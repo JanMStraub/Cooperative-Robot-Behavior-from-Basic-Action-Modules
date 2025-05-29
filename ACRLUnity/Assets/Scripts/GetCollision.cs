@@ -13,7 +13,7 @@ public class GetCollision : MonoBehaviour
             Vector3 closestPoint = triggerCollider.ClosestPoint(other.transform.position);
 
             other.GetComponent<RobotController>().SetTargetReached(true);
-            if (_robotManagerInstance.GetRobotSpeed() != 3.0f)
+            if (_robotManagerInstance.robotSpeed != 3.0f)
                 _robotManagerInstance.SetRobotSpeed(3.0f);
 
             Debug.DrawRay(closestPoint, Vector3.up * 0.5f, Color.green, 100.0f);

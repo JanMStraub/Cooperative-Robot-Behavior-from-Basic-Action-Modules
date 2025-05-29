@@ -34,7 +34,9 @@ public class ManualRobotController : MonoBehaviour
 
         if (_selectedJointIndex.HasValue)
         {
-            currentJoint = this.GetComponent<RobotController>().robotJoints[_selectedJointIndex.Value];
+            currentJoint = this.GetComponent<RobotController>().robotJoints[
+                _selectedJointIndex.Value
+            ];
         }
 
         if (currentJoint != null)
@@ -56,7 +58,8 @@ public class ManualRobotController : MonoBehaviour
             {
                 // Compute the new target and clamp within limits
                 float newTarget = Mathf.Clamp(
-                    drive.target + adjustment * _robotManagerInstance.GetRobotSpeed(),
+                    drive.target
+                        + adjustment * this.GetComponent<RobotController>().GetMaxStepSpeed(),
                     drive.lowerLimit,
                     drive.upperLimit
                 );

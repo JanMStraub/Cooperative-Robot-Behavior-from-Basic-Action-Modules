@@ -6,15 +6,29 @@ public class RobotController : MonoBehaviour
 {
     private SimulationManager _simulationManagerInstance;
     private RobotManager _robotManagerInstance;
-    private Vector3 _distanceToTarget;
-    private Vector3 _endEffectorPosition;
-    private Vector3 _defaultPosition;
-    private Vector3 _target;
-    private float _tolerance = 0.001f;
-    private Quaternion _targetRotation;
-    private Quaternion _gripperRotation;
+    private Transform _target;
+    private Vector3 _lastEndEffectorPosition;
+    private float _convergenceThreshold = 1e-4f;
+    private float _dampingFactorLambda = 0.1f;
+    private float _initialMovementDampFactor = 0.2f; // Significantly reduce speed if error is large
+    private float _largeErrorThreshold = 0.5f;
+    private float _maxStepSpeed = 0.5f;
+    private float _minStepSpeedNearTarget = 0.1f;
     private bool _targetReached = true;
-    private bool _waitForCommand = true;
+
+    // Private IK Calculation Members
+    private const int _JacobianRows = 6; // 3 for position, 3 for orientation
+
+    // Pre-allocated for performance to reduce GC allocs if IK is called frequently
+    private Matrix<double> _jacobian;
+    private Matrix<double> _pseudoInverseJacobian;
+    private Vector<double> _errorVector;
+    private Vector<double> _deltaTheta; // Joint angle changes
+
+    // Current state (updated before IK calculation)
+    private Vector3 _currentEndEffectorPosition;
+    private Quaternion _currentEndEffectorRotation;
+    private Vector3 _vectorToTarget;
 
     public ArticulationBody[] robotJoints;
     public Transform[] robotGripper;
@@ -35,17 +49,19 @@ public class RobotController : MonoBehaviour
     /// </summary>
     private void SetUpRobot()
     {
+        int numJoints = robotJoints.Length;
+
         // Ensure robot joints are assigned
-        if (robotJoints == null || robotJoints.Length == 0)
+        if (robotJoints == null || numJoints == 0)
         {
             Debug.LogError(
-                "No ArticulationBody components assigned to the left robot. Check your hierarchy."
+                "No ArticulationBody components assigned to the robot. Check your hierarchy."
             );
             return;
         }
 
         // Configure joint drives
-        for (int i = 0; i < robotJoints.Length; i++)
+        for (int i = 0; i < numJoints; i++)
         {
             var drive = robotJoints[i].xDrive;
             drive.stiffness = _robotManagerInstance.GetStiffnessValue(i);
@@ -55,49 +71,47 @@ public class RobotController : MonoBehaviour
             drive.lowerLimit = _robotManagerInstance.GetDriveLowerLimits(i);
             robotJoints[i].xDrive = drive;
         }
+
+        _jacobian = DenseMatrix.Build.Dense(_JacobianRows, numJoints);
+        // Pseudo-inverse will be calculated based on Jacobian's dimensions
+        _errorVector = Vector<double>.Build.Dense(_JacobianRows);
+        _deltaTheta = Vector<double>.Build.Dense(numJoints);
+
+        Debug.Log($"IK Controller Initialized with {numJoints} joints.");
     }
 
-    /// <summary>
-    /// Moves the robot back to its default position.
-    /// </summary>
-    public void ReturnToDefaultPosition()
+    public void SetTarget(GameObject target)
     {
-        Debug.Log("Returning to default position: " + _defaultPosition);
+        _target = target.transform;
 
-        MoveTo(_defaultPosition);
-    }
-
-    /// <summary>
-    /// Moves the robot to a specified target position.
-    /// </summary>
-    /// <param name="target"> The target position to move the robot to.</param>
-    public void MoveTo(Vector3 target)
-    {
         _targetReached = false;
-        _waitForCommand = false;
-
-        _target = target;
     }
+
+    public Vector3 GetCurrentTarget() => _target.position;
+
+    public float GetMaxStepSpeed() => _maxStepSpeed;
 
     /// <summary>
     /// Calculates the distance from the closest end-effector sensor
     /// to the target position.
     /// </summary>
-    private void CalculateDistanceToTarget()
+    private void UpdateCurrentState()
     {
         float minDistance = float.MaxValue;
 
         for (int i = 0; i < robotGripper.Length; i++)
         {
-            Vector3 gripperPosition = robotGripper[i].transform.position;
-            Vector3 distanceToGripper = _target - gripperPosition;
+            Vector3 endEffectorPosition = robotGripper[i].transform.position;
+            Quaternion endEffectorRotation = robotGripper[i].rotation;
+            Vector3 distanceToGripper = _target.position - endEffectorPosition;
 
             float distanceMagnitude = distanceToGripper.magnitude;
             if (distanceMagnitude < minDistance)
             {
                 minDistance = distanceMagnitude;
-                _endEffectorPosition = gripperPosition;
-                _distanceToTarget = distanceToGripper;
+                _currentEndEffectorPosition = endEffectorPosition;
+                _currentEndEffectorRotation = endEffectorRotation;
+                _vectorToTarget = distanceToGripper;
             }
         }
     }
@@ -106,47 +120,49 @@ public class RobotController : MonoBehaviour
     /// Computes the Jacobian matrix for the robot's kinematics.
     /// </summary>
     /// <param name="numJoints"> Number of robot joints.</param>
-    /// <param name="endEffectorPosition"> Current position of the end-effector.
     /// </param>
-    /// <returns>
-    /// A 6xN Jacobian matrix representing the robot's movement.
-    /// </returns>
-    private Matrix<double> CalculateJacobian(int numJoints, Vector3 endEffectorPosition)
+    private void CalculateJacobian(int numJoints)
     {
-        Matrix<double> jacobian = DenseMatrix.Build.Dense(6, numJoints);
+        if (_jacobian.ColumnCount != numJoints)
+        {
+            _jacobian = DenseMatrix.Build.Dense(_JacobianRows, numJoints); // Resize if necessary
+        }
 
         for (int i = 0; i < numJoints; i++)
         {
             var joint = robotJoints[i];
-            var jointTransform = joint.transform;
+            Transform jointTransform = joint.transform;
             Vector3 jointPosition = jointTransform.position;
 
-            // Determine the rotation axis in world space
-            Quaternion anchorRotation = joint.anchorRotation;
-            Vector3 worldRotationAxis = jointTransform.TransformDirection(
-                anchorRotation * Vector3.right
-            );
+            // Determine the rotation axis in world space.
+            // Assumes joint.anchorRotation defines the joint's axis relative to its local space.
+            // For a revolute joint rotating around its local X-axis: anchorRotation * Vector3.right
+            // For a revolute joint rotating around its local Y-axis: anchorRotation * Vector3.up
+            // For a revolute joint rotating around its local Z-axis: anchorRotation * Vector3.forward
+            // Ensure this matches your joint setup.
+            Vector3 worldRotationAxis = jointTransform
+                .TransformDirection(joint.anchorRotation * Vector3.right)
+                .normalized; // Normalize for robustness, as rotation axes should be unit vectors.
 
-            // Compute linear velocity part (same as before)
-            Vector3 linearVelocity = Vector3.Cross(
-                worldRotationAxis,
-                endEffectorPosition - jointPosition
-            );
+            // Linear velocity component: v = omega x r
+            // r is the vector from the joint to the end-effector.
+            Vector3 r = _currentEndEffectorPosition - jointPosition;
+            Vector3 linearVelocityContribution = Vector3.Cross(worldRotationAxis, r);
 
-            // Compute angular velocity part (just the rotation axis)
-            Vector3 angularVelocity = worldRotationAxis;
+            // Angular velocity component (for revolute joints, this is simply the world rotation axis)
+            Vector3 angularVelocityContribution = worldRotationAxis;
 
-            // Assign values to the Jacobian matrix
-            jacobian[0, i] = linearVelocity.x;
-            jacobian[1, i] = linearVelocity.y;
-            jacobian[2, i] = linearVelocity.z;
+            // Assign to Jacobian matrix (column 'i' corresponds to joint 'i')
+            // Top 3 rows: linear velocity
+            _jacobian[0, i] = linearVelocityContribution.x;
+            _jacobian[1, i] = linearVelocityContribution.y;
+            _jacobian[2, i] = linearVelocityContribution.z;
 
-            jacobian[3, i] = angularVelocity.x;
-            jacobian[4, i] = angularVelocity.y;
-            jacobian[5, i] = angularVelocity.z;
+            // Bottom 3 rows: angular velocity
+            _jacobian[3, i] = angularVelocityContribution.x;
+            _jacobian[4, i] = angularVelocityContribution.y;
+            _jacobian[5, i] = angularVelocityContribution.z;
         }
-
-        return jacobian;
     }
 
     /// <summary>
@@ -156,114 +172,136 @@ public class RobotController : MonoBehaviour
     /// <returns>
     /// The pseudo-inverse of the input matrix.
     /// </returns>
-    private Matrix<double> PseudoInverse(Matrix<double> matrix)
+    private void CalculatePseudoInverseJacobian()
     {
-        return matrix.PseudoInverse();
+        Matrix<double> JT = _jacobian.Transpose();
+        Matrix<double> JJT = _jacobian * JT;
+        Matrix<double> identity = DenseMatrix.Build.DenseIdentity(JJT.RowCount);
+        try
+        {
+            Matrix<double> termToInvert =
+                JJT + (_dampingFactorLambda * _dampingFactorLambda * identity);
+            _pseudoInverseJacobian = JT * termToInvert.Inverse();
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning(
+                $"DLS Matrix inversion failed: {ex.Message}. Falling back to standard pseudo-inverse."
+            );
+            _pseudoInverseJacobian = _jacobian.PseudoInverse(); // Fallback
+        }
     }
 
     /// <summary>
     /// Uses inverse kinematics to compute and apply new joint angles
     /// that move the robot towards the target.
     /// </summary>
-    public void InverseKinematics()
+    public void PerformInverseKinematicsStep()
     {
-        int numJoints = robotJoints.Length;
-        if (numJoints == 0)
+        if (robotJoints == null || robotJoints.Length == 0)
         {
-            Debug.LogWarning("No robot joints found for inverse kinematics.");
+            Debug.LogWarning("No robot joints found or IK not initialized.");
+            return;
+        }
+        if (robotGripper == null || _target == null)
+        {
+            Debug.LogError("EndEffector or Target is not assigned.");
             return;
         }
 
+        UpdateCurrentState(); // Get latest positions/rotations
+
+        int numJoints = robotJoints.Length;
+
+        Quaternion rotationDifference =
+            _target.rotation * Quaternion.Inverse(_currentEndEffectorRotation);
+        rotationDifference.ToAngleAxis(out float angleDegrees, out Vector3 rotationAxis);
+        // Convert angle to radians and scale by axis to get error vector
+        Vector3 orientationError = rotationAxis * angleDegrees * Mathf.Deg2Rad;
+
+        // Using pre-allocated _errorVector
+        _errorVector[0] = _vectorToTarget.x;
+        _errorVector[1] = _vectorToTarget.y;
+        _errorVector[2] = _vectorToTarget.z;
+        _errorVector[3] = orientationError.x;
+        _errorVector[4] = orientationError.y;
+        _errorVector[5] = orientationError.z;
+
+        if (_errorVector.L2Norm() < _convergenceThreshold)
+        {
+            _targetReached = true;
+
+            if (_targetReached)
+                Debug.Log("IK converged to target.");
+
+            return; // Already close enough
+        }
+
         // Calculate the 6xN Jacobian matrix
-        Matrix<double> jacobian = CalculateJacobian(numJoints, _endEffectorPosition);
+        CalculateJacobian(numJoints);
 
         // Compute the pseudo-inverse of the Jacobian
-        Matrix<double> pseudoInverseJacobian = PseudoInverse(jacobian);
+        CalculatePseudoInverseJacobian();
 
-        // Position error vector (X, Y, Z)
-        Vector<double> positionError = Vector<double>.Build.DenseOfArray(
-            new double[] { _distanceToTarget.x, _distanceToTarget.y, _distanceToTarget.z }
+        // dTheta = J_pinv * dx
+        // _deltaTheta is pre-allocated
+        _pseudoInverseJacobian.Multiply(_errorVector, _deltaTheta);
+
+        for (int i = 0; i < numJoints; ++i)
+        {
+            _deltaTheta[i] = System.Math.Clamp(
+                _deltaTheta[i],
+                -_robotManagerInstance.maxRawJointStepRad,
+                _robotManagerInstance.maxRawJointStepRad
+            );
+        }
+
+        // Adaptive speed based on distance to target
+        float normalizedDistance = Mathf.Clamp01(
+            _vectorToTarget.magnitude / robotGripper[0].lossyScale.x
+        ); // Normalize by some scale factor if needed
+        float adaptiveGain = Mathf.Lerp(_minStepSpeedNearTarget, _maxStepSpeed, normalizedDistance); // Slower as it nears target
+
+        float overallSpeedMultiplier = _robotManagerInstance.robotSpeed * adaptiveGain;
+
+        if (_errorVector.L2Norm() > _largeErrorThreshold)
+        {
+            overallSpeedMultiplier *= _initialMovementDampFactor;
+        }
+
+        // Ensure it doesn't go below a very minimal speed if minStepSpeedNearTarget is already low
+        overallSpeedMultiplier = Mathf.Max(
+            overallSpeedMultiplier,
+            _minStepSpeedNearTarget * _robotManagerInstance.robotSpeed * 0.1f
         );
 
-        // Compute orientation error (rotation difference)
-        Quaternion currentRotation = _gripperRotation;
-        Quaternion rotationDifference = _targetRotation * Quaternion.Inverse(currentRotation);
-
-        // Convert quaternion difference to axis-angle representation
-        Vector3 rotationAxis;
-        float rotationAngle;
-        rotationDifference.ToAngleAxis(out rotationAngle, out rotationAxis);
-        Vector3 orientationError = rotationAxis * Mathf.Deg2Rad * rotationAngle; // Convert to radians
-
-        // Combine position and orientation errors into a single 6D error vector
-        Vector<double> errorVector = Vector<double>.Build.DenseOfArray(
-            new double[]
-            {
-                positionError[0],
-                positionError[1],
-                positionError[2],
-                orientationError.x,
-                orientationError.y,
-                orientationError.z,
-            }
-        );
-
-        float distanceFactor = Mathf.Clamp01(_distanceToTarget.magnitude); // 0 to 1 based on distance
-        float adaptiveSpeed = Mathf.Lerp(0.3f, 1.0f, distanceFactor); // Slower as it nears target
-        Vector<double> deltaTheta = pseudoInverseJacobian * errorVector * adaptiveSpeed;
-
-        // Apply the joint adjustments
-        float robotSpeed = RobotManager.Instance.GetRobotSpeed();
         for (int i = 0; i < numJoints; i++)
         {
             var joint = robotJoints[i];
-            var drive = joint.xDrive;
+            ArticulationDrive drive = joint.xDrive;
 
-            float newTarget = Mathf.Clamp(
-                drive.target + (float)deltaTheta[i] * robotSpeed,
-                drive.lowerLimit,
-                drive.upperLimit
-            );
+            // The change in angle from IK (deltaTheta) is typically in radians.
+            // Ensure your joint drive target units match, as xDrive taked deg.
+            double jointAngleChangeRad = _deltaTheta[i];
+            float jointAngleChangeDeg = (float)jointAngleChangeRad * Mathf.Rad2Deg;
 
-            if (!Mathf.Approximately(newTarget, drive.target))
+            // Apply the scaled change.
+            float newTargetAngle =
+                drive.target + (float)jointAngleChangeDeg * overallSpeedMultiplier;
+
+            // Clamp to joint limits
+            newTargetAngle = Mathf.Clamp(newTargetAngle, drive.lowerLimit, drive.upperLimit);
+
+            if (!Mathf.Approximately(newTargetAngle, drive.target))
             {
-                drive.target = newTarget;
+                drive.target = newTargetAngle;
                 joint.xDrive = drive;
             }
         }
     }
 
-    /// <summary>
-    /// Checks if the robot has reached the target within the allowed tolerance.
-    /// If the tolerance is met, it stops the robot and updates the simulation
-    /// state.
-    /// </summary>
-    private void CheckTolerance()
-    {
-        if (_distanceToTarget.magnitude < _tolerance)
-        {
-            _waitForCommand = true;
-            _targetReached = true;
-
-            Debug.Log("Tolerance reached");
-        }
-    }
-
-    public void StartRobot(GameObject target)
-    {
-        _targetRotation = target.transform.rotation;
-        MoveTo(target.transform.position);
-    }
-
     private void Start()
     {
-        _distanceToTarget = Vector3.zero;
-        _endEffectorPosition = Vector3.zero;
-        _target = robotGripper[0].transform.position;
-        _defaultPosition = robotGripper[0].transform.position;
-
-        _gripperRotation = robotGripper[0].transform.rotation;
-
         _simulationManagerInstance = SimulationManager.Instance;
         _robotManagerInstance = RobotManager.Instance;
 
@@ -276,21 +314,10 @@ public class RobotController : MonoBehaviour
         if (_simulationManagerInstance.stopRobot)
             return;
 
-        CheckTolerance();
-
-        // If there is an active target
-        if (_target != Vector3.zero)
+        if (!_targetReached)
         {
-            if (_targetReached)
-            {
-                // Update the distance to the target before any movement logic
-                CalculateDistanceToTarget();
-                if (_waitForCommand)
-                {
-                    // If the target is not reached or a robot command is active, perform inverse kinematics.
-                    InverseKinematics();
-                }
-            }
+            // If the target is not reached perform inverse kinematics.
+            PerformInverseKinematicsStep();
         }
     }
 }
