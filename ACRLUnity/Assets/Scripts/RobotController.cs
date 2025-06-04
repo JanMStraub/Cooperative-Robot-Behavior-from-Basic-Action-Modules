@@ -7,7 +7,6 @@ public class RobotController : MonoBehaviour
     private SimulationManager _simulationManagerInstance;
     private RobotManager _robotManagerInstance;
     private Transform _target;
-    private Vector3 _lastEndEffectorPosition;
     private float _convergenceThreshold = 1e-4f;
     private float _dampingFactorLambda = 0.1f;
     private float _initialMovementDampFactor = 0.2f; // Significantly reduce speed if error is large
@@ -15,11 +14,9 @@ public class RobotController : MonoBehaviour
     private float _maxStepSpeed = 0.5f;
     private float _minStepSpeedNearTarget = 0.1f;
     private bool _targetReached = true;
-
-    // Private IK Calculation Members
     private const int _JacobianRows = 6; // 3 for position, 3 for orientation
 
-    // Pre-allocated for performance to reduce GC allocs if IK is called frequently
+    // Pre-allocated for performance to reduce GC allocs
     private Matrix<double> _jacobian;
     private Matrix<double> _pseudoInverseJacobian;
     private Vector<double> _errorVector;
@@ -80,6 +77,11 @@ public class RobotController : MonoBehaviour
         Debug.Log($"IK Controller Initialized with {numJoints} joints.");
     }
 
+    /// <summary>
+    /// Updates the target object.
+    /// </summary>
+    /// <param name="target"> The new target for the robot arm.
+    /// </param>
     public void SetTarget(GameObject target)
     {
         _target = target.transform;
@@ -95,7 +97,7 @@ public class RobotController : MonoBehaviour
     /// Calculates the distance from the closest end-effector sensor
     /// to the target position.
     /// </summary>
-    private void UpdateCurrentState()
+    private void CalculateDistanceToTarget()
     {
         float minDistance = float.MaxValue;
 
@@ -134,22 +136,16 @@ public class RobotController : MonoBehaviour
             Transform jointTransform = joint.transform;
             Vector3 jointPosition = jointTransform.position;
 
-            // Determine the rotation axis in world space.
-            // Assumes joint.anchorRotation defines the joint's axis relative to its local space.
-            // For a revolute joint rotating around its local X-axis: anchorRotation * Vector3.right
-            // For a revolute joint rotating around its local Y-axis: anchorRotation * Vector3.up
-            // For a revolute joint rotating around its local Z-axis: anchorRotation * Vector3.forward
-            // Ensure this matches your joint setup.
             Vector3 worldRotationAxis = jointTransform
                 .TransformDirection(joint.anchorRotation * Vector3.right)
-                .normalized; // Normalize for robustness, as rotation axes should be unit vectors.
+                .normalized; // Normalize for robustness
 
             // Linear velocity component: v = omega x r
             // r is the vector from the joint to the end-effector.
             Vector3 r = _currentEndEffectorPosition - jointPosition;
             Vector3 linearVelocityContribution = Vector3.Cross(worldRotationAxis, r);
 
-            // Angular velocity component (for revolute joints, this is simply the world rotation axis)
+            // Angular velocity component
             Vector3 angularVelocityContribution = worldRotationAxis;
 
             // Assign to Jacobian matrix (column 'i' corresponds to joint 'i')
@@ -166,12 +162,9 @@ public class RobotController : MonoBehaviour
     }
 
     /// <summary>
-    /// Calculates the pseudo inverse of the Jacobian matrix.
+    /// Calculates the pseudo inverse (with damping factor) of the Jacobian 
+    /// matrix.
     /// </summary>
-    /// <param name="matrix"> The Jacobian matrix.</param>
-    /// <returns>
-    /// The pseudo-inverse of the input matrix.
-    /// </returns>
     private void CalculatePseudoInverseJacobian()
     {
         Matrix<double> JT = _jacobian.Transpose();
@@ -193,8 +186,8 @@ public class RobotController : MonoBehaviour
     }
 
     /// <summary>
-    /// Uses inverse kinematics to compute and apply new joint angles
-    /// that move the robot towards the target.
+    /// Performes one inverse kinematics step to compute and apply new joint 
+    /// angles that move the robot towards the target.
     /// </summary>
     public void PerformInverseKinematicsStep()
     {
@@ -209,7 +202,7 @@ public class RobotController : MonoBehaviour
             return;
         }
 
-        UpdateCurrentState(); // Get latest positions/rotations
+        CalculateDistanceToTarget(); // Get latest positions/rotations
 
         int numJoints = robotJoints.Length;
 
@@ -243,8 +236,6 @@ public class RobotController : MonoBehaviour
         // Compute the pseudo-inverse of the Jacobian
         CalculatePseudoInverseJacobian();
 
-        // dTheta = J_pinv * dx
-        // _deltaTheta is pre-allocated
         _pseudoInverseJacobian.Multiply(_errorVector, _deltaTheta);
 
         for (int i = 0; i < numJoints; ++i)
@@ -256,10 +247,11 @@ public class RobotController : MonoBehaviour
             );
         }
 
-        // Adaptive speed based on distance to target
+        // Adaptive speed based on distance to target and 
+        // normalize by a scale factor
         float normalizedDistance = Mathf.Clamp01(
             _vectorToTarget.magnitude / robotGripper[0].lossyScale.x
-        ); // Normalize by some scale factor if needed
+        );
         float adaptiveGain = Mathf.Lerp(_minStepSpeedNearTarget, _maxStepSpeed, normalizedDistance); // Slower as it nears target
 
         float overallSpeedMultiplier = _robotManagerInstance.robotSpeed * adaptiveGain;
@@ -269,7 +261,8 @@ public class RobotController : MonoBehaviour
             overallSpeedMultiplier *= _initialMovementDampFactor;
         }
 
-        // Ensure it doesn't go below a very minimal speed if minStepSpeedNearTarget is already low
+        // Ensures that it doesn't go below a very minimal speed if
+        // minStepSpeedNearTarget is already low
         overallSpeedMultiplier = Mathf.Max(
             overallSpeedMultiplier,
             _minStepSpeedNearTarget * _robotManagerInstance.robotSpeed * 0.1f
@@ -280,12 +273,11 @@ public class RobotController : MonoBehaviour
             var joint = robotJoints[i];
             ArticulationDrive drive = joint.xDrive;
 
-            // The change in angle from IK (deltaTheta) is typically in radians.
-            // Ensure your joint drive target units match, as xDrive taked deg.
-            double jointAngleChangeRad = _deltaTheta[i];
-            float jointAngleChangeDeg = (float)jointAngleChangeRad * Mathf.Rad2Deg;
+            // The change in angle from IK (deltaTheta) is typically in radians,
+            // but xDrive takes degrees.
+            float jointAngleChangeDeg = (float)_deltaTheta[i] * Mathf.Rad2Deg;
 
-            // Apply the scaled change.
+            // Apply the scaled change
             float newTargetAngle =
                 drive.target + (float)jointAngleChangeDeg * overallSpeedMultiplier;
 
