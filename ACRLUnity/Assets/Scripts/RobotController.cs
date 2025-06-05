@@ -9,8 +9,6 @@ public class RobotController : MonoBehaviour
     private Transform _target;
     private float _convergenceThreshold = 1e-4f;
     private float _dampingFactorLambda = 0.1f;
-    private float _initialMovementDampFactor = 0.2f; // Significantly reduce speed if error is large
-    private float _largeErrorThreshold = 0.5f;
     private float _maxStepSpeed = 0.5f;
     private float _minStepSpeedNearTarget = 0.1f;
     private bool _targetReached = true;
@@ -28,7 +26,7 @@ public class RobotController : MonoBehaviour
     private Vector3 _vectorToTarget;
 
     public ArticulationBody[] robotJoints;
-    public Transform[] robotGripper;
+    public Transform robotGripperBase;
 
     /// <summary>
     /// Updates the flag indicating whether the target has been reached.
@@ -99,23 +97,13 @@ public class RobotController : MonoBehaviour
     /// </summary>
     private void CalculateDistanceToTarget()
     {
-        float minDistance = float.MaxValue;
+        Vector3 endEffectorPosition = robotGripperBase.transform.position;
+        Quaternion endEffectorRotation = robotGripperBase.rotation;
+        Vector3 distanceToGripper = _target.position - endEffectorPosition;
 
-        for (int i = 0; i < robotGripper.Length; i++)
-        {
-            Vector3 endEffectorPosition = robotGripper[i].transform.position;
-            Quaternion endEffectorRotation = robotGripper[i].rotation;
-            Vector3 distanceToGripper = _target.position - endEffectorPosition;
-
-            float distanceMagnitude = distanceToGripper.magnitude;
-            if (distanceMagnitude < minDistance)
-            {
-                minDistance = distanceMagnitude;
-                _currentEndEffectorPosition = endEffectorPosition;
-                _currentEndEffectorRotation = endEffectorRotation;
-                _vectorToTarget = distanceToGripper;
-            }
-        }
+        _currentEndEffectorPosition = endEffectorPosition;
+        _currentEndEffectorRotation = endEffectorRotation;
+        _vectorToTarget = distanceToGripper;
     }
 
     /// <summary>
@@ -162,7 +150,7 @@ public class RobotController : MonoBehaviour
     }
 
     /// <summary>
-    /// Calculates the pseudo inverse (with damping factor) of the Jacobian 
+    /// Calculates the pseudo inverse (with damping factor) of the Jacobian
     /// matrix.
     /// </summary>
     private void CalculatePseudoInverseJacobian()
@@ -186,7 +174,7 @@ public class RobotController : MonoBehaviour
     }
 
     /// <summary>
-    /// Performes one inverse kinematics step to compute and apply new joint 
+    /// Performes one inverse kinematics step to compute and apply new joint
     /// angles that move the robot towards the target.
     /// </summary>
     public void PerformInverseKinematicsStep()
@@ -196,7 +184,7 @@ public class RobotController : MonoBehaviour
             Debug.LogWarning("No robot joints found or IK not initialized.");
             return;
         }
-        if (robotGripper == null || _target == null)
+        if (robotGripperBase == null || _target == null)
         {
             Debug.LogError("EndEffector or Target is not assigned.");
             return;
@@ -247,26 +235,14 @@ public class RobotController : MonoBehaviour
             );
         }
 
-        // Adaptive speed based on distance to target and 
+        // Adaptive speed based on distance to target and
         // normalize by a scale factor
         float normalizedDistance = Mathf.Clamp01(
-            _vectorToTarget.magnitude / robotGripper[0].lossyScale.x
+            _vectorToTarget.magnitude / robotGripperBase.lossyScale.x
         );
         float adaptiveGain = Mathf.Lerp(_minStepSpeedNearTarget, _maxStepSpeed, normalizedDistance); // Slower as it nears target
 
         float overallSpeedMultiplier = _robotManagerInstance.robotSpeed * adaptiveGain;
-
-        if (_errorVector.L2Norm() > _largeErrorThreshold)
-        {
-            overallSpeedMultiplier *= _initialMovementDampFactor;
-        }
-
-        // Ensures that it doesn't go below a very minimal speed if
-        // minStepSpeedNearTarget is already low
-        overallSpeedMultiplier = Mathf.Max(
-            overallSpeedMultiplier,
-            _minStepSpeedNearTarget * _robotManagerInstance.robotSpeed * 0.1f
-        );
 
         for (int i = 0; i < numJoints; i++)
         {

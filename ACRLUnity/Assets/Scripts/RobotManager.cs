@@ -66,20 +66,16 @@ public class RobotManager : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if (
-            leftRobot.GetComponent<RobotController>().GetCurrentTarget()
-            != leftTarget.transform.position
-        )
+        if (leftTarget.transform.hasChanged)
         {
             leftRobot.GetComponent<RobotController>().SetTarget(leftTarget);
+            leftTarget.transform.hasChanged = false;
         }
 
-        if (
-            rightRobot.GetComponent<RobotController>().GetCurrentTarget()
-            != rightTarget.transform.position
-        )
+        if (rightTarget.transform.hasChanged)
         {
             rightRobot.GetComponent<RobotController>().SetTarget(rightTarget);
+            rightTarget.transform.hasChanged = false;
         }
     }
 }

@@ -1,10 +1,20 @@
-using System.Collections;
-using System.Collections.Generic;
+/*
+ * GripperController.cs
+ *
+ * Author: Fabian Kontor
+ * Source: https://github.com/zebleck/AR4/blob/mlagents/Scripts/GripperController.cs
+ * Modified by: Jan M. Straub
+ *
+ * Description:
+ * Provides smooth control over AR4 gripper using ArticulationBody components.
+ */
+
 using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
 
+[RequireComponent(typeof(Transform))]
 public class GripperController : MonoBehaviour
 {
     [Header("Gripper References")]
@@ -14,96 +24,89 @@ public class GripperController : MonoBehaviour
     [Header("Control Parameters")]
     public float maxForce = 100f;
     public float speed = 10f;
-    
+
+    [Range(0f, 1f)]
     public float targetPosition = 0f;
-    public float currentPosition {
-        get {
-            return leftGripper.jointPosition[0];
-        }
-    }
-    
-    private void Awake()
-    {
-        InitializeGrippers();
-    }
-    
+
+    public float CurrentPosition => leftGripper?.jointPosition[0] ?? 0f;
+
+    private void Awake() => InitializeGrippers();
+
     private void InitializeGrippers()
     {
-        // Validate gripper references
         if (leftGripper == null || rightGripper == null)
         {
-            Debug.LogError("Gripper references not assigned in GripperController!");
+            Debug.LogError("Gripper references not assigned!");
             return;
         }
-        
-        // Initialize the left gripper drive
-        var leftDrive = leftGripper.xDrive;
-        leftDrive.forceLimit = maxForce;
-        leftDrive.stiffness = 10000;
-        leftDrive.damping = 100;
-        leftGripper.xDrive = leftDrive;
-        
-        // Initialize the right gripper drive
-        var rightDrive = rightGripper.xDrive;
-        rightDrive.forceLimit = maxForce;
-        rightDrive.stiffness = 10000;
-        rightDrive.damping = 100;
-        rightGripper.xDrive = rightDrive;
+
+        SetupDrive(leftGripper);
+        SetupDrive(rightGripper);
     }
-    
+
+    private void SetupDrive(ArticulationBody gripper)
+    {
+        var drive = gripper.xDrive;
+        drive.forceLimit = maxForce;
+        drive.stiffness = 1000f;
+        drive.damping = 100f;
+        gripper.xDrive = drive;
+    }
+
     private void Update()
     {
-        var leftDrive = leftGripper.xDrive;
-        var rightDrive = rightGripper.xDrive;
+        float newTarget = Mathf.MoveTowards(
+            leftGripper.xDrive.target,
+            targetPosition,
+            speed * Time.deltaTime
+        );
 
-        // Gradually move towards target position
-        float smoothPosition = Mathf.MoveTowards(leftDrive.target, targetPosition, speed * Time.deltaTime);
-
-        leftDrive.target = smoothPosition;
-        rightDrive.target = smoothPosition;
-
-        leftGripper.xDrive = leftDrive;
-        rightGripper.xDrive = rightDrive;
-
-        
+        ApplyTargetToGrippers(newTarget);
     }
-    
+
+    private void ApplyTargetToGrippers(float target)
+    {
+        ApplyDriveTarget(leftGripper, target);
+        ApplyDriveTarget(rightGripper, target);
+    }
+
+    private void ApplyDriveTarget(ArticulationBody gripper, float target)
+    {
+        var drive = gripper.xDrive;
+        drive.target = target;
+        gripper.xDrive = drive;
+    }
+
     public void SetGripperPosition(float normalizedPosition)
     {
         targetPosition = Mathf.Clamp01(normalizedPosition);
     }
-    
+
     public void OpenGrippers()
     {
-        var drive = leftGripper.xDrive;
-        targetPosition = drive.upperLimit;
+        targetPosition = leftGripper.xDrive.upperLimit;
+    }
+
+    public void CloseGrippers()
+    {
+        targetPosition = leftGripper.xDrive.lowerLimit;
     }
 
     public void ResetGrippers()
     {
         targetPosition = 0f;
-
-        var leftDrive = leftGripper.xDrive;
-        leftDrive.target = 0f;
-        leftGripper.xDrive = leftDrive;
-        leftGripper.jointPosition = new ArticulationReducedSpace(0f);
-        leftGripper.jointForce = new ArticulationReducedSpace(0f);
-        leftGripper.jointVelocity = new ArticulationReducedSpace(0f);
-
-        var rightDrive = rightGripper.xDrive;
-        rightDrive.target = 0f;
-        rightGripper.xDrive = rightDrive;
-        rightGripper.jointPosition = new ArticulationReducedSpace(0f);
-        rightGripper.jointForce = new ArticulationReducedSpace(0f);
-        rightGripper.jointVelocity = new ArticulationReducedSpace(0f);
+        ResetGripper(leftGripper);
+        ResetGripper(rightGripper);
     }
-    
-    public void CloseGrippers()
+
+    private void ResetGripper(ArticulationBody gripper)
     {
-        var drive = leftGripper.xDrive;
-        targetPosition = drive.lowerLimit; 
+        ApplyDriveTarget(gripper, 0f);
+        gripper.jointPosition = new ArticulationReducedSpace(0f);
+        gripper.jointVelocity = new ArticulationReducedSpace(0f);
+        gripper.jointForce = new ArticulationReducedSpace(0f);
     }
-    
+
 #if UNITY_EDITOR
     [CustomEditor(typeof(GripperController))]
     public class GripperControllerEditor : Editor
@@ -111,49 +114,47 @@ public class GripperController : MonoBehaviour
         public override void OnInspectorGUI()
         {
             DrawDefaultInspector();
-            
-            GripperController controller = (GripperController)target;
-            
-            // Make sure the gripper references are initialized
+            var controller = (GripperController)target;
+
             if (controller.leftGripper == null || controller.rightGripper == null)
             {
-                EditorGUILayout.HelpBox("One or both gripper ArticulationBody components not assigned!", MessageType.Error);
+                EditorGUILayout.HelpBox(
+                    "Assign both gripper references to enable manual control.",
+                    MessageType.Error
+                );
                 return;
             }
-            
+
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Gripper Control", EditorStyles.boldLabel);
-            
+
             if (GUILayout.Button("Open Grippers"))
-            {
                 controller.OpenGrippers();
-            }
-            
+
             if (GUILayout.Button("Close Grippers"))
-            {
                 controller.CloseGrippers();
-            }
 
-            float newPosition = GUILayout.HorizontalSlider(
-                controller.targetPosition, 
-                controller.leftGripper.xDrive.lowerLimit, 
-                controller.leftGripper.xDrive.upperLimit
-            );
+            float lower = controller.leftGripper.xDrive.lowerLimit;
+            float upper = controller.leftGripper.xDrive.upperLimit;
 
-            if (newPosition != controller.targetPosition)
+            float newPosition = GUILayout.HorizontalSlider(controller.targetPosition, lower, upper);
+
+            if (!Mathf.Approximately(newPosition, controller.targetPosition))
             {
                 controller.targetPosition = newPosition;
-                EditorUtility.SetDirty(target);
+                EditorUtility.SetDirty(controller);
             }
-            
+
             EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Current Settings", EditorStyles.boldLabel);
-            
-            var leftDrive = controller.leftGripper.xDrive;
-            var rightDrive = controller.rightGripper.xDrive;
-            
-            EditorGUILayout.LabelField("Left Gripper Target Angle", leftDrive.target.ToString("F2"));
-            EditorGUILayout.LabelField("Right Gripper Target Angle", rightDrive.target.ToString("F2"));
+            EditorGUILayout.LabelField("Debug Info", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField(
+                "Left Target",
+                controller.leftGripper.xDrive.target.ToString("F2")
+            );
+            EditorGUILayout.LabelField(
+                "Right Target",
+                controller.rightGripper.xDrive.target.ToString("F2")
+            );
         }
     }
 #endif
