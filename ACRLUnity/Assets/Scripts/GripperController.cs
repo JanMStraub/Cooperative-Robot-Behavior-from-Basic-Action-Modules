@@ -14,6 +14,58 @@ using UnityEngine;
 using UnityEditor;
 #endif
 
+#if UNITY_EDITOR
+[CustomEditor(typeof(GripperController))]
+public class GripperControllerEditor : Editor
+{
+    public override void OnInspectorGUI()
+    {
+        DrawDefaultInspector();
+        var controller = (GripperController)target;
+
+        if (controller.leftGripper == null || controller.rightGripper == null)
+        {
+            EditorGUILayout.HelpBox(
+                "Assign both gripper references to enable manual control.",
+                MessageType.Error
+            );
+            return;
+        }
+
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Gripper Control", EditorStyles.boldLabel);
+
+        if (GUILayout.Button("Open Grippers"))
+            controller.OpenGrippers();
+
+        if (GUILayout.Button("Close Grippers"))
+            controller.CloseGrippers();
+
+        float lower = controller.leftGripper.xDrive.lowerLimit;
+        float upper = controller.leftGripper.xDrive.upperLimit;
+
+        float newPosition = GUILayout.HorizontalSlider(controller.targetPosition, lower, upper);
+
+        if (!Mathf.Approximately(newPosition, controller.targetPosition))
+        {
+            controller.targetPosition = newPosition;
+            EditorUtility.SetDirty(controller);
+        }
+
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Debug Info", EditorStyles.boldLabel);
+        EditorGUILayout.LabelField(
+            "Left Target",
+            controller.leftGripper.xDrive.target.ToString("F2")
+        );
+        EditorGUILayout.LabelField(
+            "Right Target",
+            controller.rightGripper.xDrive.target.ToString("F2")
+        );
+    }
+}
+#endif
+
 [RequireComponent(typeof(Transform))]
 public class GripperController : MonoBehaviour
 {
@@ -30,20 +82,6 @@ public class GripperController : MonoBehaviour
 
     public float CurrentPosition => leftGripper?.jointPosition[0] ?? 0f;
 
-    private void Awake() => InitializeGrippers();
-
-    private void InitializeGrippers()
-    {
-        if (leftGripper == null || rightGripper == null)
-        {
-            Debug.LogError("Gripper references not assigned!");
-            return;
-        }
-
-        SetupDrive(leftGripper);
-        SetupDrive(rightGripper);
-    }
-
     private void SetupDrive(ArticulationBody gripper)
     {
         var drive = gripper.xDrive;
@@ -51,17 +89,6 @@ public class GripperController : MonoBehaviour
         drive.stiffness = 1000f;
         drive.damping = 100f;
         gripper.xDrive = drive;
-    }
-
-    private void Update()
-    {
-        float newTarget = Mathf.MoveTowards(
-            leftGripper.xDrive.target,
-            targetPosition,
-            speed * Time.deltaTime
-        );
-
-        ApplyTargetToGrippers(newTarget);
     }
 
     private void ApplyTargetToGrippers(float target)
@@ -107,55 +134,26 @@ public class GripperController : MonoBehaviour
         gripper.jointForce = new ArticulationReducedSpace(0f);
     }
 
-#if UNITY_EDITOR
-    [CustomEditor(typeof(GripperController))]
-    public class GripperControllerEditor : Editor
+    private void Awake()
     {
-        public override void OnInspectorGUI()
+        if (leftGripper == null || rightGripper == null)
         {
-            DrawDefaultInspector();
-            var controller = (GripperController)target;
-
-            if (controller.leftGripper == null || controller.rightGripper == null)
-            {
-                EditorGUILayout.HelpBox(
-                    "Assign both gripper references to enable manual control.",
-                    MessageType.Error
-                );
-                return;
-            }
-
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Gripper Control", EditorStyles.boldLabel);
-
-            if (GUILayout.Button("Open Grippers"))
-                controller.OpenGrippers();
-
-            if (GUILayout.Button("Close Grippers"))
-                controller.CloseGrippers();
-
-            float lower = controller.leftGripper.xDrive.lowerLimit;
-            float upper = controller.leftGripper.xDrive.upperLimit;
-
-            float newPosition = GUILayout.HorizontalSlider(controller.targetPosition, lower, upper);
-
-            if (!Mathf.Approximately(newPosition, controller.targetPosition))
-            {
-                controller.targetPosition = newPosition;
-                EditorUtility.SetDirty(controller);
-            }
-
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Debug Info", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField(
-                "Left Target",
-                controller.leftGripper.xDrive.target.ToString("F2")
-            );
-            EditorGUILayout.LabelField(
-                "Right Target",
-                controller.rightGripper.xDrive.target.ToString("F2")
-            );
+            Debug.LogError("Gripper references not assigned!");
+            return;
         }
+
+        SetupDrive(leftGripper);
+        SetupDrive(rightGripper);
     }
-#endif
+
+    private void Update()
+    {
+        float newTarget = Mathf.MoveTowards(
+            leftGripper.xDrive.target,
+            targetPosition,
+            speed * Time.deltaTime
+        );
+
+        ApplyTargetToGrippers(newTarget);
+    }
 }

@@ -2,8 +2,6 @@ using UnityEngine;
 
 public class RobotManager : MonoBehaviour
 {
-    private readonly float[] _jointLengths = { 0.45f, 0.75f, 0.0f, 0.55f, 0.1f, 0.11f }; // Currently unused, but may be useful in the future
-
     // Configuration values for an AR4 robotic arm
     private float[] _stiffnessValues = { 800, 700, 600, 300, 200, 100 };
     private float[] _dampingValues = { 250, 200, 150, 100, 80, 50 };
@@ -12,17 +10,11 @@ public class RobotManager : MonoBehaviour
     private float[] _driveLowerLimits = { -170, -90, -70, -135, -100, -180 };
 
     [SerializeField, Range(0.1f, 5f)]
-    public float robotSpeed = 1.0f;
+    public float robotAdjustmentSpeed = 1.0f;
 
-    [Tooltip(
-        "Maximum raw angular change (radians) a joint is allowed from one IK step, before adaptive speed scaling."
-    )]
-    public float maxRawJointStepRad = 0.1f; // Approx 5.7 degrees. Tune this value!
+    [SerializeField, Range(0.01f, 1f)]
+    public float convergenceThreshold = 0.1f;
 
-    public GameObject leftTarget,
-        rightTarget;
-    public GameObject leftRobot,
-        rightRobot;
     public static RobotManager Instance { get; private set; }
 
     /// <summary>
@@ -31,7 +23,7 @@ public class RobotManager : MonoBehaviour
     /// <param name="speed"> The speed to set for the robot.</param>
     public void SetRobotSpeed(float speed)
     {
-        robotSpeed = speed;
+        robotAdjustmentSpeed = speed;
     }
 
     public float GetStiffnessValue(int i) => _stiffnessValues[i];
@@ -57,25 +49,5 @@ public class RobotManager : MonoBehaviour
             Destroy(gameObject);
         }
     }
-
-    private void Start()
-    {
-        leftRobot.GetComponent<RobotController>().SetTarget(leftTarget);
-        rightRobot.GetComponent<RobotController>().SetTarget(rightTarget);
-    }
-
-    private void FixedUpdate()
-    {
-        if (leftTarget.transform.hasChanged)
-        {
-            leftRobot.GetComponent<RobotController>().SetTarget(leftTarget);
-            leftTarget.transform.hasChanged = false;
-        }
-
-        if (rightTarget.transform.hasChanged)
-        {
-            rightRobot.GetComponent<RobotController>().SetTarget(rightTarget);
-            rightTarget.transform.hasChanged = false;
-        }
-    }
 }
+

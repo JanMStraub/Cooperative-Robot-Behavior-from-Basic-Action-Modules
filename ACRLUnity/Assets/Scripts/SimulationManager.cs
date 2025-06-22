@@ -3,21 +3,10 @@ using UnityEngine;
 public class SimulationManager : MonoBehaviour
 {
     private PythonCaller _pythonCaller;
-    private bool _sceenshotsSaved = false;
 
+    [Header("Control Parameters")]
     public bool stopRobot = false;
-    public string screenshotExportFolder;
     public static SimulationManager Instance { get; private set; } // Singleton instance
-
-    /// <summary>
-    /// Sets the flag indicating whether screenshots have been saved.
-    /// </summary>
-    /// <param name="setting"> The value to set the screenshotsSaved flag to.
-    /// </param>
-    public void SetScreenshotsSaved(bool setting)
-    {
-        _sceenshotsSaved = setting;
-    }
 
     // Singleton pattern initialization
     private void Awake()

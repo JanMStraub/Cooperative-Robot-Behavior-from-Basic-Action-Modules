@@ -1,22 +1,43 @@
+using System.Collections;
 using System.IO;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
-public class CameraCapture : MonoBehaviour
+#if UNITY_EDITOR
+[CustomEditor(typeof(CameraController))]
+public class CameraControllerEditor : Editor
+{
+    public override void OnInspectorGUI()
+    {
+        DrawDefaultInspector();
+        var controller = (CameraController)target;
+
+        if (GUILayout.Button("Take screenshot"))
+            controller.CaptureAndSave();
+    }
+}
+#endif
+
+public class CameraController : MonoBehaviour
 {
     private int _counter = 0;
-    private string _exportFolder;
-    private SimulationManager _simulationManagerInstance;
+    private string _robotName;
+    private string _rootName;
+    private Camera _mainCamera;
+
     public int imageWidth;
     public int imageHeight;
-    public bool takeScreenshot;
-    public Camera mainCamera;
 
     /// <summary>
     /// Saves the images from the left and right camera.
     /// </summary>
     public void CaptureAndSave()
     {
-        CaptureCamera(mainCamera, $"{_exportFolder}/{_counter}.png");
+        StartCoroutine(
+            CaptureCamera(_mainCamera, $"Data/Screenshots/{_rootName}/{_robotName}/{_counter}.jpg")
+        );
         _counter += 1;
     }
 
@@ -28,7 +49,7 @@ public class CameraCapture : MonoBehaviour
     /// </param>
     /// <param name="savePath"> The relative path (within the project) to save
     /// the captured image.</param>
-    public void CaptureCamera(Camera cam, string savePath)
+    public IEnumerator CaptureCamera(Camera cam, string savePath)
     {
         // Create a temporary RenderTexture
         RenderTexture renderTexture = new RenderTexture(imageWidth, imageHeight, 24);
@@ -43,7 +64,12 @@ public class CameraCapture : MonoBehaviour
 
         // Save to disk
         string path = Path.Combine(Application.dataPath, savePath);
-        byte[] bytes = texture.EncodeToPNG(); // Change to EncodeToJPG() for JPG
+        string pathDir = Path.GetDirectoryName(path);
+        if (!Directory.Exists(pathDir))
+        {
+            Directory.CreateDirectory(pathDir);
+        }
+        byte[] bytes = texture.EncodeToJPG(); // Change to EncodeToPNG() for PNG
         File.WriteAllBytes(path, bytes);
 
         // Cleanup
@@ -54,23 +80,26 @@ public class CameraCapture : MonoBehaviour
 
         Debug.Log($"Saved image to: {path}");
 
-        _simulationManagerInstance.SetScreenshotsSaved(true);
+        yield return null;
+    }
+
+    private string FindArmRoot(Transform current)
+    {
+        while (current.parent != null)
+        {
+            current = current.parent;
+            if (current.name is "AR4Left" or "AR4Right")
+            {
+                return current.name;
+            }
+        }
+        return null;
     }
 
     private void Start()
     {
-        _simulationManagerInstance = SimulationManager.Instance;
-        _exportFolder = _simulationManagerInstance.screenshotExportFolder;
-
-        CaptureAndSave();
-    }
-
-    private void Update()
-    {
-        // Check if the "E" key was pressed
-        if (Input.GetKeyDown(KeyCode.E) || takeScreenshot)
-        {
-            CaptureAndSave();
-        }
+        _mainCamera = GetComponent<Camera>();
+        _robotName = FindArmRoot(_mainCamera.transform);
+        _rootName = _mainCamera.transform.root.name;
     }
 }

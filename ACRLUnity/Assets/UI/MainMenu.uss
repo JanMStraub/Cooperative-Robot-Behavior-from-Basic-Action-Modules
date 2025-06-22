@@ -1,0 +1,4 @@
+:root {
+    visibility: visible;
+    opacity: 1;
+}
