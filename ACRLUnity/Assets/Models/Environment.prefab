@@ -2596,7 +2596,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &4835650315267659882
 Transform:
   m_ObjectHideFlags: 0
@@ -3126,7 +3126,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &4653498342291522400
 Transform:
   m_ObjectHideFlags: 0
@@ -3443,6 +3443,7 @@ GameObject:
   - component: {fileID: 2769980654537543894}
   - component: {fileID: 5123341763645127469}
   - component: {fileID: 6753555741412500715}
+  - component: {fileID: 2690559620270089650}
   m_Layer: 0
   m_Name: TableCamera
   m_TagString: Untagged
@@ -3561,6 +3562,20 @@ MonoBehaviour:
     m_MipBias: 0
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
+--- !u!114 &2690559620270089650
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6869549267008686278}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 500fcb0ba4ef349809caeda6e7317003, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  imageWidth: 1920
+  imageHeight: 1080
 --- !u!1 &6953124915147395726
 GameObject:
   m_ObjectHideFlags: 0
