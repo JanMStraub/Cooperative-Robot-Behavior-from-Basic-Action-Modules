@@ -2,8 +2,6 @@ using UnityEngine;
 
 public class RobotManager : MonoBehaviour
 {
-    private readonly float[] _jointLengths = { 0.45f, 0.75f, 0.0f, 0.55f, 0.1f, 0.11f }; // Currently unused, but may be useful in the future
-
     // Configuration values for an AR4 robotic arm
     private float[] _stiffnessValues = { 800, 700, 600, 300, 200, 100 };
     private float[] _dampingValues = { 250, 200, 150, 100, 80, 50 };
@@ -12,7 +10,10 @@ public class RobotManager : MonoBehaviour
     private float[] _driveLowerLimits = { -170, -90, -70, -135, -100, -180 };
 
     [SerializeField, Range(0.1f, 5f)]
-    public float robotSpeed = 1.0f;
+    public float robotAdjustmentSpeed = 1.0f;
+
+    [SerializeField, Range(0.01f, 1f)]
+    public float convergenceThreshold = 0.1f;
 
     [Tooltip(
         "Maximum raw angular change (radians) a joint is allowed from one IK step, before adaptive speed scaling."
@@ -31,7 +32,7 @@ public class RobotManager : MonoBehaviour
     /// <param name="speed"> The speed to set for the robot.</param>
     public void SetRobotSpeed(float speed)
     {
-        robotSpeed = speed;
+        robotAdjustmentSpeed = speed;
     }
 
     public float GetStiffnessValue(int i) => _stiffnessValues[i];

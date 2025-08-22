@@ -1,14 +1,15 @@
 using MathNet.Numerics.LinearAlgebra;
 using MathNet.Numerics.LinearAlgebra.Double;
 using UnityEngine;
+using System.Collections;
 
 public class RobotController : MonoBehaviour
 {
     private SimulationManager _simulationManagerInstance;
     private RobotManager _robotManagerInstance;
-    private Transform _target;
     private float _convergenceThreshold = 1e-4f;
     private float _dampingFactorLambda = 0.1f;
+    private float _distanceToTarget;
     private float _maxStepSpeed = 0.5f;
     private float _minStepSpeedNearTarget = 0.1f;
     private bool _targetReached = true;
@@ -25,8 +26,11 @@ public class RobotController : MonoBehaviour
     private Quaternion _currentEndEffectorRotation;
     private Vector3 _vectorToTarget;
 
+    [Header("Joints and Gripper objects")]
     public ArticulationBody[] robotJoints;
     public Transform robotGripperBase;
+    public Transform _target;
+    public float[] ArticulationBodyTargets = { 0, 0, 0, 0, 0, 0 };
 
     /// <summary>
     /// Updates the flag indicating whether the target has been reached.
@@ -87,6 +91,18 @@ public class RobotController : MonoBehaviour
         _targetReached = false;
     }
 
+    public float GetDistanceToTarget()
+    {
+        CalculateDistanceToTarget();
+
+        return _distanceToTarget;
+    }
+
+    public float GetDriveTarget(int i)
+    {
+        return robotJoints[i].xDrive.target;
+    }
+
     public Vector3 GetCurrentTarget() => _target.position;
 
     public float GetMaxStepSpeed() => _maxStepSpeed;
@@ -98,12 +114,27 @@ public class RobotController : MonoBehaviour
     private void CalculateDistanceToTarget()
     {
         Vector3 endEffectorPosition = robotGripperBase.transform.position;
-        Quaternion endEffectorRotation = robotGripperBase.rotation;
-        Vector3 distanceToGripper = _target.position - endEffectorPosition;
 
+        _distanceToTarget = Vector3.Distance(_target.position, endEffectorPosition);
         _currentEndEffectorPosition = endEffectorPosition;
-        _currentEndEffectorRotation = endEffectorRotation;
-        _vectorToTarget = distanceToGripper;
+        _currentEndEffectorRotation = robotGripperBase.rotation;
+        _vectorToTarget = _target.position - endEffectorPosition;
+    }
+
+    public void SetDriveTargetsToZero()
+    {
+        for (int i = 0; i < robotJoints.Length; i++)
+        {
+            ArticulationBody joint = robotJoints[i];
+            ArticulationDrive drive = joint.xDrive;
+
+            drive.target = 0;
+            joint.xDrive = drive;
+
+            joint.jointPosition = new ArticulationReducedSpace(0f);
+            joint.jointForce = new ArticulationReducedSpace(0f);
+            joint.jointVelocity = new ArticulationReducedSpace(0f);
+        }
     }
 
     /// <summary>
@@ -242,7 +273,7 @@ public class RobotController : MonoBehaviour
         );
         float adaptiveGain = Mathf.Lerp(_minStepSpeedNearTarget, _maxStepSpeed, normalizedDistance); // Slower as it nears target
 
-        float overallSpeedMultiplier = _robotManagerInstance.robotSpeed * adaptiveGain;
+        float overallSpeedMultiplier = _robotManagerInstance.robotAdjustmentSpeed * adaptiveGain;
 
         for (int i = 0; i < numJoints; i++)
         {

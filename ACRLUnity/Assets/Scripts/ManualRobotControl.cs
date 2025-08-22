@@ -1,22 +1,19 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 
+[RequireComponent(typeof(RobotController))]
 public class ManualRobotController : MonoBehaviour
 {
-    private int? _selectedJointIndex = null; // Currently selected joint index
+    private int? _selectedJointIndex = null;
+    private RobotController _robotController;
     private RobotManager _robotManagerInstance;
+    private const float AdjustmentStep = 1f;
 
     /// <summary>
-    /// Handles the movement of robot joints based on keyboard input.
-    /// Maps number keys (1-6) to select joints, and left/right arrow keys to
-    /// adjust the selected joint's target.
+    /// Maps number key presses to joint indices.
     /// </summary>
-    private void MoveJoints()
+    private void HandleJointSelection()
     {
-        // Initialize current joint
-        ArticulationBody currentJoint = null;
-
-        // Map number keys to joints
         if (Keyboard.current.digit1Key.wasPressedThisFrame)
             _selectedJointIndex = 0;
         else if (Keyboard.current.digit2Key.wasPressedThisFrame)
@@ -30,63 +27,60 @@ public class ManualRobotController : MonoBehaviour
         else if (Keyboard.current.digit6Key.wasPressedThisFrame)
             _selectedJointIndex = 5;
 
-        // Select the joint based on the key pressed
+        if (_selectedJointIndex.HasValue)
+        {
+            Debug.Log($"Selected Joint {_selectedJointIndex.Value + 1}");
+        }
+    }
+
+    /// <summary>
+    /// Handles input and updates articulation joints accordingly.
+    /// </summary>
+    private void MoveJoints()
+    {
+        HandleJointSelection();
 
         if (_selectedJointIndex.HasValue)
         {
-            currentJoint = this.GetComponent<RobotController>().robotJoints[
-                _selectedJointIndex.Value
-            ];
-        }
+            ArticulationBody currentJoint = _robotController.robotJoints[_selectedJointIndex.Value];
 
-        if (currentJoint != null)
-        {
-            var drive = currentJoint.xDrive;
-            // Adjust the drive target for the selected joint
             float adjustment = 0f;
 
             if (Keyboard.current.leftArrowKey.isPressed)
-            {
-                adjustment = -1f; // Decrease target
-            }
+                adjustment = -AdjustmentStep;
             else if (Keyboard.current.rightArrowKey.isPressed)
-            {
-                adjustment = 1f; // Increase target
-            }
+                adjustment = AdjustmentStep;
 
             if (adjustment != 0f)
             {
-                // Compute the new target and clamp within limits
-                float newTarget = Mathf.Clamp(
-                    drive.target
-                        + adjustment * this.GetComponent<RobotController>().GetMaxStepSpeed(),
-                    drive.lowerLimit,
-                    drive.upperLimit
-                );
+                ArticulationDrive drive = currentJoint.xDrive;
 
-                if (newTarget != drive.target) // Only update if within limits
+                float current = drive.target;
+                float target = Mathf.Clamp(adjustment, drive.lowerLimit, drive.upperLimit);
+                float step = _robotManagerInstance.robotAdjustmentSpeed * Time.deltaTime;
+
+                if (!Mathf.Approximately(current, target))
                 {
+                    float newTarget = Mathf.MoveTowards(current, target, step);
                     drive.target = newTarget;
                     currentJoint.xDrive = drive;
-                }
-                else
-                {
-                    Debug.LogWarning("The limit of this joint is reached.");
+                    Debug.Log($"Joint {_selectedJointIndex.Value + 1} target set to {newTarget}°");
                 }
             }
         }
         else if (Keyboard.current.anyKey.wasPressedThisFrame)
         {
-            Debug.LogWarning("No joint selected. Press a number key to select a joint.");
+            Debug.LogWarning("No joint selected. Press a number key (1-6) to select a joint.");
         }
     }
 
     private void Start()
     {
+        _robotController = GetComponent<RobotController>();
         _robotManagerInstance = RobotManager.Instance;
     }
 
-    void FixedUpdate()
+    private void FixedUpdate()
     {
         MoveJoints();
     }
