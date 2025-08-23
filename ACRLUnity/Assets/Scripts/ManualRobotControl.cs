@@ -6,7 +6,7 @@ public class ManualRobotController : MonoBehaviour
 {
     private int? _selectedJointIndex = null;
     private RobotController _robotController;
-    private RobotManager _robotManagerInstance;
+    private RobotManager _robotManager;
     private const float AdjustmentStep = 1f;
 
     /// <summary>
@@ -57,7 +57,7 @@ public class ManualRobotController : MonoBehaviour
 
                 float current = drive.target;
                 float target = Mathf.Clamp(adjustment, drive.lowerLimit, drive.upperLimit);
-                float step = _robotManagerInstance.robotAdjustmentSpeed * Time.deltaTime;
+                float step = _robotManager.robotAdjustmentSpeed * Time.deltaTime;
 
                 if (!Mathf.Approximately(current, target))
                 {
@@ -77,7 +77,7 @@ public class ManualRobotController : MonoBehaviour
     private void Start()
     {
         _robotController = GetComponent<RobotController>();
-        _robotManagerInstance = RobotManager.Instance;
+        _robotManager = RobotManager.Instance;
     }
 
     private void FixedUpdate()

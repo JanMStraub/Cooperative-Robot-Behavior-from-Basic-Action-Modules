@@ -2,7 +2,7 @@ using UnityEngine;
 
 public class GetCollision : MonoBehaviour
 {
-    private RobotManager _robotManagerInstance;
+    private RobotManager _robotManager;
 
     private void OnTriggerEnter(Collider other)
     {
@@ -13,8 +13,8 @@ public class GetCollision : MonoBehaviour
             Vector3 closestPoint = triggerCollider.ClosestPoint(other.transform.position);
 
             other.GetComponent<RobotController>().SetTargetReached(true);
-            if (_robotManagerInstance.robotAdjustmentSpeed != 3.0f)
-                _robotManagerInstance.SetRobotSpeed(3.0f);
+            if (_robotManager.robotAdjustmentSpeed != 3.0f)
+                _robotManager.robotAdjustmentSpeed = 3.0f;
 
             Debug.DrawRay(closestPoint, Vector3.up * 0.5f, Color.green, 100.0f);
         }
@@ -22,6 +22,6 @@ public class GetCollision : MonoBehaviour
 
     private void Start()
     {
-        _robotManagerInstance = RobotManager.Instance;
+        _robotManager = RobotManager.Instance;
     }
 }

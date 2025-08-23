@@ -26,15 +26,6 @@ public class RobotManager : MonoBehaviour
         rightRobot;
     public static RobotManager Instance { get; private set; }
 
-    /// <summary>
-    /// Sets the speed of the robot.
-    /// </summary>
-    /// <param name="speed"> The speed to set for the robot.</param>
-    public void SetRobotSpeed(float speed)
-    {
-        robotAdjustmentSpeed = speed;
-    }
-
     public float GetStiffnessValue(int i) => _stiffnessValues[i];
 
     public float GetDampingValue(int i) => _dampingValues[i];
