@@ -531,12 +531,14 @@ MonoBehaviour:
     ikTimeout: 5
   robotProfiles: []
   globalSpeedMultiplier: 1
+  enablePerformanceMonitoring: 1
   enableTargetChangeDetection: 1
   targetChangeCheckInterval: 0.1
   leftTarget: {fileID: 2081917768}
   rightTarget: {fileID: 1169635882}
   leftRobot: {fileID: 129019687}
   rightRobot: {fileID: 1939501296}
+  showDebugInfo: 0
   logConfigurationChanges: 1
 --- !u!4 &1170887387
 Transform:
@@ -565,7 +567,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8a0f212bb248649dcb8024ba9e94a3a1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  operationType: default
+  operationType: MoveToPoint
   logFilePath: /Users/jan/Code/MS/ACRLUnity/Logs
   maxFileSizeMB: 10
   maxRotatedFiles: 5
@@ -611,8 +613,14 @@ MonoBehaviour:
     autoStart: 1
     resetOnError: 1
     coordinationMode: 0
+    robotSwitchDelay: 2
     targetFrameRate: 60
     enableVSync: 1
+    maxLogEntriesPerFrame: 10
+    verboseLogging: 0
+    showDebugGUI: 0
+    pauseKey: 32
+    resetKey: 114
   stopRobot: 0
   pauseSimulation: 0
 --- !u!4 &1797467624
@@ -661,6 +669,9 @@ MonoBehaviour:
   captureUnityLogs: 1
   logSimulationState: 1
   stateLogInterval: 10
+  maxFileSizeMB: 50
+  logPerformanceMetrics: 1
+  logSystemInfo: 1
 --- !u!1 &1939501296 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 4144416916900277827, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
@@ -858,7 +869,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2364128700517176700, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: _maxStepSpeed
-      value: 0.5
+      value: 0.1
       objectReference: {fileID: 0}
     - target: {fileID: 2364128700517176700, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: endEffectorBase

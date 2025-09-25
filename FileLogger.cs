@@ -4,12 +4,12 @@ using UnityEngine;
 public class FileLogger : MonoBehaviour
 {
     public string logFilePath;
-    private string logFile;
+    private string _logFile;
 
     void OnEnable()
     {
         // Set file path
-        logFile = Path.Combine(logFilePath, "unity_log.txt");
+        _logFile = Path.Combine(logFilePath, "unity_log.txt");
         Application.logMessageReceived += HandleLog;
     }
 
@@ -26,6 +26,6 @@ public class FileLogger : MonoBehaviour
             logEntry += $"{stackTrace}\n";
         }
 
-        File.AppendAllText(logFile, logEntry);
+        File.AppendAllText(_logFile, logEntry);
     }
 }

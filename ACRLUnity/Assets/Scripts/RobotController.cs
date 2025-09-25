@@ -11,11 +11,20 @@ public class RobotController : MonoBehaviour
 {
     private SimulationManager _simulationManager;
     private RobotManager _robotManager;
+    private RobotActionLogger _robotActionLogger;
+
+    [Header("Robot Identity")]
+    public string robotId = "AR4_Robot";
 
     [Header("IK Parameters")]
-    [SerializeField] private float _dampingFactorLambda = 0.1f;         // Damping factor for pseudo-inverse stability
-    [SerializeField] private float _minStepSpeedNearTarget = 0.1f;      // Step size when very close to target
-    [SerializeField] private float _maxStepSpeed = 0.5f;                // Maximum step size
+    [SerializeField]
+    private float _dampingFactorLambda = 0.1f; // Damping factor for pseudo-inverse stability
+
+    [SerializeField]
+    private float _minStepSpeedNearTarget = 0.1f; // Step size when very close to target
+
+    [SerializeField]
+    private float _maxStepSpeed = 0.5f; // Maximum step size
 
     private float _distanceToTarget;
     private bool _hasReachedTarget = true;
@@ -25,7 +34,6 @@ public class RobotController : MonoBehaviour
 
     // Pre-allocated for performance to reduce GC allocs
     private Matrix<double> _jacobianMatrix;
-    private Matrix<double> _pseudoInverseJacobian;
     private Vector<double> _errorVector;
     private Vector<double> _jointDelta; // Joint angle changes
 
@@ -34,8 +42,10 @@ public class RobotController : MonoBehaviour
     private Quaternion _endEffectorWorldRotation;
     private Vector3 _targetVector;
 
-    private Vector3 _endEffectorLocalPosition, _targetLocalPosition;    // positions in IK frame
-    private Quaternion _endEffectorLocalRotation, _targetLocalRotation; // rotations in IK frame
+    private Vector3 _endEffectorLocalPosition,
+        _targetLocalPosition; // positions in IK frame
+    private Quaternion _endEffectorLocalRotation,
+        _targetLocalRotation; // rotations in IK frame
 
     [Header("Robot Components")]
     public ArticulationBody[] robotJoints;
@@ -59,6 +69,20 @@ public class RobotController : MonoBehaviour
     {
         _targetTransform = target.transform;
         _hasReachedTarget = false;
+
+        // Log target assignment
+        if (_robotActionLogger != null)
+        {
+            _robotActionLogger.LogAction(
+                "setTarget",
+                robotId,
+                target.name,
+                target.transform.position,
+                null,
+                0f,
+                true
+            );
+        }
     }
 
     /// <summary>
@@ -89,15 +113,26 @@ public class RobotController : MonoBehaviour
             return;
         }
 
-        // Configure joint drives
+        // Configure joint drives using RobotManager profiles
         for (int i = 0; i < jointCount; i++)
         {
             var drive = robotJoints[i].xDrive;
-            drive.stiffness = _robotManager.GetStiffnessValue(i);
-            drive.damping = _robotManager.GetDampingValue(i);
-            drive.forceLimit = _robotManager.GetForceLimits(i);
-            drive.upperLimit = _robotManager.GetDriveUpperLimits(i);
-            drive.lowerLimit = _robotManager.GetDriveLowerLimits(i);
+
+            // Try to get robot instance and use its profile
+            if (
+                _robotManager.RobotInstances.TryGetValue(robotId, out var robotInstance)
+                && robotInstance.profile?.joints != null
+                && i < robotInstance.profile.joints.Length
+            )
+            {
+                var jointConfig = robotInstance.profile.joints[i];
+                drive.stiffness = jointConfig.stiffness;
+                drive.damping = jointConfig.damping;
+                drive.forceLimit = jointConfig.forceLimit;
+                drive.upperLimit = jointConfig.upperLimit;
+                drive.lowerLimit = jointConfig.lowerLimit;
+            }
+
             robotJoints[i].xDrive = drive;
         }
 
@@ -106,9 +141,6 @@ public class RobotController : MonoBehaviour
         _errorVector = Vector<double>.Build.Dense(_JacobianRows);
         _jointDelta = Vector<double>.Build.Dense(jointCount);
     }
-
-
-
 
     /// <summary>
     /// Updates cached world and local positions/rotations of the end effector and target.
@@ -192,6 +224,7 @@ public class RobotController : MonoBehaviour
             _jacobianMatrix[5, i] = angularComponent.z;
         }
     }
+
     /// <summary>
     /// Computes the damped least squares pseudo-inverse of the Jacobian
     /// and updates joint deltas.
@@ -199,16 +232,18 @@ public class RobotController : MonoBehaviour
     private void ComputePseudoInverseJacobian()
     {
         // Jacobian: 6xN
-        var jacobianTranspose = _jacobianMatrix.Transpose();          // Nx6
-        var jacobianJacobianTransform = _jacobianMatrix * jacobianTranspose;                 // 6x6
+        var jacobianTranspose = _jacobianMatrix.Transpose(); // Nx6
+        var jacobianJacobianTransform = _jacobianMatrix * jacobianTranspose; // 6x6
         var identity = DenseMatrix.Build.DenseIdentity(jacobianJacobianTransform.RowCount);
 
-        var regularized = jacobianJacobianTransform + _dampingFactorLambda * _dampingFactorLambda * identity;
+        var regularized =
+            jacobianJacobianTransform + _dampingFactorLambda * _dampingFactorLambda * identity;
 
         // Solve once; avoid explicit inverse
-        var y = regularized.Solve(_errorVector);         // 6x1
-        _jointDelta = jacobianTranspose * y;                     // Nx1
+        var y = regularized.Solve(_errorVector); // 6x1
+        _jointDelta = jacobianTranspose * y; // Nx1
     }
+
     /// <summary>
     /// Performes one inverse kinematics step to compute and apply new joint
     /// angles that move the robot towards the target.
@@ -226,13 +261,13 @@ public class RobotController : MonoBehaviour
             return;
         }
 
-
         UpdateEndEffectorState(); // Get latest positions/rotations
 
         int jointCount = robotJoints.Length;
 
         // Compute orientation error in local frame
-        Quaternion quaternionError = _targetLocalRotation * Quaternion.Inverse(_endEffectorLocalRotation);
+        Quaternion quaternionError =
+            _targetLocalRotation * Quaternion.Inverse(_endEffectorLocalRotation);
         quaternionError.ToAngleAxis(out float angleDegree, out Vector3 axisLocal);
         if (float.IsNaN(axisLocal.x) || float.IsNaN(axisLocal.y) || float.IsNaN(axisLocal.z))
         {
@@ -252,7 +287,22 @@ public class RobotController : MonoBehaviour
         if (_errorVector.L2Norm() < _robotManager.convergenceThreshold)
         {
             _hasReachedTarget = true;
-            Debug.Log("IK converged to target.");
+            Debug.Log($"{robotId} IK converged to target");
+
+            // Log successful convergence
+            if (_robotActionLogger != null)
+            {
+                _robotActionLogger.LogAction(
+                    "reachTarget",
+                    robotId,
+                    _targetTransform.name,
+                    _targetTransform.position,
+                    null,
+                    0f, // No speed tracking
+                    true
+                );
+            }
+
             return; // Already close enough
         }
 
@@ -291,8 +341,7 @@ public class RobotController : MonoBehaviour
             float deltaAngleDegree = (float)_jointDelta[i] * Mathf.Rad2Deg;
 
             // Apply the scaled change
-            float newTarget =
-                drive.target + (float)deltaAngleDegree * stepScale;
+            float newTarget = drive.target + (float)deltaAngleDegree * stepScale;
 
             // Clamp to joint limits
             newTarget = Mathf.Clamp(newTarget, drive.lowerLimit, drive.upperLimit);
@@ -309,6 +358,33 @@ public class RobotController : MonoBehaviour
     {
         _simulationManager = SimulationManager.Instance;
         _robotManager = RobotManager.Instance;
+        _robotActionLogger = RobotActionLogger.Instance;
+
+        // Set robot ID if empty
+        if (string.IsNullOrEmpty(robotId))
+        {
+            robotId = gameObject.name;
+        }
+
+        // Register with RobotManager if available
+        if (_robotManager != null)
+        {
+            _robotManager.RegisterRobot(robotId, gameObject);
+        }
+
+        // Log initialization
+        if (_robotActionLogger != null)
+        {
+            _robotActionLogger.LogAction(
+                "initialize",
+                robotId,
+                gameObject.name,
+                null,
+                null,
+                0f,
+                true
+            );
+        }
 
         InitializeRobot();
     }
@@ -316,11 +392,10 @@ public class RobotController : MonoBehaviour
     private void FixedUpdate()
     {
         // Early exit if the robot should stop
-        if (_simulationManager.stopRobot)
+        if (_simulationManager.ShouldStopRobots)
             return;
 
         if (!_hasReachedTarget)
             PerformInverseKinematicsStep();
-
     }
 }
