@@ -58,6 +58,9 @@ public class GetCollision : MonoBehaviour
     public CollisionConfig Config => config;
     public int TotalCollisions => _totalCollisions;
 
+    /// <summary>
+    /// Unity Awake callback - auto-detects target ID if not set.
+    /// </summary>
     private void Awake()
     {
         // Auto-detect target ID if not set
@@ -67,6 +70,9 @@ public class GetCollision : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Unity Start callback - initializes component references and validates configuration.
+    /// </summary>
     private void Start()
     {
         try
@@ -96,6 +102,9 @@ public class GetCollision : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Validates the collision configuration and corrects invalid values.
+    /// </summary>
     private void ValidateConfiguration()
     {
         if (config.collisionCooldown < 0)
@@ -110,6 +119,10 @@ public class GetCollision : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Unity OnTriggerEnter callback - processes collision when collider enters trigger.
+    /// </summary>
+    /// <param name="other">The collider that entered the trigger</param>
     private void OnTriggerEnter(Collider other)
     {
         if (!config.enableCollisionDetection)
@@ -125,6 +138,10 @@ public class GetCollision : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Unity OnTriggerStay callback - processes collision while collider remains in trigger.
+    /// </summary>
+    /// <param name="other">The collider that is inside the trigger</param>
     private void OnTriggerStay(Collider other)
     {
         if (!config.enableCollisionDetection)
@@ -140,6 +157,11 @@ public class GetCollision : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Processes a collision event by filtering, cooldown checking, and handling robot collision.
+    /// </summary>
+    /// <param name="other">The collider that triggered the collision</param>
+    /// <param name="collisionType">The type of collision (trigger_enter, trigger_stay)</param>
     private void ProcessCollision(Collider other, string collisionType)
     {
         // Filter by layer mask
@@ -168,12 +190,24 @@ public class GetCollision : MonoBehaviour
         HandleRobotCollision(other, robotController, robotId, collisionType);
     }
 
+    /// <summary>
+    /// Checks if a robot is within the collision cooldown period.
+    /// </summary>
+    /// <param name="robotId">The robot identifier to check</param>
+    /// <returns>True if in cooldown period, false otherwise</returns>
     private bool IsInCooldown(string robotId)
     {
         return _lastCollisionTime.ContainsKey(robotId)
             && Time.time - _lastCollisionTime[robotId] < config.collisionCooldown;
     }
 
+    /// <summary>
+    /// Handles a robot collision by calculating collision details and logging the event.
+    /// </summary>
+    /// <param name="other">The collider that triggered the collision</param>
+    /// <param name="robotController">The robot controller component</param>
+    /// <param name="robotId">The robot identifier</param>
+    /// <param name="collisionType">The type of collision event</param>
     private void HandleRobotCollision(
         Collider other,
         RobotController robotController,
@@ -200,7 +234,7 @@ public class GetCollision : MonoBehaviour
             // Create collision data
             var collisionData = new CollisionData
             {
-                timestamp = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
                 robotId = robotId,
                 targetId = targetId,
                 collisionPoint = closestPoint,
@@ -228,6 +262,11 @@ public class GetCollision : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Calculates the approach speed of a colliding object.
+    /// </summary>
+    /// <param name="other">The collider to calculate speed for</param>
+    /// <returns>The magnitude of the linear velocity, or 0 if no rigidbody</returns>
     private float CalculateApproachSpeed(Collider other)
     {
         try
@@ -245,11 +284,20 @@ public class GetCollision : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Updates collision metrics by incrementing the total collision count.
+    /// </summary>
+    /// <param name="robotId">The robot identifier</param>
+    /// <param name="collisionData">The collision data</param>
     private void UpdateCollisionMetrics(string robotId, CollisionData collisionData)
     {
         _totalCollisions++;
     }
 
+    /// <summary>
+    /// Logs collision data to RobotActionLogger and FileLogger.
+    /// </summary>
+    /// <param name="collisionData">The collision data to log</param>
     private void LogCollision(CollisionData collisionData)
     {
         try
@@ -284,7 +332,9 @@ public class GetCollision : MonoBehaviour
         }
     }
 
-    // Public API for external systems
+    /// <summary>
+    /// Resets all collision metrics and tracking data.
+    /// </summary>
     public void ResetMetrics()
     {
         _totalCollisions = 0;
@@ -296,6 +346,10 @@ public class GetCollision : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Sets the target reward value for this collision target.
+    /// </summary>
+    /// <param name="rewardValue">The new reward value</param>
     public void SetTargetReward(float rewardValue)
     {
         targetRewardValue = rewardValue;
@@ -308,7 +362,9 @@ public class GetCollision : MonoBehaviour
         }
     }
 
-    // Debug visualization
+    /// <summary>
+    /// Unity OnDrawGizmos callback - visualizes the collision target in the scene view.
+    /// </summary>
     private void OnDrawGizmos()
     {
         Gizmos.color = Color.green;
@@ -326,6 +382,9 @@ public class GetCollision : MonoBehaviour
 #endif
     }
 
+    /// <summary>
+    /// Unity OnDestroy callback - logs final collision statistics.
+    /// </summary>
     private void OnDestroy()
     {
         try

@@ -78,10 +78,14 @@ public class GripperController : MonoBehaviour
     public float speed = 10f;
 
     [Range(0f, 1f)]
-    public float targetPosition = 0f;
+    public float targetPosition = 1f;
 
     public float CurrentPosition => leftGripper?.jointPosition[0] ?? 0f;
 
+    /// <summary>
+    /// Configures the articulation drive parameters for a gripper joint.
+    /// </summary>
+    /// <param name="gripper">The gripper ArticulationBody to configure</param>
     private void SetupDrive(ArticulationBody gripper)
     {
         var drive = gripper.xDrive;
@@ -91,12 +95,21 @@ public class GripperController : MonoBehaviour
         gripper.xDrive = drive;
     }
 
+    /// <summary>
+    /// Applies a target position to both left and right grippers.
+    /// </summary>
+    /// <param name="target">The target position to apply</param>
     private void ApplyTargetToGrippers(float target)
     {
         ApplyDriveTarget(leftGripper, target);
         ApplyDriveTarget(rightGripper, target);
     }
 
+    /// <summary>
+    /// Applies a drive target to a specific gripper.
+    /// </summary>
+    /// <param name="gripper">The gripper ArticulationBody to apply the target to</param>
+    /// <param name="target">The target position value</param>
     private void ApplyDriveTarget(ArticulationBody gripper, float target)
     {
         var drive = gripper.xDrive;
@@ -104,21 +117,34 @@ public class GripperController : MonoBehaviour
         gripper.xDrive = drive;
     }
 
+    /// <summary>
+    /// Sets the gripper position using a normalized value (0 to 1).
+    /// </summary>
+    /// <param name="normalizedPosition">The normalized position (0 = closed, 1 = open)</param>
     public void SetGripperPosition(float normalizedPosition)
     {
         targetPosition = Mathf.Clamp01(normalizedPosition);
     }
 
+    /// <summary>
+    /// Opens both grippers to their upper limit.
+    /// </summary>
     public void OpenGrippers()
     {
-        targetPosition = leftGripper.xDrive.upperLimit;
+        targetPosition = 1.0f;
     }
 
+    /// <summary>
+    /// Closes both grippers to their lower limit.
+    /// </summary>
     public void CloseGrippers()
     {
-        targetPosition = leftGripper.xDrive.lowerLimit;
+        targetPosition = 0.0f;
     }
 
+    /// <summary>
+    /// Resets both grippers to their default position and clears their physics state.
+    /// </summary>
     public void ResetGrippers()
     {
         targetPosition = 0f;
@@ -126,6 +152,10 @@ public class GripperController : MonoBehaviour
         ResetGripper(rightGripper);
     }
 
+    /// <summary>
+    /// Resets a single gripper to its default state.
+    /// </summary>
+    /// <param name="gripper">The gripper ArticulationBody to reset</param>
     private void ResetGripper(ArticulationBody gripper)
     {
         ApplyDriveTarget(gripper, 0f);
@@ -134,6 +164,9 @@ public class GripperController : MonoBehaviour
         gripper.jointForce = new ArticulationReducedSpace(0f);
     }
 
+    /// <summary>
+    /// Unity Awake callback - validates gripper references and sets up drive parameters.
+    /// </summary>
     private void Awake()
     {
         if (leftGripper == null || rightGripper == null)
@@ -146,11 +179,19 @@ public class GripperController : MonoBehaviour
         SetupDrive(rightGripper);
     }
 
+    /// <summary>
+    /// Unity Update callback - smoothly interpolates gripper position towards target position.
+    /// </summary>
     private void Update()
     {
+        // Map normalized position [0,1] to actual joint limits
+        float lower = leftGripper.xDrive.lowerLimit;
+        float upper = leftGripper.xDrive.upperLimit;
+        float mappedTarget = Mathf.Lerp(lower, upper, targetPosition);
+
         float newTarget = Mathf.MoveTowards(
             leftGripper.xDrive.target,
-            targetPosition,
+            mappedTarget,
             speed * Time.deltaTime
         );
 

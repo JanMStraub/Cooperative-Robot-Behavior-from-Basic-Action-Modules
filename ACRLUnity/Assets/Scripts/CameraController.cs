@@ -23,7 +23,7 @@ public class CameraControllerEditor : Editor
 public class CameraController : MonoBehaviour
 {
     private int _counter = 0;
-    private string _robotName;
+    private string _robotArmName;
     private string _rootName;
     private Camera _mainCamera;
 
@@ -36,7 +36,7 @@ public class CameraController : MonoBehaviour
     public void CaptureAndSave()
     {
         StartCoroutine(
-            CaptureCamera(_mainCamera, $"Data/Screenshots/{_rootName}/{_robotName}/{_counter}.jpg")
+            CaptureCamera(_mainCamera, $"Data/Screenshots/{_rootName}/{_robotArmName}/{_counter}.jpg")
         );
         _counter += 1;
     }
@@ -99,7 +99,7 @@ public class CameraController : MonoBehaviour
     private void Start()
     {
         _mainCamera = GetComponent<Camera>();
-        _robotName = FindArmRoot(_mainCamera.transform);
+        _robotArmName = FindArmRoot(_mainCamera.transform);
         _rootName = _mainCamera.transform.root.name;
     }
 }

@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics;
 using System.IO;
 using UnityEngine;
@@ -72,15 +73,36 @@ public class PythonCaller : MonoBehaviour
 
     private void Start()
     {
-        _isActive = true;
+        try
+        {
+            if (string.IsNullOrEmpty(basePath))
+                basePath = Directory.GetParent(Directory.GetParent(Application.dataPath).FullName).FullName;
 
-        if (string.IsNullOrEmpty(basePath))
-            basePath = Directory.GetParent(Directory.GetParent(Application.dataPath).FullName).FullName;
+            if (string.IsNullOrEmpty(pythonEnvPath))
+            {
+                if (SystemInfo.operatingSystemFamily == OperatingSystemFamily.Windows)
+                    pythonEnvPath = "roboscan/Scripts/python.exe";
+                else
+                    pythonEnvPath = "roboscan/bin/python";
+            }
 
-        if (string.IsNullOrEmpty(pythonEnvPath))
-            if (SystemInfo.operatingSystemFamily == OperatingSystemFamily.Windows)
-                pythonEnvPath = "roboscan/Scripts/python.exe";
+            // Verify Python environment exists
+            string fullPythonPath = Path.Combine(basePath, pythonEnvPath);
+            if (File.Exists(NormalizePath(fullPythonPath)))
+            {
+                _isActive = true;
+                UnityEngine.Debug.Log($"Python environment found at: {fullPythonPath}");
+            }
             else
-                pythonEnvPath = "roboscan/bin/python";
+            {
+                _isActive = false;
+                UnityEngine.Debug.LogWarning($"Python environment not found at: {fullPythonPath}. PythonCaller will be inactive.");
+            }
+        }
+        catch (Exception ex)
+        {
+            _isActive = false;
+            UnityEngine.Debug.LogError($"Failed to initialize PythonCaller: {ex.Message}");
+        }
     }
 }

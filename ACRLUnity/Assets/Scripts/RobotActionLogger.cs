@@ -283,7 +283,7 @@ public class RobotActionLogger : MonoBehaviour
                     : null,
                 jointAngles = jointAngles,
                 speed = speed,
-                timestamp = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
                 gameTime = Time.time,
                 success = success,
                 errorMessage = errorMessage,

@@ -4,84 +4,13 @@ using System.Linq;
 using UnityEngine;
 
 [System.Serializable]
-public class JointConfiguration
-{
-    [Header("Joint Parameters")]
-    public float stiffness = 800f;
-    public float damping = 250f;
-    public float forceLimit = 1000f;
-    public float upperLimit = 170f;
-    public float lowerLimit = -170f;
-
-    [Header("Performance Settings")]
-    public float maxVelocity = 180f; // degrees per second
-    public float acceleration = 360f; // degrees per second squared
-
-    public JointConfiguration() { }
-
-    public JointConfiguration(float stiff, float damp, float force, float upper, float lower)
-    {
-        stiffness = stiff;
-        damping = damp;
-        forceLimit = force;
-        upperLimit = upper;
-        lowerLimit = lower;
-    }
-}
-
-[System.Serializable]
-public class RobotProfile
-{
-    [Header("Robot Identity")]
-    public string profileName = "AR4_Default";
-    public string description = "Standard AR4 robotic arm configuration";
-
-    [Header("Joint Configurations")]
-    public JointConfiguration[] joints = new JointConfiguration[6];
-
-    [Header("IK Settings")]
-    [Range(0.1f, 5f)]
-    public float adjustmentSpeed = 1.0f;
-
-    [Range(0.001f, 0.5f)]
-    public float convergenceThreshold = 0.1f;
-
-    [Range(0.01f, 0.5f)]
-    public float maxJointStepRad = 0.1f;
-
-    [Header("Performance Limits")]
-    public float maxReachDistance = 0.8f;
-    public float minReachDistance = 0.1f;
-    public int maxIKIterations = 100;
-    public float ikTimeout = 5f;
-
-    public RobotProfile()
-    {
-        InitializeDefaultAR4Profile();
-    }
-
-    public void InitializeDefaultAR4Profile()
-    {
-        joints = new JointConfiguration[6]
-        {
-            new JointConfiguration(800, 250, 1000, 170, -170), // Base
-            new JointConfiguration(700, 200, 1500, 90, -90), // Shoulder
-            new JointConfiguration(600, 150, 1000, 65, -70), // Elbow
-            new JointConfiguration(300, 100, 800, 135, -135), // Wrist 1
-            new JointConfiguration(200, 80, 500, 100, -100), // Wrist 2
-            new JointConfiguration(100, 50, 300, 180, -180), // Wrist 3
-        };
-    }
-}
-
-[System.Serializable]
 public class RobotInstance
 {
     public string robotId;
     public GameObject robotGameObject;
     public GameObject targetGameObject;
     public RobotController controller;
-    public RobotProfile profile;
+    public RobotConfig profile;
     public bool isActive;
     public float lastTargetChangeTime;
     public Vector3 lastTargetPosition;
@@ -93,37 +22,23 @@ public class RobotManager : MonoBehaviour
 
     [Header("Robot Profiles")]
     [SerializeField]
-    private RobotProfile defaultProfile = new RobotProfile();
+    public RobotConfig robotProfile;
 
-    [SerializeField]
-    private List<RobotProfile> robotProfiles = new List<RobotProfile>();
+    // Configuration values for an AR4 robotic arm
 
     [Header("Global Settings")]
     [SerializeField, Range(0.1f, 5f)]
-    private float globalSpeedMultiplier = 1.0f;
+    public float globalSpeedMultiplier = 1.0f;
 
     [SerializeField]
-    private bool enableTargetChangeDetection = true;
+    private bool _enableTargetChangeDetection = true;
 
     [SerializeField]
-    private float targetChangeCheckInterval = 0.1f;
-
-    [Header("Legacy Support")]
-    [SerializeField]
-    private GameObject leftTarget;
-
-    [SerializeField]
-    private GameObject rightTarget;
-
-    [SerializeField]
-    private GameObject leftRobot;
-
-    [SerializeField]
-    private GameObject rightRobot;
+    private float _targetChangeCheckInterval = 0.1f;
 
     [Header("Debug Settings")]
     [SerializeField]
-    private bool logConfigurationChanges = true;
+    private bool _logConfigurationChanges = true;
 
     // Core components
     private FileLogger _fileLogger;
@@ -138,16 +53,13 @@ public class RobotManager : MonoBehaviour
     public event System.Action<string, GameObject> OnTargetChanged;
 
     // Properties
-    public RobotProfile DefaultProfile => defaultProfile;
     public IReadOnlyDictionary<string, RobotInstance> RobotInstances => _robotInstances;
     public int ActiveRobotCount => _robotInstances.Values.Count(r => r.isActive);
+    public RobotConfig RobotProfile => robotProfile;
 
-    // Legacy properties for backward compatibility
-    public float robotAdjustmentSpeed => defaultProfile.adjustmentSpeed * globalSpeedMultiplier;
-    public float convergenceThreshold => defaultProfile.convergenceThreshold;
-    public float maxRawJointStepRad => defaultProfile.maxJointStepRad;
-
-    // Singleton pattern initialization
+    /// <summary>
+    /// Unity Awake callback - initializes singleton instance.
+    /// </summary>
     private void Awake()
     {
         if (Instance == null)
@@ -162,19 +74,26 @@ public class RobotManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Initializes the RobotManager and creates default robot profile if needed.
+    /// </summary>
     private void InitializeManager()
     {
         try
         {
-            // Ensure default profile is properly initialized
-            if (defaultProfile.joints == null || defaultProfile.joints.Length == 0)
+            // Create default profile if not assigned in inspector
+            if (robotProfile == null)
             {
-                defaultProfile.InitializeDefaultAR4Profile();
+                robotProfile = ScriptableObject.CreateInstance<RobotConfig>();
             }
 
-            _nextTargetCheckTime = Time.time + targetChangeCheckInterval;
+            // Ensure default profile is properly initialized
+            if (robotProfile.joints == null || robotProfile.joints.Length == 0)
+            {
+                robotProfile.InitializeDefaultAR4Profile();
+            }
 
-            Debug.Log($"RobotManager initialized with {robotProfiles.Count + 1} profiles");
+            _nextTargetCheckTime = Time.time + _targetChangeCheckInterval;
         }
         catch (Exception ex)
         {
@@ -182,6 +101,9 @@ public class RobotManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Unity Start callback - initializes component references and discovers robots in the scene.
+    /// </summary>
     private void Start()
     {
         try
@@ -192,9 +114,6 @@ public class RobotManager : MonoBehaviour
 
             // Auto-discover robots
             DiscoverRobots();
-
-            // Setup legacy robots if specified
-            SetupLegacyRobots();
 
             // Log initialization
             _fileLogger?.LogSimulationEvent(
@@ -210,9 +129,13 @@ public class RobotManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Automatically discovers all RobotController components in the scene and registers them.
+    /// </summary>
     private void DiscoverRobots()
     {
         RobotController[] controllers = FindObjectsByType<RobotController>(
+            FindObjectsInactive.Exclude,
             FindObjectsSortMode.None
         );
 
@@ -222,52 +145,86 @@ public class RobotManager : MonoBehaviour
 
             if (!_robotInstances.ContainsKey(robotId))
             {
-                RegisterRobot(robotId, controller.gameObject, null, GetProfileForRobot(robotId));
-                Debug.Log($"Auto-discovered robot: {robotId}");
+                // Try to find a target for this robot
+                GameObject target = FindTargetForRobot(robotId);
+
+                RegisterRobot(robotId, controller.gameObject, target);
+                Debug.Log(
+                    $"Auto-discovered robot: {robotId}"
+                        + (target != null ? $" with target: {target.name}" : " (no target found)")
+                );
             }
         }
     }
 
-    private void SetupLegacyRobots()
+    /// <summary>
+    /// Attempts to find a target GameObject for a specific robot.
+    /// Searches for objects named "{RobotId}Target" or "Target_{RobotId}" or just "Target"
+    /// </summary>
+    /// <param name="robotId">The robot identifier to find a target for</param>
+    /// <returns>The target GameObject if found, null otherwise</returns>
+    private GameObject FindTargetForRobot(string robotId)
     {
-        // Setup legacy left robot
-        if (leftRobot != null && leftTarget != null)
+        // Search patterns: "AR4LeftTarget", "Target_AR4Left", "AR4Left_Target"
+        string[] patterns = new string[]
         {
-            string leftId = "AR4Left";
-            if (!_robotInstances.ContainsKey(leftId))
+            $"{robotId}Target",
+            $"Target_{robotId}",
+            $"{robotId}_Target",
+        };
+
+        // Add pattern without "AR4" prefix if it exists
+        if (robotId.Contains("AR4"))
+        {
+            string nameWithoutAR4 = robotId.Replace("AR4", "");
+            patterns = patterns.Append($"{nameWithoutAR4}Target").ToArray();
+        }
+
+        foreach (var pattern in patterns)
+        {
+            GameObject found = GameObject.Find(pattern);
+            if (found != null)
             {
-                RegisterRobot(leftId, leftRobot, leftTarget, defaultProfile);
-            }
-            else
-            {
-                _robotInstances[leftId].targetGameObject = leftTarget;
+                Debug.Log($"Found target '{found.name}' for robot '{robotId}'");
+                return found;
             }
         }
 
-        // Setup legacy right robot
-        if (rightRobot != null && rightTarget != null)
+        // Fallback: search for any object with "Target" in name near the robot
+        GameObject[] allObjects = FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+        foreach (var obj in allObjects)
         {
-            string rightId = "AR4Right";
-            if (!_robotInstances.ContainsKey(rightId))
+            if (
+                obj.name.ToLower().Contains("target")
+                && obj.name.Contains(robotId.Replace("AR4", ""))
+            )
             {
-                RegisterRobot(rightId, rightRobot, rightTarget, defaultProfile);
-            }
-            else
-            {
-                _robotInstances[rightId].targetGameObject = rightTarget;
+                Debug.Log($"Found target '{obj.name}' for robot '{robotId}' (fallback search)");
+                return obj;
             }
         }
+
+        Debug.LogWarning(
+            $"No target found for robot '{robotId}'. Robot will not move until target is assigned."
+        );
+        return null;
     }
 
+    /// <summary>
+    /// Unity Update callback - checks for target position changes at regular intervals.
+    /// </summary>
     private void Update()
     {
-        if (enableTargetChangeDetection && Time.time >= _nextTargetCheckTime)
+        if (_enableTargetChangeDetection && Time.time >= _nextTargetCheckTime)
         {
             CheckForTargetChanges();
-            _nextTargetCheckTime = Time.time + targetChangeCheckInterval;
+            _nextTargetCheckTime = Time.time + _targetChangeCheckInterval;
         }
     }
 
+    /// <summary>
+    /// Checks all registered robots for target position changes and updates controllers accordingly.
+    /// </summary>
     private void CheckForTargetChanges()
     {
         foreach (var robotEntry in _robotInstances)
@@ -288,7 +245,7 @@ public class RobotManager : MonoBehaviour
                     robot.controller.SetTarget(robot.targetGameObject);
                     OnTargetChanged?.Invoke(robot.robotId, robot.targetGameObject);
 
-                    if (logConfigurationChanges)
+                    if (_logConfigurationChanges)
                     {
                         _robotActionLogger?.LogAction(
                             "target_updated",
@@ -305,12 +262,18 @@ public class RobotManager : MonoBehaviour
         }
     }
 
-    // Public API
+    /// <summary>
+    /// Registers a robot with the RobotManager and applies its configuration profile.
+    /// </summary>
+    /// <param name="robotId">Unique identifier for the robot</param>
+    /// <param name="robotObject">The robot's GameObject containing RobotController</param>
+    /// <param name="targetObject">Optional target GameObject for the robot to track</param>
+    /// <param name="profile">Optional custom RobotConfig profile, uses default if null</param>
     public void RegisterRobot(
         string robotId,
         GameObject robotObject,
         GameObject targetObject = null,
-        RobotProfile profile = null
+        RobotConfig profile = null
     )
     {
         try
@@ -333,7 +296,7 @@ public class RobotManager : MonoBehaviour
                 robotGameObject = robotObject,
                 targetGameObject = targetObject,
                 controller = controller,
-                profile = profile ?? defaultProfile,
+                profile = profile ?? robotProfile,
                 isActive = true,
                 lastTargetChangeTime = Time.time,
                 lastTargetPosition = targetObject?.transform.position ?? Vector3.zero,
@@ -344,13 +307,22 @@ public class RobotManager : MonoBehaviour
             // Apply configuration to robot
             ApplyProfileToRobot(robotId);
 
+            // Set target on the controller if available
+            if (targetObject != null && controller != null)
+            {
+                controller.SetTarget(targetObject);
+                Debug.Log($"Assigned target '{targetObject.name}' to robot '{robotId}'");
+            }
+
+            string profileName = instance.profile != null ? instance.profile.profileName : "default";
+
             _fileLogger?.LogSimulationEvent(
                 "robot_registered",
-                $"Robot {robotId} registered with profile {profile?.profileName ?? "default"}"
+                $"Robot {robotId} registered with profile {profileName}"
             );
 
             Debug.Log(
-                $"Registered robot: {robotId} with profile: {profile?.profileName ?? "default"}"
+                $"Registered robot: {robotId} with profile: {profileName}"
             );
         }
         catch (Exception ex)
@@ -359,6 +331,10 @@ public class RobotManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Unregisters a robot from the RobotManager.
+    /// </summary>
+    /// <param name="robotId">The robot identifier to unregister</param>
     public void UnregisterRobot(string robotId)
     {
         if (_robotInstances.Remove(robotId))
@@ -374,23 +350,11 @@ public class RobotManager : MonoBehaviour
         }
     }
 
-    public void SetRobotProfile(string robotId, RobotProfile profile)
-    {
-        if (_robotInstances.TryGetValue(robotId, out RobotInstance robot))
-        {
-            robot.profile = profile;
-            ApplyProfileToRobot(robotId);
-
-            if (logConfigurationChanges)
-            {
-                _fileLogger?.LogSimulationEvent(
-                    "robot_profile_changed",
-                    $"Robot {robotId} profile changed to {profile.profileName}"
-                );
-            }
-        }
-    }
-
+    /// <summary>
+    /// Sets the target GameObject for a specific robot.
+    /// </summary>
+    /// <param name="robotId">The robot identifier</param>
+    /// <param name="target">The target GameObject to assign</param>
     public void SetRobotTarget(string robotId, GameObject target)
     {
         if (_robotInstances.TryGetValue(robotId, out RobotInstance robot))
@@ -407,18 +371,65 @@ public class RobotManager : MonoBehaviour
         }
     }
 
-    public void SetRobotActive(string robotId, bool active)
+    /// <summary>
+    /// Sets the target for a robot using a position coordinate.
+    /// Creates a temporary target object at the specified position.
+    /// </summary>
+    /// <param name="robotId">The robot identifier</param>
+    /// <param name="position">The target position in world coordinates</param>
+    public void SetRobotTarget(string robotId, Vector3 position)
     {
         if (_robotInstances.TryGetValue(robotId, out RobotInstance robot))
         {
-            robot.isActive = active;
-            _fileLogger?.LogSimulationEvent(
-                "robot_activation_changed",
-                $"Robot {robotId} active: {active}"
-            );
+            if (robot.controller != null)
+            {
+                robot.controller.SetTarget(position);
+
+                // Update robot instance tracking
+                robot.targetGameObject = GameObject.Find($"{robotId}_TempTarget");
+                robot.lastTargetPosition = position;
+                robot.lastTargetChangeTime = Time.time;
+
+                if (robot.targetGameObject != null)
+                {
+                    OnTargetChanged?.Invoke(robotId, robot.targetGameObject);
+                }
+            }
         }
     }
 
+    /// <summary>
+    /// Sets the target for a robot using position and rotation coordinates.
+    /// Creates a temporary target object at the specified position and rotation.
+    /// </summary>
+    /// <param name="robotId">The robot identifier</param>
+    /// <param name="position">The target position in world coordinates</param>
+    /// <param name="rotation">The target rotation in world coordinates</param>
+    public void SetRobotTarget(string robotId, Vector3 position, Quaternion rotation)
+    {
+        if (_robotInstances.TryGetValue(robotId, out RobotInstance robot))
+        {
+            if (robot.controller != null)
+            {
+                robot.controller.SetTarget(position, rotation);
+
+                // Update robot instance tracking
+                robot.targetGameObject = GameObject.Find($"{robotId}_TempTarget");
+                robot.lastTargetPosition = position;
+                robot.lastTargetChangeTime = Time.time;
+
+                if (robot.targetGameObject != null)
+                {
+                    OnTargetChanged?.Invoke(robotId, robot.targetGameObject);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Applies the robot's configuration profile to all its joints.
+    /// </summary>
+    /// <param name="robotId">The robot identifier</param>
     private void ApplyProfileToRobot(string robotId)
     {
         if (!_robotInstances.TryGetValue(robotId, out RobotInstance robot))
@@ -427,15 +438,21 @@ public class RobotManager : MonoBehaviour
         try
         {
             var controller = robot.controller;
-            if (controller?.robotJoints == null)
+            if (controller == null || controller.robotJoints == null || robot.profile == null || robot.profile.joints == null)
                 return;
 
+            // Validate joint count matches
+            int jointCount = Mathf.Min(controller.robotJoints.Length, robot.profile.joints.Length);
+            if (controller.robotJoints.Length != robot.profile.joints.Length)
+            {
+                Debug.LogWarning(
+                    $"Joint count mismatch for {robotId}: Controller has {controller.robotJoints.Length}, " +
+                    $"Profile has {robot.profile.joints.Length}. Applying to first {jointCount} joints."
+                );
+            }
+
             // Apply joint configurations
-            for (
-                int i = 0;
-                i < controller.robotJoints.Length && i < robot.profile.joints.Length;
-                i++
-            )
+            for (int i = 0; i < jointCount; i++)
             {
                 var joint = controller.robotJoints[i];
                 var config = robot.profile.joints[i];
@@ -450,7 +467,7 @@ public class RobotManager : MonoBehaviour
                 joint.xDrive = drive;
             }
 
-            if (logConfigurationChanges && _robotActionLogger != null)
+            if (_logConfigurationChanges && _robotActionLogger != null)
             {
                 _robotActionLogger.LogAction(
                     "configuration_applied",
@@ -469,23 +486,28 @@ public class RobotManager : MonoBehaviour
         }
     }
 
-    private RobotProfile GetProfileForRobot(string robotId)
+    /// <summary>
+    /// Gets the profile for a specific robot by robotId
+    /// </summary>
+    /// <param name="robotId">The robot identifier</param>
+    /// <returns>The robot's profile or null if robot not found</returns>
+    public RobotConfig GetRobotProfile(string robotId)
     {
-        // Try to find specific profile for robot
-        var profile = robotProfiles.FirstOrDefault(p => p.profileName.Contains(robotId));
-        return profile ?? defaultProfile;
+        return _robotInstances.TryGetValue(robotId, out RobotInstance robot) ? robot.profile : null;
     }
 
+    /// <summary>
+    /// Logs a summary of all robot configurations to the file logger and console.
+    /// </summary>
     private void LogConfigurationSummary()
     {
-        if (!logConfigurationChanges)
+        if (!_logConfigurationChanges)
             return;
 
         string summary = $"RobotManager Configuration Summary:\n";
         summary += $"- Total Robots: {_robotInstances.Count}\n";
         summary += $"- Global Speed Multiplier: {globalSpeedMultiplier}\n";
-        summary += $"- Default Profile: {defaultProfile.profileName}\n";
-        summary += $"- Available Profiles: {robotProfiles.Count + 1}\n";
+        summary += $"- Default Profile: {robotProfile.profileName}\n";
 
         foreach (var robot in _robotInstances.Values)
         {
@@ -497,6 +519,9 @@ public class RobotManager : MonoBehaviour
         Debug.Log(summary);
     }
 
+    /// <summary>
+    /// Unity OnDestroy callback - cleans up singleton instance.
+    /// </summary>
     private void OnDestroy()
     {
         if (Instance == this)

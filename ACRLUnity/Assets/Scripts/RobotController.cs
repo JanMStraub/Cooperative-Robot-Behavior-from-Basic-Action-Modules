@@ -58,7 +58,19 @@ public class RobotController : MonoBehaviour
     /// </summary>
     /// <param name="setting"> The value to set the targetReached flag to.
     /// </param>
-    public void SetTargetReached(bool setting) => _hasReachedTarget = setting;
+    public void SetTargetReached(bool setting)
+    {
+        if (_hasReachedTarget != setting)
+        {
+            _hasReachedTarget = setting;
+
+            // Notify simulation manager of target state change
+            if (_simulationManager != null)
+            {
+                _simulationManager.NotifyTargetReached(robotId, setting);
+            }
+        }
+    }
 
     /// <summary>
     /// Updates the target object.
@@ -68,7 +80,7 @@ public class RobotController : MonoBehaviour
     public void SetTarget(GameObject target)
     {
         _targetTransform = target.transform;
-        _hasReachedTarget = false;
+        SetTargetReached(false); // This will notify SimulationManager
 
         // Log target assignment
         if (_robotActionLogger != null)
@@ -83,6 +95,45 @@ public class RobotController : MonoBehaviour
                 true
             );
         }
+    }
+
+    /// <summary>
+    /// Updates the target to a specific position by creating a temporary target transform.
+    /// </summary>
+    /// <param name="position"> The target position in world coordinates.
+    /// </param>
+    public void SetTarget(Vector3 position)
+    {
+        // Create or reuse a temporary target object
+        GameObject tempTarget = GameObject.Find($"{robotId}_TempTarget");
+        if (tempTarget == null)
+        {
+            tempTarget = new GameObject($"{robotId}_TempTarget");
+        }
+
+        tempTarget.transform.position = position;
+        SetTarget(tempTarget);
+    }
+
+    /// <summary>
+    /// Updates the target to a specific position and rotation by creating a temporary target transform.
+    /// </summary>
+    /// <param name="position"> The target position in world coordinates.
+    /// </param>
+    /// <param name="rotation"> The target rotation in world coordinates.
+    /// </param>
+    public void SetTarget(Vector3 position, Quaternion rotation)
+    {
+        // Create or reuse a temporary target object
+        GameObject tempTarget = GameObject.Find($"{robotId}_TempTarget");
+        if (tempTarget == null)
+        {
+            tempTarget = new GameObject($"{robotId}_TempTarget");
+        }
+
+        tempTarget.transform.position = position;
+        tempTarget.transform.rotation = rotation;
+        SetTarget(tempTarget);
     }
 
     /// <summary>
@@ -201,13 +252,13 @@ public class RobotController : MonoBehaviour
 
             // World joint position/axis of xDrive
             Vector3 jointWorldPosition = jointTransform.position;
-            Vector3 axidWorld = jointTransform.rotation * joint.anchorRotation * Vector3.right;
+            Vector3 axisWorld = jointTransform.rotation * joint.anchorRotation * Vector3.right;
             // Simpler and equivalent in practice for xDrive:
-            // Vector3 axidWorld = jointTransform.rotation * (joint.anchorRotation * Vector3.right);
+            // Vector3 axisWorld = jointTransform.rotation * (joint.anchorRotation * Vector3.right);
 
             // Bring them into IK frame
             Vector3 jointLocalPosition = frame.InverseTransformPoint(jointWorldPosition);
-            Vector3 axisLocal = frame.InverseTransformDirection(axidWorld).normalized;
+            Vector3 axisLocal = frame.InverseTransformDirection(axisWorld).normalized;
 
             // Vector from joint to EE in IK frame
             Vector3 vectorJointToEndEffector = _endEffectorLocalPosition - jointLocalPosition;
@@ -284,9 +335,13 @@ public class RobotController : MonoBehaviour
         _errorVector[4] = orientationError.y;
         _errorVector[5] = orientationError.z;
 
-        if (_errorVector.L2Norm() < _robotManager.convergenceThreshold)
+        // Get robot's specific profile or fall back to default
+        var robotProfile = _robotManager.GetRobotProfile(robotId);
+        if (robotProfile == null)
+            robotProfile = _robotManager.RobotProfile;
+        if (_errorVector.L2Norm() < robotProfile.convergenceThreshold)
         {
-            _hasReachedTarget = true;
+            SetTargetReached(true); // This will notify SimulationManager
             Debug.Log($"{robotId} IK converged to target");
 
             // Log successful convergence
@@ -317,8 +372,8 @@ public class RobotController : MonoBehaviour
         {
             _jointDelta[i] = System.Math.Clamp(
                 _jointDelta[i],
-                -_robotManager.maxRawJointStepRad,
-                _robotManager.maxRawJointStepRad
+                -robotProfile.maxJointStepRad,
+                robotProfile.maxJointStepRad
             );
         }
 
@@ -328,7 +383,8 @@ public class RobotController : MonoBehaviour
         );
         float adaptiveGain = Mathf.Lerp(_minStepSpeedNearTarget, _maxStepSpeed, normalizedDistance); // Slower as it nears target
 
-        float stepScale = _robotManager.robotAdjustmentSpeed * adaptiveGain;
+        float stepScale =
+            robotProfile.adjustmentSpeed * _robotManager.globalSpeedMultiplier * adaptiveGain;
 
         // Apply joint updates
         for (int i = 0; i < jointCount; i++)
@@ -336,12 +392,12 @@ public class RobotController : MonoBehaviour
             var joint = robotJoints[i];
             ArticulationDrive drive = joint.xDrive;
 
-            // The change in angle from IK (deltaTheta) is typically in radians,
-            // but xDrive takes degrees.
-            float deltaAngleDegree = (float)_jointDelta[i] * Mathf.Rad2Deg;
+            // The change in angle from IK (deltaTheta) is in radians
+            // Convert to degrees and apply step scale
+            float deltaAngleDegree = (float)_jointDelta[i] * Mathf.Rad2Deg * stepScale;
 
             // Apply the scaled change
-            float newTarget = drive.target + (float)deltaAngleDegree * stepScale;
+            float newTarget = drive.target + deltaAngleDegree;
 
             // Clamp to joint limits
             newTarget = Mathf.Clamp(newTarget, drive.lowerLimit, drive.upperLimit);
@@ -392,7 +448,11 @@ public class RobotController : MonoBehaviour
     private void FixedUpdate()
     {
         // Early exit if the robot should stop
-        if (_simulationManager.ShouldStopRobots)
+        if (_simulationManager != null && _simulationManager.ShouldStopRobots)
+            return;
+
+        // Check if this robot is allowed to move (respects coordination mode)
+        if (_simulationManager != null && !_simulationManager.IsRobotActive(robotId))
             return;
 
         if (!_hasReachedTarget)

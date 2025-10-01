@@ -105,7 +105,7 @@ public class FileLogger : MonoBehaviour
         // Get references to other managers
         _simulationManager = SimulationManager.Instance;
         _robotActionLogger = RobotActionLogger.Instance;
-        _robotControllers = FindObjectsByType<RobotController>(FindObjectsSortMode.None);
+        _robotControllers = FindObjectsByType<RobotController>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
 
         if (captureUnityLogs)
         {
@@ -149,7 +149,7 @@ public class FileLogger : MonoBehaviour
         {
             SimulationLoggingState state = new SimulationLoggingState
             {
-                timestamp = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
                 gameTime = Time.time,
                 eventType = eventType,
                 simulationActive = isActive,

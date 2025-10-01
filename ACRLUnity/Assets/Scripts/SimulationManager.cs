@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 
 public enum SimulationState
 {
-    Stopped,
     Initializing,
     Running,
     Paused,
@@ -13,62 +14,73 @@ public enum SimulationState
     Error,
 }
 
-public enum RobotCoordinationMode
+#if UNITY_EDITOR
+[CustomEditor(typeof(SimulationManager))]
+public class SimulationManagerEditor : Editor
 {
-    Independent, // Robots operate independently
-    Sequential, // Robots take turns
+    public override void OnInspectorGUI()
+    {
+        DrawDefaultInspector();
+
+        SimulationManager manager = (SimulationManager)target;
+
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Simulation Controls", EditorStyles.boldLabel);
+
+        // Display current state
+        EditorGUILayout.LabelField($"Current State: {manager.CurrentState}");
+        EditorGUILayout.LabelField($"Active Robot: {manager.GetActiveRobotId()}");
+
+        EditorGUILayout.Space();
+
+        // Control buttons
+        EditorGUILayout.BeginHorizontal();
+
+        if (GUILayout.Button("Start"))
+        {
+            manager.StartSimulation();
+        }
+
+        if (GUILayout.Button("Pause"))
+        {
+            manager.PauseSimulation();
+        }
+
+        if (GUILayout.Button("Resume"))
+        {
+            manager.ResumeSimulation();
+        }
+
+        if (GUILayout.Button("Reset"))
+        {
+            manager.ResetSimulation();
+        }
+
+        EditorGUILayout.EndHorizontal();
+    }
 }
-
-[System.Serializable]
-public class SimulationConfig
-{
-    [Header("Simulation Settings")]
-    public float timeScale = 1f;
-    public bool autoStart = true;
-    public bool resetOnError = true;
-
-    [Header("Robot Coordination")]
-    public RobotCoordinationMode coordinationMode = RobotCoordinationMode.Independent;
-
-    [Header("Performance")]
-    public int targetFrameRate = 60;
-    public bool enableVSync = true;
-}
+#endif
 
 public class SimulationManager : MonoBehaviour
 {
-    public static SimulationManager Instance { get; private set; }
+    public static SimulationManager Instance { get; private set; } // Singleton instance
 
     [Header("Configuration")]
     [SerializeField]
-    private SimulationConfig config = new SimulationConfig();
-
-    [Header("Runtime Control")]
-    [SerializeField]
-    private bool stopRobot = false;
-
-    [SerializeField]
-    private bool pauseSimulation = false;
+    public SimulationConfig config;
 
     // Core components
     private PythonCaller _pythonCaller;
     private FileLogger _fileLogger;
-    private RobotActionLogger _robotActionLogger;
     private RobotController[] _robotControllers;
-    private RobotManager _robotManager;
 
     // State management
-    private SimulationState _currentState = SimulationState.Stopped;
-    private SimulationState _previousState = SimulationState.Stopped;
-    private float _stateChangeTime;
-    private string _lastErrorMessage;
+    private SimulationState _currentState = SimulationState.Paused;
+    private SimulationState _previousState = SimulationState.Paused;
 
     // Robot coordination
     private int _activeRobotIndex = 0;
     private Dictionary<string, bool> _robotTargetReached = new Dictionary<string, bool>();
-
-    // Session tracking
-    private float _sessionStartTime;
 
     // Events
     public event System.Action<SimulationState, SimulationState> OnStateChanged;
@@ -76,11 +88,12 @@ public class SimulationManager : MonoBehaviour
     // Properties
     public SimulationState CurrentState => _currentState;
     public bool IsRunning => _currentState == SimulationState.Running;
-    public bool IsPaused => _currentState == SimulationState.Paused || pauseSimulation;
-    public bool ShouldStopRobots =>
-        stopRobot || IsPaused || _currentState != SimulationState.Running;
+    public bool IsPaused => _currentState == SimulationState.Paused;
+    public bool ShouldStopRobots => _currentState != SimulationState.Running;
 
-    // Singleton pattern initialization
+    /// <summary>
+    /// Unity Awake callback - initializes singleton instance and simulation.
+    /// </summary>
     private void Awake()
     {
         if (Instance == null)
@@ -95,18 +108,26 @@ public class SimulationManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Initializes the simulation with default configuration and performance settings.
+    /// </summary>
     private void InitializeSimulation()
     {
         try
         {
+            // Create default config if not assigned
+            if (config == null)
+            {
+                Debug.LogWarning("SimulationConfig not assigned. Creating default configuration.");
+                config = ScriptableObject.CreateInstance<SimulationConfig>();
+            }
+
             // Apply performance settings
             Application.targetFrameRate = config.targetFrameRate;
             QualitySettings.vSyncCount = config.enableVSync ? 1 : 0;
             Time.timeScale = config.timeScale;
 
             ChangeState(SimulationState.Initializing);
-
-            _sessionStartTime = Time.time;
 
             Debug.Log(
                 $"SimulationManager initialized: {config.coordinationMode} mode, {config.targetFrameRate}fps"
@@ -118,6 +139,9 @@ public class SimulationManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Unity Start callback - initializes component references and robot tracking.
+    /// </summary>
     private void Start()
     {
         try
@@ -125,11 +149,9 @@ public class SimulationManager : MonoBehaviour
             // Get component references
             _pythonCaller = PythonCaller.Instance;
             _fileLogger = FileLogger.Instance;
-            _robotActionLogger = RobotActionLogger.Instance;
-            _robotManager = RobotManager.Instance;
 
             // Find all robot controllers
-            _robotControllers = FindObjectsByType<RobotController>(FindObjectsSortMode.None);
+            _robotControllers = FindObjectsByType<RobotController>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
 
             if (_robotControllers.Length == 0)
             {
@@ -157,7 +179,7 @@ public class SimulationManager : MonoBehaviour
             }
             else
             {
-                ChangeState(SimulationState.Stopped);
+                ChangeState(SimulationState.Paused);
             }
         }
         catch (Exception ex)
@@ -166,6 +188,9 @@ public class SimulationManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Unity Update callback - updates robot coordination based on configuration mode.
+    /// </summary>
     private void Update()
     {
         try
@@ -178,6 +203,9 @@ public class SimulationManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Unity LateUpdate callback - handles ML-Agents coordination if Python process is active.
+    /// </summary>
     private void LateUpdate()
     {
         try
@@ -193,6 +221,9 @@ public class SimulationManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Updates robot coordination based on the current coordination mode.
+    /// </summary>
     private void UpdateRobotCoordination()
     {
         if (!IsRunning || _robotControllers == null)
@@ -205,62 +236,84 @@ public class SimulationManager : MonoBehaviour
                 break;
 
             case RobotCoordinationMode.Independent:
+
+            case RobotCoordinationMode.Collaborative:
             default:
                 // All robots operate independently - no coordination needed
                 break;
         }
     }
 
+    /// <summary>
+    /// Handles robot coordination in sequential mode, switching to the next robot when current robot reaches its target.
+    /// </summary>
     private void HandleSequentialMode()
     {
-        // Simple sequential mode - robots take turns automatically
-        if (
-            _robotTargetReached.GetValueOrDefault(
-                _robotControllers[_activeRobotIndex].gameObject.name,
-                true
-            )
-        )
+        if (_robotControllers == null || _robotControllers.Length == 0)
+            return;
+
+        if (_activeRobotIndex < 0 || _activeRobotIndex >= _robotControllers.Length)
+            _activeRobotIndex = 0;
+
+        var currentRobot = _robotControllers[_activeRobotIndex];
+        if (currentRobot == null)
+            return;
+
+        string currentRobotId = currentRobot.gameObject.name;
+
+        // Check if current robot has reached its target
+        if (_robotTargetReached.GetValueOrDefault(currentRobotId, true))
         {
             // Switch to next robot
+            int previousIndex = _activeRobotIndex;
             _activeRobotIndex = (_activeRobotIndex + 1) % _robotControllers.Length;
 
             if (_fileLogger != null)
             {
                 _fileLogger.LogSimulationEvent(
                     "robot_switch",
-                    $"Switched to robot {_activeRobotIndex}"
+                    $"Switched from {currentRobotId} to {GetActiveRobotId()}"
                 );
             }
+
+            Debug.Log(
+                $"Sequential mode: Switched from robot {previousIndex} ({currentRobotId}) to robot {_activeRobotIndex} ({GetActiveRobotId()})"
+            );
         }
     }
 
+    /// <summary>
+    /// Changes the simulation state and triggers state change event.
+    /// </summary>
+    /// <param name="newState">The new simulation state to transition to</param>
     private void ChangeState(SimulationState newState)
     {
         if (_currentState == newState)
             return;
 
-        SimulationState oldState = _currentState;
         _previousState = _currentState;
         _currentState = newState;
-        _stateChangeTime = Time.time;
 
-        OnStateChanged?.Invoke(oldState, newState);
+        OnStateChanged?.Invoke(_previousState, newState);
 
         if (_fileLogger != null)
         {
             _fileLogger.LogSimulationEvent(
                 "state_change",
-                $"Changed from {oldState} to {newState}",
+                $"Changed from {_previousState} to {newState}",
                 newState == SimulationState.Running
             );
         }
 
-        Debug.Log($"SimulationManager state: {oldState} -> {newState}");
+        Debug.Log($"SimulationManager state: {_previousState} -> {newState}");
     }
 
+    /// <summary>
+    /// Handles simulation errors by changing state to error and optionally scheduling a reset.
+    /// </summary>
+    /// <param name="errorMessage">The error message to log</param>
     private void HandleError(string errorMessage)
     {
-        _lastErrorMessage = errorMessage;
         ChangeState(SimulationState.Error);
 
         Debug.LogError($"SimulationManager Error: {errorMessage}");
@@ -276,18 +329,18 @@ public class SimulationManager : MonoBehaviour
         }
     }
 
-    // Public control methods
+    /// <summary>
+    /// Starts the simulation and changes state to Running.
+    /// </summary>
     public void StartSimulation()
     {
-        if (_currentState == SimulationState.Error && !string.IsNullOrEmpty(_lastErrorMessage))
+        if (_currentState == SimulationState.Error)
         {
             Debug.LogWarning("Cannot start simulation while in error state. Reset first.");
             return;
         }
 
         ChangeState(SimulationState.Running);
-        stopRobot = false;
-        pauseSimulation = false;
 
         if (_fileLogger != null)
         {
@@ -298,27 +351,14 @@ public class SimulationManager : MonoBehaviour
         }
     }
 
-    public void StopSimulation()
-    {
-        ChangeState(SimulationState.Stopped);
-        stopRobot = true;
-
-        if (_fileLogger != null)
-        {
-            _fileLogger.LogSimulationEvent(
-                "simulation_stopped",
-                "Simulation stopped by user request",
-                false
-            );
-        }
-    }
-
+    /// <summary>
+    /// Pauses the simulation if currently running.
+    /// </summary>
     public void PauseSimulation()
     {
         if (IsRunning)
         {
             ChangeState(SimulationState.Paused);
-            pauseSimulation = true;
 
             if (_fileLogger != null)
             {
@@ -327,12 +367,14 @@ public class SimulationManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Resumes the simulation if currently paused.
+    /// </summary>
     public void ResumeSimulation()
     {
         if (IsPaused)
         {
             ChangeState(SimulationState.Running);
-            pauseSimulation = false;
 
             if (_fileLogger != null)
             {
@@ -341,6 +383,9 @@ public class SimulationManager : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Resets the simulation by resetting all robot joint targets and coordination state.
+    /// </summary>
     public void ResetSimulation()
     {
         ChangeState(SimulationState.Resetting);
@@ -360,8 +405,6 @@ public class SimulationManager : MonoBehaviour
             // Reset coordination
             _activeRobotIndex = 0;
 
-            _lastErrorMessage = string.Empty;
-
             if (_fileLogger != null)
             {
                 _fileLogger.LogSimulationEvent("simulation_reset", "Simulation reset completed");
@@ -374,7 +417,7 @@ public class SimulationManager : MonoBehaviour
             }
             else
             {
-                ChangeState(SimulationState.Stopped);
+                ChangeState(SimulationState.Paused);
             }
         }
         catch (Exception ex)
@@ -383,22 +426,66 @@ public class SimulationManager : MonoBehaviour
         }
     }
 
-    // Public getters
-    public float GetSessionTime() => Time.time - _sessionStartTime;
-
-    public string GetActiveRobotId() =>
-        _robotControllers?[_activeRobotIndex]?.gameObject.name ?? "None";
-
-    public string GetLastError() => _lastErrorMessage;
-
-    private void OnApplicationPause(bool pauseStatus)
+    /// <summary>
+    /// Gets the identifier of the currently active robot.
+    /// </summary>
+    /// <returns>The robot identifier or "None" if no active robot</returns>
+    public string GetActiveRobotId()
     {
-        if (pauseStatus && IsRunning)
+        if (_robotControllers == null || _robotControllers.Length == 0)
+            return "None";
+
+        if (_activeRobotIndex < 0 || _activeRobotIndex >= _robotControllers.Length)
+            return "None";
+
+        var controller = _robotControllers[_activeRobotIndex];
+        if (controller == null)
+            return "None";
+
+        return controller.gameObject.name;
+    }
+
+    /// <summary>
+    /// Checks if a specific robot is allowed to move based on coordination mode.
+    /// </summary>
+    /// <param name="robotId">The robot identifier to check</param>
+    /// <returns>True if the robot is allowed to move, false otherwise</returns>
+    public bool IsRobotActive(string robotId)
+    {
+        if (!IsRunning)
+            return false;
+
+        // In Sequential mode, only the active robot can move
+        if (config.coordinationMode == RobotCoordinationMode.Sequential)
         {
-            PauseSimulation();
+            return GetActiveRobotId() == robotId;
+        }
+
+        // In all other modes, all robots can move
+        return true;
+    }
+
+    /// <summary>
+    /// Notifies the manager that a robot has reached or is moving towards its target.
+    /// </summary>
+    /// <param name="robotId">The robot identifier</param>
+    /// <param name="reached">True if target is reached, false if still moving</param>
+    public void NotifyTargetReached(string robotId, bool reached)
+    {
+        _robotTargetReached[robotId] = reached;
+
+        if (reached && config.coordinationMode == RobotCoordinationMode.Sequential)
+        {
+            _fileLogger?.LogSimulationEvent(
+                "robot_target_reached",
+                $"Robot {robotId} reached target in sequential mode"
+            );
         }
     }
 
+    /// <summary>
+    /// Unity OnDestroy callback - cleans up singleton instance.
+    /// </summary>
     private void OnDestroy()
     {
         if (Instance == this)
