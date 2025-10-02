@@ -314,16 +314,15 @@ public class RobotManager : MonoBehaviour
                 Debug.Log($"Assigned target '{targetObject.name}' to robot '{robotId}'");
             }
 
-            string profileName = instance.profile != null ? instance.profile.profileName : "default";
+            string profileName =
+                instance.profile != null ? instance.profile.profileName : "default";
 
             _fileLogger?.LogSimulationEvent(
                 "robot_registered",
                 $"Robot {robotId} registered with profile {profileName}"
             );
 
-            Debug.Log(
-                $"Registered robot: {robotId} with profile: {profileName}"
-            );
+            Debug.Log($"Registered robot: {robotId} with profile: {profileName}");
         }
         catch (Exception ex)
         {
@@ -438,7 +437,12 @@ public class RobotManager : MonoBehaviour
         try
         {
             var controller = robot.controller;
-            if (controller == null || controller.robotJoints == null || robot.profile == null || robot.profile.joints == null)
+            if (
+                controller == null
+                || controller.robotJoints == null
+                || robot.profile == null
+                || robot.profile.joints == null
+            )
                 return;
 
             // Validate joint count matches
@@ -446,8 +450,8 @@ public class RobotManager : MonoBehaviour
             if (controller.robotJoints.Length != robot.profile.joints.Length)
             {
                 Debug.LogWarning(
-                    $"Joint count mismatch for {robotId}: Controller has {controller.robotJoints.Length}, " +
-                    $"Profile has {robot.profile.joints.Length}. Applying to first {jointCount} joints."
+                    $"Joint count mismatch for {robotId}: Controller has {controller.robotJoints.Length}, "
+                        + $"Profile has {robot.profile.joints.Length}. Applying to first {jointCount} joints."
                 );
             }
 

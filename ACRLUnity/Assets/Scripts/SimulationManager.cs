@@ -151,7 +151,10 @@ public class SimulationManager : MonoBehaviour
             _fileLogger = FileLogger.Instance;
 
             // Find all robot controllers
-            _robotControllers = FindObjectsByType<RobotController>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            _robotControllers = FindObjectsByType<RobotController>(
+                FindObjectsInactive.Exclude,
+                FindObjectsSortMode.None
+            );
 
             if (_robotControllers.Length == 0)
             {
