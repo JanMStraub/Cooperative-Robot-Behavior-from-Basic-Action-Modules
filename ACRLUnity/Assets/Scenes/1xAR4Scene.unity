@@ -207,7 +207,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a79441f348de89743a2939f4d699eac1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  m_RenderShadows: 1
+  m_RenderShadows: 0
   m_RequiresDepthTextureOption: 2
   m_RequiresOpaqueTextureOption: 2
   m_CameraType: 0
@@ -248,7 +248,7 @@ Camera:
   m_GameObject: {fileID: 627489884}
   m_Enabled: 1
   serializedVersion: 2
-  m_ClearFlags: 1
+  m_ClearFlags: 2
   m_BackGroundColor: {r: 0.19215687, g: 0.3019608, b: 0.4745098, a: 0}
   m_projectionMatrixMode: 1
   m_GateFitMode: 2
@@ -602,8 +602,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f5cfa4b1371fb4519a6878256014daf6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  basePath: 
-  pythonEnvPath: 
+  _basePath: 
+  _pythonEnvPath: 
+  _defaultTimeoutSeconds: 300
+  _maxConcurrentProcesses: 3
+  _outputBufferSize: 4096
 --- !u!114 &1797467629
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1359,10 +1362,60 @@ PrefabInstance:
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7024246774837506572, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 9060350412813614536}
+    - targetCorrespondingSourceObject: {fileID: 4144416916900277827, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 9060350412813614535}
     - targetCorrespondingSourceObject: {fileID: 8118212121978727654, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       insertIndex: -1
       addedObject: {fileID: 1336713178}
   m_SourcePrefab: {fileID: 100100000, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+--- !u!1 &9060350412813614533 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 4144416916900277827, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
+--- !u!1 &9060350412813614534 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 7024246774837506572, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &9060350412813614535
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9060350412813614533}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: debbc6b38e9e94e2f96a98663a243eb5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Logging.AutoLogger
+  enableAutoLogging: 1
+  robotId: Right
+  logMovement: 1
+  logGripper: 1
+  autoRegisterObjects: 1
+--- !u!114 &9060350412813614536
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9060350412813614534}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: debbc6b38e9e94e2f96a98663a243eb5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Logging.AutoLogger
+  enableAutoLogging: 1
+  robotId: Left
+  logMovement: 1
+  logGripper: 1
+  autoRegisterObjects: 1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
