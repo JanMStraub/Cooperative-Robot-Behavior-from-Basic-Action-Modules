@@ -454,7 +454,6 @@ GameObject:
   m_Component:
   - component: {fileID: 1170887387}
   - component: {fileID: 1170887386}
-  - component: {fileID: 1170887388}
   m_Layer: 0
   m_Name: RobotManager
   m_TagString: Untagged
@@ -494,23 +493,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1170887388
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1170887385}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 8a0f212bb248649dcb8024ba9e94a3a1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  operationType: default
-  logFilePath: /Users/jan/Code/MS/ACRLUnity/Logs
-  maxFileSizeMB: 10
-  maxRotatedFiles: 5
-  bufferSize: 100
 --- !u!1 &1336713174 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 8118212121978727654, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
@@ -614,16 +596,24 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1797467622}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ea63ce7a9290c46a3be33ded19d0ca14, type: 3}
+  m_Script: {fileID: 11500000, guid: 9b79e6a1d5d0c487f9f89560e0660fe9, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: 
-  logFilePath: /Users/jan/Code/MS/ACRLUnity/Logs
-  operationType: simulation
+  m_EditorClassIdentifier: Assembly-CSharp::Logging.RobotLogger
+  enableLogging: 1
+  logDirectory: 
+  operationType: NavigateToObject
+  perRobotFiles: 1
+  maxFileSizeMB: 10
+  maxRotatedFiles: 5
   captureUnityLogs: 0
   logSimulationState: 0
   stateLogInterval: 10
+  captureEnvironment: 1
+  environmentSampleRate: 2
+  trackTrajectories: 1
+  trajectorySampleRate: 0.2
 --- !u!4 &2081917769 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2394689641468132642, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}

@@ -1,6 +1,7 @@
 using MathNet.Numerics.LinearAlgebra;
 using MathNet.Numerics.LinearAlgebra.Double;
 using UnityEngine;
+using Logging;
 
 /// <summary>
 /// Controls a robotic arm using inverse kinematics (IK) with a damped least squares
@@ -11,7 +12,7 @@ public class RobotController : MonoBehaviour
 {
     private SimulationManager _simulationManager;
     private RobotManager _robotManager;
-    private RobotActionLogger _robotActionLogger;
+    private MainLogger _logger;
     public GripperController _gripperController;
 
     [Header("Robot Identity")]
@@ -84,9 +85,9 @@ public class RobotController : MonoBehaviour
         SetTargetReached(false); // This will notify SimulationManager
 
         // Log target assignment
-        if (_robotActionLogger != null)
+        if (_logger != null)
         {
-            _robotActionLogger.LogAction(
+            _logger.LogAction(
                 "setTarget",
                 robotId,
                 target.name,
@@ -348,9 +349,9 @@ public class RobotController : MonoBehaviour
             Debug.Log($"{robotId} closed grippers");
 
             // Log successful convergence
-            if (_robotActionLogger != null)
+            if (_logger != null)
             {
-                _robotActionLogger.LogAction(
+                _logger.LogAction(
                     "reachTarget",
                     robotId,
                     _targetTransform.name,
@@ -417,7 +418,7 @@ public class RobotController : MonoBehaviour
     {
         _simulationManager = SimulationManager.Instance;
         _robotManager = RobotManager.Instance;
-        _robotActionLogger = RobotActionLogger.Instance;
+        _logger = MainLogger.Instance;
 
         // Set robot ID if empty
         if (string.IsNullOrEmpty(robotId))
@@ -442,9 +443,9 @@ public class RobotController : MonoBehaviour
         }
 
         // Log initialization
-        if (_robotActionLogger != null)
+        if (_logger != null)
         {
-            _robotActionLogger.LogAction(
+            _logger.LogAction(
                 "initialize",
                 robotId,
                 gameObject.name,

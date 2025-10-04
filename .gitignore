@@ -96,6 +96,11 @@ images/
 
 # macOS system files
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
 
 # IDEs and Editors
 .idea/
@@ -104,6 +109,9 @@ images/
 .spyderproject
 .spyproject
 .ropeproject
+*.swp
+*.swo
+*~
 
 # mkdocs documentation
 /site
@@ -148,6 +156,29 @@ crashlytics-build.properties
 fabric.properties
 .idea/codestream.xml
 
+# Unity-specific (at root level)
+ACRLUnity/Library/
+ACRLUnity/Temp/
+ACRLUnity/Obj/
+ACRLUnity/Build/
+ACRLUnity/Builds/
+ACRLUnity/Logs/
+ACRLUnity/UserSettings/
+ACRLUnity/MemoryCaptures/
+ACRLUnity/Recordings/
+
+# ML-Agents training outputs
+results/
+summaries/
+models/
+
+# Log files
+*.log
+
 # Miscellaneous
 *.png
 *.jpg
+
+# Other
+CLAUDE.md
+.ml-agents/

@@ -257,14 +257,14 @@ namespace Logging
         }
 
         /// <summary>
-        /// Quick export from RobotLogger instance
+        /// Quick export from MainLogger instance
         /// </summary>
         public static void QuickExport(string format = "jsonl")
         {
-            var logger = RobotLogger.Instance;
+            var logger = MainLogger.Instance;
             if (logger == null)
             {
-                Debug.LogError("RobotLogger instance not found");
+                Debug.LogError("MainLogger instance not found");
                 return;
             }
 

@@ -20,15 +20,15 @@ namespace Logging
         public bool autoRun = false;
         public float delayBeforeStart = 2f;
 
-        private RobotLogger _logger;
+        private MainLogger _logger;
 
         private void Start()
         {
-            _logger = RobotLogger.Instance;
+            _logger = MainLogger.Instance;
 
             if (_logger == null)
             {
-                Debug.LogError("RobotLogger not found. Add it to the scene first.");
+                Debug.LogError("MainLogger not found. Add it to the scene first.");
                 return;
             }
 

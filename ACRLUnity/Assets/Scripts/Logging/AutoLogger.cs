@@ -28,7 +28,7 @@ namespace Logging
         public bool autoRegisterObjects = true;
 
         // Component references
-        private RobotLogger _logger;
+        private MainLogger _logger;
         private RobotController _robotController;
         private GripperController _gripperController;
 
@@ -46,11 +46,11 @@ namespace Logging
 
         private void Initialize()
         {
-            _logger = RobotLogger.Instance;
+            _logger = MainLogger.Instance;
             if (_logger == null)
             {
                 Debug.LogWarning(
-                    $"RobotLogger not found. Auto-logging disabled for {gameObject.name}"
+                    $"MainLogger not found. Auto-logging disabled for {gameObject.name}"
                 );
                 enableAutoLogging = false;
                 return;

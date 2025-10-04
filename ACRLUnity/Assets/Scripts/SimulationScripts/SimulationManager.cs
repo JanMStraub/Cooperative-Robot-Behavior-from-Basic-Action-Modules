@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using Logging;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -71,7 +72,7 @@ public class SimulationManager : MonoBehaviour
 
     // Core components
     private PythonCaller _pythonCaller;
-    private FileLogger _fileLogger;
+    private MainLogger _logger;
     private RobotController[] _robotControllers;
 
     // State management
@@ -148,7 +149,7 @@ public class SimulationManager : MonoBehaviour
         {
             // Get component references
             _pythonCaller = PythonCaller.Instance;
-            _fileLogger = FileLogger.Instance;
+            _logger = MainLogger.Instance;
 
             // Find all robot controllers
             _robotControllers = FindObjectsByType<RobotController>(
@@ -170,7 +171,7 @@ public class SimulationManager : MonoBehaviour
             }
 
             // Log simulation start
-            _fileLogger?.LogSimulationEvent(
+            _logger?.LogSimulationEvent(
                 "simulation_initialized",
                 $"Found {_robotControllers.Length} robots. Mode: {config.coordinationMode}"
             );
@@ -271,9 +272,9 @@ public class SimulationManager : MonoBehaviour
             int previousIndex = _activeRobotIndex;
             _activeRobotIndex = (_activeRobotIndex + 1) % _robotControllers.Length;
 
-            if (_fileLogger != null)
+            if (_logger != null)
             {
-                _fileLogger.LogSimulationEvent(
+                _logger.LogSimulationEvent(
                     "robot_switch",
                     $"Switched from {currentRobotId} to {GetActiveRobotId()}"
                 );
@@ -299,9 +300,9 @@ public class SimulationManager : MonoBehaviour
 
         OnStateChanged?.Invoke(_previousState, newState);
 
-        if (_fileLogger != null)
+        if (_logger != null)
         {
-            _fileLogger.LogSimulationEvent(
+            _logger.LogSimulationEvent(
                 "state_change",
                 $"Changed from {_previousState} to {newState}",
                 newState == SimulationState.Running
@@ -321,9 +322,9 @@ public class SimulationManager : MonoBehaviour
 
         Debug.LogError($"SimulationManager Error: {errorMessage}");
 
-        if (_fileLogger != null)
+        if (_logger != null)
         {
-            _fileLogger.LogSimulationEvent("simulation_error", errorMessage, false);
+            _logger.LogSimulationEvent("simulation_error", errorMessage, false);
         }
 
         if (config.resetOnError)
@@ -345,9 +346,9 @@ public class SimulationManager : MonoBehaviour
 
         ChangeState(SimulationState.Running);
 
-        if (_fileLogger != null)
+        if (_logger != null)
         {
-            _fileLogger.LogSimulationEvent(
+            _logger.LogSimulationEvent(
                 "simulation_started",
                 "Simulation started by user request"
             );
@@ -363,9 +364,9 @@ public class SimulationManager : MonoBehaviour
         {
             ChangeState(SimulationState.Paused);
 
-            if (_fileLogger != null)
+            if (_logger != null)
             {
-                _fileLogger.LogSimulationEvent("simulation_paused", "Simulation paused", false);
+                _logger.LogSimulationEvent("simulation_paused", "Simulation paused", false);
             }
         }
     }
@@ -379,9 +380,9 @@ public class SimulationManager : MonoBehaviour
         {
             ChangeState(SimulationState.Running);
 
-            if (_fileLogger != null)
+            if (_logger != null)
             {
-                _fileLogger.LogSimulationEvent("simulation_resumed", "Simulation resumed");
+                _logger.LogSimulationEvent("simulation_resumed", "Simulation resumed");
             }
         }
     }
@@ -408,9 +409,9 @@ public class SimulationManager : MonoBehaviour
             // Reset coordination
             _activeRobotIndex = 0;
 
-            if (_fileLogger != null)
+            if (_logger != null)
             {
-                _fileLogger.LogSimulationEvent("simulation_reset", "Simulation reset completed");
+                _logger.LogSimulationEvent("simulation_reset", "Simulation reset completed");
             }
 
             // Restart if configured
@@ -479,7 +480,7 @@ public class SimulationManager : MonoBehaviour
 
         if (reached && config.coordinationMode == RobotCoordinationMode.Sequential)
         {
-            _fileLogger?.LogSimulationEvent(
+            _logger?.LogSimulationEvent(
                 "robot_target_reached",
                 $"Robot {robotId} reached target in sequential mode"
             );
@@ -493,9 +494,9 @@ public class SimulationManager : MonoBehaviour
     {
         if (Instance == this)
         {
-            if (_fileLogger != null)
+            if (_logger != null)
             {
-                _fileLogger.LogSimulationEvent(
+                _logger.LogSimulationEvent(
                     "simulation_destroyed",
                     "SimulationManager destroyed",
                     false
