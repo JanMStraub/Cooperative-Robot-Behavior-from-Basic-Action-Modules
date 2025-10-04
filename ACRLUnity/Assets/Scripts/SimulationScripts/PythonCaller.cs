@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
+using Logging;
 
 /// <summary>
 /// Manages Python process execution for ML-Agents and external data processing.
@@ -46,7 +47,7 @@ public class PythonCaller : MonoBehaviour
     private int _nextProcessId = 1;
 
     // Logging integration
-    private FileLogger _fileLogger;
+    private MainLogger _logger;
 
     /// <summary>
     /// Information about a running Python process
@@ -100,8 +101,8 @@ public class PythonCaller : MonoBehaviour
     {
         try
         {
-            // Get FileLogger reference
-            _fileLogger = FindFirstObjectByType<FileLogger>();
+            // Get RobotLogger reference
+            _logger = FindFirstObjectByType<MainLogger>();
 
             // Auto-detect base path if not set
             if (string.IsNullOrEmpty(_basePath))
@@ -656,34 +657,34 @@ public class PythonCaller : MonoBehaviour
     }
 
     /// <summary>
-    /// Logs a message using FileLogger if available, otherwise uses Unity Debug
+    /// Logs a message using RobotLogger if available, otherwise uses Unity Debug
     /// </summary>
     private void LogMessage(string message)
     {
-        if (_fileLogger != null)
-            _fileLogger.LogSimulationEvent("python_info", message);
+        if (_logger != null)
+            _logger.LogSimulationEvent("python_info", message);
 
         UnityEngine.Debug.Log($"[PythonCaller] {message}");
     }
 
     /// <summary>
-    /// Logs a warning using FileLogger if available, otherwise uses Unity Debug
+    /// Logs a warning using RobotLogger if available, otherwise uses Unity Debug
     /// </summary>
     private void LogWarning(string message)
     {
-        if (_fileLogger != null)
-            _fileLogger.LogSimulationEvent("python_warning", message);
+        if (_logger != null)
+            _logger.LogSimulationEvent("python_warning", message);
 
         UnityEngine.Debug.LogWarning($"[PythonCaller] {message}");
     }
 
     /// <summary>
-    /// Logs an error using FileLogger if available, otherwise uses Unity Debug
+    /// Logs an error using RobotLogger if available, otherwise uses Unity Debug
     /// </summary>
     private void LogError(string message)
     {
-        if (_fileLogger != null)
-            _fileLogger.LogSimulationEvent("python_error", message, false);
+        if (_logger != null)
+            _logger.LogSimulationEvent("python_error", message, false);
 
         UnityEngine.Debug.LogError($"[PythonCaller] {message}");
     }

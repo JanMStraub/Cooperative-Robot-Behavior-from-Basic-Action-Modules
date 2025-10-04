@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using Logging;
 
 [System.Serializable]
 public class RobotInstance
@@ -41,8 +42,7 @@ public class RobotManager : MonoBehaviour
     private bool _logConfigurationChanges = true;
 
     // Core components
-    private FileLogger _fileLogger;
-    private RobotActionLogger _robotActionLogger;
+    private MainLogger _logger;
 
     // Robot management
     private Dictionary<string, RobotInstance> _robotInstances =
@@ -109,14 +109,13 @@ public class RobotManager : MonoBehaviour
         try
         {
             // Get component references
-            _fileLogger = FileLogger.Instance;
-            _robotActionLogger = RobotActionLogger.Instance;
+            _logger = MainLogger.Instance;
 
             // Auto-discover robots
             DiscoverRobots();
 
             // Log initialization
-            _fileLogger?.LogSimulationEvent(
+            _logger?.LogSimulationEvent(
                 "robot_manager_initialized",
                 $"Initialized with {_robotInstances.Count} robots"
             );
@@ -247,7 +246,7 @@ public class RobotManager : MonoBehaviour
 
                     if (_logConfigurationChanges)
                     {
-                        _robotActionLogger?.LogAction(
+                        _logger?.LogAction(
                             "target_updated",
                             robot.robotId,
                             robot.targetGameObject.name,
@@ -317,7 +316,7 @@ public class RobotManager : MonoBehaviour
             string profileName =
                 instance.profile != null ? instance.profile.profileName : "default";
 
-            _fileLogger?.LogSimulationEvent(
+            _logger?.LogSimulationEvent(
                 "robot_registered",
                 $"Robot {robotId} registered with profile {profileName}"
             );
@@ -338,13 +337,10 @@ public class RobotManager : MonoBehaviour
     {
         if (_robotInstances.Remove(robotId))
         {
-            if (_fileLogger != null)
-            {
-                _fileLogger.LogSimulationEvent(
-                    "robot_unregistered",
-                    $"Robot {robotId} unregistered"
-                );
-            }
+            _logger?.LogSimulationEvent(
+                "robot_unregistered",
+                $"Robot {robotId} unregistered"
+            );
             Debug.Log($"Unregistered robot: {robotId}");
         }
     }
@@ -471,9 +467,9 @@ public class RobotManager : MonoBehaviour
                 joint.xDrive = drive;
             }
 
-            if (_logConfigurationChanges && _robotActionLogger != null)
+            if (_logConfigurationChanges && _logger != null)
             {
-                _robotActionLogger.LogAction(
+                _logger.LogAction(
                     "configuration_applied",
                     robotId,
                     robot.profile.profileName,
@@ -519,7 +515,7 @@ public class RobotManager : MonoBehaviour
                 $"- {robot.robotId}: Profile '{robot.profile.profileName}', Active: {robot.isActive}\n";
         }
 
-        _fileLogger?.LogSimulationEvent("robot_configuration_summary", summary);
+        _logger?.LogSimulationEvent("robot_configuration_summary", summary);
         Debug.Log(summary);
     }
 
@@ -530,10 +526,7 @@ public class RobotManager : MonoBehaviour
     {
         if (Instance == this)
         {
-            if (_fileLogger != null)
-            {
-                _fileLogger.LogSimulationEvent("robot_manager_destroyed", "RobotManager destroyed");
-            }
+            _logger?.LogSimulationEvent("robot_manager_destroyed", "RobotManager destroyed");
             Instance = null;
         }
     }

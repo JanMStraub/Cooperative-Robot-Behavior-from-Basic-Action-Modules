@@ -71,7 +71,36 @@ crashlytics-build.properties
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
 
-# other
+# Mac-specific
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Python virtual environments
+venv/
+env/
+*.pyc
+__pycache__/
+
+# ML-Agents training outputs
+results/
+summaries/
+models/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Log files
+*.log
+
+# Other
 *.png
 Screenshots/
 Assets/Packages/

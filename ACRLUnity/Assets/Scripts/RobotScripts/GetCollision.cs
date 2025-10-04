@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using Logging;
 
 [System.Serializable]
 public class CollisionData
@@ -47,8 +48,7 @@ public class GetCollision : MonoBehaviour
 
     // Core components
     private RobotManager _robotManager;
-    private RobotActionLogger _robotActionLogger;
-    private FileLogger _fileLogger;
+    private MainLogger _logger;
 
     // Collision tracking
     private Dictionary<string, float> _lastCollisionTime = new Dictionary<string, float>();
@@ -79,20 +79,16 @@ public class GetCollision : MonoBehaviour
         {
             // Get component references
             _robotManager = RobotManager.Instance;
-            _robotActionLogger = RobotActionLogger.Instance;
-            _fileLogger = FileLogger.Instance;
+            _logger = MainLogger.Instance;
 
             // Validate configuration
             ValidateConfiguration();
 
             // Log collision detector initialization
-            if (_fileLogger != null)
-            {
-                _fileLogger.LogSimulationEvent(
-                    "collision_detector_initialized",
-                    $"Target: {targetId}, GoalTarget: {isGoalTarget}, RewardValue: {targetRewardValue}"
-                );
-            }
+            _logger?.LogSimulationEvent(
+                "collision_detector_initialized",
+                $"Target: {targetId}, GoalTarget: {isGoalTarget}, RewardValue: {targetRewardValue}"
+            );
 
             Debug.Log($"Collision detector initialized for target: {targetId}");
         }
@@ -295,17 +291,17 @@ public class GetCollision : MonoBehaviour
     }
 
     /// <summary>
-    /// Logs collision data to RobotActionLogger and FileLogger.
+    /// Logs collision data to RobotLogger and FileLogger.
     /// </summary>
     /// <param name="collisionData">The collision data to log</param>
     private void LogCollision(CollisionData collisionData)
     {
         try
         {
-            // Log to RobotActionLogger
-            if (_robotActionLogger != null)
+            // Log to RobotLogger
+            if (_logger != null)
             {
-                _robotActionLogger.LogAction(
+                _logger.LogAction(
                     "collision_detected",
                     collisionData.robotId,
                     targetId,
@@ -317,14 +313,11 @@ public class GetCollision : MonoBehaviour
                 );
             }
 
-            // Log to FileLogger
-            if (_fileLogger != null)
-            {
-                _fileLogger.LogSimulationEvent(
-                    "target_collision",
-                    $"Robot: {collisionData.robotId}, Target: {targetId}, Type: {collisionData.collisionType}, Speed: {collisionData.approachSpeed:F2}, Intended: {collisionData.wasIntended}"
-                );
-            }
+            // Log to simulation event log
+            _logger?.LogSimulationEvent(
+                "target_collision",
+                $"Robot: {collisionData.robotId}, Target: {targetId}, Type: {collisionData.collisionType}, Speed: {collisionData.approachSpeed:F2}, Intended: {collisionData.wasIntended}"
+            );
         }
         catch (Exception ex)
         {
@@ -340,10 +333,7 @@ public class GetCollision : MonoBehaviour
         _totalCollisions = 0;
         _lastCollisionTime.Clear();
 
-        if (_fileLogger != null)
-        {
-            _fileLogger.LogSimulationEvent("collision_metrics_reset", $"Target: {targetId}");
-        }
+        _logger?.LogSimulationEvent("collision_metrics_reset", $"Target: {targetId}");
     }
 
     /// <summary>
@@ -353,13 +343,10 @@ public class GetCollision : MonoBehaviour
     public void SetTargetReward(float rewardValue)
     {
         targetRewardValue = rewardValue;
-        if (_fileLogger != null)
-        {
-            _fileLogger.LogSimulationEvent(
-                "target_reward_changed",
-                $"Target: {targetId}, NewReward: {rewardValue}"
-            );
-        }
+        _logger?.LogSimulationEvent(
+            "target_reward_changed",
+            $"Target: {targetId}, NewReward: {rewardValue}"
+        );
     }
 
     /// <summary>
@@ -390,10 +377,10 @@ public class GetCollision : MonoBehaviour
         try
         {
             // Log final statistics
-            if (_fileLogger != null && _totalCollisions > 0)
+            if (_totalCollisions > 0)
             {
                 string summary = $"Target {targetId} final stats: {_totalCollisions} collisions";
-                _fileLogger.LogSimulationEvent("collision_detector_destroyed", summary);
+                _logger?.LogSimulationEvent("collision_detector_destroyed", summary);
             }
         }
         catch (Exception ex)

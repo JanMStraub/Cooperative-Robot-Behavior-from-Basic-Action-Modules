@@ -7,13 +7,11 @@ using UnityEngine;
 namespace Logging
 {
     /// <summary>
-    ///  unified robot logger for LLM training data
-    /// Replaces: EnhancedRobotActionLogger + TaskLogger + OperationLogger +
-    ///           EnvironmentTracker + CoordinationLogger
+    /// Unified logger for LLM training data
     /// </summary>
-    public class RobotLogger : MonoBehaviour
+    public class MainLogger : MonoBehaviour
     {
-        public static RobotLogger Instance { get; private set; }
+        public static MainLogger Instance { get; private set; }
 
         [Header("Configuration")]
         [Tooltip("Enable/disable logging")]
@@ -22,6 +20,29 @@ namespace Logging
         [Tooltip("Log file directory (leave empty for default)")]
         public string logDirectory = "";
 
+        [Tooltip("Folder name for the operation performed")]
+        public string operationType = "default";
+
+        [Tooltip("Use per-robot log files (true) or single session file (false)")]
+        public bool perRobotFiles = true;
+
+        [Tooltip("Maximum log file size in MB before rotation")]
+        public float maxFileSizeMB = 10f;
+
+        [Tooltip("Maximum number of rotated log files to keep")]
+        public int maxRotatedFiles = 5;
+
+        [Header("Console Logging")]
+        [Tooltip("Capture Unity console logs (Debug.Log, etc.)")]
+        public bool captureUnityLogs = true;
+
+        [Tooltip("Enable simulation state logging")]
+        public bool logSimulationState = true;
+
+        [Tooltip("Interval for periodic state logging (seconds)")]
+        public float stateLogInterval = 10f;
+
+        [Header("Environment Tracking")]
         [Tooltip("Capture environment snapshots")]
         public bool captureEnvironment = true;
 
@@ -47,6 +68,23 @@ namespace Logging
         private string _logFilePath;
         private StreamWriter _logWriter;
         private string _sessionId;
+        private StreamWriter _consoleLogWriter; // Separate console log file
+
+        // Simulation state tracking
+        private float _nextStateLogTime;
+        private float _startTime;
+        private SimulationManager _simulationManager;
+        private RobotController[] _robotControllers;
+
+        // Per-robot file management
+        private readonly Dictionary<string, RobotFileData> _robotFiles = new();
+
+        private class RobotFileData
+        {
+            public string FilePath { get; set; }
+            public StreamWriter Writer { get; set; }
+            public long CurrentFileSize { get; set; }
+        }
 
         private void Awake()
         {
@@ -65,18 +103,52 @@ namespace Logging
         private void Initialize()
         {
             _sessionId = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            _startTime = Time.time;
 
             if (string.IsNullOrEmpty(logDirectory))
                 logDirectory = Path.Combine(Application.persistentDataPath, "RobotLogs");
 
-            Directory.CreateDirectory(logDirectory);
-            _logFilePath = Path.Combine(logDirectory, $"robot_actions_{_sessionId}.jsonl");
+            // Add operation type subfolder
+            string fullLogPath = Path.Combine(logDirectory, operationType);
+            Directory.CreateDirectory(fullLogPath);
 
-            _logWriter = new StreamWriter(_logFilePath, true);
-            _logWriter.AutoFlush = true;
+            if (!perRobotFiles)
+            {
+                // Single session file
+                _logFilePath = Path.Combine(fullLogPath, $"robot_actions_{_sessionId}.json");
+                _logWriter = new StreamWriter(_logFilePath, true);
+                _logWriter.AutoFlush = true;
+                Debug.Log($"MainLogger initialized. Session log: {_logFilePath}");
+            }
+            else
+            {
+                Debug.Log($"MainLogger initialized. Per-robot logs in: {fullLogPath}");
+            }
+
+            // Create console log file if enabled
+            if (captureUnityLogs)
+            {
+                string consoleLogPath = Path.Combine(fullLogPath, $"console_{_sessionId}.log");
+                _consoleLogWriter = new StreamWriter(consoleLogPath, true);
+                _consoleLogWriter.AutoFlush = true;
+                Application.logMessageReceived += HandleUnityLog;
+                Debug.Log($"Console logging enabled: {consoleLogPath}");
+            }
 
             LogSessionStart();
-            Debug.Log($"RobotLogger initialized. Logs: {_logFilePath}");
+            LogSystemInformation();
+        }
+
+        private void Start()
+        {
+            // Get references to other managers
+            _simulationManager = SimulationManager.Instance;
+            _robotControllers = FindObjectsByType<RobotController>(
+                FindObjectsInactive.Exclude,
+                FindObjectsSortMode.None
+            );
+
+            _nextStateLogTime = Time.time + stateLogInterval;
         }
 
         private void Update()
@@ -95,6 +167,13 @@ namespace Logging
             {
                 CaptureEnvironment();
                 _lastEnvironmentCapture = Time.time;
+            }
+
+            // Log simulation state periodically
+            if (logSimulationState && Time.time >= _nextStateLogTime)
+            {
+                LogCurrentSimulationState();
+                _nextStateLogTime = Time.time + stateLogInterval;
             }
         }
 
@@ -294,6 +373,29 @@ namespace Logging
                 metrics["joint_count"] = jointAngles.Length;
 
             CompleteAction(actionId, success, success ? 0.8f : 0f, errorMessage, metrics);
+        }
+
+        /// <summary>
+        /// Log joint states for IK debugging (for compatibility with RobotActionLogger)
+        /// </summary>
+        public void LogJointState(
+            string robotId,
+            float[] jointAngles,
+            Vector3? targetPosition = null,
+            bool success = true,
+            string errorMessage = null
+        )
+        {
+            LogAction(
+                "joint_state",
+                robotId,
+                null,
+                targetPosition,
+                jointAngles,
+                0f,
+                success,
+                errorMessage
+            );
         }
 
         // ==================== INTERNAL METHODS ====================
@@ -576,13 +678,26 @@ namespace Logging
 
         private void WriteLog(LogEntry entry)
         {
-            if (_logWriter == null)
+            if (!enableLogging)
                 return;
 
             try
             {
                 string json = JsonUtility.ToJson(entry);
-                _logWriter.WriteLine(json);
+
+                if (perRobotFiles && entry.action != null && entry.action.robotIds.Length > 0)
+                {
+                    // Write to per-robot files
+                    foreach (string robotId in entry.action.robotIds)
+                    {
+                        WriteToRobotFile(robotId, json);
+                    }
+                }
+                else if (_logWriter != null)
+                {
+                    // Write to session file
+                    _logWriter.WriteLine(json);
+                }
             }
             catch (Exception ex)
             {
@@ -590,22 +705,313 @@ namespace Logging
             }
         }
 
+        /// <summary>
+        /// Get or create per-robot file writer
+        /// </summary>
+        private RobotFileData GetOrCreateRobotFile(string robotId)
+        {
+            if (_robotFiles.TryGetValue(robotId, out RobotFileData fileData))
+                return fileData;
+
+            // Create new robot file
+            string safeRobotId = string.IsNullOrEmpty(robotId)
+                ? "Unknown"
+                : robotId.Replace("/", "_").Replace("\\", "_");
+
+            string fullLogPath = Path.Combine(logDirectory, operationType);
+            string fileName = $"{safeRobotId}_actions.json";
+            string filePath = Path.Combine(fullLogPath, fileName);
+
+            fileData = new RobotFileData
+            {
+                FilePath = filePath,
+                Writer = new StreamWriter(filePath, true) { AutoFlush = true },
+                CurrentFileSize = File.Exists(filePath) ? new FileInfo(filePath).Length : 0,
+            };
+
+            _robotFiles[robotId] = fileData;
+            Debug.Log($"Created log file for robot '{safeRobotId}': {filePath}");
+
+            return fileData;
+        }
+
+        /// <summary>
+        /// Write to per-robot file with rotation
+        /// </summary>
+        private void WriteToRobotFile(string robotId, string json)
+        {
+            RobotFileData fileData = GetOrCreateRobotFile(robotId);
+
+            // Check if rotation needed
+            if (fileData.CurrentFileSize > maxFileSizeMB * 1024 * 1024)
+            {
+                RotateLogFile(robotId, fileData);
+            }
+
+            fileData.Writer.WriteLine(json);
+            fileData.CurrentFileSize += System.Text.Encoding.UTF8.GetByteCount(json) + 1; // +1 for newline
+        }
+
+        /// <summary>
+        /// Rotate log file when size limit reached
+        /// </summary>
+        private void RotateLogFile(string robotId, RobotFileData fileData)
+        {
+            try
+            {
+                string baseFileName = Path.GetFileNameWithoutExtension(fileData.FilePath);
+                string extension = Path.GetExtension(fileData.FilePath);
+                string directory = Path.GetDirectoryName(fileData.FilePath);
+
+                // Close current writer
+                fileData.Writer.Close();
+                fileData.Writer.Dispose();
+
+                // Rotate existing backup files
+                for (int i = maxRotatedFiles; i > 1; i--)
+                {
+                    string oldFile = Path.Combine(directory, $"{baseFileName}.{i - 1}{extension}");
+                    string newFile = Path.Combine(directory, $"{baseFileName}.{i}{extension}");
+
+                    if (File.Exists(oldFile))
+                    {
+                        if (File.Exists(newFile))
+                            File.Delete(newFile);
+                        File.Move(oldFile, newFile);
+                    }
+                }
+
+                // Move current file to .1
+                if (File.Exists(fileData.FilePath))
+                {
+                    string firstBackup = Path.Combine(directory, $"{baseFileName}.1{extension}");
+                    if (File.Exists(firstBackup))
+                        File.Delete(firstBackup);
+                    File.Move(fileData.FilePath, firstBackup);
+                }
+
+                // Create new writer
+                fileData.Writer = new StreamWriter(fileData.FilePath, true) { AutoFlush = true };
+                fileData.CurrentFileSize = 0;
+
+                Debug.Log($"Rotated log file for {robotId}. New log: {fileData.FilePath}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Failed to rotate log file for robot {robotId}: {ex.Message}");
+                // Recreate writer on error
+                fileData.Writer = new StreamWriter(fileData.FilePath, true) { AutoFlush = true };
+            }
+        }
+
         private void OnDestroy()
         {
             if (Instance == this)
             {
+                LogSimulationEvent("session_end", "Simulation session ended", false);
+
+                // Close session writer
                 _logWriter?.Close();
                 _logWriter?.Dispose();
                 _logWriter = null;
-                Instance = null;
 
-                Debug.Log($"RobotLogger shutdown. Logs saved to: {_logFilePath}");
+                // Close console writer
+                _consoleLogWriter?.Close();
+                _consoleLogWriter?.Dispose();
+                _consoleLogWriter = null;
+
+                // Close all per-robot writers
+                foreach (var fileData in _robotFiles.Values)
+                {
+                    fileData.Writer?.Close();
+                    fileData.Writer?.Dispose();
+                }
+                _robotFiles.Clear();
+
+                Instance = null;
+                Debug.Log($"MainLogger shutdown. Logs saved.");
             }
         }
 
         private void OnApplicationQuit()
         {
             _logWriter?.Flush();
+            _consoleLogWriter?.Flush();
+
+            foreach (var fileData in _robotFiles.Values)
+            {
+                fileData.Writer?.Flush();
+            }
+        }
+
+        /// <summary>
+        /// Flush all logs immediately (for compatibility with RobotActionLogger and FileLogger)
+        /// </summary>
+        public void FlushLogs()
+        {
+            _logWriter?.Flush();
+            _consoleLogWriter?.Flush();
+
+            foreach (var fileData in _robotFiles.Values)
+            {
+                fileData.Writer?.Flush();
+            }
+        }
+
+        /// <summary>
+        /// Flush logs for specific robot (for compatibility with RobotActionLogger)
+        /// </summary>
+        public void FlushLogs(string robotId)
+        {
+            if (_robotFiles.TryGetValue(robotId, out RobotFileData fileData))
+            {
+                fileData.Writer?.Flush();
+            }
+        }
+
+        // ==================== CONSOLE LOGGING (from FileLogger) ====================
+
+        /// <summary>
+        /// Handle Unity console log messages
+        /// </summary>
+        private void HandleUnityLog(string logString, string stackTrace, LogType type)
+        {
+            if (_consoleLogWriter == null)
+                return;
+
+            try
+            {
+                string logEntry = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{type}] {logString}";
+                if (type == LogType.Exception || type == LogType.Error)
+                {
+                    logEntry += $"\nStack Trace: {stackTrace}";
+                }
+
+                _consoleLogWriter.WriteLine(logEntry);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Failed to write Unity log: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Log simulation event (for compatibility with FileLogger)
+        /// </summary>
+        public void LogSimulationEvent(string eventType, string details, bool isActive = true)
+        {
+            if (!enableLogging)
+                return;
+
+            try
+            {
+                var state = new
+                {
+                    timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                    gameTime = Time.time,
+                    eventType,
+                    simulationActive = isActive,
+                    frameCount = Time.frameCount,
+                    frameRate = 1f / Time.deltaTime,
+                    robotCount = _robotControllers?.Length ?? 0,
+                    activeRobots = GetActiveRobotIds(),
+                    memoryUsageMB = System.GC.GetTotalMemory(false) / (1024f * 1024f),
+                    unityVersion = Application.unityVersion,
+                    details,
+                };
+
+                string json = JsonUtility.ToJson(state);
+                _consoleLogWriter?.WriteLine($"[SIM] {json}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Failed to log simulation event: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Log current simulation state
+        /// </summary>
+        private void LogCurrentSimulationState()
+        {
+            if (_simulationManager != null)
+            {
+                string details = $"StopRobot={_simulationManager.ShouldStopRobots}";
+                LogSimulationEvent("periodic_state", details, !_simulationManager.ShouldStopRobots);
+            }
+        }
+
+        /// <summary>
+        /// Log system information at startup
+        /// </summary>
+        private void LogSystemInformation()
+        {
+            try
+            {
+                string sysInfo = $"System Information - ";
+                sysInfo += $"Unity: {Application.unityVersion}, ";
+                sysInfo += $"Platform: {Application.platform}, ";
+                sysInfo += $"Device: {SystemInfo.deviceModel}, ";
+                sysInfo += $"OS: {SystemInfo.operatingSystem}, ";
+                sysInfo += $"CPU: {SystemInfo.processorType} ({SystemInfo.processorCount} cores), ";
+                sysInfo += $"Memory: {SystemInfo.systemMemorySize}MB, ";
+                sysInfo += $"GPU: {SystemInfo.graphicsDeviceName}";
+
+                LogSimulationEvent("system_info", sysInfo);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"Failed to log system information: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Get active robot IDs
+        /// </summary>
+        private string[] GetActiveRobotIds()
+        {
+            if (_robotControllers == null)
+                return new string[0];
+
+            List<string> activeIds = new List<string>();
+            foreach (var controller in _robotControllers)
+            {
+                if (controller != null && controller.gameObject.activeInHierarchy)
+                {
+                    activeIds.Add(controller.robotId);
+                }
+            }
+            return activeIds.ToArray();
+        }
+
+        private void OnDisable()
+        {
+            if (captureUnityLogs)
+            {
+                Application.logMessageReceived -= HandleUnityLog;
+            }
+        }
+
+        private void OnApplicationPause(bool pauseStatus)
+        {
+            LogSimulationEvent(
+                pauseStatus ? "app_pause" : "app_resume",
+                $"Application paused: {pauseStatus}",
+                !pauseStatus
+            );
+            if (pauseStatus)
+                FlushLogs();
+        }
+
+        private void OnApplicationFocus(bool hasFocus)
+        {
+            LogSimulationEvent(
+                hasFocus ? "app_focus" : "app_unfocus",
+                $"Application focus: {hasFocus}",
+                hasFocus
+            );
+            if (!hasFocus)
+                FlushLogs();
         }
     }
 }

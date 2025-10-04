@@ -3,6 +3,7 @@ using System.Collections;
 using System.IO;
 using System.Threading.Tasks;
 using UnityEngine;
+using Logging;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -66,8 +67,7 @@ public class CameraController : MonoBehaviour
 
     // Core components
     private Camera _mainCamera;
-    private RobotActionLogger _robotActionLogger;
-    private FileLogger _fileLogger;
+    private MainLogger _logger;
 
     // State tracking
     private int _counter = 0;
@@ -107,8 +107,7 @@ public class CameraController : MonoBehaviour
             }
 
             // Get logging components
-            _robotActionLogger = RobotActionLogger.Instance;
-            _fileLogger = FileLogger.Instance;
+            _logger = MainLogger.Instance;
 
             // Validate image dimensions
             if (_imageWidth <= 0 || _imageHeight <= 0)
@@ -145,7 +144,7 @@ public class CameraController : MonoBehaviour
             _rootName = _mainCamera.transform.root.name;
 
             // Log initialization
-            _fileLogger?.LogSimulationEvent(
+            _logger?.LogSimulationEvent(
                 "camera_controller_initialized",
                 $"Camera: {gameObject.name}, Robot: {_robotArmName}, Resolution: {_imageWidth}x{_imageHeight}"
             );
@@ -202,9 +201,9 @@ public class CameraController : MonoBehaviour
             _counter++;
 
             // Log successful capture
-            if (_robotActionLogger != null)
+            if (_logger != null)
             {
-                _robotActionLogger.LogAction(
+                _logger.LogAction(
                     "screenshot_captured",
                     _robotArmName,
                     filename,
@@ -220,9 +219,9 @@ public class CameraController : MonoBehaviour
             // Log failure
             Debug.LogError($"CameraController: Capture failed: {errorMessage}");
 
-            if (_robotActionLogger != null)
+            if (_logger != null)
             {
-                _robotActionLogger.LogAction(
+                _logger.LogAction(
                     "screenshot_failed",
                     _robotArmName,
                     null,
@@ -476,9 +475,9 @@ public class CameraController : MonoBehaviour
     /// </summary>
     private void OnDestroy()
     {
-        if (_fileLogger != null && _counter > 0)
+        if (_logger != null && _counter > 0)
         {
-            _fileLogger.LogSimulationEvent(
+            _logger.LogSimulationEvent(
                 "camera_controller_destroyed",
                 $"Camera {gameObject.name} captured {_counter} screenshots"
             );
