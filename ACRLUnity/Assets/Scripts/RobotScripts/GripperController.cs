@@ -75,10 +75,14 @@ public class GripperController : MonoBehaviour
 
     [Header("Control Parameters")]
     public float maxForce = 100f;
-    public float speed = 10f;
+    [Tooltip("Smooth interpolation time in seconds")]
+    public float smoothTime = 0.3f;
 
     [Range(0f, 1f)]
     public float targetPosition = 1f;
+
+    private float _currentVelocity;
+    private float _currentTarget;
 
     public float CurrentPosition => leftGripper?.jointPosition[0] ?? 0f;
 
@@ -180,7 +184,7 @@ public class GripperController : MonoBehaviour
     }
 
     /// <summary>
-    /// Unity Update callback - smoothly interpolates gripper position towards target position.
+    /// Unity Update callback - smoothly interpolates gripper position towards target position using SmoothDamp.
     /// </summary>
     private void Update()
     {
@@ -189,12 +193,14 @@ public class GripperController : MonoBehaviour
         float upper = leftGripper.xDrive.upperLimit;
         float mappedTarget = Mathf.Lerp(lower, upper, targetPosition);
 
-        float newTarget = Mathf.MoveTowards(
-            leftGripper.xDrive.target,
+        // Smooth interpolation using SmoothDamp for natural acceleration/deceleration
+        _currentTarget = Mathf.SmoothDamp(
+            _currentTarget,
             mappedTarget,
-            speed * Time.deltaTime
+            ref _currentVelocity,
+            smoothTime
         );
 
-        ApplyTargetToGrippers(newTarget);
+        ApplyTargetToGrippers(_currentTarget);
     }
 }

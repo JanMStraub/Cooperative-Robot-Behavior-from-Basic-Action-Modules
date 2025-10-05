@@ -115,7 +115,7 @@ namespace Logging
             if (!perRobotFiles)
             {
                 // Single session file
-                _logFilePath = Path.Combine(fullLogPath, $"robot_actions_{_sessionId}.json");
+                _logFilePath = Path.Combine(fullLogPath, $"robot_actions_{_sessionId}.jsonl");
                 _logWriter = new StreamWriter(_logFilePath, true);
                 _logWriter.AutoFlush = true;
                 Debug.Log($"MainLogger initialized. Session log: {_logFilePath}");
