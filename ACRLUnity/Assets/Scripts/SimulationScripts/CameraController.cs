@@ -2,8 +2,8 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Threading.Tasks;
-using UnityEngine;
 using Logging;
+using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -47,6 +47,10 @@ public class CameraController : MonoBehaviour
     [SerializeField]
     [Tooltip("Image format to use for screenshots")]
     private ImageFormat _imageFormat = ImageFormat.JPG;
+
+    [SerializeField]
+    [Tooltip("Use Python server to send images")]
+    private bool _usePythonServer = true;
 
     [SerializeField]
     [Tooltip("Use Application.persistentDataPath for runtime builds")]
@@ -101,7 +105,9 @@ public class CameraController : MonoBehaviour
             _mainCamera = GetComponent<Camera>();
             if (_mainCamera == null)
             {
-                Debug.LogError($"CameraController: No Camera component found on {gameObject.name}");
+                Debug.LogError(
+                    $"[CAMERA_CONTROLLER] No Camera component found on {gameObject.name}"
+                );
                 enabled = false;
                 return;
             }
@@ -113,11 +119,11 @@ public class CameraController : MonoBehaviour
             if (_imageWidth <= 0 || _imageHeight <= 0)
             {
                 Debug.LogWarning(
-                    $"CameraController: Invalid image dimensions ({_imageWidth}x{_imageHeight}). "
-                        + "Setting to default 1920x1080"
+                    $"[CAMERA_CONTROLLER] Invalid image dimensions ({_imageWidth}x{_imageHeight}). "
+                        + "Setting to default 1000x1000"
                 );
-                _imageWidth = 1920;
-                _imageHeight = 1080;
+                _imageWidth = 1000;
+                _imageHeight = 1000;
             }
 
             // Find robot arm name
@@ -132,7 +138,7 @@ public class CameraController : MonoBehaviour
                 // Log hierarchy for debugging
                 string hierarchy = GetHierarchyPath(_mainCamera.transform);
                 Debug.Log(
-                    $"CameraController: Could not find robot arm in hierarchy.\n"
+                    $"[CAMERA_CONTROLLER] Could not find robot arm in hierarchy.\n"
                         + $"Camera hierarchy: {hierarchy}\n"
                         + $"Looking for patterns: [{string.Join(", ", _robotNamePatterns)}]\n"
                         + $"Using fallback: {fallbackName}"
@@ -144,19 +150,13 @@ public class CameraController : MonoBehaviour
             _rootName = _mainCamera.transform.root.name;
 
             // Log initialization
-            _logger?.LogSimulationEvent(
-                "camera_controller_initialized",
-                $"Camera: {gameObject.name}, Robot: {_robotArmName}, Resolution: {_imageWidth}x{_imageHeight}"
-            );
-
             Debug.Log(
-                $"CameraController initialized: Robot={_robotArmName}, "
-                    + $"Root={_rootName}, Resolution={_imageWidth}x{_imageHeight}, Format={_imageFormat}"
+                $"[CAMERA_CONTROLLER] Initialized: Camera={gameObject.name}, Robot={_robotArmName}, Resolution={_imageWidth}x{_imageHeight}, Format={_imageFormat}"
             );
         }
         catch (Exception ex)
         {
-            Debug.LogError($"CameraController: Failed to initialize: {ex.Message}");
+            Debug.LogError($"[CAMERA_CONTROLLER] Failed to initialize: {ex.Message}");
             enabled = false;
         }
     }
@@ -168,13 +168,13 @@ public class CameraController : MonoBehaviour
     {
         if (_mainCamera == null)
         {
-            Debug.LogError("CameraController: Cannot capture - camera is null");
+            Debug.LogError("[CAMERA_CONTROLLER] Cannot capture - camera is null");
             return;
         }
 
         if (_isCapturing)
         {
-            Debug.LogWarning("CameraController: Already capturing, ignoring request");
+            Debug.LogWarning("[CAMERA_CONTROLLER] Already capturing, ignoring request");
             return;
         }
 
@@ -203,33 +203,35 @@ public class CameraController : MonoBehaviour
             // Log successful capture
             if (_logger != null)
             {
-                _logger.LogAction(
-                    "screenshot_captured",
-                    _robotArmName,
-                    filename,
-                    _mainCamera.transform.position,
-                    null,
-                    0f,
-                    true
+                string actionId = _logger.StartAction(
+                    actionName: "screenshot_captured",
+                    type: Logging.ActionType.Observation,
+                    robotIds: new[] { _robotArmName },
+                    startPos: _mainCamera.transform.position,
+                    objectIds: new[] { filename },
+                    description: $"Screenshot captured: {filename}"
                 );
+                _logger.CompleteAction(actionId, success: true, qualityScore: 1f);
             }
         }
         else
         {
             // Log failure
-            Debug.LogError($"CameraController: Capture failed: {errorMessage}");
+            Debug.LogError($"[CAMERA_CONTROLLER] Capture failed: {errorMessage}");
 
             if (_logger != null)
             {
-                _logger.LogAction(
-                    "screenshot_failed",
-                    _robotArmName,
-                    null,
-                    null,
-                    null,
-                    0f,
-                    false,
-                    errorMessage
+                string actionId = _logger.StartAction(
+                    actionName: "screenshot_failed",
+                    type: Logging.ActionType.Observation,
+                    robotIds: new[] { _robotArmName },
+                    description: "Screenshot capture failed"
+                );
+                _logger.CompleteAction(
+                    actionId,
+                    success: false,
+                    qualityScore: 0f,
+                    errorMessage: errorMessage
                 );
             }
         }
@@ -290,19 +292,45 @@ public class CameraController : MonoBehaviour
         }
         catch (Exception ex)
         {
-            errorMsg = $"Image encoding failed: {ex.Message}";
+            errorMsg = $"[CAMERA_CONTROLLER] Image encoding failed: {ex.Message}";
             onError?.Invoke(errorMsg);
         }
 
-        // Save to disk asynchronously if encoding succeeded
-        if (bytes != null)
+        // Send to python server or save to disk asynchronously if encoding succeeded
+        if (_usePythonServer && bytes != null)
+        {
+            // Get camera identifier from robot name or use generic camera name
+            string cameraId = !string.IsNullOrEmpty(_robotArmName) ? _robotArmName : "Camera";
+
+            // Send via ImageSender singleton
+            if (ImageSender.Instance != null && ImageSender.Instance.IsConnected)
+            {
+                bool sent = ImageSender.Instance.SendImageData(bytes, cameraId);
+                if (sent)
+                {
+                    Debug.Log($"[CAMERA_CONTROLLER] Sent image to Python server: {relativePath}");
+                }
+                else
+                {
+                    errorMsg = "[CAMERA_CONTROLLER] Failed to send image to Python server";
+                    onError?.Invoke(errorMsg);
+                }
+            }
+            else
+            {
+                errorMsg = "[CAMERA_CONTROLLER] ImageSender not available or not connected";
+                onError?.Invoke(errorMsg);
+                Debug.LogWarning(errorMsg);
+            }
+        }
+        else if (bytes != null)
         {
             string fullPath = GetFullPath(relativePath);
             yield return SaveImageAsync(fullPath, bytes, onError);
 
             if (errorMsg == null)
             {
-                Debug.Log($"CameraController: Saved image to: {fullPath}");
+                Debug.Log($"[CAMERA_CONTROLLER] Saved image to: {fullPath}");
             }
         }
 
@@ -359,7 +387,7 @@ public class CameraController : MonoBehaviour
             }
             catch (Exception ex)
             {
-                saveError = $"Failed to save image: {ex.Message}";
+                saveError = $"[CAMERA_CONTROLLER] Failed to save image: {ex.Message}";
             }
             finally
             {
@@ -447,7 +475,7 @@ public class CameraController : MonoBehaviour
     public void ResetCounter()
     {
         _counter = 0;
-        Debug.Log("CameraController: Counter reset to 0");
+        Debug.Log("[CAMERA_CONTROLLER] Counter reset to 0");
     }
 
     /// <summary>
@@ -457,7 +485,7 @@ public class CameraController : MonoBehaviour
     public void SetImageFormat(ImageFormat format)
     {
         _imageFormat = format;
-        Debug.Log($"CameraController: Image format set to {format}");
+        Debug.Log($"[CAMERA_CONTROLLER] Image format set to {format}");
     }
 
     /// <summary>
@@ -467,7 +495,7 @@ public class CameraController : MonoBehaviour
     public void SetJpegQuality(int quality)
     {
         _jpegQuality = Mathf.Clamp(quality, 1, 100);
-        Debug.Log($"CameraController: JPEG quality set to {_jpegQuality}");
+        Debug.Log($"[CAMERA_CONTROLLER] JPEG quality set to {_jpegQuality}");
     }
 
     /// <summary>
@@ -475,11 +503,10 @@ public class CameraController : MonoBehaviour
     /// </summary>
     private void OnDestroy()
     {
-        if (_logger != null && _counter > 0)
+        if (_counter > 0)
         {
-            _logger.LogSimulationEvent(
-                "camera_controller_destroyed",
-                $"Camera {gameObject.name} captured {_counter} screenshots"
+            Debug.Log(
+                $"[CAMERA_CONTROLLER] Camera {gameObject.name} destroyed after capturing {_counter} screenshots"
             );
         }
     }

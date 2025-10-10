@@ -119,7 +119,7 @@ public class SimulationManager : MonoBehaviour
             // Create default config if not assigned
             if (config == null)
             {
-                Debug.LogWarning("SimulationConfig not assigned. Creating default configuration.");
+                Debug.LogWarning("[SIMULATION_MANAGER] SimulationConfig not assigned. Creating default configuration.");
                 config = ScriptableObject.CreateInstance<SimulationConfig>();
             }
 
@@ -131,12 +131,12 @@ public class SimulationManager : MonoBehaviour
             ChangeState(SimulationState.Initializing);
 
             Debug.Log(
-                $"SimulationManager initialized: {config.coordinationMode} mode, {config.targetFrameRate}fps"
+                $"[SIMULATION_MANAGER] Initialized: {config.coordinationMode} mode, {config.targetFrameRate}fps"
             );
         }
         catch (Exception ex)
         {
-            HandleError($"Failed to initialize simulation: {ex.Message}");
+            HandleError($"[SIMULATION_MANAGER] Failed to initialize simulation: {ex.Message}");
         }
     }
 
@@ -159,7 +159,7 @@ public class SimulationManager : MonoBehaviour
 
             if (_robotControllers.Length == 0)
             {
-                HandleError("No RobotController components found in scene");
+                HandleError("[SIMULATION_MANAGER] No RobotController components found in scene");
                 return;
             }
 
@@ -171,10 +171,7 @@ public class SimulationManager : MonoBehaviour
             }
 
             // Log simulation start
-            _logger?.LogSimulationEvent(
-                "simulation_initialized",
-                $"Found {_robotControllers.Length} robots. Mode: {config.coordinationMode}"
-            );
+            Debug.Log($"[SIMULATION_MANAGER] Initialized: Found {_robotControllers.Length} robots. Mode: {config.coordinationMode}");
 
             // Auto-start if configured
             if (config.autoStart)
@@ -188,7 +185,7 @@ public class SimulationManager : MonoBehaviour
         }
         catch (Exception ex)
         {
-            HandleError($"Failed to start simulation: {ex.Message}");
+            HandleError($"[SIMULATION_MANAGER] Failed to start simulation: {ex.Message}");
         }
     }
 
@@ -203,7 +200,7 @@ public class SimulationManager : MonoBehaviour
         }
         catch (Exception ex)
         {
-            HandleError($"Error in simulation update: {ex.Message}");
+            HandleError($"[SIMULATION_MANAGER] Error in simulation update: {ex.Message}");
         }
     }
 
@@ -221,7 +218,7 @@ public class SimulationManager : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogWarning($"Non-critical error in LateUpdate: {ex.Message}");
+            Debug.LogWarning($"[SIMULATION_MANAGER] Non-critical error in LateUpdate: {ex.Message}");
         }
     }
 
@@ -274,14 +271,11 @@ public class SimulationManager : MonoBehaviour
 
             if (_logger != null)
             {
-                _logger.LogSimulationEvent(
-                    "robot_switch",
-                    $"Switched from {currentRobotId} to {GetActiveRobotId()}"
-                );
+                Debug.Log($"[SIMULATION_MANAGER] Robot switch: {currentRobotId} -> {GetActiveRobotId()}");
             }
 
             Debug.Log(
-                $"Sequential mode: Switched from robot {previousIndex} ({currentRobotId}) to robot {_activeRobotIndex} ({GetActiveRobotId()})"
+                $"[SIMULATION_MANAGER] Sequential mode: Switched from robot {previousIndex} ({currentRobotId}) to robot {_activeRobotIndex} ({GetActiveRobotId()})"
             );
         }
     }
@@ -302,14 +296,10 @@ public class SimulationManager : MonoBehaviour
 
         if (_logger != null)
         {
-            _logger.LogSimulationEvent(
-                "state_change",
-                $"Changed from {_previousState} to {newState}",
-                newState == SimulationState.Running
-            );
+            Debug.Log($"[SIMULATION_MANAGER] State change: {_previousState} -> {newState}");
         }
 
-        Debug.Log($"SimulationManager state: {_previousState} -> {newState}");
+        Debug.Log($"[SIMULATION_MANAGER] State: {_previousState} -> {newState}");
     }
 
     /// <summary>
@@ -320,11 +310,11 @@ public class SimulationManager : MonoBehaviour
     {
         ChangeState(SimulationState.Error);
 
-        Debug.LogError($"SimulationManager Error: {errorMessage}");
+        Debug.LogError($"[SIMULATION_MANAGER] Error: {errorMessage}");
 
         if (_logger != null)
         {
-            _logger.LogSimulationEvent("simulation_error", errorMessage, false);
+            Debug.LogError($"[SIMULATION_MANAGER] Error: {errorMessage}");
         }
 
         if (config.resetOnError)
@@ -340,7 +330,7 @@ public class SimulationManager : MonoBehaviour
     {
         if (_currentState == SimulationState.Error)
         {
-            Debug.LogWarning("Cannot start simulation while in error state. Reset first.");
+            Debug.LogWarning("[SIMULATION_MANAGER] Cannot start simulation while in error state. Reset first.");
             return;
         }
 
@@ -348,10 +338,7 @@ public class SimulationManager : MonoBehaviour
 
         if (_logger != null)
         {
-            _logger.LogSimulationEvent(
-                "simulation_started",
-                "Simulation started by user request"
-            );
+            Debug.Log("[SIMULATION_MANAGER] Started by user request");
         }
     }
 
@@ -366,7 +353,7 @@ public class SimulationManager : MonoBehaviour
 
             if (_logger != null)
             {
-                _logger.LogSimulationEvent("simulation_paused", "Simulation paused", false);
+                Debug.Log("[SIMULATION_MANAGER] Paused");
             }
         }
     }
@@ -382,7 +369,7 @@ public class SimulationManager : MonoBehaviour
 
             if (_logger != null)
             {
-                _logger.LogSimulationEvent("simulation_resumed", "Simulation resumed");
+                Debug.Log("[SIMULATION_MANAGER] Resumed");
             }
         }
     }
@@ -411,7 +398,7 @@ public class SimulationManager : MonoBehaviour
 
             if (_logger != null)
             {
-                _logger.LogSimulationEvent("simulation_reset", "Simulation reset completed");
+                Debug.Log("[SIMULATION_MANAGER] Reset completed");
             }
 
             // Restart if configured
@@ -426,7 +413,7 @@ public class SimulationManager : MonoBehaviour
         }
         catch (Exception ex)
         {
-            HandleError($"Failed to reset simulation: {ex.Message}");
+            HandleError($"[SIMULATION_MANAGER] Failed to reset simulation: {ex.Message}");
         }
     }
 
@@ -480,10 +467,7 @@ public class SimulationManager : MonoBehaviour
 
         if (reached && config.coordinationMode == RobotCoordinationMode.Sequential)
         {
-            _logger?.LogSimulationEvent(
-                "robot_target_reached",
-                $"Robot {robotId} reached target in sequential mode"
-            );
+            Debug.Log($"[SIMULATION_MANAGER] Robot {robotId} reached target in sequential mode");
         }
     }
 
@@ -496,11 +480,7 @@ public class SimulationManager : MonoBehaviour
         {
             if (_logger != null)
             {
-                _logger.LogSimulationEvent(
-                    "simulation_destroyed",
-                    "SimulationManager destroyed",
-                    false
-                );
+                Debug.Log("[SIMULATION_MANAGER] SimulationManager destroyed");
             }
             Instance = null;
         }

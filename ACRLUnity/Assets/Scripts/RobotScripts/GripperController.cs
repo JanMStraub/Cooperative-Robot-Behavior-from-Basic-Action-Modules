@@ -175,7 +175,7 @@ public class GripperController : MonoBehaviour
     {
         if (leftGripper == null || rightGripper == null)
         {
-            Debug.LogError("Gripper references not assigned!");
+            Debug.LogError("[GRIPPER_CONTROLLER] Gripper references not assigned!");
             return;
         }
 

@@ -87,15 +87,16 @@ public class RobotController : MonoBehaviour
         // Log target assignment
         if (_logger != null)
         {
-            _logger.LogAction(
-                "setTarget",
-                robotId,
-                target.name,
-                target.transform.position,
-                null,
-                0f,
-                true
+            string actionId = _logger.StartAction(
+                actionName: "set_target",
+                type: ActionType.Movement,
+                robotIds: new[] { robotId },
+                startPos: endEffectorBase.position,
+                targetPos: target.transform.position,
+                objectIds: new[] { target.name },
+                description: $"Setting target to {target.name}"
             );
+            _logger.CompleteAction(actionId, success: true, qualityScore: 1f);
         }
     }
 
@@ -162,7 +163,7 @@ public class RobotController : MonoBehaviour
         // Ensure robot joints are assigned
         if (robotJoints == null || jointCount == 0)
         {
-            Debug.LogError("Robot joints are not assigned. Please assign ArticulationBodies.");
+            Debug.LogError("[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
             return;
         }
 
@@ -305,12 +306,12 @@ public class RobotController : MonoBehaviour
     {
         if (robotJoints == null || robotJoints.Length == 0)
         {
-            Debug.LogWarning("No robot joints found or IK not initialized.");
+            Debug.LogWarning("[ROBOT_CONTROLLER] No robot joints found or IK not initialized.");
             return;
         }
         if (endEffectorBase == null || _targetTransform == null)
         {
-            Debug.LogError("EndEffector or Target is not assigned.");
+            Debug.LogError("[ROBOT_CONTROLLER] EndEffector or Target is not assigned.");
             return;
         }
 
@@ -344,22 +345,25 @@ public class RobotController : MonoBehaviour
         if (_errorVector.L2Norm() < robotProfile.convergenceThreshold)
         {
             SetTargetReached(true); // This will notify SimulationManager
-            Debug.Log($"{robotId} IK converged to target");
+            Debug.Log($"[ROBOT_CONTROLLER] {robotId} IK converged to target");
             _gripperController.CloseGrippers();
-            Debug.Log($"{robotId} closed grippers");
+            Debug.Log($"[ROBOT_CONTROLLER] {robotId} closed grippers");
 
             // Log successful convergence
             if (_logger != null)
             {
-                _logger.LogAction(
-                    "reachTarget",
-                    robotId,
-                    _targetTransform.name,
-                    _targetTransform.position,
-                    null,
-                    0f, // No speed tracking
-                    true
+                string actionId = _logger.StartAction(
+                    actionName: "reach_target",
+                    type: ActionType.Movement,
+                    robotIds: new[] { robotId },
+                    startPos: endEffectorBase.position,
+                    targetPos: _targetTransform.position,
+                    objectIds: new[] { _targetTransform.name },
+                    description: $"Reached target {_targetTransform.name}"
                 );
+                float distance = GetDistanceToTarget();
+                float quality = Mathf.Max(0f, 1f - distance / 0.1f);
+                _logger.CompleteAction(actionId, success: true, qualityScore: quality);
             }
 
             return; // Already close enough
@@ -432,7 +436,7 @@ public class RobotController : MonoBehaviour
             _gripperController = GetComponentInChildren<GripperController>();
             if (_gripperController != null)
             {
-                Debug.Log($"{robotId}: Auto-found GripperController in children");
+                Debug.Log($"[ROBOT_CONTROLLER] {robotId}: Auto-found GripperController in children");
             }
         }
 
@@ -445,15 +449,15 @@ public class RobotController : MonoBehaviour
         // Log initialization
         if (_logger != null)
         {
-            _logger.LogAction(
-                "initialize",
-                robotId,
-                gameObject.name,
-                null,
-                null,
-                0f,
-                true
+            string actionId = _logger.StartAction(
+                actionName: "initialize_robot",
+                type: ActionType.Task,
+                robotIds: new[] { robotId },
+                startPos: endEffectorBase.position,
+                objectIds: new[] { gameObject.name },
+                description: $"Initialized robot {robotId}"
             );
+            _logger.CompleteAction(actionId, success: true, qualityScore: 1f);
         }
 
         InitializeRobot();

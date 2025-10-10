@@ -20,7 +20,7 @@ namespace Logging
         {
             if (!File.Exists(sourceLogFile))
             {
-                Debug.LogError($"Source log file not found: {sourceLogFile}");
+                Debug.LogError($"[LLM_EXPORTER] Source log file not found: {sourceLogFile}");
                 return;
             }
 
@@ -57,11 +57,11 @@ namespace Logging
                     }
                 }
 
-                Debug.Log($"Exported {entries.Count} entries to {outputFile}");
+                Debug.Log($"[LLM_EXPORTER] Exported {entries.Count} entries to {outputFile}");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Export failed: {ex.Message}");
+                Debug.LogError($"[LLM_EXPORTER] Export failed: {ex.Message}");
             }
         }
 
@@ -73,7 +73,7 @@ namespace Logging
         {
             if (!File.Exists(sourceLogFile))
             {
-                Debug.LogError($"Source log file not found: {sourceLogFile}");
+                Debug.LogError($"[LLM_EXPORTER] Source log file not found: {sourceLogFile}");
                 return;
             }
 
@@ -93,6 +93,19 @@ namespace Logging
                         if (entry == null || entry.logType == "session")
                             continue;
 
+                        // Generate prompt from action data
+                        string userPrompt = entry.action != null
+                            ? $"What happened with robot action: {entry.action.actionName}?"
+                            : entry.scene != null
+                            ? "Describe the current scene"
+                            : "What happened?";
+
+                        string assistantResponse = entry.action != null
+                            ? entry.action.humanReadable ?? "Action completed"
+                            : entry.scene != null
+                            ? entry.scene.sceneDescription ?? "Scene snapshot captured"
+                            : "Action completed";
+
                         var conversation = new Dictionary<string, object>
                         {
                             ["messages"] = new List<Dictionary<string, string>>
@@ -100,19 +113,18 @@ namespace Logging
                                 new Dictionary<string, string>
                                 {
                                     ["role"] = "user",
-                                    ["content"] = entry.trainingPrompt ?? "What happened?",
+                                    ["content"] = userPrompt,
                                 },
                                 new Dictionary<string, string>
                                 {
                                     ["role"] = "assistant",
-                                    ["content"] = entry.trainingResponse ?? "Action completed",
+                                    ["content"] = assistantResponse,
                                 },
                             },
                             ["metadata"] = new Dictionary<string, object>
                             {
-                                ["difficulty"] = entry.difficultyLevel,
                                 ["timestamp"] = entry.timestamp,
-                                ["learning_points"] = entry.learningPoints,
+                                ["log_type"] = entry.logType,
                             },
                         };
 
@@ -140,11 +152,11 @@ namespace Logging
                     writer.WriteLine("]");
                 }
 
-                Debug.Log($"Exported {conversations.Count} conversations to {outputFile}");
+                Debug.Log($"[LLM_EXPORTER] Exported {conversations.Count} conversations to {outputFile}");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Conversational export failed: {ex.Message}");
+                Debug.LogError($"[LLM_EXPORTER] Conversational export failed: {ex.Message}");
             }
         }
 
@@ -184,14 +196,13 @@ namespace Logging
                 stats["action_types"] = actions
                     .GroupBy(a => a.type)
                     .ToDictionary(g => g.Key.ToString(), g => g.Count());
-                stats["complexity_distribution"] = actions
-                    .GroupBy(a => a.complexityLevel)
-                    .ToDictionary(g => $"level_{g.Key}", g => g.Count());
                 stats["average_duration"] =
                     actions.Count > 0 ? actions.Average(a => a.duration) : 0f;
+                stats["average_quality"] =
+                    actions.Count > 0 ? actions.Average(a => a.qualityScore) : 0f;
                 stats["unique_robots"] = actions.SelectMany(a => a.robotIds).Distinct().Count();
 
-                Debug.Log("Statistics generated:");
+                Debug.Log("[LLM_EXPORTER] Statistics generated:");
                 foreach (var stat in stats)
                 {
                     Debug.Log($"  {stat.Key}: {stat.Value}");
@@ -199,7 +210,7 @@ namespace Logging
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Statistics generation failed: {ex.Message}");
+                Debug.LogError($"[LLM_EXPORTER] Statistics generation failed: {ex.Message}");
             }
 
             return stats;
@@ -213,7 +224,7 @@ namespace Logging
             string outputFile,
             ActionType? typeFilter = null,
             bool? successFilter = null,
-            int? minComplexity = null
+            float? minQuality = null
         )
         {
             try
@@ -238,8 +249,8 @@ namespace Logging
                         if (successFilter.HasValue && entry.action.success != successFilter.Value)
                             continue;
                         if (
-                            minComplexity.HasValue
-                            && entry.action.complexityLevel < minComplexity.Value
+                            minQuality.HasValue
+                            && entry.action.qualityScore < minQuality.Value
                         )
                             continue;
 
@@ -248,11 +259,11 @@ namespace Logging
                     }
                 }
 
-                Debug.Log($"Filtered {filtered} entries to {outputFile}");
+                Debug.Log($"[LLM_EXPORTER] Filtered {filtered} entries to {outputFile}");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Filtering failed: {ex.Message}");
+                Debug.LogError($"[LLM_EXPORTER] Filtering failed: {ex.Message}");
             }
         }
 
@@ -264,14 +275,14 @@ namespace Logging
             var logger = MainLogger.Instance;
             if (logger == null)
             {
-                Debug.LogError("MainLogger instance not found");
+                Debug.LogError("[LLM_EXPORTER] MainLogger instance not found");
                 return;
             }
 
             string logDir = Path.Combine(Application.persistentDataPath, "RobotLogs");
             if (!Directory.Exists(logDir))
             {
-                Debug.LogError("Log directory not found");
+                Debug.LogError("[LLM_EXPORTER] Log directory not found");
                 return;
             }
 
@@ -283,7 +294,7 @@ namespace Logging
 
             if (files.Length == 0)
             {
-                Debug.LogError("No log files found");
+                Debug.LogError("[LLM_EXPORTER] No log files found");
                 return;
             }
 
@@ -302,7 +313,7 @@ namespace Logging
                 ExportToJSONL(sourceFile, outputFile);
             }
 
-            Debug.Log($"Quick export complete: {outputFile}");
+            Debug.Log($"[LLM_EXPORTER] Quick export complete: {outputFile}");
         }
     }
 

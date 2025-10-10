@@ -661,31 +661,22 @@ public class PythonCaller : MonoBehaviour
     /// </summary>
     private void LogMessage(string message)
     {
-        if (_logger != null)
-            _logger.LogSimulationEvent("python_info", message);
-
         UnityEngine.Debug.Log($"[PythonCaller] {message}");
     }
 
     /// <summary>
-    /// Logs a warning using RobotLogger if available, otherwise uses Unity Debug
+    /// Logs a warning using Unity Debug
     /// </summary>
     private void LogWarning(string message)
     {
-        if (_logger != null)
-            _logger.LogSimulationEvent("python_warning", message);
-
         UnityEngine.Debug.LogWarning($"[PythonCaller] {message}");
     }
 
     /// <summary>
-    /// Logs an error using RobotLogger if available, otherwise uses Unity Debug
+    /// Logs an error using Unity Debug
     /// </summary>
     private void LogError(string message)
     {
-        if (_logger != null)
-            _logger.LogSimulationEvent("python_error", message, false);
-
         UnityEngine.Debug.LogError($"[PythonCaller] {message}");
     }
 

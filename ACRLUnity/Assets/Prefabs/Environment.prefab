@@ -773,7 +773,6 @@ GameObject:
   - component: {fileID: 289575440513923745}
   - component: {fileID: 2462808258959950513}
   - component: {fileID: 227607308499139090}
-  - component: {fileID: 7783781801568496181}
   - component: {fileID: 3184499423319174628}
   m_Layer: 0
   m_Name: GripperJawLeft
@@ -853,28 +852,6 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!64 &7783781801568496181
-MeshCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 834086927593800607}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 0
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 5
-  m_Convex: 1
-  m_CookingOptions: 30
-  m_Mesh: {fileID: -9005509185804766182, guid: 10adfd1040bd448c68e3aaeb040821cc, type: 3}
 --- !u!171741748 &3184499423319174628
 ArticulationBody:
   m_ObjectHideFlags: 0
@@ -952,7 +929,6 @@ GameObject:
   - component: {fileID: 4863858250209169175}
   - component: {fileID: 7062402687199635000}
   - component: {fileID: 6567833768618816711}
-  - component: {fileID: 3867828433414554716}
   - component: {fileID: 5158624744778643750}
   m_Layer: 0
   m_Name: GripperJawRight
@@ -1032,28 +1008,6 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!64 &3867828433414554716
-MeshCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2116362737340270651}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 1
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 5
-  m_Convex: 1
-  m_CookingOptions: 30
-  m_Mesh: {fileID: 520792588098325021, guid: 10adfd1040bd448c68e3aaeb040821cc, type: 3}
 --- !u!171741748 &5158624744778643750
 ArticulationBody:
   m_ObjectHideFlags: 0
@@ -1861,7 +1815,7 @@ MonoBehaviour:
   leftGripper: {fileID: 3033137874226169314}
   rightGripper: {fileID: 5158624744778643750}
   maxForce: 100
-  speed: 10
+  smoothTime: 0.3
   targetPosition: 0
 --- !u!1 &3494898492998266439
 GameObject:
@@ -1985,7 +1939,6 @@ GameObject:
   - component: {fileID: 7402370751279832772}
   - component: {fileID: 1895561406371096132}
   - component: {fileID: 7367749871147549637}
-  - component: {fileID: 3319537951897329645}
   - component: {fileID: 7199837420558049903}
   m_Layer: 0
   m_Name: GripperJawRight
@@ -2065,28 +2018,6 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!64 &3319537951897329645
-MeshCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3623066850377666085}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 1
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 5
-  m_Convex: 1
-  m_CookingOptions: 30
-  m_Mesh: {fileID: 520792588098325021, guid: 10adfd1040bd448c68e3aaeb040821cc, type: 3}
 --- !u!171741748 &7199837420558049903
 ArticulationBody:
   m_ObjectHideFlags: 0
@@ -2442,7 +2373,7 @@ MonoBehaviour:
   leftGripper: {fileID: 3184499423319174628}
   rightGripper: {fileID: 7199837420558049903}
   maxForce: 100
-  speed: 10
+  smoothTime: 0.3
   targetPosition: 0
 --- !u!1 &3998671219060649947
 GameObject:
@@ -3589,8 +3520,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 500fcb0ba4ef349809caeda6e7317003, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  imageWidth: 1920
-  imageHeight: 1080
+  _imageWidth: 1000
+  _imageHeight: 1000
+  _jpegQuality: 85
+  _imageFormat: 0
+  _usePersistentDataPath: 1
+  _includeTimestamp: 0
+  _robotNamePatterns:
+  - AR4Left
+  - AR4Right
+  _fallbackRobotName: 
 --- !u!1 &6953124915147395726
 GameObject:
   m_ObjectHideFlags: 0
@@ -4646,8 +4585,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 500fcb0ba4ef349809caeda6e7317003, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CameraController
-  imageWidth: 128
-  imageHeight: 128
+  _imageWidth: 1000
+  _imageHeight: 1000
+  _jpegQuality: 85
+  _imageFormat: 0
+  _usePersistentDataPath: 1
+  _includeTimestamp: 0
+  _robotNamePatterns:
+  - AR4Left
+  - AR4Right
+  _fallbackRobotName: 
 --- !u!1 &8248274338237748328
 GameObject:
   m_ObjectHideFlags: 0
@@ -5156,7 +5103,6 @@ GameObject:
   - component: {fileID: 3860062366763306248}
   - component: {fileID: 6995822355801488265}
   - component: {fileID: 5004411779024357332}
-  - component: {fileID: 5691414779723745587}
   - component: {fileID: 3033137874226169314}
   m_Layer: 0
   m_Name: GripperJawLeft
@@ -5236,28 +5182,6 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
---- !u!64 &5691414779723745587
-MeshCollider:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9101567445215437364}
-  m_Material: {fileID: 0}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_LayerOverridePriority: 0
-  m_IsTrigger: 1
-  m_ProvidesContacts: 0
-  m_Enabled: 1
-  serializedVersion: 5
-  m_Convex: 1
-  m_CookingOptions: 30
-  m_Mesh: {fileID: -9005509185804766182, guid: 10adfd1040bd448c68e3aaeb040821cc, type: 3}
 --- !u!171741748 &3033137874226169314
 ArticulationBody:
   m_ObjectHideFlags: 0

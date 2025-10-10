@@ -56,8 +56,6 @@ namespace Logging
 
         // LLM training essentials
         public string humanReadable; // Natural language description
-        public string[] capabilities; // Required skills: ["movement", "manipulation"]
-        public int complexityLevel; // 1-4: simple to expert
 
         // Hierarchical relationships
         public string parentActionId; // For subtasks
@@ -69,7 +67,6 @@ namespace Logging
             objectIds = new string[0];
             trajectoryPoints = new Vector3[0];
             metrics = new Dictionary<string, float>();
-            capabilities = new string[0];
             childActionIds = new string[0];
         }
     }
@@ -136,7 +133,6 @@ namespace Logging
 
     /// <summary>
     /// Final log entry combining action and environment
-    /// Replaces: EnhancedLogEntry, LearningMetadata
     /// </summary>
     [System.Serializable]
     public class LogEntry
@@ -149,16 +145,5 @@ namespace Logging
         // Core data
         public RobotAction action;
         public SceneSnapshot scene;
-
-        // LLM training metadata
-        public string trainingPrompt; // "Task: Move robot to target..."
-        public string trainingResponse; // "Robot successfully moved..."
-        public string[] learningPoints; // Key takeaways for LLM
-        public string difficultyLevel; // "simple", "moderate", "complex"
-
-        public LogEntry()
-        {
-            learningPoints = new string[0];
-        }
     }
 }
