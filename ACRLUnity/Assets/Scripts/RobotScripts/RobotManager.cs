@@ -97,7 +97,7 @@ public class RobotManager : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogError($"Failed to initialize RobotManager: {ex.Message}");
+            Debug.LogError($"[ROBOT_MANAGER] Failed to initialize: {ex.Message}");
         }
     }
 
@@ -115,16 +115,13 @@ public class RobotManager : MonoBehaviour
             DiscoverRobots();
 
             // Log initialization
-            _logger?.LogSimulationEvent(
-                "robot_manager_initialized",
-                $"Initialized with {_robotInstances.Count} robots"
-            );
+            Debug.Log($"[ROBOT_MANAGER] Initialized with {_robotInstances.Count} robots");
 
             LogConfigurationSummary();
         }
         catch (Exception ex)
         {
-            Debug.LogError($"Failed to start RobotManager: {ex.Message}");
+            Debug.LogError($"[ROBOT_MANAGER] Failed to start: {ex.Message}");
         }
     }
 
@@ -149,7 +146,7 @@ public class RobotManager : MonoBehaviour
 
                 RegisterRobot(robotId, controller.gameObject, target);
                 Debug.Log(
-                    $"Auto-discovered robot: {robotId}"
+                    $"[ROBOT_MANAGER] Auto-discovered robot: {robotId}"
                         + (target != null ? $" with target: {target.name}" : " (no target found)")
                 );
             }
@@ -184,7 +181,7 @@ public class RobotManager : MonoBehaviour
             GameObject found = GameObject.Find(pattern);
             if (found != null)
             {
-                Debug.Log($"Found target '{found.name}' for robot '{robotId}'");
+                Debug.Log($"[ROBOT_MANAGER] Found target '{found.name}' for robot '{robotId}'");
                 return found;
             }
         }
@@ -198,13 +195,13 @@ public class RobotManager : MonoBehaviour
                 && obj.name.Contains(robotId.Replace("AR4", ""))
             )
             {
-                Debug.Log($"Found target '{obj.name}' for robot '{robotId}' (fallback search)");
+                Debug.Log($"[ROBOT_MANAGER] Found target '{obj.name}' for robot '{robotId}' (fallback search)");
                 return obj;
             }
         }
 
         Debug.LogWarning(
-            $"No target found for robot '{robotId}'. Robot will not move until target is assigned."
+            $"[ROBOT_MANAGER] No target found for robot '{robotId}'. Robot will not move until target is assigned."
         );
         return null;
     }
@@ -244,17 +241,17 @@ public class RobotManager : MonoBehaviour
                     robot.controller.SetTarget(robot.targetGameObject);
                     OnTargetChanged?.Invoke(robot.robotId, robot.targetGameObject);
 
-                    if (_logConfigurationChanges)
+                    if (_logConfigurationChanges && _logger != null)
                     {
-                        _logger?.LogAction(
-                            "target_updated",
-                            robot.robotId,
-                            robot.targetGameObject.name,
-                            currentPos,
-                            null,
-                            0f,
-                            true
+                        string actionId = _logger.StartAction(
+                            actionName: "target_updated",
+                            type: Logging.ActionType.Movement,
+                            robotIds: new[] { robot.robotId },
+                            targetPos: currentPos,
+                            objectIds: new[] { robot.targetGameObject.name },
+                            description: $"Target updated to {robot.targetGameObject.name}"
                         );
+                        _logger.CompleteAction(actionId, success: true, qualityScore: 1f);
                     }
                 }
             }
@@ -279,13 +276,13 @@ public class RobotManager : MonoBehaviour
         {
             if (_robotInstances.ContainsKey(robotId))
             {
-                Debug.LogWarning($"Robot {robotId} already registered. Updating configuration.");
+                Debug.LogWarning($"[ROBOT_MANAGER] Robot {robotId} already registered. Updating configuration.");
             }
 
             var controller = robotObject.GetComponent<RobotController>();
             if (controller == null)
             {
-                Debug.LogError($"Robot {robotId} missing RobotController component");
+                Debug.LogError($"[ROBOT_MANAGER] Robot {robotId} missing RobotController component");
                 return;
             }
 
@@ -310,22 +307,19 @@ public class RobotManager : MonoBehaviour
             if (targetObject != null && controller != null)
             {
                 controller.SetTarget(targetObject);
-                Debug.Log($"Assigned target '{targetObject.name}' to robot '{robotId}'");
+                Debug.Log($"[ROBOT_MANAGER] Assigned target '{targetObject.name}' to robot '{robotId}'");
             }
 
             string profileName =
                 instance.profile != null ? instance.profile.profileName : "default";
 
-            _logger?.LogSimulationEvent(
-                "robot_registered",
-                $"Robot {robotId} registered with profile {profileName}"
-            );
+            Debug.Log($"[ROBOT_MANAGER] Robot {robotId} registered with profile {profileName}");
 
-            Debug.Log($"Registered robot: {robotId} with profile: {profileName}");
+            Debug.Log($"[ROBOT_MANAGER] Registered robot: {robotId} with profile: {profileName}");
         }
         catch (Exception ex)
         {
-            Debug.LogError($"Failed to register robot {robotId}: {ex.Message}");
+            Debug.LogError($"[ROBOT_MANAGER] Failed to register robot {robotId}: {ex.Message}");
         }
     }
 
@@ -337,11 +331,7 @@ public class RobotManager : MonoBehaviour
     {
         if (_robotInstances.Remove(robotId))
         {
-            _logger?.LogSimulationEvent(
-                "robot_unregistered",
-                $"Robot {robotId} unregistered"
-            );
-            Debug.Log($"Unregistered robot: {robotId}");
+            Debug.Log($"[ROBOT_MANAGER] Robot {robotId} unregistered");
         }
     }
 
@@ -446,7 +436,7 @@ public class RobotManager : MonoBehaviour
             if (controller.robotJoints.Length != robot.profile.joints.Length)
             {
                 Debug.LogWarning(
-                    $"Joint count mismatch for {robotId}: Controller has {controller.robotJoints.Length}, "
+                    $"[ROBOT_MANAGER] Joint count mismatch for {robotId}: Controller has {controller.robotJoints.Length}, "
                         + $"Profile has {robot.profile.joints.Length}. Applying to first {jointCount} joints."
                 );
             }
@@ -469,20 +459,19 @@ public class RobotManager : MonoBehaviour
 
             if (_logConfigurationChanges && _logger != null)
             {
-                _logger.LogAction(
-                    "configuration_applied",
-                    robotId,
-                    robot.profile.profileName,
-                    null,
-                    null,
-                    0f,
-                    true
+                string actionId = _logger.StartAction(
+                    actionName: "configuration_applied",
+                    type: Logging.ActionType.Task,
+                    robotIds: new[] { robotId },
+                    objectIds: new[] { robot.profile.profileName },
+                    description: $"Applied configuration {robot.profile.profileName} to {robotId}"
                 );
+                _logger.CompleteAction(actionId, success: true, qualityScore: 1f);
             }
         }
         catch (Exception ex)
         {
-            Debug.LogError($"Failed to apply profile to robot {robotId}: {ex.Message}");
+            Debug.LogError($"[ROBOT_MANAGER] Failed to apply profile to robot {robotId}: {ex.Message}");
         }
     }
 
@@ -515,8 +504,7 @@ public class RobotManager : MonoBehaviour
                 $"- {robot.robotId}: Profile '{robot.profile.profileName}', Active: {robot.isActive}\n";
         }
 
-        _logger?.LogSimulationEvent("robot_configuration_summary", summary);
-        Debug.Log(summary);
+        Debug.Log($"[ROBOT_MANAGER] Configuration summary:\n{summary}");
     }
 
     /// <summary>
@@ -526,7 +514,7 @@ public class RobotManager : MonoBehaviour
     {
         if (Instance == this)
         {
-            _logger?.LogSimulationEvent("robot_manager_destroyed", "RobotManager destroyed");
+            Debug.Log("[ROBOT_MANAGER] RobotManager destroyed");
             Instance = null;
         }
     }

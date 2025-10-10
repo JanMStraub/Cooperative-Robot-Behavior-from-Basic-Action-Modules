@@ -85,12 +85,7 @@ public class GetCollision : MonoBehaviour
             ValidateConfiguration();
 
             // Log collision detector initialization
-            _logger?.LogSimulationEvent(
-                "collision_detector_initialized",
-                $"Target: {targetId}, GoalTarget: {isGoalTarget}, RewardValue: {targetRewardValue}"
-            );
-
-            Debug.Log($"Collision detector initialized for target: {targetId}");
+            Debug.Log($"[COLLISION] Initialized for target: {targetId}, GoalTarget: {isGoalTarget}, RewardValue: {targetRewardValue}");
         }
         catch (Exception ex)
         {
@@ -301,23 +296,21 @@ public class GetCollision : MonoBehaviour
             // Log to RobotLogger
             if (_logger != null)
             {
-                _logger.LogAction(
-                    "collision_detected",
-                    collisionData.robotId,
-                    targetId,
-                    collisionData.collisionPoint,
-                    null, // Joint angles would need public access
-                    collisionData.approachSpeed,
-                    collisionData.wasIntended,
-                    $"Type: {collisionData.collisionType}"
+                string actionId = _logger.StartAction(
+                    actionName: "collision_detected",
+                    type: Logging.ActionType.Observation,
+                    robotIds: new[] { collisionData.robotId },
+                    targetPos: collisionData.collisionPoint,
+                    objectIds: new[] { targetId },
+                    description: $"Collision with {targetId}: {collisionData.collisionType}, Speed: {collisionData.approachSpeed:F2}"
                 );
+                var metrics = new System.Collections.Generic.Dictionary<string, float>
+                {
+                    ["approach_speed"] = collisionData.approachSpeed,
+                    ["was_intended"] = collisionData.wasIntended ? 1f : 0f
+                };
+                _logger.CompleteAction(actionId, success: true, qualityScore: collisionData.wasIntended ? 1f : 0.5f, metrics: metrics);
             }
-
-            // Log to simulation event log
-            _logger?.LogSimulationEvent(
-                "target_collision",
-                $"Robot: {collisionData.robotId}, Target: {targetId}, Type: {collisionData.collisionType}, Speed: {collisionData.approachSpeed:F2}, Intended: {collisionData.wasIntended}"
-            );
         }
         catch (Exception ex)
         {
@@ -333,7 +326,7 @@ public class GetCollision : MonoBehaviour
         _totalCollisions = 0;
         _lastCollisionTime.Clear();
 
-        _logger?.LogSimulationEvent("collision_metrics_reset", $"Target: {targetId}");
+        Debug.Log($"[COLLISION] Metrics reset for target: {targetId}");
     }
 
     /// <summary>
@@ -343,10 +336,7 @@ public class GetCollision : MonoBehaviour
     public void SetTargetReward(float rewardValue)
     {
         targetRewardValue = rewardValue;
-        _logger?.LogSimulationEvent(
-            "target_reward_changed",
-            $"Target: {targetId}, NewReward: {rewardValue}"
-        );
+        Debug.Log($"[COLLISION] Target reward changed: {targetId}, NewReward: {rewardValue}");
     }
 
     /// <summary>
@@ -379,8 +369,7 @@ public class GetCollision : MonoBehaviour
             // Log final statistics
             if (_totalCollisions > 0)
             {
-                string summary = $"Target {targetId} final stats: {_totalCollisions} collisions";
-                _logger?.LogSimulationEvent("collision_detector_destroyed", summary);
+                Debug.Log($"[COLLISION] Detector destroyed for target {targetId}, final stats: {_totalCollisions} collisions");
             }
         }
         catch (Exception ex)

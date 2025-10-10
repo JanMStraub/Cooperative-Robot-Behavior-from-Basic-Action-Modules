@@ -50,7 +50,7 @@ namespace Logging
             if (_logger == null)
             {
                 Debug.LogWarning(
-                    $"MainLogger not found. Auto-logging disabled for {gameObject.name}"
+                    $"[AUTO_LOGGER] MainLogger not found. Auto-logging disabled for {gameObject.name}"
                 );
                 enableAutoLogging = false;
                 return;
@@ -73,7 +73,7 @@ namespace Logging
             }
 
             _isInitialized = true;
-            Debug.Log($"AutoLogger initialized for {robotId}");
+            Debug.Log($"[AUTO_LOGGER] Initialized for {robotId}");
         }
 
         private void Update()

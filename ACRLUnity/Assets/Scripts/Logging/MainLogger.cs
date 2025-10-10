@@ -26,22 +26,6 @@ namespace Logging
         [Tooltip("Use per-robot log files (true) or single session file (false)")]
         public bool perRobotFiles = true;
 
-        [Tooltip("Maximum log file size in MB before rotation")]
-        public float maxFileSizeMB = 10f;
-
-        [Tooltip("Maximum number of rotated log files to keep")]
-        public int maxRotatedFiles = 5;
-
-        [Header("Console Logging")]
-        [Tooltip("Capture Unity console logs (Debug.Log, etc.)")]
-        public bool captureUnityLogs = true;
-
-        [Tooltip("Enable simulation state logging")]
-        public bool logSimulationState = true;
-
-        [Tooltip("Interval for periodic state logging (seconds)")]
-        public float stateLogInterval = 10f;
-
         [Header("Environment Tracking")]
         [Tooltip("Capture environment snapshots")]
         public bool captureEnvironment = true;
@@ -66,25 +50,12 @@ namespace Logging
 
         // File management
         private string _logFilePath;
+        private string _fullLogPath;
         private StreamWriter _logWriter;
         private string _sessionId;
-        private StreamWriter _consoleLogWriter; // Separate console log file
-
-        // Simulation state tracking
-        private float _nextStateLogTime;
-        private float _startTime;
-        private SimulationManager _simulationManager;
-        private RobotController[] _robotControllers;
 
         // Per-robot file management
-        private readonly Dictionary<string, RobotFileData> _robotFiles = new();
-
-        private class RobotFileData
-        {
-            public string FilePath { get; set; }
-            public StreamWriter Writer { get; set; }
-            public long CurrentFileSize { get; set; }
-        }
+        private readonly Dictionary<string, StreamWriter> _robotFiles = new();
 
         private void Awake()
         {
@@ -102,53 +73,29 @@ namespace Logging
 
         private void Initialize()
         {
-            _sessionId = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            _startTime = Time.time;
+            _sessionId = DateTime.Now.ToString("yyyyMMddHHmmss");
 
             if (string.IsNullOrEmpty(logDirectory))
                 logDirectory = Path.Combine(Application.persistentDataPath, "RobotLogs");
 
-            // Add operation type subfolder
-            string fullLogPath = Path.Combine(logDirectory, operationType);
-            Directory.CreateDirectory(fullLogPath);
+            // Add operation type subfolder and timestamp folder
+            _fullLogPath = Path.Combine(logDirectory, operationType, _sessionId);
+            Directory.CreateDirectory(_fullLogPath);
 
             if (!perRobotFiles)
             {
                 // Single session file
-                _logFilePath = Path.Combine(fullLogPath, $"robot_actions_{_sessionId}.jsonl");
+                _logFilePath = Path.Combine(_fullLogPath, $"robot_actions_{_sessionId}.jsonl");
                 _logWriter = new StreamWriter(_logFilePath, true);
                 _logWriter.AutoFlush = true;
-                Debug.Log($"MainLogger initialized. Session log: {_logFilePath}");
+                Debug.Log($"[MAIN_LOGGER] Initialized. Session log: {_logFilePath}");
             }
             else
             {
-                Debug.Log($"MainLogger initialized. Per-robot logs in: {fullLogPath}");
-            }
-
-            // Create console log file if enabled
-            if (captureUnityLogs)
-            {
-                string consoleLogPath = Path.Combine(fullLogPath, $"console_{_sessionId}.log");
-                _consoleLogWriter = new StreamWriter(consoleLogPath, true);
-                _consoleLogWriter.AutoFlush = true;
-                Application.logMessageReceived += HandleUnityLog;
-                Debug.Log($"Console logging enabled: {consoleLogPath}");
+                Debug.Log($"[MAIN_LOGGER] Initialized. Per-robot logs in: {_fullLogPath}");
             }
 
             LogSessionStart();
-            LogSystemInformation();
-        }
-
-        private void Start()
-        {
-            // Get references to other managers
-            _simulationManager = SimulationManager.Instance;
-            _robotControllers = FindObjectsByType<RobotController>(
-                FindObjectsInactive.Exclude,
-                FindObjectsSortMode.None
-            );
-
-            _nextStateLogTime = Time.time + stateLogInterval;
         }
 
         private void Update()
@@ -167,13 +114,6 @@ namespace Logging
             {
                 CaptureEnvironment();
                 _lastEnvironmentCapture = Time.time;
-            }
-
-            // Log simulation state periodically
-            if (logSimulationState && Time.time >= _nextStateLogTime)
-            {
-                LogCurrentSimulationState();
-                _nextStateLogTime = Time.time + stateLogInterval;
             }
         }
 
@@ -205,14 +145,12 @@ namespace Logging
                 status = ActionStatus.Started,
                 robotIds = robotIds ?? new string[0],
                 objectIds = objectIds ?? new string[0],
-                timestamp = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                timestamp = DateTime.Now.ToString("dd-MM-yyyy HH:mm:ss.ff"),
                 gameTime = Time.time,
                 startPosition = startPos ?? Vector3.zero,
                 targetPosition = targetPos ?? Vector3.zero,
                 description = description ?? actionName,
                 humanReadable = GenerateHumanReadable(actionName, type, robotIds, description),
-                capabilities = DetermineCapabilities(type, actionName),
-                complexityLevel = CalculateComplexity(type, robotIds?.Length ?? 0),
             };
 
             _activeActions[actionId] = action;
@@ -294,7 +232,7 @@ namespace Logging
             var snapshot = new SceneSnapshot
             {
                 snapshotId = snapshotId ?? $"env_{Time.time:F2}",
-                timestamp = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                timestamp = DateTime.Now.ToString("dd-MM-yyyy HH:mm:ss.ff"),
                 gameTime = Time.time,
                 objects = GetSceneObjects(),
                 robots = GetRobotStates(),
@@ -333,69 +271,6 @@ namespace Logging
             };
 
             _trackedObjects[obj.name] = simpleObj;
-        }
-
-        /// <summary>
-        /// Backward compatibility with RobotActionLogger
-        /// </summary>
-        public void LogAction(
-            string type,
-            string robotId,
-            string objectName = null,
-            Vector3? target = null,
-            float[] jointAngles = null,
-            float speed = 0f,
-            bool success = true,
-            string errorMessage = null
-        )
-        {
-            // Map old API to new system
-            ActionType actionType = type.ToLower() switch
-            {
-                "move" or "settarget" => ActionType.Movement,
-                "grip" or "grasp" or "release" => ActionType.Manipulation,
-                "observe" or "scan" => ActionType.Observation,
-                _ => ActionType.Task,
-            };
-
-            string actionId = StartAction(
-                type,
-                actionType,
-                new[] { robotId },
-                targetPos: target,
-                objectIds: objectName != null ? new[] { objectName } : null
-            );
-
-            var metrics = new Dictionary<string, float>();
-            if (speed > 0)
-                metrics["speed"] = speed;
-            if (jointAngles != null)
-                metrics["joint_count"] = jointAngles.Length;
-
-            CompleteAction(actionId, success, success ? 0.8f : 0f, errorMessage, metrics);
-        }
-
-        /// <summary>
-        /// Log joint states for IK debugging (for compatibility with RobotActionLogger)
-        /// </summary>
-        public void LogJointState(
-            string robotId,
-            float[] jointAngles,
-            Vector3? targetPosition = null,
-            bool success = true,
-            string errorMessage = null
-        )
-        {
-            LogAction(
-                "joint_state",
-                robotId,
-                null,
-                targetPosition,
-                jointAngles,
-                0f,
-                success,
-                errorMessage
-            );
         }
 
         // ==================== INTERNAL METHODS ====================
@@ -493,7 +368,7 @@ namespace Logging
             int graspable = _trackedObjects.Values.Count(o => o.isGraspable);
             int robots = RobotManager.Instance?.RobotInstances.Count ?? 0;
 
-            return $"Scene with {robots} robot(s), {objects} object(s) ({graspable} graspable)";
+            return $"[MAIN_LOGGER] Scene with {robots} robot(s), {objects} object(s) ({graspable} graspable)";
         }
 
         private string GenerateHumanReadable(
@@ -524,43 +399,6 @@ namespace Logging
             return $"{action.humanReadable} ({outcome} completed in {action.duration:F1}s, quality: {action.qualityScore:F2})";
         }
 
-        private string[] DetermineCapabilities(ActionType type, string actionName)
-        {
-            var caps = new List<string>();
-
-            switch (type)
-            {
-                case ActionType.Movement:
-                    caps.Add("movement");
-                    break;
-                case ActionType.Manipulation:
-                    caps.AddRange(new[] { "manipulation", "grasping" });
-                    break;
-                case ActionType.Coordination:
-                    caps.AddRange(new[] { "coordination", "communication" });
-                    break;
-                case ActionType.Observation:
-                    caps.Add("perception");
-                    break;
-            }
-
-            return caps.ToArray();
-        }
-
-        private int CalculateComplexity(ActionType type, int robotCount)
-        {
-            int complexity = 1;
-
-            if (type == ActionType.Coordination)
-                complexity += 2;
-            if (type == ActionType.Manipulation)
-                complexity += 1;
-            if (robotCount > 1)
-                complexity += robotCount;
-
-            return Mathf.Clamp(complexity, 1, 4);
-        }
-
         private string DetermineObjectType(GameObject obj)
         {
             string name = obj.name.ToLower();
@@ -584,12 +422,9 @@ namespace Logging
             var entry = new LogEntry
             {
                 logId = "session_start",
-                timestamp = DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                timestamp = DateTime.Now.ToString("dd-MM-yyyy HH:mm:ss.ff"),
                 gameTime = Time.time,
                 logType = "session",
-                trainingPrompt = "Robot simulation session started",
-                trainingResponse = $"Session {_sessionId} initialized with logging enabled",
-                difficultyLevel = "simple",
             };
 
             WriteLog(entry);
@@ -604,16 +439,6 @@ namespace Logging
                 gameTime = action.gameTime,
                 logType = "action",
                 action = action,
-                trainingPrompt = GenerateTrainingPrompt(action),
-                trainingResponse = action.humanReadable,
-                learningPoints = GenerateLearningPoints(action),
-                difficultyLevel = action.complexityLevel switch
-                {
-                    1 => "simple",
-                    2 => "moderate",
-                    3 => "complex",
-                    _ => "expert",
-                },
             };
 
             WriteLog(entry);
@@ -628,52 +453,9 @@ namespace Logging
                 gameTime = scene.gameTime,
                 logType = "scene",
                 scene = scene,
-                trainingPrompt = "Describe the current scene",
-                trainingResponse = scene.sceneDescription,
-                difficultyLevel = "simple",
             };
 
             WriteLog(entry);
-        }
-
-        private string GenerateTrainingPrompt(RobotAction action)
-        {
-            string robots = string.Join(", ", action.robotIds);
-            string objects =
-                action.objectIds.Length > 0
-                    ? $" involving {string.Join(", ", action.objectIds)}"
-                    : "";
-
-            return $"Task: {action.actionName} with robot(s) {robots}{objects}. "
-                + $"Required capabilities: {string.Join(", ", action.capabilities)}. "
-                + $"What should happen?";
-        }
-
-        private string[] GenerateLearningPoints(RobotAction action)
-        {
-            var points = new List<string>();
-
-            if (!action.success)
-            {
-                points.Add($"Action failed: {action.errorMessage ?? "unknown reason"}");
-            }
-
-            if (action.robotIds.Length > 1)
-            {
-                points.Add("Multi-robot coordination demonstrated");
-            }
-
-            if (action.type == ActionType.Manipulation)
-            {
-                points.Add("Object manipulation skills used");
-            }
-
-            if (action.qualityScore < 0.5f && action.success)
-            {
-                points.Add("Action succeeded but with low quality - improvement possible");
-            }
-
-            return points.ToArray();
         }
 
         private void WriteLog(LogEntry entry)
@@ -701,146 +483,71 @@ namespace Logging
             }
             catch (Exception ex)
             {
-                Debug.LogError($"Failed to write log: {ex.Message}");
+                Debug.LogError($"[MAIN_LOGGER] Failed to write log: {ex.Message}");
             }
         }
 
         /// <summary>
         /// Get or create per-robot file writer
         /// </summary>
-        private RobotFileData GetOrCreateRobotFile(string robotId)
+        private StreamWriter GetOrCreateRobotFile(string robotId)
         {
-            if (_robotFiles.TryGetValue(robotId, out RobotFileData fileData))
-                return fileData;
+            if (_robotFiles.TryGetValue(robotId, out StreamWriter writer))
+                return writer;
 
             // Create new robot file
             string safeRobotId = string.IsNullOrEmpty(robotId)
                 ? "Unknown"
                 : robotId.Replace("/", "_").Replace("\\", "_");
 
-            string fullLogPath = Path.Combine(logDirectory, operationType);
             string fileName = $"{safeRobotId}_actions.json";
-            string filePath = Path.Combine(fullLogPath, fileName);
+            string filePath = Path.Combine(_fullLogPath, fileName);
 
-            fileData = new RobotFileData
-            {
-                FilePath = filePath,
-                Writer = new StreamWriter(filePath, true) { AutoFlush = true },
-                CurrentFileSize = File.Exists(filePath) ? new FileInfo(filePath).Length : 0,
-            };
+            writer = new StreamWriter(filePath, true) { AutoFlush = true };
+            _robotFiles[robotId] = writer;
+            Debug.Log($"[MAIN_LOGGER] Created log file for robot '{safeRobotId}': {filePath}");
 
-            _robotFiles[robotId] = fileData;
-            Debug.Log($"Created log file for robot '{safeRobotId}': {filePath}");
-
-            return fileData;
+            return writer;
         }
 
         /// <summary>
-        /// Write to per-robot file with rotation
+        /// Write to per-robot file
         /// </summary>
         private void WriteToRobotFile(string robotId, string json)
         {
-            RobotFileData fileData = GetOrCreateRobotFile(robotId);
-
-            // Check if rotation needed
-            if (fileData.CurrentFileSize > maxFileSizeMB * 1024 * 1024)
-            {
-                RotateLogFile(robotId, fileData);
-            }
-
-            fileData.Writer.WriteLine(json);
-            fileData.CurrentFileSize += System.Text.Encoding.UTF8.GetByteCount(json) + 1; // +1 for newline
-        }
-
-        /// <summary>
-        /// Rotate log file when size limit reached
-        /// </summary>
-        private void RotateLogFile(string robotId, RobotFileData fileData)
-        {
-            try
-            {
-                string baseFileName = Path.GetFileNameWithoutExtension(fileData.FilePath);
-                string extension = Path.GetExtension(fileData.FilePath);
-                string directory = Path.GetDirectoryName(fileData.FilePath);
-
-                // Close current writer
-                fileData.Writer.Close();
-                fileData.Writer.Dispose();
-
-                // Rotate existing backup files
-                for (int i = maxRotatedFiles; i > 1; i--)
-                {
-                    string oldFile = Path.Combine(directory, $"{baseFileName}.{i - 1}{extension}");
-                    string newFile = Path.Combine(directory, $"{baseFileName}.{i}{extension}");
-
-                    if (File.Exists(oldFile))
-                    {
-                        if (File.Exists(newFile))
-                            File.Delete(newFile);
-                        File.Move(oldFile, newFile);
-                    }
-                }
-
-                // Move current file to .1
-                if (File.Exists(fileData.FilePath))
-                {
-                    string firstBackup = Path.Combine(directory, $"{baseFileName}.1{extension}");
-                    if (File.Exists(firstBackup))
-                        File.Delete(firstBackup);
-                    File.Move(fileData.FilePath, firstBackup);
-                }
-
-                // Create new writer
-                fileData.Writer = new StreamWriter(fileData.FilePath, true) { AutoFlush = true };
-                fileData.CurrentFileSize = 0;
-
-                Debug.Log($"Rotated log file for {robotId}. New log: {fileData.FilePath}");
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Failed to rotate log file for robot {robotId}: {ex.Message}");
-                // Recreate writer on error
-                fileData.Writer = new StreamWriter(fileData.FilePath, true) { AutoFlush = true };
-            }
+            StreamWriter writer = GetOrCreateRobotFile(robotId);
+            writer.WriteLine(json);
         }
 
         private void OnDestroy()
         {
             if (Instance == this)
             {
-                LogSimulationEvent("session_end", "Simulation session ended", false);
-
                 // Close session writer
                 _logWriter?.Close();
                 _logWriter?.Dispose();
                 _logWriter = null;
 
-                // Close console writer
-                _consoleLogWriter?.Close();
-                _consoleLogWriter?.Dispose();
-                _consoleLogWriter = null;
-
                 // Close all per-robot writers
-                foreach (var fileData in _robotFiles.Values)
+                foreach (var writer in _robotFiles.Values)
                 {
-                    fileData.Writer?.Close();
-                    fileData.Writer?.Dispose();
+                    writer?.Close();
+                    writer?.Dispose();
                 }
                 _robotFiles.Clear();
 
                 Instance = null;
-                Debug.Log($"MainLogger shutdown. Logs saved.");
+                Debug.Log($"[MAIN_LOGGER] Shutdown. Logs saved.");
             }
         }
 
         private void OnApplicationQuit()
         {
             _logWriter?.Flush();
-            _consoleLogWriter?.Flush();
 
-            foreach (var fileData in _robotFiles.Values)
+            foreach (var writer in _robotFiles.Values)
             {
-                fileData.Writer?.Flush();
+                writer?.Flush();
             }
         }
 
@@ -850,11 +557,10 @@ namespace Logging
         public void FlushLogs()
         {
             _logWriter?.Flush();
-            _consoleLogWriter?.Flush();
 
-            foreach (var fileData in _robotFiles.Values)
+            foreach (var writer in _robotFiles.Values)
             {
-                fileData.Writer?.Flush();
+                writer?.Flush();
             }
         }
 
@@ -863,155 +569,10 @@ namespace Logging
         /// </summary>
         public void FlushLogs(string robotId)
         {
-            if (_robotFiles.TryGetValue(robotId, out RobotFileData fileData))
+            if (_robotFiles.TryGetValue(robotId, out StreamWriter writer))
             {
-                fileData.Writer?.Flush();
+                writer?.Flush();
             }
-        }
-
-        // ==================== CONSOLE LOGGING (from FileLogger) ====================
-
-        /// <summary>
-        /// Handle Unity console log messages
-        /// </summary>
-        private void HandleUnityLog(string logString, string stackTrace, LogType type)
-        {
-            if (_consoleLogWriter == null)
-                return;
-
-            try
-            {
-                string logEntry = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{type}] {logString}";
-                if (type == LogType.Exception || type == LogType.Error)
-                {
-                    logEntry += $"\nStack Trace: {stackTrace}";
-                }
-
-                _consoleLogWriter.WriteLine(logEntry);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Failed to write Unity log: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Log simulation event (for compatibility with FileLogger)
-        /// </summary>
-        public void LogSimulationEvent(string eventType, string details, bool isActive = true)
-        {
-            if (!enableLogging)
-                return;
-
-            try
-            {
-                var state = new
-                {
-                    timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
-                    gameTime = Time.time,
-                    eventType,
-                    simulationActive = isActive,
-                    frameCount = Time.frameCount,
-                    frameRate = 1f / Time.deltaTime,
-                    robotCount = _robotControllers?.Length ?? 0,
-                    activeRobots = GetActiveRobotIds(),
-                    memoryUsageMB = System.GC.GetTotalMemory(false) / (1024f * 1024f),
-                    unityVersion = Application.unityVersion,
-                    details,
-                };
-
-                string json = JsonUtility.ToJson(state);
-                _consoleLogWriter?.WriteLine($"[SIM] {json}");
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Failed to log simulation event: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Log current simulation state
-        /// </summary>
-        private void LogCurrentSimulationState()
-        {
-            if (_simulationManager != null)
-            {
-                string details = $"StopRobot={_simulationManager.ShouldStopRobots}";
-                LogSimulationEvent("periodic_state", details, !_simulationManager.ShouldStopRobots);
-            }
-        }
-
-        /// <summary>
-        /// Log system information at startup
-        /// </summary>
-        private void LogSystemInformation()
-        {
-            try
-            {
-                string sysInfo = $"System Information - ";
-                sysInfo += $"Unity: {Application.unityVersion}, ";
-                sysInfo += $"Platform: {Application.platform}, ";
-                sysInfo += $"Device: {SystemInfo.deviceModel}, ";
-                sysInfo += $"OS: {SystemInfo.operatingSystem}, ";
-                sysInfo += $"CPU: {SystemInfo.processorType} ({SystemInfo.processorCount} cores), ";
-                sysInfo += $"Memory: {SystemInfo.systemMemorySize}MB, ";
-                sysInfo += $"GPU: {SystemInfo.graphicsDeviceName}";
-
-                LogSimulationEvent("system_info", sysInfo);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Failed to log system information: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Get active robot IDs
-        /// </summary>
-        private string[] GetActiveRobotIds()
-        {
-            if (_robotControllers == null)
-                return new string[0];
-
-            List<string> activeIds = new List<string>();
-            foreach (var controller in _robotControllers)
-            {
-                if (controller != null && controller.gameObject.activeInHierarchy)
-                {
-                    activeIds.Add(controller.robotId);
-                }
-            }
-            return activeIds.ToArray();
-        }
-
-        private void OnDisable()
-        {
-            if (captureUnityLogs)
-            {
-                Application.logMessageReceived -= HandleUnityLog;
-            }
-        }
-
-        private void OnApplicationPause(bool pauseStatus)
-        {
-            LogSimulationEvent(
-                pauseStatus ? "app_pause" : "app_resume",
-                $"Application paused: {pauseStatus}",
-                !pauseStatus
-            );
-            if (pauseStatus)
-                FlushLogs();
-        }
-
-        private void OnApplicationFocus(bool hasFocus)
-        {
-            LogSimulationEvent(
-                hasFocus ? "app_focus" : "app_unfocus",
-                $"Application focus: {hasFocus}",
-                hasFocus
-            );
-            if (!hasFocus)
-                FlushLogs();
         }
     }
 }
