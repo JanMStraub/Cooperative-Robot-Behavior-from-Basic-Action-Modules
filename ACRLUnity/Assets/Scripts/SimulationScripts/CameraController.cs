@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
-using System.Threading.Tasks;
 using Logging;
 using UnityEngine;
 #if UNITY_EDITOR
@@ -12,13 +12,44 @@ using UnityEditor;
 [CustomEditor(typeof(CameraController))]
 public class CameraControllerEditor : Editor
 {
+    private bool _lastConnectionState;
+
     public override void OnInspectorGUI()
     {
         DrawDefaultInspector();
         var controller = (CameraController)target;
 
-        if (GUILayout.Button("Take Screenshot"))
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Capture Controls", EditorStyles.boldLabel);
+
+        // Capture buttons
+        EditorGUILayout.BeginHorizontal();
+        if (GUILayout.Button("Take Screenshot", GUILayout.Height(30)))
             controller.CaptureAndSave();
+
+        if (GUILayout.Button("Send to LLM", GUILayout.Height(30)))
+            controller.CaptureAndSend();
+        EditorGUILayout.EndHorizontal();
+
+        if (!Application.isPlaying)
+            return;
+
+        bool isConnected = ImageSender.Instance != null && ImageSender.Instance.IsConnected;
+        string statusText = isConnected ? "Connected" : "Disconnected";
+        Color statusColor = isConnected ? new Color(0.6f, 1f, 0.6f) : new Color(1f, 0.6f, 0.6f);
+
+        var originalColor = GUI.color;
+        GUI.color = statusColor;
+        EditorGUILayout.TextField("Server Status", statusText, EditorStyles.boldLabel);
+        GUI.color = originalColor;
+
+        // Only repaint when connection status changes
+        if (isConnected != _lastConnectionState)
+        {
+            _lastConnectionState = isConnected;
+            EditorUtility.SetDirty(target);
+            Repaint();
+        }
     }
 }
 #endif
@@ -39,18 +70,21 @@ public class CameraController : MonoBehaviour
     private int _imageHeight = 1000;
 
     [SerializeField]
-    [Range(1, 100)]
-    [Tooltip("JPEG quality (1-100, only applies if using JPEG format)")]
-    private int _jpegQuality = 85;
-
-    [Header("File Settings")]
-    [SerializeField]
-    [Tooltip("Image format to use for screenshots")]
-    private ImageFormat _imageFormat = ImageFormat.JPG;
+    [Range(0.25f, 2.0f)]
+    [Tooltip("Resolution scale multiplier (0.25x to 2.0x)")]
+    private float _resolutionScale = 1.0f;
 
     [SerializeField]
-    [Tooltip("Use Python server to send images")]
-    private bool _usePythonServer = true;
+    [Tooltip("Capture in grayscale (reduces memory and bandwidth by 66%)")]
+    private bool _grayscaleMode = false;
+
+    [SerializeField]
+    [Tooltip("Material with a grayscale shader. Required if Grayscale Mode is enabled.")]
+    private Material _grayscaleMaterial;
+
+    [SerializeField]
+    [Tooltip("Compression quality preset")]
+    private CompressionPreset _compressionPreset = CompressionPreset.Balanced;
 
     [SerializeField]
     [Tooltip("Use Application.persistentDataPath for runtime builds")]
@@ -67,31 +101,61 @@ public class CameraController : MonoBehaviour
 
     [SerializeField]
     [Tooltip("Fallback name if no robot detected (leave empty to use camera GameObject name)")]
-    private string _fallbackRobotName = "";
+    private string _fallbackRobotName = "AR4";
+
+    [Header("LLM Settings")]
+    [SerializeField]
+    [Tooltip("A prompt to associate with the image when sending to the LLM")]
+    private string _llmPrompt = "Analyze the image";
 
     // Core components
     private Camera _mainCamera;
     private MainLogger _logger;
 
     // State tracking
-    private int _counter = 0;
+    private int _captureCounter = 0;
     private string _robotArmName;
     private string _rootName;
     private bool _isCapturing = false;
+    private RenderTexture _cachedRenderTexture;
+    private Texture2D _cachedTexture;
+
+    // Events
+    public event Action<byte[]> OnCaptureComplete;
+    public event Action<string> OnCaptureFailed;
 
     // Properties
-    public int ImageWidth => _imageWidth;
-    public int ImageHeight => _imageHeight;
     public bool IsCapturing => _isCapturing;
-    public int CaptureCount => _counter;
+    public int CaptureCount => _captureCounter;
 
     /// <summary>
-    /// Image format options for screenshots.
+    /// Compression quality presets.
     /// </summary>
-    public enum ImageFormat
+    public enum CompressionPreset
     {
-        JPG,
-        PNG,
+        Fast, // Low quality, fast encoding (JPEG 40)
+        Balanced, // Medium quality, balanced speed (JPEG 70)
+        Quality, // High quality, slower encoding (JPEG 95)
+    }
+
+    /// <summary>
+    /// Capture request types.
+    /// </summary>
+    public enum CaptureType
+    {
+        SaveToFile,
+        SendToServer,
+    }
+
+    private void OnValidate()
+    {
+        if (_grayscaleMode && _grayscaleMaterial == null)
+        {
+            Debug.LogWarning(
+                "[CameraController] Grayscale Mode is enabled, but no Grayscale Material is assigned. Disabling mode."
+            );
+            _grayscaleMode = false;
+        }
     }
 
     /// <summary>
@@ -99,257 +163,285 @@ public class CameraController : MonoBehaviour
     /// </summary>
     private void Start()
     {
+        // Get camera component
+        _mainCamera = GetComponent<Camera>();
+        if (_mainCamera == null)
+        {
+            Debug.LogError($"[CAMERA_CONTROLLER] No Camera component found on {gameObject.name}");
+            enabled = false;
+            return;
+        }
+
+        // Get logging components
+        _logger = MainLogger.Instance;
+
+        // Validate image dimensions
+        if (_imageWidth <= 0 || _imageHeight <= 0)
+        {
+            Debug.LogWarning(
+                $"[CAMERA_CONTROLLER] Invalid image dimensions ({_imageWidth}x{_imageHeight}). "
+                    + "Setting to default 1000x1000"
+            );
+            _imageWidth = 1000;
+            _imageHeight = 1000;
+        }
+
+        // Find robot arm name
+        _robotArmName = FindArmRoot(_mainCamera.transform);
+        if (string.IsNullOrEmpty(_robotArmName))
+        {
+            // Use camera name as fallback if no custom fallback is set
+            string fallbackName = string.IsNullOrEmpty(_fallbackRobotName)
+                ? _mainCamera.gameObject.name
+                : _fallbackRobotName;
+
+            // Log hierarchy for debugging
+            string hierarchy = GetHierarchyPath(_mainCamera.transform);
+            Debug.Log(
+                $"[CAMERA_CONTROLLER] Could not find robot arm in hierarchy.\n"
+                    + $"Camera hierarchy: {hierarchy}\n"
+                    + $"Looking for patterns: [{string.Join(", ", _robotNamePatterns)}]\n"
+                    + $"Using fallback: {fallbackName}"
+            );
+            _robotArmName = fallbackName;
+        }
+
+        // Get root name
+        _rootName = _mainCamera.transform.root.name;
+
+        // Log initialization
+        Debug.Log(
+            $"[CAMERA_CONTROLLER] Initialized: Camera={gameObject.name}, Robot={_robotArmName}, Resolution={_imageWidth}x{_imageHeight}"
+        );
+    }
+
+    /// <summary>
+    /// Captures a screenshot and saves it to disk if not already capturing.
+    /// </summary>
+    public void CaptureAndSave() => InitiateCapture(CaptureType.SaveToFile);
+
+    /// <summary>
+    /// Captures a screenshot and sends it to the LLM server if not already capturing.
+    /// </summary>
+    public void CaptureAndSend() => InitiateCapture(CaptureType.SendToServer);
+
+    /// <summary>
+    /// Initiates the capture process if the controller isn't busy.
+    /// </summary>
+    private void InitiateCapture(CaptureType type)
+    {
+        if (_isCapturing)
+        {
+            Debug.LogWarning("[CameraController] A capture is already in progress. Please wait.");
+            return;
+        }
+        if (!enabled)
+        {
+            Debug.LogWarning("[CameraController] Cannot capture, component is disabled.");
+            return;
+        }
+        StartCoroutine(ProcessCaptureCoroutine(type));
+    }
+
+    /// <summary>
+    /// Processes a single capture request, handling the entire pipeline.
+    /// </summary>
+    private IEnumerator ProcessCaptureCoroutine(CaptureType type)
+    {
+        _isCapturing = true;
+        float startTime = Time.realtimeSinceStartup;
+        string errorMessage = null;
+        byte[] imageBytes = null;
+
         try
         {
-            // Get camera component
-            _mainCamera = GetComponent<Camera>();
-            if (_mainCamera == null)
+            // Capture image
+            imageBytes = CaptureImageBytes();
+            Debug.Log($"[CameraController] Captured {imageBytes?.Length ?? 0} bytes");
+            if (imageBytes == null)
+                throw new Exception("Image capture returned null bytes.");
+
+            // Process based on type
+            switch (type)
             {
-                Debug.LogError(
-                    $"[CAMERA_CONTROLLER] No Camera component found on {gameObject.name}"
-                );
-                enabled = false;
-                return;
+                case CaptureType.SaveToFile:
+                    string filename = GenerateFilename();
+                    string fullPath = GetFullPath(
+                        $"Screenshots/{_rootName}/{_robotArmName}/{filename}"
+                    );
+                    SaveImageToFile(fullPath, imageBytes);
+                    Debug.Log($"[CameraController] Image saved to: {fullPath}");
+                    break;
+
+                case CaptureType.SendToServer:
+                    if (ImageSender.Instance == null || !ImageSender.Instance.IsConnected)
+                    {
+                        throw new Exception("ImageSender not available or not connected.");
+                    }
+                    ImageSender.Instance.SendImageData(imageBytes, _robotArmName, _llmPrompt);
+                    Debug.Log(
+                        $"[CameraController] Image sent successfully ({imageBytes.Length / 1024f:F1} KB)."
+                    );
+                    break;
             }
-
-            // Get logging components
-            _logger = MainLogger.Instance;
-
-            // Validate image dimensions
-            if (_imageWidth <= 0 || _imageHeight <= 0)
-            {
-                Debug.LogWarning(
-                    $"[CAMERA_CONTROLLER] Invalid image dimensions ({_imageWidth}x{_imageHeight}). "
-                        + "Setting to default 1000x1000"
-                );
-                _imageWidth = 1000;
-                _imageHeight = 1000;
-            }
-
-            // Find robot arm name
-            _robotArmName = FindArmRoot(_mainCamera.transform);
-            if (string.IsNullOrEmpty(_robotArmName))
-            {
-                // Use camera name as fallback if no custom fallback is set
-                string fallbackName = string.IsNullOrEmpty(_fallbackRobotName)
-                    ? _mainCamera.gameObject.name
-                    : _fallbackRobotName;
-
-                // Log hierarchy for debugging
-                string hierarchy = GetHierarchyPath(_mainCamera.transform);
-                Debug.Log(
-                    $"[CAMERA_CONTROLLER] Could not find robot arm in hierarchy.\n"
-                        + $"Camera hierarchy: {hierarchy}\n"
-                        + $"Looking for patterns: [{string.Join(", ", _robotNamePatterns)}]\n"
-                        + $"Using fallback: {fallbackName}"
-                );
-                _robotArmName = fallbackName;
-            }
-
-            // Get root name
-            _rootName = _mainCamera.transform.root.name;
-
-            // Log initialization
-            Debug.Log(
-                $"[CAMERA_CONTROLLER] Initialized: Camera={gameObject.name}, Robot={_robotArmName}, Resolution={_imageWidth}x{_imageHeight}, Format={_imageFormat}"
-            );
         }
         catch (Exception ex)
         {
-            Debug.LogError($"[CAMERA_CONTROLLER] Failed to initialize: {ex.Message}");
-            enabled = false;
-        }
-    }
-
-    /// <summary>
-    /// Captures a screenshot from the camera and saves it to disk.
-    /// </summary>
-    public void CaptureAndSave()
-    {
-        if (_mainCamera == null)
-        {
-            Debug.LogError("[CAMERA_CONTROLLER] Cannot capture - camera is null");
-            return;
+            errorMessage = ex.Message;
+            Debug.LogError($"[CameraController] Capture failed: {errorMessage}");
         }
 
-        if (_isCapturing)
-        {
-            Debug.LogWarning("[CAMERA_CONTROLLER] Already capturing, ignoring request");
-            return;
-        }
-
-        StartCoroutine(CaptureAndSaveCoroutine());
-    }
-
-    /// <summary>
-    /// Coroutine that handles the screenshot capture process.
-    /// </summary>
-    private IEnumerator CaptureAndSaveCoroutine()
-    {
-        _isCapturing = true;
-        string filename = GenerateFilename();
-        string relativePath = $"Screenshots/{_rootName}/{_robotArmName}/{filename}";
-        string errorMessage = null;
-
-        // Capture the image
-        yield return CaptureCamera(_mainCamera, relativePath, error => errorMessage = error);
-
-        // Check for errors and log accordingly
+        // Finalize and log
+        float captureTime = Time.realtimeSinceStartup - startTime;
         if (errorMessage == null)
         {
-            // Increment counter on success
-            _counter++;
+            _captureCounter++;
+            OnCaptureComplete?.Invoke(imageBytes);
 
-            // Log successful capture
+            // Log successful capture to MainLogger for LLM training
             if (_logger != null)
             {
                 string actionId = _logger.StartAction(
-                    actionName: "screenshot_captured",
-                    type: Logging.ActionType.Observation,
-                    robotIds: new[] { _robotArmName },
-                    startPos: _mainCamera.transform.position,
-                    objectIds: new[] { filename },
-                    description: $"Screenshot captured: {filename}"
+                    "CameraCapture",
+                    ActionType.Observation,
+                    new[] { _robotArmName },
+                    description: $"Camera captured image ({type})"
                 );
-                _logger.CompleteAction(actionId, success: true, qualityScore: 1f);
+
+                _logger.CompleteAction(
+                    actionId,
+                    success: true,
+                    qualityScore: 1.0f,
+                    metrics: new Dictionary<string, float>
+                    {
+                        { "captureTimeMs", captureTime * 1000f },
+                        { "fileSizeKB", imageBytes.Length / 1024f },
+                        { "width", _imageWidth * _resolutionScale },
+                        { "height", _imageHeight * _resolutionScale },
+                    }
+                );
             }
         }
         else
         {
-            // Log failure
-            Debug.LogError($"[CAMERA_CONTROLLER] Capture failed: {errorMessage}");
+            OnCaptureFailed?.Invoke(errorMessage);
 
+            // Log failed capture to MainLogger
             if (_logger != null)
             {
                 string actionId = _logger.StartAction(
-                    actionName: "screenshot_failed",
-                    type: Logging.ActionType.Observation,
-                    robotIds: new[] { _robotArmName },
-                    description: "Screenshot capture failed"
+                    "CameraCapture",
+                    ActionType.Observation,
+                    new[] { _robotArmName },
+                    description: $"Camera capture attempt ({type})"
                 );
-                _logger.CompleteAction(
-                    actionId,
-                    success: false,
-                    qualityScore: 0f,
-                    errorMessage: errorMessage
-                );
+
+                _logger.CompleteAction(actionId, success: false, errorMessage: errorMessage);
             }
         }
 
         _isCapturing = false;
+        yield return null;
+    }
+
+    /// <summary>
+    /// Captures the camera view as a byte array using GPU-accelerated processing.
+    /// Must be called after WaitForEndOfFrame.
+    /// </summary>
+    private byte[] CaptureImageBytes()
+    {
+        int scaledWidth = Mathf.RoundToInt(_imageWidth * _resolutionScale);
+        int scaledHeight = Mathf.RoundToInt(_imageHeight * _resolutionScale);
+
+        // Create or reuse render texture
+        if (
+            _cachedRenderTexture == null
+            || _cachedRenderTexture.width != scaledWidth
+            || _cachedRenderTexture.height != scaledHeight
+        )
+        {
+            if (_cachedRenderTexture != null)
+            {
+                Destroy(_cachedRenderTexture);
+                _cachedRenderTexture = null;
+            }
+            _cachedRenderTexture = new RenderTexture(scaledWidth, scaledHeight, 24);
+        }
+
+        // Render camera to texture
+        _mainCamera.targetTexture = _cachedRenderTexture;
+        _mainCamera.Render();
+
+        RenderTexture source = _cachedRenderTexture;
+
+        // Apply grayscale if enabled
+        if (_grayscaleMode && _grayscaleMaterial != null)
+        {
+            RenderTexture grayRT = RenderTexture.GetTemporary(scaledWidth, scaledHeight);
+            Graphics.Blit(source, grayRT, _grayscaleMaterial);
+            source = grayRT;
+        }
+
+        // Create or reuse texture2D
+        if (
+            _cachedTexture == null
+            || _cachedTexture.width != scaledWidth
+            || _cachedTexture.height != scaledHeight
+        )
+        {
+            if (_cachedTexture != null)
+            {
+                Destroy(_cachedTexture);
+                _cachedTexture = null;
+            }
+            _cachedTexture = new Texture2D(scaledWidth, scaledHeight, TextureFormat.RGB24, false);
+        }
+
+        // Read pixels from GPU to CPU
+        RenderTexture.active = source;
+        _cachedTexture.ReadPixels(new Rect(0, 0, scaledWidth, scaledHeight), 0, 0);
+        _cachedTexture.Apply();
+
+        // Cleanup
+        _mainCamera.targetTexture = null;
+        RenderTexture.active = null;
+        if (source != _cachedRenderTexture)
+            RenderTexture.ReleaseTemporary(source);
+
+        // Encode to JPEG
+        int quality = GetEncodingSettings();
+        byte[] bytes = _cachedTexture.EncodeToJPG(quality);
+
+        return bytes;
+    }
+
+    /// <summary>
+    /// Saves image bytes to disk synchronously.
+    /// </summary>
+    private void SaveImageToFile(string fullPath, byte[] bytes)
+    {
+        string directory = Path.GetDirectoryName(fullPath);
+        if (!Directory.Exists(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+        File.WriteAllBytes(fullPath, bytes);
     }
 
     /// <summary>
     /// Generates a filename for the screenshot based on current settings.
     /// </summary>
-    /// <returns>The generated filename</returns>
     private string GenerateFilename()
     {
-        string extension = _imageFormat == ImageFormat.PNG ? "png" : "jpg";
+        string extension = "jpg";
         string timestamp = _includeTimestamp ? $"_{DateTime.Now:yyyyMMdd_HHmmss}" : "";
 
-        return $"{_counter}{timestamp}.{extension}";
-    }
-
-    /// <summary>
-    /// Captures the scene from the specified camera and saves it as an image to the given path.
-    /// </summary>
-    /// <param name="cam">The Camera object from which to capture the scene</param>
-    /// <param name="relativePath">The relative path to save the captured image</param>
-    /// <param name="onError">Callback to invoke if an error occurs</param>
-    private IEnumerator CaptureCamera(Camera cam, string relativePath, Action<string> onError)
-    {
-        RenderTexture renderTexture = null;
-        Texture2D texture = null;
-        string errorMsg = null;
-
-        // Create a temporary RenderTexture
-        renderTexture = new RenderTexture(_imageWidth, _imageHeight, 24);
-        cam.targetTexture = renderTexture;
-        cam.Render();
-
-        // Wait for end of frame to ensure rendering is complete
-        yield return new WaitForEndOfFrame();
-
-        // Set up a Texture2D to copy the RenderTexture
-        RenderTexture.active = renderTexture;
-        texture = new Texture2D(_imageWidth, _imageHeight, TextureFormat.RGB24, false);
-        texture.ReadPixels(new Rect(0, 0, _imageWidth, _imageHeight), 0, 0);
-        texture.Apply();
-
-        // Reset render texture
-        cam.targetTexture = null;
-        RenderTexture.active = null;
-
-        // Encode image
-        byte[] bytes = null;
-        try
-        {
-            bytes =
-                _imageFormat == ImageFormat.PNG
-                    ? texture.EncodeToPNG()
-                    : texture.EncodeToJPG(_jpegQuality);
-        }
-        catch (Exception ex)
-        {
-            errorMsg = $"[CAMERA_CONTROLLER] Image encoding failed: {ex.Message}";
-            onError?.Invoke(errorMsg);
-        }
-
-        // Send to python server or save to disk asynchronously if encoding succeeded
-        if (_usePythonServer && bytes != null)
-        {
-            // Get camera identifier from robot name or use generic camera name
-            string cameraId = !string.IsNullOrEmpty(_robotArmName) ? _robotArmName : "Camera";
-
-            // Send via ImageSender singleton
-            if (ImageSender.Instance != null && ImageSender.Instance.IsConnected)
-            {
-                bool sent = ImageSender.Instance.SendImageData(bytes, cameraId);
-                if (sent)
-                {
-                    Debug.Log($"[CAMERA_CONTROLLER] Sent image to Python server: {relativePath}");
-                }
-                else
-                {
-                    errorMsg = "[CAMERA_CONTROLLER] Failed to send image to Python server";
-                    onError?.Invoke(errorMsg);
-                }
-            }
-            else
-            {
-                errorMsg = "[CAMERA_CONTROLLER] ImageSender not available or not connected";
-                onError?.Invoke(errorMsg);
-                Debug.LogWarning(errorMsg);
-            }
-        }
-        else if (bytes != null)
-        {
-            string fullPath = GetFullPath(relativePath);
-            yield return SaveImageAsync(fullPath, bytes, onError);
-
-            if (errorMsg == null)
-            {
-                Debug.Log($"[CAMERA_CONTROLLER] Saved image to: {fullPath}");
-            }
-        }
-
-        // Cleanup
-        if (renderTexture != null)
-        {
-            Destroy(renderTexture);
-        }
-        if (texture != null)
-        {
-            Destroy(texture);
-        }
+        return $"{_captureCounter}{timestamp}.{extension}";
     }
 
     /// <summary>
     /// Gets the full file path for saving screenshots.
     /// </summary>
-    /// <param name="relativePath">The relative path</param>
-    /// <returns>The full absolute path</returns>
     private string GetFullPath(string relativePath)
     {
         string basePath = _usePersistentDataPath
@@ -360,59 +452,8 @@ public class CameraController : MonoBehaviour
     }
 
     /// <summary>
-    /// Asynchronously saves image data to disk.
-    /// </summary>
-    /// <param name="fullPath">The full path to save the file</param>
-    /// <param name="bytes">The image bytes to write</param>
-    /// <param name="onError">Callback to invoke if an error occurs</param>
-    private IEnumerator SaveImageAsync(string fullPath, byte[] bytes, Action<string> onError)
-    {
-        bool saveComplete = false;
-        string saveError = null;
-
-        // Start async save operation
-        Task.Run(() =>
-        {
-            try
-            {
-                // Ensure directory exists
-                string directory = Path.GetDirectoryName(fullPath);
-                if (!Directory.Exists(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                }
-
-                // Write file
-                File.WriteAllBytes(fullPath, bytes);
-            }
-            catch (Exception ex)
-            {
-                saveError = $"[CAMERA_CONTROLLER] Failed to save image: {ex.Message}";
-            }
-            finally
-            {
-                saveComplete = true;
-            }
-        });
-
-        // Wait for save to complete
-        while (!saveComplete)
-        {
-            yield return null;
-        }
-
-        // Check for errors
-        if (saveError != null)
-        {
-            onError?.Invoke(saveError);
-        }
-    }
-
-    /// <summary>
     /// Gets the full hierarchy path for a transform (for debugging).
     /// </summary>
-    /// <param name="transform">The transform to get the path for</param>
-    /// <returns>The full hierarchy path</returns>
     private string GetHierarchyPath(Transform transform)
     {
         if (transform == null)
@@ -433,8 +474,6 @@ public class CameraController : MonoBehaviour
     /// <summary>
     /// Searches up the transform hierarchy to find a robot arm name matching configured patterns.
     /// </summary>
-    /// <param name="current">The starting transform</param>
-    /// <returns>The robot arm name if found, null otherwise</returns>
     private string FindArmRoot(Transform current)
     {
         if (current == null)
@@ -470,43 +509,39 @@ public class CameraController : MonoBehaviour
     }
 
     /// <summary>
-    /// Resets the screenshot counter.
+    /// Gets encoding quality based on compression preset.
     /// </summary>
-    public void ResetCounter()
+    private int GetEncodingSettings()
     {
-        _counter = 0;
-        Debug.Log("[CAMERA_CONTROLLER] Counter reset to 0");
+        return _compressionPreset switch
+        {
+            CompressionPreset.Fast => 40,
+            CompressionPreset.Balanced => 70,
+            CompressionPreset.Quality => 95,
+            _ => 85,
+        };
     }
 
     /// <summary>
-    /// Sets the image format for future screenshots.
-    /// </summary>
-    /// <param name="format">The image format to use</param>
-    public void SetImageFormat(ImageFormat format)
-    {
-        _imageFormat = format;
-        Debug.Log($"[CAMERA_CONTROLLER] Image format set to {format}");
-    }
-
-    /// <summary>
-    /// Sets the JPEG quality for future screenshots.
-    /// </summary>
-    /// <param name="quality">Quality value from 1-100</param>
-    public void SetJpegQuality(int quality)
-    {
-        _jpegQuality = Mathf.Clamp(quality, 1, 100);
-        Debug.Log($"[CAMERA_CONTROLLER] JPEG quality set to {_jpegQuality}");
-    }
-
-    /// <summary>
-    /// Unity OnDestroy callback - logs final statistics.
+    /// Unity OnDestroy callback - logs final statistics and cleans up resources.
     /// </summary>
     private void OnDestroy()
     {
-        if (_counter > 0)
+        if (_cachedRenderTexture != null)
+        {
+            Destroy(_cachedRenderTexture);
+            _cachedRenderTexture = null;
+        }
+        if (_cachedTexture != null)
+        {
+            Destroy(_cachedTexture);
+            _cachedTexture = null;
+        }
+
+        if (_captureCounter > 0)
         {
             Debug.Log(
-                $"[CAMERA_CONTROLLER] Camera {gameObject.name} destroyed after capturing {_counter} screenshots"
+                $"[CAMERA_CONTROLLER] Camera {gameObject.name} destroyed after capturing {_captureCounter} screenshots"
             );
         }
     }

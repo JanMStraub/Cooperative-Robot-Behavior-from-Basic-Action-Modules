@@ -38,10 +38,18 @@ class GracefulShutdown:
 
 
 class ImageServer:
-    """Singleton to access camera images from the streaming server."""
+    """
+    Singleton to access camera images from the streaming server.
+
+    This class can work in two modes:
+    1. Server mode: Set storage via set_storage() when running the server
+    2. Client mode: Access via shared memory (same process only)
+
+    For cross-process access, use ImageClient instead.
+    """
 
     _instance = None
-    _cameras_dict: Dict[str, Tuple[np.ndarray, float]] = {}
+    _cameras_dict: Dict[str, Tuple[np.ndarray, float, str]] = {}
     _cameras_lock = threading.Lock()
 
     @classmethod
@@ -69,8 +77,24 @@ class ImageServer:
         """
         with self._cameras_lock:
             if camera_id in self._cameras_dict:
-                image, _ = self._cameras_dict[camera_id]
+                image, _, _ = self._cameras_dict[camera_id]
                 return image.copy()  # Return a copy to prevent race conditions
+            return None
+
+    def get_camera_prompt(self, camera_id: str) -> Optional[str]:
+        """
+        Get the prompt associated with the latest image from a camera.
+
+        Args:
+            camera_id: Camera identifier
+
+        Returns:
+            Prompt string, or None if camera not found
+        """
+        with self._cameras_lock:
+            if camera_id in self._cameras_dict:
+                _, _, prompt = self._cameras_dict[camera_id]
+                return prompt
             return None
 
     def get_all_camera_ids(self) -> List[str]:
@@ -95,9 +119,11 @@ class ImageServer:
         """
         with self._cameras_lock:
             if camera_id in self._cameras_dict:
-                _, timestamp = self._cameras_dict[camera_id]
+                _, timestamp, _ = self._cameras_dict[camera_id]
                 return time.time() - timestamp
             return None
+
+
 
 
 def receive_exactly(sock: socket.socket, num_bytes: int) -> Optional[bytes]:
@@ -122,7 +148,7 @@ def receive_exactly(sock: socket.socket, num_bytes: int) -> Optional[bytes]:
 
 def receive_image(
     sock: socket.socket, config: ServerConfig
-) -> Tuple[Optional[str], Optional[np.ndarray]]:
+) -> Tuple[Optional[str], Optional[np.ndarray], Optional[str]]:
     """
     Receives one image from the socket.
 
@@ -131,41 +157,60 @@ def receive_image(
         config: Server configuration for validation
 
     Returns:
-        Tuple of (cam_id, image) or (None, None) on failure
+        Tuple of (cam_id, image, prompt) or (None, None, None) on failure
     """
     try:
         # Receive camera ID length (4 bytes)
         id_length_data = receive_exactly(sock, 4)
         if id_length_data is None:
-            return None, None
+            return None, None, None
         id_length = struct.unpack("I", id_length_data)[0]
 
         # Validate camera ID length
         if id_length == 0 or id_length > config.max_id_length:
             logging.error(f"Invalid camera ID length: {id_length}")
-            return None, None
+            return None, None, None
 
         # Receive camera ID string
         id_data = receive_exactly(sock, id_length)
         if id_data is None:
-            return None, None
+            return None, None, None
         cam_id = id_data.decode("utf-8")
+
+        # Receive prompt length (4 bytes)
+        prompt_length_data = receive_exactly(sock, 4)
+        if prompt_length_data is None:
+            return None, None, None
+        prompt_length = struct.unpack("I", prompt_length_data)[0]
+
+        # Validate prompt length (allow 0 for empty prompt)
+        if prompt_length > config.max_id_length:
+            logging.error(f"Invalid prompt length: {prompt_length}")
+            return None, None, None
+
+        # Receive prompt string (may be empty)
+        prompt = ""
+        if prompt_length > 0:
+            prompt_data = receive_exactly(sock, prompt_length)
+            if prompt_data is None:
+                return None, None, None
+            prompt = prompt_data.decode("utf-8")
 
         # Receive image size (4 bytes)
         size_info = receive_exactly(sock, 4)
         if size_info is None:
-            return None, None
+            return None, None, None
         image_size = struct.unpack("I", size_info)[0]
 
         # Validate image size
         if image_size == 0 or image_size > config.max_image_size:
             logging.error(f"Invalid image size: {image_size} bytes")
-            return None, None
+            return None, None, None
 
         # Receive image data
         image_data = receive_exactly(sock, image_size)
         if image_data is None:
-            return None, None
+            return None, None, None
 
         # Decode the PNG/JPG image
         nparr = np.frombuffer(image_data, np.uint8)
@@ -173,21 +218,21 @@ def receive_image(
 
         if image is None:
             logging.warning(f"Failed to decode image from camera {cam_id}")
-            return None, None
+            return None, None, None
 
-        return cam_id, image
+        return cam_id, image, prompt
 
     except UnicodeDecodeError as e:
-        logging.error(f"Failed to decode camera ID: {e}")
-        return None, None
+        logging.error(f"Failed to decode camera ID or prompt: {e}")
+        return None, None, None
     except Exception as e:
         logging.error(f"Error receiving image: {e}")
-        return None, None
+        return None, None, None
 
 
 def handle_client(
     conn: socket.socket,
-    cameras_dict: Dict[str, Tuple[np.ndarray, float]],
+    cameras_dict: Dict[str, Tuple[np.ndarray, float, str]],
     cameras_lock: threading.Lock,
     config: ServerConfig,
 ) -> None:
@@ -196,25 +241,28 @@ def handle_client(
 
     Args:
         conn: Client socket connection
-        cameras_dict: Dictionary mapping camera ID to (image, timestamp)
+        cameras_dict: Dictionary mapping camera ID to (image, timestamp, prompt)
         cameras_lock: Lock for thread-safe access to cameras_dict
         config: Server configuration
     """
     try:
         while not GracefulShutdown.shutdown_requested:
-            cam_id, image = receive_image(conn, config)
+            cam_id, image, prompt = receive_image(conn, config)
             if image is None:
                 logging.warning("Failed to receive image from client")
                 break
 
             timestamp = time.time()
+            # Ensure prompt is never None
+            prompt = prompt if prompt is not None else ""
+            prompt_info = f" with prompt: '{prompt}'" if prompt else ""
             logging.info(
-                f"Received image from camera: {cam_id} ({image.shape[1]}x{image.shape[0]})"
+                f"Received image from camera: {cam_id} ({image.shape[1]}x{image.shape[0]}){prompt_info}"
             )
 
-            # Store image by camera ID with timestamp (thread-safe)
+            # Store image by camera ID with timestamp and prompt (thread-safe)
             with cameras_lock:
-                cameras_dict[cam_id] = (image, timestamp)
+                cameras_dict[cam_id] = (image, timestamp, prompt)
 
     except Exception as e:
         logging.error(f"Client error: {e}")
@@ -225,7 +273,7 @@ def handle_client(
 
 def accept_clients(
     server_socket: socket.socket,
-    cameras_dict: Dict[str, Tuple[np.ndarray, float]],
+    cameras_dict: Dict[str, Tuple[np.ndarray, float, str]],
     cameras_lock: threading.Lock,
     config: ServerConfig,
 ) -> None:
@@ -234,7 +282,7 @@ def accept_clients(
 
     Args:
         server_socket: Server socket for accepting connections
-        cameras_dict: Dictionary for storing images by camera ID
+        cameras_dict: Dictionary for storing images by camera ID with prompts
         cameras_lock: Lock for thread-safe access
         config: Server configuration
     """
@@ -279,7 +327,7 @@ def run_server(config: ServerConfig = ServerConfig()) -> None:
         logging.info("Ready to receive images from Unity cameras")
 
         # Shared data structures
-        cameras_dict: Dict[str, Tuple[np.ndarray, float]] = {}
+        cameras_dict: Dict[str, Tuple[np.ndarray, float, str]] = {}
         cameras_lock = threading.Lock()
 
         # Make images available via ImageServer singleton
@@ -301,10 +349,11 @@ def run_server(config: ServerConfig = ServerConfig()) -> None:
             with cameras_lock:
                 if cameras_dict:
                     logging.info(f"Active cameras: {list(cameras_dict.keys())}")
-                    for cam_id, (img, timestamp) in cameras_dict.items():
+                    for cam_id, (img, timestamp, prompt) in cameras_dict.items():
                         age = time.time() - timestamp
+                        prompt_info = f", prompt: '{prompt}'" if prompt else ""
                         logging.info(
-                            f"  {cam_id}: {img.shape[1]}x{img.shape[0]}, {age:.1f}s ago"
+                            f"  {cam_id}: {img.shape[1]}x{img.shape[0]}, {age:.1f}s ago{prompt_info}"
                         )
 
     except Exception as e:

@@ -1,11 +1,12 @@
-# Claude API Vision Integration for Unity Robots
+# LLM Vision Integration for Unity Robots
 
-Real-time vision analysis for Unity robot cameras using Claude API. Stream camera images from Unity via TCP and send them to Claude for instant AI-powered analysis.
+Real-time vision analysis for Unity robot cameras using either **Claude API** (cloud-based) or **Ollama** (local LLM). Stream camera images from Unity via TCP and send them to an LLM for instant AI-powered analysis.
 
 ## Architecture
 
-The system consists of three components:
+The system supports two LLM backends:
 
+### Option 1: Claude API (Cloud)
 1. **Unity (C#)** - `CameraController` + `ImageSender` capture and stream images via TCP
 2. **StreamingServer.py** - Receives images from Unity and stores them in memory
 3. **SendScreenshots.py** - Fetches images from StreamingServer and sends to Claude API
@@ -14,23 +15,27 @@ The system consists of three components:
 Unity Camera → ImageSender (TCP) → StreamingServer → SendScreenshots → Claude API
 ```
 
-## Setup
+### Option 2: Ollama (Local)
+1. **Unity (C#)** - `CameraController` + `ImageSender` capture and stream images via TCP with prompts
+2. **RunAnalyzer.py** - Combined server + analyzer that processes images automatically when prompts are attached
 
-### 1. Install Python Dependencies
-
-```bash
-cd ACRLPython/LLMcommunication
-pip install -r requirements.txt
+```
+Unity Camera → ImageSender (TCP with prompt) → RunAnalyzer → Ollama (local)
 ```
 
-Required packages:
-- `anthropic` - Claude API client
-- `opencv-python` - Image processing
-- `numpy` - Array operations
-- `python-dotenv` - Environment variable management
+## Setup
 
-### 2. Configure API Key
+### Choose Your Backend
 
+#### For Claude API (Cloud-based, High Quality)
+
+**1. Install Python Dependencies**
+```bash
+cd ACRLPython/LLMcommunication
+pip install anthropic opencv-python numpy python-dotenv
+```
+
+**2. Configure API Key**
 1. Get your API key from [Anthropic Console](https://console.anthropic.com/settings/keys)
 2. Copy `.env.example` to `.env`:
    ```bash
@@ -43,6 +48,35 @@ Required packages:
 
 **Security Note:** The `.env` file is gitignored. Never commit your API key to version control.
 
+#### For Ollama (Local, Free, Private)
+
+**1. Install Ollama**
+```bash
+# macOS
+brew install ollama
+
+# Linux
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Or download from https://ollama.com/download
+```
+
+**2. Install Python Dependencies**
+```bash
+pip install ollama opencv-python numpy
+```
+
+**3. Pull a Vision Model**
+```bash
+# Start Ollama server
+ollama serve
+
+# In another terminal, pull a vision model
+ollama pull llava          # 7B model (recommended for testing)
+ollama pull llava:13b      # 13B model (better quality)
+ollama pull llama3.2-vision # Alternative vision model
+```
+
 ### 3. Unity Setup
 
 Add to your Unity scene:
@@ -52,7 +86,41 @@ Add to your Unity scene:
 
 ## Usage
 
-### Starting the System
+### Using Ollama (Local) - RECOMMENDED for Development
+
+**1. Start Ollama** (if not already running)
+```bash
+ollama serve
+```
+
+**2. Start RunAnalyzer** (combines server + analyzer)
+```bash
+python RunAnalyzer.py
+```
+
+**3. Run Unity**
+- Unity will automatically connect and stream camera images to port 5005
+- When Unity sends an image with a prompt attached, RunAnalyzer will automatically:
+  - Receive the image
+  - Send it to Ollama with the prompt
+  - Display and save the response
+
+**Examples:**
+```bash
+# Use default model (llava)
+python RunAnalyzer.py
+
+# Use a specific model
+python RunAnalyzer.py --model llava:13b
+
+# Monitor only specific cameras
+python RunAnalyzer.py --camera AR4Left AR4Right
+
+# Adjust check interval and age window
+python RunAnalyzer.py --interval 1.0 --min-age 0.5 --max-age 30.0
+```
+
+### Using Claude API (Cloud) - For Production Quality
 
 **Terminal 1: Start StreamingServer**
 ```bash
@@ -456,11 +524,25 @@ If image transmission is slow:
 - **Memory**: ~100MB per active camera
 - **Internet**: Required for Claude API access
 
+## Key Differences: Ollama vs Claude API
+
+| Feature | Ollama (Local) | Claude API (Cloud) |
+|---------|---------------|-------------------|
+| **Cost** | Free | Pay per request (~$0.001-0.01/image) |
+| **Privacy** | Fully local, no data sent to cloud | Data sent to Anthropic servers |
+| **Speed** | Fast (local inference) | Depends on network, typically slower |
+| **Quality** | Good (7B-90B models) | Excellent (state-of-the-art) |
+| **Setup** | Requires local GPU/CPU resources | Just API key needed |
+| **Workflow** | Automatic (prompt embedded in stream) | Manual (call script per request) |
+| **Best For** | Development, testing, private data | Production, highest quality analysis |
+
 ## Files
 
 | File | Purpose |
 |------|---------|
 | `StreamingServer.py` | TCP server receiving images from Unity |
+| `RunAnalyzer.py` | **Combined server + Ollama analyzer (recommended)** |
+| `AnalyzeImage.py` | Ollama vision client (standalone) |
 | `SendScreenshots.py` | Claude API client for vision analysis |
 | `requirements.txt` | Python dependencies |
 | `.env` | API key configuration (gitignored) |
