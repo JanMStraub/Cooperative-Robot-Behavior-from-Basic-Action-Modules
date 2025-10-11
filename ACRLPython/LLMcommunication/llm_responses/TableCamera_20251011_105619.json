@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "response": " The right cube is also a yellow cube and it's located at position (0.4,0.3,0.6). ",
+  "metadata": {
+    "model": "llava",
+    "timestamp": "2025-10-11T10:56:19.067441",
+    "duration_seconds": 25.630383,
+    "image_count": 1,
+    "camera_ids": [
+      "TableCamera"
+    ],
+    "prompt": "The left yellow cube is at position (0.2,0.3,0). What is the position of the right cube?",
+    "full_prompt": "The left yellow cube is at position (0.2,0.3,0). What is the position of the right cube?"
+  }
+}

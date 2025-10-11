@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "response": " The right cube is at position (0.5,0.3,0). ",
+  "metadata": {
+    "model": "llava",
+    "timestamp": "2025-10-11T10:58:09.372587",
+    "duration_seconds": 10.982542,
+    "image_count": 1,
+    "camera_ids": [
+      "TableCamera"
+    ],
+    "prompt": "The left yellow cube is at position (0.2,0.3,0). What is the position of the right cube?",
+    "full_prompt": "The left yellow cube is at position (0.2,0.3,0). What is the position of the right cube?"
+  }
+}

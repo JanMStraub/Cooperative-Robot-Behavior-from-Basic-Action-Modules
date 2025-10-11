@@ -133,8 +133,9 @@ public class ImageSender : MonoBehaviour
     /// </summary>
     /// <param name="imageBytes">Encoded image data (PNG/JPG)</param>
     /// <param name="cameraId">Identifier for the camera</param>
+    /// <param name="prompt">Optional prompt for LLM vision processing</param>
     /// <returns>True if sent successfully, false otherwise</returns>
-    public bool SendImageData(byte[] imageBytes, string cameraId)
+    public bool SendImageData(byte[] imageBytes, string cameraId, string prompt = "")
     {
         if (!IsConnected)
         {
@@ -154,6 +155,12 @@ public class ImageSender : MonoBehaviour
             cameraId = "Unknown";
         }
 
+        // Ensure prompt is not null
+        if (prompt == null)
+        {
+            prompt = "";
+        }
+
         try
         {
             // Send camera ID header (UTF-8 string with length prefix)
@@ -161,6 +168,12 @@ public class ImageSender : MonoBehaviour
             byte[] idLength = BitConverter.GetBytes(idBytes.Length);
             _stream.Write(idLength, 0, idLength.Length);
             _stream.Write(idBytes, 0, idBytes.Length);
+
+            // Send prompt header (UTF-8 string with length prefix)
+            byte[] promptBytes = Encoding.UTF8.GetBytes(prompt);
+            byte[] promptLength = BitConverter.GetBytes(promptBytes.Length);
+            _stream.Write(promptLength, 0, promptLength.Length);
+            _stream.Write(promptBytes, 0, promptBytes.Length);
 
             // Send image size (4 bytes)
             byte[] sizeInfo = BitConverter.GetBytes(imageBytes.Length);
@@ -170,7 +183,8 @@ public class ImageSender : MonoBehaviour
             _stream.Write(imageBytes, 0, imageBytes.Length);
             _stream.Flush();
 
-            Debug.Log($"[IMAGE_SENDER] Sent {imageBytes.Length} bytes for camera '{cameraId}'");
+            string promptInfo = string.IsNullOrEmpty(prompt) ? "" : $" with prompt: '{prompt}'";
+            Debug.Log($"[IMAGE_SENDER] Sent {imageBytes.Length} bytes for camera '{cameraId}'{promptInfo}");
             return true;
         }
         catch (Exception e)
@@ -186,8 +200,9 @@ public class ImageSender : MonoBehaviour
     /// </summary>
     /// <param name="cam">Camera to capture from</param>
     /// <param name="cameraId">String identifier for the camera</param>
+    /// <param name="prompt">Optional prompt for LLM vision processing</param>
     /// <returns>True if captured and sent successfully, false otherwise</returns>
-    public bool CaptureAndSendCamera(Camera cam, string cameraId)
+    public bool CaptureAndSendCamera(Camera cam, string cameraId, string prompt = "")
     {
         if (cam == null)
         {
@@ -219,7 +234,7 @@ public class ImageSender : MonoBehaviour
 
             // Encode and send
             byte[] imageData = texture.EncodeToPNG();
-            bool success = SendImageData(imageData, cameraId);
+            bool success = SendImageData(imageData, cameraId, prompt);
 
             return success;
         }
