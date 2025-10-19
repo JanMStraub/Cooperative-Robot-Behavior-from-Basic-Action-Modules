@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Unity.VisualScripting;
 using UnityEngine;
 
 namespace Logging
@@ -39,6 +40,9 @@ namespace Logging
         [Tooltip("Trajectory point sampling rate (seconds)")]
         public float trajectorySampleRate = 0.2f;
 
+        [Tooltip("Auto-register objects in scene")]
+        public bool autoRegisterObjects = true;
+
         // Active tracking
         private readonly Dictionary<string, RobotAction> _activeActions = new();
         private readonly Dictionary<string, List<Vector3>> _trajectories = new();
@@ -52,6 +56,7 @@ namespace Logging
         private string _logFilePath;
         private string _fullLogPath;
         private StreamWriter _logWriter;
+        private StreamWriter _sceneWriter;
         private string _sessionId;
 
         // Per-robot file management
@@ -82,6 +87,11 @@ namespace Logging
             _fullLogPath = Path.Combine(logDirectory, operationType, _sessionId);
             Directory.CreateDirectory(_fullLogPath);
 
+            // Create dedicated scene log file
+            string sceneLogPath = Path.Combine(_fullLogPath, $"scene_{_sessionId}.jsonl");
+            _sceneWriter = new StreamWriter(sceneLogPath, true) { AutoFlush = true };
+            Debug.Log($"[MAIN_LOGGER] Scene log: {sceneLogPath}");
+
             if (!perRobotFiles)
             {
                 // Single session file
@@ -95,7 +105,36 @@ namespace Logging
                 Debug.Log($"[MAIN_LOGGER] Initialized. Per-robot logs in: {_fullLogPath}");
             }
 
+            // Auto-register scene objects
+            if (autoRegisterObjects)
+            {
+                RegisterSceneObjects();
+            }
+
             LogSessionStart();
+        }
+
+        private void Start()
+        {
+            // Delay initial capture to ensure all objects are registered first
+            StartCoroutine(CaptureInitialScene());
+        }
+
+        /// <summary>
+        /// Captures initial scene after all Start() methods have completed
+        /// </summary>
+        private System.Collections.IEnumerator CaptureInitialScene()
+        {
+            // Wait for next frame to ensure all Start() methods have completed
+            yield return null;
+
+            // Wait one more frame to ensure all AutoLoggers have registered objects
+            yield return null;
+
+            Debug.Log(
+                $"[MAIN_LOGGER] About to capture initial scene. Tracked objects: {_trackedObjects.Count}"
+            );
+            CaptureEnvironment("initial_scene");
         }
 
         private void Update()
@@ -222,11 +261,41 @@ namespace Logging
         }
 
         /// <summary>
+        /// Log a generic simulation event
+        /// </summary>
+        public void LogSimulationEvent(
+            string eventName,
+            string description,
+            string[] robotIds = null,
+            string[] objectIds = null
+        )
+        {
+            if (!enableLogging)
+                return;
+
+            var actionId = StartAction(
+                eventName,
+                ActionType.Observation,
+                robotIds ?? new string[0],
+                objectIds: objectIds,
+                description: description
+            );
+
+            // Complete immediately (events are instantaneous)
+            CompleteAction(actionId, true, 1.0f);
+        }
+
+        /// <summary>
         /// Capture current environment state
         /// </summary>
         public void CaptureEnvironment(string snapshotId = null)
         {
-            if (!enableLogging || !captureEnvironment)
+            if (!enableLogging)
+                return;
+
+            // For periodic/automatic captures, check captureEnvironment flag
+            // For manual captures (snapshotId provided), always capture
+            if (snapshotId == null && !captureEnvironment)
                 return;
 
             var snapshot = new SceneSnapshot
@@ -399,16 +468,109 @@ namespace Logging
             return $"{action.humanReadable} ({outcome} completed in {action.duration:F1}s, quality: {action.qualityScore:F2})";
         }
 
+        /// <summary>
+        /// Determines object type based on name and material
+        /// </summary>
         private string DetermineObjectType(GameObject obj)
         {
             string name = obj.name.ToLower();
+
+            // Check for Trackpoint material
+            if (obj.TryGetComponent<Renderer>(out var renderer))
+            {
+                foreach (var material in renderer.sharedMaterials)
+                {
+                    if (material != null && material.name.Contains("Trackpoint"))
+                        return "trackpoint";
+                }
+            }
+
+            // Check name patterns
             if (name.Contains("cube"))
                 return "cube";
             if (name.Contains("sphere"))
                 return "sphere";
             if (name.Contains("target"))
                 return "target";
+            if (name.Contains("trackpoint"))
+                return "trackpoint";
+
             return "object";
+        }
+
+        /// <summary>
+        /// Registers scene objects for logging (objects with colliders or Trackpoint material)
+        /// </summary>
+        private void RegisterSceneObjects()
+        {
+            var registeredObjects = new HashSet<GameObject>();
+
+            // Find all objects with colliders (potential targets)
+            var colliders = FindObjectsByType<Collider>(FindObjectsSortMode.None);
+
+            foreach (var collider in colliders)
+            {
+                var obj = collider.gameObject;
+
+                // Skip robot parts
+                if (
+                    obj.GetComponent<RobotController>() != null
+                    || obj.GetComponent<ArticulationBody>() != null
+                    || obj.GetComponent<GripperController>() != null
+                )
+                    continue;
+
+                // Skip too small objects
+                if (collider.bounds.size.magnitude < 0.01f)
+                    continue;
+
+                // Register object
+                bool isGraspable =
+                    obj.GetComponent<Rigidbody>() != null && collider.bounds.size.magnitude < 0.5f;
+
+                RegisterObject(obj, null, isGraspable);
+                registeredObjects.Add(obj);
+            }
+
+            // Find all objects with Trackpoint material
+            var renderers = FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+
+            foreach (var renderer in renderers)
+            {
+                var obj = renderer.gameObject;
+
+                // Skip if already registered
+                if (registeredObjects.Contains(obj))
+                    continue;
+
+                // Skip robot parts
+                if (
+                    obj.GetComponent<RobotController>() != null
+                    || obj.GetComponent<ArticulationBody>() != null
+                    || obj.GetComponent<GripperController>() != null
+                )
+                    continue;
+
+                // Check if any material is named "Trackpoint"
+                bool hasTrackpointMaterial = false;
+                foreach (var material in renderer.sharedMaterials)
+                {
+                    if (material != null && material.name.Contains("Trackpoint"))
+                    {
+                        hasTrackpointMaterial = true;
+                        break;
+                    }
+                }
+
+                if (hasTrackpointMaterial)
+                {
+                    // Trackpoint objects are typically not graspable (markers)
+                    RegisterObject(obj, null, false);
+                    registeredObjects.Add(obj);
+                }
+            }
+
+            Debug.Log($"[MAIN_LOGGER] Registered {registeredObjects.Count} objects");
         }
 
         private string GenerateActionId(string actionName, ActionType type)
@@ -455,6 +617,9 @@ namespace Logging
                 scene = scene,
             };
 
+            Debug.Log(
+                $"[MAIN_LOGGER] Logging scene snapshot: {scene.snapshotId}, Objects: {scene.totalObjects}, Robots: {scene.robots.Length}"
+            );
             WriteLog(entry);
         }
 
@@ -467,17 +632,43 @@ namespace Logging
             {
                 string json = JsonUtility.ToJson(entry);
 
-                if (perRobotFiles && entry.action != null && entry.action.robotIds.Length > 0)
+                // Scene logs always go to dedicated scene file
+                if (entry.logType == "scene")
                 {
-                    // Write to per-robot files
-                    foreach (string robotId in entry.action.robotIds)
+                    _sceneWriter?.WriteLine(json);
+                    return;
+                }
+
+                // Handle action and session logs
+                if (perRobotFiles)
+                {
+                    // Per-robot file mode
+                    if (entry.action != null && entry.action.robotIds.Length > 0)
                     {
-                        WriteToRobotFile(robotId, json);
+                        // Write action logs to per-robot files
+                        foreach (string robotId in entry.action.robotIds)
+                        {
+                            WriteToRobotFile(robotId, json);
+                        }
+                    }
+                    else
+                    {
+                        // Write session logs to session file
+                        if (_logWriter == null)
+                        {
+                            string sessionFile = Path.Combine(
+                                _fullLogPath,
+                                $"session_{_sessionId}.jsonl"
+                            );
+                            _logWriter = new StreamWriter(sessionFile, true) { AutoFlush = true };
+                            Debug.Log($"[MAIN_LOGGER] Created session log file: {sessionFile}");
+                        }
+                        _logWriter.WriteLine(json);
                     }
                 }
                 else if (_logWriter != null)
                 {
-                    // Write to session file
+                    // Single session file mode
                     _logWriter.WriteLine(json);
                 }
             }
@@ -500,7 +691,7 @@ namespace Logging
                 ? "Unknown"
                 : robotId.Replace("/", "_").Replace("\\", "_");
 
-            string fileName = $"{safeRobotId}_actions.json";
+            string fileName = $"{safeRobotId}_actions.jsonl";
             string filePath = Path.Combine(_fullLogPath, fileName);
 
             writer = new StreamWriter(filePath, true) { AutoFlush = true };
@@ -523,6 +714,11 @@ namespace Logging
         {
             if (Instance == this)
             {
+                // Close scene writer
+                _sceneWriter?.Close();
+                _sceneWriter?.Dispose();
+                _sceneWriter = null;
+
                 // Close session writer
                 _logWriter?.Close();
                 _logWriter?.Dispose();
@@ -543,33 +739,11 @@ namespace Logging
 
         private void OnApplicationQuit()
         {
+            // Writers already auto-flush, but ensure everything is written on quit
+            _sceneWriter?.Flush();
             _logWriter?.Flush();
 
             foreach (var writer in _robotFiles.Values)
-            {
-                writer?.Flush();
-            }
-        }
-
-        /// <summary>
-        /// Flush all logs immediately (for compatibility with RobotActionLogger and FileLogger)
-        /// </summary>
-        public void FlushLogs()
-        {
-            _logWriter?.Flush();
-
-            foreach (var writer in _robotFiles.Values)
-            {
-                writer?.Flush();
-            }
-        }
-
-        /// <summary>
-        /// Flush logs for specific robot (for compatibility with RobotActionLogger)
-        /// </summary>
-        public void FlushLogs(string robotId)
-        {
-            if (_robotFiles.TryGetValue(robotId, out StreamWriter writer))
             {
                 writer?.Flush();
             }

@@ -223,8 +223,13 @@ namespace Logging
                 return "adjust_gripper";
         }
 
+        /// <summary>
+        /// Registers scene objects for logging (objects with colliders or Trackpoint material)
+        /// </summary>
         private void RegisterSceneObjects()
         {
+            var registeredObjects = new HashSet<GameObject>();
+
             // Find all objects with colliders (potential targets)
             var colliders = FindObjectsByType<Collider>(FindObjectsSortMode.None);
 
@@ -236,11 +241,12 @@ namespace Logging
                 if (
                     obj.GetComponent<RobotController>() != null
                     || obj.GetComponent<ArticulationBody>() != null
+                    || obj.GetComponent<GripperController>() != null
                 )
                     continue;
 
                 // Skip too small objects
-                if (collider.bounds.size.magnitude < 0.02f)
+                if (collider.bounds.size.magnitude < 0.01f)
                     continue;
 
                 // Register object
@@ -248,7 +254,48 @@ namespace Logging
                     obj.GetComponent<Rigidbody>() != null && collider.bounds.size.magnitude < 0.5f;
 
                 _logger.RegisterObject(obj, null, isGraspable);
+                registeredObjects.Add(obj);
             }
+
+            // Find all objects with Trackpoint material
+            var renderers = FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+
+            foreach (var renderer in renderers)
+            {
+                var obj = renderer.gameObject;
+
+                // Skip if already registered
+                if (registeredObjects.Contains(obj))
+                    continue;
+
+                // Skip robot parts
+                if (
+                    obj.GetComponent<RobotController>() != null
+                    || obj.GetComponent<ArticulationBody>() != null
+                    || obj.GetComponent<GripperController>() != null
+                )
+                    continue;
+
+                // Check if any material is named "Trackpoint"
+                bool hasTrackpointMaterial = false;
+                foreach (var material in renderer.sharedMaterials)
+                {
+                    if (material != null && material.name.Contains("Trackpoint"))
+                    {
+                        hasTrackpointMaterial = true;
+                        break;
+                    }
+                }
+
+                if (hasTrackpointMaterial)
+                {
+                    // Trackpoint objects are typically not graspable (markers)
+                    _logger.RegisterObject(obj, null, false);
+                    registeredObjects.Add(obj);
+                }
+            }
+
+            Debug.Log($"[AUTO_LOGGER] Registered {registeredObjects.Count} objects");
         }
 
         // Public methods for manual logging

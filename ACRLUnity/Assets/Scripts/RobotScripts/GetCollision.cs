@@ -286,14 +286,14 @@ public class GetCollision : MonoBehaviour
     }
 
     /// <summary>
-    /// Logs collision data to RobotLogger and FileLogger.
+    /// Logs collision data to MainLogger
     /// </summary>
     /// <param name="collisionData">The collision data to log</param>
     private void LogCollision(CollisionData collisionData)
     {
         try
         {
-            // Log to RobotLogger
+            // Log to MainLogger
             if (_logger != null)
             {
                 string actionId = _logger.StartAction(
