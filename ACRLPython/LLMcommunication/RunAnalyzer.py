@@ -130,7 +130,6 @@ def run_analyzer_loop(args):
         logging.info("Starting continuous monitoring mode...")
         logging.info(f"Check interval: {args.interval}s")
         logging.info(f"Image age window: {args.min_age}s - {args.max_age}s")
-        logging.info("📸 Only NEW screenshots will be sent to LLM (resource efficient)")
         if monitor_cameras:
             logging.info(f"Monitoring cameras: {', '.join(monitor_cameras)}")
         else:

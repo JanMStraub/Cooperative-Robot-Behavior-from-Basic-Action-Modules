@@ -72,7 +72,7 @@ class OllamaVisionProcessor:
         "bakllava",
     ]
 
-    DEFAULT_MODEL = "llava"
+    DEFAULT_MODEL = "gemma3"
 
     def __init__(self, model: str = DEFAULT_MODEL, host: Optional[str] = None):
         """

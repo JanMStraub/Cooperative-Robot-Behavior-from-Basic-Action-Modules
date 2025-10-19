@@ -27,6 +27,13 @@ namespace Logging
             try
             {
                 var lines = File.ReadAllLines(sourceLogFile);
+
+                if (lines.Length == 0)
+                {
+                    Debug.LogWarning($"[LLM_EXPORTER] Source log file is empty: {sourceLogFile}");
+                    return;
+                }
+
                 var entries = new List<LogEntry>();
 
                 // Parse all log entries
@@ -45,6 +52,12 @@ namespace Logging
                     {
                         // Skip malformed entries
                     }
+                }
+
+                if (entries.Count == 0)
+                {
+                    Debug.LogWarning($"[LLM_EXPORTER] No valid entries found in: {sourceLogFile}");
+                    return;
                 }
 
                 // Write clean JSONL output
@@ -286,9 +299,10 @@ namespace Logging
                 return;
             }
 
-            // Find most recent log file
+            // Find most recent log file (support both naming patterns)
             var files = Directory
-                .GetFiles(logDir, "robot_actions_*.jsonl")
+                .GetFiles(logDir, "*_actions.jsonl", SearchOption.AllDirectories)
+                .Concat(Directory.GetFiles(logDir, "robot_actions_*.jsonl", SearchOption.AllDirectories))
                 .OrderByDescending(f => File.GetLastWriteTime(f))
                 .ToArray();
 
@@ -339,14 +353,21 @@ namespace Logging
         private static void GenerateStats()
         {
             string logDir = Path.Combine(Application.persistentDataPath, "RobotLogs");
+
+            // Support both naming patterns
             var files = Directory
-                .GetFiles(logDir, "robot_actions_*.jsonl")
+                .GetFiles(logDir, "*_actions.jsonl", SearchOption.AllDirectories)
+                .Concat(Directory.GetFiles(logDir, "robot_actions_*.jsonl", SearchOption.AllDirectories))
                 .OrderByDescending(f => File.GetLastWriteTime(f))
                 .ToArray();
 
             if (files.Length > 0)
             {
                 LLMExporter.GenerateStatistics(files[0]);
+            }
+            else
+            {
+                Debug.LogWarning("[LLM_EXPORTER] No log files found for statistics");
             }
         }
 
