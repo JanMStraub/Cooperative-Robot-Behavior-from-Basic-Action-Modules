@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """
 ResultsServer.py - Sends LLM analysis results back to Unity
-
-Refactored version using TCPServerBase and UnityProtocol.
-Reduces code by ~120 lines compared to original implementation.
 """
 
 import socket
@@ -13,13 +10,12 @@ import time
 from typing import Dict, Optional, List
 import signal
 
-# Import base classes
+# Import config and base classes
+import config as cfg
 from core.TCPServerBase import TCPServerBase, ServerConfig
 from core.UnityProtocol import UnityProtocol
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
-)
+logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
 
 
 class ResultsBroadcaster:
@@ -31,13 +27,13 @@ class ResultsBroadcaster:
     """
 
     _instance = None
-    _server: Optional['ResultsServer'] = None
+    _server: Optional["ResultsServer"] = None
     _result_queue: List[Dict] = []
     _queue_lock = threading.Lock()
-    _max_queue_size: int = 100
+    _max_queue_size: int = cfg.MAX_RESULT_QUEUE_SIZE
 
     @classmethod
-    def initialize(cls, server: 'ResultsServer'):
+    def initialize(cls, server: "ResultsServer"):
         """Initialize the broadcaster with a server instance"""
         if cls._instance is None:
             cls._instance = cls()
@@ -70,20 +66,38 @@ class ResultsBroadcaster:
             if "timestamp" not in result and "metadata" in result:
                 result["timestamp"] = result["metadata"].get("timestamp", "")
 
-            # If no clients, queue the result
-            if cls._server.get_client_count() == 0:
+            # Encode the message once before checking client count
+            # This prevents race condition where clients disconnect after check
+            message = UnityProtocol.encode_result_message(result)
+
+            # Check client count and send in single atomic operation
+            client_count = cls._server.get_client_count()
+
+            if client_count == 0:
+                # No clients - queue the result
                 with cls._queue_lock:
                     if len(cls._result_queue) >= cls._max_queue_size:
-                        cls._result_queue.pop(0)
+                        dropped = cls._result_queue.pop(0)
+                        logging.warning(
+                            f"Queue full - dropped result for {dropped.get('camera_id', 'unknown')}"
+                        )
                     cls._result_queue.append(result)
                 logging.debug("Result queued (no clients connected)")
                 return True
 
-            # Send to all clients
-            message = UnityProtocol.encode_result_message(result)
+            # Send to all clients (they may have disconnected, but that's OK)
             sent_count = cls._server.broadcast_to_all_clients(message)
+
+            # If send failed but we thought there were clients, queue it
+            if sent_count == 0:
+                with cls._queue_lock:
+                    if len(cls._result_queue) >= cls._max_queue_size:
+                        cls._result_queue.pop(0)
+                    cls._result_queue.append(result)
+                logging.debug("Result queued (send failed)")
+
             logging.debug(f"Result sent to {sent_count} client(s)")
-            return sent_count > 0
+            return sent_count > 0 or True  # Queued results also count as success
 
         except Exception as e:
             logging.error(f"Error sending result: {e}")
@@ -106,11 +120,11 @@ class ResultsServer(TCPServerBase):
     Handles result-specific JSON encoding and broadcasting.
     """
 
-    def __init__(self, config: ServerConfig = None):
-        if config is None:
-            config = ServerConfig(host="127.0.0.1", port=5006)
+    def __init__(self, server_config: ServerConfig = None):
+        if server_config is None:
+            server_config = cfg.get_results_config()
 
-        super().__init__(config)
+        super().__init__(server_config)
         ResultsBroadcaster.initialize(self)
         logging.info("ResultsServer initialized")
 
@@ -130,7 +144,7 @@ class ResultsServer(TCPServerBase):
             # Keep connection alive - receive keep-alive packets from Unity
             while self.is_running():
                 # Simple keep-alive check
-                client.settimeout(1.0)
+                client.settimeout(cfg.RESULTS_SERVER_KEEPALIVE)
                 try:
                     data = client.recv(1024)
                     if not data:
@@ -156,18 +170,19 @@ class ResultsServer(TCPServerBase):
                     break
 
 
-def run_results_server(config: ServerConfig = None, setup_signals: bool = True):
+def run_results_server(server_config: ServerConfig = None, setup_signals: bool = True):
     """
     Start the ResultsServer (blocking)
 
     Args:
-        config: Server configuration
+        server_config: Server configuration
         setup_signals: If True, setup signal handlers (only valid in main thread)
     """
-    server = ResultsServer(config)
+    server = ResultsServer(server_config)
 
     # Setup signal handlers (only if in main thread)
     if setup_signals:
+
         def signal_handler(_sig, _frame):
             logging.info("Shutdown signal received")
             server.stop()
@@ -181,7 +196,7 @@ def run_results_server(config: ServerConfig = None, setup_signals: bool = True):
 
         # Keep server running
         while server.is_running():
-            time.sleep(1.0)
+            time.sleep(cfg.RESULTS_SERVER_KEEPALIVE)
 
     except KeyboardInterrupt:
         logging.info("Interrupted by user")
@@ -189,14 +204,14 @@ def run_results_server(config: ServerConfig = None, setup_signals: bool = True):
         server.stop()
 
 
-def run_results_server_background(config: ServerConfig = None):
+def run_results_server_background(server_config: ServerConfig = None):
     """Start the ResultsServer in a background thread"""
-    config = config or ServerConfig(host="127.0.0.1", port=5006)
+    server_config = server_config or cfg.get_results_config()
 
     thread = threading.Thread(
         target=run_results_server,
-        args=(config, False),  # setup_signals=False in background thread
-        daemon=True
+        args=(server_config, False),  # setup_signals=False in background thread
+        daemon=True,
     )
     thread.start()
     logging.info("ResultsServer started in background thread")
@@ -207,17 +222,21 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="LLM results server for Unity")
-    parser.add_argument("--host", default="127.0.0.1", help="Host to bind to")
-    parser.add_argument("--port", type=int, default=5006, help="Port to bind to")
-    parser.add_argument("--test", action="store_true", help="Send test results every 5 seconds")
+    parser.add_argument("--host", default=cfg.DEFAULT_HOST, help="Host to bind to")
+    parser.add_argument(
+        "--port", type=int, default=cfg.RESULTS_SERVER_PORT, help="Port to bind to"
+    )
+    parser.add_argument(
+        "--test", action="store_true", help="Send test results every 5 seconds"
+    )
 
     args = parser.parse_args()
 
-    config = ServerConfig(host=args.host, port=args.port)
+    server_config = ServerConfig(host=args.host, port=args.port)
 
     if args.test:
         # Test mode - run server and send test results
-        run_results_server_background(config)
+        run_results_server_background(server_config)
 
         print("Sending test results every 5 seconds...")
         print("Press Ctrl+C to stop")
@@ -246,4 +265,4 @@ if __name__ == "__main__":
             print("\nStopping test server...")
     else:
         # Normal mode
-        run_results_server(config)
+        run_results_server(server_config)

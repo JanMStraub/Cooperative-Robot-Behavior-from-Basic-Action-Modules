@@ -843,6 +843,7 @@ MonoBehaviour:
   _autoConnect: 1
   _autoReconnect: 0
   _reconnectInterval: 2
+  _readTimeoutMs: 120000
   _verboseLogging: 0
   _enableStreaming: 0
   _sendInterval: 0.2
@@ -862,13 +863,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PythonServerManager
   servers:
-  - serverName: RunAnalyzer
-    scriptPath: ACRLPython/LLMcommunication/RunAnalyzer.py
-    arguments: --model gemma3 --server-host 127.0.0.1 --server-port 5005 --results-port
-      5006
-    autoStart: 1
+  - serverName: LLMAnalyzer
+    scriptPath: ACRLPython/LLMcommunication/RunAnalyzerWrapper.py
+    arguments: --model gemma3 --interval 2.0
+    autoStart: 0
     enabled: 1
-    description: Combined StreamingServer + Ollama image analyzer
+    description: Ollama LLM vision processor with streaming server
   _startupDelay: 1
 --- !u!114 &1797467632
 MonoBehaviour:
@@ -887,6 +887,7 @@ MonoBehaviour:
   _autoConnect: 1
   _autoReconnect: 1
   _reconnectInterval: 2
+  _readTimeoutMs: 120000
   _verboseLogging: 1
   _logResults: 1
 --- !u!4 &2081917769 stripped

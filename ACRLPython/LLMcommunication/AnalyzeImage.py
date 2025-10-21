@@ -44,6 +44,9 @@ except ImportError:
     print("Error: 'opencv-python' and 'numpy' required. Install with: pip install opencv-python numpy")
     sys.exit(1)
 
+# Import config
+import config as cfg
+
 # Import ImageStorage from StreamingServer
 try:
     from StreamingServer import ImageStorage
@@ -53,26 +56,18 @@ except ImportError:
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
+    level=getattr(logging, cfg.LOG_LEVEL),
+    format=cfg.LOG_FORMAT
 )
 
 
 class OllamaVisionProcessor:
     """Handles sending screenshots to Ollama for vision-based LLM processing"""
 
-    # Popular Ollama vision models
-    VISION_MODELS = [
-        "llava",
-        "llava:13b",
-        "llava:34b",
-        "llama3.2-vision",
-        "llama3.2-vision:11b",
-        "llama3.2-vision:90b",
-        "bakllava",
-    ]
+    # Popular Ollama vision models (from config)
+    VISION_MODELS = cfg.VISION_MODELS
 
-    DEFAULT_MODEL = "gemma3"
+    DEFAULT_MODEL = cfg.DEFAULT_OLLAMA_MODEL
 
     def __init__(self, model: str = DEFAULT_MODEL, host: Optional[str] = None):
         """
@@ -112,7 +107,7 @@ class OllamaVisionProcessor:
         images: List[np.ndarray],
         camera_ids: List[str],
         prompt: str,
-        temperature: float = 0.7
+        temperature: float = None
     ) -> Dict:
         """
         Send images to Ollama for vision-based analysis
@@ -128,6 +123,10 @@ class OllamaVisionProcessor:
         """
         if not images:
             raise ValueError("No images provided")
+
+        # Use config default if not specified
+        if temperature is None:
+            temperature = cfg.DEFAULT_TEMPERATURE
 
         logging.info(f"Processing {len(images)} image(s) with Ollama...")
 
@@ -314,8 +313,8 @@ Note: StreamingServer.py must be running for this script to work.
     ollama_group.add_argument(
         "--temperature",
         type=float,
-        default=0.7,
-        help="Sampling temperature 0.0-2.0 (default: 0.7)"
+        default=cfg.DEFAULT_TEMPERATURE,
+        help=f"Sampling temperature 0.0-2.0 (default: {cfg.DEFAULT_TEMPERATURE})"
     )
 
     # Server options
@@ -323,28 +322,28 @@ Note: StreamingServer.py must be running for this script to work.
     server_group.add_argument(
         "--interval", "-i",
         type=float,
-        default=1.0,
-        help="Check interval in seconds (default: 1.0)"
+        default=cfg.IMAGE_CHECK_INTERVAL,
+        help=f"Check interval in seconds (default: {cfg.IMAGE_CHECK_INTERVAL})"
     )
     server_group.add_argument(
         "--min-age",
         type=float,
-        default=0.5,
-        help="Minimum image age in seconds before processing (default: 0.5)"
+        default=cfg.MIN_IMAGE_AGE,
+        help=f"Minimum image age in seconds before processing (default: {cfg.MIN_IMAGE_AGE})"
     )
     server_group.add_argument(
         "--max-age",
         type=float,
-        default=30.0,
-        help="Maximum image age in seconds to consider fresh (default: 30.0)"
+        default=cfg.MAX_IMAGE_AGE,
+        help=f"Maximum image age in seconds to consider fresh (default: {cfg.MAX_IMAGE_AGE})"
     )
 
     # Output options
     output_group = parser.add_argument_group("output options")
     output_group.add_argument(
         "--output-dir",
-        default="./llm_responses",
-        help="Directory for saving responses (default: ./llm_responses)"
+        default=cfg.DEFAULT_OUTPUT_DIR,
+        help=f"Directory for saving responses (default: {cfg.DEFAULT_OUTPUT_DIR})"
     )
     output_group.add_argument(
         "--no-save",

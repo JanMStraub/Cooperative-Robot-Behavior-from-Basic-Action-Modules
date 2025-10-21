@@ -23,9 +23,10 @@ import json
 from typing import Tuple, Optional
 import logging
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
-)
+# Import config
+import config as cfg
+
+logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
 
 
 class UnityProtocol:
@@ -34,9 +35,9 @@ class UnityProtocol:
     # Protocol version
     VERSION = 1
 
-    # Limits
-    MAX_STRING_LENGTH = 256
-    MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB
+    # Limits (from config)
+    MAX_STRING_LENGTH = cfg.MAX_STRING_LENGTH
+    MAX_IMAGE_SIZE = cfg.MAX_IMAGE_SIZE
 
     # Struct formats
     INT_FORMAT = "I"  # Unsigned 32-bit integer, little-endian
@@ -64,17 +65,23 @@ class UnityProtocol:
         if len(camera_id) == 0:
             raise ValueError("Camera ID cannot be empty")
         if len(camera_id) > UnityProtocol.MAX_STRING_LENGTH:
-            raise ValueError(f"Camera ID too long: {len(camera_id)} > {UnityProtocol.MAX_STRING_LENGTH}")
+            raise ValueError(
+                f"Camera ID too long: {len(camera_id)} > {UnityProtocol.MAX_STRING_LENGTH}"
+            )
         if len(prompt) > UnityProtocol.MAX_STRING_LENGTH:
-            raise ValueError(f"Prompt too long: {len(prompt)} > {UnityProtocol.MAX_STRING_LENGTH}")
+            raise ValueError(
+                f"Prompt too long: {len(prompt)} > {UnityProtocol.MAX_STRING_LENGTH}"
+            )
         if len(image_bytes) == 0:
             raise ValueError("Image data cannot be empty")
         if len(image_bytes) > UnityProtocol.MAX_IMAGE_SIZE:
-            raise ValueError(f"Image too large: {len(image_bytes)} > {UnityProtocol.MAX_IMAGE_SIZE}")
+            raise ValueError(
+                f"Image too large: {len(image_bytes)} > {UnityProtocol.MAX_IMAGE_SIZE}"
+            )
 
         # Encode strings
-        camera_id_bytes = camera_id.encode('utf-8')
-        prompt_bytes = prompt.encode('utf-8')
+        camera_id_bytes = camera_id.encode("utf-8")
+        prompt_bytes = prompt.encode("utf-8")
 
         # Build message
         message = bytearray()
@@ -139,7 +146,7 @@ class UnityProtocol:
         """
         # Convert dict to JSON
         json_str = json.dumps(result_dict, ensure_ascii=False)
-        json_bytes = json_str.encode('utf-8')
+        json_bytes = json_str.encode("utf-8")
 
         # Build message
         message = bytearray()
@@ -169,15 +176,17 @@ class UnityProtocol:
             if len(data) < UnityProtocol.INT_SIZE:
                 raise ValueError("Message too short")
 
-            json_length = struct.unpack(UnityProtocol.INT_FORMAT, data[offset:offset + UnityProtocol.INT_SIZE])[0]
+            json_length = struct.unpack(
+                UnityProtocol.INT_FORMAT, data[offset : offset + UnityProtocol.INT_SIZE]
+            )[0]
             offset += UnityProtocol.INT_SIZE
 
             # Read JSON data
             if offset + json_length > len(data):
                 raise ValueError(f"JSON length {json_length} exceeds remaining data")
 
-            json_bytes = data[offset:offset + json_length]
-            json_str = json_bytes.decode('utf-8')
+            json_bytes = data[offset : offset + json_length]
+            json_str = json_bytes.decode("utf-8")
 
             return json.loads(json_str)
 
@@ -200,22 +209,28 @@ class UnityProtocol:
         if offset + UnityProtocol.INT_SIZE > len(data):
             raise ValueError("Not enough data for string length")
 
-        str_length = struct.unpack(UnityProtocol.INT_FORMAT, data[offset:offset + UnityProtocol.INT_SIZE])[0]
+        str_length = struct.unpack(
+            UnityProtocol.INT_FORMAT, data[offset : offset + UnityProtocol.INT_SIZE]
+        )[0]
         offset += UnityProtocol.INT_SIZE
 
         # Validate length
         if str_length > UnityProtocol.MAX_STRING_LENGTH:
-            raise ValueError(f"String length {str_length} exceeds maximum {UnityProtocol.MAX_STRING_LENGTH}")
+            raise ValueError(
+                f"String length {str_length} exceeds maximum {UnityProtocol.MAX_STRING_LENGTH}"
+            )
 
         # Read string data
         if offset + str_length > len(data):
-            raise ValueError(f"Not enough data for string (need {str_length}, have {len(data) - offset})")
+            raise ValueError(
+                f"Not enough data for string (need {str_length}, have {len(data) - offset})"
+            )
 
-        str_bytes = data[offset:offset + str_length]
+        str_bytes = data[offset : offset + str_length]
         offset += str_length
 
         # Decode
-        string = str_bytes.decode('utf-8')
+        string = str_bytes.decode("utf-8")
         return string, offset
 
     @staticmethod
@@ -234,18 +249,24 @@ class UnityProtocol:
         if offset + UnityProtocol.INT_SIZE > len(data):
             raise ValueError("Not enough data for bytes length")
 
-        bytes_length = struct.unpack(UnityProtocol.INT_FORMAT, data[offset:offset + UnityProtocol.INT_SIZE])[0]
+        bytes_length = struct.unpack(
+            UnityProtocol.INT_FORMAT, data[offset : offset + UnityProtocol.INT_SIZE]
+        )[0]
         offset += UnityProtocol.INT_SIZE
 
         # Validate length
         if bytes_length > UnityProtocol.MAX_IMAGE_SIZE:
-            raise ValueError(f"Bytes length {bytes_length} exceeds maximum {UnityProtocol.MAX_IMAGE_SIZE}")
+            raise ValueError(
+                f"Bytes length {bytes_length} exceeds maximum {UnityProtocol.MAX_IMAGE_SIZE}"
+            )
 
         # Read byte data
         if offset + bytes_length > len(data):
-            raise ValueError(f"Not enough data for bytes (need {bytes_length}, have {len(data) - offset})")
+            raise ValueError(
+                f"Not enough data for bytes (need {bytes_length}, have {len(data) - offset})"
+            )
 
-        byte_data = data[offset:offset + bytes_length]
+        byte_data = data[offset : offset + bytes_length]
         offset += bytes_length
 
         return byte_data, offset
@@ -261,11 +282,15 @@ if __name__ == "__main__":
     test_image = b"FAKE_PNG_DATA_HERE" * 100  # Fake image data
 
     # Encode
-    encoded = UnityProtocol.encode_image_message(test_camera_id, test_prompt, test_image)
+    encoded = UnityProtocol.encode_image_message(
+        test_camera_id, test_prompt, test_image
+    )
     print(f"Encoded image message: {len(encoded)} bytes")
 
     # Decode
-    decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(encoded)
+    decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(
+        encoded
+    )
     assert decoded_id == test_camera_id
     assert decoded_prompt == test_prompt
     assert decoded_image == test_image
@@ -276,10 +301,7 @@ if __name__ == "__main__":
         "success": True,
         "response": "I see a robot arm",
         "camera_id": "TestCamera",
-        "metadata": {
-            "model": "llava",
-            "duration_seconds": 1.5
-        }
+        "metadata": {"model": "llava", "duration_seconds": 1.5},
     }
 
     # Encode

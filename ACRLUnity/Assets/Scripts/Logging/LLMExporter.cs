@@ -8,15 +8,15 @@ namespace Logging
 {
     /// <summary>
     /// Lightweight LLM training data exporter
-    /// Exports logs in JSONL format (standard for LLM training)
-    /// Replaces: LLMDataExporter with 5 formats (now just JSONL + conversational)
+    /// Exports logs in JSON format (standard for LLM training)
+    /// Replaces: LLMDataExporter with 5 formats (now just JSON + conversational)
     /// </summary>
     public class LLMExporter
     {
         /// <summary>
-        /// Export logs to JSONL format for LLM training
+        /// Export logs to JSON format for LLM training
         /// </summary>
-        public static void ExportToJSONL(string sourceLogFile, string outputFile)
+        public static void ExportToJSON(string sourceLogFile, string outputFile)
         {
             if (!File.Exists(sourceLogFile))
             {
@@ -60,7 +60,7 @@ namespace Logging
                     return;
                 }
 
-                // Write clean JSONL output
+                // Write clean JSON output
                 using (var writer = new StreamWriter(outputFile))
                 {
                     foreach (var entry in entries)
@@ -283,7 +283,7 @@ namespace Logging
         /// <summary>
         /// Quick export from MainLogger instance
         /// </summary>
-        public static void QuickExport(string format = "jsonl")
+        public static void QuickExport(string format = "json")
         {
             var logger = MainLogger.Instance;
             if (logger == null)
@@ -301,8 +301,8 @@ namespace Logging
 
             // Find most recent log file (support both naming patterns)
             var files = Directory
-                .GetFiles(logDir, "*_actions.jsonl", SearchOption.AllDirectories)
-                .Concat(Directory.GetFiles(logDir, "robot_actions_*.jsonl", SearchOption.AllDirectories))
+                .GetFiles(logDir, "*_actions.json", SearchOption.AllDirectories)
+                .Concat(Directory.GetFiles(logDir, "robot_actions_*.json", SearchOption.AllDirectories))
                 .OrderByDescending(f => File.GetLastWriteTime(f))
                 .ToArray();
 
@@ -315,8 +315,8 @@ namespace Logging
             string sourceFile = files[0];
             string outputFile =
                 format.ToLower() == "conversational"
-                    ? sourceFile.Replace(".jsonl", "_conversational.json")
-                    : sourceFile.Replace(".jsonl", "_export.jsonl");
+                    ? sourceFile.Replace(".json", "_conversational.json")
+                    : sourceFile.Replace(".json", "_export.json");
 
             if (format.ToLower() == "conversational")
             {
@@ -324,7 +324,7 @@ namespace Logging
             }
             else
             {
-                ExportToJSONL(sourceFile, outputFile);
+                ExportToJSON(sourceFile, outputFile);
             }
 
             Debug.Log($"[LLM_EXPORTER] Quick export complete: {outputFile}");
@@ -337,10 +337,10 @@ namespace Logging
     /// </summary>
     public static class ExporterMenu
     {
-        [UnityEditor.MenuItem("Tools/Robot Logging/Export to JSONL")]
-        private static void ExportJSONL()
+        [UnityEditor.MenuItem("Tools/Robot Logging/Export to JSON")]
+        private static void ExportJSON()
         {
-            LLMExporter.QuickExport("jsonl");
+            LLMExporter.QuickExport("json");
         }
 
         [UnityEditor.MenuItem("Tools/Robot Logging/Export to Conversational")]
@@ -356,8 +356,8 @@ namespace Logging
 
             // Support both naming patterns
             var files = Directory
-                .GetFiles(logDir, "*_actions.jsonl", SearchOption.AllDirectories)
-                .Concat(Directory.GetFiles(logDir, "robot_actions_*.jsonl", SearchOption.AllDirectories))
+                .GetFiles(logDir, "*_actions.json", SearchOption.AllDirectories)
+                .Concat(Directory.GetFiles(logDir, "robot_actions_*.json", SearchOption.AllDirectories))
                 .OrderByDescending(f => File.GetLastWriteTime(f))
                 .ToArray();
 
