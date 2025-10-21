@@ -88,14 +88,14 @@ namespace Logging
             Directory.CreateDirectory(_fullLogPath);
 
             // Create dedicated scene log file
-            string sceneLogPath = Path.Combine(_fullLogPath, $"scene_{_sessionId}.jsonl");
+            string sceneLogPath = Path.Combine(_fullLogPath, $"scene_{_sessionId}.json");
             _sceneWriter = new StreamWriter(sceneLogPath, true) { AutoFlush = true };
             Debug.Log($"[MAIN_LOGGER] Scene log: {sceneLogPath}");
 
             if (!perRobotFiles)
             {
                 // Single session file
-                _logFilePath = Path.Combine(_fullLogPath, $"robot_actions_{_sessionId}.jsonl");
+                _logFilePath = Path.Combine(_fullLogPath, $"robot_actions_{_sessionId}.json");
                 _logWriter = new StreamWriter(_logFilePath, true);
                 _logWriter.AutoFlush = true;
                 Debug.Log($"[MAIN_LOGGER] Initialized. Session log: {_logFilePath}");
@@ -658,7 +658,7 @@ namespace Logging
                         {
                             string sessionFile = Path.Combine(
                                 _fullLogPath,
-                                $"session_{_sessionId}.jsonl"
+                                $"session_{_sessionId}.json"
                             );
                             _logWriter = new StreamWriter(sessionFile, true) { AutoFlush = true };
                             Debug.Log($"[MAIN_LOGGER] Created session log file: {sessionFile}");
@@ -691,7 +691,7 @@ namespace Logging
                 ? "Unknown"
                 : robotId.Replace("/", "_").Replace("\\", "_");
 
-            string fileName = $"{safeRobotId}_actions.jsonl";
+            string fileName = $"{safeRobotId}_actions.json";
             string filePath = Path.Combine(_fullLogPath, fileName);
 
             writer = new StreamWriter(filePath, true) { AutoFlush = true };

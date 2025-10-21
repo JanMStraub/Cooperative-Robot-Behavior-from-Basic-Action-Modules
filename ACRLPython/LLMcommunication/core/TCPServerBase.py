@@ -18,18 +18,25 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
-)
+# Import config
+import config as cfg
+
+logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
 
 
 @dataclass
 class ServerConfig:
     """Configuration for TCP servers"""
-    host: str = "127.0.0.1"
+
+    host: str = cfg.DEFAULT_HOST
     port: int = 5000
-    max_connections: int = 5
-    socket_timeout: float = 1.0  # Timeout for accept() to allow periodic shutdown checks
+    max_connections: int = cfg.MAX_CONNECTIONS_BACKLOG  # Max backlog for listen()
+    max_client_threads: int = (
+        cfg.MAX_CLIENT_THREADS
+    )  # Max concurrent client handler threads
+    socket_timeout: float = (
+        cfg.SOCKET_ACCEPT_TIMEOUT
+    )  # Timeout for accept() to allow periodic shutdown checks
 
 
 class TCPServerBase(ABC):
@@ -53,6 +60,10 @@ class TCPServerBase(ABC):
         self._clients_lock = threading.Lock()
         self._server_socket: Optional[socket.socket] = None
         self._accept_thread: Optional[threading.Thread] = None
+        self._client_threads: List[threading.Thread] = (
+            []
+        )  # Track client handler threads
+        self._client_threads_lock = threading.Lock()  # Protect thread list
 
     @abstractmethod
     def handle_client_connection(self, client: socket.socket, address: tuple):
@@ -70,7 +81,9 @@ class TCPServerBase(ABC):
     def start(self):
         """Start the TCP server"""
         if self._running:
-            logging.warning(f"Server already running on {self._config.host}:{self._config.port}")
+            logging.warning(
+                f"Server already running on {self._config.host}:{self._config.port}"
+            )
             return
 
         try:
@@ -85,7 +98,9 @@ class TCPServerBase(ABC):
             logging.info(f"Server started on {self._config.host}:{self._config.port}")
 
             # Start accept thread
-            self._accept_thread = threading.Thread(target=self._accept_loop, daemon=True)
+            self._accept_thread = threading.Thread(
+                target=self._accept_loop, daemon=True
+            )
             self._accept_thread.start()
 
         except Exception as e:
@@ -114,6 +129,17 @@ class TCPServerBase(ABC):
                     logging.debug(f"Error closing client: {e}")
             self._clients.clear()
 
+        # Wait for client handler threads to finish
+        logging.info("Waiting for client threads to finish...")
+        with self._client_threads_lock:
+            threads_to_join = list(self._client_threads)
+
+        for thread in threads_to_join:
+            if thread.is_alive():
+                thread.join(timeout=2.0)
+
+        logging.info("All client threads stopped")
+
         # Close server socket
         self._cleanup()
         logging.info("Server stopped")
@@ -137,21 +163,28 @@ class TCPServerBase(ABC):
         Returns:
             Number of clients successfully sent to
         """
+        # Get snapshot of clients without holding lock during send
+        # This prevents deadlock if sendall() blocks
+        with self._clients_lock:
+            clients_snapshot = list(self._clients)
+
         disconnected = []
         success_count = 0
 
-        with self._clients_lock:
-            for client in self._clients:
-                try:
-                    client.sendall(data)
-                    success_count += 1
-                except Exception as e:
-                    logging.warning(f"Failed to send to client {client.getpeername()}: {e}")
-                    disconnected.append(client)
+        # Send to all clients outside of lock
+        for client in clients_snapshot:
+            try:
+                client.sendall(data)
+                success_count += 1
+            except Exception as e:
+                logging.warning(f"Failed to send to client: {e}")
+                disconnected.append(client)
 
-            # Remove disconnected clients
-            for client in disconnected:
-                self._remove_client(client)
+        # Remove disconnected clients
+        if disconnected:
+            with self._clients_lock:
+                for client in disconnected:
+                    self._remove_client(client)
 
         return success_count
 
@@ -160,6 +193,27 @@ class TCPServerBase(ABC):
         while self._running:
             try:
                 client, address = self._server_socket.accept()
+
+                # Clean up completed threads before checking limit
+                self._cleanup_completed_threads()
+
+                # Check if we've reached max client threads
+                with self._client_threads_lock:
+                    active_threads = len(
+                        [t for t in self._client_threads if t.is_alive()]
+                    )
+
+                if active_threads >= self._config.max_client_threads:
+                    logging.warning(
+                        f"Max client threads ({self._config.max_client_threads}) reached. "
+                        f"Rejecting connection from {address}"
+                    )
+                    try:
+                        client.close()
+                    except:
+                        pass
+                    continue
+
                 logging.info(f"Client connected from {address}")
 
                 # Add to client list
@@ -170,8 +224,13 @@ class TCPServerBase(ABC):
                 client_thread = threading.Thread(
                     target=self._handle_client_wrapper,
                     args=(client, address),
-                    daemon=True
+                    daemon=True,
                 )
+
+                # Track the client thread
+                with self._client_threads_lock:
+                    self._client_threads.append(client_thread)
+
                 client_thread.start()
 
             except socket.timeout:
@@ -202,6 +261,11 @@ class TCPServerBase(ABC):
                 pass
 
             logging.info(f"Client disconnected from {address}")
+
+    def _cleanup_completed_threads(self):
+        """Remove completed threads from the thread list"""
+        with self._client_threads_lock:
+            self._client_threads = [t for t in self._client_threads if t.is_alive()]
 
     def _remove_client(self, client: socket.socket):
         """Remove a client from the tracked list (must hold _clients_lock)"""
@@ -248,6 +312,7 @@ if __name__ == "__main__":
 
     try:
         import time
+
         while True:
             time.sleep(1)
             print(f"Server running, clients: {server.get_client_count()}")

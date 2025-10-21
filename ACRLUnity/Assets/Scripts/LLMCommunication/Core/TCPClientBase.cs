@@ -32,6 +32,10 @@ namespace LLMCommunication.Core
         [SerializeField]
         protected float _reconnectInterval = 2f;
 
+        [Tooltip("Socket read timeout in milliseconds (0 = infinite)")]
+        [SerializeField]
+        protected int _readTimeoutMs = 120000; // 2 minutes default
+
         [Header("Debug")]
         [Tooltip("Enable verbose logging")]
         [SerializeField]
@@ -115,10 +119,17 @@ namespace LLMCommunication.Core
             {
                 _client = new TcpClient(_serverHost, _serverPort);
                 _stream = _client.GetStream();
+
+                // Set read timeout (0 = infinite, otherwise milliseconds)
+                if (_readTimeoutMs > 0)
+                {
+                    _stream.ReadTimeout = _readTimeoutMs;
+                }
+
                 _isConnected = true;
 
                 OnConnected();
-                Log($"Connected to {_serverHost}:{_serverPort}");
+                Log($"Connected to {_serverHost}:{_serverPort} (read timeout: {(_readTimeoutMs > 0 ? $"{_readTimeoutMs}ms" : "infinite")})");
             }
             catch (Exception ex)
             {

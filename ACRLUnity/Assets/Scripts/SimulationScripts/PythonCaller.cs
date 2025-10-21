@@ -387,10 +387,14 @@ public class PythonCaller : MonoBehaviour
         string exceptionMessage = null;
 
         // Create process
+        // Detect if script is a shell script (.sh) - if so, execute directly
+        bool isShellScript = scriptPath.EndsWith(".sh");
+        string fullScriptPath = NormalizePath(System.IO.Path.Combine(_basePath, scriptPath));
+
         ProcessStartInfo psi = new ProcessStartInfo
         {
-            FileName = _fullPythonPath,
-            Arguments = NormalizePath($"\"{scriptPath}\" {arguments}"),
+            FileName = isShellScript ? fullScriptPath : _fullPythonPath,
+            Arguments = isShellScript ? arguments : NormalizePath($"\"{scriptPath}\" {arguments}"),
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -537,9 +541,14 @@ public class PythonCaller : MonoBehaviour
             LogError($"Python process {processId} failed with exit code {exitCode}:\n{error}");
         }
 
+        // Always log output and error for debugging
         if (!string.IsNullOrEmpty(output))
         {
-            UnityEngine.Debug.Log($"Python Output [{processId}]:\n{output}");
+            UnityEngine.Debug.Log($"[PythonCaller] Python Output [{processId}]:\n{output}");
+        }
+        if (!string.IsNullOrEmpty(error))
+        {
+            UnityEngine.Debug.Log($"[PythonCaller] Python Error [{processId}]:\n{error}");
         }
 
         // Invoke callback
@@ -565,10 +574,14 @@ public class PythonCaller : MonoBehaviour
 
         try
         {
+            // Detect if script is a shell script (.sh) - if so, execute directly
+            bool isShellScript = scriptPath.EndsWith(".sh");
+            string fullScriptPath = NormalizePath(System.IO.Path.Combine(_basePath, scriptPath));
+
             ProcessStartInfo psi = new ProcessStartInfo
             {
-                FileName = _fullPythonPath,
-                Arguments = NormalizePath($"\"{scriptPath}\" {arguments}"),
+                FileName = isShellScript ? fullScriptPath : _fullPythonPath,
+                Arguments = isShellScript ? arguments : NormalizePath($"\"{scriptPath}\" {arguments}"),
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,

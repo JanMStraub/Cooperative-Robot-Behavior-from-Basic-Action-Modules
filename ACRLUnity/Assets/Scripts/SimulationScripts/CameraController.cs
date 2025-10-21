@@ -44,6 +44,22 @@ public class CameraControllerEditor : Editor
         EditorGUILayout.TextField("Server Status", statusText, EditorStyles.boldLabel);
         GUI.color = originalColor;
 
+        // LLM processing indicator
+        if (controller.IsWaitingForLLM)
+        {
+            float elapsed = controller.LLMElapsedTime;
+            GUI.color = new Color(1f, 0.9f, 0.4f); // Yellow color for processing
+            EditorGUILayout.TextField("LLM Status", $"Processing... ({elapsed:F1}s)", EditorStyles.boldLabel);
+            GUI.color = originalColor;
+
+            // Repaint continuously while processing to update the timer
+            Repaint();
+        }
+        else
+        {
+            EditorGUILayout.TextField("LLM Status", "Idle");
+        }
+
         // Only repaint when connection status changes
         if (isConnected != _lastConnectionState)
         {
@@ -119,6 +135,11 @@ public class CameraController : MonoBehaviour
     private string _rootName;
     private bool _isCapturing = false;
     private RenderTexture _cachedRenderTexture;
+
+    // LLM processing state
+    private bool _isWaitingForLLM = false;
+    private float _llmSentTime = 0f;
+    private string _lastSentCameraId = "";
     private Texture2D _cachedTexture;
 
     // Events
@@ -128,6 +149,8 @@ public class CameraController : MonoBehaviour
     // Properties
     public bool IsCapturing => _isCapturing;
     public int CaptureCount => _captureCounter;
+    public bool IsWaitingForLLM => _isWaitingForLLM;
+    public float LLMElapsedTime => _isWaitingForLLM ? Time.time - _llmSentTime : 0f;
 
     /// <summary>
     /// Compression quality presets.
@@ -210,10 +233,31 @@ public class CameraController : MonoBehaviour
         // Get root name
         _rootName = _mainCamera.transform.root.name;
 
+        // Subscribe to LLM results
+        if (LLMResultsReceiver.Instance != null)
+        {
+            LLMResultsReceiver.Instance.OnResultReceived += HandleLLMResult;
+        }
+
         // Log initialization
         Debug.Log(
             $"[CAMERA_CONTROLLER] Initialized: Camera={gameObject.name}, Robot={_robotArmName}, Resolution={_imageWidth}x{_imageHeight}"
         );
+    }
+
+    /// <summary>
+    /// Handles LLM result received event.
+    /// </summary>
+    private void HandleLLMResult(LLMResult result)
+    {
+        if (result == null)
+            return;
+
+        // Check if this result is for our camera
+        if (result.camera_id == _lastSentCameraId && _isWaitingForLLM)
+        {
+            _isWaitingForLLM = false;
+        }
     }
 
     /// <summary>
@@ -280,8 +324,14 @@ public class CameraController : MonoBehaviour
                         throw new Exception("ImageSender not available or not connected.");
                     }
                     ImageSender.Instance.SendImageData(imageBytes, _robotArmName, _llmPrompt);
+
+                    // Track LLM processing state
+                    _isWaitingForLLM = true;
+                    _llmSentTime = Time.time;
+                    _lastSentCameraId = _robotArmName;
+
                     Debug.Log(
-                        $"[CameraController] Image sent successfully ({imageBytes.Length / 1024f:F1} KB)."
+                        $"[CameraController] Image sent successfully ({imageBytes.Length / 1024f:F1} KB). Waiting for LLM response..."
                     );
                     break;
             }
@@ -528,6 +578,12 @@ public class CameraController : MonoBehaviour
     /// </summary>
     private void OnDestroy()
     {
+        // Unsubscribe from LLM results
+        if (LLMResultsReceiver.Instance != null)
+        {
+            LLMResultsReceiver.Instance.OnResultReceived -= HandleLLMResult;
+        }
+
         if (_cachedRenderTexture != null)
         {
             Destroy(_cachedRenderTexture);

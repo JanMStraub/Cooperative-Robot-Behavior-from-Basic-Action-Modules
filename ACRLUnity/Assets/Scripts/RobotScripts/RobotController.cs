@@ -13,7 +13,6 @@ public class RobotController : MonoBehaviour
     private SimulationManager _simulationManager;
     private RobotManager _robotManager;
     private MainLogger _logger;
-    public GripperController _gripperController;
 
     [Header("Robot Identity")]
     public string robotId = "AR4_Robot";
@@ -54,6 +53,10 @@ public class RobotController : MonoBehaviour
     public Transform endEffectorBase;
     public Transform IKReferenceFrame;
     public float[] jointDriveTargets = { 0, 0, 0, 0, 0, 0 };
+
+    // Events
+
+    public event System.Action OnTargetReached;
 
     /// <summary>
     /// Updates the flag indicating whether the target has been reached.
@@ -346,8 +349,7 @@ public class RobotController : MonoBehaviour
         {
             SetTargetReached(true); // This will notify SimulationManager
             Debug.Log($"[ROBOT_CONTROLLER] {robotId} IK converged to target");
-            _gripperController.CloseGrippers();
-            Debug.Log($"[ROBOT_CONTROLLER] {robotId} closed grippers");
+            OnTargetReached?.Invoke();
 
             // Log successful convergence
             if (_logger != null)
@@ -428,16 +430,6 @@ public class RobotController : MonoBehaviour
         if (string.IsNullOrEmpty(robotId))
         {
             robotId = gameObject.name;
-        }
-
-        // Auto-find gripper controller if not assigned
-        if (_gripperController == null)
-        {
-            _gripperController = GetComponentInChildren<GripperController>();
-            if (_gripperController != null)
-            {
-                Debug.Log($"[ROBOT_CONTROLLER] {robotId}: Auto-found GripperController in children");
-            }
         }
 
         // Register with RobotManager if available

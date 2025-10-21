@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """
 StreamingServer.py - Receives camera images from Unity
-
-Refactored version using TCPServerBase and UnityProtocol.
-Reduces code by ~150 lines compared to original implementation.
 """
 
 import socket
@@ -18,10 +15,9 @@ import signal
 # Import base classes
 from core.TCPServerBase import TCPServerBase, ServerConfig
 from core.UnityProtocol import UnityProtocol
+import config as cfg
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
-)
+logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
 
 
 class ImageStorage:
@@ -37,7 +33,7 @@ class ImageStorage:
     _lock = threading.Lock()
 
     @classmethod
-    def get_instance(cls) -> 'ImageStorage':
+    def get_instance(cls) -> "ImageStorage":
         """Get the singleton instance"""
         if cls._instance is None:
             cls._instance = cls()
@@ -87,11 +83,11 @@ class StreamingServer(TCPServerBase):
     Handles image-specific protocol decoding and storage.
     """
 
-    def __init__(self, config: ServerConfig = None):
-        if config is None:
-            config = ServerConfig(host="127.0.0.1", port=5005)
+    def __init__(self, server_config: ServerConfig = None):
+        if server_config is None:
+            server_config = cfg.get_streaming_config()
 
-        super().__init__(config)
+        super().__init__(server_config)
         self._storage = ImageStorage.get_instance()
         logging.info("StreamingServer initialized")
 
@@ -133,7 +129,9 @@ class StreamingServer(TCPServerBase):
         except Exception as e:
             logging.error(f"Error handling client {address}: {e}")
 
-    def _receive_image_message(self, client: socket.socket) -> Tuple[Optional[str], Optional[str], Optional[bytes]]:
+    def _receive_image_message(
+        self, client: socket.socket
+    ) -> Tuple[Optional[str], Optional[str], Optional[bytes]]:
         """
         Receive one complete image message from Unity.
 
@@ -146,6 +144,9 @@ class StreamingServer(TCPServerBase):
         import struct
 
         try:
+            # Set socket timeout to prevent indefinite hangs on partial data
+            client.settimeout(cfg.SOCKET_RECEIVE_TIMEOUT)
+
             # Read camera ID length and data
             id_length_bytes = self._recv_exactly(client, UnityProtocol.INT_SIZE)
             if not id_length_bytes:
@@ -159,13 +160,15 @@ class StreamingServer(TCPServerBase):
             camera_id_bytes = self._recv_exactly(client, id_length)
             if not camera_id_bytes:
                 return None, None, None
-            camera_id = camera_id_bytes.decode('utf-8')
+            camera_id = camera_id_bytes.decode("utf-8")
 
             # Read prompt length and data
             prompt_length_bytes = self._recv_exactly(client, UnityProtocol.INT_SIZE)
             if not prompt_length_bytes:
                 return None, None, None
-            prompt_length = struct.unpack(UnityProtocol.INT_FORMAT, prompt_length_bytes)[0]
+            prompt_length = struct.unpack(
+                UnityProtocol.INT_FORMAT, prompt_length_bytes
+            )[0]
 
             if prompt_length > UnityProtocol.MAX_STRING_LENGTH:
                 logging.error(f"Prompt length {prompt_length} exceeds maximum")
@@ -176,13 +179,15 @@ class StreamingServer(TCPServerBase):
                 prompt_bytes = self._recv_exactly(client, prompt_length)
                 if not prompt_bytes:
                     return None, None, None
-                prompt = prompt_bytes.decode('utf-8')
+                prompt = prompt_bytes.decode("utf-8")
 
             # Read image length and data
             image_length_bytes = self._recv_exactly(client, UnityProtocol.INT_SIZE)
             if not image_length_bytes:
                 return None, None, None
-            image_length = struct.unpack(UnityProtocol.INT_FORMAT, image_length_bytes)[0]
+            image_length = struct.unpack(UnityProtocol.INT_FORMAT, image_length_bytes)[
+                0
+            ]
 
             if image_length > UnityProtocol.MAX_IMAGE_SIZE:
                 logging.error(f"Image size {image_length} exceeds maximum")
@@ -199,28 +204,44 @@ class StreamingServer(TCPServerBase):
             return None, None, None
 
     def _recv_exactly(self, sock: socket.socket, num_bytes: int) -> Optional[bytes]:
-        """Receive exactly num_bytes from socket"""
+        """
+        Receive exactly num_bytes from socket with timeout protection
+
+        Args:
+            sock: Socket to receive from (should have timeout set)
+            num_bytes: Exact number of bytes to receive
+
+        Returns:
+            Bytes received or None if connection closed/timeout
+        """
         data = b""
         while len(data) < num_bytes:
-            chunk = sock.recv(num_bytes - len(data))
-            if not chunk:
+            try:
+                chunk = sock.recv(num_bytes - len(data))
+                if not chunk:
+                    return None
+                data += chunk
+            except socket.timeout:
+                logging.warning(
+                    f"Socket timeout while receiving data (got {len(data)}/{num_bytes} bytes)"
+                )
                 return None
-            data += chunk
         return data
 
 
-def run_server(config: ServerConfig = None, setup_signals: bool = True):
+def run_server(server_config: ServerConfig = None, setup_signals: bool = True):
     """
     Start the StreamingServer (blocking)
 
     Args:
-        config: Server configuration
+        server_config: Server configuration
         setup_signals: If True, setup signal handlers (only valid in main thread)
     """
-    server = StreamingServer(config)
+    server = StreamingServer(server_config)
 
     # Setup signal handlers (only if in main thread)
     if setup_signals:
+
         def signal_handler(_sig, _frame):
             logging.info("Shutdown signal received")
             server.stop()
@@ -234,7 +255,7 @@ def run_server(config: ServerConfig = None, setup_signals: bool = True):
         # Status monitoring loop
         storage = ImageStorage.get_instance()
         while server.is_running():
-            time.sleep(5.0)
+            time.sleep(cfg.STREAMING_SERVER_MONITOR)
 
             camera_ids = storage.get_all_camera_ids()
             if camera_ids:
@@ -251,14 +272,14 @@ def run_server(config: ServerConfig = None, setup_signals: bool = True):
         server.stop()
 
 
-def run_streaming_server_background(config: ServerConfig = None):
+def run_streaming_server_background(server_config: ServerConfig = None):
     """Start the StreamingServer in a background thread"""
-    config = config or ServerConfig(host="127.0.0.1", port=5005)
+    server_config = server_config or cfg.get_streaming_config()
 
     thread = threading.Thread(
         target=run_server,
-        args=(config, False),  # setup_signals=False in background thread
-        daemon=True
+        args=(server_config, False),  # setup_signals=False in background thread
+        daemon=True,
     )
     thread.start()
     logging.info("StreamingServer started in background thread")
@@ -269,10 +290,12 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Unity camera image streaming server")
-    parser.add_argument("--host", default="127.0.0.1", help="Host to bind to")
-    parser.add_argument("--port", type=int, default=5005, help="Port to bind to")
+    parser.add_argument("--host", default=cfg.DEFAULT_HOST, help="Host to bind to")
+    parser.add_argument(
+        "--port", type=int, default=cfg.STREAMING_SERVER_PORT, help="Port to bind to"
+    )
 
     args = parser.parse_args()
 
-    config = ServerConfig(host=args.host, port=args.port)
-    run_server(config)
+    server_config = ServerConfig(host=args.host, port=args.port)
+    run_server(server_config)
