@@ -72,6 +72,7 @@ public class SimulationManager : MonoBehaviour
 
     // Core components
     private PythonCaller _pythonCaller;
+    private PythonServerManager _pythonServerManager;
     private MainLogger _logger;
     private RobotController[] _robotControllers;
 
@@ -149,6 +150,7 @@ public class SimulationManager : MonoBehaviour
         {
             // Get component references
             _pythonCaller = PythonCaller.Instance;
+            _pythonServerManager = PythonServerManager.Instance;
             _logger = MainLogger.Instance;
 
             // Find all robot controllers
@@ -172,6 +174,16 @@ public class SimulationManager : MonoBehaviour
 
             // Log simulation start
             Debug.Log($"[SIMULATION_MANAGER] Initialized: Found {_robotControllers.Length} robots. Mode: {config.coordinationMode}");
+
+            // Log Python server manager status
+            if (_pythonServerManager != null)
+            {
+                Debug.Log("[SIMULATION_MANAGER] PythonServerManager will auto-start configured servers");
+            }
+            else
+            {
+                Debug.LogWarning("[SIMULATION_MANAGER] PythonServerManager not found - Python servers will not start automatically");
+            }
 
             // Auto-start if configured
             if (config.autoStart)

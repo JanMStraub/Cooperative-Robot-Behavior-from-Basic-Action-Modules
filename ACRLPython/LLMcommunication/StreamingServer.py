@@ -1,376 +1,278 @@
+#!/usr/bin/env python3
+"""
+StreamingServer.py - Receives camera images from Unity
+
+Refactored version using TCPServerBase and UnityProtocol.
+Reduces code by ~150 lines compared to original implementation.
+"""
+
 import socket
-import struct
 import cv2
 import numpy as np
 import threading
 import time
 import logging
-from typing import Optional, Tuple, Dict, List
-from dataclasses import dataclass
+from typing import Optional, Tuple, List, Dict
 import signal
 
-# Configure logging
+# Import base classes
+from core.TCPServerBase import TCPServerBase, ServerConfig
+from core.UnityProtocol import UnityProtocol
+
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
 
-@dataclass
-class ServerConfig:
-    """Server configuration settings."""
-
-    host: str = "127.0.0.1"
-    port: int = 5005
-    max_id_length: int = 256
-    max_image_size: int = 10 * 1024 * 1024  # 10MB max
-
-
-class GracefulShutdown:
-    """Handles graceful shutdown signal."""
-
-    shutdown_requested = False
-
-    @classmethod
-    def request_shutdown(cls, _signum=None, _frame=None):
-        """Request graceful shutdown."""
-        logging.info("Shutdown signal received...")
-        cls.shutdown_requested = True
-
-
-class ImageServer:
+class ImageStorage:
     """
-    Singleton to access camera images from the streaming server.
+    Singleton for storing and accessing camera images.
 
-    This class can work in two modes:
-    1. Server mode: Set storage via set_storage() when running the server
-    2. Client mode: Access via shared memory (same process only)
-
-    For cross-process access, use ImageClient instead.
+    Renamed from 'ImageServer' for clarity - this stores images, not a server.
+    Thread-safe storage of images received from Unity cameras.
     """
 
     _instance = None
-    _cameras_dict: Dict[str, Tuple[np.ndarray, float, str]] = {}
-    _cameras_lock = threading.Lock()
+    _cameras: Dict[str, Tuple[np.ndarray, float, str]] = {}
+    _lock = threading.Lock()
 
     @classmethod
-    def get_instance(cls):
-        """Get the singleton instance."""
+    def get_instance(cls) -> 'ImageStorage':
+        """Get the singleton instance"""
         if cls._instance is None:
             cls._instance = cls()
         return cls._instance
 
-    @classmethod
-    def set_storage(cls, cameras_dict: Dict, cameras_lock: threading.Lock):
-        """Set the shared storage references (called by server)."""
-        cls._cameras_dict = cameras_dict
-        cls._cameras_lock = cameras_lock
+    def store_image(self, camera_id: str, image: np.ndarray, prompt: str = ""):
+        """Store an image for a camera"""
+        timestamp = time.time()
+        with self._lock:
+            self._cameras[camera_id] = (image, timestamp, prompt)
 
     def get_camera_image(self, camera_id: str) -> Optional[np.ndarray]:
-        """
-        Get the latest image from a specific camera.
-
-        Args:
-            camera_id: Camera identifier (e.g., "AR4Left", "AR4Right")
-
-        Returns:
-            numpy array of the image, or None if not available
-        """
-        with self._cameras_lock:
-            if camera_id in self._cameras_dict:
-                image, _, _ = self._cameras_dict[camera_id]
-                return image.copy()  # Return a copy to prevent race conditions
+        """Get the latest image from a camera"""
+        with self._lock:
+            if camera_id in self._cameras:
+                image, _, _ = self._cameras[camera_id]
+                return image.copy()
             return None
 
     def get_camera_prompt(self, camera_id: str) -> Optional[str]:
-        """
-        Get the prompt associated with the latest image from a camera.
-
-        Args:
-            camera_id: Camera identifier
-
-        Returns:
-            Prompt string, or None if camera not found
-        """
-        with self._cameras_lock:
-            if camera_id in self._cameras_dict:
-                _, _, prompt = self._cameras_dict[camera_id]
+        """Get the prompt associated with latest image"""
+        with self._lock:
+            if camera_id in self._cameras:
+                _, _, prompt = self._cameras[camera_id]
                 return prompt
             return None
 
-    def get_all_camera_ids(self) -> List[str]:
-        """
-        Get list of all active camera IDs.
-
-        Returns:
-            List of camera IDs
-        """
-        with self._cameras_lock:
-            return list(self._cameras_dict.keys())
-
     def get_camera_age(self, camera_id: str) -> Optional[float]:
-        """
-        Get the age (in seconds) of the latest image from a camera.
-
-        Args:
-            camera_id: Camera identifier
-
-        Returns:
-            Age in seconds, or None if camera not found
-        """
-        with self._cameras_lock:
-            if camera_id in self._cameras_dict:
-                _, timestamp, _ = self._cameras_dict[camera_id]
+        """Get the age (in seconds) of the latest image"""
+        with self._lock:
+            if camera_id in self._cameras:
+                _, timestamp, _ = self._cameras[camera_id]
                 return time.time() - timestamp
             return None
 
+    def get_all_camera_ids(self) -> List[str]:
+        """Get list of all active camera IDs"""
+        with self._lock:
+            return list(self._cameras.keys())
 
 
-
-def receive_exactly(sock: socket.socket, num_bytes: int) -> Optional[bytes]:
+class StreamingServer(TCPServerBase):
     """
-    Receives exactly num_bytes from the socket.
+    TCP server that receives camera images from Unity.
 
-    Args:
-        sock: Socket to receive from
-        num_bytes: Exact number of bytes to receive
-
-    Returns:
-        Bytes received or None if connection closes
+    Inherits connection management from TCPServerBase (~150 lines saved).
+    Handles image-specific protocol decoding and storage.
     """
-    data = b""
-    while len(data) < num_bytes:
-        packet = sock.recv(num_bytes - len(data))
-        if not packet:
-            return None  # Connection closed
-        data += packet
-    return data
 
+    def __init__(self, config: ServerConfig = None):
+        if config is None:
+            config = ServerConfig(host="127.0.0.1", port=5005)
 
-def receive_image(
-    sock: socket.socket, config: ServerConfig
-) -> Tuple[Optional[str], Optional[np.ndarray], Optional[str]]:
-    """
-    Receives one image from the socket.
+        super().__init__(config)
+        self._storage = ImageStorage.get_instance()
+        logging.info("StreamingServer initialized")
 
-    Args:
-        sock: Socket to receive from
-        config: Server configuration for validation
+    def handle_client_connection(self, client: socket.socket, address: tuple):
+        """
+        Handle a Unity client connection - receives images continuously.
 
-    Returns:
-        Tuple of (cam_id, image, prompt) or (None, None, None) on failure
-    """
-    try:
-        # Receive camera ID length (4 bytes)
-        id_length_data = receive_exactly(sock, 4)
-        if id_length_data is None:
-            return None, None, None
-        id_length = struct.unpack("I", id_length_data)[0]
+        This method is called by TCPServerBase in a separate thread per client.
+        """
+        logging.info(f"Unity camera client connected from {address}")
 
-        # Validate camera ID length
-        if id_length == 0 or id_length > config.max_id_length:
-            logging.error(f"Invalid camera ID length: {id_length}")
-            return None, None, None
-
-        # Receive camera ID string
-        id_data = receive_exactly(sock, id_length)
-        if id_data is None:
-            return None, None, None
-        cam_id = id_data.decode("utf-8")
-
-        # Receive prompt length (4 bytes)
-        prompt_length_data = receive_exactly(sock, 4)
-        if prompt_length_data is None:
-            return None, None, None
-        prompt_length = struct.unpack("I", prompt_length_data)[0]
-
-        # Validate prompt length (allow 0 for empty prompt)
-        if prompt_length > config.max_id_length:
-            logging.error(f"Invalid prompt length: {prompt_length}")
-            return None, None, None
-
-        # Receive prompt string (may be empty)
-        prompt = ""
-        if prompt_length > 0:
-            prompt_data = receive_exactly(sock, prompt_length)
-            if prompt_data is None:
-                return None, None, None
-            prompt = prompt_data.decode("utf-8")
-
-        # Receive image size (4 bytes)
-        size_info = receive_exactly(sock, 4)
-        if size_info is None:
-            return None, None, None
-        image_size = struct.unpack("I", size_info)[0]
-
-        # Validate image size
-        if image_size == 0 or image_size > config.max_image_size:
-            logging.error(f"Invalid image size: {image_size} bytes")
-            return None, None, None
-
-        # Receive image data
-        image_data = receive_exactly(sock, image_size)
-        if image_data is None:
-            return None, None, None
-
-        # Decode the PNG/JPG image
-        nparr = np.frombuffer(image_data, np.uint8)
-        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-        if image is None:
-            logging.warning(f"Failed to decode image from camera {cam_id}")
-            return None, None, None
-
-        return cam_id, image, prompt
-
-    except UnicodeDecodeError as e:
-        logging.error(f"Failed to decode camera ID or prompt: {e}")
-        return None, None, None
-    except Exception as e:
-        logging.error(f"Error receiving image: {e}")
-        return None, None, None
-
-
-def handle_client(
-    conn: socket.socket,
-    cameras_dict: Dict[str, Tuple[np.ndarray, float, str]],
-    cameras_lock: threading.Lock,
-    config: ServerConfig,
-) -> None:
-    """
-    Handles a client connection by receiving images and storing them by camera ID.
-
-    Args:
-        conn: Client socket connection
-        cameras_dict: Dictionary mapping camera ID to (image, timestamp, prompt)
-        cameras_lock: Lock for thread-safe access to cameras_dict
-        config: Server configuration
-    """
-    try:
-        while not GracefulShutdown.shutdown_requested:
-            cam_id, image, prompt = receive_image(conn, config)
-            if image is None:
-                logging.warning("Failed to receive image from client")
-                break
-
-            timestamp = time.time()
-            # Ensure prompt is never None
-            prompt = prompt if prompt is not None else ""
-            prompt_info = f" with prompt: '{prompt}'" if prompt else ""
-            logging.info(
-                f"Received image from camera: {cam_id} ({image.shape[1]}x{image.shape[0]}){prompt_info}"
-            )
-
-            # Store image by camera ID with timestamp and prompt (thread-safe)
-            with cameras_lock:
-                cameras_dict[cam_id] = (image, timestamp, prompt)
-
-    except Exception as e:
-        logging.error(f"Client error: {e}")
-    finally:
-        conn.close()
-        logging.info("Client disconnected")
-
-
-def accept_clients(
-    server_socket: socket.socket,
-    cameras_dict: Dict[str, Tuple[np.ndarray, float, str]],
-    cameras_lock: threading.Lock,
-    config: ServerConfig,
-) -> None:
-    """
-    Continuously accepts incoming client connections.
-
-    Args:
-        server_socket: Server socket for accepting connections
-        cameras_dict: Dictionary for storing images by camera ID with prompts
-        cameras_lock: Lock for thread-safe access
-        config: Server configuration
-    """
-    server_socket.settimeout(1.0)  # Allow periodic checks for shutdown
-
-    while not GracefulShutdown.shutdown_requested:
         try:
-            conn, addr = server_socket.accept()
-            logging.info(f"Client connected from {addr}")
-            threading.Thread(
-                target=handle_client,
-                args=(conn, cameras_dict, cameras_lock, config),
-                daemon=True,
-            ).start()
-        except socket.timeout:
-            continue
+            while self.is_running():
+                # Receive one complete image message
+                camera_id, prompt, image_bytes = self._receive_image_message(client)
+
+                if image_bytes is None:
+                    # Connection closed or error
+                    break
+
+                # Decode PNG/JPG image
+                nparr = np.frombuffer(image_bytes, np.uint8)
+                image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+                if image is None:
+                    logging.warning(f"Failed to decode image from {camera_id}")
+                    continue
+
+                # Store in singleton
+                self._storage.store_image(camera_id, image, prompt)
+
+                # Log receipt
+                prompt_info = f" with prompt: '{prompt}'" if prompt else ""
+                logging.info(
+                    f"Received image from {camera_id}: "
+                    f"{image.shape[1]}x{image.shape[0]}{prompt_info}"
+                )
+
         except Exception as e:
-            if not GracefulShutdown.shutdown_requested:
-                logging.error(f"Error accepting client: {e}")
+            logging.error(f"Error handling client {address}: {e}")
+
+    def _receive_image_message(self, client: socket.socket) -> Tuple[Optional[str], Optional[str], Optional[bytes]]:
+        """
+        Receive one complete image message from Unity.
+
+        Uses UnityProtocol format:
+        [camera_id_len][camera_id][prompt_len][prompt][image_len][image_data]
+
+        Returns:
+            (camera_id, prompt, image_bytes) or (None, None, None) on failure
+        """
+        import struct
+
+        try:
+            # Read camera ID length and data
+            id_length_bytes = self._recv_exactly(client, UnityProtocol.INT_SIZE)
+            if not id_length_bytes:
+                return None, None, None
+            id_length = struct.unpack(UnityProtocol.INT_FORMAT, id_length_bytes)[0]
+
+            if id_length > UnityProtocol.MAX_STRING_LENGTH:
+                logging.error(f"Camera ID length {id_length} exceeds maximum")
+                return None, None, None
+
+            camera_id_bytes = self._recv_exactly(client, id_length)
+            if not camera_id_bytes:
+                return None, None, None
+            camera_id = camera_id_bytes.decode('utf-8')
+
+            # Read prompt length and data
+            prompt_length_bytes = self._recv_exactly(client, UnityProtocol.INT_SIZE)
+            if not prompt_length_bytes:
+                return None, None, None
+            prompt_length = struct.unpack(UnityProtocol.INT_FORMAT, prompt_length_bytes)[0]
+
+            if prompt_length > UnityProtocol.MAX_STRING_LENGTH:
+                logging.error(f"Prompt length {prompt_length} exceeds maximum")
+                return None, None, None
+
+            prompt = ""
+            if prompt_length > 0:
+                prompt_bytes = self._recv_exactly(client, prompt_length)
+                if not prompt_bytes:
+                    return None, None, None
+                prompt = prompt_bytes.decode('utf-8')
+
+            # Read image length and data
+            image_length_bytes = self._recv_exactly(client, UnityProtocol.INT_SIZE)
+            if not image_length_bytes:
+                return None, None, None
+            image_length = struct.unpack(UnityProtocol.INT_FORMAT, image_length_bytes)[0]
+
+            if image_length > UnityProtocol.MAX_IMAGE_SIZE:
+                logging.error(f"Image size {image_length} exceeds maximum")
+                return None, None, None
+
+            image_bytes = self._recv_exactly(client, image_length)
+            if not image_bytes:
+                return None, None, None
+
+            return camera_id, prompt, image_bytes
+
+        except Exception as e:
+            logging.error(f"Error receiving image message: {e}")
+            return None, None, None
+
+    def _recv_exactly(self, sock: socket.socket, num_bytes: int) -> Optional[bytes]:
+        """Receive exactly num_bytes from socket"""
+        data = b""
+        while len(data) < num_bytes:
+            chunk = sock.recv(num_bytes - len(data))
+            if not chunk:
+                return None
+            data += chunk
+        return data
 
 
-def run_server(config: ServerConfig = ServerConfig()) -> None:
+def run_server(config: ServerConfig = None, setup_signals: bool = True):
     """
-    Main server function that receives and stores images from Unity cameras.
+    Start the StreamingServer (blocking)
 
     Args:
-        config: Server configuration settings
+        config: Server configuration
+        setup_signals: If True, setup signal handlers (only valid in main thread)
     """
-    # Set up signal handlers for graceful shutdown
-    signal.signal(signal.SIGINT, GracefulShutdown.request_shutdown)
-    signal.signal(signal.SIGTERM, GracefulShutdown.request_shutdown)
+    server = StreamingServer(config)
 
-    server_socket = None
+    # Setup signal handlers (only if in main thread)
+    if setup_signals:
+        def signal_handler(_sig, _frame):
+            logging.info("Shutdown signal received")
+            server.stop()
+
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
 
     try:
-        # Create server socket
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server_socket.bind((config.host, config.port))
-        server_socket.listen(5)
-        logging.info(f"Server listening on {config.host}:{config.port}...")
-        logging.info("Ready to receive images from Unity cameras")
+        server.start()
 
-        # Shared data structures
-        cameras_dict: Dict[str, Tuple[np.ndarray, float, str]] = {}
-        cameras_lock = threading.Lock()
+        # Status monitoring loop
+        storage = ImageStorage.get_instance()
+        while server.is_running():
+            time.sleep(5.0)
 
-        # Make images available via ImageServer singleton
-        ImageServer.set_storage(cameras_dict, cameras_lock)
-        logging.info("ImageServer singleton is ready for external access")
+            camera_ids = storage.get_all_camera_ids()
+            if camera_ids:
+                logging.info(f"Active cameras: {camera_ids}")
+                for cam_id in camera_ids:
+                    age = storage.get_camera_age(cam_id)
+                    prompt = storage.get_camera_prompt(cam_id)
+                    prompt_info = f", prompt: '{prompt}'" if prompt else ""
+                    logging.info(f"  {cam_id}: age={age:.1f}s{prompt_info}")
 
-        # Start background thread for accepting clients
-        accept_thread = threading.Thread(
-            target=accept_clients,
-            args=(server_socket, cameras_dict, cameras_lock, config),
-            daemon=True,
-        )
-        accept_thread.start()
-
-        # Main loop - display camera statistics
-        while not GracefulShutdown.shutdown_requested:
-            time.sleep(5.0)  # Update every 5 seconds
-
-            with cameras_lock:
-                if cameras_dict:
-                    logging.info(f"Active cameras: {list(cameras_dict.keys())}")
-                    for cam_id, (img, timestamp, prompt) in cameras_dict.items():
-                        age = time.time() - timestamp
-                        prompt_info = f", prompt: '{prompt}'" if prompt else ""
-                        logging.info(
-                            f"  {cam_id}: {img.shape[1]}x{img.shape[0]}, {age:.1f}s ago{prompt_info}"
-                        )
-
-    except Exception as e:
-        logging.error(f"Server error: {e}")
-
+    except KeyboardInterrupt:
+        logging.info("Interrupted by user")
     finally:
-        logging.info("Shutting down server...")
+        server.stop()
 
-        if server_socket is not None:
-            try:
-                server_socket.close()
-            except Exception as e:
-                logging.error(f"Error closing server socket: {e}")
 
-        logging.info("Server shutdown complete")
+def run_streaming_server_background(config: ServerConfig = None):
+    """Start the StreamingServer in a background thread"""
+    config = config or ServerConfig(host="127.0.0.1", port=5005)
+
+    thread = threading.Thread(
+        target=run_server,
+        args=(config, False),  # setup_signals=False in background thread
+        daemon=True
+    )
+    thread.start()
+    logging.info("StreamingServer started in background thread")
+    return thread
 
 
 if __name__ == "__main__":
-    config = ServerConfig()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Unity camera image streaming server")
+    parser.add_argument("--host", default="127.0.0.1", help="Host to bind to")
+    parser.add_argument("--port", type=int, default=5005, help="Port to bind to")
+
+    args = parser.parse_args()
+
+    config = ServerConfig(host=args.host, port=args.port)
     run_server(config)

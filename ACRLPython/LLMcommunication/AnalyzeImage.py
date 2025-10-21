@@ -44,9 +44,9 @@ except ImportError:
     print("Error: 'opencv-python' and 'numpy' required. Install with: pip install opencv-python numpy")
     sys.exit(1)
 
-# Import ImageServer from StreamingServer
+# Import ImageStorage from StreamingServer
 try:
-    from StreamingServer import ImageServer
+    from StreamingServer import ImageStorage
 except ImportError:
     print("Error: StreamingServer.py not found in the same directory")
     sys.exit(1)
@@ -205,11 +205,11 @@ def get_images_from_server(camera_ids: Optional[List[str]] = None) -> tuple[List
     Returns:
         Tuple of (images list, camera_ids list, prompts list)
     """
-    server = ImageServer.get_instance()
+    storage = ImageStorage.get_instance()
 
     # Get all available cameras if not specified
     if camera_ids is None:
-        camera_ids = server.get_all_camera_ids()
+        camera_ids = storage.get_all_camera_ids()
 
     if not camera_ids:
         raise ValueError("No cameras available. Is the StreamingServer running and receiving images?")
@@ -219,10 +219,10 @@ def get_images_from_server(camera_ids: Optional[List[str]] = None) -> tuple[List
     prompts = []
 
     for cam_id in camera_ids:
-        image = server.get_camera_image(cam_id)
+        image = storage.get_camera_image(cam_id)
         if image is not None:
-            age = server.get_camera_age(cam_id)
-            prompt = server.get_camera_prompt(cam_id) or ""
+            age = storage.get_camera_age(cam_id)
+            prompt = storage.get_camera_prompt(cam_id) or ""
             prompt_info = f", prompt: '{prompt}'" if prompt else ""
             print(f"  ✓ {cam_id}: {image.shape[1]}x{image.shape[0]}, {age:.1f}s ago{prompt_info}")
             images.append(image)
@@ -357,13 +357,13 @@ Note: StreamingServer.py must be running for this script to work.
     try:
         # List cameras mode
         if args.list_cameras:
-            server = ImageServer.get_instance()
-            camera_ids = server.get_all_camera_ids()
+            storage = ImageStorage.get_instance()
+            camera_ids = storage.get_all_camera_ids()
             if camera_ids:
                 print("Available cameras:")
                 for cam_id in camera_ids:
-                    age = server.get_camera_age(cam_id)
-                    prompt = server.get_camera_prompt(cam_id) or "(no prompt)"
+                    age = storage.get_camera_age(cam_id)
+                    prompt = storage.get_camera_prompt(cam_id) or "(no prompt)"
                     print(f"  • {cam_id} - age: {age:.1f}s, prompt: {prompt}")
             else:
                 print("No cameras available. Is StreamingServer running?")
@@ -396,22 +396,22 @@ Note: StreamingServer.py must be running for this script to work.
         # Main processing loop
         while True:
             try:
-                server = ImageServer.get_instance()
+                storage = ImageStorage.get_instance()
 
                 # Get camera IDs to check
                 if monitor_cameras:
                     camera_ids = monitor_cameras
                 else:
-                    camera_ids = server.get_all_camera_ids()
+                    camera_ids = storage.get_all_camera_ids()
 
                 # Check each camera for new images with prompts
                 for cam_id in camera_ids:
-                    image = server.get_camera_image(cam_id)
+                    image = storage.get_camera_image(cam_id)
                     if image is None:
                         continue
 
-                    prompt = server.get_camera_prompt(cam_id)
-                    age = server.get_camera_age(cam_id)
+                    prompt = storage.get_camera_prompt(cam_id)
+                    age = storage.get_camera_age(cam_id)
 
                     # Skip if age is None (shouldn't happen if image exists)
                     if age is None:
