@@ -6,8 +6,8 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using UnityEngine;
 using Logging;
+using UnityEngine;
 
 /// <summary>
 /// Manages Python process execution for ML-Agents and external data processing.
@@ -15,15 +15,6 @@ using Logging;
 /// </summary>
 public class PythonCaller : MonoBehaviour
 {
-    [Header("Python Environment")]
-    [SerializeField]
-    [Tooltip("Base path for Python environment (leave empty to auto-detect from Unity project)")]
-    private string _basePath;
-
-    [SerializeField]
-    [Tooltip("Relative path to Python executable from base path")]
-    private string _pythonEnvPath;
-
     [Header("Process Settings")]
     [SerializeField]
     [Tooltip("Default timeout in seconds for Python processes (0 = no timeout)")]
@@ -40,10 +31,15 @@ public class PythonCaller : MonoBehaviour
     // Singleton
     public static PythonCaller Instance { get; private set; }
 
+    // Config
+    private string _basePath;
+    private string _pythonEnvPath;
+
     // State
     private bool _isActive = false;
     private string _fullPythonPath;
-    private readonly Dictionary<int, ProcessInfo> _runningProcesses = new Dictionary<int, ProcessInfo>();
+    private readonly Dictionary<int, ProcessInfo> _runningProcesses =
+        new Dictionary<int, ProcessInfo>();
     private int _nextProcessId = 1;
 
     // Logging integration
@@ -108,30 +104,39 @@ public class PythonCaller : MonoBehaviour
             if (string.IsNullOrEmpty(_basePath))
             {
                 // Navigate to grandparent of Assets folder
-                _basePath = Directory.GetParent(Directory.GetParent(Application.dataPath).FullName).FullName;
+                _basePath = Directory
+                    .GetParent(Directory.GetParent(Application.dataPath).FullName)
+                    .FullName;
             }
 
             // Auto-detect Python path if not set
             if (string.IsNullOrEmpty(_pythonEnvPath))
             {
                 if (SystemInfo.operatingSystemFamily == OperatingSystemFamily.Windows)
-                    _pythonEnvPath = "roboscan/Scripts/python.exe";
+                    _pythonEnvPath = "ACRLPython/acrl/Scripts/python.exe";
                 else
-                    _pythonEnvPath = "roboscan/bin/python";
+                    _pythonEnvPath = "ACRLPython/acrl/bin/python";
             }
 
             // Validate Python environment exists
             _fullPythonPath = NormalizePath(Path.Combine(_basePath, _pythonEnvPath));
 
+            // Debug logging to help diagnose path issues
+            LogMessage($"PythonCaller path detection:\n  Base Path: {_basePath}\n  Python Env Path: {_pythonEnvPath}\n  Full Python Path: {_fullPythonPath}");
+
             if (File.Exists(_fullPythonPath))
             {
                 _isActive = true;
-                LogMessage($"PythonCaller initialized: Python={_fullPythonPath}, Timeout={_defaultTimeoutSeconds}s, MaxProcesses={_maxConcurrentProcesses}");
+                LogMessage(
+                    $"PythonCaller initialized: Python={_fullPythonPath}, Timeout={_defaultTimeoutSeconds}s, MaxProcesses={_maxConcurrentProcesses}"
+                );
             }
             else
             {
                 _isActive = false;
-                LogWarning($"Python environment not found at: {_fullPythonPath}. PythonCaller will be inactive.");
+                LogWarning(
+                    $"Python environment not found at: {_fullPythonPath}. PythonCaller will be inactive."
+                );
             }
         }
         catch (Exception ex)
@@ -182,29 +187,40 @@ public class PythonCaller : MonoBehaviour
     /// <param name="onComplete">Callback invoked when process completes</param>
     /// <param name="timeoutSeconds">Timeout in seconds (0 = use default, -1 = no timeout)</param>
     /// <returns>Process ID for tracking, or -1 if failed to start</returns>
-    public int ExecuteAsync(string scriptPath, string arguments = "", Action<PythonResult> onComplete = null, int timeoutSeconds = 0)
+    public int ExecuteAsync(
+        string scriptPath,
+        string arguments = "",
+        Action<PythonResult> onComplete = null,
+        int timeoutSeconds = 0
+    )
     {
         if (!_isActive)
         {
             LogError("Cannot execute Python script: PythonCaller is not active");
-            onComplete?.Invoke(new PythonResult
-            {
-                Success = false,
-                Error = "PythonCaller is not active",
-                ExitCode = -1
-            });
+            onComplete?.Invoke(
+                new PythonResult
+                {
+                    Success = false,
+                    Error = "PythonCaller is not active",
+                    ExitCode = -1,
+                }
+            );
             return -1;
         }
 
         if (_runningProcesses.Count >= _maxConcurrentProcesses)
         {
-            LogWarning($"Cannot execute Python script: Maximum concurrent processes ({_maxConcurrentProcesses}) reached");
-            onComplete?.Invoke(new PythonResult
-            {
-                Success = false,
-                Error = $"Maximum concurrent processes ({_maxConcurrentProcesses}) reached",
-                ExitCode = -1
-            });
+            LogWarning(
+                $"Cannot execute Python script: Maximum concurrent processes ({_maxConcurrentProcesses}) reached"
+            );
+            onComplete?.Invoke(
+                new PythonResult
+                {
+                    Success = false,
+                    Error = $"Maximum concurrent processes ({_maxConcurrentProcesses}) reached",
+                    ExitCode = -1,
+                }
+            );
             return -1;
         }
 
@@ -217,12 +233,14 @@ public class PythonCaller : MonoBehaviour
         if (!File.Exists(fullScriptPath))
         {
             LogError($"Python script not found: {fullScriptPath}");
-            onComplete?.Invoke(new PythonResult
-            {
-                Success = false,
-                Error = $"Script not found: {fullScriptPath}",
-                ExitCode = -1
-            });
+            onComplete?.Invoke(
+                new PythonResult
+                {
+                    Success = false,
+                    Error = $"Script not found: {fullScriptPath}",
+                    ExitCode = -1,
+                }
+            );
             return -1;
         }
 
@@ -231,7 +249,9 @@ public class PythonCaller : MonoBehaviour
 
         // Start process asynchronously
         int processId = _nextProcessId++;
-        StartCoroutine(ExecuteProcessAsync(processId, fullScriptPath, arguments, onComplete, timeout));
+        StartCoroutine(
+            ExecuteProcessAsync(processId, fullScriptPath, arguments, onComplete, timeout)
+        );
 
         return processId;
     }
@@ -244,7 +264,11 @@ public class PythonCaller : MonoBehaviour
     /// <param name="arguments">Command line arguments for the script</param>
     /// <param name="timeoutSeconds">Timeout in seconds (0 = use default, -1 = no timeout)</param>
     /// <returns>Result of the execution</returns>
-    public PythonResult ExecuteSync(string scriptPath, string arguments = "", int timeoutSeconds = 0)
+    public PythonResult ExecuteSync(
+        string scriptPath,
+        string arguments = "",
+        int timeoutSeconds = 0
+    )
     {
         if (!_isActive)
         {
@@ -252,7 +276,7 @@ public class PythonCaller : MonoBehaviour
             {
                 Success = false,
                 Error = "PythonCaller is not active",
-                ExitCode = -1
+                ExitCode = -1,
             };
         }
 
@@ -268,7 +292,7 @@ public class PythonCaller : MonoBehaviour
             {
                 Success = false,
                 Error = $"Script not found: {fullScriptPath}",
-                ExitCode = -1
+                ExitCode = -1,
             };
         }
 
@@ -295,7 +319,9 @@ public class PythonCaller : MonoBehaviour
             if (!info.Process.HasExited)
             {
                 info.Process.Kill();
-                LogMessage($"Stopped Python process {processId}: {Path.GetFileName(info.ScriptPath)}");
+                LogMessage(
+                    $"Stopped Python process {processId}: {Path.GetFileName(info.ScriptPath)}"
+                );
             }
 
             CleanupProcess(processId);
@@ -348,7 +374,13 @@ public class PythonCaller : MonoBehaviour
     /// <summary>
     /// Executes a Python process asynchronously using coroutine
     /// </summary>
-    private IEnumerator ExecuteProcessAsync(int processId, string scriptPath, string arguments, Action<PythonResult> onComplete, int timeoutSeconds)
+    private IEnumerator ExecuteProcessAsync(
+        int processId,
+        string scriptPath,
+        string arguments,
+        Action<PythonResult> onComplete,
+        int timeoutSeconds
+    )
     {
         DateTime startTime = DateTime.Now;
         ProcessInfo info = null;
@@ -363,7 +395,7 @@ public class PythonCaller : MonoBehaviour
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
-            WorkingDirectory = NormalizePath(_basePath)
+            WorkingDirectory = NormalizePath(_basePath),
         };
 
         Process process = new Process { StartInfo = psi };
@@ -377,7 +409,7 @@ public class PythonCaller : MonoBehaviour
             Arguments = arguments,
             StartTime = startTime,
             OutputBuffer = new StringBuilder(),
-            ErrorBuffer = new StringBuilder()
+            ErrorBuffer = new StringBuilder(),
         };
 
         _runningProcesses[processId] = info;
@@ -386,7 +418,9 @@ public class PythonCaller : MonoBehaviour
         try
         {
             process.Start();
-            LogMessage($"Started Python process {processId}: {Path.GetFileName(scriptPath)} {arguments}");
+            LogMessage(
+                $"Started Python process {processId}: {Path.GetFileName(scriptPath)} {arguments}"
+            );
         }
         catch (Exception startEx)
         {
@@ -394,22 +428,32 @@ public class PythonCaller : MonoBehaviour
             LogError($"Python process {processId} failed: {exceptionMessage}");
             CleanupProcess(processId);
 
-            onComplete?.Invoke(new PythonResult
-            {
-                Success = false,
-                ExitCode = -1,
-                Output = "",
-                Error = exceptionMessage,
-                ExecutionTimeSeconds = (float)(DateTime.Now - startTime).TotalSeconds,
-                TimedOut = false
-            });
+            onComplete?.Invoke(
+                new PythonResult
+                {
+                    Success = false,
+                    ExitCode = -1,
+                    Output = "",
+                    Error = exceptionMessage,
+                    ExecutionTimeSeconds = (float)(DateTime.Now - startTime).TotalSeconds,
+                    TimedOut = false,
+                }
+            );
 
             yield break;
         }
 
         // Read output asynchronously
-        Task<string> outputTask = ReadStreamAsync(process.StandardOutput, info.OutputBuffer, cts.Token);
-        Task<string> errorTask = ReadStreamAsync(process.StandardError, info.ErrorBuffer, cts.Token);
+        Task<string> outputTask = ReadStreamAsync(
+            process.StandardOutput,
+            info.OutputBuffer,
+            cts.Token
+        );
+        Task<string> errorTask = ReadStreamAsync(
+            process.StandardError,
+            info.ErrorBuffer,
+            cts.Token
+        );
 
         // Wait for process to complete or timeout
         bool completed = false;
@@ -437,7 +481,9 @@ public class PythonCaller : MonoBehaviour
         // Handle timeout
         if (timedOut)
         {
-            LogWarning($"Python process {processId} timed out after {timeoutSeconds}s: {Path.GetFileName(scriptPath)}");
+            LogWarning(
+                $"Python process {processId} timed out after {timeoutSeconds}s: {Path.GetFileName(scriptPath)}"
+            );
 
             try
             {
@@ -452,15 +498,17 @@ public class PythonCaller : MonoBehaviour
 
             CleanupProcess(processId);
 
-            onComplete?.Invoke(new PythonResult
-            {
-                Success = false,
-                ExitCode = -1,
-                Output = info.OutputBuffer.ToString(),
-                Error = info.ErrorBuffer.ToString(),
-                ExecutionTimeSeconds = (float)(DateTime.Now - startTime).TotalSeconds,
-                TimedOut = true
-            });
+            onComplete?.Invoke(
+                new PythonResult
+                {
+                    Success = false,
+                    ExitCode = -1,
+                    Output = info.OutputBuffer.ToString(),
+                    Error = info.ErrorBuffer.ToString(),
+                    ExecutionTimeSeconds = (float)(DateTime.Now - startTime).TotalSeconds,
+                    TimedOut = true,
+                }
+            );
 
             yield break;
         }
@@ -495,15 +543,17 @@ public class PythonCaller : MonoBehaviour
         }
 
         // Invoke callback
-        onComplete?.Invoke(new PythonResult
-        {
-            Success = exitCode == 0,
-            ExitCode = exitCode,
-            Output = output,
-            Error = error,
-            ExecutionTimeSeconds = executionTime,
-            TimedOut = false
-        });
+        onComplete?.Invoke(
+            new PythonResult
+            {
+                Success = exitCode == 0,
+                ExitCode = exitCode,
+                Output = output,
+                Error = error,
+                ExecutionTimeSeconds = executionTime,
+                TimedOut = false,
+            }
+        );
     }
 
     /// <summary>
@@ -523,7 +573,7 @@ public class PythonCaller : MonoBehaviour
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 CreateNoWindow = true,
-                WorkingDirectory = NormalizePath(_basePath)
+                WorkingDirectory = NormalizePath(_basePath),
             };
 
             using (Process process = new Process { StartInfo = psi })
@@ -550,7 +600,11 @@ public class PythonCaller : MonoBehaviour
 
                 if (!completed)
                 {
-                    try { process.Kill(); } catch { }
+                    try
+                    {
+                        process.Kill();
+                    }
+                    catch { }
 
                     return new PythonResult
                     {
@@ -559,7 +613,7 @@ public class PythonCaller : MonoBehaviour
                         Output = output,
                         Error = error,
                         ExecutionTimeSeconds = executionTime,
-                        TimedOut = true
+                        TimedOut = true,
                     };
                 }
 
@@ -570,7 +624,7 @@ public class PythonCaller : MonoBehaviour
                     Output = output,
                     Error = error,
                     ExecutionTimeSeconds = executionTime,
-                    TimedOut = false
+                    TimedOut = false,
                 };
             }
         }
@@ -583,7 +637,7 @@ public class PythonCaller : MonoBehaviour
                 Output = "",
                 Error = $"Exception: {ex.Message}",
                 ExecutionTimeSeconds = (float)(DateTime.Now - startTime).TotalSeconds,
-                TimedOut = false
+                TimedOut = false,
             };
         }
     }
@@ -591,14 +645,21 @@ public class PythonCaller : MonoBehaviour
     /// <summary>
     /// Reads a stream asynchronously with buffering
     /// </summary>
-    private async Task<string> ReadStreamAsync(StreamReader reader, StringBuilder buffer, CancellationToken token)
+    private async Task<string> ReadStreamAsync(
+        StreamReader reader,
+        StringBuilder buffer,
+        CancellationToken token
+    )
     {
         try
         {
             char[] charBuffer = new char[_outputBufferSize];
             int bytesRead;
 
-            while (!token.IsCancellationRequested && (bytesRead = await reader.ReadAsync(charBuffer, 0, charBuffer.Length)) > 0)
+            while (
+                !token.IsCancellationRequested
+                && (bytesRead = await reader.ReadAsync(charBuffer, 0, charBuffer.Length)) > 0
+            )
             {
                 buffer.Append(charBuffer, 0, bytesRead);
             }

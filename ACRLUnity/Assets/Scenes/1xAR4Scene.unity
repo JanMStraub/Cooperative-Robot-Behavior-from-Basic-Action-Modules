@@ -753,6 +753,8 @@ GameObject:
   - component: {fileID: 1797467628}
   - component: {fileID: 1797467629}
   - component: {fileID: 1797467630}
+  - component: {fileID: 1797467631}
+  - component: {fileID: 1797467632}
   m_Layer: 0
   m_Name: SimulationManager
   m_TagString: Untagged
@@ -795,13 +797,11 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1797467622}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: f5cfa4b1371fb4519a6878256014daf6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _basePath: 
-  _pythonEnvPath: 
   _defaultTimeoutSeconds: 300
   _maxConcurrentProcesses: 3
   _outputBufferSize: 4096
@@ -838,14 +838,57 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 73c72107ccdd7439a8c2e7e76783d5b2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StereoImageSender
-  _serverIP: 127.0.0.1
+  _serverHost: 127.0.0.1
   _serverPort: 5005
-  _autoReconnect: 1
+  _autoConnect: 1
+  _autoReconnect: 0
   _reconnectInterval: 2
+  _verboseLogging: 0
   _enableStreaming: 0
   _sendInterval: 0.2
   _streamCamera: {fileID: 1678465791}
   _streamCameraId: Main
+  _streamPrompt: 
+--- !u!114 &1797467631
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1797467622}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f01d3ad9a5b2543cdab1c78b83bd2d0b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PythonServerManager
+  servers:
+  - serverName: RunAnalyzer
+    scriptPath: ACRLPython/LLMcommunication/RunAnalyzer.py
+    arguments: --model gemma3 --server-host 127.0.0.1 --server-port 5005 --results-port
+      5006
+    autoStart: 1
+    enabled: 1
+    description: Combined StreamingServer + Ollama image analyzer
+  _startupDelay: 1
+--- !u!114 &1797467632
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1797467622}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9a46d6cd8c9f846b387170157a8e9ac3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LLMCommunication.LLMResultsReceiver
+  _serverHost: 127.0.0.1
+  _serverPort: 5006
+  _autoConnect: 1
+  _autoReconnect: 1
+  _reconnectInterval: 2
+  _verboseLogging: 1
+  _logResults: 1
 --- !u!4 &2081917769 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2394689641468132642, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}

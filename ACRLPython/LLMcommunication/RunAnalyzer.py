@@ -18,8 +18,9 @@ import argparse
 import sys
 
 # Import server components
-from StreamingServer import ServerConfig, ImageServer, GracefulShutdown, accept_clients
-import socket
+from StreamingServer import ImageStorage, run_streaming_server_background
+from core.TCPServerBase import ServerConfig
+from ResultsServer import ResultsBroadcaster, run_results_server_background
 
 # Import analyzer (but we'll use its functions, not run main directly)
 from AnalyzeImage import OllamaVisionProcessor, save_response
@@ -35,72 +36,11 @@ logging.basicConfig(
 )
 
 
-def run_server_thread(config: ServerConfig) -> None:
-    """
-    Server function for running in a background thread (no signal handlers).
-
-    Args:
-        config: Server configuration settings
-    """
-    server_socket = None
-
-    try:
-        # Create server socket
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server_socket.bind((config.host, config.port))
-        server_socket.listen(5)
-        logging.info(f"Server listening on {config.host}:{config.port}...")
-        logging.info("Ready to receive images from Unity cameras")
-
-        # Shared data structures
-        cameras_dict = {}
-        cameras_lock = threading.Lock()
-
-        # Make images available via ImageServer singleton
-        ImageServer.set_storage(cameras_dict, cameras_lock)
-        logging.info("ImageServer singleton is ready for external access")
-
-        # Start background thread for accepting clients
-        accept_thread = threading.Thread(
-            target=accept_clients,
-            args=(server_socket, cameras_dict, cameras_lock, config),
-            daemon=True,
-        )
-        accept_thread.start()
-
-        # Main loop - display camera statistics
-        while not GracefulShutdown.shutdown_requested:
-            time.sleep(5.0)  # Update every 5 seconds
-
-            with cameras_lock:
-                if cameras_dict:
-                    logging.info(f"Active cameras: {list(cameras_dict.keys())}")
-                    for cam_id, (img, timestamp, prompt) in cameras_dict.items():
-                        age = time.time() - timestamp
-                        prompt_info = f", prompt: '{prompt}'" if prompt else ""
-                        logging.info(
-                            f"  {cam_id}: {img.shape[1]}x{img.shape[0]}, {age:.1f}s ago{prompt_info}"
-                        )
-
-    except Exception as e:
-        logging.error(f"Server error: {e}")
-
-    finally:
-        logging.info("Shutting down server...")
-
-        if server_socket is not None:
-            try:
-                server_socket.close()
-            except Exception as e:
-                logging.error(f"Error closing server socket: {e}")
-
-        logging.info("Server shutdown complete")
 
 
 def run_analyzer_loop(args):
     """
-    Run the image analyzer loop using the ImageServer singleton.
+    Run the image analyzer loop using the ImageStorage singleton.
 
     Args:
         args: Command line arguments from argparse
@@ -135,8 +75,8 @@ def run_analyzer_loop(args):
         else:
             logging.info("Monitoring all available cameras")
 
-        # Get the ImageServer instance (same process, so this works!)
-        server = ImageServer.get_instance()
+        # Get the ImageStorage instance (same process, so this works!)
+        storage = ImageStorage.get_instance()
 
         # Main processing loop
         while True:
@@ -145,16 +85,16 @@ def run_analyzer_loop(args):
                 if monitor_cameras:
                     camera_ids = monitor_cameras
                 else:
-                    camera_ids = server.get_all_camera_ids()
+                    camera_ids = storage.get_all_camera_ids()
 
                 # Check each camera for new images with prompts
                 for cam_id in camera_ids:
-                    image = server.get_camera_image(cam_id)
+                    image = storage.get_camera_image(cam_id)
                     if image is None:
                         continue
 
-                    prompt = server.get_camera_prompt(cam_id)
-                    age = server.get_camera_age(cam_id)
+                    prompt = storage.get_camera_prompt(cam_id)
+                    age = storage.get_camera_age(cam_id)
 
                     # Skip if age is None (shouldn't happen if image exists)
                     if age is None:
@@ -221,6 +161,10 @@ def run_analyzer_loop(args):
                     print(f"⏱️  Processing time: {result['metadata']['duration_seconds']:.2f}s")
                     print(f"📊 Model: {result['metadata']['model']}")
                     print("="*80 + "\n")
+
+                    # Send result to Unity
+                    ResultsBroadcaster.send_result(result)
+                    logging.info(f"📤 Sent result to Unity for camera: {cam_id}")
 
                     # Save response
                     if not args.no_save:
@@ -312,6 +256,12 @@ Note: This script runs both the StreamingServer and AnalyzeImage in the same pro
         help="StreamingServer port (default: 5005)"
     )
     server_group.add_argument(
+        "--results-port",
+        type=int,
+        default=5006,
+        help="ResultsServer port for sending results to Unity (default: 5006)"
+    )
+    server_group.add_argument(
         "--interval", "-i",
         type=float,
         default=1.0,
@@ -346,20 +296,23 @@ Note: This script runs both the StreamingServer and AnalyzeImage in the same pro
     args = parser.parse_args()
 
     try:
-        # Create server config
-        config = ServerConfig(
+        # Create server configs
+        streaming_config = ServerConfig(
             host=args.server_host,
             port=args.server_port
+        )
+        results_config = ServerConfig(
+            host=args.server_host,
+            port=args.results_port
         )
 
         # Start StreamingServer in background thread
         logging.info("Starting StreamingServer in background...")
-        server_thread = threading.Thread(
-            target=run_server_thread,
-            args=(config,),
-            daemon=True
-        )
-        server_thread.start()
+        run_streaming_server_background(streaming_config)
+
+        # Start ResultsServer in background thread
+        logging.info("Starting ResultsServer in background...")
+        run_results_server_background(results_config)
 
         # Run analyzer in main thread
         run_analyzer_loop(args)

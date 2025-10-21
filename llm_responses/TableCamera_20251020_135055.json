@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "response": "Here's a concise list of the non-robot objects in the scene:\n\n*   Red block\n*   Pink sphere\n*   Blue cubes (x2)\n*   Checkerboard floor",
+  "metadata": {
+    "model": "gemma3",
+    "timestamp": "2025-10-20T13:50:55.464099",
+    "duration_seconds": 41.622385,
+    "image_count": 1,
+    "camera_ids": [
+      "TableCamera"
+    ],
+    "prompt": "Identify all non-robot objects in the scene. List them concisely.",
+    "full_prompt": "Identify all non-robot objects in the scene. List them concisely."
+  }
+}
