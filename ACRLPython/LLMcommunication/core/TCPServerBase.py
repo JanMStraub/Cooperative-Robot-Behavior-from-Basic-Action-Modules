@@ -17,6 +17,12 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import List, Optional
+import sys
+from pathlib import Path
+
+# Add LLMCommunication package directory to path
+_package_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(_package_dir))
 
 # Import config
 import config as cfg
@@ -56,6 +62,7 @@ class TCPServerBase(ABC):
         """
         self._config = config
         self._running = False
+        self._shutdown_flag = False
         self._clients: List[socket.socket] = []
         self._clients_lock = threading.Lock()
         self._server_socket: Optional[socket.socket] = None
@@ -147,6 +154,14 @@ class TCPServerBase(ABC):
     def is_running(self) -> bool:
         """Check if server is running"""
         return self._running
+    
+    def should_shutdown(self) -> bool:
+        """Return True if the server should stop."""
+        return self._shutdown_flag
+
+    def shutdown(self):
+        """Trigger server shutdown."""
+        self._shutdown_flag = True
 
     def get_client_count(self) -> int:
         """Get number of connected clients"""
@@ -192,6 +207,8 @@ class TCPServerBase(ABC):
         """Accept incoming client connections (runs in separate thread)"""
         while self._running:
             try:
+                if not self._server_socket:
+                    break
                 client, address = self._server_socket.accept()
 
                 # Clean up completed threads before checking limit

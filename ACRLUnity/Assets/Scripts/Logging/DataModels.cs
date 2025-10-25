@@ -48,6 +48,11 @@ namespace Logging
         public Vector3 targetPosition;
         public Vector3[] trajectoryPoints; // Optional:  trajectory
 
+        // Stereo depth estimation data (optional)
+        public Vector3? detectedTargetWorldPosition; // 3D position from stereo depth
+        public float? depthEstimationConfidence; // Confidence of depth estimation
+        public string depthEstimationMethod; // "stereo_disparity" or "raycast"
+
         // Outcomes and metrics
         public bool success;
         public string errorMessage;

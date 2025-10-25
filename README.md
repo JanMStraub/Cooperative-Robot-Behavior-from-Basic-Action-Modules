@@ -4,15 +4,18 @@ A Unity-based reinforcement learning environment for training dual AR4 robotic a
 
 ## Description
 
-The goal of this project is to have two AR4 robot arms positioned side by side that learn to collaboratively solve tasks which would be impossible for a single robot to accomplish. The system uses Unity ML-Agents for reinforcement learning, implementing inverse kinematics control, multi-robot coordination patterns, and comprehensive data logging for LLM training.
+The goal of this project is to have two AR4 robot arms positioned side by side that learn to collaboratively solve tasks which would be impossible for a single robot to accomplish. The system uses Unity ML-Agents for reinforcement learning, implementing inverse kinematics control, multi-robot coordination patterns, vision-based object detection, and comprehensive data logging for LLM training.
 
 **Key Features**:
 - Unity 6000.2.5f1 simulation environment with physics-based ArticulationBody robots
 - Damped least-squares inverse kinematics (6-DOF control)
 - PPO-based reinforcement learning with LSTM memory
 - Multiple coordination modes: Independent, Collaborative, Master-Slave, Distributed, Sequential
-- JSON logging system for LLM training data generation
-- Python integration for external ML workflows
+- LLM vision integration (Ollama) for scene understanding
+- Object detection system (color-based HSV segmentation)
+- Stereo vision depth estimation for 3D object localization
+- JSONL logging system for LLM training data generation
+- Python-Unity TCP communication for real-time vision processing
 
 ## Getting Started
 
@@ -31,10 +34,12 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
 - Universal Render Pipeline (17.2.0)
 - Unity Test Framework (1.5.1)
 
-**Python Dependencies** (installed in ml-agents submodule):
-- mlagents (Unity ML-Agents Toolkit)
+**Python Dependencies**:
+- mlagents (Unity ML-Agents Toolkit) - installed in ml-agents submodule
 - torch (PyTorch for neural networks)
 - numpy, matplotlib (data processing)
+- opencv-python (computer vision, object detection)
+- ollama (LLM vision integration)
 
 ### Installing
 
@@ -130,17 +135,24 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
 **Three Singleton Managers**:
 - **SimulationManager**: Top-level orchestrator controlling simulation state and coordination modes
 - **RobotManager**: Robot lifecycle management, configuration loading, target assignment
-- **FileLogger**: Centralized logging for Unity console and simulation state
+- **MainLogger**: Unified logging system for LLM training data with action tracking and trajectories
 
 **Robot Control Layers**:
 1. **RobotController**: Inverse kinematics computation using damped least-squares method
 2. **RobotAgent**: ML-Agents integration with PPO training and episode management
 3. **GripperController**: End-effector control with open/close commands
 
+**Vision & Perception Systems**:
+- **LLM Vision** (Ollama): Scene understanding and natural language descriptions
+- **Object Detection**: HSV color-based cube detection with bounding boxes
+- **Stereo Depth**: 3D localization using stereo disparity estimation
+- **TCP Communication**: Real-time image streaming between Unity and Python (ports 5005-5009)
+
 **Data Logging**:
-- JSON logging per robot with automatic rotation (10MB default)
-- LLM-ready export format with human-readable descriptions
+- JSONL logging per robot or per session
+- LLM-ready export format with action types, trajectories, and metrics
 - Thread-safe concurrent writes for multi-robot scenarios
+- Export tools for LLM training and statistics generation
 
 ### Key Directories
 
@@ -202,10 +214,31 @@ Default settings:
 ## Development Branches
 
 - `main` - Stable release branch
-- `navigate_to_object` - Current development (navigation tasks)
+- `feature_detect_object` - Current development (object detection and stereo vision)
+- `navigate_to_object` - Navigation to detected objects
 - `feature_gripper` - Gripper control implementation
 - `feature_ml` - ML-Agents integration features
 - `work_package_2` - Research milestone tracking
+
+## Quick Start
+
+For a complete setup and usage guide, see **[USER_GUIDE.md](USER_GUIDE.md)**.
+
+**5-Minute Start**:
+1. Clone repository: `git clone --recursive https://github.com/JanMStraub/Auto-Cooperative-Robot-Learning.git`
+2. Open `ACRLUnity/` in Unity Hub (version 6000.2.5f1 required)
+3. Open scene: `Assets/Scenes/1xAR4Scene.unity`
+4. Press Play to run simulation
+
+**For ML Training**:
+1. Setup ML-Agents: `cd ml-agents && python -m venv venv && source venv/bin/activate && pip install -e ./ml-agents`
+2. Run training: `mlagents-learn ../ACRLUnity/Assets/Configuration/RobotNavigation.yaml --run-id=test`
+3. Monitor: `tensorboard --logdir results/`
+
+**For Vision/Detection**:
+1. Setup Python environment: `cd ACRLPython && source acrl/bin/activate`
+2. Run object detector: `python -m LLMCommunication.orchestrators.RunDetector`
+3. In Unity: Use CameraController to send images and receive detection results
 
 ## License
 

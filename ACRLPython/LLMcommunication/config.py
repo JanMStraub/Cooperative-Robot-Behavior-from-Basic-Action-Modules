@@ -16,6 +16,7 @@ DEFAULT_HOST = "127.0.0.1"
 # Port assignments
 STREAMING_SERVER_PORT = 5005  # Receives images from Unity
 RESULTS_SERVER_PORT = 5006  # Sends LLM results to Unity
+STEREO_DETECTION_PORT = 5009  # Receives stereo image pairs from Unity
 
 # Connection limits
 MAX_CONNECTIONS_BACKLOG = 5  # Max pending connections in listen() queue
@@ -55,17 +56,20 @@ DUPLICATE_TIME_THRESHOLD = 0.1  # Time threshold for detecting duplicate sends (
 # LLM Configuration
 # ===========================
 
-# Default Ollama model
-DEFAULT_OLLAMA_MODEL = "gemma3"
+# LM Studio server configuration
+LMSTUDIO_BASE_URL = "http://127.0.0.1:1234/v1"
+
+# Default LM Studio model (use model name shown in LM Studio)
+DEFAULT_LMSTUDIO_MODEL = "llama-3.2-vision"
 
 # LLM generation parameters
 DEFAULT_TEMPERATURE = 0.7  # Sampling temperature (0.0-2.0)
 
-# Popular vision models (for reference)
+# Popular vision models compatible with LM Studio (for reference)
 VISION_MODELS = [
+    "llama-3.2-vision",
     "llava",
-    "llama3.2-vision",
-    "gemma3",
+    "moondream",
 ]
 
 
@@ -101,6 +105,49 @@ THREAD_CLEANUP_INTERVAL = 10.0  # How often to clean up completed threads (secon
 # Keepalive intervals
 RESULTS_SERVER_KEEPALIVE = 1.0  # Results server monitoring interval (seconds)
 STREAMING_SERVER_MONITOR = 5.0  # Streaming server monitoring interval (seconds)
+
+
+# ===========================
+# Object Detection Configuration
+# ===========================
+
+# Detection Server Port
+DETECTION_SERVER_PORT = 5007  # Sends object detection results to Unity
+
+# Color Ranges for Cube Detection (HSV)
+# Red wraps around in HSV space (0° and 180° are both red)
+RED_HSV_LOWER_1 = (0, 100, 100)
+RED_HSV_UPPER_1 = (10, 255, 255)
+RED_HSV_LOWER_2 = (170, 100, 100)
+RED_HSV_UPPER_2 = (180, 255, 255)
+
+# Blue range
+BLUE_HSV_LOWER = (100, 100, 100)
+BLUE_HSV_UPPER = (130, 255, 255)
+
+# Detection Filters
+MIN_CUBE_AREA_PX = 100  # Minimum bounding box area in pixels
+MAX_CUBE_AREA_PX = 100000  # Maximum bounding box area in pixels
+MIN_ASPECT_RATIO = 0.5  # Minimum width/height ratio (allows perspective)
+MAX_ASPECT_RATIO = 2.0  # Maximum width/height ratio (allows perspective)
+MIN_CONFIDENCE = 0.6  # Minimum detection confidence threshold
+
+# Detection Processing
+DETECTION_CHECK_INTERVAL = 1.0  # Check for new images every N seconds
+ENABLE_DEBUG_IMAGES = False  # Save annotated images for debugging
+DEBUG_IMAGES_DIR = "ACRLPython/LLMCommunication/debug_detections"
+
+
+# ===========================
+# Stereo Reconstruction Configuration
+# ===========================
+
+# Default stereo camera parameters
+DEFAULT_STEREO_BASELINE = 0.1  # meters, distance between stereo cameras
+DEFAULT_STEREO_FOV = 60.0  # degrees, field of view of cameras
+
+# Stereo processing
+STEREO_CHECK_INTERVAL = 0.5  # Check for new stereo pairs every N seconds
 
 
 # ===========================

@@ -75,6 +75,7 @@ public class GripperController : MonoBehaviour
 
     [Header("Control Parameters")]
     public float maxForce = 100f;
+
     [Tooltip("Smooth interpolation time in seconds")]
     public float smoothTime = 0.3f;
 

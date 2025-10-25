@@ -8,11 +8,34 @@ This protocol is versioned and should match the Unity-side implementation.
 Protocol version: 1
 
 Message formats:
-1. Image Message (Unity → Python):
+1. Image Message (Unity → Python, single camera):
    [camera_id_len:4][camera_id:N][prompt_len:4][prompt:N][image_len:4][image_data:N]
 
-2. Result Message (Python → Unity):
+2. Stereo Image Message (Unity → Python, stereo pair):
+   [cam_pair_id_len:4][cam_pair_id:N]
+   [camera_L_id_len:4][camera_L_id:N]
+   [camera_R_id_len:4][camera_R_id:N]
+   [prompt_len:4][prompt:N]
+   [image_L_len:4][image_L_data:N]
+   [image_R_len:4][image_R_data:N]
+
+3. Result Message (Python → Unity):
    [json_len:4][json_data:N]
+
+   Result JSON may include optional "world_position" field for 3D coordinates:
+   {
+     "success": true,
+     "detections": [
+       {
+         "id": 0,
+         "color": "red",
+         "bbox_px": {...},
+         "center_px": {...},
+         "confidence": 0.95,
+         "world_position": {"x": 0.5, "y": 0.2, "z": 1.0}  // Optional, meters
+       }
+     ]
+   }
 
 All integers are little-endian unsigned 32-bit (struct format 'I').
 All strings are UTF-8 encoded.
@@ -22,6 +45,12 @@ import struct
 import json
 from typing import Tuple, Optional
 import logging
+import sys
+from pathlib import Path
+
+# Add LLMCommunication package directory to path
+_package_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(_package_dir))
 
 # Import config
 import config as cfg

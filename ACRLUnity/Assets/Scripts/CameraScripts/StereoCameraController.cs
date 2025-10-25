@@ -2,23 +2,23 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using Logging;
 using LLMCommunication;
+using Logging;
 using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
 
 #if UNITY_EDITOR
-[CustomEditor(typeof(CameraController))]
-public class CameraControllerEditor : Editor
+[CustomEditor(typeof(StereoCameraController))]
+public class StereoCameraControllerEditor : Editor
 {
     private bool _lastConnectionState;
 
     public override void OnInspectorGUI()
     {
         DrawDefaultInspector();
-        var controller = (CameraController)target;
+        var controller = (StereoCameraController)target;
 
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("Capture Controls", EditorStyles.boldLabel);
@@ -49,7 +49,11 @@ public class CameraControllerEditor : Editor
         {
             float elapsed = controller.LLMElapsedTime;
             GUI.color = new Color(1f, 0.9f, 0.4f); // Yellow color for processing
-            EditorGUILayout.TextField("LLM Status", $"Processing... ({elapsed:F1}s)", EditorStyles.boldLabel);
+            EditorGUILayout.TextField(
+                "LLM Status",
+                $"Processing... ({elapsed:F1}s)",
+                EditorStyles.boldLabel
+            );
             GUI.color = originalColor;
 
             // Repaint continuously while processing to update the timer
@@ -75,7 +79,7 @@ public class CameraControllerEditor : Editor
 /// Controls camera screenshot capture for robot cameras.
 /// Captures images from the robot's camera and saves them to disk with proper organization.
 /// </summary>
-public class CameraController : MonoBehaviour
+public class StereoCameraController : MonoBehaviour
 {
     [Header("Image Settings")]
     [SerializeField]
@@ -125,8 +129,28 @@ public class CameraController : MonoBehaviour
     [Tooltip("A prompt to associate with the image when sending to the LLM")]
     private string _llmPrompt = "Analyze the image";
 
+    [Header("Stereo Detection Settings")]
+    [SerializeField]
+    [Tooltip("Enable stereo depth estimation for 3D object localization")]
+    private bool _useStereoDepth = false;
+
+    [SerializeField]
+    [Tooltip("Left camera for stereo pair")]
+    private Camera _leftCamera;
+
+    [SerializeField]
+    [Tooltip("Right camera for stereo pair")]
+    private Camera _rightCamera;
+
+    [SerializeField]
+    [Tooltip("Stereo baseline distance in meters (distance between cameras)")]
+    private float _stereoBaseline = 0.1f;
+
+    [SerializeField]
+    [Tooltip("Camera field of view in degrees (for depth calculation)")]
+    private float _cameraFOV = 60.0f;
+
     // Core components
-    private Camera _mainCamera;
     private MainLogger _logger;
 
     // State tracking
@@ -176,7 +200,7 @@ public class CameraController : MonoBehaviour
         if (_grayscaleMode && _grayscaleMaterial == null)
         {
             Debug.LogWarning(
-                "[CameraController] Grayscale Mode is enabled, but no Grayscale Material is assigned. Disabling mode."
+                "[StereoCameraController] Grayscale Mode is enabled, but no Grayscale Material is assigned. Disabling mode."
             );
             _grayscaleMode = false;
         }
@@ -187,9 +211,7 @@ public class CameraController : MonoBehaviour
     /// </summary>
     private void Start()
     {
-        // Get camera component
-        _mainCamera = GetComponent<Camera>();
-        if (_mainCamera == null)
+        if (_leftCamera == null)
         {
             Debug.LogError($"[CAMERA_CONTROLLER] No Camera component found on {gameObject.name}");
             enabled = false;
@@ -211,16 +233,16 @@ public class CameraController : MonoBehaviour
         }
 
         // Find robot arm name
-        _robotArmName = FindArmRoot(_mainCamera.transform);
+        _robotArmName = FindArmRoot(_leftCamera.transform);
         if (string.IsNullOrEmpty(_robotArmName))
         {
             // Use camera name as fallback if no custom fallback is set
             string fallbackName = string.IsNullOrEmpty(_fallbackRobotName)
-                ? _mainCamera.gameObject.name
+                ? _leftCamera.gameObject.name
                 : _fallbackRobotName;
 
             // Log hierarchy for debugging
-            string hierarchy = GetHierarchyPath(_mainCamera.transform);
+            string hierarchy = GetHierarchyPath(_leftCamera.transform);
             Debug.Log(
                 $"[CAMERA_CONTROLLER] Could not find robot arm in hierarchy.\n"
                     + $"Camera hierarchy: {hierarchy}\n"
@@ -231,7 +253,7 @@ public class CameraController : MonoBehaviour
         }
 
         // Get root name
-        _rootName = _mainCamera.transform.root.name;
+        _rootName = _leftCamera.transform.root.name;
 
         // Subscribe to LLM results
         if (LLMResultsReceiver.Instance != null)
@@ -277,12 +299,14 @@ public class CameraController : MonoBehaviour
     {
         if (_isCapturing)
         {
-            Debug.LogWarning("[CameraController] A capture is already in progress. Please wait.");
+            Debug.LogWarning(
+                "[StereoCameraController] A capture is already in progress. Please wait."
+            );
             return;
         }
         if (!enabled)
         {
-            Debug.LogWarning("[CameraController] Cannot capture, component is disabled.");
+            Debug.LogWarning("[StereoCameraController] Cannot capture, component is disabled.");
             return;
         }
         StartCoroutine(ProcessCaptureCoroutine(type));
@@ -302,7 +326,7 @@ public class CameraController : MonoBehaviour
         {
             // Capture image
             imageBytes = CaptureImageBytes();
-            Debug.Log($"[CameraController] Captured {imageBytes?.Length ?? 0} bytes");
+            Debug.Log($"[StereoCameraController] Captured {imageBytes?.Length ?? 0} bytes");
             if (imageBytes == null)
                 throw new Exception("Image capture returned null bytes.");
 
@@ -315,31 +339,79 @@ public class CameraController : MonoBehaviour
                         $"Screenshots/{_rootName}/{_robotArmName}/{filename}"
                     );
                     SaveImageToFile(fullPath, imageBytes);
-                    Debug.Log($"[CameraController] Image saved to: {fullPath}");
+                    Debug.Log($"[StereoCameraController] Image saved to: {fullPath}");
                     break;
 
                 case CaptureType.SendToServer:
-                    if (ImageSender.Instance == null || !ImageSender.Instance.IsConnected)
+                    // Check if stereo mode is enabled
+                    if (_useStereoDepth && _rightCamera != null)
                     {
-                        throw new Exception("ImageSender not available or not connected.");
-                    }
-                    ImageSender.Instance.SendImageData(imageBytes, _robotArmName, _llmPrompt);
+                        // Stereo mode: send stereo pair for 3D detection
+                        if (
+                            StereoImageSender.Instance == null
+                            || !StereoImageSender.Instance.IsConnected
+                        )
+                        {
+                            throw new Exception(
+                                "StereoImageSender not available or not connected."
+                            );
+                        }
 
-                    // Track LLM processing state
+                        // imageBytes is already the left camera image
+                        byte[] leftImageBytes = imageBytes;
+
+                        // Capture right camera image
+                        byte[] rightImageBytes = CaptureImageBytesFromCamera(_rightCamera);
+                        if (rightImageBytes == null)
+                        {
+                            throw new Exception("Failed to capture right camera image for stereo.");
+                        }
+
+                        // Encode camera parameters in prompt as JSON metadata
+                        string promptWithMetadata = $"{{\"prompt\":\"{_llmPrompt}\",\"baseline\":{_stereoBaseline},\"fov\":{_cameraFOV}}}";
+
+                        // Send stereo pair
+                        StereoImageSender.Instance.SendStereoPair(
+                            leftImageBytes,
+                            rightImageBytes,
+                            _robotArmName + "_stereo",
+                            _robotArmName + "_L",
+                            _robotArmName + "_R",
+                            promptWithMetadata
+                        );
+
+                        Debug.Log(
+                            $"[StereoCameraController] Stereo pair sent successfully "
+                                + $"(L:{leftImageBytes.Length / 1024f:F1} KB, R:{rightImageBytes.Length / 1024f:F1} KB). "
+                                + $"Waiting for 3D detection result..."
+                        );
+                    }
+                    else
+                    {
+                        // Mono mode: send single image for 2D detection
+                        if (ImageSender.Instance == null || !ImageSender.Instance.IsConnected)
+                        {
+                            throw new Exception("ImageSender not available or not connected.");
+                        }
+                        ImageSender.Instance.SendImageData(imageBytes, _robotArmName, _llmPrompt);
+
+                        Debug.Log(
+                            $"[StereoCameraController] Image sent successfully ({imageBytes.Length / 1024f:F1} KB). Waiting for response..."
+                        );
+                    }
+
+                    // Track processing state
                     _isWaitingForLLM = true;
                     _llmSentTime = Time.time;
                     _lastSentCameraId = _robotArmName;
 
-                    Debug.Log(
-                        $"[CameraController] Image sent successfully ({imageBytes.Length / 1024f:F1} KB). Waiting for LLM response..."
-                    );
                     break;
             }
         }
         catch (Exception ex)
         {
             errorMessage = ex.Message;
-            Debug.LogError($"[CameraController] Capture failed: {errorMessage}");
+            Debug.LogError($"[StereoCameraController] Capture failed: {errorMessage}");
         }
 
         // Finalize and log
@@ -420,8 +492,8 @@ public class CameraController : MonoBehaviour
         }
 
         // Render camera to texture
-        _mainCamera.targetTexture = _cachedRenderTexture;
-        _mainCamera.Render();
+        _leftCamera.targetTexture = _cachedRenderTexture;
+        _leftCamera.Render();
 
         RenderTexture source = _cachedRenderTexture;
 
@@ -454,7 +526,7 @@ public class CameraController : MonoBehaviour
         _cachedTexture.Apply();
 
         // Cleanup
-        _mainCamera.targetTexture = null;
+        _leftCamera.targetTexture = null;
         RenderTexture.active = null;
         if (source != _cachedRenderTexture)
             RenderTexture.ReleaseTemporary(source);
@@ -464,6 +536,55 @@ public class CameraController : MonoBehaviour
         byte[] bytes = _cachedTexture.EncodeToJPG(quality);
 
         return bytes;
+    }
+
+    /// <summary>
+    /// Captures image bytes from any camera (used for stereo right camera).
+    /// </summary>
+    private byte[] CaptureImageBytesFromCamera(Camera camera)
+    {
+        if (camera == null)
+        {
+            Debug.LogError("[StereoCameraController] Cannot capture from null camera");
+            return null;
+        }
+
+        int scaledWidth = Mathf.RoundToInt(_imageWidth * _resolutionScale);
+        int scaledHeight = Mathf.RoundToInt(_imageHeight * _resolutionScale);
+
+        RenderTexture rt = new RenderTexture(scaledWidth, scaledHeight, 24);
+        Texture2D texture = null;
+
+        try
+        {
+            // Render camera to texture
+            camera.targetTexture = rt;
+            camera.Render();
+
+            // Read pixels
+            RenderTexture.active = rt;
+            texture = new Texture2D(scaledWidth, scaledHeight, TextureFormat.RGB24, false);
+            texture.ReadPixels(new Rect(0, 0, scaledWidth, scaledHeight), 0, 0);
+            texture.Apply();
+
+            // Cleanup
+            camera.targetTexture = null;
+            RenderTexture.active = null;
+
+            // Encode to JPEG
+            int quality = GetEncodingSettings();
+            byte[] bytes = texture.EncodeToJPG(quality);
+
+            return bytes;
+        }
+        finally
+        {
+            // Cleanup resources
+            if (rt != null)
+                Destroy(rt);
+            if (texture != null)
+                Destroy(texture);
+        }
     }
 
     /// <summary>

@@ -9,13 +9,25 @@ import logging
 import time
 from typing import Dict, Optional, List
 import signal
+import sys
+from pathlib import Path
 
-# Import config and base classes
+# Add LLMCommunication package directory to path
+_package_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(_package_dir))
+
+# Import config
 import config as cfg
 from core.TCPServerBase import TCPServerBase, ServerConfig
 from core.UnityProtocol import UnityProtocol
 
-logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
+# Configure logging (safe for testing with mocked config)
+try:
+    log_level = getattr(logging, cfg.LOG_LEVEL) if isinstance(cfg.LOG_LEVEL, str) else logging.INFO
+    log_format = cfg.LOG_FORMAT if isinstance(cfg.LOG_FORMAT, str) else '%(levelname)s - %(message)s'
+    logging.basicConfig(level=log_level, format=log_format)
+except (AttributeError, TypeError):
+    logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
 
 
 class ResultsBroadcaster:
@@ -120,7 +132,7 @@ class ResultsServer(TCPServerBase):
     Handles result-specific JSON encoding and broadcasting.
     """
 
-    def __init__(self, server_config: ServerConfig = None):
+    def __init__(self, server_config: ServerConfig):
         if server_config is None:
             server_config = cfg.get_results_config()
 
@@ -170,7 +182,7 @@ class ResultsServer(TCPServerBase):
                     break
 
 
-def run_results_server(server_config: ServerConfig = None, setup_signals: bool = True):
+def run_results_server(server_config: ServerConfig, setup_signals: bool = True):
     """
     Start the ResultsServer (blocking)
 
@@ -204,7 +216,7 @@ def run_results_server(server_config: ServerConfig = None, setup_signals: bool =
         server.stop()
 
 
-def run_results_server_background(server_config: ServerConfig = None):
+def run_results_server_background(server_config: ServerConfig):
     """Start the ResultsServer in a background thread"""
     server_config = server_config or cfg.get_results_config()
 
