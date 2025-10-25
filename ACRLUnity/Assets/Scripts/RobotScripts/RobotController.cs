@@ -259,8 +259,6 @@ public class RobotController : MonoBehaviour
             // World joint position/axis of xDrive
             Vector3 jointWorldPosition = jointTransform.position;
             Vector3 axisWorld = jointTransform.rotation * joint.anchorRotation * Vector3.right;
-            // Simpler and equivalent in practice for xDrive:
-            // Vector3 axisWorld = jointTransform.rotation * (joint.anchorRotation * Vector3.right);
 
             // Bring them into IK frame
             Vector3 jointLocalPosition = frame.InverseTransformPoint(jointWorldPosition);

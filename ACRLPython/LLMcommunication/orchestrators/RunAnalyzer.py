@@ -8,7 +8,7 @@ singleton and communicate in-process.
 
 Usage:
     python RunAnalyzer.py
-    python RunAnalyzer.py --model llava:13b
+    python RunAnalyzer.py --model llama-3.2-vision
     python RunAnalyzer.py --help
 """
 
@@ -16,18 +16,29 @@ import logging
 import argparse
 import sys
 import hashlib
-
-# Import config
-import config as cfg
-
-# Import server components
-from StreamingServer import ImageStorage, run_streaming_server_background
-from core.TCPServerBase import ServerConfig
-from ResultsServer import ResultsBroadcaster, run_results_server_background
-
-# Import analyzer (but we'll use its functions, not run main directly)
-from AnalyzeImage import OllamaVisionProcessor, save_response
 from pathlib import Path
+
+# Add LLMCommunication package directory to path
+_package_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(_package_dir))
+
+# Import config - support both direct script and module execution
+try:
+    from .. import config as cfg
+except ImportError:
+    import config as cfg
+
+# Import server components - support both direct script and module execution
+try:
+    from ..servers.StreamingServer import ImageStorage, run_streaming_server_background
+    from ..core.TCPServerBase import ServerConfig
+    from ..servers.ResultsServer import ResultsBroadcaster, run_results_server_background
+    from ..vision.AnalyzeImage import LMStudioVisionProcessor, save_response
+except ImportError:
+    from servers.StreamingServer import ImageStorage, run_streaming_server_background
+    from core.TCPServerBase import ServerConfig
+    from servers.ResultsServer import ResultsBroadcaster, run_results_server_background
+    from vision.AnalyzeImage import LMStudioVisionProcessor, save_response
 from datetime import datetime
 import time
 from typing import Dict
@@ -48,9 +59,9 @@ def run_analyzer_loop(args):
         logging.info("Waiting for StreamingServer to initialize...")
         time.sleep(cfg.SERVER_INIT_WAIT_TIME)
 
-        # Initialize Ollama processor
-        logging.info("Initializing Ollama vision processor...")
-        processor = OllamaVisionProcessor(model=args.model, host=args.host)
+        # Initialize LM Studio processor
+        logging.info("Initializing LM Studio vision processor...")
+        processor = LMStudioVisionProcessor(model=args.model, base_url=args.base_url)
 
         # Create output directory if needed
         output_dir = Path(args.output_dir)
@@ -163,7 +174,7 @@ def run_analyzer_loop(args):
 
                     # Display response prominently
                     print("\n" + "=" * 80)
-                    print(f"🤖 OLLAMA RESPONSE FOR {cam_id}")
+                    print(f"🤖 LM STUDIO RESPONSE FOR {cam_id}")
                     print("=" * 80)
                     print(result["response"])
                     print("=" * 80)
@@ -207,15 +218,15 @@ def run_analyzer_loop(args):
 def main():
     """Main entry point - runs server and analyzer together"""
     parser = argparse.ArgumentParser(
-        description="Run StreamingServer and Ollama image analyzer together",
+        description="Run StreamingServer and LM Studio image analyzer together",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Start with default model (llava)
+  # Start with default model
   %(prog)s
 
   # Use specific model
-  %(prog)s --model llava:13b
+  %(prog)s --model llama-3.2-vision
 
   # Monitor specific camera only
   %(prog)s --camera AR4Left
@@ -225,7 +236,7 @@ Examples:
 
 Note: This script runs both the StreamingServer and AnalyzeImage in the same process.
       Unity should send images to port 5005 (default).
-      Ollama must be installed and running locally.
+      LM Studio must be running with the server started.
         """,
     )
 
@@ -238,18 +249,18 @@ Note: This script runs both the StreamingServer and AnalyzeImage in the same pro
         help="Specific camera ID(s) to monitor (default: all cameras)",
     )
 
-    # Ollama options
-    ollama_group = parser.add_argument_group("Ollama options")
-    ollama_group.add_argument(
+    # LM Studio options
+    lmstudio_group = parser.add_argument_group("LM Studio options")
+    lmstudio_group.add_argument(
         "--model",
         "-m",
-        default=cfg.DEFAULT_OLLAMA_MODEL,
-        help=f"Ollama vision model to use (default: {cfg.DEFAULT_OLLAMA_MODEL})",
+        default=cfg.DEFAULT_LMSTUDIO_MODEL,
+        help=f"LM Studio vision model to use (default: {cfg.DEFAULT_LMSTUDIO_MODEL})",
     )
-    ollama_group.add_argument(
-        "--host", help="Ollama server host (default: uses Ollama's default localhost)"
+    lmstudio_group.add_argument(
+        "--base-url", help=f"LM Studio server base URL (default: {cfg.LMSTUDIO_BASE_URL})"
     )
-    ollama_group.add_argument(
+    lmstudio_group.add_argument(
         "--temperature",
         type=float,
         default=cfg.DEFAULT_TEMPERATURE,

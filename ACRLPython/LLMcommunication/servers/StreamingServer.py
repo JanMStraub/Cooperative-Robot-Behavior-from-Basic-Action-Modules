@@ -11,11 +11,19 @@ import time
 import logging
 from typing import Optional, Tuple, List, Dict
 import signal
+import sys
+from pathlib import Path
+
+# Add LLMCommunication package directory to path
+_package_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(_package_dir))
+
+# Import config
+import config as cfg
 
 # Import base classes
 from core.TCPServerBase import TCPServerBase, ServerConfig
 from core.UnityProtocol import UnityProtocol
-import config as cfg
 
 logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
 
@@ -83,7 +91,7 @@ class StreamingServer(TCPServerBase):
     Handles image-specific protocol decoding and storage.
     """
 
-    def __init__(self, server_config: ServerConfig = None):
+    def __init__(self, server_config: ServerConfig):
         if server_config is None:
             server_config = cfg.get_streaming_config()
 
@@ -117,6 +125,8 @@ class StreamingServer(TCPServerBase):
                     continue
 
                 # Store in singleton
+                camera_id = camera_id or "unknown_camera"
+                prompt = prompt or ""
                 self._storage.store_image(camera_id, image, prompt)
 
                 # Log receipt
@@ -229,7 +239,7 @@ class StreamingServer(TCPServerBase):
         return data
 
 
-def run_server(server_config: ServerConfig = None, setup_signals: bool = True):
+def run_server(server_config: ServerConfig, setup_signals: bool = True):
     """
     Start the StreamingServer (blocking)
 
@@ -272,7 +282,7 @@ def run_server(server_config: ServerConfig = None, setup_signals: bool = True):
         server.stop()
 
 
-def run_streaming_server_background(server_config: ServerConfig = None):
+def run_streaming_server_background(server_config: ServerConfig):
     """Start the StreamingServer in a background thread"""
     server_config = server_config or cfg.get_streaming_config()
 

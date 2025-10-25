@@ -28,7 +28,9 @@ public class RobotGripperBehavior : MonoBehaviour
         _gripperController = GetComponentInChildren<GripperController>();
         if (_gripperController == null)
         {
-            Debug.LogWarning($"[GRIPPER_BEHAVIOR] No GripperController found in children of {gameObject.name}");
+            Debug.LogWarning(
+                $"[GRIPPER_BEHAVIOR] No GripperController found in children of {gameObject.name}"
+            );
             return;
         }
 
@@ -45,7 +47,9 @@ public class RobotGripperBehavior : MonoBehaviour
         if (_gripperController != null)
         {
             _gripperController.CloseGrippers();
-            Debug.Log($"[GRIPPER_BEHAVIOR] {gameObject.name} closing grippers after reaching target");
+            Debug.Log(
+                $"[GRIPPER_BEHAVIOR] {gameObject.name} closing grippers after reaching target"
+            );
         }
     }
 

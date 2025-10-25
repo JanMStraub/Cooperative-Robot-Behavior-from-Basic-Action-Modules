@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-AnalyzeImage.py - Continuously process Unity robot camera screenshots with Ollama LLM
+AnalyzeImage.py - Continuously process Unity robot camera screenshots with LM Studio LLM
 
 This script integrates with StreamingServer to get live camera images from Unity
-and sends them to Ollama for vision-based analysis. It runs as a daemon, continuously
+and sends them to LM Studio for vision-based analysis. It runs as a daemon, continuously
 monitoring for new images with prompts and processing them automatically.
 
 Usage:
@@ -12,13 +12,13 @@ Usage:
 
     # Then start this script to continuously process images:
     python AnalyzeImage.py
-    python AnalyzeImage.py --model llava:13b
+    python AnalyzeImage.py --model llama-3.2-vision
     python AnalyzeImage.py --interval 2.0  # Check every 2 seconds
 
 Requirements:
-    - ollama Python SDK (pip install ollama)
+    - openai Python SDK (pip install openai)
     - opencv-python and numpy
-    - Ollama installed and running locally
+    - LM Studio running locally with server started
     - StreamingServer.py running
 """
 
@@ -27,14 +27,16 @@ import json
 import sys
 import time
 import logging
+import base64
 from datetime import datetime
 from typing import List, Dict, Optional
 from pathlib import Path
 
 try:
-    import ollama
+    import openai
+    from openai import OpenAI
 except ImportError:
-    print("Error: 'ollama' package not found. Install with: pip install ollama")
+    print("Error: 'openai' package not found. Install with: pip install openai")
     sys.exit(1)
 
 try:
@@ -44,15 +46,25 @@ except ImportError:
     print("Error: 'opencv-python' and 'numpy' required. Install with: pip install opencv-python numpy")
     sys.exit(1)
 
-# Import config
-import config as cfg
+# Add LLMCommunication package directory to path
+_package_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(_package_dir))
 
-# Import ImageStorage from StreamingServer
+# Import config - support both direct script and module execution
 try:
-    from StreamingServer import ImageStorage
+    from .. import config as cfg
 except ImportError:
-    print("Error: StreamingServer.py not found in the same directory")
-    sys.exit(1)
+    import config as cfg
+
+# Import ImageStorage - support both direct script and module execution
+try:
+    from ..servers.StreamingServer import ImageStorage
+except ImportError:
+    try:
+        from servers.StreamingServer import ImageStorage
+    except ImportError:
+        print("Error: StreamingServer not found. Make sure servers package is available.")
+        sys.exit(1)
 
 # Configure logging
 logging.basicConfig(
@@ -61,31 +73,32 @@ logging.basicConfig(
 )
 
 
-class OllamaVisionProcessor:
-    """Handles sending screenshots to Ollama for vision-based LLM processing"""
+class LMStudioVisionProcessor:
+    """Handles sending screenshots to LM Studio for vision-based LLM processing"""
 
-    # Popular Ollama vision models (from config)
+    # Popular LM Studio vision models (from config)
     VISION_MODELS = cfg.VISION_MODELS
 
-    DEFAULT_MODEL = cfg.DEFAULT_OLLAMA_MODEL
+    DEFAULT_MODEL = cfg.DEFAULT_LMSTUDIO_MODEL
 
-    def __init__(self, model: str = DEFAULT_MODEL, host: Optional[str] = None):
+    def __init__(self, model: str = DEFAULT_MODEL, base_url: Optional[str] = None):
         """
-        Initialize the Ollama vision processor
+        Initialize the LM Studio vision processor
 
         Args:
-            model: Ollama vision model to use
-            host: Ollama server host (default: uses Ollama's default)
+            model: LM Studio vision model to use
+            base_url: LM Studio server base URL (default: http://127.0.0.1:1234/v1)
         """
         self._model = model
-        self._client = ollama.Client(host=host) if host else ollama.Client()
+        self._base_url = base_url if base_url else cfg.LMSTUDIO_BASE_URL
+        self._client = OpenAI(base_url=self._base_url, api_key="not-needed")
 
         # Test connection
         try:
-            self._client.list()
-            logging.info(f"Connected to Ollama, using model: {self._model}")
+            self._client.models.list()
+            logging.info(f"Connected to LM Studio at {self._base_url}, using model: {self._model}")
         except Exception as e:
-            raise ConnectionError(f"Cannot connect to Ollama: {e}. Make sure Ollama is running.")
+            raise ConnectionError(f"Cannot connect to LM Studio: {e}. Make sure LM Studio server is running.")
 
     def encode_image_to_bytes(self, image: np.ndarray) -> bytes:
         """
@@ -107,10 +120,10 @@ class OllamaVisionProcessor:
         images: List[np.ndarray],
         camera_ids: List[str],
         prompt: str,
-        temperature: float = None
+        temperature: Optional[float] = None
     ) -> Dict:
         """
-        Send images to Ollama for vision-based analysis
+        Send images to LM Studio for vision-based analysis
 
         Args:
             images: List of numpy image arrays
@@ -128,14 +141,20 @@ class OllamaVisionProcessor:
         if temperature is None:
             temperature = cfg.DEFAULT_TEMPERATURE
 
-        logging.info(f"Processing {len(images)} image(s) with Ollama...")
+        logging.info(f"Processing {len(images)} image(s) with LM Studio...")
 
-        # Prepare images as bytes for Ollama
-        image_bytes_list = []
+        # Prepare images as base64 encoded data URLs for OpenAI API
+        image_content = []
         for i, (image, cam_id) in enumerate(zip(images, camera_ids)):
             try:
                 img_bytes = self.encode_image_to_bytes(image)
-                image_bytes_list.append(img_bytes)
+                img_base64 = base64.b64encode(img_bytes).decode('utf-8')
+                image_content.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/png;base64,{img_base64}"
+                    }
+                })
                 logging.info(f"  [{i+1}/{len(images)}] Encoded: {cam_id} ({image.shape[1]}x{image.shape[0]})")
             except Exception as e:
                 logging.error(f"  Error encoding image from {cam_id}: {e}")
@@ -148,31 +167,36 @@ class OllamaVisionProcessor:
         else:
             full_prompt = prompt
 
-        # Make request to Ollama
-        logging.info(f"Sending request to Ollama ({self._model})...")
+        # Build message content with text and images
+        # Combine text prompt with image content for vision API
+        message_content = [{"type": "text", "text": full_prompt}] + image_content
+
+        # Make request to LM Studio
+        logging.info(f"Sending request to LM Studio ({self._model})...")
         start_time = datetime.now()
 
         try:
-            response = self._client.chat(
+            # OpenAI vision API format with properly typed message
+            response = self._client.chat.completions.create(
                 model=self._model,
-                messages=[{
-                    'role': 'user',
-                    'content': full_prompt,
-                    'images': image_bytes_list
-                }],
-                options={
-                    'temperature': temperature
-                }
+                messages=[
+                    {
+                        "role": "user",
+                        "content": message_content  # type: ignore - LM Studio accepts this format
+                    }
+                ],
+                temperature=temperature,
+                max_tokens=1000
             )
         except Exception as e:
-            logging.error(f"Ollama error: {e}")
+            logging.error(f"LM Studio error: {e}")
             raise
 
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
 
         # Extract response text
-        response_text = response['message']['content']
+        response_text = response.choices[0].message.content
 
         # Build result
         result = {
@@ -262,15 +286,15 @@ def save_response(result: Dict, output_path: Optional[str] = None):
 def main():
     """Main entry point - runs as a daemon monitoring for images with prompts"""
     parser = argparse.ArgumentParser(
-        description="Continuously process Unity robot camera images with Ollama vision LLM",
+        description="Continuously process Unity robot camera images with LM Studio vision LLM",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Start processing with default model (llava)
+  # Start processing with default model
   %(prog)s
 
   # Use specific model
-  %(prog)s --model llava:13b
+  %(prog)s --model llama-3.2-vision
 
   # Monitor specific camera only
   %(prog)s --camera AR4Left
@@ -282,7 +306,7 @@ Examples:
   %(prog)s --list-cameras
 
 Note: StreamingServer.py must be running for this script to work.
-      Ollama must be installed and running locally.
+      LM Studio must be running with the server started.
         """
     )
 
@@ -299,18 +323,18 @@ Note: StreamingServer.py must be running for this script to work.
         help="List available cameras and exit"
     )
 
-    # Ollama options
-    ollama_group = parser.add_argument_group("Ollama options")
-    ollama_group.add_argument(
+    # LM Studio options
+    lmstudio_group = parser.add_argument_group("LM Studio options")
+    lmstudio_group.add_argument(
         "--model", "-m",
-        default=OllamaVisionProcessor.DEFAULT_MODEL,
-        help=f"Ollama vision model to use (default: {OllamaVisionProcessor.DEFAULT_MODEL})"
+        default=LMStudioVisionProcessor.DEFAULT_MODEL,
+        help=f"LM Studio vision model to use (default: {LMStudioVisionProcessor.DEFAULT_MODEL})"
     )
-    ollama_group.add_argument(
-        "--host",
-        help="Ollama server host (default: uses Ollama's default localhost)"
+    lmstudio_group.add_argument(
+        "--base-url",
+        help=f"LM Studio server base URL (default: {cfg.LMSTUDIO_BASE_URL})"
     )
-    ollama_group.add_argument(
+    lmstudio_group.add_argument(
         "--temperature",
         type=float,
         default=cfg.DEFAULT_TEMPERATURE,
@@ -368,9 +392,9 @@ Note: StreamingServer.py must be running for this script to work.
                 print("No cameras available. Is StreamingServer running?")
             sys.exit(0)
 
-        # Initialize Ollama processor
-        logging.info("Initializing Ollama vision processor...")
-        processor = OllamaVisionProcessor(model=args.model, host=args.host)
+        # Initialize LM Studio processor
+        logging.info("Initializing LM Studio vision processor...")
+        processor = LMStudioVisionProcessor(model=args.model, base_url=args.base_url)
 
         # Create output directory if needed
         output_dir = Path(args.output_dir)

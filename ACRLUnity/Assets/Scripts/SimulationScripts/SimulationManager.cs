@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using UnityEngine;
 using Logging;
+using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -72,7 +72,6 @@ public class SimulationManager : MonoBehaviour
 
     // Core components
     private PythonCaller _pythonCaller;
-    private PythonServerManager _pythonServerManager;
     private MainLogger _logger;
     private RobotController[] _robotControllers;
 
@@ -120,7 +119,9 @@ public class SimulationManager : MonoBehaviour
             // Create default config if not assigned
             if (config == null)
             {
-                Debug.LogWarning("[SIMULATION_MANAGER] SimulationConfig not assigned. Creating default configuration.");
+                Debug.LogWarning(
+                    "[SIMULATION_MANAGER] SimulationConfig not assigned. Creating default configuration."
+                );
                 config = ScriptableObject.CreateInstance<SimulationConfig>();
             }
 
@@ -150,7 +151,6 @@ public class SimulationManager : MonoBehaviour
         {
             // Get component references
             _pythonCaller = PythonCaller.Instance;
-            _pythonServerManager = PythonServerManager.Instance;
             _logger = MainLogger.Instance;
 
             // Find all robot controllers
@@ -173,17 +173,9 @@ public class SimulationManager : MonoBehaviour
             }
 
             // Log simulation start
-            Debug.Log($"[SIMULATION_MANAGER] Initialized: Found {_robotControllers.Length} robots. Mode: {config.coordinationMode}");
-
-            // Log Python server manager status
-            if (_pythonServerManager != null)
-            {
-                Debug.Log("[SIMULATION_MANAGER] PythonServerManager will auto-start configured servers");
-            }
-            else
-            {
-                Debug.LogWarning("[SIMULATION_MANAGER] PythonServerManager not found - Python servers will not start automatically");
-            }
+            Debug.Log(
+                $"[SIMULATION_MANAGER] Initialized: Found {_robotControllers.Length} robots. Mode: {config.coordinationMode}"
+            );
 
             // Auto-start if configured
             if (config.autoStart)
@@ -230,7 +222,9 @@ public class SimulationManager : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogWarning($"[SIMULATION_MANAGER] Non-critical error in LateUpdate: {ex.Message}");
+            Debug.LogWarning(
+                $"[SIMULATION_MANAGER] Non-critical error in LateUpdate: {ex.Message}"
+            );
         }
     }
 
@@ -283,7 +277,9 @@ public class SimulationManager : MonoBehaviour
 
             if (_logger != null)
             {
-                Debug.Log($"[SIMULATION_MANAGER] Robot switch: {currentRobotId} -> {GetActiveRobotId()}");
+                Debug.Log(
+                    $"[SIMULATION_MANAGER] Robot switch: {currentRobotId} -> {GetActiveRobotId()}"
+                );
             }
 
             Debug.Log(
@@ -305,11 +301,6 @@ public class SimulationManager : MonoBehaviour
         _currentState = newState;
 
         OnStateChanged?.Invoke(_previousState, newState);
-
-        if (_logger != null)
-        {
-            Debug.Log($"[SIMULATION_MANAGER] State change: {_previousState} -> {newState}");
-        }
 
         Debug.Log($"[SIMULATION_MANAGER] State: {_previousState} -> {newState}");
     }
@@ -342,7 +333,9 @@ public class SimulationManager : MonoBehaviour
     {
         if (_currentState == SimulationState.Error)
         {
-            Debug.LogWarning("[SIMULATION_MANAGER] Cannot start simulation while in error state. Reset first.");
+            Debug.LogWarning(
+                "[SIMULATION_MANAGER] Cannot start simulation while in error state. Reset first."
+            );
             return;
         }
 

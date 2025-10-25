@@ -167,8 +167,6 @@ namespace LLMCommunication
                 // Send data piece by piece (streaming protocol)
                 // Format: [camera_id_len][camera_id][prompt_len][prompt][image_len][image_data]
 
-                Debug.Log($"[ImageSender] DEBUG: Sending with REFACTORED code! Camera: {cameraId}");
-
                 // Send camera ID
                 byte[] idBytes = System.Text.Encoding.UTF8.GetBytes(cameraId);
                 byte[] idLength = BitConverter.GetBytes(idBytes.Length);

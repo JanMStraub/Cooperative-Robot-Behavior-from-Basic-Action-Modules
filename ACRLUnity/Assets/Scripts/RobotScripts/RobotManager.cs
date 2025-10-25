@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using UnityEngine;
 using Logging;
+using UnityEngine;
 
 [System.Serializable]
 public class RobotInstance
@@ -195,7 +195,9 @@ public class RobotManager : MonoBehaviour
                 && obj.name.Contains(robotId.Replace("AR4", ""))
             )
             {
-                Debug.Log($"[ROBOT_MANAGER] Found target '{obj.name}' for robot '{robotId}' (fallback search)");
+                Debug.Log(
+                    $"[ROBOT_MANAGER] Found target '{obj.name}' for robot '{robotId}' (fallback search)"
+                );
                 return obj;
             }
         }
@@ -276,13 +278,17 @@ public class RobotManager : MonoBehaviour
         {
             if (_robotInstances.ContainsKey(robotId))
             {
-                Debug.LogWarning($"[ROBOT_MANAGER] Robot {robotId} already registered. Updating configuration.");
+                Debug.LogWarning(
+                    $"[ROBOT_MANAGER] Robot {robotId} already registered. Updating configuration."
+                );
             }
 
             var controller = robotObject.GetComponent<RobotController>();
             if (controller == null)
             {
-                Debug.LogError($"[ROBOT_MANAGER] Robot {robotId} missing RobotController component");
+                Debug.LogError(
+                    $"[ROBOT_MANAGER] Robot {robotId} missing RobotController component"
+                );
                 return;
             }
 
@@ -307,13 +313,13 @@ public class RobotManager : MonoBehaviour
             if (targetObject != null && controller != null)
             {
                 controller.SetTarget(targetObject);
-                Debug.Log($"[ROBOT_MANAGER] Assigned target '{targetObject.name}' to robot '{robotId}'");
+                Debug.Log(
+                    $"[ROBOT_MANAGER] Assigned target '{targetObject.name}' to robot '{robotId}'"
+                );
             }
 
             string profileName =
                 instance.profile != null ? instance.profile.profileName : "default";
-
-            Debug.Log($"[ROBOT_MANAGER] Robot {robotId} registered with profile {profileName}");
 
             Debug.Log($"[ROBOT_MANAGER] Registered robot: {robotId} with profile: {profileName}");
         }
@@ -471,7 +477,9 @@ public class RobotManager : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogError($"[ROBOT_MANAGER] Failed to apply profile to robot {robotId}: {ex.Message}");
+            Debug.LogError(
+                $"[ROBOT_MANAGER] Failed to apply profile to robot {robotId}: {ex.Message}"
+            );
         }
     }
 
