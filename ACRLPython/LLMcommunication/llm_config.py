@@ -24,7 +24,8 @@ MAX_CLIENT_THREADS = 10  # Max concurrent client handler threads
 
 # Timeout settings (seconds)
 SOCKET_ACCEPT_TIMEOUT = 1.0  # Timeout for accept() to allow shutdown checks
-SOCKET_RECEIVE_TIMEOUT = 30.0  # Timeout for receiving data (prevents hangs)
+SOCKET_RECEIVE_TIMEOUT = 300.0  # Timeout for idle connections (5 minutes)
+# Note: Individual servers may override this for persistent connections
 
 
 # ===========================
@@ -115,27 +116,34 @@ STREAMING_SERVER_MONITOR = 5.0  # Streaming server monitoring interval (seconds)
 DETECTION_SERVER_PORT = 5007  # Sends object detection results to Unity
 
 # Color Ranges for Cube Detection (HSV)
-# Red wraps around in HSV space (0° and 180° are both red)
-RED_HSV_LOWER_1 = (0, 100, 100)
+# OpenCV HSV: H=0-180, S=0-255, V=0-255
+# Red (RGB 255,0,0): H≈0-10 or H≈170-180 (wraps around)
+# Allow some tolerance for lighting/shadows
+RED_HSV_LOWER_1 = (0, 100, 100)  # Red with some tolerance for lighting
 RED_HSV_UPPER_1 = (10, 255, 255)
-RED_HSV_LOWER_2 = (170, 100, 100)
+RED_HSV_LOWER_2 = (170, 100, 100)  # Red wraparound with tolerance
 RED_HSV_UPPER_2 = (180, 255, 255)
 
-# Blue range
-BLUE_HSV_LOWER = (100, 100, 100)
+# Blue (RGB 0,0,255): H≈110-130 in OpenCV HSV space
+# Allow some tolerance for lighting/shadows
+BLUE_HSV_LOWER = (110, 100, 100)  # Blue with tolerance for lighting
 BLUE_HSV_UPPER = (130, 255, 255)
 
 # Detection Filters
-MIN_CUBE_AREA_PX = 100  # Minimum bounding box area in pixels
-MAX_CUBE_AREA_PX = 100000  # Maximum bounding box area in pixels
-MIN_ASPECT_RATIO = 0.5  # Minimum width/height ratio (allows perspective)
-MAX_ASPECT_RATIO = 2.0  # Maximum width/height ratio (allows perspective)
-MIN_CONFIDENCE = 0.6  # Minimum detection confidence threshold
+MIN_CUBE_AREA_PX = 800  # Minimum bounding box area in pixels
+MAX_CUBE_AREA_PX = 80000  # Maximum bounding box area in pixels
+MIN_ASPECT_RATIO = 0.3  # Minimum width/height ratio (allow some perspective distortion)
+MAX_ASPECT_RATIO = 3.5  # Maximum width/height ratio (allow elongated views)
+MIN_CONFIDENCE = 0.3  # Minimum detection confidence threshold (lower to catch more)
 
 # Detection Processing
 DETECTION_CHECK_INTERVAL = 1.0  # Check for new images every N seconds
-ENABLE_DEBUG_IMAGES = False  # Save annotated images for debugging
+ENABLE_DEBUG_IMAGES = True  # Save annotated images for debugging
 DEBUG_IMAGES_DIR = "ACRLPython/LLMCommunication/debug_detections"
+
+# Disparity Map Debugging
+SAVE_DEBUG_DISPARITY_MAPS = False  # Set to True to save disparity maps for debugging
+DEBUG_DISPARITY_DIR = "ACRLPython/LLMCommunication/debug_detections"
 
 
 # ===========================

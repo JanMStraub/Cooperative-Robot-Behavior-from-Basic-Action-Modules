@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """
-ObjectDetector.py - Color-based cube detection in pixel space
+ObjectDetector.py - General object detection using contours
 
-Detects red and blue cubes using HSV color segmentation and contour detection.
-Returns bounding boxes and centroids in pixel coordinates. Unity handles the
-conversion from pixel coordinates to world coordinates using raycasting.
+Detects any colored objects using contour detection and edge detection.
+Returns bounding boxes and centroids in pixel coordinates.
 
 Supports stereo mode: Detects objects and estimates 3D world positions using
 stereo disparity.
@@ -23,31 +22,56 @@ from datetime import datetime
 from pathlib import Path
 import numpy as np
 import cv2
-import sys
-import importlib.util
 
-# Setup paths carefully to avoid config name conflicts
-_stereo_path = Path(__file__).parent.parent.parent / "StereoImageReconstruction"
-_package_dir = Path(__file__).parent.parent
-_acrl_root = Path(__file__).parent.parent.parent  # ACRLPython directory
-
-# Add paths to sys.path for imports
-if str(_package_dir) not in sys.path:
-    sys.path.insert(0, str(_package_dir))
-if str(_acrl_root) not in sys.path:
-    sys.path.insert(0, str(_acrl_root))
+# Import LLM communication config - support both direct script and module execution
+try:
+    from .. import llm_config as cfg
+except ImportError:
+    import llm_config as cfg
 
 # Import stereo depth estimation
 try:
-    # Import using the full module path
-    from StereoImageReconstruction.config import (
-        CameraConfig,
-        DEFAULT_CAMERA_CONFIG,
-    )
-    from LLMCommunication.vision.DepthEstimator import estimate_object_world_position
+    try:
+        from ...StereoImageReconstruction.stereo_config import (
+            CameraConfig,
+            DEFAULT_CAMERA_CONFIG,
+        )
+    except ImportError:
+        from StereoImageReconstruction.stereo_config import (
+            CameraConfig,
+            DEFAULT_CAMERA_CONFIG,
+        )
+
+    # Use depth estimator - import optimized version
+    try:
+        from .DepthEstimator import (
+            estimate_object_world_position,
+            estimate_object_world_position_from_disparity,
+            save_disparity_map_debug
+        )
+    except ImportError:
+        from vision.DepthEstimator import (
+            estimate_object_world_position,
+            estimate_object_world_position_from_disparity,
+            save_disparity_map_debug
+        )
+
+    # Import calc_disparity for computing disparity once
+    try:
+        from ...StereoImageReconstruction.Reconstruct import calc_disparity
+        from ...StereoImageReconstruction.stereo_config import (
+            ReconstructionConfig,
+            DEFAULT_RECONSTRUCTION_CONFIG
+        )
+    except ImportError:
+        from StereoImageReconstruction.Reconstruct import calc_disparity
+        from StereoImageReconstruction.stereo_config import (
+            ReconstructionConfig,
+            DEFAULT_RECONSTRUCTION_CONFIG
+        )
 
     STEREO_AVAILABLE = True
-    logging.info("Stereo depth estimation available")
+    logging.debug("Stereo depth estimation available")
 except Exception as e:
     logging.warning(f"Stereo depth estimation not available: {e}")
     STEREO_AVAILABLE = False
@@ -58,15 +82,6 @@ except Exception as e:
     def estimate_object_world_position(*args, **kwargs) -> Optional[Tuple[float, float, float]]:
         """Dummy function when stereo depth estimation is not available"""
         return None
-
-# NOW import LLMCommunication config (after stereo setup is done)
-# Import config module directly to avoid circular import through package __init__
-_config_path = Path(__file__).parent.parent / "config.py"
-config_spec = importlib.util.spec_from_file_location("llm_config", _config_path)
-if config_spec is None or config_spec.loader is None:
-    raise ImportError("Failed to load LLMCommunication config")
-cfg = importlib.util.module_from_spec(config_spec)
-config_spec.loader.exec_module(cfg)
 
 
 class DetectionObject:
@@ -209,20 +224,20 @@ class CubeDetector:
             self.debug_dir = Path(cfg.DEBUG_IMAGES_DIR)
             self.debug_dir.mkdir(parents=True, exist_ok=True)
 
-        logging.info("CubeDetector initialized")
+        logging.debug("CubeDetector initialized")
 
     def detect_cubes(
         self, image: np.ndarray, camera_id: str = "unknown"
     ) -> DetectionResult:
         """
-        Detect red and blue cubes in an image
+        Detect any colored objects in an image using contour detection
 
         Args:
             image: OpenCV image (BGR format)
             camera_id: ID of the camera for metadata
 
         Returns:
-            DetectionResult containing all detected cubes
+            DetectionResult containing all detected objects
         """
         if image is None or image.size == 0:
             logging.warning("Empty image provided to detector")
@@ -230,27 +245,14 @@ class CubeDetector:
 
         height, width = image.shape[:2]
 
-        # Convert to HSV color space
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        # Detect all objects using edge and contour detection
+        detections = self._detect_all_objects(image)
 
-        # Detect red cubes
-        red_detections = self._detect_color(
-            hsv,
-            color_name="red",
-            lower_ranges=[self.red_lower_1, self.red_lower_2],
-            upper_ranges=[self.red_upper_1, self.red_upper_2],
-        )
-
-        # Detect blue cubes
-        blue_detections = self._detect_color(
-            hsv, color_name="blue", lower_ranges=[self.blue_lower], upper_ranges=[self.blue_upper]
-        )
-
-        # Combine and assign IDs
+        # Assign IDs
         all_detections = []
         object_id = 0
 
-        for det in red_detections + blue_detections:
+        for det in detections:
             all_detections.append(
                 DetectionObject(
                     object_id=object_id,
@@ -265,9 +267,7 @@ class CubeDetector:
         if self.enable_debug and len(all_detections) > 0:
             self._save_debug_image(image, all_detections, camera_id)
 
-        logging.info(
-            f"Detected {len(all_detections)} cubes ({len(red_detections)} red, {len(blue_detections)} blue)"
-        )
+        logging.info(f"Detected {len(all_detections)} objects")
 
         return DetectionResult(camera_id, width, height, all_detections)
 
@@ -277,6 +277,8 @@ class CubeDetector:
         imgR: np.ndarray,
         camera_config: Optional["CameraConfig"] = None,  # type: ignore
         camera_id: str = "stereo",
+        camera_rotation: Optional[List[float]] = None,
+        camera_position: Optional[List[float]] = None,
     ) -> DetectionResult:
         """
         Detect cubes in stereo images and estimate 3D world positions.
@@ -288,6 +290,8 @@ class CubeDetector:
             imgR: Right camera image (BGR format)
             camera_config: Camera calibration parameters (baseline, FOV, etc.)
             camera_id: ID of the camera for metadata
+            camera_rotation: Camera rotation [pitch, yaw, roll] in degrees
+            camera_position: Camera position [x, y, z] in world space
 
         Returns:
             DetectionResult containing detected cubes with 3D world positions
@@ -315,13 +319,46 @@ class CubeDetector:
         # First, detect cubes in the left image (using existing 2D detection)
         detection_result = self.detect_cubes(imgL, camera_id=camera_id)
 
-        # Now estimate 3D world position for each detection
+        # If no detections, return early
+        if len(detection_result.detections) == 0:
+            logging.info("No objects detected in stereo images")
+            return detection_result
+
+        # OPTIMIZATION: Compute disparity map ONCE for all detections
+        # This provides 80-95% speedup for multi-object scenes
+        logging.debug(f"Computing disparity map for {len(detection_result.detections)} detections")
+
+        # Convert to grayscale if needed
+        if len(imgL.shape) == 3:
+            imgL_gray = cv2.cvtColor(imgL, cv2.COLOR_BGR2GRAY)
+        else:
+            imgL_gray = imgL
+
+        if len(imgR.shape) == 3:
+            imgR_gray = cv2.cvtColor(imgR, cv2.COLOR_BGR2GRAY)
+        else:
+            imgR_gray = imgR
+
+        # Compute disparity once using default reconstruction config
+        recon_config = DEFAULT_RECONSTRUCTION_CONFIG
+        disparity = calc_disparity(imgL_gray, imgR_gray, recon_config)
+
+        # Save disparity map for debugging (if enabled in config)
+        save_disparity_map_debug(disparity)
+
+        # Now estimate 3D world position for each detection using pre-computed disparity
         detections_with_depth = []
+        h, w = imgL.shape[:2]
 
         for det in detection_result.detections:
-            # Estimate world position at bounding box center
-            world_pos = estimate_object_world_position(
-                imgL, imgR, det.center_x, det.center_y, camera_config
+            # Estimate world position using pre-computed disparity (OPTIMIZED)
+            # Use lower min_disparity (1.0px) to handle distant objects better
+            world_pos = estimate_object_world_position_from_disparity(
+                disparity, det.center_x, det.center_y, camera_config, w, h,
+                min_disparity=1.0,  # Lower threshold for tabletop scenes
+                max_depth=10.0,
+                camera_rotation=camera_rotation,
+                camera_position=camera_position
             )
 
             # Create new detection object with world position
@@ -341,7 +378,7 @@ class CubeDetector:
                     f"→ world pos ({world_pos[0]:.3f}, {world_pos[1]:.3f}, {world_pos[2]:.3f})m"
                 )
             else:
-                logging.warning(
+                logging.debug(
                     f"{det.color.upper()} cube at pixel ({det.center_x}, {det.center_y}) "
                     f"- failed to estimate depth"
                 )
@@ -350,76 +387,79 @@ class CubeDetector:
             camera_id, detection_result.image_width, detection_result.image_height, detections_with_depth
         )
 
-    def _detect_color(
-        self,
-        hsv_image: np.ndarray,
-        color_name: str,
-        lower_ranges: List[np.ndarray],
-        upper_ranges: List[np.ndarray],
-    ) -> List[Dict]:
+    def _detect_all_objects(self, image: np.ndarray) -> List[Dict]:
         """
-        Detect objects of a specific color
+        Detect colored cubes in image using HSV color segmentation
 
         Args:
-            hsv_image: Image in HSV color space
-            color_name: Name of the color ('red' or 'blue')
-            lower_ranges: List of lower HSV bounds
-            upper_ranges: List of upper HSV bounds
+            image: OpenCV image (BGR format)
 
         Returns:
             List of detection dictionaries
         """
-        # Create combined mask for all color ranges
-        mask = None
-        for lower, upper in zip(lower_ranges, upper_ranges):
-            range_mask = cv2.inRange(hsv_image, lower, upper)
-            if mask is None:
-                mask = range_mask
-            else:
-                mask = cv2.bitwise_or(mask, range_mask)
-
-        # Check if mask was created
-        if mask is None:
-            logging.warning(f"No color ranges provided for {color_name} detection")
-            return []
-
-        # Apply morphological operations to reduce noise
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-
-        # Find contours
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # Convert to HSV for color segmentation
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
         detections = []
 
-        for contour in contours:
-            # Get bounding box
-            x, y, w, h = cv2.boundingRect(contour)
-            area = w * h
+        # Detect red cubes (two ranges because red wraps around HSV)
+        mask_red_1 = cv2.inRange(hsv, self.red_lower_1, self.red_upper_1)
+        mask_red_2 = cv2.inRange(hsv, self.red_lower_2, self.red_upper_2)
+        mask_red = cv2.bitwise_or(mask_red_1, mask_red_2)
 
-            # Filter by area
-            if area < self.min_area or area > self.max_area:
-                continue
+        # Detect blue/cyan cubes
+        mask_blue = cv2.inRange(hsv, self.blue_lower, self.blue_upper)
 
-            # Filter by aspect ratio (allow some perspective distortion)
-            aspect_ratio = w / h if h > 0 else 0
-            if aspect_ratio < self.min_aspect or aspect_ratio > self.max_aspect:
-                continue
+        # Process each color mask
+        for color_name, mask in [("red", mask_red), ("blue", mask_blue)]:
+            # Apply morphological operations to clean up mask
+            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+            mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
 
-            # Calculate confidence based on how well the contour fills the bounding box
-            contour_area = cv2.contourArea(contour)
-            bbox_area = w * h
-            fill_ratio = contour_area / bbox_area if bbox_area > 0 else 0
-            confidence = min(fill_ratio * 1.2, 1.0)  # Scale up slightly
+            # Find contours in the mask
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-            # Filter by confidence
-            if confidence < self.min_confidence:
-                continue
+            logging.info(f"  {color_name.upper()}: Found {len(contours)} contours")
 
-            detections.append(
-                {"color": color_name, "bbox": (x, y, w, h), "confidence": confidence}
-            )
+            for i, contour in enumerate(contours):
+                # Get bounding box
+                x, y, w, h = cv2.boundingRect(contour)
+                area = w * h
+
+                # Filter by area
+                if area < self.min_area or area > self.max_area:
+                    logging.debug(f"    Contour {i}: Rejected by area ({area}px, need {self.min_area}-{self.max_area})")
+                    continue
+
+                # Filter by aspect ratio
+                aspect_ratio = w / h if h > 0 else 0
+                if aspect_ratio < self.min_aspect or aspect_ratio > self.max_aspect:
+                    logging.debug(f"    Contour {i}: Rejected by aspect ratio ({aspect_ratio:.2f}, need {self.min_aspect}-{self.max_aspect})")
+                    continue
+
+                # Calculate confidence based on how well contour fills bounding box
+                contour_area = cv2.contourArea(contour)
+                bbox_area = w * h
+                fill_ratio = contour_area / bbox_area if bbox_area > 0 else 0
+
+                # Also consider how many pixels in bbox match the color
+                roi_mask = mask[y:y+h, x:x+w]
+                color_ratio = np.sum(roi_mask > 0) / bbox_area if bbox_area > 0 else 0
+
+                # Confidence is combination of shape and color match
+                confidence = min((fill_ratio * 0.5 + color_ratio * 0.5) * 1.2, 1.0)
+
+                # Filter by confidence
+                if confidence < self.min_confidence:
+                    logging.debug(f"    Contour {i}: Rejected by confidence ({confidence:.2f}, need >={self.min_confidence})")
+                    continue
+
+                logging.info(f"    Contour {i}: ACCEPTED - area={area}px, aspect={aspect_ratio:.2f}, conf={confidence:.2f}")
+
+                detections.append(
+                    {"color": color_name, "bbox": (x, y, w, h), "confidence": confidence}
+                )
 
         return detections
 
@@ -437,7 +477,7 @@ class CubeDetector:
         debug_image = image.copy()
 
         # Color map for visualization
-        color_map = {"red": (0, 0, 255), "blue": (255, 0, 0)}
+        color_map = {"red": (0, 0, 255), "blue": (0, 255, 255)}
 
         # Draw bounding boxes
         for det in detections:

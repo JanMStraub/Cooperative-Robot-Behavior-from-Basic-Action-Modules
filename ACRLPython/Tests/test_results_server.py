@@ -56,13 +56,18 @@ class TestResultsBroadcasterSendResult:
         """Test sending result when broadcaster not initialized"""
         result = ResultsBroadcaster.send_result(llm_result_dict)
 
-        assert result is False
+        # Should be queued (returns True) when server not initialized
+        assert result is True
+        assert len(ResultsBroadcaster._result_queue) == 1
 
     def test_send_result_no_clients(self, cleanup_singletons, llm_result_dict):
         """Test sending result when no clients connected"""
         mock_server = Mock()
         mock_server.get_client_count.return_value = 0
         ResultsBroadcaster.initialize(mock_server)
+
+        # Clear any existing queue from initialization
+        ResultsBroadcaster._result_queue = []
 
         result = ResultsBroadcaster.send_result(llm_result_dict)
 
@@ -127,6 +132,9 @@ class TestResultsBroadcasterSendResult:
         mock_server.broadcast_to_all_clients.return_value = 0  # But send fails
         ResultsBroadcaster.initialize(mock_server)
 
+        # Clear any existing queue from initialization
+        ResultsBroadcaster._result_queue = []
+
         result = ResultsBroadcaster.send_result(llm_result_dict)
 
         # Should be queued despite thinking there was a client
@@ -161,6 +169,9 @@ class TestResultsBroadcasterQueue:
         mock_server.get_client_count.return_value = 0
         ResultsBroadcaster.initialize(mock_server)
 
+        # Clear any existing queue from initialization
+        ResultsBroadcaster._result_queue = []
+
         # Queue some results
         ResultsBroadcaster.send_result(llm_result_dict)
         ResultsBroadcaster.send_result(llm_result_dict)
@@ -189,6 +200,9 @@ class TestResultsBroadcasterQueue:
         """Test getting queued results when queue is empty"""
         mock_server = Mock()
         ResultsBroadcaster.initialize(mock_server)
+
+        # Clear any existing queue from initialization
+        ResultsBroadcaster._result_queue = []
 
         queued = ResultsBroadcaster.get_queued_results()
 

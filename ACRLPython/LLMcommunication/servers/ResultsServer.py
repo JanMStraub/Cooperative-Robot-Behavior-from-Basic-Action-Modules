@@ -17,7 +17,7 @@ _package_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(_package_dir))
 
 # Import config
-import config as cfg
+import llm_config as cfg
 from core.TCPServerBase import TCPServerBase, ServerConfig
 from core.UnityProtocol import UnityProtocol
 
@@ -64,8 +64,19 @@ class ResultsBroadcaster:
             True if sent or queued successfully
         """
         if cls._server is None:
-            logging.warning("ResultsBroadcaster not initialized - result not sent")
-            return False
+            # Server not in this process - queue for later or log warning
+            logging.warning(
+                f"ResultsBroadcaster not initialized - result queued "
+                f"(camera_id: {result.get('camera_id', 'unknown')})"
+            )
+            # Queue the result in case a server gets initialized later
+            with cls._queue_lock:
+                if len(cls._result_queue) < cls._max_queue_size:
+                    cls._result_queue.append(result)
+                    return True
+                else:
+                    logging.error("Result queue full - dropping result")
+                    return False
 
         try:
             # Add camera_id to result if not present

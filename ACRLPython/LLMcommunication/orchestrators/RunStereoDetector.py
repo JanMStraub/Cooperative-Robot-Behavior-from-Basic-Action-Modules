@@ -18,36 +18,50 @@ import sys
 from pathlib import Path
 import argparse
 
-# Add LLMCommunication package directory to path
+# Add parent directories to path for direct script execution
 _package_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(_package_dir))
+_acrl_root = Path(__file__).parent.parent.parent
+if str(_package_dir) not in sys.path:
+    sys.path.insert(0, str(_package_dir))
+if str(_acrl_root) not in sys.path:
+    sys.path.insert(0, str(_acrl_root))
 
 # Import config - support both direct script and module execution
+# Try absolute import first (for direct execution), then relative (for module execution)
 try:
-    from .. import config as cfg
+    from LLMCommunication import llm_config as cfg
 except ImportError:
-    import config as cfg
+    from .. import llm_config as cfg
 
-# Import CameraConfig from StereoImageReconstruction using importlib
-import importlib.util
-stereo_config_path = Path(__file__).parent.parent.parent / "StereoImageReconstruction" / "config.py"
-spec = importlib.util.spec_from_file_location("stereo_config", stereo_config_path)
-if spec is None or spec.loader is None:
-    raise ImportError(f"Failed to load module spec from {stereo_config_path}")
-
-stereo_config = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(stereo_config)  # type: ignore[union-attr]
-CameraConfig = stereo_config.CameraConfig
-
-# Import servers - support both direct script and module execution
+# Import CameraConfig from StereoImageReconstruction
 try:
-    from ..servers.StereoDetectionServer import StereoDetectionServer, StereoImageStorage, run_stereo_detection_server_background
-    from ..servers.ResultsServer import run_results_server_background, ResultsBroadcaster
+    from StereoImageReconstruction.stereo_config import CameraConfig
+except ImportError:
+    from ...StereoImageReconstruction.stereo_config import CameraConfig
+
+# Import servers and detector - support both direct script and module execution
+try:
+    from LLMCommunication.servers.StereoDetectionServer import (
+        StereoDetectionServer,
+        StereoImageStorage,
+        run_stereo_detection_server_background
+    )
+    from LLMCommunication.servers.ResultsServer import (
+        run_results_server_background,
+        ResultsBroadcaster
+    )
+    from LLMCommunication.vision.ObjectDetector import CubeDetector
+except ImportError:
+    from ..servers.StereoDetectionServer import (
+        StereoDetectionServer,
+        StereoImageStorage,
+        run_stereo_detection_server_background
+    )
+    from ..servers.ResultsServer import (
+        run_results_server_background,
+        ResultsBroadcaster
+    )
     from ..vision.ObjectDetector import CubeDetector
-except ImportError:
-    from servers.StereoDetectionServer import StereoDetectionServer, StereoImageStorage, run_stereo_detection_server_background
-    from servers.ResultsServer import run_results_server_background, ResultsBroadcaster
-    from vision.ObjectDetector import CubeDetector
 
 logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
 
@@ -95,23 +109,24 @@ class StereoDetectorOrchestrator:
 
         while not self.shutdown_flag:
             try:
-                # Get list of available camera pairs (currently just check if we have any data)
-                # In a real system, you might track multiple camera pairs
-                camera_pair_id = "stereo"  # Default camera pair ID
+                # Get all available camera pairs
+                camera_pair_ids = self.image_storage.get_all_camera_pair_ids()
 
-                # Check if there's a new stereo pair to process
-                age = self.image_storage.get_pair_age(camera_pair_id)
+                # Process each camera pair
+                for camera_pair_id in camera_pair_ids:
+                    # Check if there's a new stereo pair to process
+                    age = self.image_storage.get_pair_age(camera_pair_id)
 
-                if age is not None:
-                    # Check if this is a new image (not processed yet)
-                    last_processed = self.last_processed_time.get(camera_pair_id, 0)
-                    current_time = time.time()
-                    image_time = current_time - age
+                    if age is not None:
+                        # Check if this is a new image (not processed yet)
+                        last_processed = self.last_processed_time.get(camera_pair_id, 0)
+                        current_time = time.time()
+                        image_time = current_time - age
 
-                    if image_time > last_processed:
-                        # New image available - process it
-                        self._process_stereo_pair(camera_pair_id)
-                        self.last_processed_time[camera_pair_id] = current_time
+                        if image_time > last_processed:
+                            # New image available - process it
+                            self._process_stereo_pair(camera_pair_id)
+                            self.last_processed_time[camera_pair_id] = current_time
 
                 # Wait before checking again
                 time.sleep(self.check_interval)
@@ -145,6 +160,10 @@ class StereoDetectorOrchestrator:
         camera_config = self.camera_config
         actual_prompt = prompt
 
+        # Camera position and rotation for coordinate transformation
+        camera_position = None
+        camera_rotation = None
+
         try:
             # Try to parse as JSON with camera parameters
             prompt_data = json.loads(prompt)
@@ -154,9 +173,18 @@ class StereoDetectorOrchestrator:
                 fov = prompt_data.get("fov", self.camera_config.fov)
                 actual_prompt = prompt_data.get("prompt", "")
 
+                # Extract camera position and rotation if provided
+                camera_position = prompt_data.get("camera_position")
+                camera_rotation = prompt_data.get("camera_rotation")
+
                 # Create config with Unity-provided parameters
                 camera_config = CameraConfig(fov=fov, baseline=baseline)
                 logging.info(f"Using Unity camera params: baseline={baseline}m, fov={fov}°")
+
+                if camera_position:
+                    logging.info(f"Camera position: ({camera_position[0]:.3f}, {camera_position[1]:.3f}, {camera_position[2]:.3f})")
+                if camera_rotation:
+                    logging.info(f"Camera rotation: ({camera_rotation[0]:.1f}, {camera_rotation[1]:.1f}, {camera_rotation[2]:.1f})°")
         except json.JSONDecodeError:
             # Prompt is not JSON, use as-is
             pass
@@ -167,7 +195,9 @@ class StereoDetectorOrchestrator:
             # Run stereo detection with depth estimation
             start_time = time.time()
             result = self.detector.detect_cubes_stereo(
-                imgL, imgR, camera_config, camera_id=camera_pair_id
+                imgL, imgR, camera_config, camera_id=camera_pair_id,
+                camera_rotation=camera_rotation,
+                camera_position=camera_position
             )
             duration = time.time() - start_time
 
@@ -225,8 +255,8 @@ def main():
     parser.add_argument(
         "--baseline",
         type=float,
-        default=0.1,
-        help="Camera baseline distance in meters (default: 0.1)",
+        default=0.05,
+        help="Camera baseline distance in meters (default: 0.05)",
     )
     parser.add_argument(
         "--fov", type=float, default=60.0, help="Camera field of view in degrees (default: 60)"
@@ -261,6 +291,11 @@ def main():
         default=0.5,
         help="Seconds between checking for new images (default: 0.5)",
     )
+    parser.add_argument(
+        "--no-results-server",
+        action="store_true",
+        help="Don't start ResultsServer (use when RunAnalyzer is already running)",
+    )
 
     args = parser.parse_args()
 
@@ -284,10 +319,15 @@ def main():
         args.detection_host, args.detection_port
     )
 
-    # Start results server (sends detection results to Unity)
-    from core.TCPServerBase import ServerConfig
-    results_config = ServerConfig(host=args.results_host, port=args.results_port)
-    results_server = run_results_server_background(results_config)
+    # Start results server if requested
+    results_server = None
+    if not args.no_results_server:
+        logging.info(f"Starting ResultsServer on port {args.results_port}")
+        from core.TCPServerBase import ServerConfig
+        results_config = ServerConfig(host=args.results_host, port=args.results_port)
+        results_server = run_results_server_background(results_config)
+    else:
+        logging.info("Skipping ResultsServer startup (using shared ResultsBroadcaster from RunAnalyzer)")
 
     # Wait for servers to start
     time.sleep(1.0)

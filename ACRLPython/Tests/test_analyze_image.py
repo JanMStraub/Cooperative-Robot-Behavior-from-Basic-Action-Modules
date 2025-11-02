@@ -17,7 +17,7 @@ from datetime import datetime
 sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
 
 from LLMCommunication.vision.AnalyzeImage import LMStudioVisionProcessor, get_images_from_server, save_response
-import LLMCommunication.config as cfg
+import LLMCommunication.llm_config as cfg
 
 
 class TestLMStudioVisionProcessorInitialization:

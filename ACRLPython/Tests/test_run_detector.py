@@ -16,7 +16,7 @@ from argparse import Namespace
 # Add LLMCommunication directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
 
-import LLMCommunication.config as cfg
+import LLMCommunication.llm_config as cfg
 
 
 class TestRunDetectorImageProcessing:
@@ -25,12 +25,13 @@ class TestRunDetectorImageProcessing:
     @patch('LLMCommunication.orchestrators.RunDetector.DetectionBroadcaster')
     @patch('LLMCommunication.orchestrators.RunDetector.ImageStorage')
     @patch('LLMCommunication.orchestrators.RunDetector.CubeDetector')
-    def test_process_new_image(self, mock_detector_class, mock_storage_class,
+    @patch('LLMCommunication.orchestrators.RunDetector.run_detection_server_background')
+    def test_process_new_image(self, mock_server_bg, mock_detector_class, mock_storage_class,
                                mock_broadcaster_class, sample_red_cube_image):
         """Test processing a new image for detection"""
         from LLMCommunication.orchestrators.RunDetector import run_detection_loop
 
-        # Setup storage
+        # Setup storage mock to return from get_instance
         mock_storage = MagicMock()
         mock_storage.get_all_camera_ids.return_value = ["camera1"]
         mock_storage.get_camera_image.return_value = sample_red_cube_image

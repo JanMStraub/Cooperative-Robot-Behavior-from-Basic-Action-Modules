@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
 
 from LLMCommunication.servers.DetectionServer import DetectionBroadcaster, DetectionServer
 from LLMCommunication.core.TCPServerBase import ServerConfig
-import LLMCommunication.config as cfg
+import LLMCommunication.llm_config as cfg
 
 
 class TestDetectionBroadcasterSingleton:

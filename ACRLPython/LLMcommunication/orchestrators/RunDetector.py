@@ -25,27 +25,32 @@ import hashlib
 from typing import Dict
 from pathlib import Path
 
-# Add LLMCommunication package directory to path
+# Add parent directories to path for direct script execution
 _package_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(_package_dir))
+_acrl_root = Path(__file__).parent.parent.parent
+if str(_package_dir) not in sys.path:
+    sys.path.insert(0, str(_package_dir))
+if str(_acrl_root) not in sys.path:
+    sys.path.insert(0, str(_acrl_root))
 
 # Import config - support both direct script and module execution
+# Try absolute import first (for direct execution), then relative (for module execution)
 try:
-    from .. import config as cfg
+    from LLMCommunication import llm_config as cfg
 except ImportError:
-    import config as cfg
+    from .. import llm_config as cfg
 
 # Import detection components - support both direct script and module execution
 try:
+    from LLMCommunication.vision.ObjectDetector import CubeDetector
+    from LLMCommunication.servers.DetectionServer import DetectionBroadcaster, run_detection_server_background
+    from LLMCommunication.core.TCPServerBase import ServerConfig
+    from LLMCommunication.servers.StreamingServer import ImageStorage
+except ImportError:
     from ..vision.ObjectDetector import CubeDetector
     from ..servers.DetectionServer import DetectionBroadcaster, run_detection_server_background
     from ..core.TCPServerBase import ServerConfig
     from ..servers.StreamingServer import ImageStorage
-except ImportError:
-    from vision.ObjectDetector import CubeDetector
-    from servers.DetectionServer import DetectionBroadcaster, run_detection_server_background
-    from core.TCPServerBase import ServerConfig
-    from servers.StreamingServer import ImageStorage
 
 # Configure logging
 logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)

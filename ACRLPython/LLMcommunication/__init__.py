@@ -11,7 +11,7 @@ Subpackages:
 - orchestrators: Main entry point scripts (RunAnalyzer, RunDetector, RunStereoDetector)
 
 Configuration:
-- config.py: Centralized configuration for all modules
+- llm_config.py: Centralized configuration for all modules
 
 For detailed usage, see RESTRUCTURING_SUMMARY.md
 """
@@ -20,7 +20,7 @@ __version__ = "2.0.0"
 __author__ = "ACRL Team"
 
 # Core exports
-from . import config
+from . import llm_config as config
 from .core import TCPServerBase, ServerConfig, UnityProtocol
 
 # Server exports

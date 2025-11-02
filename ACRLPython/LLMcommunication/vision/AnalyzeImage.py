@@ -52,9 +52,9 @@ sys.path.insert(0, str(_package_dir))
 
 # Import config - support both direct script and module execution
 try:
-    from .. import config as cfg
+    from .. import llm_config as cfg
 except ImportError:
-    import config as cfg
+    import llm_config as cfg
 
 # Import ImageStorage - support both direct script and module execution
 try:

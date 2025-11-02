@@ -53,7 +53,7 @@ _package_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(_package_dir))
 
 # Import config
-import config as cfg
+import llm_config as cfg
 
 logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
 

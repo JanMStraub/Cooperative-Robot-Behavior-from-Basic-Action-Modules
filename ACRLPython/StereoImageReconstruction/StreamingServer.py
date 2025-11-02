@@ -19,7 +19,7 @@ import cv2
 import numpy as np
 import open3d as o3d
 
-from .config import (
+from .stereo_config import (
     CameraConfig,
     ReconstructionConfig,
     ServerConfig,
@@ -66,6 +66,7 @@ class StereoStreamingServer:
         self.server_socket: Optional[socket.socket] = None
         self.visualizer: Optional[o3d.visualization.Visualizer] = None  # type: ignore[attr-defined]
         self.point_cloud = o3d.geometry.PointCloud()
+        self.point_cloud_lock = threading.Lock()  # Protect point cloud access from multiple threads
 
     def receive_exactly(self, sock: socket.socket, num_bytes: int) -> Optional[bytes]:
         """
@@ -220,9 +221,10 @@ class StereoStreamingServer:
                     voxel_size=self.server_config.voxel_downsample_size
                 )
 
-                # Update shared point cloud
-                self.point_cloud.points = new_pcd.points
-                self.point_cloud.colors = new_pcd.colors
+                # Update shared point cloud (thread-safe)
+                with self.point_cloud_lock:
+                    self.point_cloud.points = new_pcd.points
+                    self.point_cloud.colors = new_pcd.colors
 
                 logging.info("Updated point cloud")
 
@@ -295,9 +297,10 @@ class StereoStreamingServer:
             logging.info("Visualization started. Press 'Q' to quit.")
             try:
                 while not self.shutdown_event.is_set():
-                    # Update visualization
+                    # Update visualization (thread-safe)
                     assert self.visualizer is not None
-                    self.visualizer.update_geometry(self.point_cloud)
+                    with self.point_cloud_lock:
+                        self.visualizer.update_geometry(self.point_cloud)
                     if not self.visualizer.poll_events():
                         break
                     self.visualizer.update_renderer()
@@ -323,15 +326,15 @@ class StereoStreamingServer:
         if self.server_socket:
             try:
                 self.server_socket.close()
-            except:
-                pass
+            except Exception as e:
+                logging.warning(f"Error closing server socket: {e}")
 
         # Close visualizer
         if self.visualizer:
             try:
                 self.visualizer.destroy_window()
-            except:
-                pass
+            except Exception as e:
+                logging.warning(f"Error closing visualizer: {e}")
 
         logging.info("Server shutdown complete")
 

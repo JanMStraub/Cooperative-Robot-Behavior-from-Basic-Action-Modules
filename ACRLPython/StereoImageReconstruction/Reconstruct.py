@@ -6,6 +6,7 @@ using Semi-Global Block Matching (SGBM) algorithm for disparity calculation.
 """
 
 import argparse
+import logging
 import math
 import os
 from collections import namedtuple
@@ -15,7 +16,7 @@ from typing import Optional, Tuple
 import cv2
 import numpy as np
 
-from .config import (
+from .stereo_config import (
     CameraConfig,
     ReconstructionConfig,
     OutputConfig,
@@ -102,13 +103,19 @@ def estimate_max_disparity(
         Estimated maximum disparity (capped at image_width / 10)
     """
     try:
-        from ACRLPython.StereoImageReconstruction.FeatureMatching import find_matches
+        # Try both import styles
+        try:
+            from ACRLPython.StereoImageReconstruction.FeatureMatching import find_matches
+        except ImportError:
+            from .FeatureMatching import find_matches
 
         matches, kp1, kp2 = find_matches(imgL, imgR)
 
         if len(matches) < 10:
-            print(f"Warning: Only found {len(matches)} matches, using default max_disp")
-            return min(64, imgL.shape[1] // 10)
+            print(f"Warning: Only found {len(matches)} matches, using image-based default")
+            # Use image-width-based heuristic: max_disp = width / 8
+            default = imgL.shape[1] // 8
+            return ((default + 15) // 16) * 16
 
         disparities = []
         for match in matches:
@@ -128,8 +135,10 @@ def estimate_max_disparity(
         return max(16, max_disp)  # Minimum of 16
 
     except Exception as e:
-        print(f"Warning: Could not estimate max disparity ({e}), using default")
-        return 64
+        print(f"Warning: Could not estimate max disparity ({e}), using image-based default")
+        # Use image-width-based heuristic: max_disp = width / 8
+        default = imgL.shape[1] // 8
+        return ((default + 15) // 16) * 16
 
 
 def calc_disparity(
@@ -161,11 +170,25 @@ def calc_disparity(
     if max_disp is None:
         imgL_gray = cv2.cvtColor(imgL, cv2.COLOR_BGR2GRAY) if len(imgL.shape) == 3 else imgL
         imgR_gray = cv2.cvtColor(imgR, cv2.COLOR_BGR2GRAY) if len(imgR.shape) == 3 else imgR
-        max_disp = estimate_max_disparity(imgL_gray, imgR_gray)
+
+        # Try feature-based estimation first
+        try:
+            max_disp = estimate_max_disparity(imgL_gray, imgR_gray)
+        except Exception as e:
+            # Fallback: use image-width-based heuristic
+            # Rule of thumb: max_disparity should be ~1/8 to 1/6 of image width
+            logging.warning(f"Feature-based disparity estimation failed: {e}. Using heuristic.")
+            max_disp = imgL.shape[1] // 8
+
         print(f"Estimated maximum disparity: {max_disp}")
 
-    # Ensure max_disp is a multiple of 16
+    # Ensure max_disp is a multiple of 16 and reasonable
     max_disp = ((max_disp + 15) // 16) * 16
+
+    # Cap max_disparity for performance (larger values are very slow)
+    if max_disp > 256:
+        print(f"Warning: Capping max_disparity from {max_disp} to 256 for performance")
+        max_disp = 256
 
     # Create SGBM matcher
     stereo = cv2.StereoSGBM_create(  # type: ignore[attr-defined]

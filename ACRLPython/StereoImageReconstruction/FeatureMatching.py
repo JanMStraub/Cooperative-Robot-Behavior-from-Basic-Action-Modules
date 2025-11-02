@@ -5,13 +5,14 @@ This module provides ORB-based feature matching for estimating disparity
 and validating stereo calibration.
 """
 
+import logging
 import math
 from typing import List, Tuple, Optional
 
 import cv2
 import numpy as np
 
-from .config import FeatureMatchConfig, DEFAULT_FEATURE_CONFIG
+from .stereo_config import FeatureMatchConfig, DEFAULT_FEATURE_CONFIG
 
 
 def find_matches(
@@ -54,7 +55,7 @@ def find_matches(
     keypoints2, descriptors2 = orb.detectAndCompute(imgR, None)
 
     if descriptors1 is None or descriptors2 is None:
-        print("Warning: No descriptors found in one or both images")
+        logging.warning("No descriptors found in one or both images")
         return [], keypoints1, keypoints2
 
     # Use FLANN matcher optimized for ORB (LSH algorithm)
@@ -71,7 +72,7 @@ def find_matches(
     try:
         matches = flann.knnMatch(descriptors1, descriptors2, k=2)
     except cv2.error as e:
-        print(f"FLANN matching error: {e}")
+        logging.error(f"FLANN matching error: {e}")
         return [], keypoints1, keypoints2
 
     # Apply Lowe's ratio test
@@ -104,7 +105,7 @@ def find_matches(
     n_keep = int(len(filtered_matches) * config.match_keep_ratio)
     filtered_matches = sorted(filtered_matches, key=lambda x: x.distance)[:n_keep]
 
-    print(
+    logging.info(
         f"Found {len(keypoints1)} and {len(keypoints2)} keypoints, "
         f"{len(good_matches)} good matches, {len(filtered_matches)} after filtering"
     )
@@ -265,7 +266,7 @@ def estimate_baseline_from_matches(
     matches, kp1, kp2 = find_matches(imgL, imgR, config)
 
     if len(matches) < 10:
-        print("Warning: Too few matches for reliable baseline estimation")
+        logging.warning("Too few matches for reliable baseline estimation")
         return None
 
     # Calculate median disparity from matches
@@ -278,7 +279,7 @@ def estimate_baseline_from_matches(
             disparities.append(disparity)
 
     if not disparities:
-        print("Warning: No valid disparities found")
+        logging.warning("No valid disparities found")
         return None
 
     median_disparity = np.median(disparities)
@@ -286,8 +287,8 @@ def estimate_baseline_from_matches(
     # Estimate baseline using known object
     baseline = (known_object_width * focal_length) / object_disparity
 
-    print(f"Median disparity from matches: {median_disparity:.2f} pixels")
-    print(f"Estimated baseline: {baseline:.4f} meters")
+    logging.info(f"Median disparity from matches: {median_disparity:.2f} pixels")
+    logging.info(f"Estimated baseline: {baseline:.4f} meters")
 
     return baseline
 
@@ -298,14 +299,14 @@ if __name__ == "__main__":
     from pathlib import Path
 
     if len(sys.argv) < 3:
-        print("Usage: python feature_match.py <left_image> <right_image>")
+        logging.error("Usage: python feature_match.py <left_image> <right_image>")
         sys.exit(1)
 
     left_path = sys.argv[1]
     right_path = sys.argv[2]
 
     if not Path(left_path).exists() or not Path(right_path).exists():
-        print("Error: One or both image files not found")
+        logging.error("One or both image files not found")
         sys.exit(1)
 
     # Load images
@@ -313,10 +314,10 @@ if __name__ == "__main__":
     imgR = cv2.imread(right_path, cv2.IMREAD_GRAYSCALE)
 
     if imgL is None or imgR is None:
-        print("Error: Failed to load images")
+        logging.error("Failed to load images")
         sys.exit(1)
 
-    print(f"Loaded images: {imgL.shape}")
+    logging.info(f"Loaded images: {imgL.shape}")
 
     # Visualize matches
     visualize_matches(imgL, imgR, draw_keypoints=False)

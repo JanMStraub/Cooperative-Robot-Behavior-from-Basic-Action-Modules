@@ -15,8 +15,9 @@ from unittest.mock import Mock, patch, MagicMock
 sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
 
 # Mock StereoImageReconstruction imports
-sys.modules['Reconstruct'] = MagicMock()
-sys.modules['config'] = MagicMock()
+sys.modules['StereoImageReconstruction'] = MagicMock()
+sys.modules['StereoImageReconstruction.Reconstruct'] = MagicMock()
+sys.modules['StereoImageReconstruction.stereo_config'] = MagicMock()
 
 
 # Create mock CameraConfig for testing
@@ -45,11 +46,11 @@ class MockReconstructionConfig:  # type: ignore - Mock implements Reconstruction
 
 
 # Patch the imports
-sys.modules['Reconstruct'].calc_disparity = MagicMock()
-sys.modules['config'].CameraConfig = MockCameraConfig
-sys.modules['config'].ReconstructionConfig = MockReconstructionConfig
-sys.modules['config'].DEFAULT_CAMERA_CONFIG = MockCameraConfig()
-sys.modules['config'].DEFAULT_RECONSTRUCTION_CONFIG = MockReconstructionConfig()
+sys.modules['StereoImageReconstruction.Reconstruct'].calc_disparity = MagicMock()
+sys.modules['StereoImageReconstruction.stereo_config'].CameraConfig = MockCameraConfig
+sys.modules['StereoImageReconstruction.stereo_config'].ReconstructionConfig = MockReconstructionConfig
+sys.modules['StereoImageReconstruction.stereo_config'].DEFAULT_CAMERA_CONFIG = MockCameraConfig()
+sys.modules['StereoImageReconstruction.stereo_config'].DEFAULT_RECONSTRUCTION_CONFIG = MockReconstructionConfig()
 
 from LLMCommunication.vision.DepthEstimator import (
     estimate_depth_at_point,
@@ -61,7 +62,7 @@ from LLMCommunication.vision.DepthEstimator import (
 class TestEstimateDepthAtPoint:
     """Test estimate_depth_at_point function"""
 
-    @patch('Reconstruct.calc_disparity')
+    @patch('LLMCommunication.vision.DepthEstimator.calc_disparity')
     def test_estimate_depth_valid_point(self, mock_calc_disparity, sample_stereo_pair):
         """Test depth estimation at valid pixel coordinate"""
         imgL, imgR = sample_stereo_pair
@@ -82,7 +83,7 @@ class TestEstimateDepthAtPoint:
         assert depth > 0
         assert isinstance(depth, float)
 
-    @patch('Reconstruct.calc_disparity')
+    @patch('LLMCommunication.vision.DepthEstimator.calc_disparity')
     def test_estimate_depth_with_default_config(self, mock_calc_disparity, sample_stereo_pair):
         """Test depth estimation with default camera config"""
         imgL, imgR = sample_stereo_pair
@@ -98,7 +99,7 @@ class TestEstimateDepthAtPoint:
         assert depth is not None
         assert depth > 0
 
-    @patch('Reconstruct.calc_disparity')
+    @patch('LLMCommunication.vision.DepthEstimator.calc_disparity')
     def test_estimate_depth_out_of_bounds(self, mock_calc_disparity, sample_stereo_pair):
         """Test depth estimation with out-of-bounds coordinates"""
         imgL, imgR = sample_stereo_pair
@@ -124,7 +125,7 @@ class TestEstimateDepthAtPoint:
         )
         assert depth is None
 
-    @patch('Reconstruct.calc_disparity')
+    @patch('LLMCommunication.vision.DepthEstimator.calc_disparity')
     def test_estimate_depth_invalid_disparity(self, mock_calc_disparity, sample_stereo_pair):
         """Test depth estimation with invalid disparity values"""
         imgL, imgR = sample_stereo_pair
@@ -143,7 +144,7 @@ class TestEstimateDepthAtPoint:
 
         assert depth is None
 
-    @patch('Reconstruct.calc_disparity')
+    @patch('LLMCommunication.vision.DepthEstimator.calc_disparity')
     def test_estimate_depth_zero_disparity(self, mock_calc_disparity, sample_stereo_pair):
         """Test depth estimation with zero/negative disparity"""
         imgL, imgR = sample_stereo_pair
@@ -162,16 +163,21 @@ class TestEstimateDepthAtPoint:
 
         assert depth is None
 
-    @patch('Reconstruct.calc_disparity')
+    @patch('LLMCommunication.vision.DepthEstimator.calc_disparity')
     def test_estimate_depth_uses_median(self, mock_calc_disparity, sample_stereo_pair):
         """Test that depth estimation uses median for robustness"""
         imgL, imgR = sample_stereo_pair
 
         # Create disparity with outliers
         disparity = np.full((480, 640), 10.0, dtype=np.float32)
-        # Add outliers in the center region
-        disparity[238:242, 318:322] = [8.0, 9.0, 10.0, 11.0, 12.0, 100.0, 10.0, 10.0,
-                                        10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0]
+        # Add outliers in the center region (4x4 = 16 values)
+        outlier_values = np.array([
+            [8.0, 9.0, 10.0, 11.0],
+            [12.0, 100.0, 10.0, 10.0],
+            [10.0, 10.0, 10.0, 10.0],
+            [10.0, 10.0, 10.0, 10.0]
+        ], dtype=np.float32)
+        disparity[238:242, 318:322] = outlier_values
 
         mock_calc_disparity.return_value = disparity
 
@@ -187,7 +193,7 @@ class TestEstimateDepthAtPoint:
         # Should use median, not affected by outlier
         assert depth is not None
 
-    @patch('Reconstruct.calc_disparity')
+    @patch('LLMCommunication.vision.DepthEstimator.calc_disparity')
     def test_estimate_depth_grayscale_conversion(self, mock_calc_disparity):
         """Test that color images are converted to grayscale"""
         # Color images
@@ -211,7 +217,7 @@ class TestEstimateDepthAtPoint:
         assert len(args[0].shape) == 2  # Grayscale
         assert len(args[1].shape) == 2  # Grayscale
 
-    @patch('Reconstruct.calc_disparity')
+    @patch('LLMCommunication.vision.DepthEstimator.calc_disparity')
     def test_estimate_depth_focal_length_calculation_fov(self, mock_calc_disparity, sample_stereo_pair):
         """Test focal length calculation using FOV"""
         imgL, imgR = sample_stereo_pair
@@ -229,7 +235,7 @@ class TestEstimateDepthAtPoint:
 
         assert depth is not None
 
-    @patch('Reconstruct.calc_disparity')
+    @patch('LLMCommunication.vision.DepthEstimator.calc_disparity')
     def test_estimate_depth_focal_length_calculation_sensor(self, mock_calc_disparity, sample_stereo_pair):
         """Test focal length calculation using sensor width"""
         imgL, imgR = sample_stereo_pair
@@ -253,7 +259,7 @@ class TestEstimateDepthAtPoint:
 
         assert depth is not None
 
-    @patch('Reconstruct.calc_disparity')
+    @patch('LLMCommunication.vision.DepthEstimator.calc_disparity')
     def test_estimate_depth_missing_focal_info_raises(self, mock_calc_disparity, sample_stereo_pair):
         """Test that missing focal length info returns None"""
         imgL, imgR = sample_stereo_pair
@@ -421,7 +427,7 @@ class TestPixelToWorldCoords:
 class TestEstimateObjectWorldPosition:
     """Test estimate_object_world_position function"""
 
-    @patch('DepthEstimator.estimate_depth_at_point')
+    @patch('LLMCommunication.vision.DepthEstimator.estimate_depth_at_point')
     def test_estimate_object_position_success(self, mock_estimate_depth, sample_stereo_pair):
         """Test successful object position estimation"""
         imgL, imgR = sample_stereo_pair
@@ -445,7 +451,7 @@ class TestEstimateObjectWorldPosition:
         # Z should match the mocked depth
         assert abs(world_z - 1.5) < 0.01
 
-    @patch('DepthEstimator.estimate_depth_at_point')
+    @patch('LLMCommunication.vision.DepthEstimator.estimate_depth_at_point')
     def test_estimate_object_position_depth_failure(self, mock_estimate_depth, sample_stereo_pair):
         """Test when depth estimation fails"""
         imgL, imgR = sample_stereo_pair
@@ -464,7 +470,7 @@ class TestEstimateObjectWorldPosition:
 
         assert world_pos is None
 
-    @patch('DepthEstimator.estimate_depth_at_point')
+    @patch('LLMCommunication.vision.DepthEstimator.estimate_depth_at_point')
     def test_estimate_object_position_off_center(self, mock_estimate_depth, sample_stereo_pair):
         """Test object position estimation for off-center detection"""
         imgL, imgR = sample_stereo_pair
@@ -488,7 +494,7 @@ class TestEstimateObjectWorldPosition:
         assert world_y > 0
         assert abs(world_z - 2.0) < 0.01
 
-    @patch('DepthEstimator.estimate_depth_at_point')
+    @patch('LLMCommunication.vision.DepthEstimator.estimate_depth_at_point')
     def test_estimate_object_position_with_recon_config(self, mock_estimate_depth, sample_stereo_pair):
         """Test with custom reconstruction config"""
         imgL, imgR = sample_stereo_pair
@@ -510,15 +516,16 @@ class TestEstimateObjectWorldPosition:
 
         # Verify estimate_depth_at_point was called with correct params
         mock_estimate_depth.assert_called_once()
-        call_args = mock_estimate_depth.call_args[1]
-        assert call_args['camera_config'] == camera_config
-        assert call_args['recon_config'] == recon_config
+        # Arguments are positional: imgL, imgR, bbox_center_x, bbox_center_y, camera_config, recon_config
+        call_args = mock_estimate_depth.call_args[0]
+        assert call_args[4] == camera_config  # 5th positional arg
+        assert call_args[5] == recon_config  # 6th positional arg
 
 
 class TestDepthEstimatorIntegration:
     """Integration tests for depth estimation workflow"""
 
-    @patch('Reconstruct.calc_disparity')
+    @patch('LLMCommunication.vision.DepthEstimator.calc_disparity')
     def test_full_pipeline(self, mock_calc_disparity, sample_stereo_pair):
         """Test complete depth estimation pipeline"""
         imgL, imgR = sample_stereo_pair
@@ -549,7 +556,7 @@ class TestDepthEstimatorIntegration:
         assert len(world_pos) == 3
         assert world_pos[2] == depth
 
-    @patch('DepthEstimator.estimate_depth_at_point')
+    @patch('LLMCommunication.vision.DepthEstimator.estimate_depth_at_point')
     def test_object_position_estimation_workflow(self, mock_estimate_depth, sample_stereo_pair):
         """Test object position estimation workflow"""
         imgL, imgR = sample_stereo_pair
@@ -578,7 +585,7 @@ class TestDepthEstimatorIntegration:
 class TestDepthEstimatorEdgeCases:
     """Test edge cases and error conditions"""
 
-    @patch('Reconstruct.calc_disparity')
+    @patch('LLMCommunication.vision.DepthEstimator.calc_disparity')
     def test_very_small_disparity(self, mock_calc_disparity, sample_stereo_pair):
         """Test with very small disparity (far object)"""
         imgL, imgR = sample_stereo_pair
@@ -598,7 +605,7 @@ class TestDepthEstimatorEdgeCases:
         assert depth is not None
         assert depth > 10  # Far away
 
-    @patch('Reconstruct.calc_disparity')
+    @patch('LLMCommunication.vision.DepthEstimator.calc_disparity')
     def test_large_disparity(self, mock_calc_disparity, sample_stereo_pair):
         """Test with large disparity (close object)"""
         imgL, imgR = sample_stereo_pair
@@ -618,7 +625,7 @@ class TestDepthEstimatorEdgeCases:
         assert depth is not None
         assert depth < 1  # Close
 
-    @patch('Reconstruct.calc_disparity')
+    @patch('LLMCommunication.vision.DepthEstimator.calc_disparity')
     def test_window_size_variation(self, mock_calc_disparity, sample_stereo_pair):
         """Test different window sizes for depth estimation"""
         imgL, imgR = sample_stereo_pair

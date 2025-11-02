@@ -33,6 +33,12 @@ namespace LLMCommunication
         [SerializeField]
         private string _cameraRightId = "R";
 
+        [Header("Image Encoding Settings")]
+        [Tooltip("JPEG quality (1-100, higher is better quality but larger file)")]
+        [SerializeField]
+        [Range(1, 100)]
+        private int _jpegQuality = 85;
+
         [Header("Stereo Streaming Settings (Optional)")]
         [Tooltip("Enable continuous stereo streaming mode")]
         [SerializeField]
@@ -71,6 +77,13 @@ namespace LLMCommunication
             if (_serverPort == 0)
             {
                 _serverPort = 5009; // StereoDetectionServer default port
+            }
+
+            // Disable auto-connect by default for stereo sender
+            // Only connect when actually needed (when streaming is enabled or manual send)
+            if (!_enableStreaming)
+            {
+                _autoConnect = false;
             }
         }
 
@@ -156,10 +169,18 @@ namespace LLMCommunication
                 return false;
             }
 
+            // Check connection and attempt reconnect if needed
             if (!IsConnected)
             {
-                LogWarning("Cannot send stereo pair - not connected");
-                return false;
+                LogWarning("Not connected - attempting to connect");
+                Connect();
+
+                // Check again after connect attempt
+                if (!IsConnected)
+                {
+                    LogError("Cannot send stereo pair - connection failed");
+                    return false;
+                }
             }
 
             RenderTexture rtLeft = null;
@@ -189,9 +210,9 @@ namespace LLMCommunication
                 textureRight.ReadPixels(new Rect(0, 0, rtRight.width, rtRight.height), 0, 0);
                 textureRight.Apply();
 
-                // Encode to PNG
-                byte[] imageLeftData = textureLeft.EncodeToPNG();
-                byte[] imageRightData = textureRight.EncodeToPNG();
+                // Encode to JPEG
+                byte[] imageLeftData = textureLeft.EncodeToJPG(_jpegQuality);
+                byte[] imageRightData = textureRight.EncodeToJPG(_jpegQuality);
 
                 // Send stereo pair
                 string pairId = cameraPairId ?? _cameraPairId;
@@ -235,10 +256,18 @@ namespace LLMCommunication
             string prompt = ""
         )
         {
+            // Check connection and attempt reconnect if needed
             if (!IsConnected)
             {
-                LogWarning("Cannot send stereo pair - not connected");
-                return false;
+                LogWarning("Not connected - attempting to connect");
+                Connect();
+
+                // Check again after connect attempt
+                if (!IsConnected)
+                {
+                    LogError("Cannot send stereo pair - connection failed");
+                    return false;
+                }
             }
 
             if (imageLeftBytes == null || imageLeftBytes.Length == 0)

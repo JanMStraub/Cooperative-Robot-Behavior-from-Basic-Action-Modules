@@ -26,9 +26,9 @@ sys.path.insert(0, str(_package_dir))
 
 # Import config - support both direct script and module execution
 try:
-    from .. import config as cfg
+    from .. import llm_config as cfg
 except ImportError:
-    import config as cfg
+    import llm_config as cfg
 
 # Import core infrastructure - support both direct script and module execution
 try:
@@ -123,6 +123,16 @@ class StereoImageStorage:
                 return time.time() - timestamp
             return None
 
+    def get_all_camera_pair_ids(self) -> list:
+        """
+        Get list of all camera pair IDs with stored images.
+
+        Returns:
+            List of camera pair IDs
+        """
+        with self._data_lock:
+            return list(self._images.keys())
+
 
 class StereoDetectionServer(TCPServerBase):
     """
@@ -163,7 +173,9 @@ class StereoDetectionServer(TCPServerBase):
         logging.info(f"Stereo detection client connected from {address}")
 
         try:
-            client.settimeout(5.0)
+            # No timeout - allow persistent connections to stay open indefinitely
+            # Unity will reconnect automatically if connection drops
+            # client.settimeout(None)  # None = blocking, no timeout (default)
 
             while not self.should_shutdown():
                 # Read camera pair ID length
@@ -297,22 +309,14 @@ class StereoDetectionServer(TCPServerBase):
             Received bytes or None if connection closed
         """
         data = b""
-        timeout_count = 0
-        max_timeouts = 3  # Limit timeout retries
 
         while len(data) < num_bytes:
             try:
                 packet = sock.recv(num_bytes - len(data))
                 if not packet:
+                    # Connection closed cleanly
                     return None
                 data += packet
-                timeout_count = 0  # Reset on successful recv
-            except socket.timeout:
-                timeout_count += 1
-                if timeout_count >= max_timeouts:
-                    logging.warning(f"Socket receive timed out after {max_timeouts} retries")
-                    return None
-                continue
             except Exception as e:
                 logging.error(f"Socket receive error: {e}")
                 return None

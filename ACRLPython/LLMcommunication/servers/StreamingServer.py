@@ -19,7 +19,7 @@ _package_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(_package_dir))
 
 # Import config
-import config as cfg
+import llm_config as cfg
 
 # Import base classes
 from core.TCPServerBase import TCPServerBase, ServerConfig
@@ -154,8 +154,9 @@ class StreamingServer(TCPServerBase):
         import struct
 
         try:
-            # Set socket timeout to prevent indefinite hangs on partial data
-            client.settimeout(cfg.SOCKET_RECEIVE_TIMEOUT)
+            # No timeout - allow persistent connections to stay open indefinitely
+            # Unity will reconnect automatically if connection drops
+            # client.settimeout(None)  # None = blocking, no timeout (default)
 
             # Read camera ID length and data
             id_length_bytes = self._recv_exactly(client, UnityProtocol.INT_SIZE)
@@ -215,26 +216,25 @@ class StreamingServer(TCPServerBase):
 
     def _recv_exactly(self, sock: socket.socket, num_bytes: int) -> Optional[bytes]:
         """
-        Receive exactly num_bytes from socket with timeout protection
+        Receive exactly num_bytes from socket.
 
         Args:
-            sock: Socket to receive from (should have timeout set)
+            sock: Socket to receive from
             num_bytes: Exact number of bytes to receive
 
         Returns:
-            Bytes received or None if connection closed/timeout
+            Bytes received or None if connection closed
         """
         data = b""
         while len(data) < num_bytes:
             try:
                 chunk = sock.recv(num_bytes - len(data))
                 if not chunk:
+                    # Connection closed cleanly
                     return None
                 data += chunk
-            except socket.timeout:
-                logging.warning(
-                    f"Socket timeout while receiving data (got {len(data)}/{num_bytes} bytes)"
-                )
+            except Exception as e:
+                logging.error(f"Socket receive error: {e}")
                 return None
         return data
 
