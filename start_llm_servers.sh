@@ -14,7 +14,7 @@ echo ""
 ANALYZER_PID=$!
 echo "Started RunAnalyzer.py with LM Studio (PID: $ANALYZER_PID)"
 
-./ACRLPython/acrl/bin/python -u ACRLPython/LLMCommunication/orchestrators/RunStereoDetector.py --baseline 0.1 --fov 60 --results-port 5007 &
+./ACRLPython/acrl/bin/python -u ACRLPython/LLMCommunication/orchestrators/RunStereoDetector.py --baseline 0.05 --fov 60 --results-port 5007 &
 STEREO_PID=$!
 echo "Started RunStereoDetector.py (PID: $STEREO_PID)"
 

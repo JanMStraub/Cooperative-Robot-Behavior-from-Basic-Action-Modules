@@ -49,7 +49,25 @@ namespace LLMCommunication.Core
         protected float _reconnectTimer = 0f;
 
         // Properties
-        public bool IsConnected => _isConnected && _client != null && _client.Connected;
+        public bool IsConnected
+        {
+            get
+            {
+                if (!_isConnected || _client == null)
+                    return false;
+
+                try
+                {
+                    // Basic check - fast and reliable for most cases
+                    return _client.Connected;
+                }
+                catch
+                {
+                    _isConnected = false;
+                    return false;
+                }
+            }
+        }
         public string ServerHost => _serverHost;
         public int ServerPort => _serverPort;
         public string ConnectionInfo => $"{_serverHost}:{_serverPort}";
@@ -258,6 +276,38 @@ namespace LLMCommunication.Core
         #endregion
 
         #region Utility Methods
+
+        /// <summary>
+        /// Check if the socket is truly connected (more thorough than IsConnected property).
+        /// Use this before critical operations like sending data.
+        /// </summary>
+        protected bool VerifyConnection()
+        {
+            if (!_isConnected || _client == null)
+                return false;
+
+            try
+            {
+                // Quick poll check to detect dead connections
+                if (_client.Client != null && _client.Client.Poll(0, System.Net.Sockets.SelectMode.SelectRead))
+                {
+                    byte[] buff = new byte[1];
+                    if (_client.Client.Receive(buff, System.Net.Sockets.SocketFlags.Peek) == 0)
+                    {
+                        // Connection is closed
+                        _isConnected = false;
+                        return false;
+                    }
+                }
+
+                return _client.Connected;
+            }
+            catch
+            {
+                _isConnected = false;
+                return false;
+            }
+        }
 
         /// <summary>
         /// Read exactly N bytes from the stream.

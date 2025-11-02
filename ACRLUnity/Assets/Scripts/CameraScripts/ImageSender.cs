@@ -18,6 +18,13 @@ namespace LLMCommunication
         [SerializeField]
         private bool _enableStreaming = false;
 
+        [Header("Image Encoding Settings")]
+        [Tooltip("JPEG quality (1-100, higher is better quality but larger file)")]
+        [SerializeField]
+        [Range(1, 100)]
+        private int _jpegQuality = 85;
+
+        [Header("Streaming Settings (Optional)")]
         [Tooltip("Time between streamed images in seconds")]
         [SerializeField]
         private float _sendInterval = 0.2f;
@@ -125,16 +132,25 @@ namespace LLMCommunication
         /// <returns>True if sent successfully</returns>
         public bool SendImageData(byte[] imageBytes, string cameraId, string prompt = "")
         {
-            if (!IsConnected)
-            {
-                LogWarning("Cannot send image - not connected");
-                return false;
-            }
-
+            // Pre-flight validation
             if (imageBytes == null || imageBytes.Length == 0)
             {
                 LogError("Cannot send empty image data");
                 return false;
+            }
+
+            // Check connection and attempt reconnect if needed
+            if (!IsConnected)
+            {
+                LogWarning("Not connected - attempting to connect");
+                Connect();
+
+                // Check again after connect attempt
+                if (!IsConnected)
+                {
+                    LogError("Cannot send image - connection failed");
+                    return false;
+                }
             }
 
             if (string.IsNullOrEmpty(cameraId))
@@ -164,6 +180,19 @@ namespace LLMCommunication
                     return false;
                 }
 
+                // Verify connection is alive before writing
+                if (!VerifyConnection())
+                {
+                    LogError("Connection verification failed - attempting reconnect");
+                    Connect();
+
+                    if (!VerifyConnection())
+                    {
+                        LogError("Reconnection failed");
+                        return false;
+                    }
+                }
+
                 // Send data piece by piece (streaming protocol)
                 // Format: [camera_id_len][camera_id][prompt_len][prompt][image_len][image_data]
 
@@ -191,9 +220,23 @@ namespace LLMCommunication
 
                 return true;
             }
+            catch (System.IO.IOException ioEx)
+            {
+                LogError($"Network error sending image: {ioEx.Message}");
+                _isConnected = false;
+                // Trigger reconnection
+                return false;
+            }
+            catch (System.Net.Sockets.SocketException sockEx)
+            {
+                LogError($"Socket error sending image: {sockEx.Message}");
+                _isConnected = false;
+                // Trigger reconnection
+                return false;
+            }
             catch (Exception ex)
             {
-                LogError($"Error sending image: {ex.Message}");
+                LogError($"Unexpected error sending image: {ex.Message}");
                 _isConnected = false;
                 return false;
             }
@@ -236,8 +279,8 @@ namespace LLMCommunication
                 texture.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
                 texture.Apply();
 
-                // Encode to PNG
-                byte[] imageData = texture.EncodeToPNG();
+                // Encode to JPEG
+                byte[] imageData = texture.EncodeToJPG(_jpegQuality);
 
                 // Send using protocol
                 return SendImageData(imageData, cameraId, prompt);

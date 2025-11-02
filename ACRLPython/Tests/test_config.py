@@ -12,7 +12,7 @@ from pathlib import Path
 # Add LLMCommunication directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
 
-import LLMCommunication.config as cfg
+import LLMCommunication.llm_config as cfg
 
 
 class TestConfigConstants:

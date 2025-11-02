@@ -16,7 +16,7 @@ from unittest.mock import patch, Mock
 sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
 
 from LLMCommunication.vision.ObjectDetector import DetectionObject, DetectionResult, CubeDetector
-import LLMCommunication.config as cfg
+import LLMCommunication.llm_config as cfg
 
 
 class TestDetectionObject:
@@ -341,7 +341,7 @@ class TestCubeDetectorDebug:
 class TestCubeDetectorStereo:
     """Test stereo detection functionality"""
 
-    @patch('ObjectDetector.STEREO_AVAILABLE', False)
+    @patch('LLMCommunication.vision.ObjectDetector.STEREO_AVAILABLE', False)
     def test_detect_cubes_stereo_unavailable(self):
         """Test stereo detection when stereo dependencies not available"""
         detector = CubeDetector()
@@ -373,8 +373,8 @@ class TestCubeDetectorStereo:
 
         assert len(result.detections) == 0
 
-    @patch('ObjectDetector.STEREO_AVAILABLE', True)
-    @patch('ObjectDetector.estimate_object_world_position')
+    @patch('LLMCommunication.vision.ObjectDetector.STEREO_AVAILABLE', True)
+    @patch('LLMCommunication.vision.ObjectDetector.estimate_object_world_position')
     def test_detect_cubes_stereo_with_depth(self, mock_estimate, sample_stereo_pair):
         """Test stereo detection with depth estimation"""
         # Mock world position estimation

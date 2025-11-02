@@ -8,48 +8,83 @@ using LLMCommunication.Core;
 namespace LLMCommunication
 {
     /// <summary>
-    /// Data structure for LLM analysis results received from Python
+    /// Data structure for stereo detection results with 3D depth information
     /// </summary>
     [System.Serializable]
-    public class LLMResult
+    public class DepthResult
     {
         public bool success;
-        public string response;
         public string camera_id;
         public string timestamp;
-        public LLMMetadata metadata;
+        public ObjectDetection[] detections;
+        public DepthMetadata metadata;
     }
 
     [System.Serializable]
-    public class LLMMetadata
+    public class ObjectDetection
     {
-        public string model;
-        public float duration_seconds;
-        public int image_count;
-        public string[] camera_ids;
+        public string color;
+        public float confidence;
+        public DetectionBoundingBox bbox;
+        public DetectionPixelCoords pixel_center;
+        public Detection3DPosition world_position;
+        public float depth_m;
+        public float disparity;
+    }
+
+    [System.Serializable]
+    public class DetectionBoundingBox
+    {
+        public int x;
+        public int y;
+        public int width;
+        public int height;
+    }
+
+    [System.Serializable]
+    public class DetectionPixelCoords
+    {
+        public int x;
+        public int y;
+    }
+
+    [System.Serializable]
+    public class Detection3DPosition
+    {
+        public float x;
+        public float y;
+        public float z;
+    }
+
+    [System.Serializable]
+    public class DepthMetadata
+    {
+        public float processing_time_seconds;
         public string prompt;
-        public string full_prompt;
+        public float camera_baseline_m;
+        public float camera_fov_deg;
+        public string detection_mode;
     }
 
     /// <summary>
-    /// Receives LLM analysis results from Python ResultsServer via TCP.
-    /// Refactored to use TCPClientBase and UnityProtocol.
+    /// Receives stereo detection results with 3D depth information from Python StereoDetector via TCP.
+    /// Connects to port 5007 (stereo detection results).
     /// </summary>
-    public class LLMResultsReceiver : TCPClientBase
+    public class DepthResultsReceiver : TCPClientBase
     {
-        public static LLMResultsReceiver Instance { get; private set; }
+        public static DepthResultsReceiver Instance { get; private set; }
 
         [Header("Result Processing")]
-        [Tooltip("Log all received results to console")]
+        [Tooltip("Log all received depth results to console")]
         [SerializeField]
         private bool _logResults = true;
 
         // Events
-        public event Action<LLMResult> OnResultReceived;
+        public event Action<DepthResult> OnDepthResultReceived;
 
         // State
         private Thread _receiveThread;
-        private Queue<LLMResult> _resultQueue = new Queue<LLMResult>();
+        private Queue<DepthResult> _resultQueue = new Queue<DepthResult>();
         private readonly object _queueLock = new object();
 
         #region Singleton
@@ -70,13 +105,13 @@ namespace LLMCommunication
                 return;
             }
 
-            // Set default port for LLMResultsReceiver
+            // Set port for DepthResultsReceiver (stereo detection results)
             if (_serverPort == 0)
             {
-                _serverPort = 5006; // ResultsServer default port
+                _serverPort = 5006; // ResultsServer port (shared with LLM results)
             }
 
-            // LLMResultsReceiver needs infinite timeout since it waits for server data
+            // Infinite timeout since we wait for server data
             _readTimeoutMs = 0; // 0 = infinite, no timeout
         }
 
@@ -96,7 +131,7 @@ namespace LLMCommunication
             {
                 while (_resultQueue.Count > 0)
                 {
-                    LLMResult result = _resultQueue.Dequeue();
+                    DepthResult result = _resultQueue.Dequeue();
                     ProcessResult(result);
                 }
             }
@@ -115,7 +150,7 @@ namespace LLMCommunication
 
         #region TCPClientBase Implementation
 
-        protected override string LogPrefix => "LLMResultsReceiver";
+        protected override string LogPrefix => "DepthResultsReceiver";
 
         protected override void OnConnected()
         {
@@ -157,7 +192,7 @@ namespace LLMCommunication
         #region Data Reception
 
         /// <summary>
-        /// Background thread loop for receiving results
+        /// Background thread loop for receiving depth results
         /// </summary>
         private void ReceiveLoop()
         {
@@ -203,7 +238,7 @@ namespace LLMCommunication
                         string json = UnityProtocol.DecodeResultMessage(fullMessage);
 
                         // Parse JSON
-                        LLMResult result = JsonUtility.FromJson<LLMResult>(json);
+                        DepthResult result = JsonUtility.FromJson<DepthResult>(json);
 
                         // Queue for processing on main thread
                         lock (_queueLock)
@@ -213,7 +248,7 @@ namespace LLMCommunication
                     }
                     catch (Exception parseEx)
                     {
-                        LogError($"Failed to parse result: {parseEx.Message}");
+                        LogError($"Failed to parse depth result: {parseEx.Message}");
                     }
                 }
             }
@@ -254,28 +289,45 @@ namespace LLMCommunication
         #region Result Processing
 
         /// <summary>
-        /// Process a received result (called on main thread)
+        /// Process a received depth result (called on main thread)
         /// </summary>
-        private void ProcessResult(LLMResult result)
+        private void ProcessResult(DepthResult result)
         {
             if (result == null)
                 return;
 
             if (_logResults)
             {
-                string modelInfo = result.metadata?.model ?? "unknown";
-                string durationInfo = result.metadata != null ? $"{result.metadata.duration_seconds:F2}s" : "?";
-                Log($"📥 LLM Result for {result.camera_id}:\n  Response: {result.response}\n  Model: {modelInfo}\n  Duration: {durationInfo}");
+                string durationInfo = result.metadata != null ? $"{result.metadata.processing_time_seconds:F2}s" : "?";
+                int detectionCount = result.detections != null ? result.detections.Length : 0;
+
+                Log($"📏 Depth Result for {result.camera_id}: {detectionCount} objects detected in {durationInfo}");
+
+                // Log each detection with 3D position
+                if (result.detections != null)
+                {
+                    foreach (var detection in result.detections)
+                    {
+                        if (detection.world_position != null)
+                        {
+                            Log($"  - {detection.color.ToUpper()} cube at ({detection.world_position.x:F3}, {detection.world_position.y:F3}, {detection.world_position.z:F3})m, depth={detection.depth_m:F3}m, confidence={detection.confidence:F2}");
+                        }
+                        else
+                        {
+                            Log($"  - {detection.color.ToUpper()} cube at pixel ({detection.pixel_center.x}, {detection.pixel_center.y}), confidence={detection.confidence:F2}");
+                        }
+                    }
+                }
             }
 
             // Fire event for subscribers
             try
             {
-                OnResultReceived?.Invoke(result);
+                OnDepthResultReceived?.Invoke(result);
             }
             catch (Exception ex)
             {
-                LogError($"Error in OnResultReceived event handler: {ex.Message}");
+                LogError($"Error in OnDepthResultReceived event handler: {ex.Message}");
             }
         }
 

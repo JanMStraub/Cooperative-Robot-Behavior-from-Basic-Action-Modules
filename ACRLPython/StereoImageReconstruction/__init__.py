@@ -7,10 +7,10 @@ Main modules:
 - Reconstruct: Core stereo reconstruction functions
 - FeatureMatching: Feature matching for disparity estimation
 - StreamingServer: Real-time streaming server with visualization
-- config: Configuration dataclasses
+- stereo_config: Configuration dataclasses
 """
 
-from .config import (
+from .stereo_config import (
     CameraConfig,
     ReconstructionConfig,
     FeatureMatchConfig,

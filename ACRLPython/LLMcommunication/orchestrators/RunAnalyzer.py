@@ -18,27 +18,32 @@ import sys
 import hashlib
 from pathlib import Path
 
-# Add LLMCommunication package directory to path
+# Add parent directories to path for direct script execution
 _package_dir = Path(__file__).parent.parent
-sys.path.insert(0, str(_package_dir))
+_acrl_root = Path(__file__).parent.parent.parent
+if str(_package_dir) not in sys.path:
+    sys.path.insert(0, str(_package_dir))
+if str(_acrl_root) not in sys.path:
+    sys.path.insert(0, str(_acrl_root))
 
 # Import config - support both direct script and module execution
+# Try absolute import first (for direct execution), then relative (for module execution)
 try:
-    from .. import config as cfg
+    from LLMCommunication import llm_config as cfg
 except ImportError:
-    import config as cfg
+    from .. import llm_config as cfg
 
 # Import server components - support both direct script and module execution
 try:
+    from LLMCommunication.servers.StreamingServer import ImageStorage, run_streaming_server_background
+    from LLMCommunication.core.TCPServerBase import ServerConfig
+    from LLMCommunication.servers.ResultsServer import ResultsBroadcaster, run_results_server_background
+    from LLMCommunication.vision.AnalyzeImage import LMStudioVisionProcessor, save_response
+except ImportError:
     from ..servers.StreamingServer import ImageStorage, run_streaming_server_background
     from ..core.TCPServerBase import ServerConfig
     from ..servers.ResultsServer import ResultsBroadcaster, run_results_server_background
     from ..vision.AnalyzeImage import LMStudioVisionProcessor, save_response
-except ImportError:
-    from servers.StreamingServer import ImageStorage, run_streaming_server_background
-    from core.TCPServerBase import ServerConfig
-    from servers.ResultsServer import ResultsBroadcaster, run_results_server_background
-    from vision.AnalyzeImage import LMStudioVisionProcessor, save_response
 from datetime import datetime
 import time
 from typing import Dict

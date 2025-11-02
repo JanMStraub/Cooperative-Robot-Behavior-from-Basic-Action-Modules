@@ -16,7 +16,7 @@ class CameraConfig:
     fov: Optional[float] = 60.0  # Field of view in degrees
     focal_length: Optional[float] = None  # Focal length in mm
     sensor_width: Optional[float] = None  # Sensor width in mm
-    baseline: float = 0.1  # Distance between stereo cameras in meters
+    baseline: float = 0.05  # Distance between stereo cameras in meters
 
 
 @dataclass
@@ -24,16 +24,16 @@ class ReconstructionConfig:
     """Stereo reconstruction algorithm parameters"""
 
     # SGBM parameters
-    window_size: int = 2
+    window_size: int = 5  # Increased from 2 for better matching
     min_disparity: int = 0
-    max_disparity: Optional[int] = None  # Auto-estimate if None
-    uniqueness_ratio: int = 40
-    speckle_window_size: int = 20
-    speckle_range: int = 1
-    disp12_max_diff: int = 5
+    max_disparity: Optional[int] = 160  # Set to 160 for close-range with reduced baseline (5cm baseline optimal)
+    uniqueness_ratio: int = 5  # Reduced from 40 for more lenient matching
+    speckle_window_size: int = 100  # Increased from 20 for better noise filtering
+    speckle_range: int = 2  # Increased from 1
+    disp12_max_diff: int = 1  # Reduced from 5 for stricter matching
 
     # Smoothness parameters
-    p1_multiplier: int = 4
+    p1_multiplier: int = 8  # Increased from 4
     p2_multiplier: int = 32
 
     # Filtering

@@ -197,6 +197,7 @@ def cleanup_singletons():
     try:
         from LLMCommunication.servers.StreamingServer import ImageStorage
         ImageStorage._instance = None
+        ImageStorage._cameras = {}
     except:
         pass
 
@@ -204,18 +205,24 @@ def cleanup_singletons():
         from LLMCommunication.servers.ResultsServer import ResultsBroadcaster
         ResultsBroadcaster._instance = None
         ResultsBroadcaster._server = None
+        ResultsBroadcaster._result_queue = []
     except:
         pass
 
     try:
         from LLMCommunication.servers.DetectionServer import DetectionBroadcaster
+        import queue
+        import LLMCommunication.llm_config as cfg
         DetectionBroadcaster._instance = None
+        DetectionBroadcaster._clients = []
+        DetectionBroadcaster._result_queue = queue.Queue(maxsize=cfg.MAX_RESULT_QUEUE_SIZE)
     except:
         pass
 
     try:
         from LLMCommunication.servers.StereoDetectionServer import StereoImageStorage
         StereoImageStorage._instance = None
+        StereoImageStorage._pairs = {}
     except:
         pass
 

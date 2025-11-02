@@ -148,7 +148,8 @@ class TestStereoDetectorOrchestratorProcessing:
 
         # Verify detector was called with Unity-provided camera config
         call_args = mock_detector.detect_cubes_stereo.call_args
-        used_config = call_args[1]['camera_config']
+        # camera_config is the 3rd positional argument (imgL, imgR, camera_config)
+        used_config = call_args[0][2]
 
         # Should use Unity's parameters
         assert used_config.baseline == 0.15
