@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using LLMCommunication;
+using PythonCommunication;
 using UnityEngine;
 
 /// <summary>

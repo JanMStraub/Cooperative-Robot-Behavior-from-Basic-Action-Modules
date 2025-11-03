@@ -693,7 +693,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 658235253818396361, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_UseGravity
-      value: 1
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 658235253818396361, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LinearDamping
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 658235253818396361, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_AngularDamping
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 739283656638030527, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Layer
@@ -793,7 +801,23 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2460541051062876866, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_UseGravity
-      value: 1
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2460541051062876866, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LinearDamping
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 2460541051062876866, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_AngularDamping
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 2525543879718364183, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: field of view
+      value: 60
+      objectReference: {fileID: 0}
+    - target: {fileID: 2525543879718364183, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: near clip plane
+      value: 0.1
       objectReference: {fileID: 0}
     - target: {fileID: 2525543879718364183, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_CullingMask.m_Bits
@@ -817,11 +841,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 2769980654537543894, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0.1
+      value: 0.025
       objectReference: {fileID: 0}
     - target: {fileID: 2769980654537543894, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.3
+      value: 0.1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2769980654537543894, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -0.65
       objectReference: {fileID: 0}
     - target: {fileID: 2769980654537543894, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalRotation.w
@@ -840,6 +868,10 @@ PrefabInstance:
       value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 3294585200459194103, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Layer
+      value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 3494898492998266439, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Layer
       value: 3
       objectReference: {fileID: 0}
@@ -884,16 +916,24 @@ PrefabInstance:
       value: 3
       objectReference: {fileID: 0}
     - target: {fileID: 5123341763645127469, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: field of view
+      value: 60
+      objectReference: {fileID: 0}
+    - target: {fileID: 5123341763645127469, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: near clip plane
+      value: 0.1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5123341763645127469, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_CullingMask.m_Bits
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5365257248420866963, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -0.02
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5365257248420866963, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0.2
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6273245316446184622, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_IsActive
@@ -933,11 +973,15 @@ PrefabInstance:
       objectReference: {fileID: 2100000, guid: 1e898575647d1445b8a577b6201e5c7d, type: 2}
     - target: {fileID: 8109739080239695593, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -0.1
+      value: -0.025
       objectReference: {fileID: 0}
     - target: {fileID: 8109739080239695593, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 0.3
+      value: 0.1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8109739080239695593, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -0.65
       objectReference: {fileID: 0}
     - target: {fileID: 8109739080239695593, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalRotation.w
@@ -965,7 +1009,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8564542878510576786, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_UseGravity
-      value: 1
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8564542878510576786, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LinearDamping
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 8564542878510576786, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_AngularDamping
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 8778473339362995434, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: 'm_Materials.Array.data[0]'
@@ -975,6 +1027,10 @@ PrefabInstance:
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: 1e898575647d1445b8a577b6201e5c7d, type: 2}
+    - target: {fileID: 8877039205544941220, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Layer
+      value: 3
+      objectReference: {fileID: 0}
     - target: {fileID: 8889996202013839288, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Layer
       value: 3

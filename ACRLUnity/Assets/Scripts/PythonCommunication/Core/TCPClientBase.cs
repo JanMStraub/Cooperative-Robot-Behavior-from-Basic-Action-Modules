@@ -2,7 +2,7 @@ using System;
 using System.Net.Sockets;
 using UnityEngine;
 
-namespace LLMCommunication.Core
+namespace PythonCommunication.Core
 {
     /// <summary>
     /// Abstract base class for TCP client connections.

@@ -1,8 +1,8 @@
 using System;
 using UnityEngine;
-using LLMCommunication.Core;
+using PythonCommunication.Core;
 
-namespace LLMCommunication
+namespace PythonCommunication
 {
     /// <summary>
     /// Sends camera images to Python StreamingServer via TCP for LLM vision processing.

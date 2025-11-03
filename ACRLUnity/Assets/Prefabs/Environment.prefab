@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 5715892671100719664}
   - component: {fileID: 8505931765121351713}
   - component: {fileID: 7439686989891152675}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: CameraBody
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -102,7 +102,7 @@ GameObject:
   - component: {fileID: 7006488491167605906}
   - component: {fileID: 1017202578622260992}
   - component: {fileID: 1925355919484458544}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Wrist1
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -282,7 +282,7 @@ GameObject:
   - component: {fileID: 8617586071485917190}
   - component: {fileID: 1525482173348621526}
   - component: {fileID: 322742488913023364}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Gripper
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -461,7 +461,7 @@ GameObject:
   - component: {fileID: 2732167814301046052}
   - component: {fileID: 6900717005396899923}
   - component: {fileID: 8923705212507109047}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: CameraBody
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -548,7 +548,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 7179193598612271950}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: GripperFocus
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -582,7 +582,7 @@ GameObject:
   - component: {fileID: 8386552090041056330}
   - component: {fileID: 4321638812643074165}
   - component: {fileID: 1084072476647038251}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: LeftRobotCamera
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -739,7 +739,7 @@ GameObject:
   - component: {fileID: 8543060397222545486}
   - component: {fileID: 1076831575800944907}
   - component: {fileID: 7560065640519557326}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Gripper
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -917,7 +917,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5776189785288816454}
   - component: {fileID: 722807700812051622}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: StereoCamera
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -956,10 +956,6 @@ MonoBehaviour:
   _leftCamera: {fileID: 8386552090041056330}
   _rightCamera: {fileID: 5805144949865213151}
   _cameraPairId: stereo
-  _stereoBaseline: 0.1
-  _useActualCameraFOV: 1
-  _manualCameraFOV: 60
-  _autoCalculateBaseline: 0
   _imageWidth: 1000
   _imageHeight: 1000
   _jpegQuality: 85
@@ -1066,7 +1062,7 @@ GameObject:
   - component: {fileID: 5469261131068901421}
   - component: {fileID: 5158624744778643750}
   - component: {fileID: 1515380530772427985}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: GripperJawRight
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -1268,7 +1264,7 @@ GameObject:
   - component: {fileID: 3924583342351954801}
   - component: {fileID: 886435204202130042}
   - component: {fileID: 2879952472659479607}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: RightRobotCamera
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1425,7 +1421,7 @@ GameObject:
   - component: {fileID: 7134811295606314512}
   - component: {fileID: 960565086628156014}
   - component: {fileID: 1795516361680870917}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Wrist2
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -1640,7 +1636,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1852501905985400592}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: GripperFocus
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -1675,7 +1671,7 @@ GameObject:
   - component: {fileID: 3360467371872225252}
   - component: {fileID: 2413239708452811029}
   - component: {fileID: 2635192068399080808}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: GripperBase
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -1808,7 +1804,7 @@ GameObject:
   - component: {fileID: 8187338594171283024}
   - component: {fileID: 4836533886669330788}
   - component: {fileID: 7506629498232951538}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: GripperBase
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -2029,7 +2025,7 @@ GameObject:
   - component: {fileID: 3066674758812174940}
   - component: {fileID: 1454215531829004526}
   - component: {fileID: 2015397268055270122}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: BasePlate
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -2186,7 +2182,7 @@ GameObject:
   - component: {fileID: 3112051045076159704}
   - component: {fileID: 8760388672605256452}
   - component: {fileID: 7397246179021266740}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: GripperJawRight
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -2341,7 +2337,7 @@ GameObject:
   - component: {fileID: 3964215953463788831}
   - component: {fileID: 3848940805899286585}
   - component: {fileID: 1388180214045174854}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: TableCameraBody
   m_TagString: EditorOnly
   m_Icon: {fileID: 0}
@@ -2432,7 +2428,7 @@ GameObject:
   - component: {fileID: 1660297301405150229}
   - component: {fileID: 6442140137147452295}
   - component: {fileID: 6935805279282253246}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Wrist2
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -2645,15 +2641,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9a4bfe224d8184bb0bce97cde2cea0f2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StereoCameraController
-  _leftCamera: {fileID: 5123341763645127469}
-  _rightCamera: {fileID: 2525543879718364183}
-  _cameraPairId: stereo
-  _stereoBaseline: 0.2
-  _useActualCameraFOV: 1
-  _manualCameraFOV: 55
-  _autoCalculateBaseline: 1
-  _imageWidth: 2048
-  _imageHeight: 2048
+  _leftCamera: {fileID: 2525543879718364183}
+  _rightCamera: {fileID: 5123341763645127469}
+  _cameraPairId: TableStereo
+  _imageWidth: 1920
+  _imageHeight: 1080
   _jpegQuality: 85
 --- !u!1 &3733249129385439708
 GameObject:
@@ -2667,7 +2659,7 @@ GameObject:
   - component: {fileID: 8089491856196762366}
   - component: {fileID: 1414597902025723859}
   - component: {fileID: 7440121535581080321}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: BasePlate
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -2825,7 +2817,7 @@ GameObject:
   - component: {fileID: 4896062774266187502}
   - component: {fileID: 3946187746601716685}
   - component: {fileID: 6119045247345513078}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Elbow
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -3019,14 +3011,14 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4156264092749512375}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.2164396, y: 0, z: 0, w: 0.97629607}
-  m_LocalPosition: {x: -0.05, y: 0.7, z: -0.85}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.025, y: 0.1, z: -0.65}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 5999932473886728195}
   m_Father: {fileID: 5365257248420866963}
-  m_LocalEulerAnglesHint: {x: 25, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!20 &2525543879718364183
 Camera:
   m_ObjectHideFlags: 0
@@ -3058,15 +3050,15 @@ Camera:
     y: 0
     width: 1
     height: 1
-  near clip plane: 0.5
+  near clip plane: 0.1
   far clip plane: 2
-  field of view: 55
+  field of view: 60
   orthographic: 0
   orthographic size: 1
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 1
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 0}
   m_TargetDisplay: 1
@@ -3134,8 +3126,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 500fcb0ba4ef349809caeda6e7317003, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _imageWidth: 512
-  _imageHeight: 512
+  _imageWidth: 1920
+  _imageHeight: 1080
   _resolutionScale: 1
   _grayscaleMode: 0
   _grayscaleMaterial: {fileID: 2100000, guid: 85731220826fe4971bb3613c9b92cf5a, type: 2}
@@ -3176,7 +3168,7 @@ Transform:
   m_GameObject: {fileID: 4311577316375393851}
   serializedVersion: 2
   m_LocalRotation: {x: -0.5, y: -0.5, z: 0.5, w: -0.5}
-  m_LocalPosition: {x: 0.2, y: 0.3, z: 0}
+  m_LocalPosition: {x: 0.2, y: 0.1, z: -0.1}
   m_LocalScale: {x: 0.03, y: 0.03, z: 0.03}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -3268,8 +3260,8 @@ Rigidbody:
   m_GameObject: {fileID: 4311577316375393851}
   serializedVersion: 5
   m_Mass: 5
-  m_LinearDamping: 0.5
-  m_AngularDamping: 0.5
+  m_LinearDamping: 10
+  m_AngularDamping: 10
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -3297,7 +3289,7 @@ GameObject:
   - component: {fileID: 7924121600540714669}
   - component: {fileID: 4096478570302293491}
   - component: {fileID: 1161484734709215062}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: CameraStand
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3386,7 +3378,7 @@ GameObject:
   - component: {fileID: 3660112861845577016}
   - component: {fileID: 3782402239980959754}
   - component: {fileID: 9204731879346805042}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: CameraBody
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3474,7 +3466,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5119881141227424559}
   - component: {fileID: 3396964541051555326}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: StereoCamera
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3513,10 +3505,6 @@ MonoBehaviour:
   _leftCamera: {fileID: 3842654130852729012}
   _rightCamera: {fileID: 3924583342351954801}
   _cameraPairId: stereo
-  _stereoBaseline: 0.1
-  _useActualCameraFOV: 1
-  _manualCameraFOV: 60
-  _autoCalculateBaseline: 0
   _imageWidth: 1000
   _imageHeight: 1000
   _jpegQuality: 85
@@ -3531,7 +3519,7 @@ GameObject:
   - component: {fileID: 229241472082279365}
   - component: {fileID: 6857167107933580145}
   - component: {fileID: 1256139227801611331}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: CameraStand
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -3622,7 +3610,7 @@ GameObject:
   - component: {fileID: 1787542479872063365}
   - component: {fileID: 6496973695171843233}
   - component: {fileID: 5937554946705700565}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Base
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -3936,8 +3924,8 @@ Rigidbody:
   m_GameObject: {fileID: 5331003820133270314}
   serializedVersion: 5
   m_Mass: 2
-  m_LinearDamping: 0
-  m_AngularDamping: 0.05
+  m_LinearDamping: 10
+  m_AngularDamping: 10
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -4079,7 +4067,7 @@ GameObject:
   - component: {fileID: 8978128410019019753}
   - component: {fileID: 2765377995425387486}
   - component: {fileID: 2802120220629274552}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Wrist1
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -4346,7 +4334,7 @@ GameObject:
   - component: {fileID: 6293840062568876107}
   - component: {fileID: 3358529700324312489}
   - component: {fileID: 5589320365573243051}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: CameraStand
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -4451,14 +4439,14 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6869549267008686278}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.2164396, y: 0, z: 0, w: 0.97629607}
-  m_LocalPosition: {x: 0.05, y: 0.7, z: -0.85}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.025, y: 0.1, z: -0.65}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 3964215953463788831}
   m_Father: {fileID: 5365257248420866963}
-  m_LocalEulerAnglesHint: {x: 25, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!20 &5123341763645127469
 Camera:
   m_ObjectHideFlags: 0
@@ -4490,15 +4478,15 @@ Camera:
     y: 0
     width: 1
     height: 1
-  near clip plane: 0.5
+  near clip plane: 0.1
   far clip plane: 2
-  field of view: 55
+  field of view: 60
   orthographic: 0
   orthographic size: 1
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
-    m_Bits: 4294967295
+    m_Bits: 1
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 0}
   m_TargetDisplay: 1
@@ -4566,8 +4554,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 500fcb0ba4ef349809caeda6e7317003, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _imageWidth: 512
-  _imageHeight: 512
+  _imageWidth: 1920
+  _imageHeight: 1080
   _resolutionScale: 1
   _grayscaleMode: 0
   _grayscaleMaterial: {fileID: 2100000, guid: 85731220826fe4971bb3613c9b92cf5a, type: 2}
@@ -4592,7 +4580,7 @@ GameObject:
   - component: {fileID: 1103127970691089494}
   - component: {fileID: 6939588221563339080}
   - component: {fileID: 2788938982573676558}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Base
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -4772,7 +4760,7 @@ GameObject:
   - component: {fileID: 2292720968236429135}
   - component: {fileID: 4225898286242565996}
   - component: {fileID: 921355904595458570}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: AR4Right
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -4891,7 +4879,7 @@ GameObject:
   - component: {fileID: 7475884861670805274}
   - component: {fileID: 1500006890886948574}
   - component: {fileID: 8735969257302034147}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Elbow
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -5160,7 +5148,7 @@ GameObject:
   - component: {fileID: 5840388464726680511}
   - component: {fileID: 5451199788923998407}
   - component: {fileID: 3645888230020927152}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Shoulder
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -5340,7 +5328,7 @@ GameObject:
   - component: {fileID: 3714971054200463545}
   - component: {fileID: 6659326363438565893}
   - component: {fileID: 5056347768535104996}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: AR4Left
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -5582,7 +5570,7 @@ GameObject:
   - component: {fileID: 2573037727115102132}
   - component: {fileID: 1734386335833230299}
   - component: {fileID: 7150650322934181665}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: GripperJawLeft
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -5738,7 +5726,7 @@ GameObject:
   - component: {fileID: 5805144949865213151}
   - component: {fileID: 1251536100996104891}
   - component: {fileID: 2528618199720844531}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: RightRobotCamera
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -5982,7 +5970,7 @@ GameObject:
   - component: {fileID: 5486484262926425780}
   - component: {fileID: 3199376764436919545}
   - component: {fileID: 708409721223384275}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: CameraBody
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6160,7 +6148,7 @@ GameObject:
   - component: {fileID: 5999932473886728195}
   - component: {fileID: 3548702069596846286}
   - component: {fileID: 8350298609684973392}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: TableCameraBody
   m_TagString: EditorOnly
   m_Icon: {fileID: 0}
@@ -6249,7 +6237,7 @@ GameObject:
   - component: {fileID: 6521241865830170374}
   - component: {fileID: 868585622766005939}
   - component: {fileID: 5185781255207190820}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: CameraStand
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -6448,8 +6436,8 @@ Rigidbody:
   m_GameObject: {fileID: 8958063787227036824}
   serializedVersion: 5
   m_Mass: 1
-  m_LinearDamping: 0.5
-  m_AngularDamping: 0.5
+  m_LinearDamping: 10
+  m_AngularDamping: 10
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -6480,7 +6468,7 @@ GameObject:
   - component: {fileID: 7973545125006724995}
   - component: {fileID: 3033137874226169314}
   - component: {fileID: 3880609169033274852}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: GripperJawLeft
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -6718,7 +6706,7 @@ GameObject:
   - component: {fileID: 1940670419343091494}
   - component: {fileID: 3733022315421630736}
   - component: {fileID: 1619851490379722535}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: Shoulder
   m_TagString: Robot
   m_Icon: {fileID: 0}
@@ -6897,7 +6885,7 @@ GameObject:
   - component: {fileID: 3842654130852729012}
   - component: {fileID: 2695245287002648498}
   - component: {fileID: 5864361968004854539}
-  m_Layer: 0
+  m_Layer: 3
   m_Name: LeftRobotCamera
   m_TagString: Untagged
   m_Icon: {fileID: 0}
