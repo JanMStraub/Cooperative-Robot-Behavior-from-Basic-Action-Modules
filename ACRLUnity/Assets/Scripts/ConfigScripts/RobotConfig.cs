@@ -1,7 +1,9 @@
 using UnityEngine;
 
-[System.Serializable]
-public class JointConfiguration
+namespace Configuration
+{
+    [System.Serializable]
+    public class JointConfiguration
 {
     [Header("Joint Parameters")]
     public float stiffness = 800f;
@@ -65,4 +67,5 @@ public class RobotConfig : ScriptableObject
             new JointConfiguration(100, 50, 300, 180, -180), // Wrist 3
         };
     }
+}
 }

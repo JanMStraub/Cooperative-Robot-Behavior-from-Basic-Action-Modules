@@ -1,5 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Robotics;
+using Utilities;
+using Core;
 
 namespace Logging
 {
@@ -66,10 +69,10 @@ namespace Logging
                 robotId = _robotController != null ? _robotController.robotId : gameObject.name;
             }
 
-            // Auto-register scene objects
+            // Auto-register scene objects using ObjectRegistry
             if (autoRegisterObjects)
             {
-                RegisterSceneObjects();
+                RegisterSceneObjectsViaRegistry();
             }
 
             _isInitialized = true;
@@ -224,78 +227,42 @@ namespace Logging
         }
 
         /// <summary>
-        /// Registers scene objects for logging (objects with colliders or Trackpoint material)
+        /// Registers scene objects for logging using centralized ObjectRegistry service.
+        /// This eliminates code duplication with MainLogger.
         /// </summary>
-        private void RegisterSceneObjects()
+        private void RegisterSceneObjectsViaRegistry()
         {
-            var registeredObjects = new HashSet<GameObject>();
-
-            // Find all objects with colliders (potential targets)
-            var colliders = FindObjectsByType<Collider>(FindObjectsSortMode.None);
-
-            foreach (var collider in colliders)
+            // Ensure ObjectRegistry exists
+            if (ObjectRegistry.Instance == null)
             {
-                var obj = collider.gameObject;
-
-                // Skip robot parts
-                if (
-                    obj.GetComponent<RobotController>() != null
-                    || obj.GetComponent<ArticulationBody>() != null
-                    || obj.GetComponent<GripperController>() != null
-                )
-                    continue;
-
-                // Skip too small objects
-                if (collider.bounds.size.magnitude < 0.01f)
-                    continue;
-
-                // Register object
-                bool isGraspable =
-                    obj.GetComponent<Rigidbody>() != null && collider.bounds.size.magnitude < 0.5f;
-
-                _logger.RegisterObject(obj, null, isGraspable);
-                registeredObjects.Add(obj);
+                Debug.LogWarning("[AUTO_LOGGER] ObjectRegistry not found in scene. Creating one.");
+                var registryGO = new GameObject("ObjectRegistry");
+                registryGO.AddComponent<ObjectRegistry>();
             }
 
-            // Find all objects with Trackpoint material
-            var renderers = FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+            // Subscribe to registration events
+            ObjectRegistry.Instance.OnObjectRegistered += HandleObjectRegistered;
 
-            foreach (var renderer in renderers)
-            {
-                var obj = renderer.gameObject;
+            // Use centralized registry to find and register scene objects
+            int count = ObjectRegistry.Instance.RegisterSceneObjects(
+                includeColliders: true,
+                includeTrackpoints: true
+            );
 
-                // Skip if already registered
-                if (registeredObjects.Contains(obj))
-                    continue;
+            Debug.Log($"[AUTO_LOGGER] Registered {count} objects via ObjectRegistry");
+        }
 
-                // Skip robot parts
-                if (
-                    obj.GetComponent<RobotController>() != null
-                    || obj.GetComponent<ArticulationBody>() != null
-                    || obj.GetComponent<GripperController>() != null
-                )
-                    continue;
+        /// <summary>
+        /// Handles object registration events from ObjectRegistry.
+        /// Delegates to MainLogger for actual tracking.
+        /// </summary>
+        private void HandleObjectRegistered(GameObject obj, ObjectRegistry.ObjectInfo info)
+        {
+            if (_logger == null || obj == null)
+                return;
 
-                // Check if any material is named "Trackpoint"
-                bool hasTrackpointMaterial = false;
-                foreach (var material in renderer.sharedMaterials)
-                {
-                    if (material != null && material.name.Contains("Trackpoint"))
-                    {
-                        hasTrackpointMaterial = true;
-                        break;
-                    }
-                }
-
-                if (hasTrackpointMaterial)
-                {
-                    // Trackpoint objects are typically not graspable (markers)
-                    _logger.RegisterObject(obj, null, false);
-                    registeredObjects.Add(obj);
-                }
-            }
-
-            Debug.Log($"[AUTO_LOGGER] Registered {registeredObjects.Count} objects");
+            // Delegate to MainLogger's registration
+            _logger.RegisterObject(obj, info.ObjectType, info.IsGraspable);
         }
 
         // Public methods for manual logging
@@ -339,6 +306,12 @@ namespace Logging
             if (!string.IsNullOrEmpty(_currentGripperActionId))
             {
                 CompleteGripperAction();
+            }
+
+            // Unsubscribe from ObjectRegistry events
+            if (ObjectRegistry.Instance != null)
+            {
+                ObjectRegistry.Instance.OnObjectRegistered -= HandleObjectRegistered;
             }
         }
 

@@ -2,13 +2,17 @@ using MathNet.Numerics.LinearAlgebra;
 using MathNet.Numerics.LinearAlgebra.Double;
 using UnityEngine;
 using Logging;
+using Simulation;
+using Core;
 
-/// <summary>
-/// Controls a robotic arm using inverse kinematics (IK) with a damped least squares
-/// pseudo-inverse approach. Handles target assignment, IK step computation,
-/// and joint drive updates.
-/// </summary>
-public class RobotController : MonoBehaviour
+namespace Robotics
+{
+    /// <summary>
+    /// Controls a robotic arm using inverse kinematics (IK) with a damped least squares
+    /// pseudo-inverse approach. Handles target assignment, IK step computation,
+    /// and joint drive updates.
+    /// </summary>
+    public class RobotController : MonoBehaviour
 {
     private SimulationManager _simulationManager;
     private RobotManager _robotManager;
@@ -466,4 +470,5 @@ public class RobotController : MonoBehaviour
         if (!_hasReachedTarget)
             PerformInverseKinematicsStep();
     }
+}
 }
