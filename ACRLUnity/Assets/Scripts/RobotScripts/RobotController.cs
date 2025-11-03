@@ -148,16 +148,28 @@ namespace Robotics
 
     /// <summary>
     /// Returns the current distance between end effector and target.
+    /// Returns 0 if no target is set.
     /// </summary>
     public float GetDistanceToTarget()
     {
+        if (_targetTransform == null)
+            return 0f;
+
         UpdateEndEffectorState();
         return _distanceToTarget;
     }
 
     public float GetDriveTarget(int i) => robotJoints[i].xDrive.target;
 
-    public Vector3 GetCurrentTarget() => _targetTransform.position;
+    /// <summary>
+    /// Returns the current target position, or null if no target is set
+    /// </summary>
+    public Vector3? GetCurrentTarget()
+    {
+        if (_targetTransform == null)
+            return null;
+        return _targetTransform.position;
+    }
 
     /// <summary>
     /// Initializes joint drive properties (stiffness, damping, limits, etc.)
@@ -208,6 +220,13 @@ namespace Robotics
     /// </summary>
     private void UpdateEndEffectorState()
     {
+        // Safety check - should not be called without a target, but guard anyway
+        if (_targetTransform == null)
+        {
+            _distanceToTarget = 0f;
+            return;
+        }
+
         // World-state
         _endEffectorWorldPosition = endEffectorBase.position;
         _endEffectorWorldRotation = endEffectorBase.rotation;

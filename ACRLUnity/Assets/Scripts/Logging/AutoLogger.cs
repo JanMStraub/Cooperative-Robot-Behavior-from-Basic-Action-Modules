@@ -1,8 +1,8 @@
 using System.Collections.Generic;
-using UnityEngine;
-using Robotics;
-using Utilities;
 using Core;
+using Robotics;
+using UnityEngine;
+using Utilities;
 
 namespace Logging
 {
@@ -85,7 +85,11 @@ namespace Logging
                 return;
 
             // Monitor robot movement
-            if (logMovement && _robotController != null)
+            if (
+                logMovement
+                && _robotController != null
+                && _robotController.GetCurrentTarget().HasValue
+            )
             {
                 MonitorRobotMovement();
             }
@@ -99,7 +103,11 @@ namespace Logging
 
         private void MonitorRobotMovement()
         {
-            Vector3 currentTarget = _robotController.GetCurrentTarget();
+            Vector3? currentTargetNullable = _robotController.GetCurrentTarget();
+            if (!currentTargetNullable.HasValue)
+                return;
+
+            Vector3 currentTarget = currentTargetNullable.Value;
 
             // Target changed
             if (Vector3.Distance(currentTarget, _lastTarget) > 0.01f)
@@ -322,7 +330,11 @@ namespace Logging
         {
             if (_robotController != null && _logger != null)
             {
-                StartMovement(_robotController.GetCurrentTarget());
+                Vector3? currentTarget = _robotController.GetCurrentTarget();
+                if (currentTarget.HasValue)
+                {
+                    StartMovement(currentTarget.Value);
+                }
             }
         }
 

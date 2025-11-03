@@ -130,7 +130,7 @@ BLUE_HSV_LOWER = (110, 100, 100)  # Blue with tolerance for lighting
 BLUE_HSV_UPPER = (130, 255, 255)
 
 # Detection Filters
-MIN_CUBE_AREA_PX = 800  # Minimum bounding box area in pixels
+MIN_CUBE_AREA_PX = 400  # Minimum bounding box area in pixels
 MAX_CUBE_AREA_PX = 80000  # Maximum bounding box area in pixels
 MIN_ASPECT_RATIO = 0.3  # Minimum width/height ratio (allow some perspective distortion)
 MAX_ASPECT_RATIO = 3.5  # Maximum width/height ratio (allow elongated views)
