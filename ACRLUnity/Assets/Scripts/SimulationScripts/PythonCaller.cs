@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Logging;
 using UnityEngine;
+using Core;
 
 namespace Simulation
 {
@@ -20,15 +21,15 @@ namespace Simulation
     [Header("Process Settings")]
     [SerializeField]
     [Tooltip("Default timeout in seconds for Python processes (0 = no timeout)")]
-    private int _defaultTimeoutSeconds = 300; // 5 minutes
+    private int _defaultTimeoutSeconds = CommunicationConstants.DEFAULT_PYTHON_TIMEOUT;
 
     [SerializeField]
     [Tooltip("Maximum number of concurrent Python processes")]
-    private int _maxConcurrentProcesses = 3;
+    private int _maxConcurrentProcesses = CommunicationConstants.MAX_CONCURRENT_PROCESSES;
 
     [SerializeField]
     [Tooltip("Buffer size for streaming process output (bytes)")]
-    private int _outputBufferSize = 4096;
+    private int _outputBufferSize = CommunicationConstants.OUTPUT_BUFFER_SIZE;
 
     // Singleton
     public static PythonCaller Instance { get; private set; }

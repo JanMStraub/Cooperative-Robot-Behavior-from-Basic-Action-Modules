@@ -26,7 +26,7 @@ public class CollisionConfig
     public bool enableCollisionDetection = true;
     public bool enableTargetReached = true;
     public bool enableCollisionLogging = true;
-    public float collisionCooldown = 0.5f;
+    public float collisionCooldown = CollisionConstants.DEFAULT_COLLISION_COOLDOWN;
 
     [Header("Filtering")]
     public LayerMask robotLayerMask = -1;
@@ -47,7 +47,7 @@ public class CollisionDetector : MonoBehaviour
     private bool isGoalTarget = true;
 
     [SerializeField]
-    private float targetRewardValue = 1.0f;
+    private float targetRewardValue = CollisionConstants.DEFAULT_TARGET_REWARD;
 
     // Core components
     private RobotManager _robotManager;
