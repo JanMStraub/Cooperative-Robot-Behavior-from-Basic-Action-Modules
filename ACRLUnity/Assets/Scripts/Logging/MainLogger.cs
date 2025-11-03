@@ -41,7 +41,7 @@ namespace Logging
         public bool trackTrajectories = true;
 
         [Tooltip("Trajectory point sampling rate (seconds)")]
-        public float trajectorySampleRate = 0.2f;
+        public float trajectorySampleRate = LoggingConstants.DEFAULT_TRAJECTORY_SAMPLE_RATE;
 
         [Tooltip("Auto-register objects in scene")]
         public bool autoRegisterObjects = true;

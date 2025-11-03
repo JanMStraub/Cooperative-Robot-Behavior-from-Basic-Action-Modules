@@ -23,19 +23,19 @@ namespace Robotics
 
     [Header("IK Parameters")]
     [SerializeField]
-    private float _dampingFactorLambda = 0.1f; // Damping factor for pseudo-inverse stability
+    private float _dampingFactorLambda = RobotConstants.DEFAULT_DAMPING_FACTOR;
 
     [SerializeField]
-    private float _minStepSpeedNearTarget = 0.1f; // Step size when very close to target
+    private float _minStepSpeedNearTarget = RobotConstants.MIN_STEP_SPEED_NEAR_TARGET;
 
     [SerializeField]
-    private float _maxStepSpeed = 0.5f; // Maximum step size
+    private float _maxStepSpeed = RobotConstants.MAX_STEP_SPEED;
 
     private float _distanceToTarget;
     private bool _hasReachedTarget = true;
     private Transform _targetTransform;
 
-    private const int _JacobianRows = 6; // 3 for position, 3 for orientation
+    private const int _JacobianRows = RobotConstants.JACOBIAN_DIMENSIONS;
 
     // Pre-allocated for performance to reduce GC allocs
     private Matrix<double> _jacobianMatrix;
@@ -366,7 +366,7 @@ namespace Robotics
                     description: $"Reached target {_targetTransform.name}"
                 );
                 float distance = GetDistanceToTarget();
-                float quality = Mathf.Max(0f, 1f - distance / 0.1f);
+                float quality = Mathf.Max(0f, 1f - distance / RobotConstants.DEFAULT_CONVERGENCE_THRESHOLD);
                 _logger.CompleteAction(actionId, success: true, qualityScore: quality);
             }
 
