@@ -1061,7 +1061,7 @@ GameObject:
   - component: {fileID: 6567833768618816711}
   - component: {fileID: 5469261131068901421}
   - component: {fileID: 5158624744778643750}
-  - component: {fileID: 1515380530772427985}
+  - component: {fileID: 5872997994507787861}
   m_Layer: 3
   m_Name: GripperJawRight
   m_TagString: Robot
@@ -1227,7 +1227,7 @@ ArticulationBody:
   m_Immovable: 0
   m_UseGravity: 1
   m_CollisionDetectionMode: 1
---- !u!114 &1515380530772427985
+--- !u!114 &5872997994507787861
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -1236,9 +1236,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 2116362737340270651}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d448f5dd7dcb046e892490188f66ac33, type: 3}
+  m_Script: {fileID: 11500000, guid: e29bc2a79cf264e6db0cbbc9e4d74b68, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::GetCollision
+  m_EditorClassIdentifier: Assembly-CSharp::Robotics.CollisionDetector
   config:
     enableCollisionDetection: 1
     enableTargetReached: 1
@@ -2182,6 +2182,7 @@ GameObject:
   - component: {fileID: 3112051045076159704}
   - component: {fileID: 8760388672605256452}
   - component: {fileID: 7397246179021266740}
+  - component: {fileID: 9197809065819740912}
   m_Layer: 3
   m_Name: GripperJawRight
   m_TagString: Robot
@@ -2326,6 +2327,31 @@ ArticulationBody:
   m_Immovable: 0
   m_UseGravity: 1
   m_CollisionDetectionMode: 1
+--- !u!114 &9197809065819740912
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3294585200459194103}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e29bc2a79cf264e6db0cbbc9e4d74b68, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Robotics.CollisionDetector
+  config:
+    enableCollisionDetection: 1
+    enableTargetReached: 1
+    enableCollisionLogging: 1
+    collisionCooldown: 0.5
+    robotLayerMask:
+      serializedVersion: 2
+      m_Bits: 4294967295
+    ignoredTags:
+    - Untagged
+  targetId: 
+  isGoalTarget: 1
+  targetRewardValue: 1
 --- !u!1 &3494898492998266439
 GameObject:
   m_ObjectHideFlags: 0
@@ -3789,8 +3815,8 @@ GameObject:
   - component: {fileID: 5941473216697401630}
   - component: {fileID: 3436176438307990037}
   - component: {fileID: 2755505551222364059}
-  - component: {fileID: 4919514808224088248}
   - component: {fileID: 658235253818396361}
+  - component: {fileID: 2793713429505950965}
   m_Layer: 0
   m_Name: MiddleTarget
   m_TagString: Target
@@ -3890,31 +3916,6 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 1, y: 1, z: 1}
   m_Center: {x: 0, y: 0, z: 0}
---- !u!114 &4919514808224088248
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5331003820133270314}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d448f5dd7dcb046e892490188f66ac33, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  config:
-    enableCollisionDetection: 1
-    enableTargetReached: 1
-    enableCollisionLogging: 1
-    collisionCooldown: 0.5
-    robotLayerMask:
-      serializedVersion: 2
-      m_Bits: 4294967295
-    ignoredTags:
-    - Untagged
-  targetId: 
-  isGoalTarget: 1
-  targetRewardValue: 1
 --- !u!54 &658235253818396361
 Rigidbody:
   m_ObjectHideFlags: 0
@@ -3942,6 +3943,31 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
+--- !u!114 &2793713429505950965
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5331003820133270314}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e29bc2a79cf264e6db0cbbc9e4d74b68, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Robotics.CollisionDetector
+  config:
+    enableCollisionDetection: 1
+    enableTargetReached: 1
+    enableCollisionLogging: 1
+    collisionCooldown: 0.5
+    robotLayerMask:
+      serializedVersion: 2
+      m_Bits: 4294967295
+    ignoredTags:
+    - Untagged
+  targetId: 
+  isGoalTarget: 1
+  targetRewardValue: 1
 --- !u!1 &6273245316446184622
 GameObject:
   m_ObjectHideFlags: 0
@@ -5570,6 +5596,7 @@ GameObject:
   - component: {fileID: 2573037727115102132}
   - component: {fileID: 1734386335833230299}
   - component: {fileID: 7150650322934181665}
+  - component: {fileID: 6279329990705201735}
   m_Layer: 3
   m_Name: GripperJawLeft
   m_TagString: Robot
@@ -5714,6 +5741,31 @@ ArticulationBody:
   m_Immovable: 0
   m_UseGravity: 1
   m_CollisionDetectionMode: 1
+--- !u!114 &6279329990705201735
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8137421635166623764}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e29bc2a79cf264e6db0cbbc9e4d74b68, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Robotics.CollisionDetector
+  config:
+    enableCollisionDetection: 1
+    enableTargetReached: 1
+    enableCollisionLogging: 1
+    collisionCooldown: 0.5
+    robotLayerMask:
+      serializedVersion: 2
+      m_Bits: 4294967295
+    ignoredTags:
+    - Untagged
+  targetId: 
+  isGoalTarget: 1
+  targetRewardValue: 1
 --- !u!1 &8174604134950154892
 GameObject:
   m_ObjectHideFlags: 0
@@ -6467,7 +6519,7 @@ GameObject:
   - component: {fileID: 5004411779024357332}
   - component: {fileID: 7973545125006724995}
   - component: {fileID: 3033137874226169314}
-  - component: {fileID: 3880609169033274852}
+  - component: {fileID: 8255526767708996404}
   m_Layer: 3
   m_Name: GripperJawLeft
   m_TagString: Robot
@@ -6633,7 +6685,7 @@ ArticulationBody:
   m_Immovable: 0
   m_UseGravity: 1
   m_CollisionDetectionMode: 1
---- !u!114 &3880609169033274852
+--- !u!114 &8255526767708996404
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -6642,9 +6694,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 9101567445215437364}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d448f5dd7dcb046e892490188f66ac33, type: 3}
+  m_Script: {fileID: 11500000, guid: e29bc2a79cf264e6db0cbbc9e4d74b68, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::GetCollision
+  m_EditorClassIdentifier: Assembly-CSharp::Robotics.CollisionDetector
   config:
     enableCollisionDetection: 1
     enableTargetReached: 1

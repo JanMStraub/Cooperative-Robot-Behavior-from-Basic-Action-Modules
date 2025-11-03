@@ -3,9 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using Logging;
 using UnityEngine;
+using Configuration;
+using Core;
 
-[System.Serializable]
-public class RobotInstance
+namespace Robotics
+{
+    [System.Serializable]
+    public class RobotInstance
 {
     public string robotId;
     public GameObject robotGameObject;
@@ -526,4 +530,5 @@ public class RobotManager : MonoBehaviour
             Instance = null;
         }
     }
+}
 }

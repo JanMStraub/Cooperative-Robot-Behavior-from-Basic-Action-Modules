@@ -14,9 +14,11 @@ using UnityEngine;
 using UnityEditor;
 #endif
 
+namespace Robotics
+{
 #if UNITY_EDITOR
-[CustomEditor(typeof(GripperController))]
-public class GripperControllerEditor : Editor
+    [CustomEditor(typeof(GripperController))]
+    public class GripperControllerEditor : Editor
 {
     public override void OnInspectorGUI()
     {
@@ -204,4 +206,5 @@ public class GripperController : MonoBehaviour
 
         ApplyTargetToGrippers(_currentTarget);
     }
+}
 }

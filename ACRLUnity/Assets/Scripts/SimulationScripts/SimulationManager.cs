@@ -2,11 +2,17 @@ using System;
 using System.Collections.Generic;
 using Logging;
 using UnityEngine;
+using Robotics;
+using Configuration;
+using Core;
+using Simulation.CoordinationStrategies;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
 
-public enum SimulationState
+namespace Simulation
+{
+    public enum SimulationState
 {
     Initializing,
     Running,
@@ -80,7 +86,7 @@ public class SimulationManager : MonoBehaviour
     private SimulationState _previousState = SimulationState.Paused;
 
     // Robot coordination
-    private int _activeRobotIndex = 0;
+    private ICoordinationStrategy _coordinationStrategy;
     private Dictionary<string, bool> _robotTargetReached = new Dictionary<string, bool>();
 
     // Events
@@ -172,6 +178,9 @@ public class SimulationManager : MonoBehaviour
                 _robotTargetReached[robotId] = true; // Start with no active targets
             }
 
+            // Initialize coordination strategy based on config
+            InitializeCoordinationStrategy();
+
             // Log simulation start
             Debug.Log(
                 $"[SIMULATION_MANAGER] Initialized: Found {_robotControllers.Length} robots. Mode: {config.coordinationMode}"
@@ -229,63 +238,35 @@ public class SimulationManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Updates robot coordination based on the current coordination mode.
+    /// Initializes the coordination strategy based on the current configuration.
+    /// Uses the Strategy Pattern to allow different coordination modes.
     /// </summary>
-    private void UpdateRobotCoordination()
+    private void InitializeCoordinationStrategy()
     {
-        if (!IsRunning || _robotControllers == null)
-            return;
-
-        switch (config.coordinationMode)
+        _coordinationStrategy = config.coordinationMode switch
         {
-            case RobotCoordinationMode.Sequential:
-                HandleSequentialMode();
-                break;
+            RobotCoordinationMode.Sequential => new SequentialStrategy(),
+            RobotCoordinationMode.Independent => new IndependentStrategy(),
+            RobotCoordinationMode.Collaborative => new IndependentStrategy(), // TODO: Implement CollaborativeStrategy
+            RobotCoordinationMode.MasterSlave => new IndependentStrategy(),   // TODO: Implement MasterSlaveStrategy
+            RobotCoordinationMode.Distributed => new IndependentStrategy(),   // TODO: Implement DistributedStrategy
+            _ => new IndependentStrategy()
+        };
 
-            case RobotCoordinationMode.Independent:
-
-            case RobotCoordinationMode.Collaborative:
-            default:
-                // All robots operate independently - no coordination needed
-                break;
-        }
+        Debug.Log($"[SIMULATION_MANAGER] Initialized coordination strategy: {_coordinationStrategy.GetType().Name}");
     }
 
     /// <summary>
-    /// Handles robot coordination in sequential mode, switching to the next robot when current robot reaches its target.
+    /// Updates robot coordination using the current strategy.
+    /// Delegates to the strategy pattern for mode-specific behavior.
     /// </summary>
-    private void HandleSequentialMode()
+    private void UpdateRobotCoordination()
     {
-        if (_robotControllers == null || _robotControllers.Length == 0)
+        if (!IsRunning || _robotControllers == null || _coordinationStrategy == null)
             return;
 
-        if (_activeRobotIndex < 0 || _activeRobotIndex >= _robotControllers.Length)
-            _activeRobotIndex = 0;
-
-        var currentRobot = _robotControllers[_activeRobotIndex];
-        if (currentRobot == null)
-            return;
-
-        string currentRobotId = currentRobot.gameObject.name;
-
-        // Check if current robot has reached its target
-        if (_robotTargetReached.GetValueOrDefault(currentRobotId, true))
-        {
-            // Switch to next robot
-            int previousIndex = _activeRobotIndex;
-            _activeRobotIndex = (_activeRobotIndex + 1) % _robotControllers.Length;
-
-            if (_logger != null)
-            {
-                Debug.Log(
-                    $"[SIMULATION_MANAGER] Robot switch: {currentRobotId} -> {GetActiveRobotId()}"
-                );
-            }
-
-            Debug.Log(
-                $"[SIMULATION_MANAGER] Sequential mode: Switched from robot {previousIndex} ({currentRobotId}) to robot {_activeRobotIndex} ({GetActiveRobotId()})"
-            );
-        }
+        // Delegate coordination logic to the strategy
+        _coordinationStrategy.Update(_robotControllers, _robotTargetReached);
     }
 
     /// <summary>
@@ -398,8 +379,8 @@ public class SimulationManager : MonoBehaviour
                 }
             }
 
-            // Reset coordination
-            _activeRobotIndex = 0;
+            // Reset coordination strategy
+            _coordinationStrategy?.Reset();
 
             if (_logger != null)
             {
@@ -426,39 +407,30 @@ public class SimulationManager : MonoBehaviour
     /// Gets the identifier of the currently active robot.
     /// </summary>
     /// <returns>The robot identifier or "None" if no active robot</returns>
+    /// <summary>
+    /// Gets the ID of the currently active robot based on the coordination strategy.
+    /// </summary>
+    /// <returns>The active robot ID, or descriptive string based on strategy</returns>
     public string GetActiveRobotId()
     {
-        if (_robotControllers == null || _robotControllers.Length == 0)
+        if (_coordinationStrategy == null)
             return "None";
 
-        if (_activeRobotIndex < 0 || _activeRobotIndex >= _robotControllers.Length)
-            return "None";
-
-        var controller = _robotControllers[_activeRobotIndex];
-        if (controller == null)
-            return "None";
-
-        return controller.gameObject.name;
+        return _coordinationStrategy.GetActiveRobotId();
     }
 
     /// <summary>
-    /// Checks if a specific robot is allowed to move based on coordination mode.
+    /// Checks if a specific robot is allowed to move based on the coordination strategy.
     /// </summary>
     /// <param name="robotId">The robot identifier to check</param>
     /// <returns>True if the robot is allowed to move, false otherwise</returns>
     public bool IsRobotActive(string robotId)
     {
-        if (!IsRunning)
+        if (!IsRunning || _coordinationStrategy == null)
             return false;
 
-        // In Sequential mode, only the active robot can move
-        if (config.coordinationMode == RobotCoordinationMode.Sequential)
-        {
-            return GetActiveRobotId() == robotId;
-        }
-
-        // In all other modes, all robots can move
-        return true;
+        // Delegate to the coordination strategy
+        return _coordinationStrategy.IsRobotActive(robotId);
     }
 
     /// <summary>
@@ -490,4 +462,5 @@ public class SimulationManager : MonoBehaviour
             Instance = null;
         }
     }
+}
 }

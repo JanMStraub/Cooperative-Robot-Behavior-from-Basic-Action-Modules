@@ -1,12 +1,14 @@
 using UnityEngine;
 
-/// <summary>
-/// Handles gripper behavior in response to robot events.
-/// Subscribes to RobotController.OnTargetReached and closes the gripper when target is reached.
-/// This implements the event-driven architecture pattern recommended in ARCHITECTURE.md.
-/// </summary>
-[RequireComponent(typeof(RobotController))]
-public class RobotGripperBehavior : MonoBehaviour
+namespace Robotics
+{
+    /// <summary>
+    /// Handles gripper behavior in response to robot events.
+    /// Subscribes to RobotController.OnTargetReached and closes the gripper when target is reached.
+    /// This implements the event-driven architecture pattern recommended in ARCHITECTURE.md.
+    /// </summary>
+    [RequireComponent(typeof(RobotController))]
+    public class RobotGripperBehavior : MonoBehaviour
 {
     private RobotController _robotController;
     private GripperController _gripperController;
@@ -63,4 +65,5 @@ public class RobotGripperBehavior : MonoBehaviour
             _robotController.OnTargetReached -= HandleTargetReached;
         }
     }
+}
 }

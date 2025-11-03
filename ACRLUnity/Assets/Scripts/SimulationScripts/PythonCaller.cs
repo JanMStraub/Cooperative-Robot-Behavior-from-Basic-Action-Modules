@@ -9,11 +9,13 @@ using System.Threading.Tasks;
 using Logging;
 using UnityEngine;
 
-/// <summary>
-/// Manages Python process execution for ML-Agents and external data processing.
-/// Supports async execution, process monitoring, and proper resource management.
-/// </summary>
-public class PythonCaller : MonoBehaviour
+namespace Simulation
+{
+    /// <summary>
+    /// Manages Python process execution for ML-Agents and external data processing.
+    /// Supports async execution, process monitoring, and proper resource management.
+    /// </summary>
+    public class PythonCaller : MonoBehaviour
 {
     [Header("Process Settings")]
     [SerializeField]
@@ -755,4 +757,5 @@ public class PythonCaller : MonoBehaviour
     }
 
     #endregion
+}
 }

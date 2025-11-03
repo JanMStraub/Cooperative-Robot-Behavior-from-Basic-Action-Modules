@@ -2,11 +2,13 @@ using System.Collections.Generic;
 using PythonCommunication;
 using UnityEngine;
 
-/// <summary>
-/// Visualizes detected cubes in the Unity scene using Gizmos and debug spheres.
-/// Attach this component to any GameObject in the scene to see detection results.
-/// </summary>
-public class CubeDetectionVisualizer : MonoBehaviour
+namespace Vision
+{
+    /// <summary>
+    /// Visualizes detected cubes in the Unity scene using Gizmos and debug spheres.
+    /// Attach this component to any GameObject in the scene to see detection results.
+    /// </summary>
+    public class CubeDetectionVisualizer : MonoBehaviour
 {
     [Header("Visualization Settings")]
     [SerializeField]
@@ -243,4 +245,5 @@ public class CubeDetectionVisualizer : MonoBehaviour
         UnityEditor.Selection.activeObject = go;
     }
 #endif
+}
 }

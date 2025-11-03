@@ -1,6 +1,8 @@
 using UnityEngine;
 
-public enum RobotCoordinationMode
+namespace Configuration
+{
+    public enum RobotCoordinationMode
 {
     Independent, // Each robot works alone
     Collaborative, // Robots work together on shared tasks
@@ -33,4 +35,5 @@ public class SimulationConfig : ScriptableObject
 
     [Tooltip("Enable vertical sync to prevent screen tearing")]
     public bool enableVSync = true;
+}
 }

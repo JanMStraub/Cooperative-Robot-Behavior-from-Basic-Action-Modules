@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using Logging;
+using Core;
 
-[System.Serializable]
-public class CollisionData
+namespace Robotics
+{
+    [System.Serializable]
+    public class CollisionData
 {
     public string timestamp;
     public string robotId;
@@ -30,7 +33,7 @@ public class CollisionConfig
     public string[] ignoredTags = { "Untagged" };
 }
 
-public class GetCollision : MonoBehaviour
+public class CollisionDetector : MonoBehaviour
 {
     [Header("Configuration")]
     [SerializeField]
@@ -377,4 +380,5 @@ public class GetCollision : MonoBehaviour
             Debug.LogError($"Error during GetCollision cleanup: {ex.Message}");
         }
     }
+}
 }

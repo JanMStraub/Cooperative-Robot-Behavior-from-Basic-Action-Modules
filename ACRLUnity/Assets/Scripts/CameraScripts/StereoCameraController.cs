@@ -4,9 +4,13 @@ using PythonCommunication;
 using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
+#endif
 
-[CustomEditor(typeof(StereoCameraController))]
-public class StereoCameraControllerEditor : Editor
+namespace Vision
+{
+#if UNITY_EDITOR
+    [CustomEditor(typeof(StereoCameraController))]
+    public class StereoCameraControllerEditor : Editor
 {
     public override void OnInspectorGUI()
     {
@@ -357,4 +361,5 @@ public class StereoCameraController : MonoBehaviour
             Debug.Log($"[StereoCameraController] Destroyed after {_captureCounter} captures");
         }
     }
+}
 }

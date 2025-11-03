@@ -5,13 +5,17 @@ using System.IO;
 using PythonCommunication;
 using Logging;
 using UnityEngine;
+using Robotics;
+using Core;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
 
+namespace Vision
+{
 #if UNITY_EDITOR
-[CustomEditor(typeof(CameraController))]
-public class CameraControllerEditor : Editor
+    [CustomEditor(typeof(CameraController))]
+    public class CameraControllerEditor : Editor
 {
     private bool _lastConnectionState;
 
@@ -608,4 +612,5 @@ public class CameraController : MonoBehaviour
             );
         }
     }
+}
 }
