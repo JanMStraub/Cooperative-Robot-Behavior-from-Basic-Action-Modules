@@ -3,9 +3,9 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
 using UnityEngine;
-using LLMCommunication.Core;
+using PythonCommunication.Core;
 
-namespace LLMCommunication
+namespace PythonCommunication
 {
     /// <summary>
     /// Data structure for stereo detection results with 3D depth information

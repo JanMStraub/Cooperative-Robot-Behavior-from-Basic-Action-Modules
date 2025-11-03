@@ -139,11 +139,11 @@ MIN_CONFIDENCE = 0.3  # Minimum detection confidence threshold (lower to catch m
 # Detection Processing
 DETECTION_CHECK_INTERVAL = 1.0  # Check for new images every N seconds
 ENABLE_DEBUG_IMAGES = True  # Save annotated images for debugging
-DEBUG_IMAGES_DIR = "ACRLPython/LLMCommunication/debug_detections"
+DEBUG_IMAGES_DIR = "./debug_detections"
 
 # Disparity Map Debugging
 SAVE_DEBUG_DISPARITY_MAPS = False  # Set to True to save disparity maps for debugging
-DEBUG_DISPARITY_DIR = "ACRLPython/LLMCommunication/debug_detections"
+DEBUG_DISPARITY_DIR = "./debug_detections"
 
 
 # ===========================

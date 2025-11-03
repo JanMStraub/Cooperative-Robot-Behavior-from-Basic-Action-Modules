@@ -1,8 +1,7 @@
 using System;
 using System.Text;
-using UnityEngine;
 
-namespace LLMCommunication.Core
+namespace PythonCommunication.Core
 {
     /// <summary>
     /// Wire protocol for Unity ↔ Python LLM communication.

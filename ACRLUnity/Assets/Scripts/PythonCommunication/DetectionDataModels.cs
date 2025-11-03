@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace LLMCommunication
+namespace PythonCommunication
 {
     /// <summary>
     /// Complete detection result from Python detector including all detected cubes in a single frame

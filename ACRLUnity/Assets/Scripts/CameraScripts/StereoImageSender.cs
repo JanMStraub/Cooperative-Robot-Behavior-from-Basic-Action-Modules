@@ -1,8 +1,8 @@
 using System;
 using UnityEngine;
-using LLMCommunication.Core;
+using PythonCommunication.Core;
 
-namespace LLMCommunication
+namespace PythonCommunication
 {
     /// <summary>
     /// Sends stereo image pairs to Python StereoDetectionServer via TCP.

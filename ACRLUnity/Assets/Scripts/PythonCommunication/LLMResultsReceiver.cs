@@ -3,9 +3,9 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
 using UnityEngine;
-using LLMCommunication.Core;
+using PythonCommunication.Core;
 
-namespace LLMCommunication
+namespace PythonCommunication
 {
     /// <summary>
     /// Data structure for LLM analysis results received from Python

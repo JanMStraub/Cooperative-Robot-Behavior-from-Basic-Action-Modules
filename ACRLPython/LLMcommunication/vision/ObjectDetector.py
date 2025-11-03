@@ -78,10 +78,25 @@ except Exception as e:
     # Define dummy types for type hints when stereo is not available
     CameraConfig = type('CameraConfig', (), {})
     DEFAULT_CAMERA_CONFIG = None
-    # Define dummy function when stereo is not available
+    DEFAULT_RECONSTRUCTION_CONFIG = None
+    ReconstructionConfig = type('ReconstructionConfig', (), {})
+
+    # Define dummy functions when stereo is not available
     def estimate_object_world_position(*args, **kwargs) -> Optional[Tuple[float, float, float]]:
         """Dummy function when stereo depth estimation is not available"""
         return None
+
+    def estimate_object_world_position_from_disparity(*args, **kwargs) -> Optional[Tuple[float, float, float]]:
+        """Dummy function when stereo depth estimation is not available"""
+        return None
+
+    def save_disparity_map_debug(*args, **kwargs) -> None:
+        """Dummy function when stereo depth estimation is not available"""
+        pass
+
+    def calc_disparity(*args, **kwargs) -> np.ndarray:
+        """Dummy function when stereo depth estimation is not available"""
+        return np.zeros((0, 0), dtype=np.float32)
 
 
 class DetectionObject:
