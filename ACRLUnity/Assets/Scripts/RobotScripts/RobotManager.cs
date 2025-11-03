@@ -145,12 +145,11 @@ public class RobotManager : MonoBehaviour
             if (!_robotInstances.ContainsKey(robotId))
             {
                 // Try to find a target for this robot
-                GameObject target = FindTargetForRobot(robotId);
+                // GameObject target = FindTargetForRobot(robotId);
 
-                RegisterRobot(robotId, controller.gameObject, target);
+                RegisterRobot(robotId, controller.gameObject);
                 Debug.Log(
-                    $"[ROBOT_MANAGER] Auto-discovered robot: {robotId}"
-                        + (target != null ? $" with target: {target.name}" : " (no target found)")
+                    $"[ROBOT_MANAGER] Auto-discovered robot: {robotId} with no target."
                 );
             }
         }
