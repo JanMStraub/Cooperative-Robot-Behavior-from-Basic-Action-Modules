@@ -18,9 +18,10 @@ import cv2
 
 # Import stereo reconstruction
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from StereoImageReconstruction.Reconstruct import calc_disparity
-from StereoImageReconstruction.stereo_config import (
+from ACRLPython.StereoImageReconstruction.StereoConfig import (
     CameraConfig,
     ReconstructionConfig,
     DEFAULT_CAMERA_CONFIG,
@@ -29,21 +30,22 @@ from StereoImageReconstruction.stereo_config import (
 
 # Import config for debug settings
 try:
-    from .. import llm_config as cfg
+    from .. import LLMConfig as cfg
 except ImportError:
-    import llm_config as cfg
+    import LLMCommunication.LLMConfig as cfg
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 
 
 # ===========================
 # Utility Functions
 # ===========================
 
+
 def calculate_focal_length_from_fov(
-    fov_vertical_deg: float,
-    image_width: int,
-    image_height: int
+    fov_vertical_deg: float, image_width: int, image_height: int
 ) -> float:
     """
     Calculate focal length in pixels from vertical FOV (Unity convention).
@@ -74,9 +76,7 @@ def calculate_focal_length_from_fov(
 
 
 def get_focal_length_pixels(
-    camera_config: CameraConfig,
-    image_width: int,
-    image_height: int
+    camera_config: CameraConfig, image_width: int, image_height: int
 ) -> float:
     """
     Get focal length in pixels from camera configuration.
@@ -100,10 +100,15 @@ def get_focal_length_pixels(
         return calculate_focal_length_from_fov(
             camera_config.fov, image_width, image_height
         )
-    elif camera_config.focal_length is not None and camera_config.sensor_width is not None:
+    elif (
+        camera_config.focal_length is not None
+        and camera_config.sensor_width is not None
+    ):
         return camera_config.focal_length / camera_config.sensor_width * image_width
     else:
-        raise ValueError("Camera config must provide fov or (focal_length and sensor_width)")
+        raise ValueError(
+            "Camera config must provide fov or (focal_length and sensor_width)"
+        )
 
 
 def save_disparity_map_debug(disparity: np.ndarray, output_path: Optional[Path] = None):
@@ -114,18 +119,26 @@ def save_disparity_map_debug(disparity: np.ndarray, output_path: Optional[Path] 
         disparity: Disparity map to save
         output_path: Optional custom output path
     """
-    if not getattr(cfg, 'SAVE_DEBUG_DISPARITY_MAPS', False):
+    if not getattr(cfg, "SAVE_DEBUG_DISPARITY_MAPS", False):
         return
 
     try:
         if output_path is None:
-            output_dir = Path(getattr(cfg, 'DEBUG_DISPARITY_DIR', 'ACRLPython/LLMCommunication/debug_detections'))
+            output_dir = Path(
+                getattr(
+                    cfg,
+                    "DEBUG_DISPARITY_DIR",
+                    "ACRLPython/LLMCommunication/debug_detections",
+                )
+            )
             output_dir.mkdir(parents=True, exist_ok=True)
             output_path = output_dir / "disparity_map.jpg"
 
         # Normalize disparity to 0-255 range for visualization
         disp_normalized = np.zeros_like(disparity, dtype=np.uint8)
-        cv2.normalize(disparity, disp_normalized, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+        cv2.normalize(
+            disparity, disp_normalized, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U
+        )
         disp_colored = cv2.applyColorMap(disp_normalized, cv2.COLORMAP_JET)
         cv2.imwrite(str(output_path), disp_colored)
         logging.debug(f"Saved disparity map to {output_path}")
@@ -147,7 +160,7 @@ def estimate_depth_from_disparity(
     image_height: int,
     window_size: int = 15,
     min_disparity_threshold: float = 5.0,
-    max_depth_threshold: float = 10.0
+    max_depth_threshold: float = 10.0,
 ) -> Optional[float]:
     """
     Estimate depth at a pixel from pre-computed disparity map (OPTIMIZED version).
@@ -179,7 +192,9 @@ def estimate_depth_from_disparity(
 
     try:
         # Try to sample disparity with progressively larger windows
-        for attempt, search_window in enumerate([window_size, window_size * 3, window_size * 6, window_size * 10], 1):
+        for attempt, search_window in enumerate(
+            [window_size, window_size * 3, window_size * 6, window_size * 10], 1
+        ):
             half_window = search_window // 2
             y_min = max(0, pixel_y - half_window)
             y_max = min(h, pixel_y + half_window + 1)
@@ -190,7 +205,9 @@ def estimate_depth_from_disparity(
 
             # Filter for valid disparities above threshold
             valid_disparities = disparity_window[~np.isnan(disparity_window)]
-            valid_disparities = valid_disparities[valid_disparities >= min_disparity_threshold]
+            valid_disparities = valid_disparities[
+                valid_disparities >= min_disparity_threshold
+            ]
 
             if len(valid_disparities) > 0:
                 if attempt > 1:
@@ -227,7 +244,9 @@ def estimate_depth_from_disparity(
                         f"Map has {len(all_valid)} values (range: {all_valid.min():.1f}-{all_valid.max():.1f}px)"
                     )
                 else:
-                    logging.debug("Entire disparity map is invalid - stereo matching failed")
+                    logging.debug(
+                        "Entire disparity map is invalid - stereo matching failed"
+                    )
                 return None
 
         # Use median disparity
@@ -235,11 +254,15 @@ def estimate_depth_from_disparity(
 
         # Final validation
         if np.isnan(disparity_value) or disparity_value < min_disparity_threshold:
-            logging.debug(f"Median disparity {disparity_value:.1f}px below threshold {min_disparity_threshold}px")
+            logging.debug(
+                f"Median disparity {disparity_value:.1f}px below threshold {min_disparity_threshold}px"
+            )
             return None
 
         # Calculate focal length using utility function
-        focal_length_px = get_focal_length_pixels(camera_config, image_width, image_height)
+        focal_length_px = get_focal_length_pixels(
+            camera_config, image_width, image_height
+        )
 
         # Calculate depth
         depth = (focal_length_px * camera_config.baseline) / disparity_value
@@ -252,7 +275,9 @@ def estimate_depth_from_disparity(
             )
             return None
 
-        logging.debug(f"Depth at ({pixel_x}, {pixel_y}): {depth:.3f}m (disparity: {disparity_value:.1f}px)")
+        logging.debug(
+            f"Depth at ({pixel_x}, {pixel_y}): {depth:.3f}m (disparity: {disparity_value:.1f}px)"
+        )
 
         return float(depth)
 
@@ -270,7 +295,7 @@ def estimate_depth_at_point(
     recon_config: Optional[ReconstructionConfig] = None,
     window_size: int = 15,
     min_disparity_threshold: float = 5.0,
-    max_depth_threshold: float = 10.0
+    max_depth_threshold: float = 10.0,
 ) -> Optional[float]:
     """
     Estimate depth at a specific pixel using stereo disparity.
@@ -325,8 +350,15 @@ def estimate_depth_at_point(
 
         # Use optimized function with pre-computed disparity
         return estimate_depth_from_disparity(
-            disparity, pixel_x, pixel_y, camera_config, w, h,
-            window_size, min_disparity_threshold, max_depth_threshold
+            disparity,
+            pixel_x,
+            pixel_y,
+            camera_config,
+            w,
+            h,
+            window_size,
+            min_disparity_threshold,
+            max_depth_threshold,
         )
 
     except Exception as e:
@@ -342,7 +374,7 @@ def pixel_to_world_coords(
     image_width: int = 640,
     image_height: int = 480,
     camera_rotation: Optional[List[float]] = None,
-    camera_position: Optional[List[float]] = None
+    camera_position: Optional[List[float]] = None,
 ) -> Tuple[float, float, float]:
     """
     Convert 2D pixel + depth to 3D world coordinates.
@@ -378,7 +410,9 @@ def pixel_to_world_coords(
     # Convert to camera-space coordinates
     # In camera space: X=right, Y=up, Z=forward
     x_cam = (pixel_x - cx) * depth / focal_length_px
-    y_cam = -(pixel_y - cy) * depth / focal_length_px  # Negate: image Y down, camera Y up
+    y_cam = (
+        -(pixel_y - cy) * depth / focal_length_px
+    )  # Negate: image Y down, camera Y up
     z_cam = depth
 
     # Apply camera rotation to transform from camera space to world space
@@ -451,7 +485,7 @@ def estimate_object_world_position_from_disparity(
     min_disparity: float = 5.0,
     max_depth: float = 10.0,
     camera_rotation: Optional[List[float]] = None,
-    camera_position: Optional[List[float]] = None
+    camera_position: Optional[List[float]] = None,
 ) -> Optional[Tuple[float, float, float]]:
     """
     Estimate 3D world position from pre-computed disparity map (OPTIMIZED version).
@@ -476,10 +510,14 @@ def estimate_object_world_position_from_disparity(
     """
     # Estimate depth from pre-computed disparity
     depth = estimate_depth_from_disparity(
-        disparity, bbox_center_x, bbox_center_y,
-        camera_config, image_width, image_height,
+        disparity,
+        bbox_center_x,
+        bbox_center_y,
+        camera_config,
+        image_width,
+        image_height,
         min_disparity_threshold=min_disparity,
-        max_depth_threshold=max_depth
+        max_depth_threshold=max_depth,
     )
 
     if depth is None:
@@ -487,10 +525,14 @@ def estimate_object_world_position_from_disparity(
 
     # Convert to world coordinates
     world_pos = pixel_to_world_coords(
-        bbox_center_x, bbox_center_y, depth,
-        camera_config, image_width, image_height,
+        bbox_center_x,
+        bbox_center_y,
+        depth,
+        camera_config,
+        image_width,
+        image_height,
         camera_rotation=camera_rotation,
-        camera_position=camera_position
+        camera_position=camera_position,
     )
 
     return world_pos
@@ -506,7 +548,7 @@ def estimate_object_world_position(
     min_disparity: float = 5.0,
     max_depth: float = 10.0,
     camera_rotation: Optional[List[float]] = None,
-    camera_position: Optional[List[float]] = None
+    camera_position: Optional[List[float]] = None,
 ) -> Optional[Tuple[float, float, float]]:
     """
     Estimate 3D world position of object from bounding box center.
@@ -532,10 +574,14 @@ def estimate_object_world_position(
     """
     # Estimate depth
     depth = estimate_depth_at_point(
-        imgL, imgR, bbox_center_x, bbox_center_y,
-        camera_config, recon_config,
+        imgL,
+        imgR,
+        bbox_center_x,
+        bbox_center_y,
+        camera_config,
+        recon_config,
         min_disparity_threshold=min_disparity,
-        max_depth_threshold=max_depth
+        max_depth_threshold=max_depth,
     )
 
     if depth is None:
@@ -544,10 +590,14 @@ def estimate_object_world_position(
     # Convert to world coordinates
     h, w = imgL.shape[:2]
     world_pos = pixel_to_world_coords(
-        bbox_center_x, bbox_center_y, depth,
-        camera_config, w, h,
+        bbox_center_x,
+        bbox_center_y,
+        depth,
+        camera_config,
+        w,
+        h,
         camera_rotation=camera_rotation,
-        camera_position=camera_position
+        camera_position=camera_position,
     )
 
     return world_pos

@@ -16,16 +16,22 @@ from argparse import Namespace
 # Add LLMCommunication directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
 
-import LLMCommunication.llm_config as cfg
+import ACRLPython.LLMCommunication.LLMConfig as cfg
 
 
 class TestRunAnalyzerImageProcessing:
     """Test image processing logic in RunAnalyzer"""
 
-    @patch('LLMCommunication.orchestrators.RunAnalyzer.ResultsBroadcaster')
-    @patch('LLMCommunication.orchestrators.RunAnalyzer.ImageStorage')
-    @patch('LLMCommunication.orchestrators.RunAnalyzer.LMStudioVisionProcessor')
-    def test_process_new_image(self, mock_processor_class, mock_storage_class, mock_broadcaster_class, sample_image):
+    @patch("LLMCommunication.orchestrators.RunAnalyzer.ResultsBroadcaster")
+    @patch("LLMCommunication.orchestrators.RunAnalyzer.ImageStorage")
+    @patch("LLMCommunication.orchestrators.RunAnalyzer.LMStudioVisionProcessor")
+    def test_process_new_image(
+        self,
+        mock_processor_class,
+        mock_storage_class,
+        mock_broadcaster_class,
+        sample_image,
+    ):
         """Test processing a new image"""
         from LLMCommunication.orchestrators.RunAnalyzer import run_analyzer_loop
 
@@ -41,10 +47,7 @@ class TestRunAnalyzerImageProcessing:
         mock_processor.send_images.return_value = {
             "success": True,
             "response": "Test response",
-            "metadata": {
-                "duration_seconds": 1.5,
-                "model": "llama-3.2-vision"
-            }
+            "metadata": {"duration_seconds": 1.5, "model": "llama-3.2-vision"},
         }
         mock_processor_class.return_value = mock_processor
 
@@ -58,11 +61,12 @@ class TestRunAnalyzerImageProcessing:
             interval=0.1,
             min_age=0.1,
             max_age=10.0,
-            temperature=0.7
+            temperature=0.7,
         )
 
         # Run for a short time
         import threading
+
         def stop_after_delay():
             time.sleep(0.5)
             raise KeyboardInterrupt()
@@ -93,7 +97,7 @@ class TestRunAnalyzerImageProcessing:
 
         assert hash1 != hash3
 
-    @patch('LLMCommunication.orchestrators.RunAnalyzer.ImageStorage')
+    @patch("LLMCommunication.orchestrators.RunAnalyzer.ImageStorage")
     def test_skip_images_without_prompt(self, mock_storage_class, sample_image):
         """Test that images without prompts are skipped"""
         from LLMCommunication.orchestrators.RunAnalyzer import run_analyzer_loop
@@ -114,11 +118,12 @@ class TestRunAnalyzerImageProcessing:
             interval=0.1,
             min_age=0.1,
             max_age=10.0,
-            temperature=0.7
+            temperature=0.7,
         )
 
         # Run briefly
         import threading
+
         def stop():
             time.sleep(0.3)
             raise KeyboardInterrupt()
@@ -131,7 +136,7 @@ class TestRunAnalyzerImageProcessing:
         except (KeyboardInterrupt, AttributeError):
             pass
 
-    @patch('LLMCommunication.orchestrators.RunAnalyzer.ImageStorage')
+    @patch("LLMCommunication.orchestrators.RunAnalyzer.ImageStorage")
     def test_skip_too_fresh_images(self, mock_storage_class, sample_image):
         """Test that too-fresh images are skipped"""
         from LLMCommunication.orchestrators.RunAnalyzer import run_analyzer_loop
@@ -152,10 +157,11 @@ class TestRunAnalyzerImageProcessing:
             interval=0.1,
             min_age=0.5,  # Require 0.5s minimum age
             max_age=10.0,
-            temperature=0.7
+            temperature=0.7,
         )
 
         import threading
+
         def stop():
             time.sleep(0.2)
             raise KeyboardInterrupt()
@@ -167,7 +173,7 @@ class TestRunAnalyzerImageProcessing:
         except (KeyboardInterrupt, AttributeError):
             pass
 
-    @patch('LLMCommunication.orchestrators.RunAnalyzer.ImageStorage')
+    @patch("LLMCommunication.orchestrators.RunAnalyzer.ImageStorage")
     def test_skip_too_old_images(self, mock_storage_class, sample_image):
         """Test that too-old images are skipped"""
         from LLMCommunication.orchestrators.RunAnalyzer import run_analyzer_loop
@@ -188,10 +194,11 @@ class TestRunAnalyzerImageProcessing:
             interval=0.1,
             min_age=0.1,
             max_age=30.0,  # Max 30 seconds old
-            temperature=0.7
+            temperature=0.7,
         )
 
         import threading
+
         def stop():
             time.sleep(0.2)
             raise KeyboardInterrupt()
@@ -207,17 +214,19 @@ class TestRunAnalyzerImageProcessing:
 class TestRunAnalyzerConfiguration:
     """Test analyzer configuration and setup"""
 
-    @patch('LLMCommunication.orchestrators.RunAnalyzer.run_streaming_server_background')
-    @patch('LLMCommunication.orchestrators.RunAnalyzer.run_results_server_background')
-    @patch('LLMCommunication.orchestrators.RunAnalyzer.run_analyzer_loop')
-    def test_main_starts_servers(self, mock_analyzer_loop, mock_results_server, mock_streaming_server):
+    @patch("LLMCommunication.orchestrators.RunAnalyzer.run_streaming_server_background")
+    @patch("LLMCommunication.orchestrators.RunAnalyzer.run_results_server_background")
+    @patch("LLMCommunication.orchestrators.RunAnalyzer.run_analyzer_loop")
+    def test_main_starts_servers(
+        self, mock_analyzer_loop, mock_results_server, mock_streaming_server
+    ):
         """Test that main() starts both servers"""
         from LLMCommunication.orchestrators.RunAnalyzer import main
 
         # Make analyzer loop exit quickly
         mock_analyzer_loop.side_effect = KeyboardInterrupt()
 
-        with patch('sys.argv', ['run_analyzer.py']):
+        with patch("sys.argv", ["run_analyzer.py"]):
             try:
                 main()
             except (KeyboardInterrupt, SystemExit):
@@ -227,7 +236,7 @@ class TestRunAnalyzerConfiguration:
         assert mock_streaming_server.called
         assert mock_results_server.called
 
-    @patch('LLMCommunication.orchestrators.RunAnalyzer.LMStudioVisionProcessor')
+    @patch("LLMCommunication.orchestrators.RunAnalyzer.LMStudioVisionProcessor")
     def test_analyzer_initialization_custom_model(self, mock_processor_class):
         """Test analyzer initialization with custom model"""
         from LLMCommunication.orchestrators.RunAnalyzer import run_analyzer_loop
@@ -241,10 +250,11 @@ class TestRunAnalyzerConfiguration:
             interval=0.1,
             min_age=0.1,
             max_age=10.0,
-            temperature=0.9
+            temperature=0.9,
         )
 
         import threading
+
         def stop():
             time.sleep(0.1)
             raise KeyboardInterrupt()
@@ -257,9 +267,11 @@ class TestRunAnalyzerConfiguration:
             pass
 
         # Verify processor was initialized with correct parameters
-        mock_processor_class.assert_called_once_with(model="llava", base_url="http://custom:1234/v1")
+        mock_processor_class.assert_called_once_with(
+            model="llava", base_url="http://custom:1234/v1"
+        )
 
-    @patch('LLMCommunication.orchestrators.RunAnalyzer.Path')
+    @patch("LLMCommunication.orchestrators.RunAnalyzer.Path")
     def test_output_directory_creation(self, mock_path_class):
         """Test that output directory is created if needed"""
         from LLMCommunication.orchestrators.RunAnalyzer import run_analyzer_loop
@@ -276,10 +288,11 @@ class TestRunAnalyzerConfiguration:
             interval=0.1,
             min_age=0.1,
             max_age=10.0,
-            temperature=0.7
+            temperature=0.7,
         )
 
         import threading
+
         def stop():
             time.sleep(0.1)
             raise KeyboardInterrupt()
@@ -298,7 +311,7 @@ class TestRunAnalyzerConfiguration:
 class TestRunAnalyzerCameraFiltering:
     """Test camera filtering logic"""
 
-    @patch('LLMCommunication.orchestrators.RunAnalyzer.ImageStorage')
+    @patch("LLMCommunication.orchestrators.RunAnalyzer.ImageStorage")
     def test_monitor_specific_cameras(self, mock_storage_class, sample_image):
         """Test monitoring specific cameras only"""
         from LLMCommunication.orchestrators.RunAnalyzer import run_analyzer_loop
@@ -320,10 +333,11 @@ class TestRunAnalyzerCameraFiltering:
             interval=0.1,
             min_age=0.1,
             max_age=10.0,
-            temperature=0.7
+            temperature=0.7,
         )
 
         import threading
+
         def stop():
             time.sleep(0.2)
             raise KeyboardInterrupt()
@@ -335,7 +349,7 @@ class TestRunAnalyzerCameraFiltering:
         except (KeyboardInterrupt, AttributeError):
             pass
 
-    @patch('LLMCommunication.orchestrators.RunAnalyzer.ImageStorage')
+    @patch("LLMCommunication.orchestrators.RunAnalyzer.ImageStorage")
     def test_monitor_all_cameras(self, mock_storage_class, sample_image):
         """Test monitoring all available cameras"""
         from LLMCommunication.orchestrators.RunAnalyzer import run_analyzer_loop
@@ -356,10 +370,11 @@ class TestRunAnalyzerCameraFiltering:
             interval=0.1,
             min_age=0.1,
             max_age=10.0,
-            temperature=0.7
+            temperature=0.7,
         )
 
         import threading
+
         def stop():
             time.sleep(0.2)
             raise KeyboardInterrupt()
@@ -378,11 +393,16 @@ class TestRunAnalyzerCameraFiltering:
 class TestRunAnalyzerResultBroadcasting:
     """Test result broadcasting integration"""
 
-    @patch('LLMCommunication.orchestrators.RunAnalyzer.ResultsBroadcaster')
-    @patch('LLMCommunication.orchestrators.RunAnalyzer.ImageStorage')
-    @patch('LLMCommunication.orchestrators.RunAnalyzer.LMStudioVisionProcessor')
-    def test_results_broadcasted_to_unity(self, mock_processor_class, mock_storage_class,
-                                          mock_broadcaster_class, sample_image):
+    @patch("LLMCommunication.orchestrators.RunAnalyzer.ResultsBroadcaster")
+    @patch("LLMCommunication.orchestrators.RunAnalyzer.ImageStorage")
+    @patch("LLMCommunication.orchestrators.RunAnalyzer.LMStudioVisionProcessor")
+    def test_results_broadcasted_to_unity(
+        self,
+        mock_processor_class,
+        mock_storage_class,
+        mock_broadcaster_class,
+        sample_image,
+    ):
         """Test that results are broadcasted to Unity"""
         from LLMCommunication.orchestrators.RunAnalyzer import run_analyzer_loop
 
@@ -399,7 +419,7 @@ class TestRunAnalyzerResultBroadcasting:
         test_result = {
             "success": True,
             "response": "Test response",
-            "metadata": {"duration_seconds": 1.0, "model": "llama-3.2-vision"}
+            "metadata": {"duration_seconds": 1.0, "model": "llama-3.2-vision"},
         }
         mock_processor.send_images.return_value = test_result
         mock_processor_class.return_value = mock_processor
@@ -417,10 +437,11 @@ class TestRunAnalyzerResultBroadcasting:
             interval=0.1,
             min_age=0.1,
             max_age=10.0,
-            temperature=0.7
+            temperature=0.7,
         )
 
         import threading
+
         def stop():
             time.sleep(0.3)
             raise KeyboardInterrupt()
@@ -439,9 +460,11 @@ class TestRunAnalyzerResultBroadcasting:
 class TestRunAnalyzerErrorHandling:
     """Test error handling in RunAnalyzer"""
 
-    @patch('LLMCommunication.orchestrators.RunAnalyzer.ImageStorage')
-    @patch('LLMCommunication.orchestrators.RunAnalyzer.LMStudioVisionProcessor')
-    def test_handles_processing_errors(self, mock_processor_class, mock_storage_class, sample_image):
+    @patch("LLMCommunication.orchestrators.RunAnalyzer.ImageStorage")
+    @patch("LLMCommunication.orchestrators.RunAnalyzer.LMStudioVisionProcessor")
+    def test_handles_processing_errors(
+        self, mock_processor_class, mock_storage_class, sample_image
+    ):
         """Test that processing errors are handled gracefully"""
         from LLMCommunication.orchestrators.RunAnalyzer import run_analyzer_loop
 
@@ -466,10 +489,11 @@ class TestRunAnalyzerErrorHandling:
             interval=0.1,
             min_age=0.1,
             max_age=10.0,
-            temperature=0.7
+            temperature=0.7,
         )
 
         import threading
+
         def stop():
             time.sleep(0.3)
             raise KeyboardInterrupt()
@@ -482,13 +506,15 @@ class TestRunAnalyzerErrorHandling:
         except (KeyboardInterrupt, AttributeError):
             pass
 
-    @patch('LLMCommunication.orchestrators.RunAnalyzer.LMStudioVisionProcessor')
+    @patch("LLMCommunication.orchestrators.RunAnalyzer.LMStudioVisionProcessor")
     def test_handles_lmstudio_connection_error(self, mock_processor_class):
         """Test handling of LM Studio connection errors"""
         from LLMCommunication.orchestrators.RunAnalyzer import run_analyzer_loop
 
         # Make processor initialization fail
-        mock_processor_class.side_effect = ConnectionError("Cannot connect to LM Studio")
+        mock_processor_class.side_effect = ConnectionError(
+            "Cannot connect to LM Studio"
+        )
 
         args = Namespace(
             model="llama-3.2-vision",
@@ -499,7 +525,7 @@ class TestRunAnalyzerErrorHandling:
             interval=0.1,
             min_age=0.1,
             max_age=10.0,
-            temperature=0.7
+            temperature=0.7,
         )
 
         # Should raise the connection error
@@ -523,7 +549,7 @@ class TestRunAnalyzerPerformance:
             interval=0.05,  # Very fast interval
             min_age=0.1,
             max_age=10.0,
-            temperature=0.7
+            temperature=0.7,
         )
 
         # Verify interval is used (check it's set correctly)
@@ -531,10 +557,7 @@ class TestRunAnalyzerPerformance:
 
     def test_image_age_window_configuration(self):
         """Test that image age window can be configured"""
-        args = Namespace(
-            min_age=0.2,
-            max_age=5.0
-        )
+        args = Namespace(min_age=0.2, max_age=5.0)
 
         # Verify age constraints
         assert args.min_age == 0.2

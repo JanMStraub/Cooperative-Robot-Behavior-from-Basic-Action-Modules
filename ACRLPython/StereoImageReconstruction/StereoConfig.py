@@ -26,7 +26,9 @@ class ReconstructionConfig:
     # SGBM parameters
     window_size: int = 5  # Increased from 2 for better matching
     min_disparity: int = 0
-    max_disparity: Optional[int] = 160  # Set to 160 for close-range with reduced baseline (5cm baseline optimal)
+    max_disparity: Optional[int] = (
+        160  # Set to 160 for close-range with reduced baseline (5cm baseline optimal)
+    )
     uniqueness_ratio: int = 5  # Reduced from 40 for more lenient matching
     speckle_window_size: int = 100  # Increased from 20 for better noise filtering
     speckle_range: int = 2  # Increased from 1

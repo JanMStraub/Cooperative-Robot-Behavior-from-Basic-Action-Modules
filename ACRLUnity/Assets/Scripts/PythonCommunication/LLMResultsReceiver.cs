@@ -2,8 +2,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
-using UnityEngine;
 using PythonCommunication.Core;
+using UnityEngine;
 
 namespace PythonCommunication
 {
@@ -69,15 +69,6 @@ namespace PythonCommunication
                 Destroy(gameObject);
                 return;
             }
-
-            // Set default port for LLMResultsReceiver
-            if (_serverPort == 0)
-            {
-                _serverPort = 5006; // ResultsServer default port
-            }
-
-            // LLMResultsReceiver needs infinite timeout since it waits for server data
-            _readTimeoutMs = 0; // 0 = infinite, no timeout
         }
 
         #endregion
@@ -198,7 +189,13 @@ namespace PythonCommunication
                     {
                         byte[] fullMessage = new byte[UnityProtocol.INT_SIZE + dataLength];
                         Buffer.BlockCopy(lengthBuffer, 0, fullMessage, 0, UnityProtocol.INT_SIZE);
-                        Buffer.BlockCopy(dataBuffer, 0, fullMessage, UnityProtocol.INT_SIZE, dataLength);
+                        Buffer.BlockCopy(
+                            dataBuffer,
+                            0,
+                            fullMessage,
+                            UnityProtocol.INT_SIZE,
+                            dataLength
+                        );
 
                         string json = UnityProtocol.DecodeResultMessage(fullMessage);
 
@@ -264,8 +261,11 @@ namespace PythonCommunication
             if (_logResults)
             {
                 string modelInfo = result.metadata?.model ?? "unknown";
-                string durationInfo = result.metadata != null ? $"{result.metadata.duration_seconds:F2}s" : "?";
-                Log($"📥 LLM Result for {result.camera_id}:\n  Response: {result.response}\n  Model: {modelInfo}\n  Duration: {durationInfo}");
+                string durationInfo =
+                    result.metadata != null ? $"{result.metadata.duration_seconds:F2}s" : "?";
+                Log(
+                    $"📥 LLM Result for {result.camera_id}:\n  Response: {result.response}\n  Model: {modelInfo}\n  Duration: {durationInfo}"
+                );
             }
 
             // Fire event for subscribers

@@ -26,9 +26,9 @@ sys.path.insert(0, str(_package_dir))
 
 # Import config - support both direct script and module execution
 try:
-    from .. import llm_config as cfg
+    from .. import LLMConfig as cfg
 except ImportError:
-    import llm_config as cfg
+    import LLMCommunication.LLMConfig as cfg
 
 # Import core infrastructure - support both direct script and module execution
 try:
@@ -40,11 +40,19 @@ except ImportError:
 
 # Configure logging (safe for testing with mocked config)
 try:
-    log_level = getattr(logging, cfg.LOG_LEVEL) if isinstance(cfg.LOG_LEVEL, str) else logging.INFO
-    log_format = cfg.LOG_FORMAT if isinstance(cfg.LOG_FORMAT, str) else '%(levelname)s - %(message)s'
+    log_level = (
+        getattr(logging, cfg.LOG_LEVEL)
+        if isinstance(cfg.LOG_LEVEL, str)
+        else logging.INFO
+    )
+    log_format = (
+        cfg.LOG_FORMAT
+        if isinstance(cfg.LOG_FORMAT, str)
+        else "%(levelname)s - %(message)s"
+    )
     logging.basicConfig(level=log_level, format=log_format)
 except (AttributeError, TypeError):
-    logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(message)s")
 
 
 class StereoImageStorage:
@@ -152,6 +160,7 @@ class StereoDetectionServer(TCPServerBase):
         """
         if server_config is None:
             from core.TCPServerBase import ServerConfig
+
             server_config = ServerConfig()
             server_config.host = "127.0.0.1"
             server_config.port = 5009
@@ -185,7 +194,9 @@ class StereoDetectionServer(TCPServerBase):
 
                 cam_pair_id_len = struct.unpack("I", cam_pair_id_len_data)[0]
                 if cam_pair_id_len > cfg.MAX_STRING_LENGTH:
-                    logging.error(f"Camera pair ID length {cam_pair_id_len} exceeds maximum")
+                    logging.error(
+                        f"Camera pair ID length {cam_pair_id_len} exceeds maximum"
+                    )
                     break
 
                 # Read camera pair ID
@@ -273,8 +284,12 @@ class StereoDetectionServer(TCPServerBase):
                     break
 
                 # Decode images
-                imgL = cv2.imdecode(np.frombuffer(img_L_data, np.uint8), cv2.IMREAD_COLOR)
-                imgR = cv2.imdecode(np.frombuffer(img_R_data, np.uint8), cv2.IMREAD_COLOR)
+                imgL = cv2.imdecode(
+                    np.frombuffer(img_L_data, np.uint8), cv2.IMREAD_COLOR
+                )
+                imgR = cv2.imdecode(
+                    np.frombuffer(img_R_data, np.uint8), cv2.IMREAD_COLOR
+                )
 
                 if imgL is None or imgR is None:
                     logging.error("Failed to decode stereo images")
@@ -323,7 +338,9 @@ class StereoDetectionServer(TCPServerBase):
         return data
 
 
-def run_stereo_detection_server_background(host: str = "127.0.0.1", port: int = 5009) -> StereoDetectionServer:
+def run_stereo_detection_server_background(
+    host: str = "127.0.0.1", port: int = 5009
+) -> StereoDetectionServer:
     """
     Run stereo detection server in background thread.
 
@@ -335,6 +352,7 @@ def run_stereo_detection_server_background(host: str = "127.0.0.1", port: int = 
         Server instance
     """
     from core.TCPServerBase import ServerConfig
+
     config = ServerConfig()
     config.host = host
     config.port = port
@@ -358,6 +376,7 @@ if __name__ == "__main__":
     logging.info(f"Starting stereo detection server on {args.host}:{args.port}")
 
     from core.TCPServerBase import ServerConfig
+
     config = ServerConfig()
     config.host = args.host
     config.port = args.port

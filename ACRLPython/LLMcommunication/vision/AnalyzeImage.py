@@ -43,7 +43,9 @@ try:
     import cv2
     import numpy as np
 except ImportError:
-    print("Error: 'opencv-python' and 'numpy' required. Install with: pip install opencv-python numpy")
+    print(
+        "Error: 'opencv-python' and 'numpy' required. Install with: pip install opencv-python numpy"
+    )
     sys.exit(1)
 
 # Add LLMCommunication package directory to path
@@ -52,9 +54,9 @@ sys.path.insert(0, str(_package_dir))
 
 # Import config - support both direct script and module execution
 try:
-    from .. import llm_config as cfg
+    from .. import LLMConfig as cfg
 except ImportError:
-    import llm_config as cfg
+    import LLMCommunication.LLMConfig as cfg
 
 # Import ImageStorage - support both direct script and module execution
 try:
@@ -63,14 +65,13 @@ except ImportError:
     try:
         from servers.StreamingServer import ImageStorage
     except ImportError:
-        print("Error: StreamingServer not found. Make sure servers package is available.")
+        print(
+            "Error: StreamingServer not found. Make sure servers package is available."
+        )
         sys.exit(1)
 
 # Configure logging
-logging.basicConfig(
-    level=getattr(logging, cfg.LOG_LEVEL),
-    format=cfg.LOG_FORMAT
-)
+logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
 
 
 class LMStudioVisionProcessor:
@@ -96,9 +97,13 @@ class LMStudioVisionProcessor:
         # Test connection
         try:
             self._client.models.list()
-            logging.info(f"Connected to LM Studio at {self._base_url}, using model: {self._model}")
+            logging.info(
+                f"Connected to LM Studio at {self._base_url}, using model: {self._model}"
+            )
         except Exception as e:
-            raise ConnectionError(f"Cannot connect to LM Studio: {e}. Make sure LM Studio server is running.")
+            raise ConnectionError(
+                f"Cannot connect to LM Studio: {e}. Make sure LM Studio server is running."
+            )
 
     def encode_image_to_bytes(self, image: np.ndarray) -> bytes:
         """
@@ -110,7 +115,7 @@ class LMStudioVisionProcessor:
         Returns:
             PNG encoded bytes
         """
-        success, buffer = cv2.imencode('.png', image)
+        success, buffer = cv2.imencode(".png", image)
         if not success:
             raise ValueError("Failed to encode image as PNG")
         return buffer.tobytes()
@@ -120,7 +125,7 @@ class LMStudioVisionProcessor:
         images: List[np.ndarray],
         camera_ids: List[str],
         prompt: str,
-        temperature: Optional[float] = None
+        temperature: Optional[float] = None,
     ) -> Dict:
         """
         Send images to LM Studio for vision-based analysis
@@ -148,14 +153,16 @@ class LMStudioVisionProcessor:
         for i, (image, cam_id) in enumerate(zip(images, camera_ids)):
             try:
                 img_bytes = self.encode_image_to_bytes(image)
-                img_base64 = base64.b64encode(img_bytes).decode('utf-8')
-                image_content.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/png;base64,{img_base64}"
+                img_base64 = base64.b64encode(img_bytes).decode("utf-8")
+                image_content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{img_base64}"},
                     }
-                })
-                logging.info(f"  [{i+1}/{len(images)}] Encoded: {cam_id} ({image.shape[1]}x{image.shape[0]})")
+                )
+                logging.info(
+                    f"  [{i+1}/{len(images)}] Encoded: {cam_id} ({image.shape[1]}x{image.shape[0]})"
+                )
             except Exception as e:
                 logging.error(f"  Error encoding image from {cam_id}: {e}")
                 raise
@@ -182,11 +189,11 @@ class LMStudioVisionProcessor:
                 messages=[
                     {
                         "role": "user",
-                        "content": message_content  # type: ignore - LM Studio accepts this format
+                        "content": message_content,  # type: ignore - LM Studio accepts this format
                     }
                 ],
                 temperature=temperature,
-                max_tokens=1000
+                max_tokens=1000,
             )
         except Exception as e:
             logging.error(f"LM Studio error: {e}")
@@ -209,8 +216,8 @@ class LMStudioVisionProcessor:
                 "image_count": len(images),
                 "camera_ids": camera_ids,
                 "prompt": prompt,
-                "full_prompt": full_prompt
-            }
+                "full_prompt": full_prompt,
+            },
         }
 
         logging.info(f"✓ Response received in {duration:.2f}s")
@@ -218,7 +225,9 @@ class LMStudioVisionProcessor:
         return result
 
 
-def get_images_from_server(camera_ids: Optional[List[str]] = None) -> tuple[List[np.ndarray], List[str], List[str]]:
+def get_images_from_server(
+    camera_ids: Optional[List[str]] = None,
+) -> tuple[List[np.ndarray], List[str], List[str]]:
     """
     Get images from the StreamingServer
 
@@ -235,7 +244,9 @@ def get_images_from_server(camera_ids: Optional[List[str]] = None) -> tuple[List
         camera_ids = storage.get_all_camera_ids()
 
     if not camera_ids:
-        raise ValueError("No cameras available. Is the StreamingServer running and receiving images?")
+        raise ValueError(
+            "No cameras available. Is the StreamingServer running and receiving images?"
+        )
 
     images = []
     valid_camera_ids = []
@@ -247,7 +258,9 @@ def get_images_from_server(camera_ids: Optional[List[str]] = None) -> tuple[List
             age = storage.get_camera_age(cam_id)
             prompt = storage.get_camera_prompt(cam_id) or ""
             prompt_info = f", prompt: '{prompt}'" if prompt else ""
-            print(f"  ✓ {cam_id}: {image.shape[1]}x{image.shape[0]}, {age:.1f}s ago{prompt_info}")
+            print(
+                f"  ✓ {cam_id}: {image.shape[1]}x{image.shape[0]}, {age:.1f}s ago{prompt_info}"
+            )
             images.append(image)
             valid_camera_ids.append(cam_id)
             prompts.append(prompt)
@@ -270,10 +283,12 @@ def save_response(result: Dict, output_path: Optional[str] = None):
     """
     if output_path:
         from pathlib import Path
+
         base_path = Path(output_path)
     else:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         from pathlib import Path
+
         base_path = Path(f"llm_response_{timestamp}")
 
     # Save full JSON result
@@ -307,59 +322,63 @@ Examples:
 
 Note: StreamingServer.py must be running for this script to work.
       LM Studio must be running with the server started.
-        """
+        """,
     )
 
     # Input options
     input_group = parser.add_argument_group("input options")
     input_group.add_argument(
-        "--camera", "-c",
+        "--camera",
+        "-c",
         nargs="+",
-        help="Specific camera ID(s) to monitor (default: all cameras)"
+        help="Specific camera ID(s) to monitor (default: all cameras)",
     )
     input_group.add_argument(
-        "--list-cameras", "-l",
+        "--list-cameras",
+        "-l",
         action="store_true",
-        help="List available cameras and exit"
+        help="List available cameras and exit",
     )
 
     # LM Studio options
     lmstudio_group = parser.add_argument_group("LM Studio options")
     lmstudio_group.add_argument(
-        "--model", "-m",
+        "--model",
+        "-m",
         default=LMStudioVisionProcessor.DEFAULT_MODEL,
-        help=f"LM Studio vision model to use (default: {LMStudioVisionProcessor.DEFAULT_MODEL})"
+        help=f"LM Studio vision model to use (default: {LMStudioVisionProcessor.DEFAULT_MODEL})",
     )
     lmstudio_group.add_argument(
         "--base-url",
-        help=f"LM Studio server base URL (default: {cfg.LMSTUDIO_BASE_URL})"
+        help=f"LM Studio server base URL (default: {cfg.LMSTUDIO_BASE_URL})",
     )
     lmstudio_group.add_argument(
         "--temperature",
         type=float,
         default=cfg.DEFAULT_TEMPERATURE,
-        help=f"Sampling temperature 0.0-2.0 (default: {cfg.DEFAULT_TEMPERATURE})"
+        help=f"Sampling temperature 0.0-2.0 (default: {cfg.DEFAULT_TEMPERATURE})",
     )
 
     # Server options
     server_group = parser.add_argument_group("server options")
     server_group.add_argument(
-        "--interval", "-i",
+        "--interval",
+        "-i",
         type=float,
         default=cfg.IMAGE_CHECK_INTERVAL,
-        help=f"Check interval in seconds (default: {cfg.IMAGE_CHECK_INTERVAL})"
+        help=f"Check interval in seconds (default: {cfg.IMAGE_CHECK_INTERVAL})",
     )
     server_group.add_argument(
         "--min-age",
         type=float,
         default=cfg.MIN_IMAGE_AGE,
-        help=f"Minimum image age in seconds before processing (default: {cfg.MIN_IMAGE_AGE})"
+        help=f"Minimum image age in seconds before processing (default: {cfg.MIN_IMAGE_AGE})",
     )
     server_group.add_argument(
         "--max-age",
         type=float,
         default=cfg.MAX_IMAGE_AGE,
-        help=f"Maximum image age in seconds to consider fresh (default: {cfg.MAX_IMAGE_AGE})"
+        help=f"Maximum image age in seconds to consider fresh (default: {cfg.MAX_IMAGE_AGE})",
     )
 
     # Output options
@@ -367,12 +386,10 @@ Note: StreamingServer.py must be running for this script to work.
     output_group.add_argument(
         "--output-dir",
         default=cfg.DEFAULT_OUTPUT_DIR,
-        help=f"Directory for saving responses (default: {cfg.DEFAULT_OUTPUT_DIR})"
+        help=f"Directory for saving responses (default: {cfg.DEFAULT_OUTPUT_DIR})",
     )
     output_group.add_argument(
-        "--no-save",
-        action="store_true",
-        help="Don't save responses to files"
+        "--no-save", action="store_true", help="Don't save responses to files"
     )
 
     args = parser.parse_args()
@@ -468,15 +485,15 @@ Note: StreamingServer.py must be running for this script to work.
                             images=[image],
                             camera_ids=[cam_id],
                             prompt=prompt,
-                            temperature=args.temperature
+                            temperature=args.temperature,
                         )
 
                     # Display response
-                    print("\n" + "="*80)
+                    print("\n" + "=" * 80)
                     print(f"RESPONSE FOR {cam_id}:")
-                    print("="*80)
+                    print("=" * 80)
                     print(result["response"])
-                    print("="*80 + "\n")
+                    print("=" * 80 + "\n")
 
                     # Save response
                     if not args.no_save:
@@ -490,6 +507,7 @@ Note: StreamingServer.py must be running for this script to work.
             except Exception as e:
                 logging.error(f"Error in processing loop: {e}")
                 import traceback
+
                 traceback.print_exc()
 
             # Wait before next check
@@ -501,6 +519,7 @@ Note: StreamingServer.py must be running for this script to work.
     except Exception as e:
         logging.error(f"\nFatal error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 

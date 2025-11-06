@@ -29,37 +29,37 @@ if str(_acrl_root) not in sys.path:
 # Import config - support both direct script and module execution
 # Try absolute import first (for direct execution), then relative (for module execution)
 try:
-    from LLMCommunication import llm_config as cfg
+    from ACRLPython.LLMCommunication import LLMConfig as cfg
 except ImportError:
-    from .. import llm_config as cfg
+    from .. import LLMConfig as cfg
 
 # Import CameraConfig from StereoImageReconstruction
 try:
-    from StereoImageReconstruction.stereo_config import CameraConfig
+    from ACRLPython.StereoImageReconstruction.StereoConfig import CameraConfig
 except ImportError:
-    from ...StereoImageReconstruction.stereo_config import CameraConfig
+    from ...StereoImageReconstruction.StereoConfig import CameraConfig
 
 # Import servers and detector - support both direct script and module execution
 try:
     from LLMCommunication.servers.StereoDetectionServer import (
         StereoDetectionServer,
         StereoImageStorage,
-        run_stereo_detection_server_background
+        run_stereo_detection_server_background,
     )
     from LLMCommunication.servers.ResultsServer import (
         run_results_server_background,
-        ResultsBroadcaster
+        ResultsBroadcaster,
     )
     from LLMCommunication.vision.ObjectDetector import CubeDetector
 except ImportError:
     from ..servers.StereoDetectionServer import (
         StereoDetectionServer,
         StereoImageStorage,
-        run_stereo_detection_server_background
+        run_stereo_detection_server_background,
     )
     from ..servers.ResultsServer import (
         run_results_server_background,
-        ResultsBroadcaster
+        ResultsBroadcaster,
     )
     from ..vision.ObjectDetector import CubeDetector
 
@@ -97,7 +97,9 @@ class StereoDetectorOrchestrator:
         self.shutdown_flag = False
 
         logging.info("Stereo detector orchestrator initialized")
-        logging.info(f"Camera config: baseline={camera_config.baseline}m, FOV={camera_config.fov}°")
+        logging.info(
+            f"Camera config: baseline={camera_config.baseline}m, FOV={camera_config.fov}°"
+        )
 
     def process_loop(self):
         """
@@ -157,6 +159,7 @@ class StereoDetectorOrchestrator:
 
         # Parse camera parameters from prompt if available
         import json
+
         camera_config = self.camera_config
         actual_prompt = prompt
 
@@ -179,25 +182,36 @@ class StereoDetectorOrchestrator:
 
                 # Create config with Unity-provided parameters
                 camera_config = CameraConfig(fov=fov, baseline=baseline)
-                logging.info(f"Using Unity camera params: baseline={baseline}m, fov={fov}°")
+                logging.info(
+                    f"Using Unity camera params: baseline={baseline}m, fov={fov}°"
+                )
 
                 if camera_position:
-                    logging.info(f"Camera position: ({camera_position[0]:.3f}, {camera_position[1]:.3f}, {camera_position[2]:.3f})")
+                    logging.info(
+                        f"Camera position: ({camera_position[0]:.3f}, {camera_position[1]:.3f}, {camera_position[2]:.3f})"
+                    )
                 if camera_rotation:
-                    logging.info(f"Camera rotation: ({camera_rotation[0]:.1f}, {camera_rotation[1]:.1f}, {camera_rotation[2]:.1f})°")
+                    logging.info(
+                        f"Camera rotation: ({camera_rotation[0]:.1f}, {camera_rotation[1]:.1f}, {camera_rotation[2]:.1f})°"
+                    )
         except json.JSONDecodeError:
             # Prompt is not JSON, use as-is
             pass
 
-        logging.info(f"Processing stereo pair '{camera_pair_id}' (prompt: '{actual_prompt}')")
+        logging.info(
+            f"Processing stereo pair '{camera_pair_id}' (prompt: '{actual_prompt}')"
+        )
 
         try:
             # Run stereo detection with depth estimation
             start_time = time.time()
             result = self.detector.detect_cubes_stereo(
-                imgL, imgR, camera_config, camera_id=camera_pair_id,
+                imgL,
+                imgR,
+                camera_config,
+                camera_id=camera_pair_id,
                 camera_rotation=camera_rotation,
-                camera_position=camera_position
+                camera_position=camera_position,
             )
             duration = time.time() - start_time
 
@@ -259,7 +273,10 @@ def main():
         help="Camera baseline distance in meters (default: 0.05)",
     )
     parser.add_argument(
-        "--fov", type=float, default=60.0, help="Camera field of view in degrees (default: 60)"
+        "--fov",
+        type=float,
+        default=60.0,
+        help="Camera field of view in degrees (default: 60)",
     )
     parser.add_argument(
         "--detection-host",
@@ -307,7 +324,9 @@ def main():
     logging.info("=" * 60)
     logging.info(f"Camera baseline: {args.baseline}m")
     logging.info(f"Camera FOV: {args.fov}°")
-    logging.info(f"Stereo detection server: {args.detection_host}:{args.detection_port}")
+    logging.info(
+        f"Stereo detection server: {args.detection_host}:{args.detection_port}"
+    )
     logging.info(f"Results server: {args.results_host}:{args.results_port}")
     logging.info("=" * 60)
 
@@ -324,10 +343,13 @@ def main():
     if not args.no_results_server:
         logging.info(f"Starting ResultsServer on port {args.results_port}")
         from core.TCPServerBase import ServerConfig
+
         results_config = ServerConfig(host=args.results_host, port=args.results_port)
         results_server = run_results_server_background(results_config)
     else:
-        logging.info("Skipping ResultsServer startup (using shared ResultsBroadcaster from RunAnalyzer)")
+        logging.info(
+            "Skipping ResultsServer startup (using shared ResultsBroadcaster from RunAnalyzer)"
+        )
 
     # Wait for servers to start
     time.sleep(1.0)

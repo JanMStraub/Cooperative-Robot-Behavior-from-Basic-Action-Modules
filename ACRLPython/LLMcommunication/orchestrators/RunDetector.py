@@ -36,19 +36,25 @@ if str(_acrl_root) not in sys.path:
 # Import config - support both direct script and module execution
 # Try absolute import first (for direct execution), then relative (for module execution)
 try:
-    from LLMCommunication import llm_config as cfg
+    from ACRLPython.LLMCommunication import LLMConfig as cfg
 except ImportError:
-    from .. import llm_config as cfg
+    from .. import LLMConfig as cfg
 
 # Import detection components - support both direct script and module execution
 try:
     from LLMCommunication.vision.ObjectDetector import CubeDetector
-    from LLMCommunication.servers.DetectionServer import DetectionBroadcaster, run_detection_server_background
+    from LLMCommunication.servers.DetectionServer import (
+        DetectionBroadcaster,
+        run_detection_server_background,
+    )
     from LLMCommunication.core.TCPServerBase import ServerConfig
     from LLMCommunication.servers.StreamingServer import ImageStorage
 except ImportError:
     from ..vision.ObjectDetector import CubeDetector
-    from ..servers.DetectionServer import DetectionBroadcaster, run_detection_server_background
+    from ..servers.DetectionServer import (
+        DetectionBroadcaster,
+        run_detection_server_background,
+    )
     from ..core.TCPServerBase import ServerConfig
     from ..servers.StreamingServer import ImageStorage
 
@@ -180,7 +186,9 @@ def run_detection_loop(args):
 
                     # Send result to Unity
                     DetectionBroadcaster.send_result(result.to_dict())
-                    logging.info(f"📤 Sent detection result to Unity for camera: {cam_id}")
+                    logging.info(
+                        f"📤 Sent detection result to Unity for camera: {cam_id}"
+                    )
 
                     # Mark as processed
                     processed_images[cam_id] = (current_timestamp, image_hash)

@@ -17,17 +17,12 @@ _package_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(_package_dir))
 
 # Import config
-import llm_config as cfg
+import LLMCommunication.LLMConfig as cfg
 from core.TCPServerBase import TCPServerBase, ServerConfig
 from core.UnityProtocol import UnityProtocol
 
-# Configure logging (safe for testing with mocked config)
-try:
-    log_level = getattr(logging, cfg.LOG_LEVEL) if isinstance(cfg.LOG_LEVEL, str) else logging.INFO
-    log_format = cfg.LOG_FORMAT if isinstance(cfg.LOG_FORMAT, str) else '%(levelname)s - %(message)s'
-    logging.basicConfig(level=log_level, format=log_format)
-except (AttributeError, TypeError):
-    logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(message)s')
+# Configure logging
+logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
 
 
 class ResultsBroadcaster:

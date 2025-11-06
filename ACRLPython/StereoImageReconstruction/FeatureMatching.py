@@ -12,7 +12,7 @@ from typing import List, Tuple, Optional
 import cv2
 import numpy as np
 
-from .stereo_config import FeatureMatchConfig, DEFAULT_FEATURE_CONFIG
+from .StereoConfig import FeatureMatchConfig, DEFAULT_FEATURE_CONFIG
 
 
 def find_matches(

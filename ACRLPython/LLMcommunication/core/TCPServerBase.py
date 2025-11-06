@@ -25,7 +25,7 @@ _package_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(_package_dir))
 
 # Import config
-import llm_config as cfg
+import LLMConfig as cfg
 
 logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
 
@@ -154,7 +154,7 @@ class TCPServerBase(ABC):
     def is_running(self) -> bool:
         """Check if server is running"""
         return self._running
-    
+
     def should_shutdown(self) -> bool:
         """Return True if the server should stop."""
         return self._shutdown_flag

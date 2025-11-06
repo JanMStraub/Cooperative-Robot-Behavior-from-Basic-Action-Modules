@@ -38,13 +38,33 @@ pytest tests/ --cov=. --cov-report=html
 
 ```bash
 # Test a specific module
-pytest tests/test_unity_protocol.py -v
+pytest Tests/TestUnityProtocol.py -v
 
 # Test configuration
-pytest tests/test_config.py -v
+pytest Tests/TestConfig.py -v
 
 # Test object detection
-pytest tests/test_object_detector.py -v
+pytest Tests/TestObjectDetector.py -v
+
+# Test RAG system (all RAG tests)
+pytest Tests/TestRAG*.py -v
+
+# Test specific RAG component
+pytest Tests/TestRAGVectorStore.py -v
+pytest Tests/TestRAGEmbeddings.py -v
+pytest Tests/TestRAGSystem.py -v
+```
+
+### Run RAG Tests
+
+Run all RAG system tests using the helper script:
+
+```bash
+# From ACRLPython directory
+./Tests/run_rag_tests.sh
+
+# Or directly with pytest
+./acrl/bin/pytest Tests/TestRAG*.py -v --tb=short
 ```
 
 ### Run Specific Test Classes or Functions
@@ -71,33 +91,62 @@ pytest tests/ -m "integration"
 
 ### Test Files
 
-- `test_config.py` - Configuration constants and helpers
-- `test_unity_protocol.py` - Unity ↔ Python wire protocol
-- `test_tcp_server_base.py` - TCP server base class
-- `test_streaming_server.py` - Image streaming server and storage
-- `test_results_server.py` - Results broadcasting server
-- `test_object_detector.py` - Color-based cube detection
-- `test_analyze_image.py` - Ollama vision processing
-- `test_depth_estimator.py` - Stereo depth estimation
-- `test_detection_server.py` - Object detection server
-- `test_run_analyzer.py` - LLM analyzer orchestrator
-- `test_run_detector.py` - Detection orchestrator
-- `test_stereo_detection_server.py` - Stereo image server
-- `test_run_stereo_detector.py` - Stereo detection orchestrator
+**Core Infrastructure:**
+- `TestConfig.py` - Configuration constants and helpers
+- `TestUnityProtocol.py` - Unity ↔ Python wire protocol
+- `TestTcpServerBase.py` - TCP server base class
 
-### Fixtures (conftest.py)
+**Network Servers:**
+- `TestStreamingServer.py` - Image streaming server and storage
+- `TestResultsServer.py` - Results broadcasting server
+- `TestDetectionServer.py` - Object detection server
+- `TestStereoDetectionServer.py` - Stereo image server
+
+**Vision & Detection:**
+- `TestObjectDetector.py` - Color-based cube detection
+- `TestAnalyzeImage.py` - Ollama vision processing
+- `TestDepthEstimator.py` - Stereo depth estimation
+
+**Orchestrators:**
+- `TestRunAnalyzer.py` - LLM analyzer orchestrator
+- `TestRunDetector.py` - Detection orchestrator
+- `TestRunStereoDetector.py` - Stereo detection orchestrator
+
+**RAG System (Semantic Search):**
+- `TestRAGConfig.py` - RAG configuration and validation
+- `TestRAGEmbeddings.py` - LM Studio embedding generation
+- `TestRAGVectorStore.py` - Vector storage and similarity search
+- `TestRAGIndexer.py` - Operation indexing from registry
+- `TestRAGQueryEngine.py` - Semantic search and retrieval
+- `TestRAGSystem.py` - RAG system integration tests
+
+### Fixtures (Conftest.py)
 
 Shared fixtures available to all tests:
 
+**Network & Communication:**
 - `mock_socket` - Mock socket object for network testing
+- `server_config` - Test server configuration
+
+**Image Processing:**
 - `sample_image` - Sample RGB gradient image (640x480)
 - `sample_red_cube_image` - Test image with red cube
 - `sample_blue_cube_image` - Test image with blue cube
 - `sample_stereo_pair` - Stereo image pair for depth testing
-- `server_config` - Test server configuration
+
+**LLM & Results:**
 - `detection_result_dict` - Sample detection result
 - `llm_result_dict` - Sample LLM analysis result
-- `mock_ollama_client` - Mock Ollama client
+- `mock_lmstudio_client` - Mock LM Studio client for vision
+
+**RAG System:**
+- `mock_lmstudio_embeddings_client` - Mock LM Studio embeddings API
+- `sample_operation` - Mock BasicOperation instance
+- `mock_operation_registry` - Mock operation registry with sample ops
+- `temp_vector_store_path` - Temporary path for vector store
+- `cleanup_rag_singletons` - Reset RAG singleton instances
+
+**Utilities:**
 - `cleanup_singletons` - Resets singleton instances between tests
 - `temp_output_dir` - Temporary directory for test output
 
@@ -125,6 +174,19 @@ Shared fixtures available to all tests:
 - ⚠️ `RunAnalyzer.py` - Partial (needs completion)
 - ⚠️ `RunDetector.py` - Partial (needs completion)
 - ⚠️ `RunStereoDetector.py` - Partial (needs completion)
+
+**RAG System** (NEW):
+- ✅ `rag/Config.py` - 95%+ coverage
+- ✅ `rag/Embeddings.py` - 90%+ coverage (with mocks)
+- ✅ `rag/VectorStore.py` - 95%+ coverage
+- ✅ `rag/Indexer.py` - 85%+ coverage
+- ✅ `rag/QueryEngine.py` - 85%+ coverage
+- ✅ `rag/__init__.py` (RAGSystem) - 90%+ coverage
+
+**Operations System** (NEW):
+- ✅ `operations/Base.py` - 95%+ coverage
+- ✅ `operations/MoveOperations.py` - 90%+ coverage
+- ✅ `operations/Registry.py` - 90%+ coverage
 
 ### Generating Coverage Reports
 
@@ -295,6 +357,12 @@ pip install opencv-python-headless
 **Ollama Connection Errors**:
 - Tests mock Ollama by default
 - No actual Ollama server needed
+
+**LM Studio Connection Errors (RAG Tests)**:
+- RAG tests mock LM Studio embeddings API by default
+- No actual LM Studio server needed for unit tests
+- Use `mock_lmstudio_embeddings_client` fixture
+- Integration tests with real LM Studio should be marked separately
 
 ### Debug Mode
 

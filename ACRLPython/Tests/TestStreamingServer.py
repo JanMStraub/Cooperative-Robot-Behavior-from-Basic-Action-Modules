@@ -239,7 +239,7 @@ class TestImageStorageThreadSafety:
         threads = [
             threading.Thread(target=writer),
             threading.Thread(target=reader),
-            threading.Thread(target=reader)
+            threading.Thread(target=reader),
         ]
 
         for t in threads:
@@ -330,7 +330,7 @@ class TestStreamingServerProtocol:
 class TestStreamingServerIntegration:
     """Integration tests for StreamingServer"""
 
-    @patch('socket.socket')
+    @patch("socket.socket")
     def test_server_stores_received_images(self, mock_socket_class, cleanup_singletons):
         """Test that server correctly stores received images"""
         # This is a simplified test - full integration would require

@@ -14,6 +14,8 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
 - LLM vision integration (Ollama) for scene understanding
 - Object detection system (color-based HSV segmentation)
 - Stereo vision depth estimation for 3D object localization
+- **Operations System**: Structured robot command framework with parameter validation and rich metadata
+- **RAG System**: Semantic search over robot operations using LM Studio embeddings for LLM-driven control
 - JSONL logging system for LLM training data generation
 - Python-Unity TCP communication for real-time vision processing
 
@@ -148,6 +150,12 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
 - **Stereo Depth**: 3D localization using stereo disparity estimation
 - **TCP Communication**: Real-time image streaming between Unity and Python (ports 5005-5009)
 
+**LLM-Driven Control Systems**:
+- **Operations System**: Structured framework for defining robot operations with parameters, preconditions, and failure modes
+- **RAG System**: Semantic search using LM Studio embeddings to find relevant operations from natural language queries
+- **Operation Registry**: Central catalog of all available robot commands with validation and execution
+- **Parameter Validation**: Automatic validation with detailed error messages and recovery suggestions
+
 **Data Logging**:
 - JSONL logging per robot or per session
 - LLM-ready export format with action types, trajectories, and metrics
@@ -222,8 +230,6 @@ Default settings:
 
 ## Quick Start
 
-For a complete setup and usage guide, see **[USER_GUIDE.md](USER_GUIDE.md)**.
-
 **5-Minute Start**:
 1. Clone repository: `git clone --recursive https://github.com/JanMStraub/Auto-Cooperative-Robot-Learning.git`
 2. Open `ACRLUnity/` in Unity Hub (version 6000.2.5f1 required)
@@ -239,6 +245,13 @@ For a complete setup and usage guide, see **[USER_GUIDE.md](USER_GUIDE.md)**.
 1. Setup Python environment: `cd ACRLPython && source acrl/bin/activate`
 2. Run object detector: `python -m LLMCommunication.orchestrators.RunDetector`
 3. In Unity: Use CameraController to send images and receive detection results
+
+**For LLM-Driven Control** (Operations + RAG):
+1. Setup Python environment: `cd ACRLPython && source acrl/bin/activate`
+2. Start LM Studio with embedding model (e.g., nomic-embed-text)
+3. Test operations: `python -m LLMCommunication.operations.example_usage`
+4. Use RAG for semantic search: See `ACRLPython/LLMCommunication/rag/README.md`
+5. Documentation: See `ACRLPython/LLMCommunication/operations/README.md` and `RAG_OPERATIONS_GUIDE.md`
 
 ## License
 

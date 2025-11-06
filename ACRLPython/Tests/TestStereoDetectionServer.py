@@ -17,9 +17,12 @@ from unittest.mock import Mock, patch, MagicMock
 # Add LLMCommunication directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
 
-from LLMCommunication.servers.StereoDetectionServer import StereoImageStorage, StereoDetectionServer
+from LLMCommunication.servers.StereoDetectionServer import (
+    StereoImageStorage,
+    StereoDetectionServer,
+)
 from LLMCommunication.core.TCPServerBase import ServerConfig
-import LLMCommunication.llm_config as cfg
+import ACRLPython.LLMCommunication.LLMConfig as cfg
 
 
 class TestStereoImageStorageSingleton:
@@ -48,7 +51,9 @@ class TestStereoImageStorageSingleton:
 class TestStereoImageStorage:
     """Test StereoImageStorage functionality"""
 
-    def test_store_and_retrieve_stereo_pair(self, cleanup_singletons, sample_stereo_pair):
+    def test_store_and_retrieve_stereo_pair(
+        self, cleanup_singletons, sample_stereo_pair
+    ):
         """Test storing and retrieving a stereo pair"""
         imgL, imgR = sample_stereo_pair
         storage = StereoImageStorage()
@@ -66,7 +71,9 @@ class TestStereoImageStorage:
             assert np.array_equal(ret_imgR, imgR)
             assert ret_prompt == prompt
 
-    def test_store_stereo_pair_with_empty_prompt(self, cleanup_singletons, sample_stereo_pair):
+    def test_store_stereo_pair_with_empty_prompt(
+        self, cleanup_singletons, sample_stereo_pair
+    ):
         """Test storing stereo pair with empty prompt"""
         imgL, imgR = sample_stereo_pair
         storage = StereoImageStorage()
@@ -192,7 +199,7 @@ class TestStereoImageStorageThreadSafety:
         threads = [
             threading.Thread(target=writer),
             threading.Thread(target=reader),
-            threading.Thread(target=reader)
+            threading.Thread(target=reader),
         ]
 
         for t in threads:
@@ -280,7 +287,9 @@ class TestStereoDetectionServerProtocol:
 class TestStereoDetectionServerClientHandling:
     """Test StereoDetectionServer client handling"""
 
-    def test_handle_client_connection_protocol(self, cleanup_singletons, sample_stereo_pair):
+    def test_handle_client_connection_protocol(
+        self, cleanup_singletons, sample_stereo_pair
+    ):
         """Test client connection handles stereo protocol"""
         imgL, imgR = sample_stereo_pair
 
@@ -295,29 +304,30 @@ class TestStereoDetectionServerClientHandling:
 
         # Encode images
         import cv2
-        _, imgL_encoded = cv2.imencode('.png', imgL)
-        _, imgR_encoded = cv2.imencode('.png', imgR)
+
+        _, imgL_encoded = cv2.imencode(".png", imgL)
+        _, imgR_encoded = cv2.imencode(".png", imgR)
         imgL_bytes = imgL_encoded.tobytes()
         imgR_bytes = imgR_encoded.tobytes()
 
         # Build message according to protocol
         message = bytearray()
-        message.extend(struct.pack('I', len(cam_pair_id.encode('utf-8'))))
-        message.extend(cam_pair_id.encode('utf-8'))
-        message.extend(struct.pack('I', len(cam_L_id.encode('utf-8'))))
-        message.extend(cam_L_id.encode('utf-8'))
-        message.extend(struct.pack('I', len(cam_R_id.encode('utf-8'))))
-        message.extend(cam_R_id.encode('utf-8'))
-        message.extend(struct.pack('I', len(prompt.encode('utf-8'))))
-        message.extend(prompt.encode('utf-8'))
-        message.extend(struct.pack('I', len(imgL_bytes)))
+        message.extend(struct.pack("I", len(cam_pair_id.encode("utf-8"))))
+        message.extend(cam_pair_id.encode("utf-8"))
+        message.extend(struct.pack("I", len(cam_L_id.encode("utf-8"))))
+        message.extend(cam_L_id.encode("utf-8"))
+        message.extend(struct.pack("I", len(cam_R_id.encode("utf-8"))))
+        message.extend(cam_R_id.encode("utf-8"))
+        message.extend(struct.pack("I", len(prompt.encode("utf-8"))))
+        message.extend(prompt.encode("utf-8"))
+        message.extend(struct.pack("I", len(imgL_bytes)))
         message.extend(imgL_bytes)
-        message.extend(struct.pack('I', len(imgR_bytes)))
+        message.extend(struct.pack("I", len(imgR_bytes)))
         message.extend(imgR_bytes)
 
         # Setup mock to return message data then disconnect
         message_bytes = bytes(message)
-        chunks = [message_bytes[i:i+100] for i in range(0, len(message_bytes), 100)]
+        chunks = [message_bytes[i : i + 100] for i in range(0, len(message_bytes), 100)]
         chunks.append(b"")  # Disconnect
 
         mock_client.recv.side_effect = lambda n: chunks.pop(0) if chunks else b""
@@ -353,8 +363,8 @@ class TestStereoDetectionServerClientHandling:
 
         # Create message with oversized camera ID
         oversized_id = "A" * (cfg.MAX_STRING_LENGTH + 100)
-        message = struct.pack('I', len(oversized_id))
-        message += oversized_id.encode('utf-8')
+        message = struct.pack("I", len(oversized_id))
+        message += oversized_id.encode("utf-8")
 
         mock_client.recv.return_value = message
 
@@ -368,10 +378,11 @@ class TestStereoDetectionServerClientHandling:
 class TestStereoDetectionServerIntegration:
     """Integration tests for StereoDetectionServer"""
 
-    @patch('socket.socket')
+    @patch("socket.socket")
     def test_server_lifecycle(self, mock_socket_class, cleanup_singletons):
         """Test server start/stop lifecycle"""
         import socket
+
         mock_server_socket = MagicMock()
         mock_socket_class.return_value = mock_server_socket
         mock_server_socket.accept.side_effect = socket.timeout()
@@ -392,9 +403,11 @@ class TestStereoDetectionServerIntegration:
     def test_run_stereo_detection_server_background(self, cleanup_singletons):
         """Test running server in background"""
         import socket
-        from LLMCommunication.servers.StereoDetectionServer import run_stereo_detection_server_background
+        from LLMCommunication.servers.StereoDetectionServer import (
+            run_stereo_detection_server_background,
+        )
 
-        with patch('socket.socket') as mock_socket_class:
+        with patch("socket.socket") as mock_socket_class:
             mock_server_socket = MagicMock()
             mock_socket_class.return_value = mock_server_socket
             mock_server_socket.accept.side_effect = socket.timeout()
@@ -441,17 +454,17 @@ class TestStereoDetectionServerErrorHandling:
         invalid_img = b"NOT_A_VALID_IMAGE"
 
         message = bytearray()
-        message.extend(struct.pack('I', len(cam_pair_id)))
-        message.extend(cam_pair_id.encode('utf-8'))
-        message.extend(struct.pack('I', len(cam_L_id)))
-        message.extend(cam_L_id.encode('utf-8'))
-        message.extend(struct.pack('I', len(cam_R_id)))
-        message.extend(cam_R_id.encode('utf-8'))
-        message.extend(struct.pack('I', len(prompt)))
-        message.extend(prompt.encode('utf-8'))
-        message.extend(struct.pack('I', len(invalid_img)))
+        message.extend(struct.pack("I", len(cam_pair_id)))
+        message.extend(cam_pair_id.encode("utf-8"))
+        message.extend(struct.pack("I", len(cam_L_id)))
+        message.extend(cam_L_id.encode("utf-8"))
+        message.extend(struct.pack("I", len(cam_R_id)))
+        message.extend(cam_R_id.encode("utf-8"))
+        message.extend(struct.pack("I", len(prompt)))
+        message.extend(prompt.encode("utf-8"))
+        message.extend(struct.pack("I", len(invalid_img)))
         message.extend(invalid_img)
-        message.extend(struct.pack('I', len(invalid_img)))
+        message.extend(struct.pack("I", len(invalid_img)))
         message.extend(invalid_img)
         message.extend(b"")  # End
 
@@ -473,8 +486,9 @@ class TestStereoDetectionServerMessageParsing:
 
         # Encode images
         import cv2
-        _, imgL_encoded = cv2.imencode('.png', imgL)
-        _, imgR_encoded = cv2.imencode('.png', imgR)
+
+        _, imgL_encoded = cv2.imencode(".png", imgL)
+        _, imgR_encoded = cv2.imencode(".png", imgR)
 
         # Message should be parseable
         assert imgL_encoded is not None
@@ -496,7 +510,7 @@ class TestStereoDetectionServerMessageParsing:
             "camera_R_id",
             "prompt",
             "image_L",
-            "image_R"
+            "image_R",
         ]
 
         # Verify order is correct (documentation test)
@@ -506,7 +520,7 @@ class TestStereoDetectionServerMessageParsing:
             "camera_R_id",
             "prompt",
             "image_L",
-            "image_R"
+            "image_R",
         ]
 
         assert fields == expected_order

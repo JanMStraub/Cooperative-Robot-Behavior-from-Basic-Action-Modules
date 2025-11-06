@@ -29,20 +29,32 @@ if str(_acrl_root) not in sys.path:
 # Import config - support both direct script and module execution
 # Try absolute import first (for direct execution), then relative (for module execution)
 try:
-    from LLMCommunication import llm_config as cfg
+    from LLMCommunication import LLMConfig as cfg
 except ImportError:
-    from .. import llm_config as cfg
+    from .. import LLMConfig as cfg
 
 # Import server components - support both direct script and module execution
 try:
-    from LLMCommunication.servers.StreamingServer import ImageStorage, run_streaming_server_background
+    from LLMCommunication.servers.StreamingServer import (
+        ImageStorage,
+        run_streaming_server_background,
+    )
     from LLMCommunication.core.TCPServerBase import ServerConfig
-    from LLMCommunication.servers.ResultsServer import ResultsBroadcaster, run_results_server_background
-    from LLMCommunication.vision.AnalyzeImage import LMStudioVisionProcessor, save_response
+    from LLMCommunication.servers.ResultsServer import (
+        ResultsBroadcaster,
+        run_results_server_background,
+    )
+    from LLMCommunication.vision.AnalyzeImage import (
+        LMStudioVisionProcessor,
+        save_response,
+    )
 except ImportError:
     from ..servers.StreamingServer import ImageStorage, run_streaming_server_background
     from ..core.TCPServerBase import ServerConfig
-    from ..servers.ResultsServer import ResultsBroadcaster, run_results_server_background
+    from ..servers.ResultsServer import (
+        ResultsBroadcaster,
+        run_results_server_background,
+    )
     from ..vision.AnalyzeImage import LMStudioVisionProcessor, save_response
 from datetime import datetime
 import time
@@ -263,7 +275,8 @@ Note: This script runs both the StreamingServer and AnalyzeImage in the same pro
         help=f"LM Studio vision model to use (default: {cfg.DEFAULT_LMSTUDIO_MODEL})",
     )
     lmstudio_group.add_argument(
-        "--base-url", help=f"LM Studio server base URL (default: {cfg.LMSTUDIO_BASE_URL})"
+        "--base-url",
+        help=f"LM Studio server base URL (default: {cfg.LMSTUDIO_BASE_URL})",
     )
     lmstudio_group.add_argument(
         "--temperature",

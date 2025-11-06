@@ -15,8 +15,12 @@ from unittest.mock import patch, Mock
 # Add LLMCommunication directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
 
-from LLMCommunication.vision.ObjectDetector import DetectionObject, DetectionResult, CubeDetector
-import LLMCommunication.llm_config as cfg
+from LLMCommunication.vision.ObjectDetector import (
+    DetectionObject,
+    DetectionResult,
+    CubeDetector,
+)
+import ACRLPython.LLMCommunication.LLMConfig as cfg
 
 
 class TestDetectionObject:
@@ -25,10 +29,7 @@ class TestDetectionObject:
     def test_detection_object_initialization(self):
         """Test creating a DetectionObject"""
         det = DetectionObject(
-            object_id=0,
-            color="red",
-            bbox=(100, 200, 50, 60),
-            confidence=0.95
+            object_id=0, color="red", bbox=(100, 200, 50, 60), confidence=0.95
         )
 
         assert det.object_id == 0
@@ -43,10 +44,7 @@ class TestDetectionObject:
     def test_detection_object_center_calculation(self):
         """Test that center point is calculated correctly"""
         det = DetectionObject(
-            object_id=0,
-            color="red",
-            bbox=(100, 200, 50, 60),
-            confidence=0.95
+            object_id=0, color="red", bbox=(100, 200, 50, 60), confidence=0.95
         )
 
         # Center should be bbox_x + bbox_w/2, bbox_y + bbox_h/2
@@ -60,7 +58,7 @@ class TestDetectionObject:
             color="blue",
             bbox=(50, 100, 30, 40),
             confidence=0.87,
-            world_position=(0.5, 0.2, 1.0)
+            world_position=(0.5, 0.2, 1.0),
         )
 
         assert det.world_position is not None
@@ -71,10 +69,7 @@ class TestDetectionObject:
     def test_detection_object_to_dict(self):
         """Test converting DetectionObject to dictionary"""
         det = DetectionObject(
-            object_id=0,
-            color="red",
-            bbox=(100, 200, 50, 60),
-            confidence=0.95
+            object_id=0, color="red", bbox=(100, 200, 50, 60), confidence=0.95
         )
 
         result = det.to_dict()
@@ -97,7 +92,7 @@ class TestDetectionObject:
             color="red",
             bbox=(100, 200, 50, 60),
             confidence=0.95,
-            world_position=(0.5, 0.2, 1.0)
+            world_position=(0.5, 0.2, 1.0),
         )
 
         result = det.to_dict()
@@ -120,7 +115,7 @@ class TestDetectionResult:
             camera_id="TestCamera",
             image_width=640,
             image_height=480,
-            detections=[det1, det2]
+            detections=[det1, det2],
         )
 
         assert result.camera_id == "TestCamera"
@@ -132,10 +127,7 @@ class TestDetectionResult:
     def test_detection_result_empty_detections(self):
         """Test DetectionResult with no detections"""
         result = DetectionResult(
-            camera_id="TestCamera",
-            image_width=640,
-            image_height=480,
-            detections=[]
+            camera_id="TestCamera", image_width=640, image_height=480, detections=[]
         )
 
         assert len(result.detections) == 0
@@ -144,10 +136,7 @@ class TestDetectionResult:
         """Test converting DetectionResult to dictionary"""
         det = DetectionObject(0, "red", (100, 200, 50, 60), 0.95)
         result = DetectionResult(
-            camera_id="TestCamera",
-            image_width=640,
-            image_height=480,
-            detections=[det]
+            camera_id="TestCamera", image_width=640, image_height=480, detections=[det]
         )
 
         result_dict = result.to_dict()
@@ -270,7 +259,9 @@ class TestCubeDetectorDetection:
 
         # Create very small red region (should be filtered out)
         image = np.zeros((480, 640, 3), dtype=np.uint8)
-        image[240:245, 320:325, 2] = 255  # 5x5 red square (area=25, below MIN_CUBE_AREA_PX=100)
+        image[240:245, 320:325, 2] = (
+            255  # 5x5 red square (area=25, below MIN_CUBE_AREA_PX=100)
+        )
 
         result = detector.detect_cubes(image, camera_id="test")
 
@@ -283,7 +274,9 @@ class TestCubeDetectorDetection:
 
         # Create very elongated red region (bad aspect ratio)
         image = np.zeros((480, 640, 3), dtype=np.uint8)
-        image[240:250, 100:400, 2] = 255  # 300x10 red rectangle (aspect=30, above MAX_ASPECT_RATIO=2.0)
+        image[240:250, 100:400, 2] = (
+            255  # 300x10 red rectangle (aspect=30, above MAX_ASPECT_RATIO=2.0)
+        )
 
         result = detector.detect_cubes(image, camera_id="test")
 
@@ -311,8 +304,8 @@ class TestCubeDetectorDetection:
 class TestCubeDetectorDebug:
     """Test debug functionality"""
 
-    @patch('config.ENABLE_DEBUG_IMAGES', True)
-    @patch('cv2.imwrite')
+    @patch("config.ENABLE_DEBUG_IMAGES", True)
+    @patch("cv2.imwrite")
     def test_save_debug_image(self, mock_imwrite, sample_red_cube_image, tmp_path):
         """Test that debug images are saved when enabled"""
         # Temporarily set debug dir to temp path
@@ -328,9 +321,7 @@ class TestCubeDetectorDebug:
         if len(result.detections) > 0:
             # Debug image should be saved
             detector._save_debug_image(
-                sample_red_cube_image,
-                result.detections,
-                "test_camera"
+                sample_red_cube_image, result.detections, "test_camera"
             )
             assert mock_imwrite.called
 
@@ -341,7 +332,7 @@ class TestCubeDetectorDebug:
 class TestCubeDetectorStereo:
     """Test stereo detection functionality"""
 
-    @patch('LLMCommunication.vision.ObjectDetector.STEREO_AVAILABLE', False)
+    @patch("LLMCommunication.vision.ObjectDetector.STEREO_AVAILABLE", False)
     def test_detect_cubes_stereo_unavailable(self):
         """Test stereo detection when stereo dependencies not available"""
         detector = CubeDetector()
@@ -359,7 +350,9 @@ class TestCubeDetectorStereo:
 
         # Create minimal empty images instead of None
         empty_image = np.zeros((1, 1, 3), dtype=np.uint8)
-        result = detector.detect_cubes_stereo(empty_image, empty_image, camera_id="test")
+        result = detector.detect_cubes_stereo(
+            empty_image, empty_image, camera_id="test"
+        )
 
         assert len(result.detections) == 0
 
@@ -373,8 +366,8 @@ class TestCubeDetectorStereo:
 
         assert len(result.detections) == 0
 
-    @patch('LLMCommunication.vision.ObjectDetector.STEREO_AVAILABLE', True)
-    @patch('LLMCommunication.vision.ObjectDetector.estimate_object_world_position')
+    @patch("LLMCommunication.vision.ObjectDetector.STEREO_AVAILABLE", True)
+    @patch("LLMCommunication.vision.ObjectDetector.estimate_object_world_position")
     def test_detect_cubes_stereo_with_depth(self, mock_estimate, sample_stereo_pair):
         """Test stereo detection with depth estimation"""
         # Mock world position estimation
@@ -385,14 +378,13 @@ class TestCubeDetectorStereo:
 
         # Add camera config mock
         from unittest.mock import Mock
+
         mock_camera_config = Mock()
         mock_camera_config.baseline = 0.1
         mock_camera_config.fov = 60.0
 
         result = detector.detect_cubes_stereo(
-            imgL, imgR,
-            camera_config=mock_camera_config,
-            camera_id="stereo_test"
+            imgL, imgR, camera_config=mock_camera_config, camera_id="stereo_test"
         )
 
         # If red cube is detected, it should have world position
@@ -402,43 +394,5 @@ class TestCubeDetectorStereo:
             # This depends on mocking, so just check it doesn't crash
 
 
-class TestDetectColorMethod:
-    """Test the internal _detect_color method"""
-
-    def test_detect_color_single_range(self):
-        """Test _detect_color with single color range"""
-        detector = CubeDetector()
-
-        # Create red HSV image
-        image = np.zeros((480, 640, 3), dtype=np.uint8)
-        image[200:300, 270:370, 2] = 255  # Red in BGR
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
-        detections = detector._detect_color(
-            hsv,
-            color_name="red",
-            lower_ranges=[detector.red_lower_1],
-            upper_ranges=[detector.red_upper_1]
-        )
-
-        # Should detect at least one red region
-        assert len(detections) >= 0  # Might be 0 if color range doesn't match exactly
-
-    def test_detect_color_multiple_ranges(self):
-        """Test _detect_color with multiple color ranges (for red wraparound)"""
-        detector = CubeDetector()
-
-        # Create red image
-        image = np.zeros((480, 640, 3), dtype=np.uint8)
-        image[200:300, 270:370, 2] = 255
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-
-        detections = detector._detect_color(
-            hsv,
-            color_name="red",
-            lower_ranges=[detector.red_lower_1, detector.red_lower_2],
-            upper_ranges=[detector.red_upper_1, detector.red_upper_2]
-        )
-
-        # Multiple ranges should work
-        assert isinstance(detections, list)
+# NOTE: TestDetectColorMethod removed - _detect_color method no longer exists
+# The detector now uses _detect_all_objects which is tested through detect_cubes()

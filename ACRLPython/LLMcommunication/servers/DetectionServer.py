@@ -41,7 +41,8 @@ _package_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(_package_dir))
 
 # Import config
-import llm_config as cfg
+import LLMCommunication.LLMConfig as cfg
+
 
 class DetectionBroadcaster:
     """
@@ -255,7 +256,9 @@ def run_detection_server_background(config: ServerConfig) -> DetectionServer:
     thread = threading.Thread(target=server_thread, daemon=True, name="DetectionServer")
     thread.start()
 
-    logging.info(f"DetectionServer started in background on {config.host}:{config.port}")
+    logging.info(
+        f"DetectionServer started in background on {config.host}:{config.port}"
+    )
     return server
 
 
