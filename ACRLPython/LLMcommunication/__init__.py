@@ -20,7 +20,7 @@ __version__ = "2.0.0"
 __author__ = "ACRL Team"
 
 # Core exports
-from . import llm_config as config
+from . import LLMConfig as config
 from .core import TCPServerBase, ServerConfig, UnityProtocol
 
 # Server exports

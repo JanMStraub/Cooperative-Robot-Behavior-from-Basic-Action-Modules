@@ -10,7 +10,7 @@ Main modules:
 - stereo_config: Configuration dataclasses
 """
 
-from .stereo_config import (
+from .StereoConfig import (
     CameraConfig,
     ReconstructionConfig,
     FeatureMatchConfig,

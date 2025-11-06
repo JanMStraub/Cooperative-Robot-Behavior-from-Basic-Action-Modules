@@ -12,7 +12,7 @@ from pathlib import Path
 # Add LLMCommunication directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
 
-import LLMCommunication.llm_config as cfg
+import ACRLPython.LLMCommunication.LLMConfig as cfg
 
 
 class TestConfigConstants:
@@ -107,7 +107,7 @@ class TestConfigHelpers:
             host="192.168.1.1",
             max_connections=10,
             max_threads=20,
-            timeout=5.0
+            timeout=5.0,
         )
 
         assert custom_config["host"] == "192.168.1.1"

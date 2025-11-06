@@ -16,7 +16,7 @@ from typing import Optional, Tuple
 import cv2
 import numpy as np
 
-from .stereo_config import (
+from .StereoConfig import (
     CameraConfig,
     ReconstructionConfig,
     OutputConfig,
@@ -105,14 +105,18 @@ def estimate_max_disparity(
     try:
         # Try both import styles
         try:
-            from ACRLPython.StereoImageReconstruction.FeatureMatching import find_matches
+            from ACRLPython.StereoImageReconstruction.FeatureMatching import (
+                find_matches,
+            )
         except ImportError:
             from .FeatureMatching import find_matches
 
         matches, kp1, kp2 = find_matches(imgL, imgR)
 
         if len(matches) < 10:
-            print(f"Warning: Only found {len(matches)} matches, using image-based default")
+            print(
+                f"Warning: Only found {len(matches)} matches, using image-based default"
+            )
             # Use image-width-based heuristic: max_disp = width / 8
             default = imgL.shape[1] // 8
             return ((default + 15) // 16) * 16
@@ -135,7 +139,9 @@ def estimate_max_disparity(
         return max(16, max_disp)  # Minimum of 16
 
     except Exception as e:
-        print(f"Warning: Could not estimate max disparity ({e}), using image-based default")
+        print(
+            f"Warning: Could not estimate max disparity ({e}), using image-based default"
+        )
         # Use image-width-based heuristic: max_disp = width / 8
         default = imgL.shape[1] // 8
         return ((default + 15) // 16) * 16
@@ -168,8 +174,12 @@ def calc_disparity(
     # Estimate max disparity if not provided
     max_disp = config.max_disparity
     if max_disp is None:
-        imgL_gray = cv2.cvtColor(imgL, cv2.COLOR_BGR2GRAY) if len(imgL.shape) == 3 else imgL
-        imgR_gray = cv2.cvtColor(imgR, cv2.COLOR_BGR2GRAY) if len(imgR.shape) == 3 else imgR
+        imgL_gray = (
+            cv2.cvtColor(imgL, cv2.COLOR_BGR2GRAY) if len(imgL.shape) == 3 else imgL
+        )
+        imgR_gray = (
+            cv2.cvtColor(imgR, cv2.COLOR_BGR2GRAY) if len(imgR.shape) == 3 else imgR
+        )
 
         # Try feature-based estimation first
         try:
@@ -177,7 +187,9 @@ def calc_disparity(
         except Exception as e:
             # Fallback: use image-width-based heuristic
             # Rule of thumb: max_disparity should be ~1/8 to 1/6 of image width
-            logging.warning(f"Feature-based disparity estimation failed: {e}. Using heuristic.")
+            logging.warning(
+                f"Feature-based disparity estimation failed: {e}. Using heuristic."
+            )
             max_disp = imgL.shape[1] // 8
 
         print(f"Estimated maximum disparity: {max_disp}")
@@ -298,7 +310,7 @@ def make_3d(
     # Reprojection matrix (Q)
     Q = np.array(
         [[-1, 0, 0, 0.5 * w], [0, 1, 0, -0.5 * h], [0, 0, 0, f], [0, 0, -1 / T_x, 0]],
-        dtype=np.float32
+        dtype=np.float32,
     )
 
     # Reproject to 3D

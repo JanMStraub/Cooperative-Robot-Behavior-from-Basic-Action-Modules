@@ -91,9 +91,7 @@ class TestResultsBroadcasterSendResult:
         """Test that camera_id is added from metadata if missing"""
         result_dict = {
             "response": "test",
-            "metadata": {
-                "camera_ids": ["camera1", "camera2"]
-            }
+            "metadata": {"camera_ids": ["camera1", "camera2"]},
         }
 
         mock_server = Mock()
@@ -110,9 +108,7 @@ class TestResultsBroadcasterSendResult:
         """Test that timestamp is added from metadata if missing"""
         result_dict = {
             "response": "test",
-            "metadata": {
-                "timestamp": "2025-01-01T12:00:00"
-            }
+            "metadata": {"timestamp": "2025-01-01T12:00:00"},
         }
 
         mock_server = Mock()
@@ -125,7 +121,9 @@ class TestResultsBroadcasterSendResult:
         # timestamp should be added
         assert "timestamp" in result_dict
 
-    def test_send_result_queues_on_broadcast_failure(self, cleanup_singletons, llm_result_dict):
+    def test_send_result_queues_on_broadcast_failure(
+        self, cleanup_singletons, llm_result_dict
+    ):
         """Test that result is queued if broadcast fails"""
         mock_server = Mock()
         mock_server.get_client_count.return_value = 1  # Think there's a client
@@ -143,10 +141,7 @@ class TestResultsBroadcasterSendResult:
     def test_send_result_handles_encoding_error(self, cleanup_singletons):
         """Test handling of encoding errors"""
         # Create un-serializable result
-        result_dict = {
-            "response": "test",
-            "circular": None
-        }
+        result_dict = {"response": "test", "circular": None}
         result_dict["circular"] = result_dict  # Create circular reference
 
         mock_server = Mock()
@@ -231,8 +226,10 @@ class TestResultsServerInitialization:
 class TestResultsServerClientHandling:
     """Test ResultsServer client handling"""
 
-    @patch('socket.socket')
-    def test_handle_client_connection_sends_queued_results(self, mock_socket_class, cleanup_singletons):
+    @patch("socket.socket")
+    def test_handle_client_connection_sends_queued_results(
+        self, mock_socket_class, cleanup_singletons
+    ):
         """Test that new clients receive queued results"""
         server_config = ServerConfig(host="127.0.0.1", port=9999, socket_timeout=0.1)
         server = ResultsServer(server_config)
@@ -261,7 +258,7 @@ class TestResultsServerClientHandling:
         mock_client = Mock()
         mock_client.recv.side_effect = [
             socket.timeout(),  # First call times out (keep alive)
-            b""  # Second call returns empty (disconnect)
+            b"",  # Second call returns empty (disconnect)
         ]
 
         # This should handle timeouts gracefully
@@ -274,7 +271,7 @@ class TestResultsServerClientHandling:
 class TestResultsServerIntegration:
     """Integration tests for ResultsServer"""
 
-    @patch('socket.socket')
+    @patch("socket.socket")
     def test_server_lifecycle(self, mock_socket_class, cleanup_singletons):
         """Test full server start/stop lifecycle"""
         mock_server_socket = MagicMock()
@@ -357,7 +354,7 @@ class TestResultsBroadcasterThreadSafety:
         threads = [
             threading.Thread(target=sender),
             threading.Thread(target=sender),
-            threading.Thread(target=getter)
+            threading.Thread(target=getter),
         ]
 
         for t in threads:

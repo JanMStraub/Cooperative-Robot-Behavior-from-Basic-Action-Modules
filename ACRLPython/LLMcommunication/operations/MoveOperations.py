@@ -1,0 +1,376 @@
+"""
+Movement Operations for Robot Control
+======================================
+
+This module implements movement-related operations for controlling the robot arm
+through Unity's RobotController via TCP communication.
+"""
+
+from typing import Dict, Any
+import time
+import logging
+from ..servers.ResultsServer import ResultsBroadcaster
+from .Base import (
+    BasicOperation,
+    OperationCategory,
+    OperationComplexity,
+    OperationParameter,
+    OperationResult,
+)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+def move_to_coordinate(
+    robot_id: str,
+    x: float,
+    y: float,
+    z: float,
+    speed: float = 1.0,
+    approach_offset: float = 0.0,
+) -> Dict[str, Any]:
+    """
+    Move robot end effector to specified 3D coordinate.
+
+    This operation commands the robot arm to move its end effector (gripper tip)
+    to a specified 3D position in the robot's coordinate system. The robot will
+    use inverse kinematics to calculate the required joint angles and execute
+    a smooth trajectory to reach the target position.
+
+    The movement respects velocity and acceleration limits for safe operation.
+    Collision detection is active during movement.
+
+    Args:
+        robot_id: ID of the robot to move (e.g., "AR4_Robot", "Robot1")
+        x: X coordinate in meters (forward/back from robot base), range: [-0.5, 0.5]
+        y: Y coordinate in meters (left/right from robot base), range: [-0.5, 0.5]
+        z: Z coordinate in meters (height above robot base), range: [0.0, 0.6]
+        speed: Speed multiplier (0.1=slow, 1.0=normal, 2.0=fast), range: [0.1, 2.0]
+        approach_offset: Stop distance before target in meters, range: [0.0, 0.1]
+
+    Returns:
+        Dict with the following structure:
+        {
+            "success": bool,           # True if command was sent successfully
+            "result": dict or None,    # Result data if successful
+            "error": dict or None      # Error information if failed
+        }
+
+        Success result structure:
+        {
+            "robot_id": str,
+            "target_position": {"x": float, "y": float, "z": float},
+            "speed": float,
+            "approach_offset": float,
+            "status": "command_sent",
+            "timestamp": float
+        }
+
+        Error structure:
+        {
+            "code": str,                    # Error code (e.g., "INVALID_X_COORDINATE")
+            "message": str,                 # Human-readable error message
+            "recovery_suggestions": list    # List of suggested actions
+        }
+
+    Example:
+        >>> # Move to detected object position
+        >>> result = move_to_coordinate("Robot1", 0.3, 0.15, 0.1)
+        >>> if result["success"]:
+        ...     print(f"Command sent at {result['result']['timestamp']}")
+
+        >>> # Move slowly to precise position
+        >>> result = move_to_coordinate("Robot1", 0.0, 0.0, 0.3, speed=0.2)
+
+        >>> # Approach with offset (stop 5cm before target)
+        >>> result = move_to_coordinate("Robot1", 0.3, 0.0, 0.1, approach_offset=0.05)
+
+    Note:
+        This operation is asynchronous - it sends the command to Unity and returns immediately. Unity executes the movement in the background. For synchronous execution (waiting for completion), use move_to_coordinate_sync() instead.
+    """
+    try:
+        # Step 1: Validate robot_id
+        if not robot_id or not isinstance(robot_id, str):
+            return {
+                "success": False,
+                "result": None,
+                "error": {
+                    "code": "INVALID_ROBOT_ID",
+                    "message": f"Robot ID must be a non-empty string, got: {robot_id}",
+                    "recovery_suggestions": [
+                        "Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')",
+                        "Check RobotManager in Unity for available robot IDs",
+                    ],
+                },
+            }
+
+        # Step 2: Validate X coordinate
+        if not (-0.5 <= x <= 0.5):
+            return {
+                "success": False,
+                "result": None,
+                "error": {
+                    "code": "INVALID_X_COORDINATE",
+                    "message": f"X coordinate {x} out of range [-0.5, 0.5]",
+                    "recovery_suggestions": [
+                        "Adjust X to be within robot workspace [-0.5, 0.5]",
+                        "Use detect_object to get valid coordinates",
+                    ],
+                },
+            }
+
+        # Step 3: Validate Y coordinate
+        if not (-0.5 <= y <= 0.5):
+            return {
+                "success": False,
+                "result": None,
+                "error": {
+                    "code": "INVALID_Y_COORDINATE",
+                    "message": f"Y coordinate {y} out of range [-0.5, 0.5]",
+                    "recovery_suggestions": [
+                        "Adjust Y to be within robot workspace [-0.5, 0.5]",
+                        "Use detect_object to get valid coordinates",
+                    ],
+                },
+            }
+
+        # Step 4: Validate Z coordinate
+        if not (0.0 <= z <= 0.6):
+            return {
+                "success": False,
+                "result": None,
+                "error": {
+                    "code": "INVALID_Z_COORDINATE",
+                    "message": f"Z coordinate {z} out of range [0.0, 0.6]",
+                    "recovery_suggestions": [
+                        "Adjust Z to be within robot workspace [0.0, 0.6]",
+                        "Ensure height is above table surface (z > 0.0)",
+                    ],
+                },
+            }
+
+        # Step 5: Validate speed
+        if not (0.1 <= speed <= 2.0):
+            return {
+                "success": False,
+                "result": None,
+                "error": {
+                    "code": "INVALID_SPEED",
+                    "message": f"Speed {speed} out of range [0.1, 2.0]",
+                    "recovery_suggestions": [
+                        "Use speed between 0.1 (very slow) and 2.0 (fast)",
+                        "Typical values: 0.2 (precise), 1.0 (normal), 1.5 (fast)",
+                    ],
+                },
+            }
+
+        # Step 6: Validate approach_offset
+        if not (0.0 <= approach_offset <= 0.1):
+            return {
+                "success": False,
+                "result": None,
+                "error": {
+                    "code": "INVALID_APPROACH_OFFSET",
+                    "message": f"Approach offset {approach_offset} out of range [0.0, 0.1]",
+                    "recovery_suggestions": [
+                        "Use offset between 0.0 (exact position) and 0.1 (10cm before)",
+                        "Typical approach offset: 0.05 (5cm)",
+                    ],
+                },
+            }
+
+        # Step 7: Apply approach offset to target position
+        actual_x = x
+        actual_y = y
+        actual_z = z + approach_offset  # Add offset to height for safety
+
+        # Step 8: Construct command for Unity
+        command = {
+            "command_type": "move_to_coordinate",
+            "robot_id": robot_id,
+            "parameters": {
+                "target_position": {"x": actual_x, "y": actual_y, "z": actual_z},
+                "speed_multiplier": speed,
+                "original_target": {"x": x, "y": y, "z": z},
+                "approach_offset": approach_offset,
+            },
+            "timestamp": time.time(),
+        }
+
+        # Step 9: Send to Unity via ResultsBroadcaster
+        logger.info(
+            f"Sending move_to_coordinate command to {robot_id}: ({actual_x:.3f}, {actual_y:.3f}, {actual_z:.3f})"
+        )
+
+        success = ResultsBroadcaster.send_result(command)
+
+        if not success:
+            return {
+                "success": False,
+                "result": None,
+                "error": {
+                    "code": "COMMUNICATION_FAILED",
+                    "message": "Failed to send command to Unity - no clients connected",
+                    "recovery_suggestions": [
+                        "Ensure Unity is running with LLMResultsReceiver active",
+                        "Verify ResultsServer is running (port 5006)",
+                        "Check Unity console for connection errors",
+                        "Restart ResultsServer: python -m LLMCommunication.orchestrators.RunAnalyzer",
+                    ],
+                },
+            }
+
+        # Step 10: Return success
+        logger.info(f"Successfully sent move_to_coordinate command to {robot_id}")
+
+        return {
+            "success": True,
+            "result": {
+                "robot_id": robot_id,
+                "target_position": {"x": actual_x, "y": actual_y, "z": actual_z},
+                "original_target": {"x": x, "y": y, "z": z},
+                "speed": speed,
+                "approach_offset": approach_offset,
+                "status": "command_sent",
+                "timestamp": time.time(),
+            },
+            "error": None,
+        }
+
+    except Exception as e:
+        logger.error(f"Unexpected error in move_to_coordinate: {e}", exc_info=True)
+        return {
+            "success": False,
+            "result": None,
+            "error": {
+                "code": "UNEXPECTED_ERROR",
+                "message": f"Unexpected error occurred: {str(e)}",
+                "recovery_suggestions": [
+                    "Check logs for detailed error information",
+                    "Verify all parameters are correct types",
+                    "Retry the operation",
+                    "Report bug if error persists",
+                ],
+            },
+        }
+
+
+# ============================================================================
+# BasicOperation Definition - For RAG System
+# ============================================================================
+
+
+def create_move_to_coordinate_operation() -> BasicOperation:
+    """
+    Create the BasicOperation definition for move_to_coordinate.
+
+    This provides rich metadata for RAG retrieval and LLM task planning.
+    """
+    return BasicOperation(
+        operation_id="motion_move_to_coord_001",
+        name="move_to_coordinate",
+        category=OperationCategory.NAVIGATION,
+        complexity=OperationComplexity.BASIC,
+        description="Move the robot's end effector to a specific 3D coordinate in workspace",
+        long_description="""
+            This operation commands the robot arm to move its end effector (gripper tip)
+            to a specified 3D position in the robot's coordinate system. The robot will
+            use inverse kinematics to calculate the required joint angles and execute
+            a smooth trajectory to reach the target position.
+
+            The movement respects velocity and acceleration limits for safe operation.
+            Collision detection is active during movement. The operation supports different
+            movement speeds for precise positioning versus fast traversal.
+
+            This operation is asynchronous - it sends the command to Unity and returns
+            immediately. Unity executes the movement in the background using RobotController.
+        """,
+        usage_examples=[
+            "After detecting an object at (0.3, 0.15, 0.1), move there: move_to_coordinate(robot_id='Robot1', x=0.3, y=0.15, z=0.1)",
+            "Move to home position: move_to_coordinate(robot_id='Robot1', x=0.0, y=0.0, z=0.3)",
+            "Approach detected object coordinates before grasping",
+            "Move slowly to precise position: move_to_coordinate(robot_id='Robot1', x=0.2, y=0.1, z=0.15, speed=0.2)",
+            "Approach with 5cm offset: move_to_coordinate(robot_id='Robot1', x=0.3, y=0.0, z=0.1, approach_offset=0.05)",
+        ],
+        parameters=[
+            OperationParameter(
+                name="robot_id",
+                type="str",
+                description="ID of the robot to move (e.g., 'Robot1', 'AR4_Robot')",
+                required=True,
+            ),
+            OperationParameter(
+                name="x",
+                type="float",
+                description="X coordinate in meters (forward/back from robot base)",
+                required=True,
+                valid_range=(-0.5, 0.5),
+            ),
+            OperationParameter(
+                name="y",
+                type="float",
+                description="Y coordinate in meters (left/right from robot base)",
+                required=True,
+                valid_range=(-0.5, 0.5),
+            ),
+            OperationParameter(
+                name="z",
+                type="float",
+                description="Z coordinate in meters (height above robot base)",
+                required=True,
+                valid_range=(0.0, 0.6),
+            ),
+            OperationParameter(
+                name="speed",
+                type="float",
+                description="Movement speed multiplier (0.1=slow, 1.0=normal, 2.0=fast)",
+                required=False,
+                default=1.0,
+                valid_range=(0.1, 2.0),
+            ),
+            OperationParameter(
+                name="approach_offset",
+                type="float",
+                description="Stop this many meters before target (useful for approaching)",
+                required=False,
+                default=0.0,
+                valid_range=(0.0, 0.1),
+            ),
+        ],
+        preconditions=[
+            "Robot arm is initialized and calibrated",
+            "Target coordinate is within robot's reachable workspace",
+            "No obstacles blocking path to target",
+            "Robot is not currently executing another motion command",
+            "Unity is running with LLMResultsReceiver active",
+            "ResultsServer is running on port 5006",
+        ],
+        postconditions=[
+            "Command has been sent to Unity via TCP",
+            "Unity RobotController will move end effector to target coordinate",
+            "Robot end effector will reach target (within 2mm tolerance)",
+            "Robot arm will be stable and holding position",
+            "Ready to execute next operation",
+        ],
+        average_duration_ms=1200.0,
+        success_rate=0.96,
+        failure_modes=[
+            "Target coordinate is unreachable (outside workspace or singularity)",
+            "Collision detected during movement - motion stopped for safety",
+            "Joint limits would be exceeded",
+            "Timeout - movement taking too long, possible obstruction",
+            "Communication failed - Unity not connected to ResultsServer",
+            "Robot ID not found in RobotManager",
+        ],
+        required_operations=[],
+        commonly_paired_with=["detect_object", "grip_object", "release_object"],
+        mutually_exclusive_with=["rotate_gripper"],  # Can't rotate while moving
+        # Link to the actual implementation function
+        implementation=move_to_coordinate,
+    )
+
+
+# Create the operation instance for export
+MOVE_TO_COORDINATE_OPERATION = create_move_to_coordinate_operation()

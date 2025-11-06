@@ -104,15 +104,6 @@ namespace PythonCommunication
                 Destroy(gameObject);
                 return;
             }
-
-            // Set port for DepthResultsReceiver (stereo detection results)
-            if (_serverPort == 0)
-            {
-                _serverPort = 5006; // ResultsServer port (shared with LLM results)
-            }
-
-            // Infinite timeout since we wait for server data
-            _readTimeoutMs = 0; // 0 = infinite, no timeout
         }
 
         #endregion

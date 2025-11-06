@@ -19,7 +19,7 @@ _package_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(_package_dir))
 
 # Import config
-import llm_config as cfg
+import LLMCommunication.LLMConfig as cfg
 
 # Import base classes
 from core.TCPServerBase import TCPServerBase, ServerConfig

@@ -18,9 +18,12 @@ from unittest.mock import Mock, patch, MagicMock
 # Add LLMCommunication directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
 
-from LLMCommunication.servers.DetectionServer import DetectionBroadcaster, DetectionServer
+from LLMCommunication.servers.DetectionServer import (
+    DetectionBroadcaster,
+    DetectionServer,
+)
 from LLMCommunication.core.TCPServerBase import ServerConfig
-import LLMCommunication.llm_config as cfg
+import ACRLPython.LLMCommunication.LLMConfig as cfg
 
 
 class TestDetectionBroadcasterSingleton:
@@ -147,11 +150,7 @@ class TestDetectionBroadcasterSendResult:
         mock_client = Mock()
         broadcaster.register_client(mock_client)
 
-        result = {
-            "success": True,
-            "camera_id": "test",
-            "detections": []
-        }
+        result = {"success": True, "camera_id": "test", "detections": []}
 
         broadcaster.send_result(result)
 
@@ -176,7 +175,9 @@ class TestDetectionBroadcasterSendResult:
         # Should handle error gracefully (not crash)
         broadcaster.send_result(result)
 
-    def test_send_result_removes_failed_clients(self, cleanup_singletons, detection_result_dict):
+    def test_send_result_removes_failed_clients(
+        self, cleanup_singletons, detection_result_dict
+    ):
         """Test that clients are removed if send fails"""
         broadcaster = DetectionBroadcaster.get_instance()
 
@@ -210,7 +211,9 @@ class TestDetectionBroadcasterSendResult:
         # Queue size should not exceed maximum
         assert broadcaster._result_queue.qsize() <= max_size
 
-    def test_send_result_encodes_with_unity_protocol(self, cleanup_singletons, detection_result_dict):
+    def test_send_result_encodes_with_unity_protocol(
+        self, cleanup_singletons, detection_result_dict
+    ):
         """Test that results are encoded using Unity protocol"""
         broadcaster = DetectionBroadcaster.get_instance()
 
@@ -242,7 +245,9 @@ class TestDetectionBroadcasterThreadSafety:
             except Exception as e:
                 errors.append(e)
 
-        threads = [threading.Thread(target=register_clients, args=(i,)) for i in range(3)]
+        threads = [
+            threading.Thread(target=register_clients, args=(i,)) for i in range(3)
+        ]
 
         for t in threads:
             t.start()
@@ -306,7 +311,7 @@ class TestDetectionBroadcasterThreadSafety:
             threading.Thread(target=register),
             threading.Thread(target=register),
             threading.Thread(target=send),
-            threading.Thread(target=send)
+            threading.Thread(target=send),
         ]
 
         for t in threads:
@@ -368,7 +373,7 @@ class TestDetectionServerClientHandling:
         mock_client.recv.side_effect = [
             socket.timeout(),  # Timeout (keep alive)
             socket.timeout(),  # Timeout (keep alive)
-            b""  # Disconnect
+            b"",  # Disconnect
         ]
 
         # Should handle timeouts gracefully
@@ -404,7 +409,7 @@ class TestDetectionServerClientHandling:
 class TestDetectionServerIntegration:
     """Integration tests for DetectionServer"""
 
-    @patch('socket.socket')
+    @patch("socket.socket")
     def test_server_lifecycle(self, mock_socket_class, cleanup_singletons):
         """Test server start/stop lifecycle"""
         mock_server_socket = MagicMock()
@@ -424,8 +429,10 @@ class TestDetectionServerIntegration:
         server.stop()
         assert not server.is_running()
 
-    @patch('socket.socket')
-    def test_broadcast_to_connected_clients(self, mock_socket_class, cleanup_singletons):
+    @patch("socket.socket")
+    def test_broadcast_to_connected_clients(
+        self, mock_socket_class, cleanup_singletons
+    ):
         """Test broadcasting to connected clients"""
         broadcaster = DetectionBroadcaster.get_instance()
 
@@ -439,9 +446,7 @@ class TestDetectionServerIntegration:
         result = {
             "success": True,
             "camera_id": "test_camera",
-            "detections": [
-                {"id": 0, "color": "red", "confidence": 0.95}
-            ]
+            "detections": [{"id": 0, "color": "red", "confidence": 0.95}],
         }
 
         broadcaster.send_result(result)

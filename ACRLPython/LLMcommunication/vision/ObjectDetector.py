@@ -25,19 +25,19 @@ import cv2
 
 # Import LLM communication config - support both direct script and module execution
 try:
-    from .. import llm_config as cfg
+    from .. import LLMConfig as cfg
 except ImportError:
-    import llm_config as cfg
+    import LLMCommunication.LLMConfig as cfg
 
 # Import stereo depth estimation
 try:
     try:
-        from ...StereoImageReconstruction.stereo_config import (
+        from ...StereoImageReconstruction.StereoConfig import (
             CameraConfig,
             DEFAULT_CAMERA_CONFIG,
         )
     except ImportError:
-        from StereoImageReconstruction.stereo_config import (
+        from ACRLPython.StereoImageReconstruction.StereoConfig import (
             CameraConfig,
             DEFAULT_CAMERA_CONFIG,
         )
@@ -47,27 +47,27 @@ try:
         from .DepthEstimator import (
             estimate_object_world_position,
             estimate_object_world_position_from_disparity,
-            save_disparity_map_debug
+            save_disparity_map_debug,
         )
     except ImportError:
         from vision.DepthEstimator import (
             estimate_object_world_position,
             estimate_object_world_position_from_disparity,
-            save_disparity_map_debug
+            save_disparity_map_debug,
         )
 
     # Import calc_disparity for computing disparity once
     try:
         from ...StereoImageReconstruction.Reconstruct import calc_disparity
-        from ...StereoImageReconstruction.stereo_config import (
+        from ...StereoImageReconstruction.StereoConfig import (
             ReconstructionConfig,
-            DEFAULT_RECONSTRUCTION_CONFIG
+            DEFAULT_RECONSTRUCTION_CONFIG,
         )
     except ImportError:
         from StereoImageReconstruction.Reconstruct import calc_disparity
-        from StereoImageReconstruction.stereo_config import (
+        from ACRLPython.StereoImageReconstruction.StereoConfig import (
             ReconstructionConfig,
-            DEFAULT_RECONSTRUCTION_CONFIG
+            DEFAULT_RECONSTRUCTION_CONFIG,
         )
 
     STEREO_AVAILABLE = True
@@ -76,17 +76,21 @@ except Exception as e:
     logging.warning(f"Stereo depth estimation not available: {e}")
     STEREO_AVAILABLE = False
     # Define dummy types for type hints when stereo is not available
-    CameraConfig = type('CameraConfig', (), {})
+    CameraConfig = type("CameraConfig", (), {})
     DEFAULT_CAMERA_CONFIG = None
     DEFAULT_RECONSTRUCTION_CONFIG = None
-    ReconstructionConfig = type('ReconstructionConfig', (), {})
+    ReconstructionConfig = type("ReconstructionConfig", (), {})
 
     # Define dummy functions when stereo is not available
-    def estimate_object_world_position(*args, **kwargs) -> Optional[Tuple[float, float, float]]:
+    def estimate_object_world_position(
+        *args, **kwargs
+    ) -> Optional[Tuple[float, float, float]]:
         """Dummy function when stereo depth estimation is not available"""
         return None
 
-    def estimate_object_world_position_from_disparity(*args, **kwargs) -> Optional[Tuple[float, float, float]]:
+    def estimate_object_world_position_from_disparity(
+        *args, **kwargs
+    ) -> Optional[Tuple[float, float, float]]:
         """Dummy function when stereo depth estimation is not available"""
         return None
 
@@ -312,7 +316,9 @@ class CubeDetector:
             DetectionResult containing detected cubes with 3D world positions
         """
         if not STEREO_AVAILABLE:
-            logging.error("Stereo depth estimation not available - missing dependencies")
+            logging.error(
+                "Stereo depth estimation not available - missing dependencies"
+            )
             return DetectionResult(camera_id, 0, 0, [])
 
         if imgL is None or imgR is None:
@@ -326,7 +332,9 @@ class CubeDetector:
         if camera_config is None:
             camera_config = DEFAULT_CAMERA_CONFIG
             if camera_config is not None:
-                logging.info(f"Using default camera config: baseline={camera_config.baseline}m, FOV={camera_config.fov}°")
+                logging.info(
+                    f"Using default camera config: baseline={camera_config.baseline}m, FOV={camera_config.fov}°"
+                )
             else:
                 logging.error("No camera config available")
                 return DetectionResult(camera_id, 0, 0, [])
@@ -341,7 +349,9 @@ class CubeDetector:
 
         # OPTIMIZATION: Compute disparity map ONCE for all detections
         # This provides 80-95% speedup for multi-object scenes
-        logging.debug(f"Computing disparity map for {len(detection_result.detections)} detections")
+        logging.debug(
+            f"Computing disparity map for {len(detection_result.detections)} detections"
+        )
 
         # Convert to grayscale if needed
         if len(imgL.shape) == 3:
@@ -369,11 +379,16 @@ class CubeDetector:
             # Estimate world position using pre-computed disparity (OPTIMIZED)
             # Use lower min_disparity (1.0px) to handle distant objects better
             world_pos = estimate_object_world_position_from_disparity(
-                disparity, det.center_x, det.center_y, camera_config, w, h,
+                disparity,
+                det.center_x,
+                det.center_y,
+                camera_config,
+                w,
+                h,
                 min_disparity=1.0,  # Lower threshold for tabletop scenes
                 max_depth=10.0,
                 camera_rotation=camera_rotation,
-                camera_position=camera_position
+                camera_position=camera_position,
             )
 
             # Create new detection object with world position
@@ -399,7 +414,10 @@ class CubeDetector:
                 )
 
         return DetectionResult(
-            camera_id, detection_result.image_width, detection_result.image_height, detections_with_depth
+            camera_id,
+            detection_result.image_width,
+            detection_result.image_height,
+            detections_with_depth,
         )
 
     def _detect_all_objects(self, image: np.ndarray) -> List[Dict]:
@@ -433,7 +451,9 @@ class CubeDetector:
             mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
 
             # Find contours in the mask
-            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            contours, _ = cv2.findContours(
+                mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+            )
 
             logging.info(f"  {color_name.upper()}: Found {len(contours)} contours")
 
@@ -444,13 +464,17 @@ class CubeDetector:
 
                 # Filter by area
                 if area < self.min_area or area > self.max_area:
-                    logging.debug(f"    Contour {i}: Rejected by area ({area}px, need {self.min_area}-{self.max_area})")
+                    logging.debug(
+                        f"    Contour {i}: Rejected by area ({area}px, need {self.min_area}-{self.max_area})"
+                    )
                     continue
 
                 # Filter by aspect ratio
                 aspect_ratio = w / h if h > 0 else 0
                 if aspect_ratio < self.min_aspect or aspect_ratio > self.max_aspect:
-                    logging.debug(f"    Contour {i}: Rejected by aspect ratio ({aspect_ratio:.2f}, need {self.min_aspect}-{self.max_aspect})")
+                    logging.debug(
+                        f"    Contour {i}: Rejected by aspect ratio ({aspect_ratio:.2f}, need {self.min_aspect}-{self.max_aspect})"
+                    )
                     continue
 
                 # Calculate confidence based on how well contour fills bounding box
@@ -459,7 +483,7 @@ class CubeDetector:
                 fill_ratio = contour_area / bbox_area if bbox_area > 0 else 0
 
                 # Also consider how many pixels in bbox match the color
-                roi_mask = mask[y:y+h, x:x+w]
+                roi_mask = mask[y : y + h, x : x + w]
                 color_ratio = np.sum(roi_mask > 0) / bbox_area if bbox_area > 0 else 0
 
                 # Confidence is combination of shape and color match
@@ -467,13 +491,21 @@ class CubeDetector:
 
                 # Filter by confidence
                 if confidence < self.min_confidence:
-                    logging.debug(f"    Contour {i}: Rejected by confidence ({confidence:.2f}, need >={self.min_confidence})")
+                    logging.debug(
+                        f"    Contour {i}: Rejected by confidence ({confidence:.2f}, need >={self.min_confidence})"
+                    )
                     continue
 
-                logging.info(f"    Contour {i}: ACCEPTED - area={area}px, aspect={aspect_ratio:.2f}, conf={confidence:.2f}")
+                logging.info(
+                    f"    Contour {i}: ACCEPTED - area={area}px, aspect={aspect_ratio:.2f}, conf={confidence:.2f}"
+                )
 
                 detections.append(
-                    {"color": color_name, "bbox": (x, y, w, h), "confidence": confidence}
+                    {
+                        "color": color_name,
+                        "bbox": (x, y, w, h),
+                        "confidence": confidence,
+                    }
                 )
 
         return detections

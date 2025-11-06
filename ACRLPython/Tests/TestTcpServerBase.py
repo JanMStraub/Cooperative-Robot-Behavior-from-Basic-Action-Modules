@@ -39,7 +39,7 @@ class TestServerConfig:
             port=8888,
             max_connections=10,
             max_client_threads=20,
-            socket_timeout=5.0
+            socket_timeout=5.0,
         )
 
         assert config.host == "192.168.1.1"
@@ -94,7 +94,7 @@ class TestTCPServerBaseInitialization:
 class TestTCPServerBaseLifecycle:
     """Test server start/stop lifecycle"""
 
-    @patch('socket.socket')
+    @patch("socket.socket")
     def test_server_start(self, mock_socket_class, server_config):
         """Test starting the server"""
         mock_socket = MagicMock()
@@ -120,7 +120,7 @@ class TestTCPServerBaseLifecycle:
         # Clean up
         server.stop()
 
-    @patch('socket.socket')
+    @patch("socket.socket")
     def test_server_start_already_running(self, mock_socket_class, server_config):
         """Test that starting an already running server is safe"""
         mock_socket = MagicMock()
@@ -138,7 +138,7 @@ class TestTCPServerBaseLifecycle:
         # Clean up
         server.stop()
 
-    @patch('socket.socket')
+    @patch("socket.socket")
     def test_server_stop(self, mock_socket_class, server_config):
         """Test stopping the server"""
         mock_socket = MagicMock()
@@ -168,19 +168,22 @@ class TestTCPServerBaseLifecycle:
 class TestTCPServerBaseClientHandling:
     """Test client connection handling"""
 
-    @patch('socket.socket')
+    @patch("socket.socket")
     def test_client_tracking(self, mock_socket_class, server_config):
         """Test that connected clients are tracked"""
         mock_server_socket = MagicMock()
         mock_client_socket = MagicMock()
 
         mock_socket_class.return_value = mock_server_socket
-        mock_server_socket.accept.return_value = (mock_client_socket, ("127.0.0.1", 12345))
+        mock_server_socket.accept.return_value = (
+            mock_client_socket,
+            ("127.0.0.1", 12345),
+        )
 
         # Make accept() timeout after first call
         mock_server_socket.accept.side_effect = [
             (mock_client_socket, ("127.0.0.1", 12345)),
-            socket.timeout()
+            socket.timeout(),
         ]
 
         server = MockTCPServer(server_config)
@@ -203,8 +206,10 @@ class TestTCPServerBaseClientHandling:
 
         assert result == 0  # No clients to send to
 
-    @patch('socket.socket')
-    def test_broadcast_to_all_clients_with_clients(self, mock_socket_class, server_config):
+    @patch("socket.socket")
+    def test_broadcast_to_all_clients_with_clients(
+        self, mock_socket_class, server_config
+    ):
         """Test broadcasting to connected clients"""
         mock_client1 = MagicMock()
         mock_client2 = MagicMock()
@@ -223,7 +228,7 @@ class TestTCPServerBaseClientHandling:
         mock_client2.sendall.assert_called_once_with(b"test_data")
         assert result == 2
 
-    @patch('socket.socket')
+    @patch("socket.socket")
     def test_broadcast_removes_failed_clients(self, mock_socket_class, server_config):
         """Test that failed clients are removed during broadcast"""
         mock_client1 = MagicMock()
@@ -273,15 +278,12 @@ class TestTCPServerBaseThreadManagement:
         assert len(server._client_threads) == 1
         assert active_thread in server._client_threads
 
-    @patch('socket.socket')
+    @patch("socket.socket")
     def test_max_client_threads_enforced(self, mock_socket_class, server_config):
         """Test that max client thread limit is enforced"""
         # Set very low limit for testing
         test_config = ServerConfig(
-            host="127.0.0.1",
-            port=9999,
-            max_client_threads=1,
-            socket_timeout=0.1
+            host="127.0.0.1", port=9999, max_client_threads=1, socket_timeout=0.1
         )
 
         mock_server_socket = MagicMock()
@@ -295,7 +297,7 @@ class TestTCPServerBaseThreadManagement:
         mock_server_socket.accept.side_effect = [
             (mock_client1, ("127.0.0.1", 12345)),
             (mock_client2, ("127.0.0.1", 12346)),
-            socket.timeout()
+            socket.timeout(),
         ]
 
         server = MockTCPServer(test_config)
@@ -313,7 +315,7 @@ class TestTCPServerBaseThreadManagement:
 class TestTCPServerBaseErrorHandling:
     """Test error handling"""
 
-    @patch('socket.socket')
+    @patch("socket.socket")
     def test_start_bind_failure(self, mock_socket_class, server_config):
         """Test handling of bind failure during start"""
         mock_socket = MagicMock()
@@ -339,9 +341,12 @@ class TestTCPServerBaseErrorHandling:
         # Should not raise exception
         server._remove_client(mock_client)
 
-    @patch('socket.socket')
-    def test_handle_client_wrapper_exception_handling(self, mock_socket_class, server_config):
+    @patch("socket.socket")
+    def test_handle_client_wrapper_exception_handling(
+        self, mock_socket_class, server_config
+    ):
         """Test that exceptions in client handler are caught"""
+
         # Create a server that raises in handle_client_connection
         class FailingServer(TCPServerBase):
             def handle_client_connection(self, client, address):

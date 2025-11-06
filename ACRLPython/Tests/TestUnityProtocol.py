@@ -49,12 +49,12 @@ class TestImageMessageEncoding:
         # Message should contain all components:
         # camera_id_len(4) + camera_id + prompt_len(4) + prompt + image_len(4) + image
         expected_min_length = (
-            UnityProtocol.INT_SIZE +  # camera_id length
-            len(camera_id.encode("utf-8")) +
-            UnityProtocol.INT_SIZE +  # prompt length
-            len(prompt.encode("utf-8")) +
-            UnityProtocol.INT_SIZE +  # image length
-            len(image_bytes)
+            UnityProtocol.INT_SIZE  # camera_id length
+            + len(camera_id.encode("utf-8"))
+            + UnityProtocol.INT_SIZE  # prompt length
+            + len(prompt.encode("utf-8"))
+            + UnityProtocol.INT_SIZE  # image length
+            + len(image_bytes)
         )
         assert len(encoded) == expected_min_length
 
@@ -117,7 +117,9 @@ class TestImageMessageDecoding:
 
         # Encode then decode
         encoded = UnityProtocol.encode_image_message(camera_id, prompt, image_bytes)
-        decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(encoded)
+        decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(
+            encoded
+        )
 
         assert decoded_id == camera_id
         assert decoded_prompt == prompt
@@ -130,7 +132,9 @@ class TestImageMessageDecoding:
         image_bytes = b"DATA"
 
         encoded = UnityProtocol.encode_image_message(camera_id, prompt, image_bytes)
-        decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(encoded)
+        decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(
+            encoded
+        )
 
         assert decoded_id == camera_id
         assert decoded_prompt == ""
@@ -143,7 +147,9 @@ class TestImageMessageDecoding:
         image_bytes = b"IMAGE"
 
         encoded = UnityProtocol.encode_image_message(camera_id, prompt, image_bytes)
-        decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(encoded)
+        decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(
+            encoded
+        )
 
         assert decoded_id == camera_id
         assert decoded_prompt == prompt
@@ -158,7 +164,7 @@ class TestImageMessageDecoding:
         encoded = UnityProtocol.encode_image_message(camera_id, prompt, image_bytes)
 
         # Truncate the message
-        truncated = encoded[:len(encoded) // 2]
+        truncated = encoded[: len(encoded) // 2]
 
         with pytest.raises(ValueError, match="Failed to decode"):
             UnityProtocol.decode_image_message(truncated)
@@ -187,7 +193,7 @@ class TestResultMessageEncoding:
             "success": True,
             "response": "Test response",
             "camera_id": "Camera1",
-            "metadata": {"model": "llava", "duration": 1.5}
+            "metadata": {"model": "llava", "duration": 1.5},
         }
 
         encoded = UnityProtocol.encode_result_message(result)
@@ -212,7 +218,7 @@ class TestResultMessageEncoding:
         result = {
             "detections": [
                 {"id": 0, "color": "red", "bbox": {"x": 10, "y": 20}},
-                {"id": 1, "color": "blue", "bbox": {"x": 30, "y": 40}}
+                {"id": 1, "color": "blue", "bbox": {"x": 30, "y": 40}},
             ]
         }
 
@@ -223,7 +229,7 @@ class TestResultMessageEncoding:
         """Test encoding result with unicode strings"""
         result = {
             "response": "I see 日本語 characters 🤖",
-            "camera_id": "Camera_日本語"
+            "camera_id": "Camera_日本語",
         }
 
         encoded = UnityProtocol.encode_result_message(result)
@@ -238,7 +244,7 @@ class TestResultMessageDecoding:
         original = {
             "success": True,
             "response": "Test response",
-            "camera_id": "Camera1"
+            "camera_id": "Camera1",
         }
 
         encoded = UnityProtocol.encode_result_message(original)
@@ -258,11 +264,8 @@ class TestResultMessageDecoding:
     def test_decode_nested_dict(self):
         """Test decoding nested dictionary"""
         original = {
-            "detections": [
-                {"id": 0, "color": "red"},
-                {"id": 1, "color": "blue"}
-            ],
-            "metadata": {"count": 2}
+            "detections": [{"id": 0, "color": "red"}, {"id": 1, "color": "blue"}],
+            "metadata": {"count": 2},
         }
 
         encoded = UnityProtocol.encode_result_message(original)
@@ -272,9 +275,7 @@ class TestResultMessageDecoding:
 
     def test_decode_unicode(self):
         """Test decoding unicode strings"""
-        original = {
-            "response": "Unicode test 日本語 🤖"
-        }
+        original = {"response": "Unicode test 日本語 🤖"}
 
         encoded = UnityProtocol.encode_result_message(original)
         decoded = UnityProtocol.decode_result_message(encoded)
@@ -287,7 +288,7 @@ class TestResultMessageDecoding:
         encoded = UnityProtocol.encode_result_message(result)
 
         # Truncate
-        truncated = encoded[:len(encoded) // 2]
+        truncated = encoded[: len(encoded) // 2]
 
         with pytest.raises(ValueError, match="Failed to decode"):
             UnityProtocol.decode_result_message(truncated)
@@ -318,7 +319,9 @@ class TestRoundTripEncoding:
         image_bytes = bytes(range(256))  # All byte values
 
         encoded = UnityProtocol.encode_image_message(camera_id, prompt, image_bytes)
-        decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(encoded)
+        decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(
+            encoded
+        )
 
         assert decoded_id == camera_id
         assert decoded_prompt == prompt
@@ -330,13 +333,13 @@ class TestRoundTripEncoding:
             "success": True,
             "detections": [
                 {"id": 0, "color": "red", "confidence": 0.95},
-                {"id": 1, "color": "blue", "confidence": 0.87}
+                {"id": 1, "color": "blue", "confidence": 0.87},
             ],
             "metadata": {
                 "model": "detection_v1",
                 "duration": 0.123,
-                "unicode": "日本語 🤖"
-            }
+                "unicode": "日本語 🤖",
+            },
         }
 
         encoded = UnityProtocol.encode_result_message(result)
@@ -352,7 +355,9 @@ class TestRoundTripEncoding:
         image_bytes = b"X" * (1024 * 1024)
 
         encoded = UnityProtocol.encode_image_message(camera_id, prompt, image_bytes)
-        decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(encoded)
+        decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(
+            encoded
+        )
 
         assert decoded_id == camera_id
         assert decoded_prompt == prompt

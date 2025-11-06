@@ -28,14 +28,6 @@ namespace PythonCommunication.Core
         [SerializeField]
         protected bool _autoReconnect = true;
 
-        [Tooltip("Seconds between reconnection attempts")]
-        [SerializeField]
-        protected float _reconnectInterval = 2f;
-
-        [Tooltip("Socket read timeout in milliseconds (0 = infinite)")]
-        [SerializeField]
-        protected int _readTimeoutMs = 120000; // 2 minutes default
-
         [Header("Debug")]
         [Tooltip("Enable verbose logging")]
         [SerializeField]
@@ -47,6 +39,7 @@ namespace PythonCommunication.Core
         protected bool _isConnected = false;
         protected bool _shouldRun = true;
         protected float _reconnectTimer = 0f;
+        protected float _reconnectInterval = 2f;
 
         // Properties
         public bool IsConnected
@@ -137,17 +130,12 @@ namespace PythonCommunication.Core
             {
                 _client = new TcpClient(_serverHost, _serverPort);
                 _stream = _client.GetStream();
-
-                // Set read timeout (0 = infinite, otherwise milliseconds)
-                if (_readTimeoutMs > 0)
-                {
-                    _stream.ReadTimeout = _readTimeoutMs;
-                }
+                _stream.ReadTimeout = 0; // Set read timeout (0 = infinite)
 
                 _isConnected = true;
 
                 OnConnected();
-                Log($"Connected to {_serverHost}:{_serverPort} (read timeout: {(_readTimeoutMs > 0 ? $"{_readTimeoutMs}ms" : "infinite")})");
+                Log($"Connected to {_serverHost}:{_serverPort} (read timeout: infinite)");
             }
             catch (Exception ex)
             {

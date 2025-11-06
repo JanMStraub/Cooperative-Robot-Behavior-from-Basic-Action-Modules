@@ -19,7 +19,7 @@ import cv2
 import numpy as np
 import open3d as o3d
 
-from .stereo_config import (
+from .StereoConfig import (
     CameraConfig,
     ReconstructionConfig,
     ServerConfig,
@@ -66,7 +66,9 @@ class StereoStreamingServer:
         self.server_socket: Optional[socket.socket] = None
         self.visualizer: Optional[o3d.visualization.Visualizer] = None  # type: ignore[attr-defined]
         self.point_cloud = o3d.geometry.PointCloud()
-        self.point_cloud_lock = threading.Lock()  # Protect point cloud access from multiple threads
+        self.point_cloud_lock = (
+            threading.Lock()
+        )  # Protect point cloud access from multiple threads
 
     def receive_exactly(self, sock: socket.socket, num_bytes: int) -> Optional[bytes]:
         """
@@ -266,9 +268,7 @@ class StereoStreamingServer:
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
         try:
-            self.server_socket.bind(
-                (self.server_config.host, self.server_config.port)
-            )
+            self.server_socket.bind((self.server_config.host, self.server_config.port))
             self.server_socket.listen(self.server_config.max_connections)
             logging.info(
                 f"Server listening on {self.server_config.host}:{self.server_config.port}"
