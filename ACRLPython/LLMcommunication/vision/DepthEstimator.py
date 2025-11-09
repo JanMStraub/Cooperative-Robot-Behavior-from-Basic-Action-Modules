@@ -7,26 +7,31 @@ Features:
 2. Expanded window search when initial sampling fails
 3. Strict disparity validation and depth sanity checking
 4. Utility functions for focal length calculation
+5. Integrated disparity calculation using OpenCV's StereoSGBM (no external dependencies)
 """
 
 import logging
 import math
-import sys
 from typing import Tuple, Optional, List
+from pathlib import Path
 import numpy as np
 import cv2
 
-# Import stereo reconstruction
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from StereoImageReconstruction.Reconstruct import calc_disparity
-from ACRLPython.StereoImageReconstruction.StereoConfig import (
-    CameraConfig,
-    ReconstructionConfig,
-    DEFAULT_CAMERA_CONFIG,
-    DEFAULT_RECONSTRUCTION_CONFIG,
-)
+# Import configuration - support both direct script and module execution
+try:
+    from .StereoConfig import (
+        CameraConfig,
+        ReconstructionConfig,
+        DEFAULT_CAMERA_CONFIG,
+        DEFAULT_RECONSTRUCTION_CONFIG,
+    )
+except ImportError:
+    from StereoConfig import (
+        CameraConfig,
+        ReconstructionConfig,
+        DEFAULT_CAMERA_CONFIG,
+        DEFAULT_RECONSTRUCTION_CONFIG,
+    )
 
 # Import config for debug settings
 try:
@@ -37,6 +42,71 @@ except ImportError:
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
 )
+
+
+# ===========================
+# Disparity Calculation
+# ===========================
+
+
+def calc_disparity(
+    imgL: np.ndarray,
+    imgR: np.ndarray,
+    config: Optional[ReconstructionConfig] = None,
+) -> np.ndarray:
+    """
+    Calculate the disparity map between two images using SGBM algorithm.
+
+    Args:
+        imgL: Left grayscale image
+        imgR: Right grayscale image
+        config: Reconstruction configuration (uses defaults if None)
+
+    Returns:
+        Disparity map as float32 array (negative values replaced with NaN)
+    """
+    if config is None:
+        config = DEFAULT_RECONSTRUCTION_CONFIG
+
+    if imgL.shape != imgR.shape:
+        raise ValueError(
+            f"Image shape mismatch: left {imgL.shape} vs right {imgR.shape}"
+        )
+
+    # Estimate max disparity if not provided
+    max_disp = config.max_disparity
+    if max_disp is None:
+        # Use image-width-based heuristic: max_disparity = width / 8
+        max_disp = imgL.shape[1] // 8
+        logging.debug(f"Estimated maximum disparity: {max_disp}")
+
+    # Ensure max_disp is a multiple of 16 (required by SGBM)
+    max_disp = ((max_disp + 15) // 16) * 16
+
+    # Cap max_disparity for performance (larger values are very slow)
+    if max_disp > 256:
+        logging.debug(f"Capping max_disparity from {max_disp} to 256 for performance")
+        max_disp = 256
+
+    # Create SGBM matcher
+    stereo = cv2.StereoSGBM_create(  # type: ignore[attr-defined]
+        minDisparity=config.min_disparity,
+        numDisparities=max_disp,
+        blockSize=config.window_size,
+        P1=config.p1_multiplier * 3 * config.window_size**2,
+        P2=config.p2_multiplier * 3 * config.window_size**2,
+        disp12MaxDiff=config.disp12_max_diff,
+        uniquenessRatio=config.uniqueness_ratio,
+        speckleWindowSize=config.speckle_window_size,
+        speckleRange=config.speckle_range,
+        mode=cv2.STEREO_SGBM_MODE_HH,  # type: ignore[attr-defined]
+    )
+
+    # Compute disparity
+    disp = stereo.compute(imgL, imgR).astype(np.float32) / 16.0
+
+    # Replace negative disparities with NaN
+    return np.where(disp >= 0.0, disp, np.nan)
 
 
 # ===========================

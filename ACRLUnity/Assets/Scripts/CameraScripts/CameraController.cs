@@ -2,10 +2,8 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using Core;
 using Logging;
 using PythonCommunication;
-using Robotics;
 using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
@@ -80,8 +78,8 @@ namespace Vision
 #endif
 
     /// <summary>
-    /// Controls camera screenshot capture for robot cameras.
-    /// Captures images from the robot's camera and saves them to disk with proper organization.
+    /// Controls camera screenshot capture.
+    /// Captures images from the camera and saves them to disk with proper organization.
     /// </summary>
     public class CameraController : MonoBehaviour
     {
@@ -112,21 +110,8 @@ namespace Vision
         private CompressionPreset _compressionPreset = CompressionPreset.Balanced;
 
         [SerializeField]
-        [Tooltip("Use Application.persistentDataPath for runtime builds")]
-        private bool _usePersistentDataPath = true;
-
-        [SerializeField]
         [Tooltip("Include timestamp in filename")]
         private bool _includeTimestamp = false;
-
-        [Header("Robot Detection")]
-        [SerializeField]
-        [Tooltip("List of robot name patterns to search for")]
-        private string[] _robotNamePatterns = { "AR4Left", "AR4Right" };
-
-        [SerializeField]
-        [Tooltip("Fallback name if no robot detected (leave empty to use camera GameObject name)")]
-        private string _fallbackRobotName = "AR4";
 
         [Header("LLM Settings")]
         [SerializeField]
@@ -139,8 +124,7 @@ namespace Vision
 
         // State tracking
         private int _captureCounter = 0;
-        private string _robotArmName;
-        private string _rootName;
+        private string _cameraName;
         private bool _isCapturing = false;
         private RenderTexture _cachedRenderTexture;
 
@@ -159,6 +143,10 @@ namespace Vision
         public int CaptureCount => _captureCounter;
         public bool IsWaitingForLLM => _isWaitingForLLM;
         public float LLMElapsedTime => _isWaitingForLLM ? Time.time - _llmSentTime : 0f;
+
+        // Helper variables
+        private string[] _cameraNamePatterns = { "Camera" };
+        private string _fallbackCameraName = "CameraFallback";
 
         /// <summary>
         /// Compression quality presets.
@@ -184,7 +172,7 @@ namespace Vision
             if (_grayscaleMode && _grayscaleMaterial == null)
             {
                 Debug.LogWarning(
-                    "[CameraController] Grayscale Mode is enabled, but no Grayscale Material is assigned. Disabling mode."
+                    "[CAMERA_CONTROLLER] Grayscale Mode is enabled, but no Grayscale Material is assigned. Disabling mode."
                 );
                 _grayscaleMode = false;
             }
@@ -219,28 +207,37 @@ namespace Vision
                 _imageHeight = 1000;
             }
 
-            // Find robot arm name
-            _robotArmName = FindArmRoot(_mainCamera.transform);
-            if (string.IsNullOrEmpty(_robotArmName))
+            // Find camera name
+            _cameraName = FindCameraRoot(_mainCamera.transform);
+            if (string.IsNullOrEmpty(_cameraName))
             {
-                // Use camera name as fallback if no custom fallback is set
-                string fallbackName = string.IsNullOrEmpty(_fallbackRobotName)
-                    ? _mainCamera.gameObject.name
-                    : _fallbackRobotName;
-
                 // Log hierarchy for debugging
                 string hierarchy = GetHierarchyPath(_mainCamera.transform);
                 Debug.Log(
-                    $"[CAMERA_CONTROLLER] Could not find robot arm in hierarchy.\n"
+                    $"[CAMERA_CONTROLLER] Could not camera name in hierarchy.\n"
                         + $"Camera hierarchy: {hierarchy}\n"
-                        + $"Looking for patterns: [{string.Join(", ", _robotNamePatterns)}]\n"
-                        + $"Using fallback: {fallbackName}"
+                        + $"Looking for patterns: [{string.Join(", ", _cameraNamePatterns)}]\n"
+                        + $"Using fallback: {_fallbackCameraName}"
                 );
-                _robotArmName = fallbackName;
+                _cameraName = _fallbackCameraName;
             }
 
-            // Get root name
-            _rootName = _mainCamera.transform.root.name;
+            // Register with CameraManager
+            if (CameraManager.Instance != null)
+            {
+                Debug.Log($"[CAMERA_CONTROLLER] Registering camera '{_cameraName}' with CameraManager");
+                bool registered = CameraManager.Instance.RegisterCamera(_cameraName, _mainCamera);
+                if (!registered)
+                {
+                    Debug.LogWarning($"[CAMERA_CONTROLLER] Failed to register camera '{_cameraName}'");
+                }
+            }
+            else
+            {
+                Debug.LogWarning(
+                    "[CAMERA_CONTROLLER] CameraManager not found. Create a CameraManager GameObject in the scene."
+                );
+            }
 
             // Subscribe to LLM results
             if (LLMResultsReceiver.Instance != null)
@@ -250,7 +247,7 @@ namespace Vision
 
             // Log initialization
             Debug.Log(
-                $"[CAMERA_CONTROLLER] Initialized: Camera={gameObject.name}, Robot={_robotArmName}, Resolution={_imageWidth}x{_imageHeight}"
+                $"[CAMERA_CONTROLLER] Initialized: Camera={gameObject.name}, Resolution={_imageWidth}x{_imageHeight}"
             );
         }
 
@@ -287,13 +284,13 @@ namespace Vision
             if (_isCapturing)
             {
                 Debug.LogWarning(
-                    "[CameraController] A capture is already in progress. Please wait."
+                    "[CAMERA_CONTROLLER] A capture is already in progress. Please wait."
                 );
                 return;
             }
             if (!enabled)
             {
-                Debug.LogWarning("[CameraController] Cannot capture, component is disabled.");
+                Debug.LogWarning("[CAMERA_CONTROLLER] Cannot capture, component is disabled.");
                 return;
             }
             StartCoroutine(ProcessCaptureCoroutine(type));
@@ -313,7 +310,7 @@ namespace Vision
             {
                 // Capture image
                 imageBytes = CaptureImageBytes();
-                Debug.Log($"[CameraController] Captured {imageBytes?.Length ?? 0} bytes");
+                Debug.Log($"[CAMERA_CONTROLLER] Captured {imageBytes?.Length ?? 0} bytes");
                 if (imageBytes == null)
                     throw new Exception("Image capture returned null bytes.");
 
@@ -322,11 +319,9 @@ namespace Vision
                 {
                     case CaptureType.SaveToFile:
                         string filename = GenerateFilename();
-                        string fullPath = GetFullPath(
-                            $"Screenshots/{_rootName}/{_robotArmName}/{filename}"
-                        );
+                        string fullPath = GetFullPath($"Screenshots/{_cameraName}/{filename}");
                         SaveImageToFile(fullPath, imageBytes);
-                        Debug.Log($"[CameraController] Image saved to: {fullPath}");
+                        Debug.Log($"[CAMERA_CONTROLLER] Image saved to: {fullPath}");
                         break;
 
                     case CaptureType.SendToServer:
@@ -336,16 +331,16 @@ namespace Vision
                         {
                             throw new Exception("ImageSender not available or not connected.");
                         }
-                        ImageSender.Instance.SendImageData(imageBytes, _robotArmName, _llmPrompt);
+                        ImageSender.Instance.SendImageData(imageBytes, _cameraName, _llmPrompt);
 
                         Debug.Log(
-                            $"[CameraController] Image sent successfully ({imageBytes.Length / 1024f:F1} KB). Waiting for response..."
+                            $"[CAMERA_CONTROLLER] Image sent successfully ({imageBytes.Length / 1024f:F1} KB). Waiting for response..."
                         );
 
                         // Track processing state
                         _isWaitingForLLM = true;
                         _llmSentTime = Time.time;
-                        _lastSentCameraId = _robotArmName;
+                        _lastSentCameraId = _cameraName;
 
                         break;
                 }
@@ -353,7 +348,7 @@ namespace Vision
             catch (Exception ex)
             {
                 errorMessage = ex.Message;
-                Debug.LogError($"[CameraController] Capture failed: {errorMessage}");
+                Debug.LogError($"[CAMERA_CONTROLLER] Capture failed: {errorMessage}");
             }
 
             // Finalize and log
@@ -369,7 +364,7 @@ namespace Vision
                     string actionId = _logger.StartAction(
                         "CameraCapture",
                         ActionType.Observation,
-                        new[] { _robotArmName },
+                        new[] { _cameraName },
                         description: $"Camera captured image ({type})"
                     );
 
@@ -397,7 +392,7 @@ namespace Vision
                     string actionId = _logger.StartAction(
                         "CameraCapture",
                         ActionType.Observation,
-                        new[] { _robotArmName },
+                        new[] { _cameraName },
                         description: $"Camera capture attempt ({type})"
                     );
 
@@ -514,11 +509,7 @@ namespace Vision
         /// </summary>
         private string GetFullPath(string relativePath)
         {
-            string basePath = _usePersistentDataPath
-                ? Application.persistentDataPath
-                : Application.dataPath;
-
-            return Path.Combine(basePath, relativePath);
+            return Path.Combine(Application.persistentDataPath, relativePath);
         }
 
         /// <summary>
@@ -542,9 +533,9 @@ namespace Vision
         }
 
         /// <summary>
-        /// Searches up the transform hierarchy to find a robot arm name matching configured patterns.
+        /// Searches up the transform hierarchy to find a camera name matching configured patterns.
         /// </summary>
-        private string FindArmRoot(Transform current)
+        private string FindCameraRoot(Transform current)
         {
             if (current == null)
                 return null;
@@ -553,7 +544,7 @@ namespace Vision
             while (current != null)
             {
                 // Check against all configured patterns
-                foreach (string pattern in _robotNamePatterns)
+                foreach (string pattern in _cameraNamePatterns)
                 {
                     if (string.IsNullOrEmpty(pattern))
                         continue;
@@ -597,6 +588,12 @@ namespace Vision
         /// </summary>
         private void OnDestroy()
         {
+            // Unregister from CameraManager
+            if (CameraManager.Instance != null && !string.IsNullOrEmpty(_cameraName))
+            {
+                CameraManager.Instance.UnregisterCamera(_cameraName);
+            }
+
             // Unsubscribe from LLM results
             if (LLMResultsReceiver.Instance != null)
             {

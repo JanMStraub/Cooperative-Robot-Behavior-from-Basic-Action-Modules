@@ -36,7 +36,7 @@ if str(_acrl_root) not in sys.path:
 # Import config - support both direct script and module execution
 # Try absolute import first (for direct execution), then relative (for module execution)
 try:
-    from ACRLPython.LLMCommunication import LLMConfig as cfg
+    from LLMCommunication import LLMConfig as cfg
 except ImportError:
     from .. import LLMConfig as cfg
 

@@ -29,15 +29,15 @@ if str(_acrl_root) not in sys.path:
 # Import config - support both direct script and module execution
 # Try absolute import first (for direct execution), then relative (for module execution)
 try:
-    from ACRLPython.LLMCommunication import LLMConfig as cfg
+    from LLMCommunication import LLMConfig as cfg
 except ImportError:
     from .. import LLMConfig as cfg
 
-# Import CameraConfig from StereoImageReconstruction
+# Import CameraConfig from vision module
 try:
-    from ACRLPython.StereoImageReconstruction.StereoConfig import CameraConfig
+    from LLMCommunication.vision.StereoConfig import CameraConfig
 except ImportError:
-    from ...StereoImageReconstruction.StereoConfig import CameraConfig
+    from ..vision.StereoConfig import CameraConfig
 
 # Import servers and detector - support both direct script and module execution
 try:

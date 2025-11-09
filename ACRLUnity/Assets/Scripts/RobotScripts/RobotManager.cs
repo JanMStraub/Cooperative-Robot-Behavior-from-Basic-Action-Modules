@@ -12,7 +12,7 @@ namespace Robotics
     {
         public string robotId;
         public GameObject robotGameObject;
-        public GameObject targetGameObject;
+        public GameObject targetGameObject; // TODO: Change to Vector3
         public RobotController controller;
         public RobotConfig profile;
         public bool isActive;
