@@ -63,6 +63,12 @@ namespace PythonCommunication
             {
                 Instance = this;
                 DontDestroyOnLoad(gameObject);
+
+                // Set default port if not configured
+                if (_serverPort == 0)
+                {
+                    _serverPort = 5006; // ResultsServer default port
+                }
             }
             else
             {

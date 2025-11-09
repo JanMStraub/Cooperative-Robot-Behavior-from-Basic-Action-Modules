@@ -346,12 +346,7 @@ MonoBehaviour:
   _grayscaleMode: 0
   _grayscaleMaterial: {fileID: 2100000, guid: 85731220826fe4971bb3613c9b92cf5a, type: 2}
   _compressionPreset: 1
-  _usePersistentDataPath: 1
   _includeTimestamp: 1
-  _robotNamePatterns:
-  - AR4Left
-  - AR4Right
-  _fallbackRobotName: 
   _llmPrompt: Analyze the image
 --- !u!1 &662395067
 GameObject:
@@ -362,6 +357,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 662395070}
+  - component: {fileID: 662395071}
   - component: {fileID: 662395069}
   - component: {fileID: 662395068}
   m_Layer: 0
@@ -387,14 +383,12 @@ MonoBehaviour:
   _serverPort: 5009
   _autoConnect: 1
   _autoReconnect: 1
-  _reconnectInterval: 2
-  _readTimeoutMs: 120000
   _verboseLogging: 0
-  _leftCamera: {fileID: 0}
-  _rightCamera: {fileID: 0}
+  _leftCamera: {fileID: 1118579538}
+  _rightCamera: {fileID: 1998407037}
   _cameraPairId: stereoTable
-  _cameraLeftId: L
-  _cameraRightId: R
+  _cameraLeftId: LTable
+  _cameraRightId: RTable
   _jpegQuality: 85
   _enableStreaming: 0
   _sendInterval: 0.5
@@ -414,14 +408,12 @@ MonoBehaviour:
   _serverHost: 127.0.0.1
   _serverPort: 5005
   _autoConnect: 1
-  _autoReconnect: 0
-  _reconnectInterval: 2
-  _readTimeoutMs: 120000
+  _autoReconnect: 1
   _verboseLogging: 0
   _enableStreaming: 0
   _jpegQuality: 85
   _sendInterval: 0.2
-  _streamCamera: {fileID: 0}
+  _streamCamera: {fileID: 1118579538}
   _streamCameraId: TableCamera
   _streamPrompt: 
 --- !u!4 &662395070
@@ -440,6 +432,24 @@ Transform:
   - {fileID: 627489885}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &662395071
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 662395067}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 94d36cbc3e24945949771a0032098589, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PythonCommunication.CameraManager
+  _initialCameras: []
+--- !u!20 &1118579538 stripped
+Camera:
+  m_CorrespondingSourceObject: {fileID: 1924621710956839310, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1168411245
 GameObject:
   m_ObjectHideFlags: 0
@@ -629,8 +639,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bb7eabb090fa24dbd9fe4880524d2a56, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ObjectNavigationController
-  leftRobotId: LeftRobot
-  rightRobotId: RightRobot
+  leftRobotId: Robot1
+  rightRobotId: Robot2
   targetObjectColor: blue
 --- !u!1 &1595579014
 GameObject:
@@ -644,6 +654,8 @@ GameObject:
   - component: {fileID: 1595579017}
   - component: {fileID: 1595579016}
   - component: {fileID: 1595579015}
+  - component: {fileID: 1595579019}
+  - component: {fileID: 1595579020}
   m_Layer: 0
   m_Name: CommunicationManager
   m_TagString: Untagged
@@ -667,8 +679,6 @@ MonoBehaviour:
   _serverPort: 5007
   _autoConnect: 1
   _autoReconnect: 1
-  _reconnectInterval: 2
-  _readTimeoutMs: 120000
   _verboseLogging: 0
   _logResults: 1
 --- !u!114 &1595579016
@@ -687,8 +697,6 @@ MonoBehaviour:
   _serverPort: 5006
   _autoConnect: 1
   _autoReconnect: 1
-  _reconnectInterval: 2
-  _readTimeoutMs: 120000
   _verboseLogging: 0
   _logResults: 1
 --- !u!114 &1595579017
@@ -721,6 +729,44 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1595579019
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1595579014}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 247de671b04464e1db9b93ce594aa30f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PythonCommunication.PythonCommandHandler
+  _verboseLogging: 0
+  _applySpeedMultiplier: 1
+  _successfulCommands: 0
+  _failedCommands: 0
+--- !u!114 &1595579020
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1595579014}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fd7a99348387e4a09a8264b45481ad6b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PythonCommunication.DetectionResultsReceiver
+  _serverHost: 127.0.0.1
+  _serverPort: 5006
+  _autoConnect: 1
+  _autoReconnect: 1
+  _verboseLogging: 0
+--- !u!20 &1998407037 stripped
+Camera:
+  m_CorrespondingSourceObject: {fileID: 5567977826561441543, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1001 &9060350412813614532
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -733,6 +779,18 @@ PrefabInstance:
       propertyPath: m_Layer
       value: 3
       objectReference: {fileID: 0}
+    - target: {fileID: 392458898457232902, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Name
+      value: RightRobot2Camera
+      objectReference: {fileID: 0}
+    - target: {fileID: 590060560836442683, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Name
+      value: RightRobot1Camera
+      objectReference: {fileID: 0}
+    - target: {fileID: 596947435951843946, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Name
+      value: Robot2StereoCamera
+      objectReference: {fileID: 0}
     - target: {fileID: 647262058709829988, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Layer
       value: 3
@@ -741,6 +799,14 @@ PrefabInstance:
       propertyPath: m_Layer
       value: 3
       objectReference: {fileID: 0}
+    - target: {fileID: 795938734311972712, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Name
+      value: Robot1StereoCamera
+      objectReference: {fileID: 0}
+    - target: {fileID: 2219641187325193096, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _cameraPairId
+      value: Robot1Stereo
+      objectReference: {fileID: 0}
     - target: {fileID: 2290850100550138070, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Layer
       value: 3
@@ -748,6 +814,18 @@ PrefabInstance:
     - target: {fileID: 2746204199733885086, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Layer
       value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 2794463736414520206, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Name
+      value: LeftRobot1Camera
+      objectReference: {fileID: 0}
+    - target: {fileID: 3238837518068886331, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Name
+      value: Robot1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4582788528901019201, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _cameraPairId
+      value: Robot2Stereo
       objectReference: {fileID: 0}
     - target: {fileID: 4749562172011976917, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.z
@@ -801,13 +879,33 @@ PrefabInstance:
       propertyPath: m_Layer
       value: 3
       objectReference: {fileID: 0}
+    - target: {fileID: 6077284443812479320, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Name
+      value: Robot2
+      objectReference: {fileID: 0}
     - target: {fileID: 6897178052544332906, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
       value: Environment
       objectReference: {fileID: 0}
+    - target: {fileID: 7756261985914743818, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Name
+      value: TableStereoCamera
+      objectReference: {fileID: 0}
     - target: {fileID: 7895265838431855440, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Layer
       value: 3
+      objectReference: {fileID: 0}
+    - target: {fileID: 7936452986229446538, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _imageWidth
+      value: 1000
+      objectReference: {fileID: 0}
+    - target: {fileID: 7936452986229446538, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _imageHeight
+      value: 1000
+      objectReference: {fileID: 0}
+    - target: {fileID: 8472021029506024806, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Name
+      value: LeftRobot2Camera
       objectReference: {fileID: 0}
     - target: {fileID: 9036475994986623082, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Layer

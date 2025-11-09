@@ -14,51 +14,8 @@ from unittest.mock import Mock, patch, MagicMock
 # Add LLMCommunication directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
 
-# Mock StereoImageReconstruction imports
-sys.modules["StereoImageReconstruction"] = MagicMock()
-sys.modules["StereoImageReconstruction.Reconstruct"] = MagicMock()
-sys.modules["StereoImageReconstruction.stereo_config"] = MagicMock()
-
-
-# Create mock CameraConfig for testing
-class MockCameraConfig:  # type: ignore - Mock implements CameraConfig interface for testing
-    """
-    Mock camera configuration that implements the same interface as
-    StereoImageReconstruction.config.CameraConfig for testing purposes.
-    """
-
-    def __init__(self, fov=60.0, baseline=0.1, focal_length=None, sensor_width=None):
-        self.fov = fov
-        self.baseline = baseline
-        self.focal_length = focal_length
-        self.sensor_width = sensor_width
-
-
-# Create mock ReconstructionConfig
-class MockReconstructionConfig:  # type: ignore - Mock implements ReconstructionConfig interface
-    """
-    Mock reconstruction configuration that implements the same interface as
-    StereoImageReconstruction.config.ReconstructionConfig for testing purposes.
-    """
-
-    def __init__(self):
-        self.algorithm = "SGBM"
-        self.min_disparity = 0
-        self.num_disparities = 64
-
-
-# Patch the imports
-sys.modules["StereoImageReconstruction.Reconstruct"].calc_disparity = MagicMock()
-sys.modules["StereoImageReconstruction.stereo_config"].CameraConfig = MockCameraConfig
-sys.modules["StereoImageReconstruction.stereo_config"].ReconstructionConfig = (
-    MockReconstructionConfig
-)
-sys.modules["StereoImageReconstruction.stereo_config"].DEFAULT_CAMERA_CONFIG = (
-    MockCameraConfig()
-)
-sys.modules["StereoImageReconstruction.stereo_config"].DEFAULT_RECONSTRUCTION_CONFIG = (
-    MockReconstructionConfig()
-)
+# Import actual configuration classes from LLMCommunication
+from LLMCommunication.vision.StereoConfig import CameraConfig, ReconstructionConfig
 
 from LLMCommunication.vision.DepthEstimator import (
     estimate_depth_at_point,
@@ -79,14 +36,14 @@ class TestEstimateDepthAtPoint:
         disparity = np.full((480, 640), 20.0, dtype=np.float32)
         mock_calc_disparity.return_value = disparity
 
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         depth = estimate_depth_at_point(
             imgL,
             imgR,
             pixel_x=320,
             pixel_y=240,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
         )
 
         assert depth is not None
@@ -118,7 +75,7 @@ class TestEstimateDepthAtPoint:
         disparity = np.full((480, 640), 10.0, dtype=np.float32)
         mock_calc_disparity.return_value = disparity
 
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         # Out of bounds X
         depth = estimate_depth_at_point(
@@ -126,7 +83,7 @@ class TestEstimateDepthAtPoint:
             imgR,
             pixel_x=1000,
             pixel_y=240,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
         )
         assert depth is None
 
@@ -136,7 +93,7 @@ class TestEstimateDepthAtPoint:
             imgR,
             pixel_x=320,
             pixel_y=1000,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
         )
         assert depth is None
 
@@ -151,14 +108,14 @@ class TestEstimateDepthAtPoint:
         disparity = np.full((480, 640), np.nan, dtype=np.float32)
         mock_calc_disparity.return_value = disparity
 
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         depth = estimate_depth_at_point(
             imgL,
             imgR,
             pixel_x=320,
             pixel_y=240,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
         )
 
         assert depth is None
@@ -174,14 +131,14 @@ class TestEstimateDepthAtPoint:
         disparity = np.zeros((480, 640), dtype=np.float32)
         mock_calc_disparity.return_value = disparity
 
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         depth = estimate_depth_at_point(
             imgL,
             imgR,
             pixel_x=320,
             pixel_y=240,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
         )
 
         assert depth is None
@@ -207,14 +164,14 @@ class TestEstimateDepthAtPoint:
 
         mock_calc_disparity.return_value = disparity
 
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         depth = estimate_depth_at_point(
             imgL,
             imgR,
             pixel_x=320,
             pixel_y=240,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
             window_size=5,
         )
 
@@ -231,14 +188,14 @@ class TestEstimateDepthAtPoint:
         disparity = np.full((480, 640), 15.0, dtype=np.float32)
         mock_calc_disparity.return_value = disparity
 
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         depth = estimate_depth_at_point(
             imgL,
             imgR,
             pixel_x=320,
             pixel_y=240,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
         )
 
         assert depth is not None
@@ -257,14 +214,14 @@ class TestEstimateDepthAtPoint:
         disparity = np.full((480, 640), 20.0, dtype=np.float32)
         mock_calc_disparity.return_value = disparity
 
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         depth = estimate_depth_at_point(
             imgL,
             imgR,
             pixel_x=320,
             pixel_y=240,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
         )
 
         assert depth is not None
@@ -280,7 +237,7 @@ class TestEstimateDepthAtPoint:
         mock_calc_disparity.return_value = disparity
 
         # Use focal_length and sensor_width instead of FOV
-        camera_config = MockCameraConfig(
+        camera_config = CameraConfig(
             fov=0.0,  # Use 0.0 instead of None to avoid type error
             baseline=0.1,
             focal_length=0.016,  # 16mm
@@ -292,7 +249,7 @@ class TestEstimateDepthAtPoint:
             imgR,
             pixel_x=320,
             pixel_y=240,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
         )
 
         assert depth is not None
@@ -308,7 +265,7 @@ class TestEstimateDepthAtPoint:
         mock_calc_disparity.return_value = disparity
 
         # Config with no FOV or focal_length
-        camera_config = MockCameraConfig(
+        camera_config = CameraConfig(
             fov=0.0,  # Use 0.0 instead of None to avoid type error
             baseline=0.1,
             focal_length=None,
@@ -320,7 +277,7 @@ class TestEstimateDepthAtPoint:
             imgR,
             pixel_x=320,
             pixel_y=240,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
         )
 
         assert depth is None
@@ -331,14 +288,14 @@ class TestPixelToWorldCoords:
 
     def test_pixel_to_world_center_pixel(self):
         """Test conversion of center pixel to world coordinates"""
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         # Center pixel at 1 meter depth
         world_x, world_y, world_z = pixel_to_world_coords(
             pixel_x=320,
             pixel_y=240,
             depth=1.0,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
             image_width=640,
             image_height=480,
         )
@@ -350,14 +307,14 @@ class TestPixelToWorldCoords:
 
     def test_pixel_to_world_right_of_center(self):
         """Test conversion of pixel to the right of center"""
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         # Pixel to the right of center
         world_x, world_y, world_z = pixel_to_world_coords(
             pixel_x=420,  # 100 pixels right of center
             pixel_y=240,
             depth=1.0,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
             image_width=640,
             image_height=480,
         )
@@ -369,14 +326,14 @@ class TestPixelToWorldCoords:
 
     def test_pixel_to_world_above_center(self):
         """Test conversion of pixel above center"""
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         # Pixel above center
         world_x, world_y, world_z = pixel_to_world_coords(
             pixel_x=320,
             pixel_y=140,  # 100 pixels above center
             depth=1.0,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
             image_width=640,
             image_height=480,
         )
@@ -388,14 +345,14 @@ class TestPixelToWorldCoords:
 
     def test_pixel_to_world_depth_scaling(self):
         """Test that world coordinates scale with depth"""
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         # Same pixel at different depths
         x1, y1, z1 = pixel_to_world_coords(
             pixel_x=420,
             pixel_y=340,
             depth=1.0,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
             image_width=640,
             image_height=480,
         )
@@ -404,7 +361,7 @@ class TestPixelToWorldCoords:
             pixel_x=420,
             pixel_y=340,
             depth=2.0,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
             image_width=640,
             image_height=480,
         )
@@ -416,7 +373,7 @@ class TestPixelToWorldCoords:
 
     def test_pixel_to_world_with_focal_length(self):
         """Test conversion using focal_length instead of FOV"""
-        camera_config = MockCameraConfig(
+        camera_config = CameraConfig(
             fov=0.0,  # Use 0.0 instead of None to avoid type error
             baseline=0.1,
             focal_length=0.016,
@@ -427,7 +384,7 @@ class TestPixelToWorldCoords:
             pixel_x=320,
             pixel_y=240,
             depth=1.0,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
             image_width=640,
             image_height=480,
         )
@@ -436,33 +393,33 @@ class TestPixelToWorldCoords:
 
     def test_pixel_to_world_missing_focal_info_raises(self):
         """Test that missing focal info raises ValueError"""
-        camera_config = MockCameraConfig(
+        camera_config = CameraConfig(
             fov=0.0,  # Use 0.0 instead of None to avoid type error
             baseline=0.1,
             focal_length=None,
             sensor_width=None,
         )
 
-        with pytest.raises(ValueError, match="Invalid camera configuration"):
+        with pytest.raises(ValueError, match="Camera config must provide"):
             pixel_to_world_coords(
                 pixel_x=320,
                 pixel_y=240,
                 depth=1.0,
-                camera_config=camera_config,  # type: ignore[arg-type]
+                camera_config=camera_config,
                 image_width=640,
                 image_height=480,
             )
 
     def test_pixel_to_world_different_image_sizes(self):
         """Test conversion with different image sizes"""
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         # HD image
         x1, y1, z1 = pixel_to_world_coords(
             pixel_x=960,
             pixel_y=540,
             depth=1.0,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
             image_width=1920,
             image_height=1080,
         )
@@ -485,14 +442,14 @@ class TestEstimateObjectWorldPosition:
         # Mock depth estimation
         mock_estimate_depth.return_value = 1.5
 
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         world_pos = estimate_object_world_position(
             imgL,
             imgR,
             bbox_center_x=320,
             bbox_center_y=240,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
         )
 
         assert world_pos is not None
@@ -512,14 +469,14 @@ class TestEstimateObjectWorldPosition:
         # Mock depth estimation failure
         mock_estimate_depth.return_value = None
 
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         world_pos = estimate_object_world_position(
             imgL,
             imgR,
             bbox_center_x=320,
             bbox_center_y=240,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
         )
 
         assert world_pos is None
@@ -533,14 +490,14 @@ class TestEstimateObjectWorldPosition:
 
         mock_estimate_depth.return_value = 2.0
 
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         world_pos = estimate_object_world_position(
             imgL,
             imgR,
             bbox_center_x=450,  # Right of center
             bbox_center_y=180,  # Above center
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
         )
 
         assert world_pos is not None
@@ -560,16 +517,16 @@ class TestEstimateObjectWorldPosition:
 
         mock_estimate_depth.return_value = 1.0
 
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
-        recon_config = MockReconstructionConfig()
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
+        recon_config = ReconstructionConfig()
 
         world_pos = estimate_object_world_position(
             imgL,
             imgR,
             bbox_center_x=320,
             bbox_center_y=240,
-            camera_config=camera_config,  # type: ignore[arg-type]
-            recon_config=recon_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
+            recon_config=recon_config,
         )
 
         assert world_pos is not None
@@ -594,7 +551,7 @@ class TestDepthEstimatorIntegration:
         disparity = np.full((480, 640), 25.0, dtype=np.float32)
         mock_calc_disparity.return_value = disparity
 
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         # Estimate depth
         depth = estimate_depth_at_point(
@@ -602,7 +559,7 @@ class TestDepthEstimatorIntegration:
             imgR,
             pixel_x=320,
             pixel_y=240,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
         )
 
         assert depth is not None
@@ -612,7 +569,7 @@ class TestDepthEstimatorIntegration:
             pixel_x=320,
             pixel_y=240,
             depth=depth,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
             image_width=640,
             image_height=480,
         )
@@ -630,14 +587,14 @@ class TestDepthEstimatorIntegration:
         # Simulate detection at (450, 300) with depth 1.8m
         mock_estimate_depth.return_value = 1.8
 
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         world_pos = estimate_object_world_position(
             imgL,
             imgR,
             bbox_center_x=450,
             bbox_center_y=300,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
         )
 
         assert world_pos is not None
@@ -660,14 +617,14 @@ class TestDepthEstimatorEdgeCases:
         disparity = np.full((480, 640), 0.1, dtype=np.float32)
         mock_calc_disparity.return_value = disparity
 
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         depth = estimate_depth_at_point(
             imgL,
             imgR,
             pixel_x=320,
             pixel_y=240,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
         )
 
         # Should work but depth will be very large
@@ -682,14 +639,14 @@ class TestDepthEstimatorEdgeCases:
         disparity = np.full((480, 640), 100.0, dtype=np.float32)
         mock_calc_disparity.return_value = disparity
 
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         depth = estimate_depth_at_point(
             imgL,
             imgR,
             pixel_x=320,
             pixel_y=240,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
         )
 
         # Should work, depth will be small
@@ -704,7 +661,7 @@ class TestDepthEstimatorEdgeCases:
         disparity = np.full((480, 640), 20.0, dtype=np.float32)
         mock_calc_disparity.return_value = disparity
 
-        camera_config = MockCameraConfig(fov=60.0, baseline=0.1)
+        camera_config = CameraConfig(fov=60.0, baseline=0.1)
 
         # Small window
         depth1 = estimate_depth_at_point(
@@ -712,7 +669,7 @@ class TestDepthEstimatorEdgeCases:
             imgR,
             pixel_x=320,
             pixel_y=240,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
             window_size=3,
         )
 
@@ -722,7 +679,7 @@ class TestDepthEstimatorEdgeCases:
             imgR,
             pixel_x=320,
             pixel_y=240,
-            camera_config=camera_config,  # type: ignore[arg-type]
+            camera_config=camera_config,
             window_size=11,
         )
 

@@ -32,42 +32,32 @@ except ImportError:
 # Import stereo depth estimation
 try:
     try:
-        from ...StereoImageReconstruction.StereoConfig import (
+        from .StereoConfig import (
             CameraConfig,
+            ReconstructionConfig,
             DEFAULT_CAMERA_CONFIG,
+            DEFAULT_RECONSTRUCTION_CONFIG,
         )
     except ImportError:
-        from ACRLPython.StereoImageReconstruction.StereoConfig import (
+        from StereoConfig import (
             CameraConfig,
+            ReconstructionConfig,
             DEFAULT_CAMERA_CONFIG,
+            DEFAULT_RECONSTRUCTION_CONFIG,
         )
 
-    # Use depth estimator - import optimized version
+    # Use depth estimator with integrated disparity calculation
     try:
         from .DepthEstimator import (
-            estimate_object_world_position,
+            calc_disparity,
             estimate_object_world_position_from_disparity,
             save_disparity_map_debug,
         )
     except ImportError:
         from vision.DepthEstimator import (
-            estimate_object_world_position,
+            calc_disparity,
             estimate_object_world_position_from_disparity,
             save_disparity_map_debug,
-        )
-
-    # Import calc_disparity for computing disparity once
-    try:
-        from ...StereoImageReconstruction.Reconstruct import calc_disparity
-        from ...StereoImageReconstruction.StereoConfig import (
-            ReconstructionConfig,
-            DEFAULT_RECONSTRUCTION_CONFIG,
-        )
-    except ImportError:
-        from StereoImageReconstruction.Reconstruct import calc_disparity
-        from ACRLPython.StereoImageReconstruction.StereoConfig import (
-            ReconstructionConfig,
-            DEFAULT_RECONSTRUCTION_CONFIG,
         )
 
     STEREO_AVAILABLE = True
@@ -82,12 +72,6 @@ except Exception as e:
     ReconstructionConfig = type("ReconstructionConfig", (), {})
 
     # Define dummy functions when stereo is not available
-    def estimate_object_world_position(
-        *args, **kwargs
-    ) -> Optional[Tuple[float, float, float]]:
-        """Dummy function when stereo depth estimation is not available"""
-        return None
-
     def estimate_object_world_position_from_disparity(
         *args, **kwargs
     ) -> Optional[Tuple[float, float, float]]:

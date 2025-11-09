@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Threading;
 using UnityEngine;
 using PythonCommunication.Core;
+using Vision;
 
 namespace PythonCommunication
 {
@@ -16,23 +16,6 @@ namespace PythonCommunication
     {
         // Singleton instance
         public static DetectionResultsReceiver Instance { get; private set; }
-
-        [Header("Connection Settings")]
-        [SerializeField]
-        [Tooltip("Python server host (default: localhost)")]
-        private new string _serverHost = "127.0.0.1";
-
-        [SerializeField]
-        [Tooltip("Python server port (default: 5007)")]
-        private new int _serverPort = 5007;
-
-        [Header("Camera Management")]
-        [SerializeField]
-        [Tooltip("Dictionary of camera IDs to Camera components for raycasting")]
-        private CameraMapping[] _cameraMappings = Array.Empty<CameraMapping>();
-
-        // Camera lookup dictionary
-        private Dictionary<string, Camera> _cameraDict;
 
         // Background thread for receiving data
         private Thread _receiveThread;
@@ -51,16 +34,6 @@ namespace PythonCommunication
         // Log prefix for TCPClientBase
         protected override string LogPrefix => "DetectionResultsReceiver";
 
-        /// <summary>
-        /// Camera mapping for inspector configuration
-        /// </summary>
-        [Serializable]
-        public class CameraMapping
-        {
-            public string cameraId;
-            public Camera camera;
-        }
-
         private void Awake()
         {
             // Singleton pattern
@@ -69,8 +42,11 @@ namespace PythonCommunication
                 Instance = this;
                 DontDestroyOnLoad(gameObject);
 
-                // Build camera dictionary
-                BuildCameraDictionary();
+                // Set default port if not configured
+                if (_serverPort == 0)
+                {
+                    _serverPort = 5007; // DetectionServer default port
+                }
             }
             else
             {
@@ -109,89 +85,25 @@ namespace PythonCommunication
         }
 
         /// <summary>
-        /// Builds the camera lookup dictionary from inspector mappings
-        /// </summary>
-        private void BuildCameraDictionary()
-        {
-            _cameraDict = new Dictionary<string, Camera>();
-
-            if (_cameraMappings != null)
-            {
-                foreach (var mapping in _cameraMappings)
-                {
-                    if (
-                        !string.IsNullOrEmpty(mapping.cameraId)
-                        && mapping.camera != null
-                        && !_cameraDict.ContainsKey(mapping.cameraId)
-                    )
-                    {
-                        _cameraDict[mapping.cameraId] = mapping.camera;
-                    }
-                }
-            }
-
-            Debug.Log(
-                $"[DetectionResultsReceiver] Registered {_cameraDict.Count} camera(s) for detection"
-            );
-        }
-
-        /// <summary>
-        /// Registers a camera for detection results
-        /// </summary>
-        /// <param name="cameraId">Camera identifier</param>
-        /// <param name="camera">Camera component</param>
-        public void RegisterCamera(string cameraId, Camera camera)
-        {
-            if (string.IsNullOrEmpty(cameraId) || camera == null)
-            {
-                Debug.LogWarning("[DetectionResultsReceiver] Invalid camera registration");
-                return;
-            }
-
-            if (_cameraDict == null)
-            {
-                _cameraDict = new Dictionary<string, Camera>();
-            }
-
-            _cameraDict[cameraId] = camera;
-            Debug.Log($"[DetectionResultsReceiver] Registered camera: {cameraId}");
-        }
-
-        /// <summary>
-        /// Gets a registered camera by ID
+        /// Gets a registered camera by ID from CameraManager
         /// </summary>
         private Camera GetCameraById(string cameraId)
         {
-            if (_cameraDict != null && _cameraDict.TryGetValue(cameraId, out Camera camera))
+            if (CameraManager.Instance == null)
             {
-                return camera;
+                Debug.LogWarning(
+                    "[DETECTION_RESULT_RECEIVER] CameraManager not initialized. Create a CameraManager GameObject in the scene."
+                );
+                return null;
             }
 
-            // Try to find camera by name if not in dictionary
-            GameObject cameraObj = GameObject.Find(cameraId);
-            if (cameraObj != null)
-            {
-                Camera foundCamera = cameraObj.GetComponent<Camera>();
-                if (foundCamera != null)
-                {
-                    Debug.Log(
-                        $"[DetectionResultsReceiver] Found camera by name: {cameraId}, registering it"
-                    );
-                    RegisterCamera(cameraId, foundCamera);
-                    return foundCamera;
-                }
-            }
-
-            Debug.LogWarning(
-                $"[DetectionResultsReceiver] Camera not found for ID: {cameraId}. Register it first or add to inspector."
-            );
-            return null;
+            return CameraManager.Instance.GetCamera(cameraId);
         }
 
         protected override void OnConnected()
         {
             Debug.Log(
-                $"[DetectionResultsReceiver] Connected to DetectionServer at {_serverHost}:{_serverPort}"
+                $"[DETECTION_RESULT_RECEIVER] Connected to DetectionServer at {_serverHost}:{_serverPort}"
             );
 
             // Start background thread to receive data
@@ -206,13 +118,13 @@ namespace PythonCommunication
         protected override void OnConnectionFailed(Exception error)
         {
             Debug.LogWarning(
-                $"[DetectionResultsReceiver] Connection failed: {error.Message}. Will retry..."
+                $"[DETECTION_RESULT_RECEIVER] Connection failed: {error.Message}. Will retry..."
             );
         }
 
         protected override void OnDisconnecting()
         {
-            Debug.Log("[DetectionResultsReceiver] Disconnecting from DetectionServer");
+            Debug.Log("[DETECTION_RESULT_RECEIVER] Disconnecting from DetectionServer");
 
             // Stop receive thread
             if (_receiveThread != null && _receiveThread.IsAlive)
@@ -223,7 +135,7 @@ namespace PythonCommunication
 
         protected override void OnDisconnected()
         {
-            Debug.Log("[DetectionResultsReceiver] Disconnected from DetectionServer");
+            Debug.Log("[DETECTION_RESULT_RECEIVER] Disconnected from DetectionServer");
         }
 
         /// <summary>
@@ -235,22 +147,21 @@ namespace PythonCommunication
             {
                 while (IsConnected && _shouldRun)
                 {
-                    // Read message length (4 bytes, big-endian)
+                    // Read message length (4 bytes, little-endian to match Python protocol)
                     byte[] lengthBuffer = new byte[4];
                     int bytesRead = ReadExactly(_stream, lengthBuffer, 4);
 
                     if (bytesRead < 4)
                     {
-                        Debug.LogWarning("[DetectionResultsReceiver] Connection closed by server");
+                        Debug.LogWarning("[DETECTION_RESULT_RECEIVER] Connection closed by server");
                         break;
                     }
 
-                    int messageLength = (lengthBuffer[0] << 24) | (lengthBuffer[1] << 16) |
-                                       (lengthBuffer[2] << 8) | lengthBuffer[3];
+                    int messageLength = BitConverter.ToInt32(lengthBuffer, 0);
 
                     if (messageLength <= 0 || messageLength > MAX_JSON_LENGTH)
                     {
-                        Debug.LogError($"[DetectionResultsReceiver] Invalid message length: {messageLength}");
+                        Debug.LogError($"[DETECTION_RESULT_RECEIVER] Invalid message length: {messageLength}");
                         continue;
                     }
 
@@ -260,7 +171,7 @@ namespace PythonCommunication
 
                     if (bytesRead < messageLength)
                     {
-                        Debug.LogWarning("[DetectionResultsReceiver] Incomplete message received");
+                        Debug.LogWarning("[DETECTION_RESULT_RECEIVER] Incomplete message received");
                         break;
                     }
 
@@ -278,12 +189,12 @@ namespace PythonCommunication
             }
             catch (System.IO.IOException ex)
             {
-                Debug.LogWarning($"[DetectionResultsReceiver] Connection lost: {ex.Message}");
+                Debug.LogWarning($"[DETECTION_RESULT_RECEIVER] Connection lost: {ex.Message}");
                 _isConnected = false;
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[DetectionResultsReceiver] Error in receive loop: {ex.Message}");
+                Debug.LogError($"[DETECTION_RESULT_RECEIVER] Error in receive loop: {ex.Message}");
                 _isConnected = false;
             }
         }
@@ -299,18 +210,17 @@ namespace PythonCommunication
                 // Format: [json_length (4 bytes)][json_data]
                 if (data.Length < 4)
                 {
-                    Debug.LogError("[DetectionResultsReceiver] Invalid data: too short");
+                    Debug.LogError("[DETECTION_RESULT_RECEIVER] Invalid data: too short");
                     return;
                 }
 
-                // Read JSON length (big-endian)
-                int jsonLength =
-                    (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+                // Read JSON length (little-endian to match Python protocol)
+                int jsonLength = BitConverter.ToInt32(data, 0);
 
                 if (jsonLength <= 0 || jsonLength > MAX_JSON_LENGTH)
                 {
                     Debug.LogError(
-                        $"[DetectionResultsReceiver] Invalid JSON length: {jsonLength}"
+                        $"[DETECTION_RESULT_RECEIVER] Invalid JSON length: {jsonLength}"
                     );
                     return;
                 }
@@ -318,7 +228,7 @@ namespace PythonCommunication
                 if (data.Length < 4 + jsonLength)
                 {
                     Debug.LogError(
-                        $"[DetectionResultsReceiver] Incomplete data: expected {4 + jsonLength} bytes, got {data.Length}"
+                        $"[DETECTION_RESULT_RECEIVER] Incomplete data: expected {4 + jsonLength} bytes, got {data.Length}"
                     );
                     return;
                 }
@@ -331,7 +241,7 @@ namespace PythonCommunication
 
                 if (result == null)
                 {
-                    Debug.LogError("[DetectionResultsReceiver] Failed to parse detection result");
+                    Debug.LogError("[DETECTION_RESULT_RECEIVER] Failed to parse detection result");
                     return;
                 }
 
@@ -340,7 +250,7 @@ namespace PythonCommunication
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[DetectionResultsReceiver] Error handling data: {ex.Message}");
+                Debug.LogError($"[DETECTION_RESULT_RECEIVER] Error handling data: {ex.Message}");
             }
         }
 
@@ -350,7 +260,7 @@ namespace PythonCommunication
         private void ProcessDetectionResult(DetectionResult result)
         {
             Debug.Log(
-                $"[DetectionResultsReceiver] Received detection: {result.detections?.Length ?? 0} cube(s) from {result.camera_id}"
+                $"[DETECTION_RESULT_RECEIVER] Received detection: {result.detections?.Length ?? 0} cube(s) from {result.camera_id}"
             );
 
             // Fire raw result event
@@ -362,7 +272,7 @@ namespace PythonCommunication
             if (sourceCamera == null)
             {
                 Debug.LogWarning(
-                    $"[DetectionResultsReceiver] Cannot convert to world coordinates: camera '{result.camera_id}' not found"
+                    $"[DETECTION_RESULT_RECEIVER] Cannot convert to world coordinates: camera '{result.camera_id}' not found"
                 );
                 return;
             }
@@ -384,7 +294,7 @@ namespace PythonCommunication
                         worldPos = detection.world_position.ToVector3();
                         hasWorldPos = true;
                         Debug.Log(
-                            $"[DetectionResultsReceiver] {detection.color} cube: using stereo depth world position {worldPos}"
+                            $"[DETECTION_RESULT_RECEIVER] {detection.color} cube: using stereo depth world position {worldPos}"
                         );
                     }
                     else
@@ -437,29 +347,10 @@ namespace PythonCommunication
             // This would require storing results in a dictionary
             // For now, users should subscribe to events
             Debug.LogWarning(
-                "[DetectionResultsReceiver] GetLatestDetectionForCamera not implemented yet. Use events instead."
+                "[DETECTION_RESULT_RECEIVER] GetLatestDetectionForCamera not implemented yet. Use events instead."
             );
             return null;
         }
 
-#if UNITY_EDITOR
-        private void OnValidate()
-        {
-            // Validate camera mappings
-            if (_cameraMappings != null)
-            {
-                bool hasDuplicates = _cameraMappings
-                    .GroupBy(m => m.cameraId)
-                    .Any(g => g.Count() > 1);
-
-                if (hasDuplicates)
-                {
-                    Debug.LogWarning(
-                        "[DetectionResultsReceiver] Duplicate camera IDs detected in mappings!"
-                    );
-                }
-            }
-        }
-#endif
     }
 }

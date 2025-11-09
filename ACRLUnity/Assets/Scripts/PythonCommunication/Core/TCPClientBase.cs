@@ -130,7 +130,7 @@ namespace PythonCommunication.Core
             {
                 _client = new TcpClient(_serverHost, _serverPort);
                 _stream = _client.GetStream();
-                _stream.ReadTimeout = 0; // Set read timeout (0 = infinite)
+                _stream.ReadTimeout = System.Threading.Timeout.Infinite;
 
                 _isConnected = true;
 
