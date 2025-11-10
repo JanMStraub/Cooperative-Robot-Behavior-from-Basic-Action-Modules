@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using UnityEngine;
-using Robotics;
-using Utilities;
 using Core;
+using Robotics;
+using UnityEngine;
+using Utilities;
 
 namespace Logging
 {
@@ -61,6 +61,9 @@ namespace Logging
         private StreamWriter _sceneWriter;
         private string _sessionId;
 
+        // Helper variables
+        private const string _logPrefix = "[MAIN_LOGGER]";
+
         // Per-robot file management
         private readonly Dictionary<string, StreamWriter> _robotFiles = new();
 
@@ -92,7 +95,7 @@ namespace Logging
             // Create dedicated scene log file
             string sceneLogPath = Path.Combine(_fullLogPath, $"scene_{_sessionId}.json");
             _sceneWriter = new StreamWriter(sceneLogPath, true) { AutoFlush = true };
-            Debug.Log($"[MAIN_LOGGER] Scene log: {sceneLogPath}");
+            Debug.Log($"{_logPrefix} Scene log: {sceneLogPath}");
 
             if (!perRobotFiles)
             {
@@ -100,11 +103,11 @@ namespace Logging
                 _logFilePath = Path.Combine(_fullLogPath, $"robot_actions_{_sessionId}.json");
                 _logWriter = new StreamWriter(_logFilePath, true);
                 _logWriter.AutoFlush = true;
-                Debug.Log($"[MAIN_LOGGER] Initialized. Session log: {_logFilePath}");
+                Debug.Log($"{_logPrefix} Initialized. Session log: {_logFilePath}");
             }
             else
             {
-                Debug.Log($"[MAIN_LOGGER] Initialized. Per-robot logs in: {_fullLogPath}");
+                Debug.Log($"{_logPrefix} Initialized. Per-robot logs in: {_fullLogPath}");
             }
 
             // Auto-register scene objects using ObjectRegistry
@@ -134,7 +137,7 @@ namespace Logging
             yield return null;
 
             Debug.Log(
-                $"[MAIN_LOGGER] About to capture initial scene. Tracked objects: {_trackedObjects.Count}"
+                $"{_logPrefix} About to capture initial scene. Tracked objects: {_trackedObjects.Count}"
             );
             CaptureEnvironment("initial_scene");
         }
@@ -439,7 +442,7 @@ namespace Logging
             int graspable = _trackedObjects.Values.Count(o => o.isGraspable);
             int robots = RobotManager.Instance?.RobotInstances.Count ?? 0;
 
-            return $"[MAIN_LOGGER] Scene with {robots} robot(s), {objects} object(s) ({graspable} graspable)";
+            return $"{_logPrefix} Scene with {robots} robot(s), {objects} object(s) ({graspable} graspable)";
         }
 
         private string GenerateHumanReadable(
@@ -467,7 +470,7 @@ namespace Logging
         private string UpdateHumanReadableWithOutcome(RobotAction action)
         {
             string outcome = action.success ? "successfully" : "unsuccessfully";
-            return $"{action.humanReadable} ({outcome} completed in {action.duration:F1}s, quality: {action.qualityScore:F2})";
+            return $"{_logPrefix} {action.humanReadable} ({outcome} completed in {action.duration:F1}s, quality: {action.qualityScore:F2})";
         }
 
         /// <summary>
@@ -509,7 +512,7 @@ namespace Logging
             // Ensure ObjectRegistry exists
             if (ObjectRegistry.Instance == null)
             {
-                Debug.LogWarning("[MAIN_LOGGER] ObjectRegistry not found in scene. Creating one.");
+                Debug.LogWarning($"{_logPrefix} ObjectRegistry not found in scene. Creating one.");
                 var registryGO = new GameObject("ObjectRegistry");
                 registryGO.AddComponent<ObjectRegistry>();
             }
@@ -523,7 +526,7 @@ namespace Logging
                 includeTrackpoints: true
             );
 
-            Debug.Log($"[MAIN_LOGGER] Registered {count} objects via ObjectRegistry");
+            Debug.Log($"{_logPrefix} Registered {count} objects via ObjectRegistry");
         }
 
         /// <summary>
@@ -597,7 +600,7 @@ namespace Logging
             };
 
             Debug.Log(
-                $"[MAIN_LOGGER] Logging scene snapshot: {scene.snapshotId}, Objects: {scene.totalObjects}, Robots: {scene.robots.Length}"
+                $"{_logPrefix} Logging scene snapshot: {scene.snapshotId}, Objects: {scene.totalObjects}, Robots: {scene.robots.Length}"
             );
             WriteLog(entry);
         }
@@ -640,7 +643,7 @@ namespace Logging
                                 $"session_{_sessionId}.json"
                             );
                             _logWriter = new StreamWriter(sessionFile, true) { AutoFlush = true };
-                            Debug.Log($"[MAIN_LOGGER] Created session log file: {sessionFile}");
+                            Debug.Log($"{_logPrefix} Created session log file: {sessionFile}");
                         }
                         _logWriter.WriteLine(json);
                     }
@@ -653,7 +656,7 @@ namespace Logging
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[MAIN_LOGGER] Failed to write log: {ex.Message}");
+                Debug.LogError($"{_logPrefix} Failed to write log: {ex.Message}");
             }
         }
 
@@ -675,7 +678,7 @@ namespace Logging
 
             writer = new StreamWriter(filePath, true) { AutoFlush = true };
             _robotFiles[robotId] = writer;
-            Debug.Log($"[MAIN_LOGGER] Created log file for robot '{safeRobotId}': {filePath}");
+            Debug.Log($"{_logPrefix} Created log file for robot '{safeRobotId}': {filePath}");
 
             return writer;
         }
@@ -718,7 +721,7 @@ namespace Logging
                 }
 
                 Instance = null;
-                Debug.Log($"[MAIN_LOGGER] Shutdown. Logs saved.");
+                Debug.Log($"{_logPrefix} Shutdown. Logs saved.");
             }
         }
 

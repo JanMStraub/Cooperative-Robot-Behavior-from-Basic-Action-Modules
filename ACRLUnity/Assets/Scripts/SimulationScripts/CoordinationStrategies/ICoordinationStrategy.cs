@@ -16,7 +16,10 @@ namespace Simulation.CoordinationStrategies
         /// </summary>
         /// <param name="robotControllers">Array of all robot controllers in the simulation</param>
         /// <param name="robotTargetReached">Dictionary tracking which robots have reached their targets</param>
-        void Update(RobotController[] robotControllers, Dictionary<string, bool> robotTargetReached);
+        void Update(
+            RobotController[] robotControllers,
+            Dictionary<string, bool> robotTargetReached
+        );
 
         /// <summary>
         /// Checks if a specific robot is allowed to move based on the coordination strategy.

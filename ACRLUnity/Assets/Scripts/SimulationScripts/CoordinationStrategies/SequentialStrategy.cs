@@ -14,6 +14,9 @@ namespace Simulation.CoordinationStrategies
         private int _activeRobotIndex;
         private RobotController[] _robotControllers;
 
+        // Helper variables
+        private const string _logPrefix = "[SEQUENTIAL_STRATEGY]";
+
         /// <summary>
         /// Constructor for SequentialStrategy
         /// </summary>
@@ -26,7 +29,10 @@ namespace Simulation.CoordinationStrategies
         /// Updates the sequential coordination logic.
         /// Switches to the next robot when the current robot reaches its target.
         /// </summary>
-        public void Update(RobotController[] robotControllers, Dictionary<string, bool> robotTargetReached)
+        public void Update(
+            RobotController[] robotControllers,
+            Dictionary<string, bool> robotTargetReached
+        )
         {
             if (robotControllers == null || robotControllers.Length == 0)
                 return;
@@ -51,7 +57,7 @@ namespace Simulation.CoordinationStrategies
                 _activeRobotIndex = (_activeRobotIndex + 1) % robotControllers.Length;
 
                 Debug.Log(
-                    $"[SEQUENTIAL_STRATEGY] Robot switch: {currentRobotId} (index {previousIndex}) -> {GetActiveRobotId()} (index {_activeRobotIndex})"
+                    $"{_logPrefix} Robot switch: {currentRobotId} (index {previousIndex}) -> {GetActiveRobotId()} (index {_activeRobotIndex})"
                 );
             }
         }
@@ -86,7 +92,7 @@ namespace Simulation.CoordinationStrategies
         public void Reset()
         {
             _activeRobotIndex = 0;
-            Debug.Log("[SEQUENTIAL_STRATEGY] Reset to robot 0");
+            Debug.Log($"{_logPrefix} Reset to robot 0");
         }
     }
 }

@@ -119,7 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &78650756
+--- !u!1 &604723476
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -127,78 +127,42 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 78650760}
-  - component: {fileID: 78650759}
-  - component: {fileID: 78650758}
-  - component: {fileID: 78650757}
+  - component: {fileID: 604723478}
+  - component: {fileID: 604723479}
   m_Layer: 0
-  m_Name: SimulationManager
+  m_Name: LoggingManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &78650757
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 78650756}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9cccc190922ec4a7b931982beb51c2f8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Utilities.ObjectRegistry
---- !u!114 &78650758
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 78650756}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9b79e6a1d5d0c487f9f89560e0660fe9, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Logging.RobotLogger
-  enableLogging: 1
-  logDirectory: 
-  operationType: NavigateToObject
-  perRobotFiles: 1
-  captureEnvironment: 0
-  environmentSampleRate: 2
-  trackTrajectories: 0
-  trajectorySampleRate: 0.2
-  autoRegisterObjects: 1
---- !u!114 &78650759
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 78650756}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c86620019df64432eb7e25afa8cf29ec, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  config: {fileID: 11400000, guid: 1c6ca8dd9c7e2451aba210581aa5f7bc, type: 2}
---- !u!4 &78650760
+--- !u!4 &604723478
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 78650756}
+  m_GameObject: {fileID: 604723476}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.01716, y: 0, z: -0.25943}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
+  m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &604723479
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 604723476}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9cccc190922ec4a7b931982beb51c2f8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Utilities.ObjectRegistry
 --- !u!1 &627489884
 GameObject:
   m_ObjectHideFlags: 0
@@ -358,8 +322,6 @@ GameObject:
   m_Component:
   - component: {fileID: 662395070}
   - component: {fileID: 662395071}
-  - component: {fileID: 662395069}
-  - component: {fileID: 662395068}
   m_Layer: 0
   m_Name: CameraManager
   m_TagString: Untagged
@@ -367,55 +329,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &662395068
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 662395067}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7a8f9c1e2b3d4e5f6a7b8c9d0e1f2a3b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::LLMCommunication.StereoImageSender
-  _serverHost: 127.0.0.1
-  _serverPort: 5009
-  _autoConnect: 1
-  _autoReconnect: 1
-  _verboseLogging: 0
-  _leftCamera: {fileID: 1118579538}
-  _rightCamera: {fileID: 1998407037}
-  _cameraPairId: stereoTable
-  _cameraLeftId: LTable
-  _cameraRightId: RTable
-  _jpegQuality: 85
-  _enableStreaming: 0
-  _sendInterval: 0.5
-  _streamPrompt: 
---- !u!114 &662395069
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 662395067}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 73c72107ccdd7439a8c2e7e76783d5b2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::StereoImageSender
-  _serverHost: 127.0.0.1
-  _serverPort: 5005
-  _autoConnect: 1
-  _autoReconnect: 1
-  _verboseLogging: 0
-  _enableStreaming: 0
-  _jpegQuality: 85
-  _sendInterval: 0.2
-  _streamCamera: {fileID: 1118579538}
-  _streamCameraId: TableCamera
-  _streamPrompt: 
 --- !u!4 &662395070
 Transform:
   m_ObjectHideFlags: 0
@@ -444,7 +357,73 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 94d36cbc3e24945949771a0032098589, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PythonCommunication.CameraManager
-  _initialCameras: []
+--- !u!1 &1032633142
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1032633146}
+  - component: {fileID: 1032633144}
+  - component: {fileID: 1032633147}
+  m_Layer: 0
+  m_Name: SimulationManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1032633144
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1032633142}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9b79e6a1d5d0c487f9f89560e0660fe9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Logging.RobotLogger
+  enableLogging: 1
+  logDirectory: 
+  operationType: NavigateToObject
+  perRobotFiles: 1
+  captureEnvironment: 0
+  environmentSampleRate: 2
+  trackTrajectories: 0
+  trajectorySampleRate: 0.2
+  autoRegisterObjects: 1
+--- !u!4 &1032633146
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1032633142}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 1
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1032633147
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1032633142}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c86620019df64432eb7e25afa8cf29ec, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  config: {fileID: 11400000, guid: 1c6ca8dd9c7e2451aba210581aa5f7bc, type: 2}
 --- !u!20 &1118579538 stripped
 Camera:
   m_CorrespondingSourceObject: {fileID: 1924621710956839310, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
@@ -651,10 +630,8 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1595579018}
-  - component: {fileID: 1595579017}
-  - component: {fileID: 1595579016}
-  - component: {fileID: 1595579015}
   - component: {fileID: 1595579019}
+  - component: {fileID: 1595579021}
   - component: {fileID: 1595579020}
   m_Layer: 0
   m_Name: CommunicationManager
@@ -663,57 +640,6 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1595579015
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1595579014}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7ce82e003bd174fb381d9ca037beb11b, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PythonCommunication.DepthResultsReceiver
-  _serverHost: 127.0.0.1
-  _serverPort: 5007
-  _autoConnect: 1
-  _autoReconnect: 1
-  _verboseLogging: 0
-  _logResults: 1
---- !u!114 &1595579016
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1595579014}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9a46d6cd8c9f846b387170157a8e9ac3, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PythonCommunication.LLMResultsReceiver
-  _serverHost: 127.0.0.1
-  _serverPort: 5006
-  _autoConnect: 1
-  _autoReconnect: 1
-  _verboseLogging: 0
-  _logResults: 1
---- !u!114 &1595579017
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1595579014}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f5cfa4b1371fb4519a6878256014daf6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Simulation.PythonCaller
-  _defaultTimeoutSeconds: 300
-  _maxConcurrentProcesses: 3
-  _outputBufferSize: 4096
 --- !u!4 &1595579018
 Transform:
   m_ObjectHideFlags: 0
@@ -754,14 +680,36 @@ MonoBehaviour:
   m_GameObject: {fileID: 1595579014}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fd7a99348387e4a09a8264b45481ad6b, type: 3}
+  m_Script: {fileID: 11500000, guid: 8dacc2a4d9d8a4f18ad49f1e9a1b0b8d, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PythonCommunication.DetectionResultsReceiver
-  _serverHost: 127.0.0.1
-  _serverPort: 5006
-  _autoConnect: 1
-  _autoReconnect: 1
-  _verboseLogging: 0
+  m_EditorClassIdentifier: Assembly-CSharp::PythonCommunication.UnifiedPythonSender
+  _jpegQuality: 85
+  _enableSingleStreaming: 0
+  _singleStreamCamera: {fileID: 627489888}
+  _singleStreamCameraId: MainCamera
+  _singleStreamPrompt: 
+  _singleStreamInterval: 0.2
+  _enableStereoStreaming: 0
+  _stereoLeftCamera: {fileID: 1118579538}
+  _stereoRightCamera: {fileID: 1998407037}
+  _stereoPairId: TableStereoCamera
+  _stereoLeftId: L
+  _stereoRightId: R
+  _stereoStreamPrompt: 
+  _stereoStreamInterval: 0.5
+--- !u!114 &1595579021
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1595579014}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 512c050872bf6405c8bba9b54f38f177, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PythonCommunication.UnifiedPythonReceiver
+  _logResults: 1
 --- !u!20 &1998407037 stripped
 Camera:
   m_CorrespondingSourceObject: {fileID: 5567977826561441543, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
@@ -932,9 +880,10 @@ PrefabInstance:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 78650760}
+  - {fileID: 1032633146}
   - {fileID: 1170887387}
   - {fileID: 1595579018}
+  - {fileID: 604723478}
   - {fileID: 662395070}
   - {fileID: 1168411248}
   - {fileID: 9060350412813614532}

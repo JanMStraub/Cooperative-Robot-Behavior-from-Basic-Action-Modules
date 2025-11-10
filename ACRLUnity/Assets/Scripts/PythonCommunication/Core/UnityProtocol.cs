@@ -16,6 +16,9 @@ namespace PythonCommunication.Core
         public const int MAX_STRING_LENGTH = 256;
         public const int MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
 
+        // Helper variables
+        private const string _logPrefix = "[UNITY_PROTOCOL]";
+
         #region Image Messages (Unity → Python)
 
         /// <summary>
@@ -31,17 +34,19 @@ namespace PythonCommunication.Core
             // Validate inputs
             if (string.IsNullOrEmpty(cameraId))
             {
-                throw new ArgumentException("Camera ID cannot be null or empty");
+                throw new ArgumentException($"{_logPrefix} Camera ID cannot be null or empty");
             }
 
             if (imageBytes == null || imageBytes.Length == 0)
             {
-                throw new ArgumentException("Image bytes cannot be null or empty");
+                throw new ArgumentException($"{_logPrefix} Image bytes cannot be null or empty");
             }
 
             if (imageBytes.Length > MAX_IMAGE_SIZE)
             {
-                throw new ArgumentException($"Image size {imageBytes.Length} exceeds maximum {MAX_IMAGE_SIZE}");
+                throw new ArgumentException(
+                    $"{_logPrefix} Image size {imageBytes.Length} exceeds maximum {MAX_IMAGE_SIZE}"
+                );
             }
 
             // Ensure prompt is not null
@@ -57,34 +62,57 @@ namespace PythonCommunication.Core
             // Validate string lengths
             if (cameraIdBytes.Length > MAX_STRING_LENGTH)
             {
-                throw new ArgumentException($"Camera ID too long: {cameraIdBytes.Length} > {MAX_STRING_LENGTH}");
+                throw new ArgumentException(
+                    $"{_logPrefix} Camera ID too long: {cameraIdBytes.Length} > {MAX_STRING_LENGTH}"
+                );
             }
 
             if (promptBytes.Length > MAX_STRING_LENGTH)
             {
-                throw new ArgumentException($"Prompt too long: {promptBytes.Length} > {MAX_STRING_LENGTH}");
+                throw new ArgumentException(
+                    $"{_logPrefix} Prompt too long: {promptBytes.Length} > {MAX_STRING_LENGTH}"
+                );
             }
 
             // Calculate total message size
-            int totalSize = INT_SIZE * 3 + cameraIdBytes.Length + promptBytes.Length + imageBytes.Length;
+            int totalSize =
+                INT_SIZE * 3 + cameraIdBytes.Length + promptBytes.Length + imageBytes.Length;
             byte[] message = new byte[totalSize];
 
             int offset = 0;
 
             // Write camera ID length and data
-            Buffer.BlockCopy(BitConverter.GetBytes(cameraIdBytes.Length), 0, message, offset, INT_SIZE);
+            Buffer.BlockCopy(
+                BitConverter.GetBytes(cameraIdBytes.Length),
+                0,
+                message,
+                offset,
+                INT_SIZE
+            );
             offset += INT_SIZE;
             Buffer.BlockCopy(cameraIdBytes, 0, message, offset, cameraIdBytes.Length);
             offset += cameraIdBytes.Length;
 
             // Write prompt length and data
-            Buffer.BlockCopy(BitConverter.GetBytes(promptBytes.Length), 0, message, offset, INT_SIZE);
+            Buffer.BlockCopy(
+                BitConverter.GetBytes(promptBytes.Length),
+                0,
+                message,
+                offset,
+                INT_SIZE
+            );
             offset += INT_SIZE;
             Buffer.BlockCopy(promptBytes, 0, message, offset, promptBytes.Length);
             offset += promptBytes.Length;
 
             // Write image length and data
-            Buffer.BlockCopy(BitConverter.GetBytes(imageBytes.Length), 0, message, offset, INT_SIZE);
+            Buffer.BlockCopy(
+                BitConverter.GetBytes(imageBytes.Length),
+                0,
+                message,
+                offset,
+                INT_SIZE
+            );
             offset += INT_SIZE;
             Buffer.BlockCopy(imageBytes, 0, message, offset, imageBytes.Length);
 
@@ -105,7 +133,7 @@ namespace PythonCommunication.Core
         {
             if (data == null || data.Length < INT_SIZE)
             {
-                throw new ArgumentException("Invalid result message: too short");
+                throw new ArgumentException($"{_logPrefix} Invalid result message: too short");
             }
 
             // Read JSON length
@@ -113,12 +141,14 @@ namespace PythonCommunication.Core
 
             if (jsonLength <= 0 || jsonLength > MAX_IMAGE_SIZE)
             {
-                throw new ArgumentException($"Invalid JSON length: {jsonLength}");
+                throw new ArgumentException($"{_logPrefix} Invalid JSON length: {jsonLength}");
             }
 
             if (data.Length < INT_SIZE + jsonLength)
             {
-                throw new ArgumentException($"Incomplete message: expected {INT_SIZE + jsonLength}, got {data.Length}");
+                throw new ArgumentException(
+                    $"{_logPrefix} Incomplete message: expected {INT_SIZE + jsonLength}, got {data.Length}"
+                );
             }
 
             // Extract JSON data
@@ -138,14 +168,16 @@ namespace PythonCommunication.Core
         {
             if (string.IsNullOrEmpty(json))
             {
-                throw new ArgumentException("JSON cannot be null or empty");
+                throw new ArgumentException($"{_logPrefix} JSON cannot be null or empty");
             }
 
             byte[] jsonBytes = Encoding.UTF8.GetBytes(json);
 
             if (jsonBytes.Length > MAX_IMAGE_SIZE)
             {
-                throw new ArgumentException($"JSON too large: {jsonBytes.Length} > {MAX_IMAGE_SIZE}");
+                throw new ArgumentException(
+                    $"{_logPrefix} JSON too large: {jsonBytes.Length} > {MAX_IMAGE_SIZE}"
+                );
             }
 
             byte[] message = new byte[INT_SIZE + jsonBytes.Length];
@@ -168,7 +200,8 @@ namespace PythonCommunication.Core
         /// </summary>
         public static bool IsValidStringLength(string str)
         {
-            if (str == null) return true; // Null is treated as empty string
+            if (str == null)
+                return true; // Null is treated as empty string
             return Encoding.UTF8.GetByteCount(str) <= MAX_STRING_LENGTH;
         }
 
@@ -177,7 +210,8 @@ namespace PythonCommunication.Core
         /// </summary>
         public static bool IsValidImageSize(byte[] imageBytes)
         {
-            if (imageBytes == null) return false;
+            if (imageBytes == null)
+                return false;
             return imageBytes.Length > 0 && imageBytes.Length <= MAX_IMAGE_SIZE;
         }
 

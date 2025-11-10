@@ -1,6 +1,6 @@
+using System.Linq;
 using PythonCommunication;
 using Robotics;
-using System.Linq;
 using UnityEngine;
 
 /// <summary>
@@ -19,19 +19,26 @@ public class ObjectNavigationController : MonoBehaviour
     [SerializeField]
     private string targetObjectColor = "red"; // Filter by object color (e.g., "red", "blue", "green")
 
+    // Helper variable
+    private const string _logPrefix = "[OBJECT_NAVIGATION_CONTROLLER]";
+
     /// <summary>
     /// Initialize and subscribe to depth results
     /// </summary>
     void Start()
     {
-        if (DepthResultsReceiver.Instance != null)
+        if (UnifiedPythonReceiver.Instance != null)
         {
-            DepthResultsReceiver.Instance.OnDepthResultReceived += OnDepthResultReceived;
-            Debug.Log($"ObjectNavigationController subscribed: Left={leftRobotId}, Right={rightRobotId}, targeting {targetObjectColor} cubes");
+            UnifiedPythonReceiver.Instance.OnDepthResultReceived += OnDepthResultReceived;
+            Debug.Log(
+                $"{_logPrefix} subscribed: Left={leftRobotId}, Right={rightRobotId}, targeting {targetObjectColor} cubes"
+            );
         }
         else
         {
-            Debug.LogError("DepthResultsReceiver.Instance is null! Ensure DepthResultsReceiver exists in scene.");
+            Debug.LogError(
+                $"{_logPrefix} UnifiedPythonReceiver.Instance is null! Ensure UnifiedPythonReceiver exists in scene."
+            );
         }
     }
 
@@ -43,18 +50,20 @@ public class ObjectNavigationController : MonoBehaviour
     {
         if (!result.success || result.detections == null || result.detections.Length == 0)
         {
-            Debug.LogWarning("No objects detected in stereo view");
+            Debug.LogWarning($"{_logPrefix} No objects detected in stereo view");
             return;
         }
 
         // Filter detections by target color
-        var matchingDetections = result.detections
-            .Where(d => d.color == targetObjectColor && d.world_position != null)
+        var matchingDetections = result
+            .detections.Where(d => d.color == targetObjectColor && d.world_position != null)
             .ToList();
 
         if (matchingDetections.Count == 0)
         {
-            Debug.LogWarning($"No {targetObjectColor} cubes with 3D positions found. Available: {string.Join(", ", result.detections.Select(d => d.color))}");
+            Debug.LogWarning(
+                $"{_logPrefix} No {targetObjectColor} cubes with 3D positions found. Available: {string.Join(", ", result.detections.Select(d => d.color))}"
+            );
             return;
         }
 
@@ -83,35 +92,45 @@ public class ObjectNavigationController : MonoBehaviour
             // Check if robots are registered
             if (!RobotManager.Instance.RobotInstances.ContainsKey(leftRobotId))
             {
-                Debug.LogError($"Robot '{leftRobotId}' is not registered with RobotManager! Available robots: {string.Join(", ", RobotManager.Instance.RobotInstances.Keys)}");
+                Debug.LogError(
+                    $"{_logPrefix} Robot '{leftRobotId}' is not registered with RobotManager! Available robots: {string.Join(", ", RobotManager.Instance.RobotInstances.Keys)}"
+                );
             }
             if (!RobotManager.Instance.RobotInstances.ContainsKey(rightRobotId))
             {
-                Debug.LogError($"Robot '{rightRobotId}' is not registered with RobotManager! Available robots: {string.Join(", ", RobotManager.Instance.RobotInstances.Keys)}");
+                Debug.LogError(
+                    $"{_logPrefix} Robot '{rightRobotId}' is not registered with RobotManager! Available robots: {string.Join(", ", RobotManager.Instance.RobotInstances.Keys)}"
+                );
             }
 
             RobotManager.Instance.SetRobotTarget(leftRobotId, leftTargetPos);
             RobotManager.Instance.SetRobotTarget(rightRobotId, rightTargetPos);
 
             Debug.Log(
-                $"Targets assigned:\n" +
-                $"  {leftRobotId} -> {targetObjectColor} at {leftTargetPos} (X={leftTarget.world_position.x:F3}, depth={leftTarget.depth_m:F3}m)\n" +
-                $"  {rightRobotId} -> {targetObjectColor} at {rightTargetPos} (X={rightTarget.world_position.x:F3}, depth={rightTarget.depth_m:F3}m)"
+                $"{_logPrefix} Targets assigned:\n"
+                    + $"  {leftRobotId} -> {targetObjectColor} at {leftTargetPos} (X={leftTarget.world_position.x:F3}, depth={leftTarget.depth_m:F3}m)\n"
+                    + $"  {rightRobotId} -> {targetObjectColor} at {rightTargetPos} (X={rightTarget.world_position.x:F3}, depth={rightTarget.depth_m:F3}m)"
             );
 
             // Verify targets were set by checking robot instances
             if (RobotManager.Instance.RobotInstances.TryGetValue(leftRobotId, out var leftRobot))
             {
-                Debug.Log($"  {leftRobotId} controller target set: {leftRobot.controller.GetCurrentTarget().HasValue}");
+                Debug.Log(
+                    $"{_logPrefix} {leftRobotId} controller target set: {leftRobot.controller.GetCurrentTarget().HasValue}"
+                );
             }
             if (RobotManager.Instance.RobotInstances.TryGetValue(rightRobotId, out var rightRobot))
             {
-                Debug.Log($"  {rightRobotId} controller target set: {rightRobot.controller.GetCurrentTarget().HasValue}");
+                Debug.Log(
+                    $"{_logPrefix} {rightRobotId} controller target set: {rightRobot.controller.GetCurrentTarget().HasValue}"
+                );
             }
         }
         else
         {
-            Debug.LogError("RobotManager.Instance is null! Cannot set robot targets.");
+            Debug.LogError(
+                $"{_logPrefix} RobotManager.Instance is null! Cannot set robot targets."
+            );
         }
     }
 
@@ -120,9 +139,9 @@ public class ObjectNavigationController : MonoBehaviour
     /// </summary>
     void OnDestroy()
     {
-        if (DepthResultsReceiver.Instance != null)
+        if (UnifiedPythonReceiver.Instance != null)
         {
-            DepthResultsReceiver.Instance.OnDepthResultReceived -= OnDepthResultReceived;
+            UnifiedPythonReceiver.Instance.OnDepthResultReceived -= OnDepthResultReceived;
         }
     }
 }

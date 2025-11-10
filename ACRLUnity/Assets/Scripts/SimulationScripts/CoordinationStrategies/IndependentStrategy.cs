@@ -15,7 +15,10 @@ namespace Simulation.CoordinationStrategies
         /// Updates the independent coordination logic.
         /// In independent mode, no coordination is needed.
         /// </summary>
-        public void Update(RobotController[] robotControllers, Dictionary<string, bool> robotTargetReached)
+        public void Update(
+            RobotController[] robotControllers,
+            Dictionary<string, bool> robotTargetReached
+        )
         {
             // No coordination needed - all robots operate independently
         }

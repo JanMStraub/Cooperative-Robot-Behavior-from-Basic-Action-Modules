@@ -37,7 +37,9 @@ namespace Vision
             if (!Application.isPlaying)
                 return;
 
-            bool isConnected = ImageSender.Instance != null && ImageSender.Instance.IsConnected;
+            bool isConnected =
+                UnifiedPythonSender.Instance != null
+                && UnifiedPythonSender.Instance.IsSingleCameraConnected;
             string statusText = isConnected ? "Connected" : "Disconnected";
             Color statusColor = isConnected ? new Color(0.6f, 1f, 0.6f) : new Color(1f, 0.6f, 0.6f);
 
@@ -147,6 +149,7 @@ namespace Vision
         // Helper variables
         private string[] _cameraNamePatterns = { "Camera" };
         private string _fallbackCameraName = "CameraFallback";
+        private const string _logPrefix = "[CAMERA_CONTROLLER]";
 
         /// <summary>
         /// Compression quality presets.
@@ -172,7 +175,7 @@ namespace Vision
             if (_grayscaleMode && _grayscaleMaterial == null)
             {
                 Debug.LogWarning(
-                    "[CAMERA_CONTROLLER] Grayscale Mode is enabled, but no Grayscale Material is assigned. Disabling mode."
+                    $"{_logPrefix} Grayscale Mode is enabled, but no Grayscale Material is assigned. Disabling mode."
                 );
                 _grayscaleMode = false;
             }
@@ -186,9 +189,7 @@ namespace Vision
             _mainCamera = GetComponent<Camera>();
             if (_mainCamera == null)
             {
-                Debug.LogError(
-                    $"[CAMERA_CONTROLLER] No Camera component found on {gameObject.name}"
-                );
+                Debug.LogError($"{_logPrefix} No Camera component found on {gameObject.name}");
                 enabled = false;
                 return;
             }
@@ -200,7 +201,7 @@ namespace Vision
             if (_imageWidth <= 0 || _imageHeight <= 0)
             {
                 Debug.LogWarning(
-                    $"[CAMERA_CONTROLLER] Invalid image dimensions ({_imageWidth}x{_imageHeight}). "
+                    $"{_logPrefix} Invalid image dimensions ({_imageWidth}x{_imageHeight}). "
                         + "Setting to default 1000x1000"
                 );
                 _imageWidth = 1000;
@@ -214,7 +215,7 @@ namespace Vision
                 // Log hierarchy for debugging
                 string hierarchy = GetHierarchyPath(_mainCamera.transform);
                 Debug.Log(
-                    $"[CAMERA_CONTROLLER] Could not camera name in hierarchy.\n"
+                    $"{_logPrefix} Could not camera name in hierarchy.\n"
                         + $"Camera hierarchy: {hierarchy}\n"
                         + $"Looking for patterns: [{string.Join(", ", _cameraNamePatterns)}]\n"
                         + $"Using fallback: {_fallbackCameraName}"
@@ -225,29 +226,29 @@ namespace Vision
             // Register with CameraManager
             if (CameraManager.Instance != null)
             {
-                Debug.Log($"[CAMERA_CONTROLLER] Registering camera '{_cameraName}' with CameraManager");
+                Debug.Log($"{_logPrefix} Registering camera '{_cameraName}' with CameraManager");
                 bool registered = CameraManager.Instance.RegisterCamera(_cameraName, _mainCamera);
                 if (!registered)
                 {
-                    Debug.LogWarning($"[CAMERA_CONTROLLER] Failed to register camera '{_cameraName}'");
+                    Debug.LogWarning($"{_logPrefix} Failed to register camera '{_cameraName}'");
                 }
             }
             else
             {
                 Debug.LogWarning(
-                    "[CAMERA_CONTROLLER] CameraManager not found. Create a CameraManager GameObject in the scene."
+                    $"{_logPrefix} CameraManager not found. Create a CameraManager GameObject in the scene."
                 );
             }
 
             // Subscribe to LLM results
-            if (LLMResultsReceiver.Instance != null)
+            if (UnifiedPythonReceiver.Instance != null)
             {
-                LLMResultsReceiver.Instance.OnResultReceived += HandleLLMResult;
+                UnifiedPythonReceiver.Instance.OnLLMResultReceived += HandleLLMResult;
             }
 
             // Log initialization
             Debug.Log(
-                $"[CAMERA_CONTROLLER] Initialized: Camera={gameObject.name}, Resolution={_imageWidth}x{_imageHeight}"
+                $"{_logPrefix} Initialized: Camera={gameObject.name}, Resolution={_imageWidth}x{_imageHeight}"
             );
         }
 
@@ -283,14 +284,12 @@ namespace Vision
         {
             if (_isCapturing)
             {
-                Debug.LogWarning(
-                    "[CAMERA_CONTROLLER] A capture is already in progress. Please wait."
-                );
+                Debug.LogWarning($"{_logPrefix} A capture is already in progress. Please wait.");
                 return;
             }
             if (!enabled)
             {
-                Debug.LogWarning("[CAMERA_CONTROLLER] Cannot capture, component is disabled.");
+                Debug.LogWarning($"{_logPrefix} Cannot capture, component is disabled.");
                 return;
             }
             StartCoroutine(ProcessCaptureCoroutine(type));
@@ -310,7 +309,7 @@ namespace Vision
             {
                 // Capture image
                 imageBytes = CaptureImageBytes();
-                Debug.Log($"[CAMERA_CONTROLLER] Captured {imageBytes?.Length ?? 0} bytes");
+                Debug.Log($"{_logPrefix} Captured {imageBytes?.Length ?? 0} bytes");
                 if (imageBytes == null)
                     throw new Exception("Image capture returned null bytes.");
 
@@ -321,20 +320,25 @@ namespace Vision
                         string filename = GenerateFilename();
                         string fullPath = GetFullPath($"Screenshots/{_cameraName}/{filename}");
                         SaveImageToFile(fullPath, imageBytes);
-                        Debug.Log($"[CAMERA_CONTROLLER] Image saved to: {fullPath}");
+                        Debug.Log($"{_logPrefix} Image saved to: {fullPath}");
                         break;
 
                     case CaptureType.SendToServer:
 
                         // Mono mode: send single image for 2D detection
-                        if (ImageSender.Instance == null || !ImageSender.Instance.IsConnected)
+                        if (
+                            UnifiedPythonSender.Instance == null
+                            || !UnifiedPythonSender.Instance.IsSingleCameraConnected
+                        )
                         {
-                            throw new Exception("ImageSender not available or not connected.");
+                            throw new Exception(
+                                "UnifiedPythonSender not available or not connected."
+                            );
                         }
-                        ImageSender.Instance.SendImageData(imageBytes, _cameraName, _llmPrompt);
+                        UnifiedPythonSender.Instance.SendImage(imageBytes, _cameraName, _llmPrompt);
 
                         Debug.Log(
-                            $"[CAMERA_CONTROLLER] Image sent successfully ({imageBytes.Length / 1024f:F1} KB). Waiting for response..."
+                            $"{_logPrefix} Image sent successfully ({imageBytes.Length / 1024f:F1} KB). Waiting for response..."
                         );
 
                         // Track processing state
@@ -348,7 +352,7 @@ namespace Vision
             catch (Exception ex)
             {
                 errorMessage = ex.Message;
-                Debug.LogError($"[CAMERA_CONTROLLER] Capture failed: {errorMessage}");
+                Debug.LogError($"{_logPrefix} Capture failed: {errorMessage}");
             }
 
             // Finalize and log
@@ -595,9 +599,9 @@ namespace Vision
             }
 
             // Unsubscribe from LLM results
-            if (LLMResultsReceiver.Instance != null)
+            if (UnifiedPythonReceiver.Instance != null)
             {
-                LLMResultsReceiver.Instance.OnResultReceived -= HandleLLMResult;
+                UnifiedPythonReceiver.Instance.OnLLMResultReceived -= HandleLLMResult;
             }
 
             if (_cachedRenderTexture != null)
@@ -614,7 +618,7 @@ namespace Vision
             if (_captureCounter > 0)
             {
                 Debug.Log(
-                    $"[CAMERA_CONTROLLER] Camera {gameObject.name} destroyed after capturing {_captureCounter} screenshots"
+                    $"{_logPrefix} Camera {gameObject.name} destroyed after capturing {_captureCounter} screenshots"
                 );
             }
         }
