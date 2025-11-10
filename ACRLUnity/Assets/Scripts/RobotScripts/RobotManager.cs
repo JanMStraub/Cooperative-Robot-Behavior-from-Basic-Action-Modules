@@ -62,6 +62,9 @@ namespace Robotics
         public int ActiveRobotCount => _robotInstances.Values.Count(r => r.isActive);
         public RobotConfig RobotProfile => robotProfile;
 
+        // Helper variables
+        private const string _logPrefix = "[ROBOT_MANAGER]";
+
         /// <summary>
         /// Gets a list of all registered robot IDs.
         /// </summary>
@@ -125,7 +128,7 @@ namespace Robotics
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[ROBOT_MANAGER] Failed to initialize: {ex.Message}");
+                Debug.LogError($"{_logPrefix} Failed to initialize: {ex.Message}");
             }
         }
 
@@ -143,13 +146,13 @@ namespace Robotics
                 DiscoverRobots();
 
                 // Log initialization
-                Debug.Log($"[ROBOT_MANAGER] Initialized with {_robotInstances.Count} robots");
+                Debug.Log($"{_logPrefix} Initialized with {_robotInstances.Count} robots");
 
                 LogConfigurationSummary();
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[ROBOT_MANAGER] Failed to start: {ex.Message}");
+                Debug.LogError($"{_logPrefix} Failed to start: {ex.Message}");
             }
         }
 
@@ -171,7 +174,7 @@ namespace Robotics
                 if (!_robotInstances.ContainsKey(robotId))
                 {
                     RegisterRobot(robotId, controller.gameObject);
-                    Debug.Log($"[ROBOT_MANAGER] Auto-discovered robot: {robotId} with no target.");
+                    Debug.Log($"{_logPrefix} Auto-discovered robot: {robotId} with no target.");
                 }
             }
         }
@@ -278,7 +281,7 @@ namespace Robotics
                 if (string.IsNullOrEmpty(robotId))
                 {
                     robotId = GenerateUniqueRobotId(robotObject.name);
-                    Debug.Log($"[ROBOT_MANAGER] Auto-generated robot ID: {robotId}");
+                    Debug.Log($"{_logPrefix} Auto-generated robot ID: {robotId}");
                 }
                 else if (!_usedRobotIds.Contains(robotId))
                 {
@@ -289,7 +292,7 @@ namespace Robotics
                 if (_robotInstances.ContainsKey(robotId))
                 {
                     Debug.LogWarning(
-                        $"[ROBOT_MANAGER] Robot {robotId} already registered. Updating configuration."
+                        $"{_logPrefix} Robot {robotId} already registered. Updating configuration."
                     );
                 }
 
@@ -297,7 +300,7 @@ namespace Robotics
                 if (controller == null)
                 {
                     Debug.LogError(
-                        $"[ROBOT_MANAGER] Robot {robotId} missing RobotController component"
+                        $"{_logPrefix} Robot {robotId} missing RobotController component"
                     );
                     return;
                 }
@@ -324,20 +327,18 @@ namespace Robotics
                 {
                     controller.SetTarget(targetObject);
                     Debug.Log(
-                        $"[ROBOT_MANAGER] Assigned target '{targetObject.name}' to robot '{robotId}'"
+                        $"{_logPrefix} Assigned target '{targetObject.name}' to robot '{robotId}'"
                     );
                 }
 
                 string profileName =
                     instance.profile != null ? instance.profile.profileName : "default";
 
-                Debug.Log(
-                    $"[ROBOT_MANAGER] Registered robot: {robotId} with profile: {profileName}"
-                );
+                Debug.Log($"{_logPrefix} Registered robot: {robotId} with profile: {profileName}");
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[ROBOT_MANAGER] Failed to register robot {robotId}: {ex.Message}");
+                Debug.LogError($"{_logPrefix} Failed to register robot {robotId}: {ex.Message}");
             }
         }
 
@@ -350,7 +351,7 @@ namespace Robotics
             if (_robotInstances.Remove(robotId))
             {
                 _usedRobotIds.Remove(robotId);
-                Debug.Log($"[ROBOT_MANAGER] Robot {robotId} unregistered");
+                Debug.Log($"{_logPrefix} Robot {robotId} unregistered");
             }
         }
 
@@ -458,7 +459,7 @@ namespace Robotics
                 if (controller.robotJoints.Length != robot.profile.joints.Length)
                 {
                     Debug.LogWarning(
-                        $"[ROBOT_MANAGER] Joint count mismatch for {robotId}: Controller has {controller.robotJoints.Length}, "
+                        $"{_logPrefix} Joint count mismatch for {robotId}: Controller has {controller.robotJoints.Length}, "
                             + $"Profile has {robot.profile.joints.Length}. Applying to first {jointCount} joints."
                     );
                 }
@@ -494,7 +495,7 @@ namespace Robotics
             catch (Exception ex)
             {
                 Debug.LogError(
-                    $"[ROBOT_MANAGER] Failed to apply profile to robot {robotId}: {ex.Message}"
+                    $"{_logPrefix} Failed to apply profile to robot {robotId}: {ex.Message}"
                 );
             }
         }
@@ -530,7 +531,7 @@ namespace Robotics
                     $"- {robot.robotId}: Profile '{robot.profile.profileName}', Active: {robot.isActive}\n";
             }
 
-            Debug.Log($"[ROBOT_MANAGER] Configuration summary:\n{summary}");
+            Debug.Log($"{_logPrefix} Configuration summary:\n{summary}");
         }
 
         /// <summary>
@@ -540,7 +541,7 @@ namespace Robotics
         {
             if (Instance == this)
             {
-                Debug.Log("[ROBOT_MANAGER] RobotManager destroyed");
+                Debug.Log($"{_logPrefix} destroyed");
                 Instance = null;
             }
         }

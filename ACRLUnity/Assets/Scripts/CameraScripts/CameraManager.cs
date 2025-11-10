@@ -19,6 +19,9 @@ namespace Vision
 
         private Dictionary<string, Camera> _cameras = new Dictionary<string, Camera>();
 
+        // Helper variables
+        private const string _logPrefix = "[CAMERA_MANAGER]";
+
         private void Awake()
         {
             // Singleton pattern
@@ -26,7 +29,7 @@ namespace Vision
             {
                 Instance = this;
                 DontDestroyOnLoad(gameObject);
-                Debug.Log("[CAMERA_MANAGER] Initializing Camera Manager");
+                Debug.Log($"{_logPrefix} Initializing Camera Manager");
             }
             else
             {
@@ -45,17 +48,13 @@ namespace Vision
         {
             if (string.IsNullOrEmpty(cameraId))
             {
-                Debug.LogError(
-                    "[CAMERA_MANAGER] Cannot register camera: cameraId is null or empty"
-                );
+                Debug.LogError($"{_logPrefix} Cannot register camera: cameraId is null or empty");
                 return false;
             }
 
             if (camera == null)
             {
-                Debug.LogError(
-                    $"[CAMERA_MANAGER] Cannot register camera '{cameraId}': camera is null"
-                );
+                Debug.LogError($"{_logPrefix} Cannot register camera '{cameraId}': camera is null");
                 return false;
             }
 
@@ -66,7 +65,7 @@ namespace Vision
                     if (!silent)
                     {
                         Debug.LogWarning(
-                            $"[CAMERA_MANAGER] Camera '{cameraId}' is already registered with the same instance"
+                            $"{_logPrefix} Camera '{cameraId}' is already registered with the same instance"
                         );
                     }
                     return false;
@@ -74,7 +73,7 @@ namespace Vision
                 else
                 {
                     Debug.LogWarning(
-                        $"[CAMERA_MANAGER] Replacing existing camera registration for '{cameraId}'"
+                        $"{_logPrefix} Replacing existing camera registration for '{cameraId}'"
                     );
                 }
             }
@@ -83,7 +82,7 @@ namespace Vision
 
             if (!silent)
             {
-                Debug.Log($"[CAMERA_MANAGER] Registered camera: '{cameraId}' ({camera.name})");
+                Debug.Log($"{_logPrefix} Registered camera: '{cameraId}' ({camera.name})");
             }
 
             OnCameraRegistered?.Invoke(cameraId, camera);
@@ -99,20 +98,18 @@ namespace Vision
         {
             if (string.IsNullOrEmpty(cameraId))
             {
-                Debug.LogError(
-                    "[CAMERA_MANAGER] Cannot unregister camera: cameraId is null or empty"
-                );
+                Debug.LogError($"{_logPrefix} Cannot unregister camera: cameraId is null or empty");
                 return false;
             }
 
             if (_cameras.Remove(cameraId))
             {
-                Debug.Log($"[CAMERA_MANAGER] Unregistered camera: '{cameraId}'");
+                Debug.Log($"{_logPrefix} Unregistered camera: '{cameraId}'");
                 OnCameraUnregistered?.Invoke(cameraId);
                 return true;
             }
 
-            Debug.LogWarning($"[CAMERA_MANAGER] Camera '{cameraId}' not found for unregistration");
+            Debug.LogWarning($"{_logPrefix} Camera '{cameraId}' not found for unregistration");
             return false;
         }
 
@@ -125,7 +122,7 @@ namespace Vision
         {
             if (string.IsNullOrEmpty(cameraId))
             {
-                Debug.LogWarning("[CAMERA_MANAGER] Cannot get camera: cameraId is null or empty");
+                Debug.LogWarning($"{_logPrefix} Cannot get camera: cameraId is null or empty");
                 return null;
             }
 
@@ -142,14 +139,14 @@ namespace Vision
                 if (foundCamera != null)
                 {
                     Debug.Log(
-                        $"[CAMERA_MANAGER] Found unregistered camera by GameObject name: '{cameraId}', auto-registering"
+                        $"{_logPrefix} Found unregistered camera by GameObject name: '{cameraId}', auto-registering"
                     );
                     RegisterCamera(cameraId, foundCamera);
                     return foundCamera;
                 }
             }
 
-            Debug.LogWarning($"[CAMERA_MANAGER] Camera '{cameraId}' not found");
+            Debug.LogWarning($"{_logPrefix} Camera '{cameraId}' not found");
             return null;
         }
 
@@ -213,7 +210,7 @@ namespace Vision
         {
             int count = _cameras.Count;
             _cameras.Clear();
-            Debug.Log($"[CAMERA_MANAGER] Cleared {count} camera registration(s)");
+            Debug.Log($"{_logPrefix} Cleared {count} camera registration(s)");
         }
 
         private void OnDestroy()

@@ -3,6 +3,101 @@ using UnityEngine;
 
 namespace PythonCommunication
 {
+    // ============================================================================
+    // LLM RESULT DATA MODELS (from LLMResultsReceiver)
+    // ============================================================================
+
+    /// <summary>
+    /// Data structure for LLM analysis results received from Python
+    /// </summary>
+    [Serializable]
+    public class LLMResult
+    {
+        public bool success;
+        public string response;
+        public string camera_id;
+        public string timestamp;
+        public LLMMetadata metadata;
+    }
+
+    [Serializable]
+    public class LLMMetadata
+    {
+        public string model;
+        public float duration_seconds;
+        public int image_count;
+        public string[] camera_ids;
+        public string prompt;
+        public string full_prompt;
+    }
+
+    // ============================================================================
+    // DEPTH RESULT DATA MODELS (from DepthResultsReceiver)
+    // ============================================================================
+
+    /// <summary>
+    /// Data structure for stereo detection results with 3D depth information
+    /// </summary>
+    [Serializable]
+    public class DepthResult
+    {
+        public bool success;
+        public string camera_id;
+        public string timestamp;
+        public ObjectDetection[] detections;
+        public DepthMetadata metadata;
+    }
+
+    [Serializable]
+    public class ObjectDetection
+    {
+        public string color;
+        public float confidence;
+        public DetectionBoundingBox bbox;
+        public DetectionPixelCoords pixel_center;
+        public Detection3DPosition world_position;
+        public float depth_m;
+        public float disparity;
+    }
+
+    [Serializable]
+    public class DetectionBoundingBox
+    {
+        public int x;
+        public int y;
+        public int width;
+        public int height;
+    }
+
+    [Serializable]
+    public class DetectionPixelCoords
+    {
+        public int x;
+        public int y;
+    }
+
+    [Serializable]
+    public class Detection3DPosition
+    {
+        public float x;
+        public float y;
+        public float z;
+    }
+
+    [Serializable]
+    public class DepthMetadata
+    {
+        public float processing_time_seconds;
+        public string prompt;
+        public float camera_baseline_m;
+        public float camera_fov_deg;
+        public string detection_mode;
+    }
+
+    // ============================================================================
+    // DETECTION RESULT DATA MODELS (original DetectionDataModels)
+    // ============================================================================
+
     /// <summary>
     /// Complete detection result from Python detector including all detected cubes in a single frame
     /// </summary>
@@ -17,10 +112,12 @@ namespace PythonCommunication
         public DetectionObject[] detections;
         public DetectionMetadata metadata;
 
+        private const string _logPrefix = "[DETECTION_RESULT]";
+
         public override string ToString()
         {
             int count = detections?.Length ?? 0;
-            return $"DetectionResult[camera={camera_id}, detections={count}]";
+            return $"{_logPrefix} [camera={camera_id}, detections={count}]";
         }
     }
 
@@ -37,6 +134,8 @@ namespace PythonCommunication
         public Vector2Int center_px;
         public float confidence;
         public WorldPosition world_position; // Optional, from stereo depth estimation
+
+        private const string _logPrefix = "[DETECTION_OBJECT]";
 
         /// <summary>
         /// Converts pixel coordinates to Unity world coordinates using raycasting
@@ -60,7 +159,7 @@ namespace PythonCommunication
 
             if (camera == null)
             {
-                Debug.LogWarning("[DetectionObject] Camera is null");
+                Debug.LogWarning($"{_logPrefix} Camera is null");
                 return false;
             }
 
@@ -88,7 +187,7 @@ namespace PythonCommunication
 
         public override string ToString()
         {
-            return $"{color} cube at ({center_px.x}, {center_px.y}) conf={confidence:F2}";
+            return $"{_logPrefix} {color} cube at ({center_px.x}, {center_px.y}) conf={confidence:F2}";
         }
     }
 
@@ -103,6 +202,8 @@ namespace PythonCommunication
         public int width;
         public int height;
 
+        private const string _logPrefix = "[BOUNDING_BOX_PX]";
+
         /// <summary>
         /// Get the center point of the bounding box
         /// </summary>
@@ -115,7 +216,7 @@ namespace PythonCommunication
 
         public override string ToString()
         {
-            return $"BBox({x}, {y}, {width}×{height})";
+            return $"{_logPrefix} BBox({x}, {y}, {width}×{height})";
         }
     }
 
@@ -128,6 +229,8 @@ namespace PythonCommunication
         public float x; // X coordinate in meters (right positive)
         public float y; // Y coordinate in meters (up positive)
         public float z; // Z coordinate in meters (forward positive)
+
+        private const string _logPrefix = "[WORLD_POSITION]";
 
         /// <summary>
         /// Convert to Unity Vector3
@@ -142,13 +245,17 @@ namespace PythonCommunication
         /// </summary>
         public bool IsValid()
         {
-            return !float.IsNaN(x) && !float.IsNaN(y) && !float.IsNaN(z) &&
-                   !float.IsInfinity(x) && !float.IsInfinity(y) && !float.IsInfinity(z);
+            return !float.IsNaN(x)
+                && !float.IsNaN(y)
+                && !float.IsNaN(z)
+                && !float.IsInfinity(x)
+                && !float.IsInfinity(y)
+                && !float.IsInfinity(z);
         }
 
         public override string ToString()
         {
-            return $"WorldPos({x:F3}, {y:F3}, {z:F3})m";
+            return $"{_logPrefix} WorldPos({x:F3}, {y:F3}, {z:F3})m";
         }
     }
 
@@ -161,14 +268,16 @@ namespace PythonCommunication
         public string server_timestamp;
         public float processing_time_seconds;
         public string prompt;
-        public float camera_baseline_m;        // Stereo baseline distance
-        public float camera_fov_deg;           // Camera field of view
-        public string detection_mode;          // "mono_2d" or "stereo_3d"
+        public float camera_baseline_m; // Stereo baseline distance
+        public float camera_fov_deg; // Camera field of view
+        public string detection_mode; // "mono_2d" or "stereo_3d"
+
+        private const string _logPrefix = "[DETECTION_METADATA]";
 
         public override string ToString()
         {
             string mode = !string.IsNullOrEmpty(detection_mode) ? $" mode={detection_mode}" : "";
-            return $"Metadata[timestamp={server_timestamp}{mode}]";
+            return $"{_logPrefix} Metadata[timestamp={server_timestamp}{mode}]";
         }
     }
 
@@ -203,6 +312,8 @@ namespace PythonCommunication
         public GameObject HitObject { get; private set; }
         public bool HasWorldPosition { get; private set; }
 
+        private const string _logPrefix = "[DETECTED_CUBE_WITH_WORLD]";
+
         public DetectedCubeWithWorld(
             DetectionObject detection,
             Vector3 worldPosition,
@@ -221,11 +332,11 @@ namespace PythonCommunication
             if (HasWorldPosition)
             {
                 string objName = HitObject != null ? HitObject.name : "none";
-                return $"{OriginalDetection.color} cube at world {WorldPosition} (hit: {objName})";
+                return $"{_logPrefix} {OriginalDetection.color} cube at world {WorldPosition} (hit: {objName})";
             }
             else
             {
-                return $"{OriginalDetection.color} cube at pixel ({OriginalDetection.center_px.x}, {OriginalDetection.center_px.y}) - no world position";
+                return $"{_logPrefix} {OriginalDetection.color} cube at pixel ({OriginalDetection.center_px.x}, {OriginalDetection.center_px.y}) - no world position";
             }
         }
     }

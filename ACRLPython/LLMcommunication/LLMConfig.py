@@ -88,7 +88,7 @@ MAX_RESULT_QUEUE_SIZE = 100  # Max queued results when no clients connected
 
 # Output directories
 DEFAULT_OUTPUT_DIR = (
-    "ACRLPython/LLMCommunication/llm_responses"  # Where to save LLM responses
+    "/llm_responses"  # Where to save LLM responses
 )
 
 # Logging format
@@ -138,7 +138,7 @@ MIN_CONFIDENCE = 0.3  # Minimum detection confidence threshold (lower to catch m
 
 # Detection Processing
 DETECTION_CHECK_INTERVAL = 1.0  # Check for new images every N seconds
-ENABLE_DEBUG_IMAGES = True  # Save annotated images for debugging
+ENABLE_DEBUG_IMAGES = False  # Save annotated images for debugging
 DEBUG_IMAGES_DIR = "./debug_detections"
 
 # Disparity Map Debugging

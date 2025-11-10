@@ -29,7 +29,7 @@ ANALYZER_PID=$!
 cd "$SCRIPT_DIR"
 echo "Started RunAnalyzer.py with LM Studio (PID: $ANALYZER_PID)"
 
-# RunStereoDetector uses ports 5009 (StereoDetectionServer) and 5007 (ResultsServer)
+# RunStereoDetector uses ports 5009 (StereoDetectionServer) and shares ResultsServer (port 5006) with RunAnalyzer
 cd "$SCRIPT_DIR/ACRLPython"
 "$SCRIPT_DIR/ACRLPython/acrl/bin/python" -u -m LLMCommunication.orchestrators.RunStereoDetector --baseline 0.05 --fov 60 --results-port 5007 &
 STEREO_PID=$!

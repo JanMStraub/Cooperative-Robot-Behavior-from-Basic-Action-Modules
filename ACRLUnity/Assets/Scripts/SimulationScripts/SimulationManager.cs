@@ -1,11 +1,10 @@
 using System;
 using System.Collections.Generic;
-using Logging;
-using UnityEngine;
-using Robotics;
 using Configuration;
-using Core;
+using Logging;
+using Robotics;
 using Simulation.CoordinationStrategies;
+using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -13,454 +12,437 @@ using UnityEditor;
 namespace Simulation
 {
     public enum SimulationState
-{
-    Initializing,
-    Running,
-    Paused,
-    Resetting,
-    Error,
-}
+    {
+        Initializing,
+        Running,
+        Paused,
+        Resetting,
+        Error,
+    }
 
 #if UNITY_EDITOR
-[CustomEditor(typeof(SimulationManager))]
-public class SimulationManagerEditor : Editor
-{
-    public override void OnInspectorGUI()
+    [CustomEditor(typeof(SimulationManager))]
+    public class SimulationManagerEditor : Editor
     {
-        DrawDefaultInspector();
-
-        SimulationManager manager = (SimulationManager)target;
-
-        EditorGUILayout.Space();
-        EditorGUILayout.LabelField("Simulation Controls", EditorStyles.boldLabel);
-
-        // Display current state
-        EditorGUILayout.LabelField($"Current State: {manager.CurrentState}");
-        EditorGUILayout.LabelField($"Active Robot: {manager.GetActiveRobotId()}");
-
-        EditorGUILayout.Space();
-
-        // Control buttons
-        EditorGUILayout.BeginHorizontal();
-
-        if (GUILayout.Button("Start"))
+        public override void OnInspectorGUI()
         {
-            manager.StartSimulation();
-        }
+            DrawDefaultInspector();
 
-        if (GUILayout.Button("Pause"))
-        {
-            manager.PauseSimulation();
-        }
+            SimulationManager manager = (SimulationManager)target;
 
-        if (GUILayout.Button("Resume"))
-        {
-            manager.ResumeSimulation();
-        }
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Simulation Controls", EditorStyles.boldLabel);
 
-        if (GUILayout.Button("Reset"))
-        {
-            manager.ResetSimulation();
-        }
+            // Display current state
+            EditorGUILayout.LabelField($"Current State: {manager.CurrentState}");
+            EditorGUILayout.LabelField($"Active Robot: {manager.GetActiveRobotId()}");
 
-        EditorGUILayout.EndHorizontal();
+            EditorGUILayout.Space();
+
+            // Control buttons
+            EditorGUILayout.BeginHorizontal();
+
+            if (GUILayout.Button("Start"))
+            {
+                manager.StartSimulation();
+            }
+
+            if (GUILayout.Button("Pause"))
+            {
+                manager.PauseSimulation();
+            }
+
+            if (GUILayout.Button("Resume"))
+            {
+                manager.ResumeSimulation();
+            }
+
+            if (GUILayout.Button("Reset"))
+            {
+                manager.ResetSimulation();
+            }
+
+            EditorGUILayout.EndHorizontal();
+        }
     }
-}
 #endif
 
-public class SimulationManager : MonoBehaviour
-{
-    public static SimulationManager Instance { get; private set; } // Singleton instance
-
-    [Header("Configuration")]
-    [SerializeField]
-    public SimulationConfig config;
-
-    // Core components
-    private PythonCaller _pythonCaller;
-    private MainLogger _logger;
-    private RobotController[] _robotControllers;
-
-    // State management
-    private SimulationState _currentState = SimulationState.Paused;
-    private SimulationState _previousState = SimulationState.Paused;
-
-    // Robot coordination
-    private ICoordinationStrategy _coordinationStrategy;
-    private Dictionary<string, bool> _robotTargetReached = new Dictionary<string, bool>();
-
-    // Events
-    public event System.Action<SimulationState, SimulationState> OnStateChanged;
-
-    // Properties
-    public SimulationState CurrentState => _currentState;
-    public bool IsRunning => _currentState == SimulationState.Running;
-    public bool IsPaused => _currentState == SimulationState.Paused;
-    public bool ShouldStopRobots => _currentState != SimulationState.Running;
-
-    /// <summary>
-    /// Unity Awake callback - initializes singleton instance and simulation.
-    /// </summary>
-    private void Awake()
+    public class SimulationManager : MonoBehaviour
     {
-        if (Instance == null)
-        {
-            Instance = this;
-            DontDestroyOnLoad(gameObject);
-            InitializeSimulation();
-        }
-        else
-        {
-            Destroy(gameObject);
-        }
-    }
+        public static SimulationManager Instance { get; private set; } // Singleton instance
 
-    /// <summary>
-    /// Initializes the simulation with default configuration and performance settings.
-    /// </summary>
-    private void InitializeSimulation()
-    {
-        try
+        [Header("Configuration")]
+        [SerializeField]
+        public SimulationConfig config;
+
+        // Core components
+        private MainLogger _logger;
+        private RobotController[] _robotControllers;
+
+        // State management
+        private SimulationState _currentState = SimulationState.Paused;
+        private SimulationState _previousState = SimulationState.Paused;
+
+        // Robot coordination
+        private ICoordinationStrategy _coordinationStrategy;
+        private Dictionary<string, bool> _robotTargetReached = new Dictionary<string, bool>();
+
+        // Events
+        public event System.Action<SimulationState, SimulationState> OnStateChanged;
+
+        // Properties
+        public SimulationState CurrentState => _currentState;
+        public bool IsRunning => _currentState == SimulationState.Running;
+        public bool IsPaused => _currentState == SimulationState.Paused;
+        public bool ShouldStopRobots => _currentState != SimulationState.Running;
+
+        // Helper variables
+        private const string _logPrefix = "[SIMULATION_MANAGER]";
+
+        /// <summary>
+        /// Unity Awake callback - initializes singleton instance and simulation.
+        /// </summary>
+        private void Awake()
         {
-            // Create default config if not assigned
-            if (config == null)
+            if (Instance == null)
             {
-                Debug.LogWarning(
-                    "[SIMULATION_MANAGER] SimulationConfig not assigned. Creating default configuration."
-                );
-                config = ScriptableObject.CreateInstance<SimulationConfig>();
-            }
-
-            // Apply performance settings
-            Application.targetFrameRate = config.targetFrameRate;
-            QualitySettings.vSyncCount = config.enableVSync ? 1 : 0;
-            Time.timeScale = config.timeScale;
-
-            ChangeState(SimulationState.Initializing);
-
-            Debug.Log(
-                $"[SIMULATION_MANAGER] Initialized: {config.coordinationMode} mode, {config.targetFrameRate}fps"
-            );
-        }
-        catch (Exception ex)
-        {
-            HandleError($"[SIMULATION_MANAGER] Failed to initialize simulation: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// Unity Start callback - initializes component references and robot tracking.
-    /// </summary>
-    private void Start()
-    {
-        try
-        {
-            // Get component references
-            _pythonCaller = PythonCaller.Instance;
-            _logger = MainLogger.Instance;
-
-            // Find all robot controllers
-            _robotControllers = FindObjectsByType<RobotController>(
-                FindObjectsInactive.Exclude,
-                FindObjectsSortMode.None
-            );
-
-            if (_robotControllers.Length == 0)
-            {
-                HandleError("[SIMULATION_MANAGER] No RobotController components found in scene");
-                return;
-            }
-
-            // Initialize robot tracking
-            foreach (var robot in _robotControllers)
-            {
-                string robotId = robot.gameObject.name;
-                _robotTargetReached[robotId] = true; // Start with no active targets
-            }
-
-            // Initialize coordination strategy based on config
-            InitializeCoordinationStrategy();
-
-            // Log simulation start
-            Debug.Log(
-                $"[SIMULATION_MANAGER] Initialized: Found {_robotControllers.Length} robots. Mode: {config.coordinationMode}"
-            );
-
-            // Auto-start if configured
-            if (config.autoStart)
-            {
-                StartSimulation();
+                Instance = this;
+                DontDestroyOnLoad(gameObject);
+                InitializeSimulation();
             }
             else
             {
-                ChangeState(SimulationState.Paused);
+                Destroy(gameObject);
             }
         }
-        catch (Exception ex)
-        {
-            HandleError($"[SIMULATION_MANAGER] Failed to start simulation: {ex.Message}");
-        }
-    }
 
-    /// <summary>
-    /// Unity Update callback - updates robot coordination based on configuration mode.
-    /// </summary>
-    private void Update()
-    {
-        try
+        /// <summary>
+        /// Initializes the simulation with default configuration and performance settings.
+        /// </summary>
+        private void InitializeSimulation()
         {
-            UpdateRobotCoordination();
-        }
-        catch (Exception ex)
-        {
-            HandleError($"[SIMULATION_MANAGER] Error in simulation update: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// Unity LateUpdate callback - handles ML-Agents coordination if Python process is active.
-    /// </summary>
-    private void LateUpdate()
-    {
-        try
-        {
-            if (_pythonCaller != null && _pythonCaller.IsActive())
+            try
             {
-                // Python process is active - could add ML-Agents coordination here
+                // Create default config if not assigned
+                if (config == null)
+                {
+                    Debug.LogWarning(
+                        $"{_logPrefix} SimulationConfig not assigned. Creating default configuration."
+                    );
+                    config = ScriptableObject.CreateInstance<SimulationConfig>();
+                }
+
+                // Apply performance settings
+                Application.targetFrameRate = config.targetFrameRate;
+                QualitySettings.vSyncCount = config.enableVSync ? 1 : 0;
+                Time.timeScale = config.timeScale;
+
+                ChangeState(SimulationState.Initializing);
+
+                Debug.Log(
+                    $"{_logPrefix} Initialized: {config.coordinationMode} mode, {config.targetFrameRate}fps"
+                );
+            }
+            catch (Exception ex)
+            {
+                HandleError($"Failed to initialize simulation: {ex.Message}");
             }
         }
-        catch (Exception ex)
+
+        /// <summary>
+        /// Unity Start callback - initializes component references and robot tracking.
+        /// </summary>
+        private void Start()
         {
-            Debug.LogWarning(
-                $"[SIMULATION_MANAGER] Non-critical error in LateUpdate: {ex.Message}"
+            try
+            {
+                // Get component reference
+                _logger = MainLogger.Instance;
+
+                // Find all robot controllers
+                _robotControllers = FindObjectsByType<RobotController>(
+                    FindObjectsInactive.Exclude,
+                    FindObjectsSortMode.None
+                );
+
+                if (_robotControllers.Length == 0)
+                {
+                    HandleError($"No RobotController components found in scene");
+                    return;
+                }
+
+                // Initialize robot tracking
+                foreach (var robot in _robotControllers)
+                {
+                    string robotId = robot.gameObject.name;
+                    _robotTargetReached[robotId] = true; // Start with no active targets
+                }
+
+                // Initialize coordination strategy based on config
+                InitializeCoordinationStrategy();
+
+                // Log simulation start
+                Debug.Log(
+                    $"{_logPrefix} Initialized: Found {_robotControllers.Length} robots. Mode: {config.coordinationMode}"
+                );
+
+                // Auto-start if configured
+                if (config.autoStart)
+                {
+                    StartSimulation();
+                }
+                else
+                {
+                    ChangeState(SimulationState.Paused);
+                }
+            }
+            catch (Exception ex)
+            {
+                HandleError($"Failed to start simulation: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Unity Update callback - updates robot coordination based on configuration mode.
+        /// </summary>
+        private void Update()
+        {
+            try
+            {
+                UpdateRobotCoordination();
+            }
+            catch (Exception ex)
+            {
+                HandleError($"Error in simulation update: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Initializes the coordination strategy based on the current configuration.
+        /// Uses the Strategy Pattern to allow different coordination modes.
+        /// </summary>
+        private void InitializeCoordinationStrategy()
+        {
+            _coordinationStrategy = config.coordinationMode switch
+            {
+                RobotCoordinationMode.Sequential => new SequentialStrategy(),
+                RobotCoordinationMode.Independent => new IndependentStrategy(),
+                RobotCoordinationMode.Collaborative => new IndependentStrategy(), // TODO: Implement CollaborativeStrategy
+                RobotCoordinationMode.MasterSlave => new IndependentStrategy(), // TODO: Implement MasterSlaveStrategy
+                RobotCoordinationMode.Distributed => new IndependentStrategy(), // TODO: Implement DistributedStrategy
+                _ => new IndependentStrategy(),
+            };
+
+            Debug.Log(
+                $"{_logPrefix} Initialized coordination strategy: {_coordinationStrategy.GetType().Name}"
             );
         }
-    }
 
-    /// <summary>
-    /// Initializes the coordination strategy based on the current configuration.
-    /// Uses the Strategy Pattern to allow different coordination modes.
-    /// </summary>
-    private void InitializeCoordinationStrategy()
-    {
-        _coordinationStrategy = config.coordinationMode switch
+        /// <summary>
+        /// Updates robot coordination using the current strategy.
+        /// Delegates to the strategy pattern for mode-specific behavior.
+        /// </summary>
+        private void UpdateRobotCoordination()
         {
-            RobotCoordinationMode.Sequential => new SequentialStrategy(),
-            RobotCoordinationMode.Independent => new IndependentStrategy(),
-            RobotCoordinationMode.Collaborative => new IndependentStrategy(), // TODO: Implement CollaborativeStrategy
-            RobotCoordinationMode.MasterSlave => new IndependentStrategy(),   // TODO: Implement MasterSlaveStrategy
-            RobotCoordinationMode.Distributed => new IndependentStrategy(),   // TODO: Implement DistributedStrategy
-            _ => new IndependentStrategy()
-        };
+            if (!IsRunning || _robotControllers == null || _coordinationStrategy == null)
+                return;
 
-        Debug.Log($"[SIMULATION_MANAGER] Initialized coordination strategy: {_coordinationStrategy.GetType().Name}");
-    }
-
-    /// <summary>
-    /// Updates robot coordination using the current strategy.
-    /// Delegates to the strategy pattern for mode-specific behavior.
-    /// </summary>
-    private void UpdateRobotCoordination()
-    {
-        if (!IsRunning || _robotControllers == null || _coordinationStrategy == null)
-            return;
-
-        // Delegate coordination logic to the strategy
-        _coordinationStrategy.Update(_robotControllers, _robotTargetReached);
-    }
-
-    /// <summary>
-    /// Changes the simulation state and triggers state change event.
-    /// </summary>
-    /// <param name="newState">The new simulation state to transition to</param>
-    private void ChangeState(SimulationState newState)
-    {
-        if (_currentState == newState)
-            return;
-
-        _previousState = _currentState;
-        _currentState = newState;
-
-        OnStateChanged?.Invoke(_previousState, newState);
-
-        Debug.Log($"[SIMULATION_MANAGER] State: {_previousState} -> {newState}");
-    }
-
-    /// <summary>
-    /// Handles simulation errors by changing state to error and optionally scheduling a reset.
-    /// </summary>
-    /// <param name="errorMessage">The error message to log</param>
-    private void HandleError(string errorMessage)
-    {
-        ChangeState(SimulationState.Error);
-
-        Debug.LogError($"[SIMULATION_MANAGER] Error: {errorMessage}");
-
-        if (_logger != null)
-        {
-            Debug.LogError($"[SIMULATION_MANAGER] Error: {errorMessage}");
+            // Delegate coordination logic to the strategy
+            _coordinationStrategy.Update(_robotControllers, _robotTargetReached);
         }
 
-        if (config.resetOnError)
+        /// <summary>
+        /// Changes the simulation state and triggers state change event.
+        /// </summary>
+        /// <param name="newState">The new simulation state to transition to</param>
+        private void ChangeState(SimulationState newState)
         {
-            Invoke(nameof(ResetSimulation), 2f); // Reset after 2 seconds
-        }
-    }
+            if (_currentState == newState)
+                return;
 
-    /// <summary>
-    /// Starts the simulation and changes state to Running.
-    /// </summary>
-    public void StartSimulation()
-    {
-        if (_currentState == SimulationState.Error)
-        {
-            Debug.LogWarning(
-                "[SIMULATION_MANAGER] Cannot start simulation while in error state. Reset first."
-            );
-            return;
+            _previousState = _currentState;
+            _currentState = newState;
+
+            OnStateChanged?.Invoke(_previousState, newState);
+
+            Debug.Log($"{_logPrefix} State: {_previousState} -> {newState}");
         }
 
-        ChangeState(SimulationState.Running);
-
-        if (_logger != null)
+        /// <summary>
+        /// Handles simulation errors by changing state to error and optionally scheduling a reset.
+        /// </summary>
+        /// <param name="errorMessage">The error message to log</param>
+        private void HandleError(string errorMessage)
         {
-            Debug.Log("[SIMULATION_MANAGER] Started by user request");
-        }
-    }
+            ChangeState(SimulationState.Error);
 
-    /// <summary>
-    /// Pauses the simulation if currently running.
-    /// </summary>
-    public void PauseSimulation()
-    {
-        if (IsRunning)
-        {
-            ChangeState(SimulationState.Paused);
+            Debug.LogError($"{_logPrefix} Error: {errorMessage}");
 
             if (_logger != null)
             {
-                Debug.Log("[SIMULATION_MANAGER] Paused");
+                Debug.LogError($"{_logPrefix} Error: {errorMessage}");
+            }
+
+            if (config.resetOnError)
+            {
+                Invoke(nameof(ResetSimulation), 2f); // Reset after 2 seconds
             }
         }
-    }
 
-    /// <summary>
-    /// Resumes the simulation if currently paused.
-    /// </summary>
-    public void ResumeSimulation()
-    {
-        if (IsPaused)
+        /// <summary>
+        /// Starts the simulation and changes state to Running.
+        /// </summary>
+        public void StartSimulation()
         {
+            if (_currentState == SimulationState.Error)
+            {
+                Debug.LogWarning(
+                    $"{_logPrefix} Cannot start simulation while in error state. Reset first."
+                );
+                return;
+            }
+
             ChangeState(SimulationState.Running);
 
             if (_logger != null)
             {
-                Debug.Log("[SIMULATION_MANAGER] Resumed");
+                Debug.Log($"{_logPrefix} Started by user request");
             }
         }
-    }
 
-    /// <summary>
-    /// Resets the simulation by resetting all robot joint targets and coordination state.
-    /// </summary>
-    public void ResetSimulation()
-    {
-        ChangeState(SimulationState.Resetting);
-
-        try
+        /// <summary>
+        /// Pauses the simulation if currently running.
+        /// </summary>
+        public void PauseSimulation()
         {
-            // Reset all robots
-            foreach (var robot in _robotControllers)
-            {
-                if (robot != null)
-                {
-                    robot.ResetJointTargets();
-                    _robotTargetReached[robot.gameObject.name] = true;
-                }
-            }
-
-            // Reset coordination strategy
-            _coordinationStrategy?.Reset();
-
-            if (_logger != null)
-            {
-                Debug.Log("[SIMULATION_MANAGER] Reset completed");
-            }
-
-            // Restart if configured
-            if (config.autoStart)
-            {
-                StartSimulation();
-            }
-            else
+            if (IsRunning)
             {
                 ChangeState(SimulationState.Paused);
+
+                if (_logger != null)
+                {
+                    Debug.Log($"{_logPrefix} Paused");
+                }
             }
         }
-        catch (Exception ex)
+
+        /// <summary>
+        /// Resumes the simulation if currently paused.
+        /// </summary>
+        public void ResumeSimulation()
         {
-            HandleError($"[SIMULATION_MANAGER] Failed to reset simulation: {ex.Message}");
-        }
-    }
-
-    /// <summary>
-    /// Gets the identifier of the currently active robot.
-    /// </summary>
-    /// <returns>The robot identifier or "None" if no active robot</returns>
-    /// <summary>
-    /// Gets the ID of the currently active robot based on the coordination strategy.
-    /// </summary>
-    /// <returns>The active robot ID, or descriptive string based on strategy</returns>
-    public string GetActiveRobotId()
-    {
-        if (_coordinationStrategy == null)
-            return "None";
-
-        return _coordinationStrategy.GetActiveRobotId();
-    }
-
-    /// <summary>
-    /// Checks if a specific robot is allowed to move based on the coordination strategy.
-    /// </summary>
-    /// <param name="robotId">The robot identifier to check</param>
-    /// <returns>True if the robot is allowed to move, false otherwise</returns>
-    public bool IsRobotActive(string robotId)
-    {
-        if (!IsRunning || _coordinationStrategy == null)
-            return false;
-
-        // Delegate to the coordination strategy
-        return _coordinationStrategy.IsRobotActive(robotId);
-    }
-
-    /// <summary>
-    /// Notifies the manager that a robot has reached or is moving towards its target.
-    /// </summary>
-    /// <param name="robotId">The robot identifier</param>
-    /// <param name="reached">True if target is reached, false if still moving</param>
-    public void NotifyTargetReached(string robotId, bool reached)
-    {
-        _robotTargetReached[robotId] = reached;
-
-        if (reached && config.coordinationMode == RobotCoordinationMode.Sequential)
-        {
-            Debug.Log($"[SIMULATION_MANAGER] Robot {robotId} reached target in sequential mode");
-        }
-    }
-
-    /// <summary>
-    /// Unity OnDestroy callback - cleans up singleton instance.
-    /// </summary>
-    private void OnDestroy()
-    {
-        if (Instance == this)
-        {
-            if (_logger != null)
+            if (IsPaused)
             {
-                Debug.Log("[SIMULATION_MANAGER] SimulationManager destroyed");
+                ChangeState(SimulationState.Running);
+
+                if (_logger != null)
+                {
+                    Debug.Log($"{_logPrefix} Resumed");
+                }
             }
-            Instance = null;
+        }
+
+        /// <summary>
+        /// Resets the simulation by resetting all robot joint targets and coordination state.
+        /// </summary>
+        public void ResetSimulation()
+        {
+            ChangeState(SimulationState.Resetting);
+
+            try
+            {
+                // Reset all robots
+                foreach (var robot in _robotControllers)
+                {
+                    if (robot != null)
+                    {
+                        robot.ResetJointTargets();
+                        _robotTargetReached[robot.gameObject.name] = true;
+                    }
+                }
+
+                // Reset coordination strategy
+                _coordinationStrategy?.Reset();
+
+                if (_logger != null)
+                {
+                    Debug.Log($"{_logPrefix} Reset completed");
+                }
+
+                // Restart if configured
+                if (config.autoStart)
+                {
+                    StartSimulation();
+                }
+                else
+                {
+                    ChangeState(SimulationState.Paused);
+                }
+            }
+            catch (Exception ex)
+            {
+                HandleError($"Failed to reset simulation: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Gets the identifier of the currently active robot.
+        /// </summary>
+        /// <returns>The robot identifier or "None" if no active robot</returns>
+        /// <summary>
+        /// Gets the ID of the currently active robot based on the coordination strategy.
+        /// </summary>
+        /// <returns>The active robot ID, or descriptive string based on strategy</returns>
+        public string GetActiveRobotId()
+        {
+            if (_coordinationStrategy == null)
+                return "None";
+
+            return _coordinationStrategy.GetActiveRobotId();
+        }
+
+        /// <summary>
+        /// Checks if a specific robot is allowed to move based on the coordination strategy.
+        /// </summary>
+        /// <param name="robotId">The robot identifier to check</param>
+        /// <returns>True if the robot is allowed to move, false otherwise</returns>
+        public bool IsRobotActive(string robotId)
+        {
+            if (!IsRunning || _coordinationStrategy == null)
+                return false;
+
+            // Delegate to the coordination strategy
+            return _coordinationStrategy.IsRobotActive(robotId);
+        }
+
+        /// <summary>
+        /// Notifies the manager that a robot has reached or is moving towards its target.
+        /// </summary>
+        /// <param name="robotId">The robot identifier</param>
+        /// <param name="reached">True if target is reached, false if still moving</param>
+        public void NotifyTargetReached(string robotId, bool reached)
+        {
+            _robotTargetReached[robotId] = reached;
+
+            if (reached && config.coordinationMode == RobotCoordinationMode.Sequential)
+            {
+                Debug.Log($"{_logPrefix} Robot {robotId} reached target in sequential mode");
+            }
+        }
+
+        /// <summary>
+        /// Unity OnDestroy callback - cleans up singleton instance.
+        /// </summary>
+        private void OnDestroy()
+        {
+            if (Instance == this)
+            {
+                if (_logger != null)
+                {
+                    Debug.Log($"{_logPrefix} SimulationManager destroyed");
+                }
+                Instance = null;
+            }
         }
     }
-}
 }

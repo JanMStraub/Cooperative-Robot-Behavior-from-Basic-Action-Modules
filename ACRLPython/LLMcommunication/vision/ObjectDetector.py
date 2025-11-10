@@ -99,6 +99,8 @@ class DetectionObject:
         bbox: Tuple[int, int, int, int],  # (x, y, width, height)
         confidence: float,
         world_position: Optional[Tuple[float, float, float]] = None,
+        depth_m: Optional[float] = None,
+        disparity: Optional[float] = None,
     ):
         """
         Initialize a detected object
@@ -109,12 +111,16 @@ class DetectionObject:
             bbox: Bounding box as (x, y, width, height) in pixels
             confidence: Detection confidence score (0.0-1.0)
             world_position: Optional 3D world position (x, y, z) in meters
+            depth_m: Optional depth in meters (Z distance from camera)
+            disparity: Optional disparity value in pixels
         """
         self.object_id = object_id
         self.color = color
         self.bbox_x, self.bbox_y, self.bbox_w, self.bbox_h = bbox
         self.confidence = confidence
         self.world_position = world_position
+        self.depth_m = depth_m
+        self.disparity = disparity
 
         # Calculate center point
         self.center_x = int(self.bbox_x + self.bbox_w / 2)
@@ -124,28 +130,52 @@ class DetectionObject:
         """
         Convert to dictionary for JSON serialization
 
+        Adapts field names based on whether 3D data is present:
+        - With 3D data: Uses Unity DepthResult format (bbox, pixel_center)
+        - Without 3D data: Uses Unity DetectionResult format (bbox_px, center_px)
+
         Returns:
             Dictionary representation of the detection
         """
-        result = {
-            "id": self.object_id,
-            "color": self.color,
-            "bbox_px": {
-                "x": self.bbox_x,
-                "y": self.bbox_y,
-                "width": self.bbox_w,
-                "height": self.bbox_h,
-            },
-            "center_px": {"x": self.center_x, "y": self.center_y},
-            "confidence": round(self.confidence, 3),
-        }
-
-        # Add world position if available
+        # Use Unity DepthResult format if 3D data is present
         if self.world_position is not None:
-            result["world_position"] = {
-                "x": round(self.world_position[0], 4),
-                "y": round(self.world_position[1], 4),
-                "z": round(self.world_position[2], 4),
+            result = {
+                "color": self.color,
+                "confidence": round(self.confidence, 3),
+                # Unity DepthResult uses "bbox" (not "bbox_px")
+                "bbox": {
+                    "x": self.bbox_x,
+                    "y": self.bbox_y,
+                    "width": self.bbox_w,
+                    "height": self.bbox_h,
+                },
+                # Unity DepthResult uses "pixel_center" (not "center_px")
+                "pixel_center": {"x": self.center_x, "y": self.center_y},
+                "world_position": {
+                    "x": round(self.world_position[0], 4),
+                    "y": round(self.world_position[1], 4),
+                    "z": round(self.world_position[2], 4),
+                },
+            }
+
+            # Add depth_m and disparity if available
+            if self.depth_m is not None:
+                result["depth_m"] = round(self.depth_m, 4)
+            if self.disparity is not None:
+                result["disparity"] = round(self.disparity, 2)
+        else:
+            # Use Unity DetectionResult format (2D only)
+            result = {
+                "id": self.object_id,
+                "color": self.color,
+                "bbox_px": {
+                    "x": self.bbox_x,
+                    "y": self.bbox_y,
+                    "width": self.bbox_w,
+                    "height": self.bbox_h,
+                },
+                "center_px": {"x": self.center_x, "y": self.center_y},
+                "confidence": round(self.confidence, 3),
             }
 
         return result
@@ -360,6 +390,20 @@ class CubeDetector:
         h, w = imgL.shape[:2]
 
         for det in detection_result.detections:
+            # Extract disparity value at detection center
+            disp_value = None
+            if 0 <= det.center_y < disparity.shape[0] and 0 <= det.center_x < disparity.shape[1]:
+                disp_value = float(disparity[det.center_y, det.center_x])
+
+            # Calculate depth from disparity
+            depth_m = None
+            if disp_value is not None and disp_value > 1.0:  # Valid disparity
+                # Depth = (baseline * focal_length) / disparity
+                # focal_length = (image_width / 2) / tan(fov/2)
+                import math
+                focal_length = (w / 2.0) / math.tan(math.radians(camera_config.fov / 2.0))
+                depth_m = (camera_config.baseline * focal_length) / disp_value
+
             # Estimate world position using pre-computed disparity (OPTIMIZED)
             # Use lower min_disparity (1.0px) to handle distant objects better
             world_pos = estimate_object_world_position_from_disparity(
@@ -375,21 +419,26 @@ class CubeDetector:
                 camera_position=camera_position,
             )
 
-            # Create new detection object with world position
+            # Create new detection object with world position, depth, and disparity
             det_with_depth = DetectionObject(
                 object_id=det.object_id,
                 color=det.color,
                 bbox=(det.bbox_x, det.bbox_y, det.bbox_w, det.bbox_h),
                 confidence=det.confidence,
                 world_position=world_pos,
+                depth_m=depth_m,
+                disparity=disp_value,
             )
 
             detections_with_depth.append(det_with_depth)
 
             if world_pos:
+                depth_str = f", depth={depth_m:.3f}m" if depth_m else ""
+                disp_str = f", disp={disp_value:.1f}px" if disp_value else ""
                 logging.info(
                     f"{det.color.upper()} cube at pixel ({det.center_x}, {det.center_y}) "
                     f"→ world pos ({world_pos[0]:.3f}, {world_pos[1]:.3f}, {world_pos[2]:.3f})m"
+                    f"{depth_str}{disp_str}"
                 )
             else:
                 logging.debug(

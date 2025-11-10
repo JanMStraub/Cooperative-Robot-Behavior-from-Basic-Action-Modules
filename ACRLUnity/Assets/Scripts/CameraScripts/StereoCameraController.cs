@@ -28,7 +28,8 @@ namespace Vision
                 return;
 
             bool isConnected =
-                StereoImageSender.Instance != null && StereoImageSender.Instance.IsConnected;
+                UnifiedPythonSender.Instance != null
+                && UnifiedPythonSender.Instance.IsStereoConnected;
             string statusText = isConnected ? "Connected to Stereo Detector" : "Disconnected";
             Color statusColor = isConnected ? new Color(0.6f, 1f, 0.6f) : new Color(1f, 0.6f, 0.6f);
 
@@ -88,7 +89,7 @@ namespace Vision
         [SerializeField]
         [Tooltip("JPEG compression quality (1-100)")]
         [Range(1, 100)]
-        private int _jpegQuality = 85;
+        private int _JPEGQuality = 85;
 
         private float _stereoBaseline;
         private float _cameraFOV;
@@ -104,11 +105,13 @@ namespace Vision
         public bool IsProcessing => _isProcessing;
         public int CaptureCount => _captureCounter;
 
-        // Helper variables
-
+        // Camera
         private Camera _leftCamera;
         private Camera _rightCamera;
         private string _cameraPairId;
+
+        // Helper variables
+        private const string _logPrefix = "[STEREO_CAMERA_CONTROLLER]";
 
         /// <summary>
         /// Get the camera FOV - either from actual camera or manual override
@@ -157,14 +160,14 @@ namespace Vision
                 if (_leftCamera != null && _rightCamera != null)
                 {
                     Debug.Log(
-                        $"[STEREO_CAMERA_CONTROLLER] Found cameras: {leftChild.name} and {rightChild.name}"
+                        $"{_logPrefix} Found cameras: {leftChild.name} and {rightChild.name}"
                     );
                     return;
                 }
             }
 
             Debug.LogError(
-                "[STEREO_CAMERA_CONTROLLER] Failed to find left and right cameras. "
+                $"{_logPrefix} Failed to find left and right cameras. "
                     + "Ensure cameras are children of this GameObject or named 'LeftCamera' and 'RightCamera'"
             );
         }
@@ -179,9 +182,7 @@ namespace Vision
             // Validate cameras
             if (_leftCamera == null || _rightCamera == null)
             {
-                Debug.LogError(
-                    $"[STEREO_CAMERA_CONTROLLER] Both left and right cameras must be assigned!"
-                );
+                Debug.LogError($"{_logPrefix} Both left and right cameras must be assigned!");
                 enabled = false;
                 return;
             }
@@ -191,24 +192,29 @@ namespace Vision
             // Register cameras with CameraManager
             if (CameraManager.Instance != null)
             {
+                // Register individual cameras with L/R suffixes
                 CameraManager.Instance.RegisterCamera(_cameraPairId + "_L", _leftCamera);
                 CameraManager.Instance.RegisterCamera(_cameraPairId + "_R", _rightCamera);
+
+                // Also register the pair ID (without suffix) pointing to left camera
+                // This is used by detection results that come with the pair ID
+                CameraManager.Instance.RegisterCamera(_cameraPairId, _leftCamera);
             }
             else
             {
                 Debug.LogWarning(
-                    "[STEREO_CAMERA_CONTROLLER] CameraManager not found. Create a CameraManager GameObject in the scene."
+                    $"{_logPrefix} CameraManager not found. Create a CameraManager GameObject in the scene."
                 );
             }
 
             // Subscribe to depth results
-            if (DepthResultsReceiver.Instance != null)
+            if (UnifiedPythonReceiver.Instance != null)
             {
-                DepthResultsReceiver.Instance.OnDepthResultReceived += HandleDepthResult;
+                UnifiedPythonReceiver.Instance.OnDepthResultReceived += HandleDepthResult;
                 float fov = GetCameraFOV();
                 float baseline = GetStereoBaseline();
                 Debug.Log(
-                    $"[STEREO_CAMERA_CONTROLLER] Initialized: {_cameraPairId}, Baseline={baseline}m, FOV={fov}°"
+                    $"{_logPrefix} Initialized: {_cameraPairId}, Baseline={baseline}m, FOV={fov}°"
                 );
 
                 // Log camera positions for debugging
@@ -218,14 +224,14 @@ namespace Vision
                     Vector3 rightPos = _rightCamera.transform.position;
                     float actualDistance = Vector3.Distance(leftPos, rightPos);
                     Debug.Log(
-                        $"[STEREO_CAMERA_CONTROLLER] Left camera: {leftPos}, Right camera: {rightPos}, Distance: {actualDistance}m"
+                        $"{_logPrefix} Left camera: {leftPos}, Right camera: {rightPos}, Distance: {actualDistance}m"
                     );
                 }
             }
             else
             {
                 Debug.LogWarning(
-                    "[STEREO_CAMERA_CONTROLLER] DepthResultsReceiver not found - results won't be received"
+                    $"{_logPrefix} UnifiedPythonReceiver not found - results won't be received"
                 );
             }
         }
@@ -255,13 +261,13 @@ namespace Vision
         {
             if (_isProcessing)
             {
-                Debug.LogWarning("[STEREO_CAMERA_CONTROLLER] Already processing a capture");
+                Debug.LogWarning($"{_logPrefix} Already processing a capture");
                 return;
             }
 
             if (!enabled)
             {
-                Debug.LogWarning("[STEREO_CAMERA_CONTROLLER] Component is disabled");
+                Debug.LogWarning($"{_logPrefix} Component is disabled");
                 return;
             }
 
@@ -279,9 +285,12 @@ namespace Vision
             try
             {
                 // Check if sender is available
-                if (StereoImageSender.Instance == null || !StereoImageSender.Instance.IsConnected)
+                if (
+                    UnifiedPythonSender.Instance == null
+                    || !UnifiedPythonSender.Instance.IsStereoConnected
+                )
                 {
-                    throw new Exception("StereoImageSender not available or not connected");
+                    throw new Exception("UnifiedPythonSender not available or not connected");
                 }
 
                 // Capture left camera
@@ -313,7 +322,7 @@ namespace Vision
                 string metadata = JsonUtility.ToJson(metadataObj);
 
                 // Send stereo pair
-                bool success = StereoImageSender.Instance.SendStereoPair(
+                bool success = UnifiedPythonSender.Instance.SendStereoPair(
                     leftImageBytes,
                     rightImageBytes,
                     _cameraPairId,
@@ -329,14 +338,14 @@ namespace Vision
                 _captureCounter++;
 
                 Debug.Log(
-                    $"[STEREO_CAMERA_CONTROLLER] Stereo pair sent successfully in {captureTime:F2}s "
+                    $"{_logPrefix} Stereo pair sent successfully in {captureTime:F2}s "
                         + $"(L:{leftImageBytes.Length / 1024f:F1} KB, R:{rightImageBytes.Length / 1024f:F1} KB). "
                         + $"Waiting for depth detection..."
                 );
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[STEREO_CAMERA_CONTROLLER] Capture failed: {ex.Message}");
+                Debug.LogError($"{_logPrefix} Capture failed: {ex.Message}");
                 _isProcessing = false;
             }
 
@@ -372,12 +381,12 @@ namespace Vision
                 RenderTexture.active = null;
 
                 // Encode to JPEG
-                byte[] bytes = texture.EncodeToJPG(_jpegQuality);
+                byte[] bytes = texture.EncodeToJPG(_JPEGQuality);
                 return bytes;
             }
             catch (Exception ex)
             {
-                Debug.LogError($"[STEREO_CAMERA_CONTROLLER] Error capturing image: {ex.Message}");
+                Debug.LogError($"{_logPrefix} Error capturing image: {ex.Message}");
                 return null;
             }
             finally
@@ -400,17 +409,18 @@ namespace Vision
             {
                 CameraManager.Instance.UnregisterCamera(_cameraPairId + "_L");
                 CameraManager.Instance.UnregisterCamera(_cameraPairId + "_R");
+                CameraManager.Instance.UnregisterCamera(_cameraPairId);
             }
 
             // Unsubscribe from depth results
-            if (DepthResultsReceiver.Instance != null)
+            if (UnifiedPythonReceiver.Instance != null)
             {
-                DepthResultsReceiver.Instance.OnDepthResultReceived -= HandleDepthResult;
+                UnifiedPythonReceiver.Instance.OnDepthResultReceived -= HandleDepthResult;
             }
 
             if (_captureCounter > 0)
             {
-                Debug.Log($"[STEREO_CAMERA_CONTROLLER] Destroyed after {_captureCounter} captures");
+                Debug.Log($"{_logPrefix} Destroyed after {_captureCounter} captures");
             }
         }
     }

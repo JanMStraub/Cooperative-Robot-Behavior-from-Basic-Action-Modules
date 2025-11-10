@@ -16,7 +16,11 @@ namespace Utilities
         public static ObjectRegistry Instance { get; private set; }
 
         private HashSet<GameObject> _registeredObjects = new HashSet<GameObject>();
-        private Dictionary<GameObject, ObjectInfo> _objectInfo = new Dictionary<GameObject, ObjectInfo>();
+        private Dictionary<GameObject, ObjectInfo> _objectInfo =
+            new Dictionary<GameObject, ObjectInfo>();
+
+        // Helper variables
+        private const string _logPrefix = "[OBJECT_REGISTRY]";
 
         /// <summary>
         /// Event fired when an object is registered
@@ -57,7 +61,11 @@ namespace Utilities
         /// <param name="gameObject">The GameObject to register</param>
         /// <param name="objectType">Optional object type identifier</param>
         /// <param name="isGraspable">Whether the object can be grasped</param>
-        public void RegisterObject(GameObject gameObject, string objectType = null, bool isGraspable = false)
+        public void RegisterObject(
+            GameObject gameObject,
+            string objectType = null,
+            bool isGraspable = false
+        )
         {
             if (gameObject == null || _registeredObjects.Contains(gameObject))
                 return;
@@ -68,7 +76,7 @@ namespace Utilities
                 IsGraspable = isGraspable,
                 InitialPosition = gameObject.transform.position,
                 InitialRotation = gameObject.transform.rotation,
-                Size = GetObjectSize(gameObject)
+                Size = GetObjectSize(gameObject),
             };
 
             _registeredObjects.Add(gameObject);
@@ -84,7 +92,10 @@ namespace Utilities
         /// <param name="includeColliders">Include objects with colliders</param>
         /// <param name="includeTrackpoints">Include objects with Trackpoint material</param>
         /// <returns>Number of objects registered</returns>
-        public int RegisterSceneObjects(bool includeColliders = true, bool includeTrackpoints = true)
+        public int RegisterSceneObjects(
+            bool includeColliders = true,
+            bool includeTrackpoints = true
+        )
         {
             var newlyRegistered = new HashSet<GameObject>();
 
@@ -98,7 +109,9 @@ namespace Utilities
                 RegisterTrackpointObjects(newlyRegistered);
             }
 
-            Debug.Log($"[OBJECT_REGISTRY] Registered {newlyRegistered.Count} new objects (total: {_registeredObjects.Count})");
+            Debug.Log(
+                $"{_logPrefix} Registered {newlyRegistered.Count} new objects (total: {_registeredObjects.Count})"
+            );
             return newlyRegistered.Count;
         }
 
@@ -126,8 +139,10 @@ namespace Utilities
                     continue;
 
                 // Register object
-                bool isGraspable = obj.GetComponent<Rigidbody>() != null
-                    && collider.bounds.size.magnitude < SceneConstants.GRASPABLE_OBJECT_SIZE_THRESHOLD;
+                bool isGraspable =
+                    obj.GetComponent<Rigidbody>() != null
+                    && collider.bounds.size.magnitude
+                        < SceneConstants.GRASPABLE_OBJECT_SIZE_THRESHOLD;
 
                 RegisterObject(obj, null, isGraspable);
                 newlyRegistered.Add(obj);
@@ -239,7 +254,7 @@ namespace Utilities
         {
             _registeredObjects.Clear();
             _objectInfo.Clear();
-            Debug.Log("[OBJECT_REGISTRY] Cleared all registered objects");
+            Debug.Log($"{_logPrefix} Cleared all registered objects");
         }
 
         /// <summary>

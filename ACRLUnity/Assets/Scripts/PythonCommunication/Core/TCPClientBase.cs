@@ -28,11 +28,6 @@ namespace PythonCommunication.Core
         [SerializeField]
         protected bool _autoReconnect = true;
 
-        [Header("Debug")]
-        [Tooltip("Enable verbose logging")]
-        [SerializeField]
-        protected bool _verboseLogging = false;
-
         // Connection state
         protected TcpClient _client;
         protected NetworkStream _stream;
@@ -40,6 +35,9 @@ namespace PythonCommunication.Core
         protected bool _shouldRun = true;
         protected float _reconnectTimer = 0f;
         protected float _reconnectInterval = 2f;
+
+        // Helper variable
+        private const string _logPrefix = "[TCP_CLIENT_BASE]";
 
         // Properties
         public bool IsConnected
@@ -122,7 +120,7 @@ namespace PythonCommunication.Core
         {
             if (IsConnected)
             {
-                LogVerbose("Already connected");
+                Debug.Log($"{_logPrefix} Already connected");
                 return;
             }
 
@@ -135,13 +133,15 @@ namespace PythonCommunication.Core
                 _isConnected = true;
 
                 OnConnected();
-                Log($"Connected to {_serverHost}:{_serverPort} (read timeout: infinite)");
+                Debug.Log(
+                    $"{_logPrefix} Connected to {_serverHost}:{_serverPort} (read timeout: infinite)"
+                );
             }
             catch (Exception ex)
             {
                 _isConnected = false;
                 OnConnectionFailed(ex);
-                LogWarning($"Connection failed: {ex.Message}");
+                Debug.LogWarning($"{_logPrefix} Connection failed: {ex.Message}");
             }
         }
 
@@ -170,11 +170,11 @@ namespace PythonCommunication.Core
 
                 _isConnected = false;
                 OnDisconnected();
-                Log("Disconnected");
+                Debug.Log($"{_logPrefix} Disconnected");
             }
             catch (Exception ex)
             {
-                LogError($"Error during disconnect: {ex.Message}");
+                Debug.LogError($"{_logPrefix} Error during disconnect: {ex.Message}");
             }
         }
 
@@ -219,49 +219,6 @@ namespace PythonCommunication.Core
 
         #endregion
 
-        #region Logging
-
-        /// <summary>
-        /// Get the log prefix for this client
-        /// </summary>
-        protected abstract string LogPrefix { get; }
-
-        /// <summary>
-        /// Log a message
-        /// </summary>
-        protected void Log(string message)
-        {
-            Debug.Log($"[{LogPrefix}] {message}");
-        }
-
-        /// <summary>
-        /// Log a warning
-        /// </summary>
-        protected void LogWarning(string message)
-        {
-            Debug.LogWarning($"[{LogPrefix}] {message}");
-        }
-
-        /// <summary>
-        /// Log an error
-        /// </summary>
-        protected void LogError(string message)
-        {
-            Debug.LogError($"[{LogPrefix}] {message}");
-        }
-
-        /// <summary>
-        /// Log a verbose message (only if verbose logging is enabled)
-        /// </summary>
-        protected void LogVerbose(string message)
-        {
-            if (_verboseLogging)
-            {
-                Debug.Log($"[{LogPrefix}] {message}");
-            }
-        }
-
-        #endregion
 
         #region Utility Methods
 
@@ -277,7 +234,10 @@ namespace PythonCommunication.Core
             try
             {
                 // Quick poll check to detect dead connections
-                if (_client.Client != null && _client.Client.Poll(0, System.Net.Sockets.SelectMode.SelectRead))
+                if (
+                    _client.Client != null
+                    && _client.Client.Poll(0, System.Net.Sockets.SelectMode.SelectRead)
+                )
                 {
                     byte[] buff = new byte[1];
                     if (_client.Client.Receive(buff, System.Net.Sockets.SocketFlags.Peek) == 0)
@@ -321,7 +281,7 @@ namespace PythonCommunication.Core
         {
             if (!IsConnected)
             {
-                LogWarning("Cannot write - not connected");
+                Debug.LogWarning($"{_logPrefix} Cannot write - not connected");
                 return false;
             }
 
@@ -333,7 +293,7 @@ namespace PythonCommunication.Core
             }
             catch (Exception ex)
             {
-                LogError($"Error writing to stream: {ex.Message}");
+                Debug.LogError($"{_logPrefix} Error writing to stream: {ex.Message}");
                 _isConnected = false;
                 return false;
             }

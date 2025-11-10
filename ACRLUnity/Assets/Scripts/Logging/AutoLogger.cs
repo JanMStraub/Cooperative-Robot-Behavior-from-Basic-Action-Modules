@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Core;
 using Robotics;
 using UnityEngine;
 using Utilities;
@@ -42,6 +41,9 @@ namespace Logging
         private string _currentGripperActionId;
         private bool _isInitialized;
 
+        // Helper variables
+        private const string _logPrefix = "[AUTO_LOGGER]";
+
         private void Start()
         {
             Initialize();
@@ -53,7 +55,7 @@ namespace Logging
             if (_logger == null)
             {
                 Debug.LogWarning(
-                    $"[AUTO_LOGGER] MainLogger not found. Auto-logging disabled for {gameObject.name}"
+                    $"{_logPrefix} MainLogger not found. Auto-logging disabled for {gameObject.name}"
                 );
                 enableAutoLogging = false;
                 return;
@@ -76,7 +78,7 @@ namespace Logging
             }
 
             _isInitialized = true;
-            Debug.Log($"[AUTO_LOGGER] Initialized for {robotId}");
+            Debug.Log($"{_logPrefix} Initialized for {robotId}");
         }
 
         private void Update()
@@ -243,7 +245,7 @@ namespace Logging
             // Ensure ObjectRegistry exists
             if (ObjectRegistry.Instance == null)
             {
-                Debug.LogWarning("[AUTO_LOGGER] ObjectRegistry not found in scene. Creating one.");
+                Debug.LogWarning($"{_logPrefix} ObjectRegistry not found in scene. Creating one.");
                 var registryGO = new GameObject("ObjectRegistry");
                 registryGO.AddComponent<ObjectRegistry>();
             }
@@ -257,7 +259,7 @@ namespace Logging
                 includeTrackpoints: true
             );
 
-            Debug.Log($"[AUTO_LOGGER] Registered {count} objects via ObjectRegistry");
+            Debug.Log($"{_logPrefix} Registered {count} objects via ObjectRegistry");
         }
 
         /// <summary>
