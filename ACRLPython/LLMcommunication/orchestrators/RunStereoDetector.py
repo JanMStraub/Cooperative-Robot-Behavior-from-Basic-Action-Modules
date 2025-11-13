@@ -3,8 +3,8 @@
 RunStereoDetector.py - Orchestrator for stereo object detection pipeline
 
 Runs the complete stereo detection system:
-1. StereoDetectionServer - receives stereo image pairs from Unity (port 5009)
-2. ResultsServer - sends detection results back to Unity (port 5006)
+1. StereoDetectionServer - receives stereo image pairs from Unity (port 5006)
+2. ResultsServer - sends detection results back to Unity (port 5007)
 3. Processing loop - detects objects with 3D positions using stereo disparity
 
 Usage:
@@ -182,25 +182,25 @@ class StereoDetectorOrchestrator:
 
                 # Create config with Unity-provided parameters
                 camera_config = CameraConfig(fov=fov, baseline=baseline)
-                logging.info(
-                    f"Using Unity camera params: baseline={baseline}m, fov={fov}°"
-                )
-
-                if camera_position:
-                    logging.info(
-                        f"Camera position: ({camera_position[0]:.3f}, {camera_position[1]:.3f}, {camera_position[2]:.3f})"
-                    )
-                if camera_rotation:
-                    logging.info(
-                        f"Camera rotation: ({camera_rotation[0]:.1f}, {camera_rotation[1]:.1f}, {camera_rotation[2]:.1f})°"
-                    )
         except json.JSONDecodeError:
             # Prompt is not JSON, use as-is
             pass
 
-        logging.info(
-            f"Processing stereo pair '{camera_pair_id}' (prompt: '{actual_prompt}')"
-        )
+        # Print visual separator and processing header
+        logging.info("=" * 80)
+        logging.info(f"🔍 PROCESSING STEREO PAIR: {camera_pair_id}")
+        if actual_prompt:
+            logging.info(f"📝 Prompt: '{actual_prompt}'")
+        logging.info(f"📷 Camera params: baseline={camera_config.baseline:.4f}m, FOV={camera_config.fov:.1f}°")
+        if camera_position:
+            logging.info(
+                f"📍 Camera position: ({camera_position[0]:.3f}, {camera_position[1]:.3f}, {camera_position[2]:.3f})m"
+            )
+        if camera_rotation:
+            logging.info(
+                f"🔄 Camera rotation: ({camera_rotation[0]:.1f}, {camera_rotation[1]:.1f}, {camera_rotation[2]:.1f})°"
+            )
+        logging.info("=" * 80)
 
         try:
             # Run stereo detection with depth estimation
@@ -217,6 +217,12 @@ class StereoDetectorOrchestrator:
 
             # Prepare result dictionary
             result_dict = result.to_dict()
+
+            # Remove image_width and image_height for Unity DepthResult format
+            # (DepthResult doesn't have these fields, only DetectionResult does)
+            result_dict.pop("image_width", None)
+            result_dict.pop("image_height", None)
+
             result_dict["metadata"] = {
                 "processing_time_seconds": round(duration, 3),
                 "prompt": actual_prompt,
@@ -228,18 +234,40 @@ class StereoDetectorOrchestrator:
             # Broadcast results to Unity
             self.results_broadcaster.send_result(result_dict)
 
-            logging.info(
-                f"Processed stereo pair in {duration:.2f}s - "
-                f"detected {len(result.detections)} objects"
-            )
+            # Print visual result summary
+            logging.info("")
+            logging.info("=" * 80)
+            logging.info(f"✓ STEREO DETECTION COMPLETE")
+            logging.info("=" * 80)
+            logging.info(f"⏱️  Processing time: {duration:.2f}s")
+            logging.info(f"🎯 Detected objects: {len(result.detections)}")
 
-            # Log individual detections with 3D positions
-            for det in result.detections:
-                if det.world_position:
-                    logging.info(
-                        f"  - {det.color.upper()} cube at "
-                        f"world ({det.world_position[0]:.3f}, {det.world_position[1]:.3f}, {det.world_position[2]:.3f})m"
-                    )
+            if result.detections:
+                logging.info("=" * 80)
+                for i, det in enumerate(result.detections, 1):
+                    if det.world_position:
+                        depth_str = f", depth={det.depth_m:.3f}m" if det.depth_m else ""
+                        disp_str = f", disp={det.disparity:.1f}px" if det.disparity else ""
+                        logging.info(
+                            f"  [{i}] {det.color.upper()} cube:"
+                        )
+                        logging.info(
+                            f"      📍 World position: ({det.world_position[0]:.3f}, {det.world_position[1]:.3f}, {det.world_position[2]:.3f})m"
+                        )
+                        logging.info(
+                            f"      📷 Pixel position: ({det.center_x}, {det.center_y})"
+                        )
+                        if det.depth_m:
+                            logging.info(f"      📏 Depth: {det.depth_m:.3f}m")
+                        if det.disparity:
+                            logging.info(f"      🔢 Disparity: {det.disparity:.1f}px")
+                        logging.info(f"      ✓ Confidence: {det.confidence:.2f}")
+                        if i < len(result.detections):
+                            logging.info("      " + "-" * 60)
+
+            logging.info("=" * 80)
+            logging.info(f"📤 Sent results to Unity")
+            logging.info("=" * 80)
 
         except Exception as e:
             logging.error(f"Failed to process stereo pair: {e}")
@@ -269,43 +297,43 @@ def main():
     parser.add_argument(
         "--baseline",
         type=float,
-        default=0.05,
+        default=cfg.DEFAULT_STEREO_BASELINE,
         help="Camera baseline distance in meters (default: 0.05)",
     )
     parser.add_argument(
         "--fov",
         type=float,
-        default=60.0,
+        default=cfg.DEFAULT_STEREO_FOV,
         help="Camera field of view in degrees (default: 60)",
     )
     parser.add_argument(
         "--detection-host",
         type=str,
-        default="127.0.0.1",
+        default=cfg.DEFAULT_HOST,
         help="Stereo detection server host (default: 127.0.0.1)",
     )
     parser.add_argument(
         "--detection-port",
         type=int,
-        default=5009,
-        help="Stereo detection server port (default: 5009)",
+        default=cfg.STEREO_DETECTION_PORT,
+        help=f"Stereo detection server port (default: {cfg.STEREO_DETECTION_PORT})",
     )
     parser.add_argument(
         "--results-host",
         type=str,
-        default="127.0.0.1",
+        default=cfg.DEFAULT_HOST,
         help="Results server host (default: 127.0.0.1)",
     )
     parser.add_argument(
         "--results-port",
         type=int,
-        default=5006,
-        help="Results server port (default: 5006)",
+        default=cfg.DEPTH_RESULTS_PORT,
+        help=f"Results server port for depth detection results (default: {cfg.DEPTH_RESULTS_PORT})",
     )
     parser.add_argument(
         "--check-interval",
         type=float,
-        default=0.5,
+        default=cfg.IMAGE_CHECK_INTERVAL,
         help="Seconds between checking for new images (default: 0.5)",
     )
     parser.add_argument(

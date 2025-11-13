@@ -5,8 +5,8 @@ StereoDetectionServer.py - TCP server for stereo object detection with depth
 Receives stereo image pairs from Unity, performs object detection with depth
 estimation, and sends results back with 3D world coordinates.
 
-Port: 5009 (receives stereo images)
-Results sent via ResultsServer (port 5006)
+Port: 5006 (receives stereo images from Unity)
+Results sent via ResultsServer (port 5007 for depth detection)
 """
 
 import logging
@@ -163,7 +163,7 @@ class StereoDetectionServer(TCPServerBase):
 
             server_config = ServerConfig()
             server_config.host = "127.0.0.1"
-            server_config.port = 5009
+            server_config.port = cfg.STEREO_DETECTION_PORT
 
         super().__init__(server_config)
         self.image_storage = StereoImageStorage()
@@ -298,9 +298,12 @@ class StereoDetectionServer(TCPServerBase):
                 # Store stereo pair
                 self.image_storage.store_stereo_pair(cam_pair_id, imgL, imgR, prompt)
 
+                # Format sizes nicely
+                size_L_kb = img_L_len / 1024
+                size_R_kb = img_R_len / 1024
                 logging.info(
-                    f"Received stereo pair '{cam_pair_id}' (L: {cam_L_id}, R: {cam_R_id}, "
-                    f"sizes: {img_L_len}B + {img_R_len}B)"
+                    f"📷 Received stereo pair '{cam_pair_id}' "
+                    f"(L: {size_L_kb:.1f}KB, R: {size_R_kb:.1f}KB)"
                 )
 
         except socket.timeout:
@@ -339,7 +342,7 @@ class StereoDetectionServer(TCPServerBase):
 
 
 def run_stereo_detection_server_background(
-    host: str = "127.0.0.1", port: int = 5009
+    host: str = "127.0.0.1", port: int = cfg.STEREO_DETECTION_PORT
 ) -> StereoDetectionServer:
     """
     Run stereo detection server in background thread.

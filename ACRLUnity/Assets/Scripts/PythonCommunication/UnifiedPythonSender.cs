@@ -1,12 +1,13 @@
 using System;
 using PythonCommunication.Core;
 using UnityEngine;
+using Core;
 
 namespace PythonCommunication
 {
     /// <summary>
     /// Unified sender for all Python image communication.
-    /// Handles both single camera images (port 5005) and stereo pairs (port 5009).
+    /// Handles both single camera images (port 5005) and stereo pairs (port 5006).
     /// Replaces ImageSender and StereoImageSender with a single, streamlined implementation.
     /// </summary>
     public class UnifiedPythonSender : MonoBehaviour
@@ -75,7 +76,7 @@ namespace PythonCommunication
 
         // Internal connections (one per port)
         private SingleImageConnection _singleConnection; // Port 5005
-        private StereoImageConnection _stereoConnection; // Port 5009
+        private StereoImageConnection _stereoConnection; // Port 5006
 
         // Streaming timers
         private float _singleStreamTimer = 0f;
@@ -106,7 +107,7 @@ namespace PythonCommunication
                 _stereoConnection = stereoConnObj.AddComponent<StereoImageConnection>();
 
                 Debug.Log(
-                    $"{_logPrefix} ✓ Initialized with two connection handlers (ports 5005, 5009)"
+                    $"{_logPrefix} ✓ Initialized with two connection handlers (ports 5005, 5006)"
                 );
             }
             else
@@ -219,10 +220,10 @@ namespace PythonCommunication
 
         #endregion
 
-        #region Public API - Stereo Pair (Port 5009)
+        #region Public API - Stereo Pair (Port 5006)
 
         /// <summary>
-        /// Send pre-encoded stereo image pair to Python StereoDetectionServer (port 5009).
+        /// Send pre-encoded stereo image pair to Python StereoDetectionServer (port 5006).
         /// </summary>
         public bool SendStereoPair(
             byte[] leftImageBytes,
@@ -250,7 +251,7 @@ namespace PythonCommunication
         }
 
         /// <summary>
-        /// Capture and send stereo image pair from two cameras (port 5009).
+        /// Capture and send stereo image pair from two cameras (port 5006).
         /// </summary>
         public bool CaptureAndSendStereoPair(
             Camera leftCam,
@@ -278,7 +279,7 @@ namespace PythonCommunication
         }
 
         /// <summary>
-        /// Check if stereo connection (port 5009) is active
+        /// Check if stereo connection (port 5006) is active
         /// </summary>
         public bool IsStereoConnected => _stereoConnection != null && _stereoConnection.IsConnected;
 
@@ -368,7 +369,7 @@ namespace PythonCommunication
 
             private void Awake()
             {
-                _serverPort = 5005; // StreamingServer port
+                _serverPort = CommunicationConstants.STREAMING_SERVER_PORT; // StreamingServer port
                 _autoConnect = true;
             }
 
@@ -554,7 +555,7 @@ namespace PythonCommunication
         }
 
         /// <summary>
-        /// Handles stereo image pair sending (port 5009 - StereoDetectionServer)
+        /// Handles stereo image pair sending (port 5006 - StereoDetectionServer)
         /// </summary>
         private class StereoImageConnection : TCPClientBase
         {
@@ -562,7 +563,7 @@ namespace PythonCommunication
 
             private void Awake()
             {
-                _serverPort = 5009; // StereoDetectionServer port
+                _serverPort = CommunicationConstants.STEREO_DETECTION_SERVER_PORT; // StereoDetectionServer port
                 _autoConnect = false; // Only connect when actually used
             }
 

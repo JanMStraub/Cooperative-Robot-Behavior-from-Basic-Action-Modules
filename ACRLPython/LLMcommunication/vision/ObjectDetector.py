@@ -433,12 +433,10 @@ class CubeDetector:
             detections_with_depth.append(det_with_depth)
 
             if world_pos:
-                depth_str = f", depth={depth_m:.3f}m" if depth_m else ""
-                disp_str = f", disp={disp_value:.1f}px" if disp_value else ""
-                logging.info(
-                    f"{det.color.upper()} cube at pixel ({det.center_x}, {det.center_y}) "
-                    f"→ world pos ({world_pos[0]:.3f}, {world_pos[1]:.3f}, {world_pos[2]:.3f})m"
-                    f"{depth_str}{disp_str}"
+                logging.debug(
+                    f"{det.color.upper()} cube: pixel ({det.center_x}, {det.center_y}) "
+                    f"→ world ({world_pos[0]:.3f}, {world_pos[1]:.3f}, {world_pos[2]:.3f})m, "
+                    f"depth={depth_m:.3f}m, disp={disp_value:.1f}px"
                 )
             else:
                 logging.debug(
@@ -488,7 +486,8 @@ class CubeDetector:
                 mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
             )
 
-            logging.info(f"  {color_name.upper()}: Found {len(contours)} contours")
+            accepted_count = 0
+            logging.debug(f"  {color_name.upper()}: Analyzing {len(contours)} contours")
 
             for i, contour in enumerate(contours):
                 # Get bounding box
@@ -529,7 +528,8 @@ class CubeDetector:
                     )
                     continue
 
-                logging.info(
+                accepted_count += 1
+                logging.debug(
                     f"    Contour {i}: ACCEPTED - area={area}px, aspect={aspect_ratio:.2f}, conf={confidence:.2f}"
                 )
 
@@ -540,6 +540,10 @@ class CubeDetector:
                         "confidence": confidence,
                     }
                 )
+
+            # Summary log for each color
+            if accepted_count > 0:
+                logging.info(f"  {color_name.upper()}: ✓ {accepted_count} cube(s) detected")
 
         return detections
 
