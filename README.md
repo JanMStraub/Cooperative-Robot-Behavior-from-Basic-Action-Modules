@@ -145,10 +145,10 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
 3. **GripperController**: End-effector control with open/close commands
 
 **Vision & Perception Systems**:
-- **LLM Vision** (Ollama): Scene understanding and natural language descriptions
+- **LLM Vision** (LM Studio): Scene understanding and natural language descriptions
 - **Object Detection**: HSV color-based cube detection with bounding boxes
 - **Stereo Depth**: 3D localization using stereo disparity estimation
-- **TCP Communication**: Real-time image streaming between Unity and Python (ports 5005-5009)
+- **TCP Communication**: Real-time image streaming between Unity and Python (ports 5005, 5006, 5007, 5010)
 
 **LLM-Driven Control Systems**:
 - **Operations System**: Structured framework for defining robot operations with parameters, preconditions, and failure modes

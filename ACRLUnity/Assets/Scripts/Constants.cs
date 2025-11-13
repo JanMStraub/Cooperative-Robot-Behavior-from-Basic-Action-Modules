@@ -120,19 +120,29 @@ namespace Core
         public const int STREAMING_SERVER_PORT = 5005;
 
         /// <summary>
-        /// Default results server port (sends LLM results to Unity)
-        /// </summary>
-        public const int RESULTS_SERVER_PORT = 5006;
-
-        /// <summary>
-        /// Detection server port (sends object detection results)
-        /// </summary>
-        public const int DETECTION_SERVER_PORT = 5007;
-
-        /// <summary>
         /// Stereo detection server port (receives stereo image pairs)
         /// </summary>
-        public const int STEREO_DETECTION_SERVER_PORT = 5009;
+        public const int STEREO_DETECTION_SERVER_PORT = 5006;
+
+        /// <summary>
+        /// LLM results server port (sends LLM analysis results to Unity from RunAnalyzer)
+        /// </summary>
+        public const int LLM_RESULTS_PORT = 5010;
+
+        /// <summary>
+        /// Depth results server port (sends depth detection results with 3D coordinates from RunStereoDetector)
+        /// </summary>
+        public const int DEPTH_RESULTS_PORT = 5007;
+
+        /// <summary>
+        /// Legacy: Default results server port (alias for LLM_RESULTS_PORT)
+        /// </summary>
+        public const int RESULTS_SERVER_PORT = LLM_RESULTS_PORT;
+
+        /// <summary>
+        /// Legacy: Detection server port (alias for DEPTH_RESULTS_PORT)
+        /// </summary>
+        public const int DETECTION_SERVER_PORT = DEPTH_RESULTS_PORT;
 
         /// <summary>
         /// Default timeout for Python processes (seconds)

@@ -14,9 +14,15 @@ StreamingServer, ResultsServer, and image analysis systems.
 DEFAULT_HOST = "127.0.0.1"
 
 # Port assignments
-STREAMING_SERVER_PORT = 5005  # Receives images from Unity
-RESULTS_SERVER_PORT = 5006  # Sends LLM results to Unity
-STEREO_DETECTION_PORT = 5009  # Receives stereo image pairs from Unity
+STREAMING_SERVER_PORT = 5005  # Receives images from Unity (RunAnalyzer)
+STEREO_DETECTION_PORT = 5006  # Receives stereo image pairs from Unity (RunStereoDetector)
+LLM_RESULTS_PORT = 5010  # Sends LLM analysis results to Unity (RunAnalyzer)
+DEPTH_RESULTS_PORT = 5007  # Sends depth detection results with 3D coordinates to Unity (RunStereoDetector)
+
+# Legacy port names for backward compatibility
+RESULTS_SERVER_PORT = LLM_RESULTS_PORT  # Default for RunAnalyzer
+DETECTION_SERVER_PORT = DEPTH_RESULTS_PORT  # Default for RunStereoDetector
+
 
 # Connection limits
 MAX_CONNECTIONS_BACKLOG = 5  # Max pending connections in listen() queue
@@ -61,7 +67,7 @@ DUPLICATE_TIME_THRESHOLD = 0.1  # Time threshold for detecting duplicate sends (
 LMSTUDIO_BASE_URL = "http://127.0.0.1:1234/v1"
 
 # Default LM Studio model (use model name shown in LM Studio)
-DEFAULT_LMSTUDIO_MODEL = "llama-3.2-vision"
+DEFAULT_LMSTUDIO_MODEL = "gemma-3-12b"
 
 # LLM generation parameters
 DEFAULT_TEMPERATURE = 0.7  # Sampling temperature (0.0-2.0)
@@ -70,7 +76,7 @@ DEFAULT_TEMPERATURE = 0.7  # Sampling temperature (0.0-2.0)
 VISION_MODELS = [
     "llama-3.2-vision",
     "llava",
-    "moondream",
+    "qwen3-vl-8b",
 ]
 
 
@@ -88,7 +94,7 @@ MAX_RESULT_QUEUE_SIZE = 100  # Max queued results when no clients connected
 
 # Output directories
 DEFAULT_OUTPUT_DIR = (
-    "/llm_responses"  # Where to save LLM responses
+    "./llm_responses"  # Where to save LLM responses
 )
 
 # Logging format
@@ -105,15 +111,12 @@ THREAD_CLEANUP_INTERVAL = 10.0  # How often to clean up completed threads (secon
 
 # Keepalive intervals
 RESULTS_SERVER_KEEPALIVE = 1.0  # Results server monitoring interval (seconds)
-STREAMING_SERVER_MONITOR = 5.0  # Streaming server monitoring interval (seconds)
+STREAMING_SERVER_MONITOR = 60.0  # Streaming server monitoring interval (seconds)
 
 
 # ===========================
 # Object Detection Configuration
 # ===========================
-
-# Detection Server Port
-DETECTION_SERVER_PORT = 5007  # Sends object detection results to Unity
 
 # Color Ranges for Cube Detection (HSV)
 # OpenCV HSV: H=0-180, S=0-255, V=0-255
@@ -151,7 +154,7 @@ DEBUG_DISPARITY_DIR = "./debug_detections"
 # ===========================
 
 # Default stereo camera parameters
-DEFAULT_STEREO_BASELINE = 0.1  # meters, distance between stereo cameras
+DEFAULT_STEREO_BASELINE = 0.05  # meters, distance between stereo cameras
 DEFAULT_STEREO_FOV = 60.0  # degrees, field of view of cameras
 
 # Stereo processing

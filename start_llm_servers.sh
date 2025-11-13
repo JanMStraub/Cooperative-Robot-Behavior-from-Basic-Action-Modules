@@ -22,19 +22,23 @@ echo ""
 export PYTHONPATH="$SCRIPT_DIR:$SCRIPT_DIR/ACRLPython:$PYTHONPATH"
 
 # Run servers in background with &
-# RunAnalyzer uses ports 5005 (StreamingServer) and 5006 (ResultsServer)
+# RunAnalyzer uses ports 5005 (StreamingServer) and 5010 (ResultsServer for LLM results)
 cd "$SCRIPT_DIR/ACRLPython"
 "$SCRIPT_DIR/ACRLPython/acrl/bin/python" -u -m LLMCommunication.orchestrators.RunAnalyzer --model llama-3.2-vision --interval 2.0 &
 ANALYZER_PID=$!
 cd "$SCRIPT_DIR"
 echo "Started RunAnalyzer.py with LM Studio (PID: $ANALYZER_PID)"
+echo "  - StreamingServer: port 5005"
+echo "  - ResultsServer (LLM): port 5010"
 
-# RunStereoDetector uses ports 5009 (StereoDetectionServer) and shares ResultsServer (port 5006) with RunAnalyzer
+# RunStereoDetector uses ports 5006 (StereoDetectionServer) and 5007 (ResultsServer for depth results)
 cd "$SCRIPT_DIR/ACRLPython"
-"$SCRIPT_DIR/ACRLPython/acrl/bin/python" -u -m LLMCommunication.orchestrators.RunStereoDetector --baseline 0.05 --fov 60 --results-port 5007 &
+"$SCRIPT_DIR/ACRLPython/acrl/bin/python" -u -m LLMCommunication.orchestrators.RunStereoDetector &
 STEREO_PID=$!
 cd "$SCRIPT_DIR"
 echo "Started RunStereoDetector.py (PID: $STEREO_PID)"
+echo "  - StereoDetectionServer: port 5006"
+echo "  - ResultsServer (Depth): port 5007"
 
 echo ""
 echo "Both servers are running. Logs will appear below."

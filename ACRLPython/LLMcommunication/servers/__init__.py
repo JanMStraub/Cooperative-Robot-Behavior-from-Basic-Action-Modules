@@ -6,9 +6,9 @@ network communication between Unity and Python.
 
 Servers:
 - StreamingServer: Receives single camera images from Unity (port 5005)
-- ResultsServer: Sends LLM analysis results to Unity (port 5006)
-- DetectionServer: Sends object detection results to Unity (port 5007)
-- StereoDetectionServer: Receives stereo image pairs from Unity (port 5009)
+- ResultsServer: Sends results to Unity (port 5010 for LLM, port 5007 for depth)
+- DetectionServer: Legacy - use ResultsServer with appropriate port
+- StereoDetectionServer: Receives stereo image pairs from Unity (port 5006)
 """
 
 from .StreamingServer import (

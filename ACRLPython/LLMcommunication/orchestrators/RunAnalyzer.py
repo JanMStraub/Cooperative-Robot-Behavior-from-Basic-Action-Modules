@@ -172,15 +172,14 @@ def run_analyzer_loop(args):
                             continue  # Same image sent too quickly, skip
 
                     # Process the NEW image
-                    print("\n" + "=" * 80)
-                    print(f"🔍 PROCESSING NEW IMAGE FROM: {cam_id}")
-                    print(f"📝 Prompt: '{prompt}'")
-                    print(f"⏱️  Age: {age:.2f}s")
+                    logging.info("\n" + "=" * 80)
+                    logging.info(f"🔍 PROCESSING NEW IMAGE FROM: {cam_id}")
+                    logging.info(f"📝 Prompt: '{prompt}'")
                     if cam_id in processed_images:
-                        print(f"✨ Image content has changed since last screenshot")
+                        logging.info(f"✨ Image content has changed since last screenshot")
                     else:
-                        print(f"🆕 First screenshot from this camera")
-                    print("=" * 80)
+                        logging.info(f"🆕 First screenshot from this camera")
+                    logging.info("=" * 80)
 
                     result = processor.send_images(
                         images=[image],
@@ -190,16 +189,16 @@ def run_analyzer_loop(args):
                     )
 
                     # Display response prominently
-                    print("\n" + "=" * 80)
-                    print(f"🤖 LM STUDIO RESPONSE FOR {cam_id}")
-                    print("=" * 80)
-                    print(result["response"])
-                    print("=" * 80)
-                    print(
+                    logging.info("\n" + "=" * 80)
+                    logging.info(f"🤖 LM STUDIO RESPONSE FOR {cam_id}")
+                    logging.info("=" * 80)
+                    logging.info(result["response"])
+                    logging.info("=" * 80)
+                    logging.info(
                         f"⏱️  Processing time: {result['metadata']['duration_seconds']:.2f}s"
                     )
-                    print(f"📊 Model: {result['metadata']['model']}")
-                    print("=" * 80 + "\n")
+                    logging.info(f"📊 Model: {result['metadata']['model']}")
+                    logging.info("=" * 80 + "\n")
 
                     # Send result to Unity
                     ResultsBroadcaster.send_result(result)
@@ -252,7 +251,7 @@ Examples:
   %(prog)s --interval 2.0
 
 Note: This script runs both the StreamingServer and AnalyzeImage in the same process.
-      Unity should send images to port 5005 (default).
+      Unity sends images to port 5005, receives LLM results on port 5010.
       LM Studio must be running with the server started.
         """,
     )
@@ -302,7 +301,7 @@ Note: This script runs both the StreamingServer and AnalyzeImage in the same pro
         "--results-port",
         type=int,
         default=cfg.RESULTS_SERVER_PORT,
-        help=f"ResultsServer port for sending results to Unity (default: {cfg.RESULTS_SERVER_PORT})",
+        help=f"ResultsServer port for sending LLM results to Unity (default: {cfg.RESULTS_SERVER_PORT})",
     )
     server_group.add_argument(
         "--interval",

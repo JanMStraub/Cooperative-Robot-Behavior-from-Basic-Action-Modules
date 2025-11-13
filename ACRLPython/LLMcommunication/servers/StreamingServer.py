@@ -82,6 +82,19 @@ class ImageStorage:
         with self._lock:
             return list(self._cameras.keys())
 
+    def cleanup_old_images(self, max_age_seconds: float = 300.0):
+        """Remove images older than max_age_seconds"""
+        with self._lock:
+            current_time = time.time()
+            to_remove = [
+                cam_id
+                for cam_id, (_, timestamp, _) in self._cameras.items()
+                if current_time - timestamp > max_age_seconds
+            ]
+            for cam_id in to_remove:
+                del self._cameras[cam_id]
+                logging.debug(f"Cleaned up old image from {cam_id}")
+
 
 class StreamingServer(TCPServerBase):
     """
@@ -261,7 +274,7 @@ def run_server(server_config: ServerConfig, setup_signals: bool = True):
 
     try:
         server.start()
-
+        
         # Status monitoring loop
         storage = ImageStorage.get_instance()
         while server.is_running():
@@ -275,6 +288,8 @@ def run_server(server_config: ServerConfig, setup_signals: bool = True):
                     prompt = storage.get_camera_prompt(cam_id)
                     prompt_info = f", prompt: '{prompt}'" if prompt else ""
                     logging.info(f"  {cam_id}: age={age:.1f}s{prompt_info}")
+                
+                storage.cleanup_old_images(max_age_seconds=300.0)  # 5 minutes
 
     except KeyboardInterrupt:
         logging.info("Interrupted by user")

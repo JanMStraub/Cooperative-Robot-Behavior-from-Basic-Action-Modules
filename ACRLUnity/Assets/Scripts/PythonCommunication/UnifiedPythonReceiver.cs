@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading;
+using Core;
 using PythonCommunication.Core;
 using UnityEngine;
 using Vision;
@@ -11,7 +12,7 @@ namespace PythonCommunication
 {
     /// <summary>
     /// Unified receiver for all Python result communication.
-    /// Handles LLM results, Depth results (port 5006), and Detection results (port 5007).
+    /// Handles LLM results (port 5010) and Depth results (port 5007).
     /// Replaces LLMResultsReceiver, DepthResultsReceiver, and DetectionResultsReceiver.
     /// </summary>
     public class UnifiedPythonReceiver : MonoBehaviour
@@ -28,8 +29,8 @@ namespace PythonCommunication
         public event Action<DepthResult> OnDepthResultReceived;
 
         // Internal connection handlers (one per port)
-        private ResultsConnection _resultsConnection; // Port 5006 (LLM + Depth results)
-        private DetectionConnection _detectionConnection; // Port 5007 (Detection results)
+        private ResultsConnection _resultsConnection; // Port 5010 (LLM results)
+        private DetectionConnection _detectionConnection; // Port 5007 (Depth results)
 
         // Helper variable
         private const string _logPrefix = "[UNIFIED_PYTHON_RECEIVER]";
@@ -58,7 +59,7 @@ namespace PythonCommunication
                 _detectionConnection.Initialize(this);
 
                 Debug.Log(
-                    $"{_logPrefix} ✓ Initialized with two connection handlers (ports 5006, 5007)"
+                    $"{_logPrefix} ✓ Initialized with two connection handlers (ports 5010, 5007)"
                 );
             }
             else
@@ -80,7 +81,7 @@ namespace PythonCommunication
         #region Public API
 
         /// <summary>
-        /// Check if results connection (port 5006) is active
+        /// Check if results connection (port 5010) is active
         /// </summary>
         public bool IsResultsConnected =>
             _resultsConnection != null && _resultsConnection.IsConnected;
@@ -181,7 +182,7 @@ namespace PythonCommunication
         #region Inner Connection Classes
 
         /// <summary>
-        /// Handles results from port 5007 (LLM results + Depth results)
+        /// Handles results from port 5010 (LLM results only from RunAnalyzer)
         /// </summary>
         private class ResultsConnection : TCPClientBase
         {
@@ -195,7 +196,7 @@ namespace PythonCommunication
             public void Initialize(UnifiedPythonReceiver parent)
             {
                 _parent = parent;
-                _serverPort = 5007; // ResultsServer port
+                _serverPort = CommunicationConstants.RESULTS_SERVER_PORT; // Port 5010 - LLM results from RunAnalyzer
                 _autoConnect = true;
             }
 
@@ -342,7 +343,7 @@ namespace PythonCommunication
             }
 
             /// <summary>
-            /// Process received JSON and route to appropriate result type
+            /// Process received JSON and parse as LLM result
             /// </summary>
             private void ProcessResult(string json)
             {
@@ -351,51 +352,21 @@ namespace PythonCommunication
 
                 try
                 {
-                    // Debug: Log raw JSON (first 500 chars)
-                    string jsonPreview = json.Length > 500 ? json.Substring(0, 500) + "..." : json;
-                    Debug.Log($"{_logPrefix} Received JSON: {jsonPreview}");
+                    // Parse as LLM result (port 5010 only receives LLM results)
+                    LLMResult result = JsonUtility.FromJson<LLMResult>(json);
 
-                    // Smart routing based on JSON content
-                    // LLM results have "metadata.model"
-                    // Depth results have "metadata.camera_baseline_m"
-
-                    if (json.Contains("\"model\":"))
+                    if (result != null)
                     {
-                        Debug.Log($"{_logPrefix} Routing as LLM result");
-                        // Parse as LLM result
-                        LLMResult result = JsonUtility.FromJson<LLMResult>(json);
-                        if (result != null)
-                        {
-                            _parent.RouteLLMResult(result);
-                        }
-                    }
-                    else if (json.Contains("\"camera_baseline_m\":"))
-                    {
-                        Debug.Log($"{_logPrefix} Routing as Depth result");
-                        // Parse as Depth result
-                        DepthResult result = JsonUtility.FromJson<DepthResult>(json);
-                        if (result != null)
-                        {
-                            Debug.Log(
-                                $"{_logPrefix} Parsed DepthResult: camera={result.camera_id}, detections={result.detections?.Length ?? 0}"
-                            );
-                            _parent.RouteDepthResult(result);
-                        }
-                        else
-                        {
-                            Debug.LogError($"{_logPrefix} Failed to parse DepthResult from JSON");
-                        }
+                        _parent.RouteLLMResult(result);
                     }
                     else
                     {
-                        Debug.LogWarning(
-                            $"{_logPrefix} Received unknown result type on port 5006 - could not determine if LLM or Depth result"
-                        );
+                        Debug.LogError($"{_logPrefix} Failed to parse LLM result from JSON");
                     }
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"{_logPrefix} Error processing result: {ex.Message}");
+                    Debug.LogError($"{_logPrefix} Error processing LLM result: {ex.Message}");
                 }
             }
 
@@ -414,7 +385,7 @@ namespace PythonCommunication
         }
 
         /// <summary>
-        /// Handles detection results from port 5006 (DetectionServer)
+        /// Handles depth detection results from port 5007 (depth results from RunStereoDetector)
         /// </summary>
         private class DetectionConnection : TCPClientBase
         {
@@ -430,7 +401,7 @@ namespace PythonCommunication
             public void Initialize(UnifiedPythonReceiver parent)
             {
                 _parent = parent;
-                _serverPort = 5006; // DetectionServer port
+                _serverPort = CommunicationConstants.DETECTION_SERVER_PORT; // Port 5007 - Depth results from RunStereoDetector
                 _autoConnect = true;
             }
 
@@ -580,98 +551,29 @@ namespace PythonCommunication
                     // Extract JSON string
                     string jsonString = Encoding.UTF8.GetString(data, 4, jsonLength);
 
-                    // Parse JSON
-                    DetectionResult result = JsonUtility.FromJson<DetectionResult>(jsonString);
+                    // Parse JSON as DepthResult (stereo detection with 3D coordinates)
+                    DepthResult result = JsonUtility.FromJson<DepthResult>(jsonString);
 
                     if (result == null)
                     {
-                        Debug.LogError($"{_logPrefix} Failed to parse detection result");
+                        Debug.LogError($"{_logPrefix} Failed to parse depth result");
                         return;
                     }
 
-                    // Process result
-                    ProcessDetectionResult(result);
+                    if (_parent._logResults)
+                    {
+                        Debug.Log(
+                            $"{_logPrefix} Received DepthResult: camera={result.camera_id}, detections={result.detections?.Length ?? 0}"
+                        );
+                    }
+
+                    // Route to parent's depth result handler
+                    _parent.RouteDepthResult(result);
                 }
                 catch (Exception ex)
                 {
                     Debug.LogError($"{_logPrefix} Error handling data: {ex.Message}");
                 }
-            }
-
-            /// <summary>
-            /// Processes a detection result and converts pixel coordinates to world coordinates
-            /// </summary>
-            private void ProcessDetectionResult(DetectionResult result)
-            {
-                // Get camera for this result
-                Camera sourceCamera = GetCameraById(result.camera_id);
-
-                if (sourceCamera == null)
-                {
-                    Debug.LogWarning(
-                        $"{_logPrefix} Cannot convert to world coordinates: camera '{result.camera_id}' not found"
-                    );
-
-                    return;
-                }
-
-                // Convert all detections to world coordinates
-                List<DetectedCubeWithWorld> cubesWithWorld = new List<DetectedCubeWithWorld>();
-
-                if (result.detections != null)
-                {
-                    foreach (var detection in result.detections)
-                    {
-                        Vector3 worldPos = Vector3.zero;
-                        GameObject hitObject = null;
-                        bool hasWorldPos = false;
-
-                        // Check if stereo depth estimation provided world position
-                        if (detection.world_position != null && detection.world_position.IsValid())
-                        {
-                            worldPos = detection.world_position.ToVector3();
-                            hasWorldPos = true;
-                        }
-                        else
-                        {
-                            // Fall back to raycasting
-                            hasWorldPos = detection.TryGetWorldPosition(
-                                sourceCamera,
-                                result.image_width,
-                                result.image_height,
-                                out worldPos,
-                                out hitObject
-                            );
-                        }
-
-                        cubesWithWorld.Add(
-                            new DetectedCubeWithWorld(detection, worldPos, hitObject, hasWorldPos)
-                        );
-                    }
-                }
-
-                // Create enhanced result with world coordinates
-                DetectionResultWithWorld resultWithWorld = new DetectionResultWithWorld(
-                    result,
-                    sourceCamera,
-                    cubesWithWorld.ToArray()
-                );
-            }
-
-            /// <summary>
-            /// Gets a registered camera by ID from CameraManager
-            /// </summary>
-            private Camera GetCameraById(string cameraId)
-            {
-                if (CameraManager.Instance == null)
-                {
-                    Debug.LogWarning(
-                        $"{_logPrefix} CameraManager not initialized. Create a CameraManager GameObject in the scene."
-                    );
-                    return null;
-                }
-
-                return CameraManager.Instance.GetCamera(cameraId);
             }
 
             /// <summary>

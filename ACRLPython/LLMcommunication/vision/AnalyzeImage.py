@@ -36,14 +36,14 @@ try:
     import openai
     from openai import OpenAI
 except ImportError:
-    print("Error: 'openai' package not found. Install with: pip install openai")
+    logging.info("Error: 'openai' package not found. Install with: pip install openai")
     sys.exit(1)
 
 try:
     import cv2
     import numpy as np
 except ImportError:
-    print(
+    logging.info(
         "Error: 'opencv-python' and 'numpy' required. Install with: pip install opencv-python numpy"
     )
     sys.exit(1)
@@ -65,7 +65,7 @@ except ImportError:
     try:
         from servers.StreamingServer import ImageStorage
     except ImportError:
-        print(
+        logging.info(
             "Error: StreamingServer not found. Make sure servers package is available."
         )
         sys.exit(1)
@@ -258,14 +258,14 @@ def get_images_from_server(
             age = storage.get_camera_age(cam_id)
             prompt = storage.get_camera_prompt(cam_id) or ""
             prompt_info = f", prompt: '{prompt}'" if prompt else ""
-            print(
+            logging.info(
                 f"  ✓ {cam_id}: {image.shape[1]}x{image.shape[0]}, {age:.1f}s ago{prompt_info}"
             )
             images.append(image)
             valid_camera_ids.append(cam_id)
             prompts.append(prompt)
         else:
-            print(f"  ✗ {cam_id}: No image available")
+            logging.info(f"  ✗ {cam_id}: No image available")
 
     if not images:
         raise ValueError(f"No images available from cameras: {camera_ids}")
@@ -295,7 +295,7 @@ def save_response(result: Dict, output_path: Optional[str] = None):
     json_path = base_path.with_suffix(".json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2, ensure_ascii=False)
-    print(f"\n✓ Saved full response to: {json_path}")
+    logging.info(f"\n✓ Saved full response to: {json_path}")
 
 
 def main():
@@ -400,13 +400,13 @@ Note: StreamingServer.py must be running for this script to work.
             storage = ImageStorage.get_instance()
             camera_ids = storage.get_all_camera_ids()
             if camera_ids:
-                print("Available cameras:")
+                logging.info("Available cameras:")
                 for cam_id in camera_ids:
                     age = storage.get_camera_age(cam_id)
                     prompt = storage.get_camera_prompt(cam_id) or "(no prompt)"
-                    print(f"  • {cam_id} - age: {age:.1f}s, prompt: {prompt}")
+                    logging.info(f"  • {cam_id} - age: {age:.1f}s, prompt: {prompt}")
             else:
-                print("No cameras available. Is StreamingServer running?")
+                logging.info("No cameras available. Is StreamingServer running?")
             sys.exit(0)
 
         # Initialize LM Studio processor
@@ -489,11 +489,11 @@ Note: StreamingServer.py must be running for this script to work.
                         )
 
                     # Display response
-                    print("\n" + "=" * 80)
-                    print(f"RESPONSE FOR {cam_id}:")
-                    print("=" * 80)
-                    print(result["response"])
-                    print("=" * 80 + "\n")
+                    logging.info("\n" + "=" * 80)
+                    logging.info(f"RESPONSE FOR {cam_id}:")
+                    logging.info("=" * 80)
+                    logging.info(result["response"])
+                    logging.info("=" * 80 + "\n")
 
                     # Save response
                     if not args.no_save:
