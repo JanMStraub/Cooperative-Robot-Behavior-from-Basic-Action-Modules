@@ -6,7 +6,6 @@ using System.Threading;
 using Core;
 using PythonCommunication.Core;
 using UnityEngine;
-using Vision;
 
 namespace PythonCommunication
 {

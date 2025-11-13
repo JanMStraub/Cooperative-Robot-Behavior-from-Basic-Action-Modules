@@ -1,7 +1,9 @@
+using System.Collections.Generic;
 using System.Linq;
 using PythonCommunication;
 using Robotics;
 using UnityEngine;
+using Utilities;
 
 /// <summary>
 /// Coordinates robot navigation to detected objects using stereo depth estimation
@@ -78,12 +80,20 @@ public class ObjectNavigationController : MonoBehaviour
             leftTarget.world_position.z
         );
 
+        List<GameObject> leftTargetObjects = ObjectFinder.Instance.FindGraspableObjects(
+            leftTargetPos
+        );
+
         // Assign rightmost target to right robot
         ObjectDetection rightTarget = sortedDetections.Last();
         Vector3 rightTargetPos = new Vector3(
             rightTarget.world_position.x,
             rightTarget.world_position.y,
             rightTarget.world_position.z
+        );
+
+        List<GameObject> rightTargetObjects = ObjectFinder.Instance.FindGraspableObjects(
+            rightTargetPos
         );
 
         // Set robot targets via RobotManager
@@ -103,8 +113,8 @@ public class ObjectNavigationController : MonoBehaviour
                 );
             }
 
-            RobotManager.Instance.SetRobotTarget(leftRobotId, leftTargetPos);
-            RobotManager.Instance.SetRobotTarget(rightRobotId, rightTargetPos);
+            RobotManager.Instance.SetRobotTarget(leftRobotId, leftTargetObjects[0]);
+            RobotManager.Instance.SetRobotTarget(rightRobotId, rightTargetObjects[0]);
 
             Debug.Log(
                 $"{_logPrefix} Targets assigned:\n"
