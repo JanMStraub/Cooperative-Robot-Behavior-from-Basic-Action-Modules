@@ -5,24 +5,18 @@ Test Cases for RAG System Integration
 Integration tests for the complete RAG system.
 """
 
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 import pytest
-import tempfile
-import os
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 import numpy as np
-from LLMCommunication.rag import RAGSystem
-from LLMCommunication.rag.VectorStore import VectorStore
+from rag import RAGSystem
+from rag.VectorStore import VectorStore
 
 
 class TestRAGSystemIntegration:
     """Integration tests for RAG system"""
 
-    @patch("LLMCommunication.rag.get_global_registry")
-    @patch("LLMCommunication.rag.EmbeddingGenerator")
+    @patch("rag.get_global_registry")
+    @patch("rag.EmbeddingGenerator")
     def test_initialization(self, mock_embedding_gen, mock_registry):
         """Test RAG system initialization"""
         # Mock components
@@ -39,15 +33,13 @@ class TestRAGSystemIntegration:
         assert rag.embedding_generator is not None
         assert rag.indexer is not None
 
-    @patch("LLMCommunication.rag.get_global_registry")
-    @patch("LLMCommunication.rag.EmbeddingGenerator")
-    @patch("LLMCommunication.rag.VectorStore.load")
-    def test_auto_load_index(self, mock_load, mock_embedding_gen, mock_registry):
+    @patch("rag.get_global_registry")
+    @patch("rag.EmbeddingGenerator")
+    def test_auto_load_index(self, mock_embedding_gen, mock_registry):
         """Test automatic index loading on initialization"""
         # Mock loaded store
         mock_store = Mock(spec=VectorStore)
         mock_store.__len__ = Mock(return_value=5)
-        mock_load.return_value = mock_store
 
         mock_reg = Mock()
         mock_registry.return_value = mock_reg
@@ -55,15 +47,16 @@ class TestRAGSystemIntegration:
         mock_emb = Mock()
         mock_embedding_gen.return_value = mock_emb
 
-        # Create RAG with auto_load
-        with patch("os.path.exists", return_value=True):
-            rag = RAGSystem(auto_load_index=True)
+        # Patch VectorStore.load class method where the class is imported
+        with patch.object(VectorStore, "load", return_value=mock_store):
+            with patch("os.path.exists", return_value=True):
+                rag = RAGSystem(auto_load_index=True)
 
         assert rag.vector_store is not None
         assert rag.query_engine is not None
 
-    @patch("LLMCommunication.rag.get_global_registry")
-    @patch("LLMCommunication.rag.EmbeddingGenerator")
+    @patch("rag.get_global_registry")
+    @patch("rag.EmbeddingGenerator")
     def test_index_operations(self, mock_embedding_gen, mock_registry):
         """Test indexing operations"""
         # Mock operation
@@ -92,8 +85,8 @@ class TestRAGSystemIntegration:
         assert success is True
         assert rag.is_ready() is True
 
-    @patch("LLMCommunication.rag.get_global_registry")
-    @patch("LLMCommunication.rag.EmbeddingGenerator")
+    @patch("rag.get_global_registry")
+    @patch("rag.EmbeddingGenerator")
     def test_search(self, mock_embedding_gen, mock_registry):
         """Test searching for operations"""
         # Setup mocks
@@ -113,7 +106,7 @@ class TestRAGSystemIntegration:
             {"name": "move_to_coordinate", "category": "navigation"}
         )
 
-        from LLMCommunication.rag.QueryEngine import QueryEngine
+        from rag.QueryEngine import QueryEngine
         rag.query_engine = QueryEngine(rag.vector_store, mock_emb, mock_reg)
 
         # Search
@@ -121,8 +114,8 @@ class TestRAGSystemIntegration:
 
         assert len(results) >= 0
 
-    @patch("LLMCommunication.rag.get_global_registry")
-    @patch("LLMCommunication.rag.EmbeddingGenerator")
+    @patch("rag.get_global_registry")
+    @patch("rag.EmbeddingGenerator")
     def test_search_not_ready(self, mock_embedding_gen, mock_registry):
         """Test search when system not ready"""
         mock_reg = Mock()
@@ -136,8 +129,8 @@ class TestRAGSystemIntegration:
 
         assert results == []
 
-    @patch("LLMCommunication.rag.get_global_registry")
-    @patch("LLMCommunication.rag.EmbeddingGenerator")
+    @patch("rag.get_global_registry")
+    @patch("rag.EmbeddingGenerator")
     def test_is_ready(self, mock_embedding_gen, mock_registry):
         """Test checking if system is ready"""
         mock_reg = Mock()
@@ -157,8 +150,8 @@ class TestRAGSystemIntegration:
 
         assert rag.is_ready() is True
 
-    @patch("LLMCommunication.rag.get_global_registry")
-    @patch("LLMCommunication.rag.EmbeddingGenerator")
+    @patch("rag.get_global_registry")
+    @patch("rag.EmbeddingGenerator")
     def test_get_stats(self, mock_embedding_gen, mock_registry):
         """Test getting RAG system statistics"""
         # Mock operation
@@ -188,8 +181,8 @@ class TestRAGSystemIntegration:
         assert "config" in stats
         assert "indexer_stats" in stats
 
-    @patch("LLMCommunication.rag.get_global_registry")
-    @patch("LLMCommunication.rag.EmbeddingGenerator")
+    @patch("rag.get_global_registry")
+    @patch("rag.EmbeddingGenerator")
     def test_repr(self, mock_embedding_gen, mock_registry):
         """Test string representation"""
         mock_reg = Mock()

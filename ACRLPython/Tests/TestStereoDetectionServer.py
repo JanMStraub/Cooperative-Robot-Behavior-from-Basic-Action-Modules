@@ -5,24 +5,18 @@ Unit tests for StereoDetectionServer.py
 Tests the stereo detection server and storage
 """
 
-import pytest
 import numpy as np
 import time
 import threading
 import struct
-import sys
-from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
-# Add LLMCommunication directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
-
-from LLMCommunication.servers.StereoDetectionServer import (
+from servers.StereoDetectionServer import (
     StereoImageStorage,
     StereoDetectionServer,
 )
-from LLMCommunication.core.TCPServerBase import ServerConfig
-import ACRLPython.LLMCommunication.LLMConfig as cfg
+from core.TCPServerBase import ServerConfig
+from .. import LLMConfig as cfg
 
 
 class TestStereoImageStorageSingleton:
@@ -403,7 +397,7 @@ class TestStereoDetectionServerIntegration:
     def test_run_stereo_detection_server_background(self, cleanup_singletons):
         """Test running server in background"""
         import socket
-        from LLMCommunication.servers.StereoDetectionServer import (
+        from servers.StereoDetectionServer import (
             run_stereo_detection_server_background,
         )
 

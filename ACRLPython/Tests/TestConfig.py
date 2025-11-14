@@ -5,15 +5,7 @@ Unit tests for config.py
 Tests configuration constants and helper functions
 """
 
-import pytest
-import sys
-from pathlib import Path
-
-# Add LLMCommunication directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
-
-import ACRLPython.LLMCommunication.LLMConfig as cfg
-
+from .. import LLMConfig as cfg
 
 class TestConfigConstants:
     """Test configuration constants have expected values"""

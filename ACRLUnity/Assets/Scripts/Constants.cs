@@ -135,6 +135,11 @@ namespace Core
         public const int DEPTH_RESULTS_PORT = 5007;
 
         /// <summary>
+        /// RAG server port (semantic search for robot operations)
+        /// </summary>
+        public const int RAG_SERVER_PORT = 5011;
+
+        /// <summary>
         /// Legacy: Default results server port (alias for LLM_RESULTS_PORT)
         /// </summary>
         public const int RESULTS_SERVER_PORT = LLM_RESULTS_PORT;

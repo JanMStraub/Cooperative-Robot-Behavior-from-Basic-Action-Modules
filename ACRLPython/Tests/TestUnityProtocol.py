@@ -7,14 +7,8 @@ Tests the wire protocol for Unity ↔ Python communication
 
 import pytest
 import struct
-import json
-import sys
-from pathlib import Path
 
-# Add LLMCommunication directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
-
-from LLMCommunication.core.UnityProtocol import UnityProtocol
+from core.UnityProtocol import UnityProtocol
 
 
 class TestUnityProtocolConstants:

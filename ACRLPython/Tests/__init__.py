@@ -1,3 +1,3 @@
 """
-Unit tests for LLMcommunication package
+Unit tests for all package
 """

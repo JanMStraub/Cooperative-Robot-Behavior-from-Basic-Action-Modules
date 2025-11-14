@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
 """
-Shared pytest fixtures for LLMcommunication tests
+Shared pytest fixtures for tests
 """
+
+import sys
+from pathlib import Path
+
+# Add parent directory to path so we can import modules
+_parent_dir = Path(__file__).parent.parent
+if str(_parent_dir) not in sys.path:
+    sys.path.insert(0, str(_parent_dir))
 
 import pytest
 import numpy as np
 import socket
 from unittest.mock import Mock, MagicMock
-from pathlib import Path
 
 
 @pytest.fixture
@@ -100,7 +107,7 @@ def server_config():
     Returns:
         ServerConfig instance with test settings
     """
-    from LLMCommunication.core.TCPServerBase import ServerConfig
+    from core.TCPServerBase import ServerConfig
 
     return ServerConfig(
         host="127.0.0.1",
@@ -188,50 +195,53 @@ def mock_lmstudio_client():
 @pytest.fixture
 def cleanup_singletons():
     """
-    Fixture to clean up singleton instances between tests
+    Fixture to clean up singleton instances before and after tests
 
-    Yields control to the test, then resets singletons
+    Cleans up before yielding to ensure clean state, then again after
     """
+    # Clean up BEFORE the test runs
+    def _cleanup():
+        try:
+            from servers.StreamingServer import ImageStorage
+
+            ImageStorage._instance = None
+            ImageStorage._cameras = {}
+        except:
+            pass
+
+        try:
+            from servers.ResultsServer import ResultsBroadcaster
+
+            ResultsBroadcaster._instance = None
+            ResultsBroadcaster._server = None
+            if hasattr(ResultsBroadcaster, '_result_queue'):
+                ResultsBroadcaster._result_queue.clear()
+        except:
+            pass
+
+        try:
+            from servers.DetectionServer import DetectionBroadcaster
+            import queue
+            import LLMConfig as cfg
+
+            DetectionBroadcaster._instance = None
+            DetectionBroadcaster._clients = []
+            DetectionBroadcaster._result_queue = queue.Queue(
+                maxsize=cfg.MAX_RESULT_QUEUE_SIZE
+            )
+        except:
+            pass
+
+        try:
+            from servers.StereoDetectionServer import StereoImageStorage
+
+            StereoImageStorage._instance = None
+        except:
+            pass
+
+    _cleanup()  # Clean before test
     yield
-
-    # Reset singleton instances
-    try:
-        from LLMCommunication.servers.StreamingServer import ImageStorage
-
-        ImageStorage._instance = None
-        ImageStorage._cameras = {}
-    except:
-        pass
-
-    try:
-        from LLMCommunication.servers.ResultsServer import ResultsBroadcaster
-
-        ResultsBroadcaster._instance = None
-        ResultsBroadcaster._server = None
-        ResultsBroadcaster._result_queue = []
-    except:
-        pass
-
-    try:
-        from LLMCommunication.servers.DetectionServer import DetectionBroadcaster
-        import queue
-        import ACRLPython.LLMCommunication.LLMConfig as cfg
-
-        DetectionBroadcaster._instance = None
-        DetectionBroadcaster._clients = []
-        DetectionBroadcaster._result_queue = queue.Queue(
-            maxsize=cfg.MAX_RESULT_QUEUE_SIZE
-        )
-    except:
-        pass
-
-    try:
-        from LLMCommunication.servers.StereoDetectionServer import StereoImageStorage
-
-        StereoImageStorage._instance = None
-        # Reset will be done through _init_storage when new instance is created
-    except:
-        pass
+    _cleanup()  # Clean after test
 
 
 @pytest.fixture
@@ -285,7 +295,7 @@ def sample_operation():
     Returns:
         Mock BasicOperation instance
     """
-    from LLMCommunication.operations.Base import OperationCategory, OperationComplexity
+    from operations.Base import OperationCategory, OperationComplexity
 
     op = Mock()
     op.operation_id = "test_op_001"
@@ -343,7 +353,7 @@ def cleanup_rag_singletons():
 
     # Reset RAG singleton instances if they exist
     try:
-        from LLMCommunication.operations.Registry import _global_registry
+        from operations.Registry import _global_registry
 
         _global_registry = None
     except:
