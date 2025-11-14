@@ -9,14 +9,9 @@ import pytest
 import socket
 import threading
 import time
-import sys
-from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
-# Add LLMCommunication directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
-
-from LLMCommunication.core.TCPServerBase import TCPServerBase, ServerConfig
+from core.TCPServerBase import TCPServerBase, ServerConfig
 
 
 class TestServerConfig:

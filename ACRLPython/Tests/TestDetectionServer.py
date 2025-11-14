@@ -5,25 +5,17 @@ Unit tests for DetectionServer.py
 Tests the detection broadcasting server
 """
 
-import pytest
 import socket
 import threading
-import queue
 import time
-import json
-import sys
-from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
-# Add LLMCommunication directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
-
-from LLMCommunication.servers.DetectionServer import (
+from servers.DetectionServer import (
     DetectionBroadcaster,
     DetectionServer,
 )
-from LLMCommunication.core.TCPServerBase import ServerConfig
-import ACRLPython.LLMCommunication.LLMConfig as cfg
+from core.TCPServerBase import ServerConfig
+from .. import LLMConfig as cfg
 
 
 class TestDetectionBroadcasterSingleton:

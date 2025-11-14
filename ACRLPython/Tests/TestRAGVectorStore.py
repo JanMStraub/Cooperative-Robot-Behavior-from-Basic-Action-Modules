@@ -5,15 +5,11 @@ Test Cases for RAG Vector Store
 Tests for the vector storage and similarity search module.
 """
 
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 import pytest
 import numpy as np
 import os
 import tempfile
-from LLMCommunication.rag.VectorStore import VectorStore
+from rag.VectorStore import VectorStore
 
 
 class TestVectorStore:
@@ -77,9 +73,12 @@ class TestVectorStore:
         query = np.array([1.0, 0.0, 0.0])
         results = store.search(query, top_k=3)
 
-        assert len(results) == 3
+        # Should return 2 results (op_001 and op_003)
+        # op_002 is filtered out due to MIN_SIMILARITY_SCORE threshold (0.5)
+        assert len(results) == 2
         assert results[0]["operation_id"] == "op_001"  # Most similar
         assert results[0]["score"] > results[1]["score"]  # Scores are sorted
+        assert results[1]["operation_id"] == "op_003"  # Second most similar
 
     def test_search_with_min_score(self):
         """Test search with minimum score threshold"""

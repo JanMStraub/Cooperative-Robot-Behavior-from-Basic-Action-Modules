@@ -5,20 +5,13 @@ Unit tests for StreamingServer.py
 Tests the image streaming server and storage
 """
 
-import pytest
 import numpy as np
 import time
 import threading
-import sys
-from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
-# Add LLMCommunication directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
-
-from LLMCommunication.servers.StreamingServer import ImageStorage, StreamingServer
-from LLMCommunication.core.TCPServerBase import ServerConfig
-
+from servers.StreamingServer import ImageStorage, StreamingServer
+from core.TCPServerBase import ServerConfig
 
 class TestImageStorageSingleton:
     """Test ImageStorage singleton pattern"""

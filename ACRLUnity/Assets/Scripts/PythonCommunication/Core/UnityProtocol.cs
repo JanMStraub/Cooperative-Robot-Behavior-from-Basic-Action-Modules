@@ -193,6 +193,89 @@ namespace PythonCommunication.Core
 
         #endregion
 
+        #region RAG Query Messages (Unity → Python)
+
+        /// <summary>
+        /// Encode a RAG query message for sending to Python RAGServer.
+        /// Format: [query_len][query_text][top_k][filters_json_len][filters_json]
+        /// </summary>
+        /// <param name="query">Natural language query text</param>
+        /// <param name="topK">Number of results to return (1-100)</param>
+        /// <param name="filtersJson">Optional filters JSON (can be null or empty)</param>
+        /// <returns>Encoded message bytes</returns>
+        public static byte[] EncodeRagQuery(string query, int topK = 5, string filtersJson = null)
+        {
+            // Validate inputs
+            if (string.IsNullOrEmpty(query))
+            {
+                throw new ArgumentException($"{_logPrefix} RAG query cannot be null or empty");
+            }
+
+            if (topK < 1 || topK > 100)
+            {
+                throw new ArgumentException($"{_logPrefix} topK must be between 1 and 100, got {topK}");
+            }
+
+            // Encode strings to UTF-8
+            byte[] queryBytes = Encoding.UTF8.GetBytes(query);
+
+            if (queryBytes.Length > MAX_STRING_LENGTH)
+            {
+                throw new ArgumentException(
+                    $"{_logPrefix} Query too long: {queryBytes.Length} > {MAX_STRING_LENGTH}"
+                );
+            }
+
+            // Handle filters (can be null or empty)
+            if (string.IsNullOrEmpty(filtersJson))
+            {
+                filtersJson = "{}"; // Empty JSON object
+            }
+
+            byte[] filtersBytes = Encoding.UTF8.GetBytes(filtersJson);
+
+            // Calculate total message size
+            int totalSize = INT_SIZE * 3 + queryBytes.Length + filtersBytes.Length;
+            byte[] message = new byte[totalSize];
+
+            int offset = 0;
+
+            // Write query length and data
+            Buffer.BlockCopy(BitConverter.GetBytes(queryBytes.Length), 0, message, offset, INT_SIZE);
+            offset += INT_SIZE;
+            Buffer.BlockCopy(queryBytes, 0, message, offset, queryBytes.Length);
+            offset += queryBytes.Length;
+
+            // Write top_k
+            Buffer.BlockCopy(BitConverter.GetBytes(topK), 0, message, offset, INT_SIZE);
+            offset += INT_SIZE;
+
+            // Write filters length and data
+            Buffer.BlockCopy(BitConverter.GetBytes(filtersBytes.Length), 0, message, offset, INT_SIZE);
+            offset += INT_SIZE;
+            Buffer.BlockCopy(filtersBytes, 0, message, offset, filtersBytes.Length);
+
+            return message;
+        }
+
+        #endregion
+
+        #region RAG Response Messages (Python → Unity)
+
+        /// <summary>
+        /// Decode a RAG response message received from Python RAGServer.
+        /// Format: [json_len][operation_context_json]
+        /// This is identical to DecodeResultMessage but kept separate for clarity.
+        /// </summary>
+        /// <param name="data">Raw message bytes</param>
+        /// <returns>JSON string with operation context</returns>
+        public static string DecodeRagResponse(byte[] data)
+        {
+            return DecodeResultMessage(data);
+        }
+
+        #endregion
+
         #region Validation Helpers
 
         /// <summary>

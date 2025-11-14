@@ -5,13 +5,9 @@ Test Cases for RAG Configuration
 Tests for the RAG system configuration module.
 """
 
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
 import pytest
 import os
-from LLMCommunication.rag.Config import RAGConfig, config
+from rag.Config import RAGConfig, config
 
 
 class TestRAGConfig:

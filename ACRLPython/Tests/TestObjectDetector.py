@@ -5,22 +5,15 @@ Unit tests for ObjectDetector.py
 Tests color-based cube detection in pixel space
 """
 
-import pytest
 import numpy as np
-import cv2
-import sys
-from pathlib import Path
 from unittest.mock import patch, Mock
 
-# Add LLMCommunication directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
-
-from LLMCommunication.vision.ObjectDetector import (
+from vision.ObjectDetector import (
     DetectionObject,
     DetectionResult,
     CubeDetector,
 )
-import ACRLPython.LLMCommunication.LLMConfig as cfg
+from .. import LLMConfig as cfg
 
 
 class TestDetectionObject:
@@ -304,7 +297,7 @@ class TestCubeDetectorDetection:
 class TestCubeDetectorDebug:
     """Test debug functionality"""
 
-    @patch("config.ENABLE_DEBUG_IMAGES", True)
+    @patch("LLMConfig.ENABLE_DEBUG_IMAGES", True)
     @patch("cv2.imwrite")
     def test_save_debug_image(self, mock_imwrite, sample_red_cube_image, tmp_path):
         """Test that debug images are saved when enabled"""
@@ -332,7 +325,7 @@ class TestCubeDetectorDebug:
 class TestCubeDetectorStereo:
     """Test stereo detection functionality"""
 
-    @patch("LLMCommunication.vision.ObjectDetector.STEREO_AVAILABLE", False)
+    @patch("vision.ObjectDetector.STEREO_AVAILABLE", False)
     def test_detect_cubes_stereo_unavailable(self):
         """Test stereo detection when stereo dependencies not available"""
         detector = CubeDetector()
@@ -366,8 +359,8 @@ class TestCubeDetectorStereo:
 
         assert len(result.detections) == 0
 
-    @patch("LLMCommunication.vision.ObjectDetector.STEREO_AVAILABLE", True)
-    @patch("LLMCommunication.vision.ObjectDetector.estimate_object_world_position")
+    @patch("vision.ObjectDetector.STEREO_AVAILABLE", True)
+    @patch("vision.ObjectDetector.estimate_object_world_position_from_disparity")
     def test_detect_cubes_stereo_with_depth(self, mock_estimate, sample_stereo_pair):
         """Test stereo detection with depth estimation"""
         # Mock world position estimation

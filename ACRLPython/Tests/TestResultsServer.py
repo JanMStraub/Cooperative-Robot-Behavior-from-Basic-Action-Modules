@@ -5,19 +5,13 @@ Unit tests for ResultsServer.py
 Tests the results broadcasting server
 """
 
-import pytest
 import socket
 import threading
 import time
-import sys
-from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
-# Add LLMCommunication directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "LLMCommunication"))
-
-from LLMCommunication.servers.ResultsServer import ResultsBroadcaster, ResultsServer
-from LLMCommunication.core.TCPServerBase import ServerConfig
+from servers.ResultsServer import ResultsBroadcaster, ResultsServer
+from core.TCPServerBase import ServerConfig
 
 
 class TestResultsBroadcasterSingleton:
