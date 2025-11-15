@@ -11,14 +11,7 @@ namespace PythonCommunication.Core
     /// </summary>
     public abstract class TCPClientBase : MonoBehaviour
     {
-        [Header("Connection Settings")]
-        [Tooltip("Server IP address")]
-        [SerializeField]
-        protected string _serverHost = "127.0.0.1";
-
-        [Tooltip("Server port")]
-        [SerializeField]
-        protected int _serverPort;
+        [Header("Connection Settings")]      
 
         [Tooltip("Auto-connect on Start")]
         [SerializeField]
@@ -35,6 +28,8 @@ namespace PythonCommunication.Core
         protected bool _shouldRun = true;
         protected float _reconnectTimer = 0f;
         protected float _reconnectInterval = 2f;
+        protected int _serverPort;
+        protected string _serverHost = "127.0.0.1";
 
         // Helper variable
         private const string _logPrefix = "[TCP_CLIENT_BASE]";

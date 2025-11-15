@@ -10,8 +10,9 @@ from typing import Dict, List, Optional
 import json
 import os
 from .Base import BasicOperation, OperationCategory, OperationComplexity
-from .MoveOperations import MOVE_TO_COORDINATE_OPERATION
 
+from .MoveOperations import MOVE_TO_COORDINATE_OPERATION
+from .StatusOperations import CHECK_ROBOT_STATUS_OPERATION
 
 class OperationRegistry:
     """
@@ -33,6 +34,7 @@ class OperationRegistry:
         """Load all available operations into the registry"""
         operations = [
             MOVE_TO_COORDINATE_OPERATION,
+            CHECK_ROBOT_STATUS_OPERATION,
             # Add more operations here as they are implemented...
         ]
 

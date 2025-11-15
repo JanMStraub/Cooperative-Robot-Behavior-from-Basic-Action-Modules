@@ -276,6 +276,86 @@ namespace PythonCommunication.Core
 
         #endregion
 
+        #region Status Query Messages (Unity → Python)
+
+        /// <summary>
+        /// Encode a status query message for sending to Python StatusServer.
+        /// Format: [robot_id_len][robot_id][detailed]
+        /// </summary>
+        /// <param name="robotId">Robot identifier (e.g., "Robot1", "AR4_Robot")</param>
+        /// <param name="detailed">If true, request detailed joint information</param>
+        /// <returns>Encoded message bytes</returns>
+        public static byte[] EncodeStatusQuery(string robotId, bool detailed = false)
+        {
+            // Validate inputs
+            if (string.IsNullOrEmpty(robotId))
+            {
+                throw new ArgumentException($"{_logPrefix} Robot ID cannot be null or empty");
+            }
+
+            // Encode robot_id to UTF-8
+            byte[] robotIdBytes = Encoding.UTF8.GetBytes(robotId);
+
+            if (robotIdBytes.Length > MAX_STRING_LENGTH)
+            {
+                throw new ArgumentException(
+                    $"{_logPrefix} Robot ID too long: {robotIdBytes.Length} > {MAX_STRING_LENGTH}"
+                );
+            }
+
+            // Calculate total message size: [robot_id_len:4][robot_id:N][detailed:1]
+            int totalSize = INT_SIZE + robotIdBytes.Length + 1;
+            byte[] message = new byte[totalSize];
+
+            int offset = 0;
+
+            // Write robot ID length and data
+            Buffer.BlockCopy(
+                BitConverter.GetBytes(robotIdBytes.Length),
+                0,
+                message,
+                offset,
+                INT_SIZE
+            );
+            offset += INT_SIZE;
+            Buffer.BlockCopy(robotIdBytes, 0, message, offset, robotIdBytes.Length);
+            offset += robotIdBytes.Length;
+
+            // Write detailed flag (1 byte: 0 or 1)
+            message[offset] = (byte)(detailed ? 1 : 0);
+
+            return message;
+        }
+
+        #endregion
+
+        #region Status Response Messages (Python → Unity)
+
+        /// <summary>
+        /// Decode a status response message received from Python StatusServer.
+        /// Format: [json_len][robot_status_json]
+        /// This is identical to DecodeResultMessage but kept separate for clarity.
+        /// </summary>
+        /// <param name="data">Raw message bytes</param>
+        /// <returns>JSON string with robot status</returns>
+        public static string DecodeStatusResponse(byte[] data)
+        {
+            return DecodeResultMessage(data);
+        }
+
+        /// <summary>
+        /// Encode a status response message for sending to Python (Unity → Python status response).
+        /// Format: [json_len][robot_status_json]
+        /// </summary>
+        /// <param name="statusJson">JSON string containing robot status</param>
+        /// <returns>Encoded message bytes</returns>
+        public static byte[] EncodeStatusResponse(string statusJson)
+        {
+            return EncodeResultMessage(statusJson);
+        }
+
+        #endregion
+
         #region Validation Helpers
 
         /// <summary>

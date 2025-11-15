@@ -22,6 +22,9 @@ from .Base import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# Implementation: Move to Coordinates
+# ============================================================================
 
 def move_to_coordinate(
     robot_id: str,
@@ -91,7 +94,7 @@ def move_to_coordinate(
         This operation is asynchronous - it sends the command to Unity and returns immediately. Unity executes the movement in the background. For synchronous execution (waiting for completion), use move_to_coordinate_sync() instead.
     """
     try:
-        # Step 1: Validate robot_id
+        # Validate robot_id
         if not robot_id or not isinstance(robot_id, str):
             return {
                 "success": False,
@@ -106,7 +109,7 @@ def move_to_coordinate(
                 },
             }
 
-        # Step 2: Validate X coordinate
+        # Validate X coordinate
         if not (-0.5 <= x <= 0.5):
             return {
                 "success": False,
@@ -121,7 +124,7 @@ def move_to_coordinate(
                 },
             }
 
-        # Step 3: Validate Y coordinate
+        # Validate Y coordinate
         if not (-0.5 <= y <= 0.5):
             return {
                 "success": False,
@@ -136,7 +139,7 @@ def move_to_coordinate(
                 },
             }
 
-        # Step 4: Validate Z coordinate
+        # Validate Z coordinate
         if not (0.0 <= z <= 0.6):
             return {
                 "success": False,
@@ -151,7 +154,7 @@ def move_to_coordinate(
                 },
             }
 
-        # Step 5: Validate speed
+        # Validate speed
         if not (0.1 <= speed <= 2.0):
             return {
                 "success": False,
@@ -166,7 +169,7 @@ def move_to_coordinate(
                 },
             }
 
-        # Step 6: Validate approach_offset
+        # Validate approach_offset
         if not (0.0 <= approach_offset <= 0.1):
             return {
                 "success": False,
@@ -181,12 +184,12 @@ def move_to_coordinate(
                 },
             }
 
-        # Step 7: Apply approach offset to target position
+        # Apply approach offset to target position
         actual_x = x
         actual_y = y
         actual_z = z + approach_offset  # Add offset to height for safety
 
-        # Step 8: Construct command for Unity
+        # Construct command for Unity
         command = {
             "command_type": "move_to_coordinate",
             "robot_id": robot_id,
@@ -199,7 +202,7 @@ def move_to_coordinate(
             "timestamp": time.time(),
         }
 
-        # Step 9: Send to Unity via ResultsBroadcaster
+        # Send to Unity via ResultsBroadcaster
         logger.info(
             f"Sending move_to_coordinate command to {robot_id}: ({actual_x:.3f}, {actual_y:.3f}, {actual_z:.3f})"
         )
@@ -222,7 +225,7 @@ def move_to_coordinate(
                 },
             }
 
-        # Step 10: Return success
+        #  Return success
         logger.info(f"Successfully sent move_to_coordinate command to {robot_id}")
 
         return {

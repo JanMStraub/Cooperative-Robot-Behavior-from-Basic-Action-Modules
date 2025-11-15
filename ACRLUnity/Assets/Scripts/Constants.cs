@@ -140,6 +140,11 @@ namespace Core
         public const int RAG_SERVER_PORT = 5011;
 
         /// <summary>
+        /// Status server port (bidirectional robot status queries)
+        /// </summary>
+        public const int STATUS_SERVER_PORT = 5012;
+
+        /// <summary>
         /// Legacy: Default results server port (alias for LLM_RESULTS_PORT)
         /// </summary>
         public const int RESULTS_SERVER_PORT = LLM_RESULTS_PORT;

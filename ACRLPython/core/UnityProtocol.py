@@ -43,6 +43,12 @@ Message formats:
 5. RAG Response Message (Python → Unity):
    [json_len:4][operation_context_json:N]
 
+6. Status Query Message (Unity → Python):
+   [robot_id_len:4][robot_id:N][detailed:1]
+
+7. Status Response Message (Python → Unity):
+   [json_len:4][robot_status_json:N]
+
 All integers are little-endian unsigned 32-bit (struct format 'I').
 All strings are UTF-8 encoded.
 """
@@ -473,6 +479,149 @@ class UnityProtocol:
 
         Returns:
             Operation context dictionary
+
+        Raises:
+            ValueError: If message is malformed
+        """
+        return UnityProtocol.decode_result_message(data)
+
+    @staticmethod
+    def encode_status_query(robot_id: str, detailed: bool = False) -> bytes:
+        """
+        Encode a status query message for sending to Python server.
+
+        Format: [robot_id_len][robot_id][detailed]
+
+        Args:
+            robot_id: Robot identifier (e.g., "Robot1", "AR4_Robot")
+            detailed: If True, return detailed joint information
+
+        Returns:
+            Encoded message bytes
+
+        Raises:
+            ValueError: If data exceeds limits
+        """
+        # Validate inputs
+        if len(robot_id) == 0:
+            raise ValueError("Robot ID cannot be empty")
+        if len(robot_id) > UnityProtocol.MAX_STRING_LENGTH:
+            raise ValueError(
+                f"Robot ID too long: {len(robot_id)} > {UnityProtocol.MAX_STRING_LENGTH}"
+            )
+
+        # Encode robot_id string
+        robot_id_bytes = robot_id.encode("utf-8")
+
+        # Build message
+        message = bytearray()
+
+        # Robot ID
+        message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(robot_id_bytes)))
+        message.extend(robot_id_bytes)
+
+        # Detailed flag (1 byte: 0 or 1)
+        message.extend(struct.pack("B", 1 if detailed else 0))
+
+        return bytes(message)
+
+    @staticmethod
+    def decode_status_query(socket_or_data) -> dict:
+        """
+        Decode a status query message from Unity.
+
+        Args:
+            socket_or_data: Either a socket object or raw bytes
+
+        Returns:
+            Dictionary with robot_id and detailed flag
+
+        Raises:
+            ValueError: If message is malformed
+        """
+        # Handle both socket and bytes input
+        if hasattr(socket_or_data, "recv"):
+            # It's a socket - read the complete message
+            data = UnityProtocol._receive_complete_status_query(socket_or_data)
+        else:
+            # It's already bytes
+            data = socket_or_data
+
+        offset = 0
+
+        try:
+            # Read robot_id
+            robot_id, offset = UnityProtocol._read_string(data, offset)
+
+            # Read detailed flag
+            if offset + 1 > len(data):
+                raise ValueError("Not enough data for detailed flag")
+
+            detailed = struct.unpack("B", data[offset : offset + 1])[0]
+            offset += 1
+
+            return {"robot_id": robot_id, "detailed": bool(detailed)}
+
+        except Exception as e:
+            raise ValueError(f"Failed to decode status query: {e}")
+
+    @staticmethod
+    def _receive_complete_status_query(client_socket) -> bytes:
+        """
+        Receive a complete status query message from socket.
+
+        Args:
+            client_socket: Socket to receive from
+
+        Returns:
+            Complete message bytes
+        """
+        data = bytearray()
+
+        # Read robot_id length and text
+        robot_id_len_bytes = client_socket.recv(UnityProtocol.INT_SIZE)
+        if not robot_id_len_bytes:
+            raise ValueError("Connection closed")
+
+        robot_id_len = struct.unpack(UnityProtocol.INT_FORMAT, robot_id_len_bytes)[0]
+        data.extend(robot_id_len_bytes)
+
+        robot_id_bytes = client_socket.recv(robot_id_len)
+        data.extend(robot_id_bytes)
+
+        # Read detailed flag (1 byte)
+        detailed_byte = client_socket.recv(1)
+        data.extend(detailed_byte)
+
+        return bytes(data)
+
+    @staticmethod
+    def encode_status_response(robot_status: dict) -> bytes:
+        """
+        Encode a status response message for sending to Unity.
+
+        Format: [json_len][robot_status_json]
+
+        This is identical to encode_result_message but kept separate for clarity.
+
+        Args:
+            robot_status: Dictionary containing robot status data
+
+        Returns:
+            Encoded message bytes
+        """
+        return UnityProtocol.encode_result_message(robot_status)
+
+    @staticmethod
+    def decode_status_response(data: bytes) -> dict:
+        """
+        Decode a status response message (for testing/verification).
+
+        Args:
+            data: Raw message bytes
+
+        Returns:
+            Robot status dictionary
 
         Raises:
             ValueError: If message is malformed

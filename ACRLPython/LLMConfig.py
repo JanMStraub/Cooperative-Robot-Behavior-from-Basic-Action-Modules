@@ -19,6 +19,7 @@ STEREO_DETECTION_PORT = 5006  # Receives stereo image pairs from Unity (RunStere
 LLM_RESULTS_PORT = 5010  # Sends LLM analysis results to Unity (RunAnalyzer)
 DEPTH_RESULTS_PORT = 5007  # Sends depth detection results with 3D coordinates to Unity (RunStereoDetector)
 RAG_SERVER_PORT = 5011  # RAG semantic search server for operation queries
+STATUS_SERVER_PORT = 5012  # Status query server for robot status information
 
 # Legacy port names for backward compatibility
 RESULTS_SERVER_PORT = LLM_RESULTS_PORT  # Default for RunAnalyzer
@@ -209,3 +210,8 @@ def get_results_config():
 def get_rag_config():
     """Get default configuration for RAGServer"""
     return get_server_config(port=RAG_SERVER_PORT)
+
+
+def get_status_config():
+    """Get default configuration for StatusServer"""
+    return get_server_config(port=STATUS_SERVER_PORT)
