@@ -188,10 +188,8 @@ def create_check_robot_status_operation() -> BasicOperation:
         name="check_robot_status",
         category=OperationCategory.STATE_CHECK,
         complexity=OperationComplexity.ATOMIC,
-
         # Descriptions for RAG
         description="Query the current status and state of a robot without causing any movement",
-
         long_description="""
             This operation sends a status check request to Unity to retrieve
             the current state of the robot including position, joint angles,
@@ -207,14 +205,12 @@ def create_check_robot_status_operation() -> BasicOperation:
             - Debugging robot behavior
             - Monitoring robot health during operation
         """,
-
         usage_examples=[
             "Before moving robot: check_robot_status('Robot1') to ensure it's ready",
             "check_robot_status('Robot1', detailed=True) to get full joint information",
             "Verify robot reached target by checking status after movement",
             "Monitor robot state during multi-step task execution",
         ],
-
         # Parameters
         parameters=[
             OperationParameter(
@@ -231,37 +227,31 @@ def create_check_robot_status_operation() -> BasicOperation:
                 default=False,
             ),
         ],
-
         # Conditions
         preconditions=[
             "Robot exists in Unity's RobotManager",
             "Unity is running with LLMResultsReceiver active",
             "ResultsServer is running on port 5010",
         ],
-
         postconditions=[
             "Status query command has been sent to Unity",
             "Unity will respond with robot status information",
             "No robot state has been modified (read-only operation)",
         ],
-
         # Performance
         average_duration_ms=50.0,  # Very fast - just a query
         success_rate=0.99,  # Very reliable
-
         failure_modes=[
             "Robot ID not found in RobotManager",
             "Communication failed - Unity not connected to ResultsServer",
             "Invalid parameter type for 'detailed'",
         ],
-
         # Relationships
         required_operations=[],  # No prerequisites
         commonly_paired_with=[
             "motion_move_to_coord_001",  # Check before/after movement
         ],
         mutually_exclusive_with=[],  # Can run anytime
-
         # Implementation
         implementation=check_robot_status,
     )

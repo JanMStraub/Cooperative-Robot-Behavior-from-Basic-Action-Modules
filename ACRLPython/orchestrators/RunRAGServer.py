@@ -65,6 +65,7 @@ Examples:
     parser.add_argument(
         "--rebuild-index",
         action="store_true",
+        default=True,
         help="Rebuild RAG index from operations registry on startup",
     )
 
@@ -95,7 +96,7 @@ Examples:
         run_test_mode(args.rebuild_index)
     else:
         # Normal mode - start server
-        logging.info("\n🚀 Starting RAG server...\n")
+        logging.info("🚀 Starting RAG server...")
         run_rag_server(server_config, rebuild_index=args.rebuild_index)
 
 
