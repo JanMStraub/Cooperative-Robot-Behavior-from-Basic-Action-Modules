@@ -12,10 +12,10 @@ echo ""
 # Check if integration tests should be run
 if [ "$1" = "--integration" ]; then
     echo "Running all tests (including integration tests)..."
-    ./acrl/bin/pytest Tests/TestRAG*.py -v --tb=short
+    ./acrl/bin/pytest tests/TestRAG*.py -v --tb=short
 else
     echo "Running unit tests only (use --integration for all tests)..."
-    ./acrl/bin/pytest Tests/TestRAG*.py -v --tb=short -m "not integration"
+    ./acrl/bin/pytest tests/TestRAG*.py -v --tb=short -m "not integration"
 fi
 
 echo ""

@@ -312,6 +312,287 @@ class TestStatusOperationWorkflow(unittest.TestCase):
         self.assertEqual(response_decoded["status"]["is_moving"], True)
 
 
+class TestStatusServerTCPClient(unittest.TestCase):
+    """Test StatusServer TCP client functionality for cross-process communication"""
+
+    def setUp(self):
+        """Set up mock ResultsServer and StatusServer"""
+        # StatusServer config (test port)
+        self.status_config = ServerConfig(host="127.0.0.1", port=15014)
+        # ResultsServer mock config
+        self.results_port = 15010
+        self.results_host = "127.0.0.1"
+
+        self.status_server = None
+        self.mock_results_server = None
+        self.status_thread = None
+        self.results_thread = None
+
+    def tearDown(self):
+        """Clean up servers"""
+        if self.status_server is not None:
+            self.status_server.stop()
+        if self.mock_results_server is not None:
+            self.mock_results_server.close()
+
+        # Wait for threads to finish
+        time.sleep(0.5)
+
+    def test_tcp_client_initialization(self):
+        """Test that StatusServer stores ResultsServer connection info"""
+        server = StatusServer(
+            self.status_config,
+            results_host=self.results_host,
+            results_port=self.results_port
+        )
+
+        self.assertEqual(server._results_host, self.results_host)
+        self.assertEqual(server._results_port, self.results_port)
+
+    def test_tcp_client_defaults(self):
+        """Test that StatusServer uses default config values when not provided"""
+        server = StatusServer(self.status_config)
+
+        self.assertEqual(server._results_host, cfg.DEFAULT_HOST)
+        self.assertEqual(server._results_port, cfg.RESULTS_SERVER_PORT)
+
+    def test_send_to_results_server_success(self):
+        """Test successful TCP client connection to ResultsServer"""
+        # Create mock ResultsServer
+        self.mock_results_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.mock_results_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.mock_results_server.bind((self.results_host, self.results_port))
+        self.mock_results_server.listen(1)
+        self.mock_results_server.settimeout(5.0)
+
+        # Start mock server in background
+        received_message = {}
+        def mock_server_handler():
+            try:
+                client, addr = self.mock_results_server.accept()
+                # Read message length
+                length_bytes = client.recv(4)
+                message_length = int.from_bytes(length_bytes, byteorder='little')
+
+                # Read JSON data
+                json_bytes = client.recv(message_length)
+                received_message['data'] = json.loads(json_bytes.decode('utf-8'))
+
+                client.close()
+            except Exception as e:
+                received_message['error'] = str(e)
+
+        self.results_thread = threading.Thread(target=mock_server_handler, daemon=True)
+        self.results_thread.start()
+
+        time.sleep(0.2)  # Let server start
+
+        # Create StatusServer with custom ResultsServer port
+        self.status_server = StatusServer(
+            self.status_config,
+            results_host=self.results_host,
+            results_port=self.results_port
+        )
+
+        # Send message via TCP client
+        test_message = {
+            "command_type": "get_robot_status",
+            "robot_id": "Robot1",
+            "parameters": {"detailed": False}
+        }
+
+        success = self.status_server._send_to_results_server(test_message)
+
+        # Wait for mock server to receive
+        time.sleep(0.5)
+
+        # Verify message was sent successfully
+        self.assertTrue(success)
+        self.assertIn('data', received_message)
+        self.assertEqual(received_message['data']['command_type'], "get_robot_status")
+        self.assertEqual(received_message['data']['robot_id'], "Robot1")
+
+    def test_send_to_results_server_connection_refused(self):
+        """Test TCP client handles connection refused"""
+        # Don't start any ResultsServer - connection should fail
+
+        self.status_server = StatusServer(
+            self.status_config,
+            results_host=self.results_host,
+            results_port=self.results_port  # No server listening here
+        )
+
+        test_message = {
+            "command_type": "get_robot_status",
+            "robot_id": "Robot1"
+        }
+
+        success = self.status_server._send_to_results_server(test_message)
+
+        # Should return False when connection is refused
+        self.assertFalse(success)
+
+    def test_send_to_results_server_timeout(self):
+        """Test TCP client handles timeout"""
+        # Create mock server that doesn't accept connections (simulates timeout)
+        self.mock_results_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.mock_results_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.mock_results_server.bind((self.results_host, self.results_port))
+        # Don't call listen() - this will cause connection attempts to hang/timeout
+
+        self.status_server = StatusServer(
+            self.status_config,
+            results_host=self.results_host,
+            results_port=self.results_port
+        )
+
+        test_message = {
+            "command_type": "get_robot_status",
+            "robot_id": "Robot1"
+        }
+
+        # This should timeout and return False
+        success = self.status_server._send_to_results_server(test_message)
+
+        self.assertFalse(success)
+
+    def test_query_robot_status_with_tcp_client(self):
+        """Test _query_robot_status uses TCP client instead of ResultsBroadcaster"""
+        # Create mock ResultsServer
+        self.mock_results_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.mock_results_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.mock_results_server.bind((self.results_host, self.results_port))
+        self.mock_results_server.listen(1)
+        self.mock_results_server.settimeout(5.0)
+
+        received_commands = []
+
+        def mock_server_handler():
+            try:
+                client, addr = self.mock_results_server.accept()
+                # Read message
+                length_bytes = client.recv(4)
+                message_length = int.from_bytes(length_bytes, byteorder='little')
+                json_bytes = client.recv(message_length)
+                received_commands.append(json.loads(json_bytes.decode('utf-8')))
+                client.close()
+            except Exception:
+                pass
+
+        self.results_thread = threading.Thread(target=mock_server_handler, daemon=True)
+        self.results_thread.start()
+
+        time.sleep(0.2)
+
+        # Create StatusServer
+        self.status_server = StatusServer(
+            self.status_config,
+            results_host=self.results_host,
+            results_port=self.results_port
+        )
+
+        # Mock the response queue to simulate Unity sending status back
+        # This will prevent timeout
+        def mock_query():
+            # Immediately put response in queue to simulate Unity response
+            StatusResponseHandler.create_request_queue("Robot1")
+            StatusResponseHandler.put_response("Robot1", {
+                "success": True,
+                "robot_id": "Robot1",
+                "status": {"position": {"x": 0.5, "y": 0.2, "z": 0.3}}
+            })
+
+        # Execute query in separate thread
+        query_thread = threading.Thread(target=mock_query, daemon=True)
+        query_thread.start()
+
+        time.sleep(0.1)
+
+        # Call _query_robot_status
+        result = self.status_server._query_robot_status("Robot1", detailed=False)
+
+        # Wait for message to be received
+        time.sleep(0.5)
+
+        # Verify command was sent via TCP
+        self.assertGreater(len(received_commands), 0)
+        self.assertEqual(received_commands[0]["command_type"], "get_robot_status")
+        self.assertEqual(received_commands[0]["robot_id"], "Robot1")
+
+    def test_query_robot_status_results_server_unavailable(self):
+        """Test _query_robot_status handles ResultsServer unavailable"""
+        # Don't start ResultsServer
+        self.status_server = StatusServer(
+            self.status_config,
+            results_host=self.results_host,
+            results_port=self.results_port
+        )
+
+        result = self.status_server._query_robot_status("Robot1", detailed=False)
+
+        # Should return error about ResultsServer unavailable
+        self.assertFalse(result["success"])
+        self.assertEqual(result["error"]["code"], "RESULTS_SERVER_UNAVAILABLE")
+        self.assertIn("Cannot connect to ResultsServer", result["error"]["message"])
+
+    def test_tcp_client_message_encoding(self):
+        """Test that messages are encoded correctly using UnityProtocol"""
+        # Create mock ResultsServer to capture raw bytes
+        self.mock_results_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.mock_results_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.mock_results_server.bind((self.results_host, self.results_port))
+        self.mock_results_server.listen(1)
+        self.mock_results_server.settimeout(5.0)
+
+        received_bytes = {}
+
+        def mock_server_handler():
+            try:
+                client, addr = self.mock_results_server.accept()
+                # Read all data
+                data = b''
+                while True:
+                    chunk = client.recv(1024)
+                    if not chunk:
+                        break
+                    data += chunk
+                received_bytes['data'] = data
+                client.close()
+            except Exception as e:
+                received_bytes['error'] = str(e)
+
+        self.results_thread = threading.Thread(target=mock_server_handler, daemon=True)
+        self.results_thread.start()
+
+        time.sleep(0.2)
+
+        # Create StatusServer
+        self.status_server = StatusServer(
+            self.status_config,
+            results_host=self.results_host,
+            results_port=self.results_port
+        )
+
+        # Send test message
+        test_message = {
+            "command_type": "test_command",
+            "data": "test_data"
+        }
+
+        self.status_server._send_to_results_server(test_message)
+
+        time.sleep(0.5)
+
+        # Verify data was received and can be decoded
+        self.assertIn('data', received_bytes)
+
+        # Decode using UnityProtocol
+        decoded = UnityProtocol.decode_result_message(received_bytes['data'])
+
+        self.assertEqual(decoded["command_type"], "test_command")
+        self.assertEqual(decoded["data"], "test_data")
+
+
 if __name__ == "__main__":
     # Run tests
     unittest.main(verbosity=2)

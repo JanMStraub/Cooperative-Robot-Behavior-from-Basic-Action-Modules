@@ -343,6 +343,16 @@ namespace Robotics
         }
 
         /// <summary>
+        /// Checks if a robot is already registered.
+        /// </summary>
+        /// <param name="robotId">The robot identifier to check</param>
+        /// <returns>True if the robot is registered, false otherwise</returns>
+        public bool IsRobotRegistered(string robotId)
+        {
+            return _robotInstances.ContainsKey(robotId);
+        }
+
+        /// <summary>
         /// Unregisters a robot from the RobotManager.
         /// </summary>
         /// <param name="robotId">The robot identifier to unregister</param>

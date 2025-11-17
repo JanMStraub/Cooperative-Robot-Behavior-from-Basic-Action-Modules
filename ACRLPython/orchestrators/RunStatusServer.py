@@ -5,6 +5,12 @@ RunStatusServer.py - Orchestrator for robot status query server
 Starts the StatusServer on port 5012 to handle bidirectional status queries
 from Unity. Unity can query robot status and receive real-time state information.
 
+StatusServer connects to ResultsServer (port 5010) as a TCP client to send
+status requests to Unity, bypassing singleton issues across processes.
+
+Prerequisites:
+- ResultsServer must be running on port 5010 (usually started by RunAnalyzer)
+
 Usage:
     python -m LLMCommunication.orchestrators.RunStatusServer [--port PORT] [--host HOST]
 
@@ -14,6 +20,8 @@ Example:
 
 import argparse
 import logging
+import socket
+import sys
 
 # Import config - try both import styles
 try:
@@ -21,7 +29,7 @@ try:
 except ImportError:
     from .. import LLMConfig as cfg
 
-# Import server
+# Import servers
 try:
     from servers.StatusServer import run_status_server
     from core.TCPServerBase import ServerConfig
@@ -53,36 +61,50 @@ def main():
     args = parser.parse_args()
 
     # Print startup banner
-    print("=" * 70)
-    print("Robot Status Server")
-    print("=" * 70)
-    print(f"Host: {args.host}")
-    print(f"Port: {args.port}")
-    print()
-    print("This server handles bidirectional status queries from Unity:")
-    print("  1. Unity sends status query → StatusServer (port 5012)")
-    print("  2. StatusServer requests status → Unity via ResultsServer (port 5010)")
-    print("  3. Unity gathers robot state → sends back to StatusServer")
-    print("  4. StatusServer returns status → original Unity client")
-    print()
-    print("Prerequisites:")
-    print("  - Unity must be running with:")
-    print("    • PythonCommandHandler (handles 'get_robot_status' commands)")
-    print("    • UnifiedPythonReceiver (connected to port 5010)")
-    print("    • StatusClient (connected to this server on port 5012)")
-    print()
-    print("Press Ctrl+C to stop")
-    print("=" * 70)
-    print()
+    logging.info("=" * 70)
+    logging.info("Robot Status Server")
+    logging.info("=" * 70)
+    logging.info(f"Host: {args.host}")
+    logging.info(f"Status Port: {args.port}")
+    logging.info(f"Results Port: {cfg.RESULTS_SERVER_PORT} (TCP client connection)")
+    logging.info("=" * 70)
 
-    # Create server config
-    server_config = ServerConfig(host=args.host, port=args.port)
+    # Verify ResultsServer is available
+    logging.info("Checking for ResultsServer availability...")
+    results_available = False
+    try:
+        test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        test_socket.settimeout(2.0)
+        result = test_socket.connect_ex((args.host, cfg.RESULTS_SERVER_PORT))
+        test_socket.close()
+        if result == 0:
+            results_available = True
+            logging.info(f"✓ ResultsServer is available on port {cfg.RESULTS_SERVER_PORT}")
+    except Exception as e:
+        logging.warning(f"Error checking ResultsServer: {e}")
+
+    if not results_available:
+        logging.info("=" * 70)
+        logging.info("ERROR: ResultsServer is not running on port 5010")
+
+        logging.info("StatusServer requires ResultsServer to send commands to Unity.")
+        logging.info("Please start RunAnalyzer first, which will start ResultsServer:")
+
+        logging.info("  ./acrl/bin/python -m orchestrators.RunAnalyzer --model <model-name>")
+
+        logging.info("Then start this StatusServer in a separate terminal.")
+        logging.info("=" * 70)
+        return 1
+
+    # Create status server config
+    status_config = ServerConfig(host=args.host, port=args.port)
 
     try:
         # Start status server (blocking)
-        run_status_server(server_config)
+        logging.info("Starting StatusServer (port 5012)...")
+        run_status_server(status_config)
     except KeyboardInterrupt:
-        print("\nShutting down status server...")
+        logging.info("\nShutting down StatusServer...")
     except Exception as e:
         logging.error(f"Fatal error: {e}", exc_info=True)
         return 1
@@ -91,6 +113,4 @@ def main():
 
 
 if __name__ == "__main__":
-    import sys
-
     sys.exit(main())

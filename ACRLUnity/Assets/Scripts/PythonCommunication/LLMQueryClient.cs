@@ -2,10 +2,38 @@ using System;
 using System.Collections.Generic;
 using Core;
 using PythonCommunication.Core;
+using Robotics;
 using UnityEngine;
 
 namespace PythonCommunication
 {
+    /// <summary>
+    /// Serializable command for move_to_coordinate operation
+    /// </summary>
+    [Serializable]
+    public class MoveToCoordinateCommand
+    {
+        public string command_type = "move_to_coordinate";
+        public string robot_id;
+        public MoveParameters parameters;
+        public long timestamp;
+
+        [Serializable]
+        public class MoveParameters
+        {
+            public Vector3Data target_position;
+            public float speed_multiplier;
+        }
+
+        [Serializable]
+        public class Vector3Data
+        {
+            public float x;
+            public float y;
+            public float z;
+        }
+    }
+
     /// <summary>
     /// Interactive Unity Inspector interface for querying the RAG/LLM system.
     /// Allows sending natural language prompts and executing returned operations.
@@ -318,6 +346,10 @@ namespace PythonCommunication
                     ExecuteMoveToCoordinate(operation);
                     break;
 
+                case "check_robot_status":
+                    ExecuteCheckRobotStatus(operation);
+                    break;
+
                 default:
                     LogOperationNotImplemented(operation);
                     break;
@@ -344,40 +376,94 @@ namespace PythonCommunication
                 $"{_logPrefix} 📍 Moving {_robotId} to ({targetPos.Value.x}, {targetPos.Value.y}, {targetPos.Value.z})"
             );
 
-            // Send command to Python via UnifiedPythonReceiver's results broadcaster
-            // The Python ResultsBroadcaster will handle this
-            var command = new
+            // Create serializable command object for logging
+            var command = new MoveToCoordinateCommand
             {
-                command_type = "move_to_coordinate",
                 robot_id = _robotId,
-                parameters = new
+                parameters = new MoveToCoordinateCommand.MoveParameters
                 {
-                    target_position = new
+                    target_position = new MoveToCoordinateCommand.Vector3Data
                     {
                         x = targetPos.Value.x,
                         y = targetPos.Value.y,
                         z = targetPos.Value.z
                     },
-                    speed_multiplier = 1.0f,
+                    speed_multiplier = 1.0f
                 },
                 timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
             };
 
-            string commandJson = JsonUtility.ToJson(command);
+            string commandJson = JsonUtility.ToJson(command, true);
             Debug.Log($"{_logPrefix} 📤 Command JSON: {commandJson}");
+
+            // Execute directly using RobotManager
+            if (RobotManager.Instance == null)
+            {
+                Debug.LogError($"{_logPrefix} ❌ RobotManager.Instance is null!");
+                _lastQueryStatus = "ERROR: RobotManager not found";
+                return;
+            }
+
+            if (!RobotManager.Instance.RobotInstances.TryGetValue(_robotId, out RobotInstance robotInstance))
+            {
+                Debug.LogError(
+                    $"{_logPrefix} ❌ Robot '{_robotId}' not found in RobotManager. "
+                    + $"Available robots: {string.Join(", ", RobotManager.Instance.RobotInstances.Keys)}"
+                );
+                _lastQueryStatus = $"ERROR: Robot '{_robotId}' not found";
+                return;
+            }
+
+            RobotController controller = robotInstance.controller;
+            if (controller == null)
+            {
+                Debug.LogError($"{_logPrefix} ❌ Robot '{_robotId}' has no RobotController component");
+                _lastQueryStatus = "ERROR: No RobotController";
+                return;
+            }
+
+            // Execute movement
+            controller.SetTarget(targetPos.Value);
 
             // Update status
             _lastOperationExecuted = $"move_to_coordinate({targetPos.Value.x:F2}, {targetPos.Value.y:F2}, {targetPos.Value.z:F2})";
             _lastQueryStatus = $"EXECUTED: {operation.name}";
 
-            // Note: The actual execution happens in Python via the ResultsBroadcaster
-            // This is just logging the intent. In a full implementation, you'd need
-            // to actually send this to Python, but the architecture expects Python to
-            // call the operations, not Unity.
+            Debug.Log($"{_logPrefix} ✓ Movement command executed on {_robotId}");
+        }
 
-            Debug.Log(
-                $"{_logPrefix} ✓ Operation command prepared. Python should execute via ResultsBroadcaster."
-            );
+        /// <summary>
+        /// Execute check_robot_status operation
+        /// </summary>
+        private void ExecuteCheckRobotStatus(OperationInfo operation)
+        {
+            Debug.Log($"{_logPrefix} 🔍 Checking status of {_robotId}");
+
+            // Check if StatusClient is available
+            if (StatusClient.Instance == null)
+            {
+                Debug.LogError($"{_logPrefix} ❌ StatusClient.Instance is null!");
+                _lastQueryStatus = "ERROR: StatusClient not found";
+                return;
+            }
+
+            // Parse detailed flag from prompt if available (default: false)
+            bool detailed = _prompt.ToLower().Contains("detailed") || _prompt.ToLower().Contains("joints");
+
+            // Send status query to Python via StatusClient
+            bool success = StatusClient.Instance.QueryStatus(_robotId, detailed);
+
+            if (success)
+            {
+                _lastOperationExecuted = $"check_robot_status({_robotId}, detailed={detailed})";
+                _lastQueryStatus = $"EXECUTED: {operation.name}";
+                Debug.Log($"{_logPrefix} ✓ Status query sent for {_robotId}");
+            }
+            else
+            {
+                _lastQueryStatus = "ERROR: Failed to send status query";
+                Debug.LogError($"{_logPrefix} ❌ Failed to send status query");
+            }
         }
 
         #endregion
@@ -392,6 +478,7 @@ namespace PythonCommunication
             switch (operationName)
             {
                 case "move_to_coordinate":
+                case "check_robot_status":
                     return true;
 
                 // Add new implemented operations here

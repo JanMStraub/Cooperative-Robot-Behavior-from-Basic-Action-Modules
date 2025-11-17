@@ -154,14 +154,14 @@ def run_analyzer_loop(args):
                             continue  # Same image sent too quickly, skip
 
                     # Process the NEW image
-                    logging.info("\n" + "=" * 80)
+                    logging.info("\n" + "=" *70)
                     logging.info(f"🔍 PROCESSING NEW IMAGE FROM: {cam_id}")
                     logging.info(f"📝 Prompt: '{prompt}'")
                     if cam_id in processed_images:
                         logging.info(f"✨ Image content has changed since last screenshot")
                     else:
                         logging.info(f"🆕 First screenshot from this camera")
-                    logging.info("=" * 80)
+                    logging.info("=" *70)
 
                     result = processor.send_images(
                         images=[image],
@@ -171,16 +171,16 @@ def run_analyzer_loop(args):
                     )
 
                     # Display response prominently
-                    logging.info("\n" + "=" * 80)
+                    logging.info("\n" + "=" *70)
                     logging.info(f"🤖 LM STUDIO RESPONSE FOR {cam_id}")
-                    logging.info("=" * 80)
+                    logging.info("=" *70)
                     logging.info(result["response"])
-                    logging.info("=" * 80)
+                    logging.info("=" *70)
                     logging.info(
                         f"⏱️  Processing time: {result['metadata']['duration_seconds']:.2f}s"
                     )
                     logging.info(f"📊 Model: {result['metadata']['model']}")
-                    logging.info("=" * 80 + "\n")
+                    logging.info("=" *70 + "\n")
 
                     # Send result to Unity
                     ResultsBroadcaster.send_result(result)

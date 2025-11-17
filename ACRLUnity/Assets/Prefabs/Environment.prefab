@@ -1286,7 +1286,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 596947435951843946}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9a4bfe224d8184bb0bce97cde2cea0f2, type: 3}
   m_Name: 
@@ -1716,7 +1716,7 @@ MeshCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!1 &795938734311972712
@@ -1760,7 +1760,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 795938734311972712}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9a4bfe224d8184bb0bce97cde2cea0f2, type: 3}
   m_Name: 
@@ -2808,7 +2808,7 @@ MeshCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!1 &2794463736414520206
@@ -3108,7 +3108,6 @@ GameObject:
   - component: {fileID: 978755434903592783}
   - component: {fileID: 634091199265105748}
   - component: {fileID: 3149036954516521331}
-  - component: {fileID: 2605189186636435374}
   m_Layer: 7
   m_Name: Robot1
   m_TagString: Robot
@@ -3166,7 +3165,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d022baada5fcb4ff9bb0b5fe65f2d0c8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  robotId: LeftRobot
+  robotId: Robot1
   _dampingFactorLambda: 0.1
   _minStepSpeedNearTarget: 0.1
   _maxStepSpeed: 0.5
@@ -3178,7 +3177,7 @@ MonoBehaviour:
   - {fileID: 2983303369044234818}
   - {fileID: 5090227897772878331}
   endEffectorBase: {fileID: 2441319199496912795}
-  IKReferenceFrame: {fileID: 0}
+  IKReferenceFrame: {fileID: 4749562172011976917}
   jointDriveTargets:
   - 0
   - 0
@@ -3199,7 +3198,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Logging.AutoLogger
   enableAutoLogging: 1
-  robotId: AR4Left
+  robotId: Robot1
   logMovement: 1
   logGripper: 1
   autoRegisterObjects: 1
@@ -3217,25 +3216,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RobotGripperBehavior
   _useGraspPlanning: 1
   _logGraspActions: 1
---- !u!114 &2605189186636435374
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3238837518068886331}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dbf3cfc523b0a49bd9a4276d0ba174dc, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Robotics.GraspPlanner
-  _tallObjectRatio: 2
-  _flatObjectHeight: 0.05
-  _smallObjectSize: 0.03
-  _largeObjectSize: 0.15
-  _heavyObjectMass: 0.5
-  _topApproachOffset: 0.1
-  _sideApproachOffset: 0.08
 --- !u!1 &3369921039827679538
 GameObject:
   m_ObjectHideFlags: 0
@@ -5278,7 +5258,7 @@ MeshCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!1 &6067006009666621896
@@ -5383,7 +5363,6 @@ GameObject:
   - component: {fileID: 6517560048216686290}
   - component: {fileID: 1879560100186494199}
   - component: {fileID: 3107173954982903968}
-  - component: {fileID: 1375551747510293840}
   m_Layer: 7
   m_Name: Robot2
   m_TagString: Robot
@@ -5441,7 +5420,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d022baada5fcb4ff9bb0b5fe65f2d0c8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  robotId: RightRobot
+  robotId: Robot2
   _dampingFactorLambda: 0.1
   _minStepSpeedNearTarget: 0.1
   _maxStepSpeed: 0.5
@@ -5453,7 +5432,7 @@ MonoBehaviour:
   - {fileID: 7560565599714718123}
   - {fileID: 7344001910401543634}
   endEffectorBase: {fileID: 3828271509751390217}
-  IKReferenceFrame: {fileID: 0}
+  IKReferenceFrame: {fileID: 5323394489080371934}
   jointDriveTargets:
   - 0
   - 0
@@ -5474,7 +5453,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Logging.AutoLogger
   enableAutoLogging: 1
-  robotId: AR4Right
+  robotId: Robot2
   logMovement: 1
   logGripper: 1
   autoRegisterObjects: 1
@@ -5492,25 +5471,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RobotGripperBehavior
   _useGraspPlanning: 1
   _logGraspActions: 1
---- !u!114 &1375551747510293840
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6077284443812479320}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: dbf3cfc523b0a49bd9a4276d0ba174dc, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Robotics.GraspPlanner
-  _tallObjectRatio: 2
-  _flatObjectHeight: 0.05
-  _smallObjectSize: 0.03
-  _largeObjectSize: 0.15
-  _heavyObjectMass: 0.5
-  _topApproachOffset: 0.1
-  _sideApproachOffset: 0.08
 --- !u!1 &6086147611823037396
 GameObject:
   m_ObjectHideFlags: 0
@@ -6597,7 +6557,7 @@ MeshCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!1 &7618324923072724000
@@ -6973,7 +6933,7 @@ MeshCollider:
   m_ProvidesContacts: 0
   m_Enabled: 1
   serializedVersion: 5
-  m_Convex: 0
+  m_Convex: 1
   m_CookingOptions: 30
   m_Mesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!1 &7942004931376830449

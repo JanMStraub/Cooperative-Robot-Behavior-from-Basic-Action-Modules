@@ -67,6 +67,9 @@ namespace Logging
         // Per-robot file management
         private readonly Dictionary<string, StreamWriter> _robotFiles = new();
 
+        // Track if we've registered with ObjectRegistry
+        private bool _registeredWithObjectRegistry = false;
+
         private void Awake()
         {
             if (Instance == null)
@@ -121,6 +124,13 @@ namespace Logging
 
         private void Start()
         {
+            // Retry ObjectRegistry registration if it wasn't available during Initialize
+            if (autoRegisterObjects && !_registeredWithObjectRegistry && ObjectRegistry.Instance != null)
+            {
+                Debug.Log($"{_logPrefix} ObjectRegistry now available, registering scene objects...");
+                RegisterSceneObjectsViaRegistry();
+            }
+
             // Delay initial capture to ensure all objects are registered first
             StartCoroutine(CaptureInitialScene());
         }
@@ -512,6 +522,16 @@ namespace Logging
             // Ensure ObjectRegistry exists
             if (ObjectRegistry.Instance == null)
             {
+                // Check if ObjectRegistry exists in scene but hasn't initialized yet
+                var existingRegistry = FindAnyObjectByType<ObjectRegistry>();
+                if (existingRegistry != null)
+                {
+                    Debug.Log($"{_logPrefix} Found existing ObjectRegistry in scene, waiting for initialization...");
+                    // ObjectRegistry will initialize and set Instance in its Awake
+                    // We'll register objects later in Start() instead
+                    return;
+                }
+
                 Debug.LogWarning($"{_logPrefix} ObjectRegistry not found in scene. Creating one.");
                 var registryGO = new GameObject("ObjectRegistry");
                 registryGO.AddComponent<ObjectRegistry>();
@@ -527,6 +547,9 @@ namespace Logging
             );
 
             Debug.Log($"{_logPrefix} Registered {count} objects via ObjectRegistry");
+
+            // Mark as registered
+            _registeredWithObjectRegistry = true;
         }
 
         /// <summary>

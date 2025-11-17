@@ -781,7 +781,8 @@ MonoBehaviour:
   _categoryFilter: 0
   _complexityFilter: 0
   _minScore: 0.5
-  _autoExecuteTopResult: 1
+  _autoExecuteTopResult: 0
+  _skipUnimplemented: 1
   _logDetailedResults: 1
   _lastQueryStatus: Ready
   _lastOperationExecuted: None
@@ -814,22 +815,6 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 2219641187325193096, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_Enabled
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4415923154711891347, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_Convex
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4415923154711891347, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_Enabled
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 4582788528901019201, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_Enabled
-      value: 1
-      objectReference: {fileID: 0}
     - target: {fileID: 5271878870994714299, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -870,29 +855,11 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 5383679615700476676, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_Convex
-      value: 1
-      objectReference: {fileID: 0}
     - target: {fileID: 6897178052544332906, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
       value: Environment
       objectReference: {fileID: 0}
-    - target: {fileID: 8378674929302703819, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_Convex
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 8683789204731125865, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_Convex
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 8917216387354379710, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_Convex
-      value: 1
-      objectReference: {fileID: 0}
-    m_RemovedComponents:
-    - {fileID: 1375551747510293840, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-    - {fileID: 2605189186636435374, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+    m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents:

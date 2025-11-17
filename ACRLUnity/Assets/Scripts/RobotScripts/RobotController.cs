@@ -466,8 +466,8 @@ namespace Robotics
                 robotId = gameObject.name;
             }
 
-            // Register with RobotManager if available
-            if (_robotManager != null)
+            // Register with RobotManager if available (skip if already registered)
+            if (_robotManager != null && !_robotManager.IsRobotRegistered(robotId))
             {
                 _robotManager.RegisterRobot(robotId, gameObject);
             }
