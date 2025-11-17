@@ -135,14 +135,14 @@ def run_detection_loop(args):
                             continue  # Same image, skip
 
                     # Process the NEW image
-                    print("\n" + "=" * 80)
+                    print("\n" + "=" * 70)
                     print(f"🔍 DETECTING CUBES IN IMAGE FROM: {cam_id}")
                     print(f"⏱️  Age: {age:.2f}s")
                     if cam_id in processed_images:
                         print(f"✨ Image content has changed since last detection")
                     else:
                         print(f"🆕 First image from this camera")
-                    print("=" * 80)
+                    print("=" * 70)
 
                     # Run detection
                     start_time = time.time()
@@ -151,7 +151,7 @@ def run_detection_loop(args):
 
                     # Display detection results
                     print(f"\n📊 DETECTION RESULTS FOR {cam_id}")
-                    print("=" * 80)
+                    print("=" * 70)
                     if len(result.detections) > 0:
                         print(f"Found {len(result.detections)} cube(s):")
                         for det in result.detections:
@@ -161,9 +161,9 @@ def run_detection_loop(args):
                             )
                     else:
                         print("No cubes detected")
-                    print("=" * 80)
+                    print("=" * 70)
                     print(f"⏱️  Detection time: {detection_time:.3f}s")
-                    print("=" * 80 + "\n")
+                    print("=" * 70 + "\n")
 
                     # Send result to Unity
                     DetectionBroadcaster.send_result(result.to_dict())

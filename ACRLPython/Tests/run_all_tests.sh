@@ -10,7 +10,7 @@ echo "==========================================="
 echo ""
 
 echo "Running all tests..."
-    ./acrl/bin/pytest Tests/Test*.py -v --tb=short
+    ./acrl/bin/pytest tests/Test*.py -v --tb=short
 
 echo ""
 echo "==========================================="

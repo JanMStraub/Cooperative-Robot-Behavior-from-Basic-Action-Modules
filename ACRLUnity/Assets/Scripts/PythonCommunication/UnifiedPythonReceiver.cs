@@ -71,7 +71,35 @@ namespace PythonCommunication
         {
             if (Instance == this)
             {
+                // Gracefully disconnect all connections
+                if (_resultsConnection != null)
+                {
+                    _resultsConnection.Disconnect();
+                }
+
+                if (_detectionConnection != null)
+                {
+                    _detectionConnection.Disconnect();
+                }
+
                 Instance = null;
+            }
+        }
+
+        /// <summary>
+        /// Called when Unity exits play mode - ensure clean shutdown
+        /// </summary>
+        private void OnApplicationQuit()
+        {
+            // Stop all connections before Unity closes
+            if (_resultsConnection != null)
+            {
+                _resultsConnection.Disconnect();
+            }
+
+            if (_detectionConnection != null)
+            {
+                _detectionConnection.Disconnect();
             }
         }
 
@@ -507,12 +535,20 @@ namespace PythonCommunication
                 }
                 catch (System.IO.IOException ex)
                 {
-                    Debug.LogWarning($"{_logPrefix} Connection lost: {ex.Message}");
+                    // Only log if it's an unexpected disconnection (not during shutdown)
+                    if (_shouldRun)
+                    {
+                        Debug.LogWarning($"{_logPrefix} Connection lost: {ex.Message}");
+                    }
                     _isConnected = false;
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"{_logPrefix} Error in receive loop: {ex.Message}");
+                    // Only log if it's an unexpected error (not during shutdown)
+                    if (_shouldRun)
+                    {
+                        Debug.LogError($"{_logPrefix} Error in receive loop: {ex.Message}");
+                    }
                     _isConnected = false;
                 }
             }

@@ -8,7 +8,7 @@ Runs the complete stereo detection system:
 3. Processing loop - detects objects with 3D positions using stereo disparity
 
 Usage:
-    python RunStereoDetector.py --baseline 0.1 --fov 60
+    python RunStereoDetector.py --baseline 0.1 --fov 70
 """
 
 import logging
@@ -160,7 +160,7 @@ class StereoDetectorOrchestrator:
             pass
 
         # Print visual separator and processing header
-        logging.info("=" * 80)
+        logging.info("=" * 70)
         logging.info(f"🔍 PROCESSING STEREO PAIR: {camera_pair_id}")
         if actual_prompt:
             logging.info(f"📝 Prompt: '{actual_prompt}'")
@@ -173,7 +173,7 @@ class StereoDetectorOrchestrator:
             logging.info(
                 f"🔄 Camera rotation: ({camera_rotation[0]:.1f}, {camera_rotation[1]:.1f}, {camera_rotation[2]:.1f})°"
             )
-        logging.info("=" * 80)
+        logging.info("=" * 70)
 
         try:
             # Run stereo detection with depth estimation
@@ -209,14 +209,14 @@ class StereoDetectorOrchestrator:
 
             # Print visual result summary
             logging.info("")
-            logging.info("=" * 80)
+            logging.info("=" * 70)
             logging.info(f"✓ STEREO DETECTION COMPLETE")
-            logging.info("=" * 80)
+            logging.info("=" * 70)
             logging.info(f"⏱️  Processing time: {duration:.2f}s")
             logging.info(f"🎯 Detected objects: {len(result.detections)}")
 
             if result.detections:
-                logging.info("=" * 80)
+                logging.info("=" * 70)
                 for i, det in enumerate(result.detections, 1):
                     if det.world_position:
                         depth_str = f", depth={det.depth_m:.3f}m" if det.depth_m else ""
@@ -236,11 +236,11 @@ class StereoDetectorOrchestrator:
                             logging.info(f"      🔢 Disparity: {det.disparity:.1f}px")
                         logging.info(f"      ✓ Confidence: {det.confidence:.2f}")
                         if i < len(result.detections):
-                            logging.info("      " + "-" * 60)
+                            logging.info("      " + "-" * 70)
 
-            logging.info("=" * 80)
+            logging.info("=" * 70)
             logging.info(f"📤 Sent results to Unity")
-            logging.info("=" * 80)
+            logging.info("=" * 70)
 
         except Exception as e:
             logging.error(f"Failed to process stereo pair: {e}")
@@ -277,7 +277,7 @@ def main():
         "--fov",
         type=float,
         default=cfg.DEFAULT_STEREO_FOV,
-        help="Camera field of view in degrees (default: 60)",
+        help="Camera field of view in degrees (default: 70)",
     )
     parser.add_argument(
         "--detection-host",
@@ -320,16 +320,16 @@ def main():
     # Create camera configuration
     camera_config = CameraConfig(fov=args.fov, baseline=args.baseline)
 
-    logging.info("=" * 60)
+    logging.info("=" * 70)
     logging.info("Stereo Object Detector with 3D Position Estimation")
-    logging.info("=" * 60)
+    logging.info("=" * 70)
     logging.info(f"Camera baseline: {args.baseline}m")
     logging.info(f"Camera FOV: {args.fov}°")
     logging.info(
         f"Stereo detection server: {args.detection_host}:{args.detection_port}"
     )
     logging.info(f"Results server: {args.results_host}:{args.results_port}")
-    logging.info("=" * 60)
+    logging.info("=" * 70)
 
     # Start servers
     logging.info("Starting servers...")

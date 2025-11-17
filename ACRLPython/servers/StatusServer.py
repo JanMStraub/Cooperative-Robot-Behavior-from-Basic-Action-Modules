@@ -11,6 +11,8 @@ import logging
 import threading
 import queue
 import time
+import json
+import struct
 from typing import Dict, Optional
 
 # Import dependencies
@@ -27,12 +29,6 @@ try:
 except ImportError:
     from ..core.TCPServerBase import TCPServerBase, ServerConfig
     from ..core.UnityProtocol import UnityProtocol
-
-# Import ResultsBroadcaster for sending status requests to Unity
-try:
-    from servers.ResultsServer import ResultsBroadcaster
-except ImportError:
-    from ..servers.ResultsServer import ResultsBroadcaster
 
 # Configure logging
 logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
@@ -104,21 +100,32 @@ class StatusServer(TCPServerBase):
 
     Inherits connection management from TCPServerBase.
     Handles status query decoding and response encoding.
+
+    Sends status requests to ResultsServer (port 5010) via TCP client connection,
+    bypassing the ResultsBroadcaster singleton to work across processes.
     """
 
-    def __init__(self, server_config: ServerConfig):
+    def __init__(self, server_config: ServerConfig, results_host: Optional[str] = None, results_port: Optional[int] = None):
         if server_config is None:
             server_config = cfg.get_status_config()
 
         super().__init__(server_config)
         self._response_handler = StatusResponseHandler.get_instance()
-        logging.info("StatusServer initialized")
+
+        # Store ResultsServer connection info for TCP client
+        self._results_host = results_host or cfg.DEFAULT_HOST
+        self._results_port = results_port or cfg.RESULTS_SERVER_PORT
+
+        logging.info(f"StatusServer initialized (will connect to ResultsServer at {self._results_host}:{self._results_port})")
 
     def handle_client_connection(self, client: socket.socket, address: tuple):
         """
         Handle a Unity client connection.
 
-        Receives status query messages and sends back robot status.
+        Receives TWO types of messages:
+        1. Status queries from StatusClient - Unity asks for robot status
+        2. Status responses from StatusResponseSender - Unity sends robot status
+
         This method is called by TCPServerBase in a separate thread per client.
 
         Args:
@@ -129,44 +136,146 @@ class StatusServer(TCPServerBase):
 
         try:
             while self.is_running():
-                # Set timeout for query receive
-                client.settimeout(30.0)
+                # Set timeout for query receive to allow periodic server state checks
+                # Longer timeout since Unity may keep connection idle between queries
+                # client.settimeout(60.0)
 
                 try:
-                    # Receive query message from Unity
-                    query_data = self._receive_query_message(client)
+                    # Peek at the first message to determine type
+                    # Both queries and responses start with length field
+                    first_message = self._receive_message(client)
 
-                    if query_data is None:
-                        # Client disconnected gracefully
+                    if first_message is None:
+                        # Client disconnected gracefully or timeout occurred
+                        # On timeout, continue to keep connection alive
+                        continue
+
+                    # Try to parse as status response first (from StatusResponseSender)
+                    if self._is_status_response(first_message):
+                        # This is a status response from Unity StatusResponseSender
+                        robot_id = first_message.get("robot_id", "unknown")
+                        logging.debug(f"Received status response from Unity for {robot_id}")
+
+                        # Put response into queue for waiting query handler
+                        self._response_handler.put_response(robot_id, first_message)
+
+                        # Close this connection (StatusResponseSender sends one message and disconnects)
                         break
+                    else:
+                        # This is a status query from Unity StatusClient
+                        robot_id = first_message.get("robot_id", "")
+                        detailed = first_message.get("detailed", False)
 
-                    # Extract query parameters
-                    robot_id = query_data["robot_id"]
-                    detailed = query_data.get("detailed", False)
+                        logging.info(
+                            f"Status query from {address}: robot='{robot_id}' detailed={detailed}"
+                        )
 
-                    logging.info(
-                        f"Status query from {address}: robot='{robot_id}' detailed={detailed}"
-                    )
+                        # Execute status query
+                        status_result = self._query_robot_status(robot_id, detailed)
 
-                    # Execute status query
-                    status_result = self._query_robot_status(robot_id, detailed)
+                        # Send results back to Unity
+                        response_message = UnityProtocol.encode_status_response(
+                            status_result
+                        )
+                        client.sendall(response_message)
 
-                    # Send results back to Unity
-                    response_message = UnityProtocol.encode_status_response(
-                        status_result
-                    )
-                    client.sendall(response_message)
-
-                    logging.debug(f"Sent status for {robot_id} to {address}")
+                        logging.debug(f"Sent status for {robot_id} to {address}")
 
                 except socket.timeout:
-                    # Expected - allows checking is_running()
+                    # Timeout is expected - allows checking is_running() periodically
+                    # Keep connection alive
                     continue
+                except (ConnectionResetError, BrokenPipeError, OSError) as e:
+                    # Connection lost - client disconnected
+                    logging.debug(f"Connection lost from {address}: {e}")
+                    break
 
         except Exception as e:
             logging.debug(f"Client connection error: {e}")
         finally:
             logging.info(f"Unity status client disconnected from {address}")
+
+    def _receive_message(self, client: socket.socket) -> Optional[Dict]:
+        """
+        Receive a generic message from Unity (either query or response).
+
+        This method reads the raw bytes and determines the message type.
+
+        Message formats:
+        - Query: [robot_id_len][robot_id][detailed_byte]
+        - Response: [json_len][json_data]
+
+        Args:
+            client: Client socket
+
+        Returns:
+            Message data dictionary or None if client disconnected
+        """
+        try:
+            # Read the first length field (4 bytes)
+            length_bytes = client.recv(UnityProtocol.INT_SIZE)
+            if not length_bytes or len(length_bytes) < UnityProtocol.INT_SIZE:
+                return None  # Connection closed
+
+            length = struct.unpack(UnityProtocol.INT_FORMAT, length_bytes)[0]
+
+            # Read the data of that length
+            data = bytearray()
+            remaining = length
+            while remaining > 0:
+                chunk = client.recv(min(remaining, 4096))
+                if not chunk:
+                    return None  # Connection closed
+                data.extend(chunk)
+                remaining -= len(chunk)
+
+            data_str = data.decode("utf-8")
+
+            # Try to parse as JSON first (status response)
+            try:
+                parsed = json.loads(data_str)
+                if isinstance(parsed, dict) and ("success" in parsed or "status" in parsed or "error" in parsed):
+                    # This is a status response from Unity
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+
+            # Not JSON, so it must be a status query
+            # Query format: [robot_id_len][robot_id][detailed_byte]
+            # We already read the robot_id, now read the detailed byte
+            detailed_byte = client.recv(1)
+            if not detailed_byte:
+                return None
+
+            detailed = struct.unpack("B", detailed_byte)[0]
+
+            return {
+                "robot_id": data_str,
+                "detailed": bool(detailed)
+            }
+
+        except Exception as e:
+            logging.debug(f"Error receiving message: {e}")
+            return None
+
+    def _is_status_response(self, message: Dict) -> bool:
+        """
+        Check if a message is a status response (from Unity).
+
+        Status responses have 'success', 'status', or 'error' fields.
+        Status queries have 'robot_id' and 'detailed' fields.
+
+        Args:
+            message: Parsed message dictionary
+
+        Returns:
+            True if this is a status response, False if it's a query
+        """
+        # Status responses have 'success', 'status', 'error' fields
+        if "success" in message or "status" in message or "error" in message:
+            return True
+        # Status queries have 'robot_id' and 'detailed' fields only
+        return False
 
     def _receive_query_message(self, client: socket.socket) -> Optional[Dict]:
         """
@@ -189,13 +298,56 @@ class StatusServer(TCPServerBase):
             logging.debug(f"Error receiving query message: {e}")
             return None
 
+    def _send_to_results_server(self, message_dict: Dict) -> bool:
+        """
+        Send a message to ResultsServer via TCP client connection.
+
+        This bypasses the ResultsBroadcaster singleton, allowing StatusServer
+        to work across process boundaries.
+
+        Args:
+            message_dict: Dictionary containing the message to send
+
+        Returns:
+            True if sent successfully, False otherwise
+        """
+        try:
+            # Create TCP socket
+            client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            client_socket.settimeout(5.0)
+
+            # Connect to ResultsServer
+            client_socket.connect((self._results_host, self._results_port))
+
+            # Encode message using UnityProtocol
+            message_bytes = UnityProtocol.encode_result_message(message_dict)
+
+            # Send message
+            client_socket.sendall(message_bytes)
+
+            # Close connection
+            client_socket.close()
+
+            logging.debug(f"Sent message to ResultsServer: {message_dict.get('command_type', 'unknown')}")
+            return True
+
+        except socket.timeout:
+            logging.error(f"Timeout connecting to ResultsServer at {self._results_host}:{self._results_port}")
+            return False
+        except ConnectionRefusedError:
+            logging.error(f"ResultsServer not available at {self._results_host}:{self._results_port}")
+            return False
+        except Exception as e:
+            logging.error(f"Error sending to ResultsServer: {e}")
+            return False
+
     def _query_robot_status(self, robot_id: str, detailed: bool) -> Dict:
         """
         Query robot status by sending request to Unity and waiting for response.
 
         This creates a bidirectional flow:
         1. Unity client sends status query to this server
-        2. Server sends status request to Unity via ResultsBroadcaster (port 5010)
+        2. Server sends status request to Unity via TCP connection to ResultsServer (port 5010)
         3. Unity PythonCommandHandler processes request and sends status back
         4. Server receives status and returns it to original Unity client
 
@@ -210,7 +362,7 @@ class StatusServer(TCPServerBase):
         response_queue = self._response_handler.create_request_queue(robot_id)
 
         try:
-            # Send status request to Unity via ResultsBroadcaster
+            # Send status request to Unity via TCP client to ResultsServer
             status_request = {
                 "command_type": "get_robot_status",
                 "robot_id": robot_id,
@@ -218,14 +370,14 @@ class StatusServer(TCPServerBase):
                 "timestamp": time.time(),
             }
 
-            success = ResultsBroadcaster.send_result(status_request)
+            success = self._send_to_results_server(status_request)
 
             if not success:
                 return {
                     "success": False,
                     "error": {
-                        "code": "UNITY_NOT_CONNECTED",
-                        "message": "Unity not connected to ResultsServer (port 5010)",
+                        "code": "RESULTS_SERVER_UNAVAILABLE",
+                        "message": f"Cannot connect to ResultsServer at {self._results_host}:{self._results_port}",
                     },
                 }
 

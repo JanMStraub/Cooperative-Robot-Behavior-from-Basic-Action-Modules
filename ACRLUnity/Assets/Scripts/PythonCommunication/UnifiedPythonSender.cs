@@ -168,7 +168,35 @@ namespace PythonCommunication
         {
             if (Instance == this)
             {
+                // Gracefully disconnect all connections
+                if (_singleConnection != null)
+                {
+                    _singleConnection.Disconnect();
+                }
+
+                if (_stereoConnection != null)
+                {
+                    _stereoConnection.Disconnect();
+                }
+
                 Instance = null;
+            }
+        }
+
+        /// <summary>
+        /// Called when Unity exits play mode - ensure clean shutdown
+        /// </summary>
+        private void OnApplicationQuit()
+        {
+            // Stop all connections before Unity closes
+            if (_singleConnection != null)
+            {
+                _singleConnection.Disconnect();
+            }
+
+            if (_stereoConnection != null)
+            {
+                _stereoConnection.Disconnect();
             }
         }
 

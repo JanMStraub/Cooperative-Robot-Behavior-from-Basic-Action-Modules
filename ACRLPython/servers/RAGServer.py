@@ -73,7 +73,9 @@ class RAGQueryHandler:
             raise
 
     @classmethod
-    def query(cls, query_text: str, top_k: int = 5, filters: Optional[Dict] = None) -> Dict:
+    def query(
+        cls, query_text: str, top_k: int = 5, filters: Optional[Dict] = None
+    ) -> Dict:
         """
         Execute a RAG query.
 
@@ -91,7 +93,9 @@ class RAGQueryHandler:
         try:
             # If filters are provided, use search() method which supports filtering
             # Otherwise use get_operation_context() for full context
-            if filters and any(filters.get(k) for k in ["category", "complexity", "min_score"]):
+            if filters and any(
+                filters.get(k) for k in ["category", "complexity", "min_score"]
+            ):
                 # Extract filter parameters
                 category = filters.get("category")
                 complexity = filters.get("complexity")
@@ -103,7 +107,7 @@ class RAGQueryHandler:
                     top_k=top_k,
                     category=category,
                     complexity=complexity,
-                    min_score=min_score
+                    min_score=min_score,
                 )
 
                 # Convert search results to context format
@@ -117,13 +121,12 @@ class RAGQueryHandler:
                     "query": query_text,
                     "num_results": len(operations),
                     "summary": f"Found {len(operations)} relevant operations for: {query_text}",
-                    "operations": operations
+                    "operations": operations,
                 }
             else:
                 # No filters - use get_operation_context for full details
                 results = cls._rag_system.get_operation_context(
-                    query=query_text,
-                    top_k=top_k
+                    query=query_text, top_k=top_k
                 )
 
             return results
@@ -135,7 +138,7 @@ class RAGQueryHandler:
                 "error": str(e),
                 "query": query_text,
                 "num_results": 0,
-                "operations": []
+                "operations": [],
             }
 
     @classmethod
@@ -174,23 +177,26 @@ class RAGServer(TCPServerBase):
 
         try:
             while self.is_running():
-                # Set timeout for query receive
-                client.settimeout(cfg.RAG_SERVER_TIMEOUT)
+                # Set long timeout to keep connection alive while waiting for queries
+                # Use 60 seconds timeout to allow periodic server state checks
+                # client.settimeout(60.0)
 
                 try:
                     # Receive query message from Unity
                     query_data = self._receive_query_message(client)
 
                     if query_data is None:
-                        # Client disconnected gracefully
-                        break
+                        # Client disconnected gracefully or timeout
+                        continue
 
                     # Execute RAG query
                     query_text = query_data["query"]
                     top_k = query_data.get("top_k", 5)
                     filters = query_data.get("filters", {})
 
-                    logging.info(f"RAG query from {address}: '{query_text}' (top_k={top_k})")
+                    logging.info(
+                        f"RAG query from {address}: '{query_text}' (top_k={top_k})"
+                    )
 
                     # Execute query
                     results = RAGQueryHandler.query(query_text, top_k, filters)
@@ -205,10 +211,17 @@ class RAGServer(TCPServerBase):
 
                 except socket.timeout:
                     # Expected - allows checking is_running()
+                    # Keep connection alive
                     continue
+                except (ConnectionResetError, BrokenPipeError, OSError) as e:
+                    # Connection lost
+                    logging.debug(f"Connection lost from {address}: {e}")
+                    break
 
         except Exception as e:
             logging.debug(f"Client connection error: {e}")
+        finally:
+            logging.info(f"Unity RAG client disconnected from {address}")
 
     def _receive_query_message(self, client: socket.socket) -> Optional[Dict]:
         """
@@ -232,7 +245,9 @@ class RAGServer(TCPServerBase):
             return None
 
 
-def run_rag_server(server_config: ServerConfig, rebuild_index: bool = False, setup_signals: bool = True):
+def run_rag_server(
+    server_config: ServerConfig, rebuild_index: bool = False, setup_signals: bool = True
+):
     """
     Start the RAGServer (blocking).
 
@@ -297,7 +312,11 @@ def run_rag_server_background(server_config: ServerConfig, rebuild_index: bool =
     # Start server in background thread
     thread = threading.Thread(
         target=run_rag_server,
-        args=(server_config, False, False),  # rebuild_index=False (already done), setup_signals=False
+        args=(
+            server_config,
+            False,
+            False,
+        ),  # rebuild_index=False (already done), setup_signals=False
         daemon=True,
     )
     thread.start()
@@ -308,7 +327,9 @@ def run_rag_server_background(server_config: ServerConfig, rebuild_index: bool =
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="RAG server for Unity operation queries")
+    parser = argparse.ArgumentParser(
+        description="RAG server for Unity operation queries"
+    )
     parser.add_argument("--host", default=cfg.DEFAULT_HOST, help="Host to bind to")
     parser.add_argument(
         "--port", type=int, default=cfg.RAG_SERVER_PORT, help="Port to bind to"
