@@ -13,6 +13,7 @@ from .Base import BasicOperation, OperationCategory, OperationComplexity
 
 from .MoveOperations import MOVE_TO_COORDINATE_OPERATION
 from .StatusOperations import CHECK_ROBOT_STATUS_OPERATION
+from .GripperOperations import CONTROL_GRIPPER_OPERATION
 
 class OperationRegistry:
     """
@@ -35,6 +36,7 @@ class OperationRegistry:
         operations = [
             MOVE_TO_COORDINATE_OPERATION,
             CHECK_ROBOT_STATUS_OPERATION,
+            CONTROL_GRIPPER_OPERATION,
             # Add more operations here as they are implemented...
         ]
 

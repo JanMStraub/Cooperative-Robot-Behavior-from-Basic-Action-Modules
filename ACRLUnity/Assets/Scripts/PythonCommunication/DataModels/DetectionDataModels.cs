@@ -18,6 +18,7 @@ namespace PythonCommunication
         public string camera_id;
         public string timestamp;
         public LLMMetadata metadata;
+        public uint request_id; // Protocol V2: for request/response correlation
     }
 
     [Serializable]

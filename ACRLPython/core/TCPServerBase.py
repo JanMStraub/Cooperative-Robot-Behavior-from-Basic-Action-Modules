@@ -14,9 +14,12 @@ All Unity-facing servers should inherit from this class.
 import socket
 import threading
 import logging
+import errno
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Dict, Tuple
+from enum import Enum
+from datetime import datetime
 
 # Import config
 # Import config - try both import styles
@@ -26,6 +29,29 @@ except ImportError:
     from .. import LLMConfig as cfg
 
 logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
+
+
+class ConnectionState(Enum):
+    """Connection state enumeration"""
+    CONNECTED = "connected"
+    IDLE = "idle"
+    RECEIVING = "receiving"
+    SENDING = "sending"
+    DISCONNECTED = "disconnected"
+    ERROR = "error"
+
+
+@dataclass
+class ClientInfo:
+    """Information about a connected client"""
+    socket: socket.socket
+    address: tuple
+    state: ConnectionState
+    connected_at: datetime
+    last_activity: datetime
+    bytes_received: int = 0
+    bytes_sent: int = 0
+    error_count: int = 0
 
 
 @dataclass
@@ -63,6 +89,7 @@ class TCPServerBase(ABC):
         self._shutdown_flag = False
         self._clients: List[socket.socket] = []
         self._clients_lock = threading.Lock()
+        self._client_info: Dict[socket.socket, ClientInfo] = {}  # Track client state
         self._server_socket: Optional[socket.socket] = None
         self._accept_thread: Optional[threading.Thread] = None
         self._client_threads: List[threading.Thread] = (
@@ -166,6 +193,74 @@ class TCPServerBase(ABC):
         with self._clients_lock:
             return len(self._clients)
 
+    def _update_client_state(self, client: socket.socket, state: ConnectionState):
+        """Update client connection state"""
+        with self._clients_lock:
+            if client in self._client_info:
+                self._client_info[client].state = state
+                self._client_info[client].last_activity = datetime.now()
+
+    def _record_bytes_received(self, client: socket.socket, num_bytes: int):
+        """Record bytes received from client"""
+        with self._clients_lock:
+            if client in self._client_info:
+                self._client_info[client].bytes_received += num_bytes
+                self._client_info[client].last_activity = datetime.now()
+
+    def _record_bytes_sent(self, client: socket.socket, num_bytes: int):
+        """Record bytes sent to client"""
+        with self._clients_lock:
+            if client in self._client_info:
+                self._client_info[client].bytes_sent += num_bytes
+                self._client_info[client].last_activity = datetime.now()
+
+    def _record_client_error(self, client: socket.socket):
+        """Record client error"""
+        with self._clients_lock:
+            if client in self._client_info:
+                self._client_info[client].error_count += 1
+                self._client_info[client].state = ConnectionState.ERROR
+
+    def get_client_info(self, client: socket.socket) -> Optional[ClientInfo]:
+        """Get information about a client"""
+        with self._clients_lock:
+            return self._client_info.get(client)
+
+    def _is_connection_error_fatal(self, error: Exception) -> Tuple[bool, str]:
+        """
+        Determine if a connection error is fatal (client disconnected).
+
+        Args:
+            error: Exception that occurred
+
+        Returns:
+            Tuple of (is_fatal, error_description)
+        """
+        # Check for specific error types
+        if isinstance(error, socket.timeout):
+            return False, "Connection idle (timeout)"
+
+        if isinstance(error, ConnectionResetError):
+            return True, "Connection reset by peer"
+
+        if isinstance(error, BrokenPipeError):
+            return True, "Broken pipe (client disconnected)"
+
+        if isinstance(error, OSError):
+            # Check errno for specific connection errors
+            if hasattr(error, 'errno'):
+                if error.errno == errno.ECONNRESET:
+                    return True, "Connection reset by peer"
+                elif error.errno == errno.EPIPE:
+                    return True, "Broken pipe"
+                elif error.errno == errno.ECONNABORTED:
+                    return True, "Connection aborted"
+                elif error.errno == errno.ETIMEDOUT:
+                    return False, "Connection idle (timeout)"
+
+        # Unknown error - treat as potentially fatal
+        return True, f"Unknown error: {type(error).__name__}"
+
     def broadcast_to_all_clients(self, data: bytes) -> int:
         """
         Send data to all connected clients.
@@ -229,11 +324,19 @@ class TCPServerBase(ABC):
                         pass
                     continue
 
-                logging.info(f"Client connected from {address}")
+                logging.debug(f"Client connected from {address}")
 
-                # Add to client list
+                # Add to client list and initialize client info
+                now = datetime.now()
                 with self._clients_lock:
                     self._clients.append(client)
+                    self._client_info[client] = ClientInfo(
+                        socket=client,
+                        address=address,
+                        state=ConnectionState.CONNECTED,
+                        connected_at=now,
+                        last_activity=now
+                    )
 
                 # Handle client in separate thread
                 client_thread = threading.Thread(
@@ -275,7 +378,7 @@ class TCPServerBase(ABC):
             except:
                 pass
 
-            logging.info(f"Client disconnected from {address}")
+            logging.debug(f"Client disconnected from {address}")
 
     def _cleanup_completed_threads(self):
         """Remove completed threads from the thread list"""
@@ -288,6 +391,10 @@ class TCPServerBase(ABC):
             self._clients.remove(client)
         except ValueError:
             pass  # Already removed
+
+        # Remove client info
+        if client in self._client_info:
+            del self._client_info[client]
 
     def _cleanup(self):
         """Clean up server socket"""

@@ -7,7 +7,6 @@ namespace Robotics
     /// Handles gripper behavior in response to robot events.
     /// Subscribes to RobotController.OnTargetReached and executes grasp strategy when target is reached.
     /// Uses GraspPlanner to determine optimal grasp approach based on object characteristics.
-    /// This implements the event-driven architecture pattern recommended in ARCHITECTURE.md.
     /// </summary>
     [RequireComponent(typeof(RobotController))]
     public class RobotGripperBehavior : MonoBehaviour

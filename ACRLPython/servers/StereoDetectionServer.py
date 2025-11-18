@@ -25,11 +25,13 @@ try:
 except ImportError:
     from .. import LLMConfig as cfg
 
-# Import base class - try both import styles
+# Import base class and protocol - try both import styles
 try:
-    from core.TCPServerBase import TCPServerBase
+    from core.TCPServerBase import TCPServerBase, ConnectionState
+    from core.UnityProtocol import UnityProtocol, MessageType
 except ImportError:
-    from ..core.TCPServerBase import TCPServerBase
+    from ..core.TCPServerBase import TCPServerBase, ConnectionState
+    from ..core.UnityProtocol import UnityProtocol, MessageType
 
 # Configure logging (safe for testing with mocked config)
 try:
@@ -164,7 +166,7 @@ class StereoDetectionServer(TCPServerBase):
 
     def handle_client_connection(self, client: socket.socket, address: tuple):
         """
-        Handle a single client connection.
+        Handle a single client connection (Protocol V2).
 
         Receives stereo image pairs and stores them for processing.
 
@@ -175,11 +177,33 @@ class StereoDetectionServer(TCPServerBase):
         logging.info(f"Stereo detection client connected from {address}")
 
         try:
-            # No timeout - allow persistent connections to stay open indefinitely
-            # Unity will reconnect automatically if connection drops
-            # client.settimeout(None)  # None = blocking, no timeout (default)
+            # Set socket to blocking mode (no timeout for persistent connections)
+            client.settimeout(None)
 
             while not self.should_shutdown():
+                # Update state to IDLE before receiving
+                self._update_client_state(client, ConnectionState.IDLE)
+
+                # Read Protocol V2 header: [type:1][request_id:4]
+                header_data = self._receive_exactly(client, UnityProtocol.HEADER_SIZE)
+                if header_data is None:
+                    # Check if it was a fatal error
+                    client_info = self.get_client_info(client)
+                    if client_info and client_info.state == ConnectionState.ERROR:
+                        # Fatal error - exit gracefully
+                        break
+                    # Otherwise connection closed cleanly
+                    break
+
+                # Decode header
+                msg_type = header_data[0]
+                request_id = struct.unpack(UnityProtocol.INT_FORMAT, header_data[1:5])[0]
+
+                # Validate message type
+                if msg_type != MessageType.STEREO_IMAGE:
+                    logging.error(f"Expected STEREO_IMAGE message, got type {msg_type}")
+                    break
+
                 # Read camera pair ID length
                 cam_pair_id_len_data = self._receive_exactly(client, 4)
                 if cam_pair_id_len_data is None:
@@ -295,7 +319,7 @@ class StereoDetectionServer(TCPServerBase):
                 size_L_kb = img_L_len / 1024
                 size_R_kb = img_R_len / 1024
                 logging.info(
-                    f"📷 Received stereo pair '{cam_pair_id}' "
+                    f"[req={request_id}] 📷 Received stereo pair '{cam_pair_id}' "
                     f"(L: {size_L_kb:.1f}KB, R: {size_R_kb:.1f}KB)"
                 )
 
@@ -310,15 +334,18 @@ class StereoDetectionServer(TCPServerBase):
 
     def _receive_exactly(self, sock: socket.socket, num_bytes: int) -> Optional[bytes]:
         """
-        Receive exactly num_bytes from socket.
+        Receive exactly num_bytes from socket with proper error handling.
 
         Args:
             sock: Socket to receive from
             num_bytes: Number of bytes to receive
 
         Returns:
-            Received bytes or None if connection closed
+            Received bytes or None if connection closed or error
         """
+        # Update state to receiving
+        self._update_client_state(sock, ConnectionState.RECEIVING)
+
         data = b""
 
         while len(data) < num_bytes:
@@ -326,11 +353,26 @@ class StereoDetectionServer(TCPServerBase):
                 packet = sock.recv(num_bytes - len(data))
                 if not packet:
                     # Connection closed cleanly
+                    logging.debug(f"Client connection closed cleanly")
+                    self._update_client_state(sock, ConnectionState.DISCONNECTED)
                     return None
                 data += packet
+                self._record_bytes_received(sock, len(packet))
+
             except Exception as e:
-                logging.error(f"Socket receive error: {e}")
+                # Determine if error is fatal
+                is_fatal, error_desc = self._is_connection_error_fatal(e)
+
+                if is_fatal:
+                    # Fatal error - connection lost
+                    logging.debug(f"Client disconnected: {error_desc}")
+                    self._record_client_error(sock)
+                else:
+                    # Non-fatal error - just log at debug level
+                    logging.debug(f"Socket idle: {error_desc}")
+
                 return None
+
         return data
 
 

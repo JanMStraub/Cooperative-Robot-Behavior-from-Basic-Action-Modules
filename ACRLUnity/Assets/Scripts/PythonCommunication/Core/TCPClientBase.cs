@@ -294,6 +294,26 @@ namespace PythonCommunication.Core
             }
         }
 
+        // Request ID counter for Protocol V2
+        private static uint _nextRequestId = 1;
+        private static readonly object _requestIdLock = new object();
+
+        /// <summary>
+        /// Generate a unique request ID for Protocol V2 message correlation.
+        /// Thread-safe counter that wraps at uint.MaxValue.
+        /// </summary>
+        protected uint GenerateRequestId()
+        {
+            lock (_requestIdLock)
+            {
+                uint id = _nextRequestId;
+                _nextRequestId++;
+                if (_nextRequestId == 0) // Wrapped around
+                    _nextRequestId = 1; // Skip 0 as it's used for "no request ID"
+                return id;
+            }
+        }
+
         #endregion
     }
 }

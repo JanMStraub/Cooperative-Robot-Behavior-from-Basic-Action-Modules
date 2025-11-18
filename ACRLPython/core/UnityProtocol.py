@@ -5,14 +5,27 @@ UnityProtocol.py - Unity ↔ Python communication protocol
 Defines the wire protocol for communication between Unity and Python servers.
 This protocol is versioned and should match the Unity-side implementation.
 
-Protocol version: 1
+Protocol version: 2
 
-Message formats:
+ALL messages now include:
+- message_type (1 byte): Identifies the message type
+- request_id (4 bytes): Unsigned integer for request/response correlation
+
+Message Type Enumeration:
+- 0x01: IMAGE - Single camera image
+- 0x02: RESULT - JSON result (LLM, detection, etc.)
+- 0x03: RAG_QUERY - Natural language query for operations
+- 0x04: RAG_RESPONSE - Operation recommendations
+- 0x05: STATUS_QUERY - Robot status request
+- 0x06: STATUS_RESPONSE - Robot status data
+- 0x07: STEREO_IMAGE - Stereo camera pair
+
+Message formats (ALL with header):
 1. Image Message (Unity → Python, single camera):
-   [camera_id_len:4][camera_id:N][prompt_len:4][prompt:N][image_len:4][image_data:N]
+   [type:1][request_id:4][camera_id_len:4][camera_id:N][prompt_len:4][prompt:N][image_len:4][image_data:N]
 
 2. Stereo Image Message (Unity → Python, stereo pair):
-   [cam_pair_id_len:4][cam_pair_id:N]
+   [type:1][request_id:4][cam_pair_id_len:4][cam_pair_id:N]
    [camera_L_id_len:4][camera_L_id:N]
    [camera_R_id_len:4][camera_R_id:N]
    [prompt_len:4][prompt:N]
@@ -20,34 +33,19 @@ Message formats:
    [image_R_len:4][image_R_data:N]
 
 3. Result Message (Python → Unity):
-   [json_len:4][json_data:N]
-
-   Result JSON may include optional "world_position" field for 3D coordinates:
-   {
-     "success": true,
-     "detections": [
-       {
-         "id": 0,
-         "color": "red",
-         "bbox_px": {...},
-         "center_px": {...},
-         "confidence": 0.95,
-         "world_position": {"x": 0.5, "y": 0.2, "z": 1.0}  // Optional, meters
-       }
-     ]
-   }
+   [type:1][request_id:4][json_len:4][json_data:N]
 
 4. RAG Query Message (Unity → Python):
-   [query_len:4][query_text:N][top_k:4][filters_json_len:4][filters_json:N]
+   [type:1][request_id:4][query_len:4][query_text:N][top_k:4][filters_json_len:4][filters_json:N]
 
 5. RAG Response Message (Python → Unity):
-   [json_len:4][operation_context_json:N]
+   [type:1][request_id:4][json_len:4][operation_context_json:N]
 
 6. Status Query Message (Unity → Python):
-   [robot_id_len:4][robot_id:N][detailed:1]
+   [type:1][request_id:4][robot_id_len:4][robot_id:N][detailed:1]
 
 7. Status Response Message (Python → Unity):
-   [json_len:4][robot_status_json:N]
+   [type:1][request_id:4][json_len:4][robot_status_json:N]
 
 All integers are little-endian unsigned 32-bit (struct format 'I').
 All strings are UTF-8 encoded.
@@ -56,10 +54,10 @@ All strings are UTF-8 encoded.
 import struct
 import json
 from typing import Tuple, Optional
+from enum import IntEnum
 import logging
 
 # Import config
-# Import config - try both import styles
 try:
     import LLMConfig as cfg
 except ImportError:
@@ -68,11 +66,22 @@ except ImportError:
 logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
 
 
+class MessageType(IntEnum):
+    """Message type enumeration for protocol V2"""
+    IMAGE = 0x01
+    RESULT = 0x02
+    RAG_QUERY = 0x03
+    RAG_RESPONSE = 0x04
+    STATUS_QUERY = 0x05
+    STATUS_RESPONSE = 0x06
+    STEREO_IMAGE = 0x07
+
+
 class UnityProtocol:
-    """Unity ↔ Python wire protocol implementation"""
+    """Unity ↔ Python wire protocol implementation (Version 2)"""
 
     # Protocol version
-    VERSION = 1
+    VERSION = 2
 
     # Limits (from config)
     MAX_STRING_LENGTH = cfg.MAX_STRING_LENGTH
@@ -81,18 +90,64 @@ class UnityProtocol:
     # Struct formats
     INT_FORMAT = "I"  # Unsigned 32-bit integer, little-endian
     INT_SIZE = 4
+    TYPE_SIZE = 1  # Message type byte
+    HEADER_SIZE = TYPE_SIZE + INT_SIZE  # type + request_id
 
     @staticmethod
-    def encode_image_message(camera_id: str, prompt: str, image_bytes: bytes) -> bytes:
+    def _encode_header(message_type: MessageType, request_id: int) -> bytes:
+        """
+        Encode message header (type + request_id).
+
+        Args:
+            message_type: Message type from MessageType enum
+            request_id: Unsigned 32-bit request ID
+
+        Returns:
+            5-byte header
+        """
+        header = bytearray()
+        header.append(message_type)  # 1 byte
+        header.extend(struct.pack(UnityProtocol.INT_FORMAT, request_id))  # 4 bytes
+        return bytes(header)
+
+    @staticmethod
+    def _decode_header(data: bytes, offset: int = 0) -> Tuple[MessageType, int, int]:
+        """
+        Decode message header from data.
+
+        Args:
+            data: Byte array to read from
+            offset: Starting offset (default 0)
+
+        Returns:
+            Tuple of (message_type, request_id, new_offset)
+
+        Raises:
+            ValueError: If header is malformed
+        """
+        if len(data) - offset < UnityProtocol.HEADER_SIZE:
+            raise ValueError(f"Not enough data for header (need {UnityProtocol.HEADER_SIZE}, have {len(data) - offset})")
+
+        message_type = MessageType(data[offset])
+        offset += UnityProtocol.TYPE_SIZE
+
+        request_id = struct.unpack(UnityProtocol.INT_FORMAT, data[offset:offset + UnityProtocol.INT_SIZE])[0]
+        offset += UnityProtocol.INT_SIZE
+
+        return message_type, request_id, offset
+
+    @staticmethod
+    def encode_image_message(camera_id: str, prompt: str, image_bytes: bytes, request_id: int = 0) -> bytes:
         """
         Encode an image message for sending to Python server.
 
-        Format: [camera_id_len][camera_id][prompt_len][prompt][image_len][image_data]
+        Format: [type:1][request_id:4][camera_id_len:4][camera_id:N][prompt_len:4][prompt:N][image_len:4][image_data:N]
 
         Args:
             camera_id: Camera identifier
             prompt: Prompt for LLM (can be empty)
             image_bytes: PNG/JPG encoded image data
+            request_id: Request ID for correlation (default 0)
 
         Returns:
             Encoded message bytes
@@ -125,6 +180,9 @@ class UnityProtocol:
         # Build message
         message = bytearray()
 
+        # Header
+        message.extend(UnityProtocol._encode_header(MessageType.IMAGE, request_id))
+
         # Camera ID
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(camera_id_bytes)))
         message.extend(camera_id_bytes)
@@ -140,7 +198,7 @@ class UnityProtocol:
         return bytes(message)
 
     @staticmethod
-    def decode_image_message(data: bytes) -> Tuple[str, str, bytes]:
+    def decode_image_message(data: bytes) -> Tuple[int, str, str, bytes]:
         """
         Decode an image message received from Unity.
 
@@ -148,14 +206,18 @@ class UnityProtocol:
             data: Raw message bytes
 
         Returns:
-            Tuple of (camera_id, prompt, image_bytes)
+            Tuple of (request_id, camera_id, prompt, image_bytes)
 
         Raises:
             ValueError: If message is malformed
         """
-        offset = 0
-
         try:
+            # Decode header
+            msg_type, request_id, offset = UnityProtocol._decode_header(data)
+
+            if msg_type != MessageType.IMAGE:
+                raise ValueError(f"Expected IMAGE message, got {msg_type.name}")
+
             # Read camera ID
             camera_id, offset = UnityProtocol._read_string(data, offset)
 
@@ -165,20 +227,21 @@ class UnityProtocol:
             # Read image
             image_bytes, offset = UnityProtocol._read_bytes(data, offset)
 
-            return camera_id, prompt, image_bytes
+            return request_id, camera_id, prompt, image_bytes
 
         except Exception as e:
             raise ValueError(f"Failed to decode image message: {e}")
 
     @staticmethod
-    def encode_result_message(result_dict: dict) -> bytes:
+    def encode_result_message(result_dict: dict, request_id: int = 0) -> bytes:
         """
-        Encode an LLM result message for sending to Unity.
+        Encode a result message for sending to Unity.
 
-        Format: [json_len][json_data]
+        Format: [type:1][request_id:4][json_len:4][json_data:N]
 
         Args:
             result_dict: Dictionary containing result data
+            request_id: Request ID for correlation (default 0)
 
         Returns:
             Encoded message bytes
@@ -189,13 +252,18 @@ class UnityProtocol:
 
         # Build message
         message = bytearray()
+
+        # Header
+        message.extend(UnityProtocol._encode_header(MessageType.RESULT, request_id))
+
+        # JSON data
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(json_bytes)))
         message.extend(json_bytes)
 
         return bytes(message)
 
     @staticmethod
-    def decode_result_message(data: bytes) -> dict:
+    def decode_result_message(data: bytes) -> Tuple[int, dict]:
         """
         Decode a result message (for testing/verification).
 
@@ -203,17 +271,21 @@ class UnityProtocol:
             data: Raw message bytes
 
         Returns:
-            Result dictionary
+            Tuple of (request_id, result_dict)
 
         Raises:
             ValueError: If message is malformed
         """
-        offset = 0
-
         try:
+            # Decode header
+            msg_type, request_id, offset = UnityProtocol._decode_header(data)
+
+            if msg_type != MessageType.RESULT:
+                raise ValueError(f"Expected RESULT message, got {msg_type.name}")
+
             # Read JSON length
-            if len(data) < UnityProtocol.INT_SIZE:
-                raise ValueError("Message too short")
+            if len(data) - offset < UnityProtocol.INT_SIZE:
+                raise ValueError("Not enough data for JSON length")
 
             json_length = struct.unpack(
                 UnityProtocol.INT_FORMAT, data[offset : offset + UnityProtocol.INT_SIZE]
@@ -227,7 +299,7 @@ class UnityProtocol:
             json_bytes = data[offset : offset + json_length]
             json_str = json_bytes.decode("utf-8")
 
-            return json.loads(json_str)
+            return request_id, json.loads(json_str)
 
         except Exception as e:
             raise ValueError(f"Failed to decode result message: {e}")
@@ -311,18 +383,17 @@ class UnityProtocol:
         return byte_data, offset
 
     @staticmethod
-    def encode_rag_query(
-        query: str, top_k: int = 5, filters: Optional[dict] = None
-    ) -> bytes:
+    def encode_rag_query(query: str, top_k: int = 5, filters: Optional[dict] = None, request_id: int = 0) -> bytes:
         """
         Encode a RAG query message for sending to Python server.
 
-        Format: [query_len][query_text][top_k][filters_json_len][filters_json]
+        Format: [type:1][request_id:4][query_len:4][query_text:N][top_k:4][filters_json_len:4][filters_json:N]
 
         Args:
             query: Natural language query text
             top_k: Number of results to return (default 5)
             filters: Optional filters dict (category, complexity, min_score)
+            request_id: Request ID for correlation (default 0)
 
         Returns:
             Encoded message bytes
@@ -351,6 +422,9 @@ class UnityProtocol:
         # Build message
         message = bytearray()
 
+        # Header
+        message.extend(UnityProtocol._encode_header(MessageType.RAG_QUERY, request_id))
+
         # Query text
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(query_bytes)))
         message.extend(query_bytes)
@@ -365,7 +439,7 @@ class UnityProtocol:
         return bytes(message)
 
     @staticmethod
-    def decode_rag_query(socket_or_data) -> dict:
+    def decode_rag_query(socket_or_data) -> Tuple[int, dict]:
         """
         Decode a RAG query message from Unity.
 
@@ -373,7 +447,7 @@ class UnityProtocol:
             socket_or_data: Either a socket object or raw bytes
 
         Returns:
-            Dictionary with query, top_k, and filters
+            Tuple of (request_id, query_dict) where query_dict contains query, top_k, and filters
 
         Raises:
             ValueError: If message is malformed
@@ -386,9 +460,13 @@ class UnityProtocol:
             # It's already bytes
             data = socket_or_data
 
-        offset = 0
-
         try:
+            # Decode header
+            msg_type, request_id, offset = UnityProtocol._decode_header(data)
+
+            if msg_type != MessageType.RAG_QUERY:
+                raise ValueError(f"Expected RAG_QUERY message, got {msg_type.name}")
+
             # Read query text
             query, offset = UnityProtocol._read_string(data, offset)
 
@@ -407,7 +485,8 @@ class UnityProtocol:
             # Parse filters
             filters = json.loads(filters_json) if filters_json else {}
 
-            return {"query": query, "top_k": top_k, "filters": filters}
+            query_dict = {"query": query, "top_k": top_k, "filters": filters}
+            return request_id, query_dict
 
         except Exception as e:
             raise ValueError(f"Failed to decode RAG query: {e}")
@@ -424,6 +503,12 @@ class UnityProtocol:
             Complete message bytes
         """
         data = bytearray()
+
+        # Read header (type + request_id)
+        header_bytes = client_socket.recv(UnityProtocol.HEADER_SIZE)
+        if not header_bytes or len(header_bytes) < UnityProtocol.HEADER_SIZE:
+            raise ValueError("Connection closed or incomplete header")
+        data.extend(header_bytes)
 
         # Read query length and text
         query_len_bytes = client_socket.recv(UnityProtocol.INT_SIZE)
@@ -453,24 +538,37 @@ class UnityProtocol:
         return bytes(data)
 
     @staticmethod
-    def encode_rag_response(operation_context: dict) -> bytes:
+    def encode_rag_response(operation_context: dict, request_id: int = 0) -> bytes:
         """
         Encode a RAG response message for sending to Unity.
 
-        Format: [json_len][operation_context_json]
-
-        This is identical to encode_result_message but kept separate for clarity.
+        Format: [type:1][request_id:4][json_len:4][operation_context_json:N]
 
         Args:
             operation_context: Dictionary containing operation results
+            request_id: Request ID for correlation (default 0)
 
         Returns:
             Encoded message bytes
         """
-        return UnityProtocol.encode_result_message(operation_context)
+        # Convert dict to JSON
+        json_str = json.dumps(operation_context, ensure_ascii=False)
+        json_bytes = json_str.encode("utf-8")
+
+        # Build message
+        message = bytearray()
+
+        # Header
+        message.extend(UnityProtocol._encode_header(MessageType.RAG_RESPONSE, request_id))
+
+        # JSON data
+        message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(json_bytes)))
+        message.extend(json_bytes)
+
+        return bytes(message)
 
     @staticmethod
-    def decode_rag_response(data: bytes) -> dict:
+    def decode_rag_response(data: bytes) -> Tuple[int, dict]:
         """
         Decode a RAG response message (for testing/verification).
 
@@ -478,23 +576,49 @@ class UnityProtocol:
             data: Raw message bytes
 
         Returns:
-            Operation context dictionary
+            Tuple of (request_id, operation_context_dict)
 
         Raises:
             ValueError: If message is malformed
         """
-        return UnityProtocol.decode_result_message(data)
+        try:
+            # Decode header
+            msg_type, request_id, offset = UnityProtocol._decode_header(data)
+
+            if msg_type != MessageType.RAG_RESPONSE:
+                raise ValueError(f"Expected RAG_RESPONSE message, got {msg_type.name}")
+
+            # Read JSON data
+            if len(data) - offset < UnityProtocol.INT_SIZE:
+                raise ValueError("Not enough data for JSON length")
+
+            json_length = struct.unpack(
+                UnityProtocol.INT_FORMAT, data[offset : offset + UnityProtocol.INT_SIZE]
+            )[0]
+            offset += UnityProtocol.INT_SIZE
+
+            if offset + json_length > len(data):
+                raise ValueError(f"JSON length {json_length} exceeds remaining data")
+
+            json_bytes = data[offset : offset + json_length]
+            json_str = json_bytes.decode("utf-8")
+
+            return request_id, json.loads(json_str)
+
+        except Exception as e:
+            raise ValueError(f"Failed to decode RAG response: {e}")
 
     @staticmethod
-    def encode_status_query(robot_id: str, detailed: bool = False) -> bytes:
+    def encode_status_query(robot_id: str, detailed: bool = False, request_id: int = 0) -> bytes:
         """
         Encode a status query message for sending to Python server.
 
-        Format: [robot_id_len][robot_id][detailed]
+        Format: [type:1][request_id:4][robot_id_len:4][robot_id:N][detailed:1]
 
         Args:
             robot_id: Robot identifier (e.g., "Robot1", "AR4_Robot")
             detailed: If True, return detailed joint information
+            request_id: Request ID for correlation (default 0)
 
         Returns:
             Encoded message bytes
@@ -516,6 +640,9 @@ class UnityProtocol:
         # Build message
         message = bytearray()
 
+        # Header
+        message.extend(UnityProtocol._encode_header(MessageType.STATUS_QUERY, request_id))
+
         # Robot ID
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(robot_id_bytes)))
         message.extend(robot_id_bytes)
@@ -526,7 +653,7 @@ class UnityProtocol:
         return bytes(message)
 
     @staticmethod
-    def decode_status_query(socket_or_data) -> dict:
+    def decode_status_query(socket_or_data) -> Tuple[int, dict]:
         """
         Decode a status query message from Unity.
 
@@ -534,7 +661,7 @@ class UnityProtocol:
             socket_or_data: Either a socket object or raw bytes
 
         Returns:
-            Dictionary with robot_id and detailed flag
+            Tuple of (request_id, query_dict) where query_dict contains robot_id and detailed flag
 
         Raises:
             ValueError: If message is malformed
@@ -547,9 +674,13 @@ class UnityProtocol:
             # It's already bytes
             data = socket_or_data
 
-        offset = 0
-
         try:
+            # Decode header
+            msg_type, request_id, offset = UnityProtocol._decode_header(data)
+
+            if msg_type != MessageType.STATUS_QUERY:
+                raise ValueError(f"Expected STATUS_QUERY message, got {msg_type.name}")
+
             # Read robot_id
             robot_id, offset = UnityProtocol._read_string(data, offset)
 
@@ -560,7 +691,8 @@ class UnityProtocol:
             detailed = struct.unpack("B", data[offset : offset + 1])[0]
             offset += 1
 
-            return {"robot_id": robot_id, "detailed": bool(detailed)}
+            query_dict = {"robot_id": robot_id, "detailed": bool(detailed)}
+            return request_id, query_dict
 
         except Exception as e:
             raise ValueError(f"Failed to decode status query: {e}")
@@ -577,6 +709,12 @@ class UnityProtocol:
             Complete message bytes
         """
         data = bytearray()
+
+        # Read header (type + request_id)
+        header_bytes = client_socket.recv(UnityProtocol.HEADER_SIZE)
+        if not header_bytes or len(header_bytes) < UnityProtocol.HEADER_SIZE:
+            raise ValueError("Connection closed or incomplete header")
+        data.extend(header_bytes)
 
         # Read robot_id length and text
         robot_id_len_bytes = client_socket.recv(UnityProtocol.INT_SIZE)
@@ -596,24 +734,37 @@ class UnityProtocol:
         return bytes(data)
 
     @staticmethod
-    def encode_status_response(robot_status: dict) -> bytes:
+    def encode_status_response(robot_status: dict, request_id: int = 0) -> bytes:
         """
         Encode a status response message for sending to Unity.
 
-        Format: [json_len][robot_status_json]
-
-        This is identical to encode_result_message but kept separate for clarity.
+        Format: [type:1][request_id:4][json_len:4][robot_status_json:N]
 
         Args:
             robot_status: Dictionary containing robot status data
+            request_id: Request ID for correlation (default 0)
 
         Returns:
             Encoded message bytes
         """
-        return UnityProtocol.encode_result_message(robot_status)
+        # Convert dict to JSON
+        json_str = json.dumps(robot_status, ensure_ascii=False)
+        json_bytes = json_str.encode("utf-8")
+
+        # Build message
+        message = bytearray()
+
+        # Header
+        message.extend(UnityProtocol._encode_header(MessageType.STATUS_RESPONSE, request_id))
+
+        # JSON data
+        message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(json_bytes)))
+        message.extend(json_bytes)
+
+        return bytes(message)
 
     @staticmethod
-    def decode_status_response(data: bytes) -> dict:
+    def decode_status_response(data: bytes) -> Tuple[int, dict]:
         """
         Decode a status response message (for testing/verification).
 
@@ -621,33 +772,60 @@ class UnityProtocol:
             data: Raw message bytes
 
         Returns:
-            Robot status dictionary
+            Tuple of (request_id, robot_status_dict)
 
         Raises:
             ValueError: If message is malformed
         """
-        return UnityProtocol.decode_result_message(data)
+        try:
+            # Decode header
+            msg_type, request_id, offset = UnityProtocol._decode_header(data)
+
+            if msg_type != MessageType.STATUS_RESPONSE:
+                raise ValueError(f"Expected STATUS_RESPONSE message, got {msg_type.name}")
+
+            # Read JSON data
+            if len(data) - offset < UnityProtocol.INT_SIZE:
+                raise ValueError("Not enough data for JSON length")
+
+            json_length = struct.unpack(
+                UnityProtocol.INT_FORMAT, data[offset : offset + UnityProtocol.INT_SIZE]
+            )[0]
+            offset += UnityProtocol.INT_SIZE
+
+            if offset + json_length > len(data):
+                raise ValueError(f"JSON length {json_length} exceeds remaining data")
+
+            json_bytes = data[offset : offset + json_length]
+            json_str = json_bytes.decode("utf-8")
+
+            return request_id, json.loads(json_str)
+
+        except Exception as e:
+            raise ValueError(f"Failed to decode status response: {e}")
 
 
 if __name__ == "__main__":
     # Test the protocol
-    print("Testing UnityProtocol...")
+    print("Testing UnityProtocol V2...")
 
     # Test image message encoding/decoding
     test_camera_id = "TestCamera"
     test_prompt = "What do you see?"
     test_image = b"FAKE_PNG_DATA_HERE" * 100  # Fake image data
+    test_request_id = 12345
 
     # Encode
     encoded = UnityProtocol.encode_image_message(
-        test_camera_id, test_prompt, test_image
+        test_camera_id, test_prompt, test_image, test_request_id
     )
-    print(f"Encoded image message: {len(encoded)} bytes")
+    print(f"Encoded image message: {len(encoded)} bytes (with 5-byte header)")
 
     # Decode
-    decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(
+    request_id, decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(
         encoded
     )
+    assert request_id == test_request_id
     assert decoded_id == test_camera_id
     assert decoded_prompt == test_prompt
     assert decoded_image == test_image
@@ -660,27 +838,53 @@ if __name__ == "__main__":
         "camera_id": "TestCamera",
         "metadata": {"model": "llava", "duration_seconds": 1.5},
     }
+    test_result_request_id = 67890
 
     # Encode
-    encoded_result = UnityProtocol.encode_result_message(test_result)
-    print(f"Encoded result message: {len(encoded_result)} bytes")
+    encoded_result = UnityProtocol.encode_result_message(test_result, test_result_request_id)
+    print(f"Encoded result message: {len(encoded_result)} bytes (with 5-byte header)")
 
     # Decode
-    decoded_result = UnityProtocol.decode_result_message(encoded_result)
+    result_request_id, decoded_result = UnityProtocol.decode_result_message(encoded_result)
+    assert result_request_id == test_result_request_id
     assert decoded_result == test_result
     print("✓ Result message encode/decode works")
 
+    # Test RAG query
+    rag_query_request_id = 99999
+    rag_encoded = UnityProtocol.encode_rag_query("move robot to position", top_k=5, request_id=rag_query_request_id)
+    rag_request_id, rag_query_dict = UnityProtocol.decode_rag_query(rag_encoded)
+    assert rag_request_id == rag_query_request_id
+    assert rag_query_dict["query"] == "move robot to position"
+    print("✓ RAG query encode/decode works")
+
+    # Test status query
+    status_query_request_id = 11111
+    status_encoded = UnityProtocol.encode_status_query("Robot1", detailed=True, request_id=status_query_request_id)
+    status_request_id, status_query_dict = UnityProtocol.decode_status_query(status_encoded)
+    assert status_request_id == status_query_request_id
+    assert status_query_dict["robot_id"] == "Robot1"
+    assert status_query_dict["detailed"] == True
+    print("✓ Status query encode/decode works")
+
     # Test error cases
     try:
-        UnityProtocol.encode_image_message("", "prompt", b"data")
+        UnityProtocol.encode_image_message("", "prompt", b"data", 0)
         assert False, "Should have raised ValueError"
     except ValueError as e:
         print(f"✓ Empty camera ID rejected: {e}")
 
     try:
-        UnityProtocol.encode_image_message("A" * 300, "prompt", b"data")
+        UnityProtocol.encode_image_message("A" * 300, "prompt", b"data", 0)
         assert False, "Should have raised ValueError"
     except ValueError as e:
         print(f"✓ Camera ID too long rejected: {e}")
 
-    print("\nAll tests passed!")
+    # Test message type detection
+    image_type, _, _ = UnityProtocol._decode_header(encoded)
+    assert image_type == MessageType.IMAGE
+    result_type, _, _ = UnityProtocol._decode_header(encoded_result)
+    assert result_type == MessageType.RESULT
+    print("✓ Message type detection works")
+
+    print("\nAll tests passed! Protocol V2 ready.")

@@ -10,8 +10,9 @@ import socket
 import threading
 import time
 from unittest.mock import Mock, patch, MagicMock
+from datetime import datetime
 
-from core.TCPServerBase import TCPServerBase, ServerConfig
+from core.TCPServerBase import TCPServerBase, ServerConfig, ConnectionState, ClientInfo
 
 
 class TestServerConfig:
@@ -72,6 +73,7 @@ class TestTCPServerBaseInitialization:
         assert server._config == server_config
         assert server._running is False
         assert len(server._clients) == 0
+        assert len(server._client_info) == 0
         assert server._server_socket is None
         assert server._accept_thread is None
 
@@ -211,10 +213,25 @@ class TestTCPServerBaseClientHandling:
 
         server = MockTCPServer(server_config)
 
-        # Manually add clients for testing
+        # Manually add clients for testing (including client info)
+        now = datetime.now()
         with server._clients_lock:
             server._clients.append(mock_client1)
             server._clients.append(mock_client2)
+            server._client_info[mock_client1] = ClientInfo(
+                socket=mock_client1,
+                address=("127.0.0.1", 12345),
+                state=ConnectionState.CONNECTED,
+                connected_at=now,
+                last_activity=now
+            )
+            server._client_info[mock_client2] = ClientInfo(
+                socket=mock_client2,
+                address=("127.0.0.1", 12346),
+                state=ConnectionState.CONNECTED,
+                connected_at=now,
+                last_activity=now
+            )
 
         result = server.broadcast_to_all_clients(b"test_data")
 
@@ -234,10 +251,25 @@ class TestTCPServerBaseClientHandling:
 
         server = MockTCPServer(server_config)
 
-        # Manually add clients
+        # Manually add clients (including client info)
+        now = datetime.now()
         with server._clients_lock:
             server._clients.append(mock_client1)
             server._clients.append(mock_client2)
+            server._client_info[mock_client1] = ClientInfo(
+                socket=mock_client1,
+                address=("127.0.0.1", 12345),
+                state=ConnectionState.CONNECTED,
+                connected_at=now,
+                last_activity=now
+            )
+            server._client_info[mock_client2] = ClientInfo(
+                socket=mock_client2,
+                address=("127.0.0.1", 12346),
+                state=ConnectionState.CONNECTED,
+                connected_at=now,
+                last_activity=now
+            )
 
         assert server.get_client_count() == 2
 

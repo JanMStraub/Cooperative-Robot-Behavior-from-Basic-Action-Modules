@@ -473,33 +473,26 @@ namespace PythonCommunication
                         }
                     }
 
-                    // Send data per streaming protocol
-                    // [camera_id_len][camera_id][prompt_len][prompt][image_len][image_data]
+                    // Generate unique request ID for correlation (Protocol V2)
+                    uint requestId = GenerateRequestId();
 
-                    // Camera ID
-                    byte[] idBytes = System.Text.Encoding.UTF8.GetBytes(cameraId);
-                    byte[] idLength = BitConverter.GetBytes(idBytes.Length);
-                    _stream.Write(idLength, 0, idLength.Length);
-                    _stream.Write(idBytes, 0, idBytes.Length);
+                    // Encode message using UnityProtocol (Protocol V2)
+                    byte[] message = UnityProtocol.EncodeImageMessage(
+                        cameraId,
+                        prompt ?? "",
+                        imageBytes,
+                        requestId
+                    );
 
-                    // Prompt
-                    byte[] promptBytes = System.Text.Encoding.UTF8.GetBytes(prompt ?? "");
-                    byte[] promptLength = BitConverter.GetBytes(promptBytes.Length);
-                    _stream.Write(promptLength, 0, promptLength.Length);
-                    _stream.Write(promptBytes, 0, promptBytes.Length);
-
-                    // Image
-                    byte[] imageLength = BitConverter.GetBytes(imageBytes.Length);
-                    _stream.Write(imageLength, 0, imageLength.Length);
-                    _stream.Write(imageBytes, 0, imageBytes.Length);
-
+                    // Send encoded message
+                    _stream.Write(message, 0, message.Length);
                     _stream.Flush();
 
                     string promptInfo = string.IsNullOrEmpty(prompt)
                         ? ""
                         : $" with prompt: '{prompt}'";
                     Debug.Log(
-                        $"{_logPrefix} Sent {imageBytes.Length} bytes for camera '{cameraId}'{promptInfo}"
+                        $"{_logPrefix} [req={requestId}] Sent {imageBytes.Length} bytes for camera '{cameraId}'{promptInfo}"
                     );
 
                     return true;
@@ -656,52 +649,29 @@ namespace PythonCommunication
                         return false;
                     }
 
-                    // Send stereo pair per protocol
-                    // [cam_pair_id_len][cam_pair_id][camera_L_id_len][camera_L_id]
-                    // [camera_R_id_len][camera_R_id][prompt_len][prompt]
-                    // [image_L_len][image_L_data][image_R_len][image_R_data]
+                    // Generate unique request ID for correlation (Protocol V2)
+                    uint requestId = GenerateRequestId();
 
-                    // Camera pair ID
-                    byte[] pairIdBytes = System.Text.Encoding.UTF8.GetBytes(cameraPairId);
-                    byte[] pairIdLength = BitConverter.GetBytes(pairIdBytes.Length);
-                    _stream.Write(pairIdLength, 0, pairIdLength.Length);
-                    _stream.Write(pairIdBytes, 0, pairIdBytes.Length);
+                    // Encode message using UnityProtocol (Protocol V2)
+                    byte[] message = UnityProtocol.EncodeStereoImageMessage(
+                        cameraPairId,
+                        cameraLeftId,
+                        cameraRightId,
+                        prompt ?? "",
+                        leftImageBytes,
+                        rightImageBytes,
+                        requestId
+                    );
 
-                    // Camera Left ID
-                    byte[] camLIdBytes = System.Text.Encoding.UTF8.GetBytes(cameraLeftId);
-                    byte[] camLIdLength = BitConverter.GetBytes(camLIdBytes.Length);
-                    _stream.Write(camLIdLength, 0, camLIdLength.Length);
-                    _stream.Write(camLIdBytes, 0, camLIdBytes.Length);
-
-                    // Camera Right ID
-                    byte[] camRIdBytes = System.Text.Encoding.UTF8.GetBytes(cameraRightId);
-                    byte[] camRIdLength = BitConverter.GetBytes(camRIdBytes.Length);
-                    _stream.Write(camRIdLength, 0, camRIdLength.Length);
-                    _stream.Write(camRIdBytes, 0, camRIdBytes.Length);
-
-                    // Prompt
-                    byte[] promptBytes = System.Text.Encoding.UTF8.GetBytes(prompt ?? "");
-                    byte[] promptLength = BitConverter.GetBytes(promptBytes.Length);
-                    _stream.Write(promptLength, 0, promptLength.Length);
-                    _stream.Write(promptBytes, 0, promptBytes.Length);
-
-                    // Left image
-                    byte[] imageLLength = BitConverter.GetBytes(leftImageBytes.Length);
-                    _stream.Write(imageLLength, 0, imageLLength.Length);
-                    _stream.Write(leftImageBytes, 0, leftImageBytes.Length);
-
-                    // Right image
-                    byte[] imageRLength = BitConverter.GetBytes(rightImageBytes.Length);
-                    _stream.Write(imageRLength, 0, imageRLength.Length);
-                    _stream.Write(rightImageBytes, 0, rightImageBytes.Length);
-
+                    // Send encoded message
+                    _stream.Write(message, 0, message.Length);
                     _stream.Flush();
 
                     string promptInfo = string.IsNullOrEmpty(prompt)
                         ? ""
                         : $" with prompt: '{prompt}'";
                     Debug.Log(
-                        $"{_logPrefix} Sent stereo pair '{cameraPairId}' (L:{leftImageBytes.Length}B, R:{rightImageBytes.Length}B){promptInfo}"
+                        $"{_logPrefix} [req={requestId}] Sent stereo pair '{cameraPairId}' (L:{leftImageBytes.Length}B, R:{rightImageBytes.Length}B){promptInfo}"
                     );
 
                     return true;

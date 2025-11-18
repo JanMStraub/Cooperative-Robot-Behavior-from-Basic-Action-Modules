@@ -111,7 +111,7 @@ class DetectionBroadcaster:
     @classmethod
     def send_result(cls, result: Dict, _from_queue: bool = False):
         """
-        Send detection result to all connected Unity clients
+        Send detection result to all connected Unity clients (Protocol V2)
 
         Args:
             result: Detection result dictionary (from DetectionResult.to_dict())
@@ -122,9 +122,12 @@ class DetectionBroadcaster:
             result["metadata"] = {}
         result["metadata"]["server_timestamp"] = datetime.now().isoformat()
 
-        # Encode using Unity protocol (pass dict directly)
+        # Extract request_id from result (or default to 0)
+        request_id = result.get("request_id", 0)
+
+        # Encode using Unity protocol (Protocol V2)
         try:
-            message = UnityProtocol.encode_result_message(result)
+            message = UnityProtocol.encode_result_message(result, request_id)
         except Exception as e:
             logging.error(f"Failed to encode detection result: {e}")
             return

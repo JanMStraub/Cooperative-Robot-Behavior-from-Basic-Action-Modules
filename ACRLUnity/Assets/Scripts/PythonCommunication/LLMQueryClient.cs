@@ -349,6 +349,10 @@ namespace PythonCommunication
                 case "check_robot_status":
                     ExecuteCheckRobotStatus(operation);
                     break;
+                
+                case "control_gripper":
+                    ExecuteControlGripper(operation);
+                    break;
 
                 default:
                     LogOperationNotImplemented(operation);
@@ -466,6 +470,80 @@ namespace PythonCommunication
             }
         }
 
+        /// <summary>
+        /// Execute control_gripper operation
+        /// </summary>
+        private void ExecuteControlGripper(OperationInfo operation)
+        {
+            // Parse action from prompt (open, close, or specific position)
+            string promptLower = _prompt.ToLower();
+            bool shouldOpen = promptLower.Contains("open");
+            bool shouldClose = promptLower.Contains("close");
+
+            // Check for specific position value (0.0 to 1.0)
+            float? specificPosition = TryParseGripperPosition(promptLower);
+
+            if (!shouldOpen && !shouldClose && !specificPosition.HasValue)
+            {
+                Debug.LogWarning(
+                    $"{_logPrefix} ⚠️ Could not parse gripper action from prompt. Use 'open', 'close', or specify position (0.0-1.0)"
+                );
+                _lastQueryStatus = "ERROR: Could not parse gripper action";
+                return;
+            }
+
+            // Get robot instance from RobotManager
+            if (RobotManager.Instance == null)
+            {
+                Debug.LogError($"{_logPrefix} ❌ RobotManager.Instance is null!");
+                _lastQueryStatus = "ERROR: RobotManager not found";
+                return;
+            }
+
+            if (!RobotManager.Instance.RobotInstances.TryGetValue(_robotId, out RobotInstance robotInstance))
+            {
+                Debug.LogError(
+                    $"{_logPrefix} ❌ Robot '{_robotId}' not found in RobotManager. "
+                    + $"Available robots: {string.Join(", ", RobotManager.Instance.RobotInstances.Keys)}"
+                );
+                _lastQueryStatus = $"ERROR: Robot '{_robotId}' not found";
+                return;
+            }
+
+            // Find GripperController component on robot
+            GripperController gripperController = robotInstance.robotGameObject.GetComponentInChildren<GripperController>();
+            if (gripperController == null)
+            {
+                Debug.LogError($"{_logPrefix} ❌ Robot '{_robotId}' has no GripperController component");
+                _lastQueryStatus = "ERROR: No GripperController";
+                return;
+            }
+
+            // Execute gripper action
+            if (specificPosition.HasValue)
+            {
+                float position = specificPosition.Value;
+                gripperController.SetGripperPosition(position);
+                Debug.Log($"{_logPrefix} 🤏 Setting {_robotId} gripper to position {position:F2}");
+                _lastOperationExecuted = $"control_gripper({_robotId}, position={position:F2})";
+            }
+            else if (shouldOpen)
+            {
+                gripperController.OpenGrippers();
+                Debug.Log($"{_logPrefix} 👐 Opening {_robotId} gripper");
+                _lastOperationExecuted = $"control_gripper({_robotId}, action=open)";
+            }
+            else if (shouldClose)
+            {
+                gripperController.CloseGrippers();
+                Debug.Log($"{_logPrefix} 🤏 Closing {_robotId} gripper");
+                _lastOperationExecuted = $"control_gripper({_robotId}, action=close)";
+            }
+
+            _lastQueryStatus = $"EXECUTED: {operation.name}";
+            Debug.Log($"{_logPrefix} ✓ Gripper command executed on {_robotId}");
+        }
+
         #endregion
 
         #region Helper Methods
@@ -479,6 +557,7 @@ namespace PythonCommunication
             {
                 case "move_to_coordinate":
                 case "check_robot_status":
+                case "control_gripper":
                     return true;
 
                 // Add new implemented operations here
@@ -630,6 +709,50 @@ namespace PythonCommunication
             if (numbers.Count >= 3)
             {
                 return new Vector3(numbers[0], numbers[1], numbers[2]);
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Try to parse gripper position from natural language prompt
+        /// Supports patterns like: "position=0.5", "pos 0.5", or just a decimal number between 0.0 and 1.0
+        /// </summary>
+        private float? TryParseGripperPosition(string prompt)
+        {
+            if (string.IsNullOrEmpty(prompt))
+                return null;
+
+            // Pattern 1: "position=0.5" or "pos=0.5"
+            string[] parts = prompt.Split(new[] { ',', ' ', '=' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < parts.Length; i++)
+            {
+                string trimmed = parts[i].Trim().ToLower();
+
+                // Check if this is a position keyword followed by a value
+                if ((trimmed == "position" || trimmed == "pos") && i + 1 < parts.Length)
+                {
+                    if (float.TryParse(parts[i + 1], out float pos) && pos >= 0.0f && pos <= 1.0f)
+                    {
+                        return pos;
+                    }
+                }
+            }
+
+            // Pattern 2: Look for any floating point number between 0.0 and 1.0
+            foreach (string part in parts)
+            {
+                string trimmed = part.Trim();
+                if (float.TryParse(trimmed, out float pos) && pos >= 0.0f && pos <= 1.0f)
+                {
+                    // Additional check: make sure it's not part of a coordinate (avoid x=0.3 being parsed as gripper position)
+                    if (!prompt.Contains($"x={trimmed}") &&
+                        !prompt.Contains($"y={trimmed}") &&
+                        !prompt.Contains($"z={trimmed}"))
+                    {
+                        return pos;
+                    }
+                }
             }
 
             return null;

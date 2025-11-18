@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 # Implementation: Move to Coordinates
 # ============================================================================
 
+
 def move_to_coordinate(
     robot_id: str,
     x: float,

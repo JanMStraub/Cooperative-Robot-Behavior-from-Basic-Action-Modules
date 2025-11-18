@@ -143,11 +143,14 @@ namespace PythonCommunication
 
             try
             {
+                // Generate unique request ID for correlation (Protocol V2)
+                uint requestId = GenerateRequestId();
+
                 // Convert filters to JSON string
                 string filtersJson = filters != null ? filters.ToJson() : null;
 
-                // Encode query message
-                byte[] message = UnityProtocol.EncodeRagQuery(query, topK, filtersJson);
+                // Encode query message (Protocol V2)
+                byte[] message = UnityProtocol.EncodeRagQuery(query, topK, filtersJson, requestId);
 
                 // Send to server
                 bool success = WriteToStream(message);
@@ -155,7 +158,7 @@ namespace PythonCommunication
                 if (success && _logQueries)
                 {
                     string filterInfo = filters != null ? $", filters={filtersJson}" : "";
-                    Debug.Log($"{_logPrefix} 📤 Sent query: '{query}' (topK={topK}{filterInfo})");
+                    Debug.Log($"{_logPrefix} [req={requestId}] 📤 Sent query: '{query}' (topK={topK}{filterInfo})");
                 }
 
                 return success;
@@ -208,7 +211,7 @@ namespace PythonCommunication
         #region Background Receive Thread
 
         /// <summary>
-        /// Background thread loop for receiving RAG responses
+        /// Background thread loop for receiving RAG responses (Protocol V2)
         /// </summary>
         private void ReceiveLoop()
         {
@@ -220,9 +223,9 @@ namespace PythonCommunication
                 {
                     try
                     {
-                        // Read response message length (4 bytes)
-                        byte[] lengthBuffer = new byte[UnityProtocol.INT_SIZE];
-                        int bytesRead = ReadExactly(_stream, lengthBuffer, UnityProtocol.INT_SIZE);
+                        // Read Protocol V2 header: [type:1][request_id:4]
+                        byte[] headerBuffer = new byte[UnityProtocol.HEADER_SIZE];
+                        int bytesRead = ReadExactly(_stream, headerBuffer, UnityProtocol.HEADER_SIZE);
 
                         if (bytesRead == 0)
                         {
@@ -230,10 +233,35 @@ namespace PythonCommunication
                             break;
                         }
 
+                        if (bytesRead < UnityProtocol.HEADER_SIZE)
+                        {
+                            Debug.LogWarning(
+                                $"{_logPrefix} Incomplete header (got {bytesRead} bytes)"
+                            );
+                            break;
+                        }
+
+                        // Decode header
+                        MessageType messageType = (MessageType)headerBuffer[0];
+                        uint requestId = BitConverter.ToUInt32(headerBuffer, 1);
+
+                        // Validate message type (should be RAG_RESPONSE)
+                        if (messageType != MessageType.RAG_RESPONSE)
+                        {
+                            Debug.LogError(
+                                $"{_logPrefix} Unexpected message type: {messageType} (expected RAG_RESPONSE)"
+                            );
+                            break;
+                        }
+
+                        // Read JSON length (4 bytes)
+                        byte[] lengthBuffer = new byte[UnityProtocol.INT_SIZE];
+                        bytesRead = ReadExactly(_stream, lengthBuffer, UnityProtocol.INT_SIZE);
+
                         if (bytesRead < UnityProtocol.INT_SIZE)
                         {
                             Debug.LogWarning(
-                                $"{_logPrefix} Incomplete length header (got {bytesRead} bytes)"
+                                $"{_logPrefix} [req={requestId}] Incomplete length header"
                             );
                             break;
                         }
@@ -247,33 +275,27 @@ namespace PythonCommunication
                         )
                         {
                             Debug.LogError(
-                                $"{_logPrefix} Invalid message length: {messageLength}"
+                                $"{_logPrefix} [req={requestId}] Invalid message length: {messageLength}"
                             );
                             break;
                         }
 
-                        // Read complete message
-                        byte[] messageBuffer = new byte[UnityProtocol.INT_SIZE + messageLength];
-                        Buffer.BlockCopy(
-                            lengthBuffer,
-                            0,
-                            messageBuffer,
-                            0,
-                            UnityProtocol.INT_SIZE
-                        );
-
-                        bytesRead = ReadExactly(_stream, messageBuffer, messageLength, UnityProtocol.INT_SIZE);
+                        // Read JSON data
+                        byte[] jsonBuffer = new byte[messageLength];
+                        bytesRead = ReadExactly(_stream, jsonBuffer, messageLength);
 
                         if (bytesRead < messageLength)
                         {
                             Debug.LogWarning(
-                                $"{_logPrefix} Incomplete message (expected {messageLength}, got {bytesRead})"
+                                $"{_logPrefix} [req={requestId}] Incomplete message (expected {messageLength}, got {bytesRead})"
                             );
                             break;
                         }
 
-                        // Decode response
-                        string jsonResponse = UnityProtocol.DecodeRagResponse(messageBuffer);
+                        // Decode JSON string
+                        string jsonResponse = System.Text.Encoding.UTF8.GetString(jsonBuffer);
+
+                        Debug.Log($"{_logPrefix} [req={requestId}] Received RAG response ({messageLength} bytes)");
 
                         // Queue for main thread processing
                         lock (_queueLock)

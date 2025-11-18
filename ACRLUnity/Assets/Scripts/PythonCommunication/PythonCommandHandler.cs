@@ -14,6 +14,7 @@ namespace PythonCommunication
         public string robot_id;
         public CommandParameters parameters;
         public float timestamp;
+        public uint request_id; // Protocol V2: for request/response correlation
     }
 
     [System.Serializable]
@@ -23,6 +24,7 @@ namespace PythonCommunication
         public TargetPosition original_target;
         public float speed_multiplier;
         public float approach_offset;
+        public bool detailed; // For status queries
     }
 
     [System.Serializable]
@@ -158,10 +160,19 @@ namespace PythonCommunication
             // Try to parse as robot command
             try
             {
+                // Debug log the raw JSON for troubleshooting
+                if (_verboseLogging && result.response != null && result.response.Contains("command_type"))
+                {
+                    Debug.Log($"{_logPrefix} [req={result.request_id}] Received potential command: {result.response}");
+                }
+
                 RobotCommand command = JsonUtility.FromJson<RobotCommand>(result.response);
 
                 if (command != null && !string.IsNullOrEmpty(command.command_type))
                 {
+                    // Set request_id from LLMResult (Protocol V2)
+                    command.request_id = result.request_id;
+
                     ProcessCommand(command);
                 }
                 else if (_verboseLogging)
@@ -171,14 +182,25 @@ namespace PythonCommunication
                     );
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 // Not a command - likely an LLM text response, which is fine
                 if (_verboseLogging)
                 {
-                    Debug.Log(
-                        $"{_logPrefix} Received non-JSON or LLM text result: {result.response?.Substring(0, Math.Min(50, result.response?.Length ?? 0))}..."
-                    );
+                    // Check if it looks like a command that failed to parse
+                    if (result.response != null && result.response.Contains("command_type"))
+                    {
+                        Debug.LogError(
+                            $"{_logPrefix} [req={result.request_id}] Failed to parse command JSON: {ex.Message}\n" +
+                            $"JSON: {result.response}"
+                        );
+                    }
+                    else
+                    {
+                        Debug.Log(
+                            $"{_logPrefix} Received non-JSON or LLM text result: {result.response?.Substring(0, Math.Min(50, result.response?.Length ?? 0))}..."
+                        );
+                    }
                 }
             }
         }
@@ -343,25 +365,21 @@ namespace PythonCommunication
                     );
                     _failedCommands++;
 
-                    // Send error response to Python
+                    // Send error response to Python (Protocol V2)
                     SendStatusErrorResponse(
                         command.robot_id,
                         "ROBOT_NOT_FOUND",
-                        $"Robot '{command.robot_id}' not found in RobotManager"
+                        $"Robot '{command.robot_id}' not found in RobotManager",
+                        command.request_id
                     );
                     return;
                 }
 
                 // Get parameters
                 bool detailed = false;
-                if (
-                    command.parameters != null
-                    && command.parameters is CommandParameters cmdParams
-                )
+                if (command.parameters != null)
                 {
-                    // Parameters may contain a 'detailed' field but CommandParameters doesn't have it
-                    // For now, we'll assume basic status unless we receive a more complex command structure
-                    detailed = false; // Can be extended later
+                    detailed = command.parameters.detailed;
                 }
 
                 // Get robot controller
@@ -376,7 +394,8 @@ namespace PythonCommunication
                     SendStatusErrorResponse(
                         command.robot_id,
                         "NO_CONTROLLER",
-                        $"Robot '{command.robot_id}' has no RobotController component"
+                        $"Robot '{command.robot_id}' has no RobotController component",
+                        command.request_id
                     );
                     return;
                 }
@@ -461,12 +480,12 @@ namespace PythonCommunication
                     );
                 }
 
-                // Send status response back to Python StatusServer
-                bool sent = SendStatusResponseToPython(statusJson);
+                // Send status response back to Python StatusServer (Protocol V2)
+                bool sent = SendStatusResponseToPython(statusJson, command.request_id);
 
                 if (!sent)
                 {
-                    Debug.LogWarning($"{_logPrefix} Failed to send status response to Python");
+                    Debug.LogWarning($"{_logPrefix} [req={command.request_id}] Failed to send status response to Python");
                 }
 
                 _successfulCommands++;
@@ -481,15 +500,16 @@ namespace PythonCommunication
                 SendStatusErrorResponse(
                     command.robot_id ?? "unknown",
                     "EXCEPTION",
-                    $"Error gathering status: {ex.Message}"
+                    $"Error gathering status: {ex.Message}",
+                    command.request_id
                 );
             }
         }
 
         /// <summary>
-        /// Send status error response to Python
+        /// Send status error response to Python (Protocol V2)
         /// </summary>
-        private void SendStatusErrorResponse(string robotId, string errorCode, string errorMessage)
+        private void SendStatusErrorResponse(string robotId, string errorCode, string errorMessage, uint requestId = 0)
         {
             var errorResponse = new
             {
@@ -502,19 +522,19 @@ namespace PythonCommunication
 
             string errorJson = JsonUtility.ToJson(errorResponse);
 
-            // Send error response to Python
-            bool sent = SendStatusResponseToPython(errorJson);
+            // Send error response to Python (Protocol V2)
+            bool sent = SendStatusResponseToPython(errorJson, requestId);
 
             if (!sent)
             {
-                Debug.LogWarning($"{_logPrefix} Failed to send error response to Python: {errorJson}");
+                Debug.LogWarning($"{_logPrefix} [req={requestId}] Failed to send error response to Python: {errorJson}");
             }
         }
 
         /// <summary>
-        /// Send status response (success or error) to Python StatusServer
+        /// Send status response (success or error) to Python StatusServer (Protocol V2)
         /// </summary>
-        private bool SendStatusResponseToPython(string statusJson)
+        private bool SendStatusResponseToPython(string statusJson, uint requestId)
         {
             // Use StatusResponseSender to send response to StatusServer (port 5012)
             if (StatusResponseSender.Instance == null)
@@ -525,7 +545,7 @@ namespace PythonCommunication
                 return false;
             }
 
-            return StatusResponseSender.Instance.SendStatusResponse(statusJson);
+            return StatusResponseSender.Instance.SendStatusResponse(statusJson, requestId);
         }
 
         #endregion
