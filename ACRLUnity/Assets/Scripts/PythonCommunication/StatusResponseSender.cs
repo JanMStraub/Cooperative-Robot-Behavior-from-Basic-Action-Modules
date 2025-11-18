@@ -78,11 +78,12 @@ namespace PythonCommunication
         #region Public API
 
         /// <summary>
-        /// Send a status response to Python StatusServer.
+        /// Send a status response to Python StatusServer (Protocol V2).
         /// </summary>
         /// <param name="statusJson">JSON string containing robot status</param>
+        /// <param name="requestId">Request ID from original query for correlation (Protocol V2)</param>
         /// <returns>True if sent successfully</returns>
-        public bool SendStatusResponse(string statusJson)
+        public bool SendStatusResponse(string statusJson, uint requestId = 0)
         {
             if (!IsConnected)
             {
@@ -98,8 +99,8 @@ namespace PythonCommunication
 
             try
             {
-                // Encode status response using protocol
-                byte[] message = UnityProtocol.EncodeStatusResponse(statusJson);
+                // Encode status response using protocol (Protocol V2)
+                byte[] message = UnityProtocol.EncodeStatusResponse(statusJson, requestId);
 
                 // Send to StatusServer
                 bool success = WriteToStream(message);
@@ -107,7 +108,7 @@ namespace PythonCommunication
                 if (success && _logResponses)
                 {
                     Debug.Log(
-                        $"{_logPrefix} 📤 Sent status response ({message.Length} bytes) to StatusServer"
+                        $"{_logPrefix} [req={requestId}] 📤 Sent status response ({message.Length} bytes) to StatusServer"
                     );
                 }
 
@@ -115,7 +116,7 @@ namespace PythonCommunication
             }
             catch (Exception ex)
             {
-                Debug.LogError($"{_logPrefix} Error sending status response: {ex.Message}");
+                Debug.LogError($"{_logPrefix} [req={requestId}] Error sending status response: {ex.Message}");
                 return false;
             }
         }

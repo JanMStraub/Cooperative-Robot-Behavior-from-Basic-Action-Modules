@@ -68,7 +68,7 @@ cd "$SCRIPT_DIR"
 STATUS_PID=$!
 cd "$SCRIPT_DIR"
 
-sleep 2
+sleep 3
 
 echo ""
 echo "======================================================================"

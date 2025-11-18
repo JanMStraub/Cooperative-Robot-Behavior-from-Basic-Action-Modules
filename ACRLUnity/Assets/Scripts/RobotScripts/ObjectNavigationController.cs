@@ -113,8 +113,28 @@ public class ObjectNavigationController : MonoBehaviour
                 );
             }
 
-            RobotManager.Instance.SetRobotTarget(leftRobotId, leftTargetObjects[0]);
-            RobotManager.Instance.SetRobotTarget(rightRobotId, rightTargetObjects[0]);
+            // Calculate grasp poses with proper orientation for both robots
+            var leftRobotInstance = RobotManager.Instance.RobotInstances[leftRobotId];
+            var rightRobotInstance = RobotManager.Instance.RobotInstances[rightRobotId];
+
+            Vector3 leftGripperPos = leftRobotInstance.controller.endEffectorBase.position;
+            Vector3 rightGripperPos = rightRobotInstance.controller.endEffectorBase.position;
+
+            (Vector3 leftGraspPos, Quaternion leftGraspRot) = GraspPlanner.CalculateGraspPose(
+                leftTargetObjects[0],
+                leftGripperPos,
+                GraspApproach.Top
+            );
+
+            (Vector3 rightGraspPos, Quaternion rightGraspRot) = GraspPlanner.CalculateGraspPose(
+                rightTargetObjects[0],
+                rightGripperPos,
+                GraspApproach.Top
+            );
+
+            // Set targets with computed grasp poses
+            RobotManager.Instance.SetRobotTarget(leftRobotId, leftGraspPos, leftGraspRot);
+            RobotManager.Instance.SetRobotTarget(rightRobotId, rightGraspPos, rightGraspRot);
 
             Debug.Log(
                 $"{_logPrefix} Targets assigned:\n"

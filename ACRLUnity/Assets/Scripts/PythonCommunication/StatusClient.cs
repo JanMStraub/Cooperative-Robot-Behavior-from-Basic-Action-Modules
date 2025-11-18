@@ -165,8 +165,11 @@ namespace PythonCommunication
 
             try
             {
-                // Encode query message
-                byte[] message = UnityProtocol.EncodeStatusQuery(robotId, detailed);
+                // Generate unique request ID for correlation (Protocol V2)
+                uint requestId = GenerateRequestId();
+
+                // Encode query message (Protocol V2)
+                byte[] message = UnityProtocol.EncodeStatusQuery(robotId, detailed, requestId);
 
                 // Send to server
                 bool success = WriteToStream(message);
@@ -174,7 +177,7 @@ namespace PythonCommunication
                 if (success && _logQueries)
                 {
                     Debug.Log(
-                        $"{_logPrefix} 📤 Sent status query: robot='{robotId}' detailed={detailed}"
+                        $"{_logPrefix} [req={requestId}] 📤 Sent status query: robot='{robotId}' detailed={detailed}"
                     );
                 }
 
@@ -192,7 +195,7 @@ namespace PythonCommunication
         #region Background Receive Thread
 
         /// <summary>
-        /// Background thread loop for receiving status responses
+        /// Background thread loop for receiving status responses (Protocol V2)
         /// </summary>
         private void ReceiveLoop()
         {
@@ -204,9 +207,9 @@ namespace PythonCommunication
                 {
                     try
                     {
-                        // Read response message length (4 bytes)
-                        byte[] lengthBuffer = new byte[UnityProtocol.INT_SIZE];
-                        int bytesRead = ReadExactly(_stream, lengthBuffer, UnityProtocol.INT_SIZE);
+                        // Read Protocol V2 header: [type:1][request_id:4]
+                        byte[] headerBuffer = new byte[UnityProtocol.HEADER_SIZE];
+                        int bytesRead = ReadExactly(_stream, headerBuffer, UnityProtocol.HEADER_SIZE);
 
                         if (bytesRead == 0)
                         {
@@ -214,10 +217,35 @@ namespace PythonCommunication
                             break;
                         }
 
+                        if (bytesRead < UnityProtocol.HEADER_SIZE)
+                        {
+                            Debug.LogWarning(
+                                $"{_logPrefix} Incomplete header (got {bytesRead} bytes)"
+                            );
+                            break;
+                        }
+
+                        // Decode header
+                        MessageType messageType = (MessageType)headerBuffer[0];
+                        uint requestId = BitConverter.ToUInt32(headerBuffer, 1);
+
+                        // Validate message type (should be STATUS_RESPONSE)
+                        if (messageType != MessageType.STATUS_RESPONSE)
+                        {
+                            Debug.LogError(
+                                $"{_logPrefix} Unexpected message type: {messageType} (expected STATUS_RESPONSE)"
+                            );
+                            break;
+                        }
+
+                        // Read JSON length (4 bytes)
+                        byte[] lengthBuffer = new byte[UnityProtocol.INT_SIZE];
+                        bytesRead = ReadExactly(_stream, lengthBuffer, UnityProtocol.INT_SIZE);
+
                         if (bytesRead < UnityProtocol.INT_SIZE)
                         {
                             Debug.LogWarning(
-                                $"{_logPrefix} Incomplete length header (got {bytesRead} bytes)"
+                                $"{_logPrefix} [req={requestId}] Incomplete length header"
                             );
                             break;
                         }
@@ -225,33 +253,28 @@ namespace PythonCommunication
                         // Parse message length
                         int messageLength = BitConverter.ToInt32(lengthBuffer, 0);
 
-                        if (messageLength <= 0 || messageLength > UnityProtocol.MAX_IMAGE_SIZE)
+                        if (messageLength <= 0 || messageLength > UnityProtocol.MAX_STRING_LENGTH)
                         {
-                            Debug.LogError($"{_logPrefix} Invalid message length: {messageLength}");
+                            Debug.LogError($"{_logPrefix} [req={requestId}] Invalid message length: {messageLength}");
                             break;
                         }
 
-                        // Read complete message
-                        byte[] messageBuffer = new byte[UnityProtocol.INT_SIZE + messageLength];
-                        Buffer.BlockCopy(lengthBuffer, 0, messageBuffer, 0, UnityProtocol.INT_SIZE);
-
-                        bytesRead = ReadExactly(
-                            _stream,
-                            messageBuffer,
-                            messageLength,
-                            UnityProtocol.INT_SIZE
-                        );
+                        // Read JSON data
+                        byte[] jsonBuffer = new byte[messageLength];
+                        bytesRead = ReadExactly(_stream, jsonBuffer, messageLength);
 
                         if (bytesRead < messageLength)
                         {
                             Debug.LogWarning(
-                                $"{_logPrefix} Incomplete message (expected {messageLength}, got {bytesRead})"
+                                $"{_logPrefix} [req={requestId}] Incomplete message (expected {messageLength}, got {bytesRead})"
                             );
                             break;
                         }
 
-                        // Decode response
-                        string jsonResponse = UnityProtocol.DecodeStatusResponse(messageBuffer);
+                        // Decode JSON string
+                        string jsonResponse = System.Text.Encoding.UTF8.GetString(jsonBuffer);
+
+                        Debug.Log($"{_logPrefix} [req={requestId}] Received status response ({messageLength} bytes)");
 
                         // Queue for main thread processing
                         lock (_queueLock)

@@ -217,7 +217,7 @@ namespace PythonCommunication
 
             private UnifiedPythonReceiver _parent;
             private Thread _receiveThread;
-            private Queue<string> _resultQueue = new Queue<string>();
+            private Queue<(uint requestId, string json)> _resultQueue = new Queue<(uint requestId, string json)>();
             private readonly object _queueLock = new object();
 
             public void Initialize(UnifiedPythonReceiver parent)
@@ -236,8 +236,8 @@ namespace PythonCommunication
                 {
                     while (_resultQueue.Count > 0)
                     {
-                        string json = _resultQueue.Dequeue();
-                        ProcessResult(json);
+                        var (requestId, json) = _resultQueue.Dequeue();
+                        ProcessResult(requestId, json);
                     }
                 }
             }
@@ -277,36 +277,58 @@ namespace PythonCommunication
             }
 
             /// <summary>
-            /// Background thread loop for receiving results
+            /// Background thread loop for receiving results (Protocol V2)
             /// </summary>
             private void ReceiveLoop()
             {
-                byte[] lengthBuffer = new byte[UnityProtocol.INT_SIZE];
+                byte[] headerBuffer = new byte[UnityProtocol.HEADER_SIZE]; // Protocol V2: 5 bytes
 
                 try
                 {
                     while (_shouldRun && _isConnected)
                     {
-                        // Read message length (4 bytes)
-                        int bytesRead = ReadExactly(_stream, lengthBuffer, UnityProtocol.INT_SIZE);
-                        if (bytesRead < UnityProtocol.INT_SIZE)
+                        // Read Protocol V2 header: [type:1][request_id:4]
+                        int bytesRead = ReadExactly(_stream, headerBuffer, UnityProtocol.HEADER_SIZE);
+                        if (bytesRead < UnityProtocol.HEADER_SIZE)
                         {
                             Debug.LogWarning($"{_logPrefix} Connection closed by server");
                             break;
                         }
 
-                        int dataLength = BitConverter.ToInt32(lengthBuffer, 0);
+                        // Decode header
+                        MessageType messageType = (MessageType)headerBuffer[0];
+                        uint requestId = BitConverter.ToUInt32(headerBuffer, 1);
 
-                        // Validate length
-                        if (dataLength <= 0 || dataLength > UnityProtocol.MAX_IMAGE_SIZE)
+                        // Validate message type (should be RESULT for this connection)
+                        if (messageType != MessageType.RESULT)
                         {
                             Debug.LogError(
-                                $"{_logPrefix} Invalid data length received: {dataLength}"
+                                $"{_logPrefix} Unexpected message type: {messageType} (expected RESULT)"
                             );
                             break;
                         }
 
-                        // Read message data
+                        // Read JSON length (4 bytes)
+                        byte[] lengthBuffer = new byte[UnityProtocol.INT_SIZE];
+                        bytesRead = ReadExactly(_stream, lengthBuffer, UnityProtocol.INT_SIZE);
+                        if (bytesRead < UnityProtocol.INT_SIZE)
+                        {
+                            Debug.LogWarning($"{_logPrefix} Connection closed while reading JSON length");
+                            break;
+                        }
+
+                        int dataLength = BitConverter.ToInt32(lengthBuffer, 0);
+
+                        // Validate length (use MAX_IMAGE_SIZE for JSON messages)
+                        if (dataLength <= 0 || dataLength > UnityProtocol.MAX_IMAGE_SIZE)
+                        {
+                            Debug.LogError(
+                                $"{_logPrefix} Invalid JSON length received: {dataLength}"
+                            );
+                            break;
+                        }
+
+                        // Read JSON data
                         byte[] dataBuffer = new byte[dataLength];
                         bytesRead = ReadExactly(_stream, dataBuffer, dataLength);
                         if (bytesRead < dataLength)
@@ -315,37 +337,23 @@ namespace PythonCommunication
                             break;
                         }
 
-                        // Decode using protocol
+                        // Decode JSON
                         try
                         {
-                            byte[] fullMessage = new byte[UnityProtocol.INT_SIZE + dataLength];
-                            Buffer.BlockCopy(
-                                lengthBuffer,
-                                0,
-                                fullMessage,
-                                0,
-                                UnityProtocol.INT_SIZE
-                            );
-                            Buffer.BlockCopy(
-                                dataBuffer,
-                                0,
-                                fullMessage,
-                                UnityProtocol.INT_SIZE,
-                                dataLength
-                            );
+                            string json = Encoding.UTF8.GetString(dataBuffer);
 
-                            string json = UnityProtocol.DecodeResultMessage(fullMessage);
-
-                            // Queue for processing on main thread
+                            // Queue for processing on main thread with request_id (Protocol V2)
                             lock (_queueLock)
                             {
-                                _resultQueue.Enqueue(json);
+                                _resultQueue.Enqueue((requestId, json));
                             }
+
+                            Debug.Log($"{_logPrefix} [req={requestId}] Received result ({dataLength} bytes)");
                         }
                         catch (Exception parseEx)
                         {
                             Debug.LogError(
-                                $"{_logPrefix} Failed to parse result: {parseEx.Message}"
+                                $"{_logPrefix} [req={requestId}] Failed to parse result: {parseEx.Message}"
                             );
                         }
                     }
@@ -370,9 +378,9 @@ namespace PythonCommunication
             }
 
             /// <summary>
-            /// Process received JSON and parse as LLM result
+            /// Process received JSON and parse as LLM result (Protocol V2)
             /// </summary>
-            private void ProcessResult(string json)
+            private void ProcessResult(uint requestId, string json)
             {
                 if (string.IsNullOrEmpty(json))
                     return;
@@ -384,6 +392,9 @@ namespace PythonCommunication
 
                     if (result != null)
                     {
+                        // Set request_id from protocol header (Protocol V2)
+                        result.request_id = requestId;
+
                         _parent.RouteLLMResult(result);
                     }
                     else
@@ -485,7 +496,7 @@ namespace PythonCommunication
             }
 
             /// <summary>
-            /// Background thread loop for receiving detection results
+            /// Background thread loop for receiving detection results (Protocol V2)
             /// </summary>
             private void ReceiveLoop()
             {
@@ -493,13 +504,36 @@ namespace PythonCommunication
                 {
                     while (IsConnected && _shouldRun)
                     {
-                        // Read message length (4 bytes)
+                        // Read Protocol V2 header: [type:1][request_id:4]
+                        byte[] headerBuffer = new byte[UnityProtocol.HEADER_SIZE];
+                        int bytesRead = ReadExactly(_stream, headerBuffer, UnityProtocol.HEADER_SIZE);
+
+                        if (bytesRead < UnityProtocol.HEADER_SIZE)
+                        {
+                            Debug.LogWarning($"{_logPrefix} Connection closed by server");
+                            break;
+                        }
+
+                        // Decode header
+                        MessageType messageType = (MessageType)headerBuffer[0];
+                        uint requestId = BitConverter.ToUInt32(headerBuffer, 1);
+
+                        // Validate message type (should be RESULT for depth detection)
+                        if (messageType != MessageType.RESULT)
+                        {
+                            Debug.LogError(
+                                $"{_logPrefix} Unexpected message type: {messageType} (expected RESULT)"
+                            );
+                            break;
+                        }
+
+                        // Read JSON length (4 bytes)
                         byte[] lengthBuffer = new byte[4];
-                        int bytesRead = ReadExactly(_stream, lengthBuffer, 4);
+                        bytesRead = ReadExactly(_stream, lengthBuffer, 4);
 
                         if (bytesRead < 4)
                         {
-                            Debug.LogWarning($"{_logPrefix} Connection closed by server");
+                            Debug.LogWarning($"{_logPrefix} Connection closed while reading JSON length");
                             break;
                         }
 
@@ -507,7 +541,7 @@ namespace PythonCommunication
 
                         if (messageLength <= 0 || messageLength > MAX_JSON_LENGTH)
                         {
-                            Debug.LogError($"{_logPrefix} Invalid message length: {messageLength}");
+                            Debug.LogError($"{_logPrefix} [req={requestId}] Invalid message length: {messageLength}");
                             continue;
                         }
 
@@ -517,11 +551,11 @@ namespace PythonCommunication
 
                         if (bytesRead < messageLength)
                         {
-                            Debug.LogWarning($"{_logPrefix} Incomplete message received");
+                            Debug.LogWarning($"{_logPrefix} [req={requestId}] Incomplete message received");
                             break;
                         }
 
-                        // Combine length + data for HandleIncomingData
+                        // Combine length + data for HandleIncomingData (keeping original format for compatibility)
                         byte[] fullMessage = new byte[4 + messageLength];
                         Array.Copy(lengthBuffer, 0, fullMessage, 0, 4);
                         Array.Copy(messageData, 0, fullMessage, 4, messageLength);
@@ -531,6 +565,8 @@ namespace PythonCommunication
                         {
                             _messageQueue.Enqueue(fullMessage);
                         }
+
+                        Debug.Log($"{_logPrefix} [req={requestId}] Received depth result ({messageLength} bytes)");
                     }
                 }
                 catch (System.IO.IOException ex)

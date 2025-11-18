@@ -88,9 +88,13 @@ class ResultsBroadcaster:
             if "timestamp" not in result and "metadata" in result:
                 result["timestamp"] = result["metadata"].get("timestamp", "")
 
-            # Encode the message once before checking client count
+            # Extract request_id from result (or default to 0)
+            # Results may include request_id from original request for correlation
+            request_id = result.get("request_id", 0)
+
+            # Encode the message once before checking client count (Protocol V2)
             # This prevents race condition where clients disconnect after check
-            message = UnityProtocol.encode_result_message(result)
+            message = UnityProtocol.encode_result_message(result, request_id)
 
             # Check client count and send in single atomic operation
             client_count = cls._server.get_client_count()
@@ -178,14 +182,16 @@ class ResultsServer(TCPServerBase):
             logging.debug(f"Client connection closed: {e}")
 
     def _send_queued_results(self, client: socket.socket):
-        """Send any queued results to a newly connected client"""
+        """Send any queued results to a newly connected client (Protocol V2)"""
         queued = ResultsBroadcaster.get_queued_results()
 
         if queued:
             logging.info(f"Sending {len(queued)} queued results to new client")
             for result in queued:
                 try:
-                    message = UnityProtocol.encode_result_message(result)
+                    # Extract request_id from result (or default to 0)
+                    request_id = result.get("request_id", 0)
+                    message = UnityProtocol.encode_result_message(result, request_id)
                     client.sendall(message)
                 except Exception as e:
                     logging.warning(f"Failed to send queued result: {e}")
