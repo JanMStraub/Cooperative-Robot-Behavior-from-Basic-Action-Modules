@@ -39,7 +39,7 @@ namespace PythonCommunication
                 DontDestroyOnLoad(gameObject);
                 _serverPort = CommunicationConstants.STATUS_SERVER_PORT; // Port 5012
                 _autoConnect = true;
-                Debug.Log($"{_logPrefix} ✓ Initialized (port {_serverPort})");
+                Debug.Log($"{_logPrefix} Initialized (port {_serverPort})");
             }
             else
             {
@@ -53,13 +53,13 @@ namespace PythonCommunication
 
         protected override void OnConnected()
         {
-            Debug.Log($"{_logPrefix} ✓ Connected to StatusServer at {ConnectionInfo}");
+            Debug.Log($"{_logPrefix} Connected to StatusServer at {ConnectionInfo}");
         }
 
         protected override void OnConnectionFailed(Exception exception)
         {
             Debug.LogWarning(
-                $"{_logPrefix} ⚠️ Connection failed: {exception.Message}. Will retry in {_reconnectInterval}s"
+                $"{_logPrefix} Connection failed: {exception.Message}. Will retry in {_reconnectInterval}s"
             );
         }
 
@@ -70,7 +70,7 @@ namespace PythonCommunication
 
         protected override void OnDisconnected()
         {
-            Debug.Log($"{_logPrefix} ✓ Disconnected from StatusServer");
+            Debug.Log($"{_logPrefix} Disconnected from StatusServer");
         }
 
         #endregion
@@ -108,7 +108,7 @@ namespace PythonCommunication
                 if (success && _logResponses)
                 {
                     Debug.Log(
-                        $"{_logPrefix} [req={requestId}] 📤 Sent status response ({message.Length} bytes) to StatusServer"
+                        $"{_logPrefix} [req={requestId}] Sent status response ({message.Length} bytes) to StatusServer"
                     );
                 }
 

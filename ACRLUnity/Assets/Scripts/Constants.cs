@@ -38,6 +38,12 @@ namespace Core
         /// Maximum step speed for IK adjustments
         /// </summary>
         public const float MAX_STEP_SPEED = 0.5f;
+
+        /// <summary>
+        /// Movement detection threshold (meters)
+        /// Robot is considered moving if distance to target exceeds this value (1cm)
+        /// </summary>
+        public const float MOVEMENT_THRESHOLD = 0.01f;
     }
 
     /// <summary>
@@ -147,11 +153,13 @@ namespace Core
         /// <summary>
         /// Legacy: Default results server port (alias for LLM_RESULTS_PORT)
         /// </summary>
+        [System.Obsolete("Use LLM_RESULTS_PORT instead")]
         public const int RESULTS_SERVER_PORT = LLM_RESULTS_PORT;
 
         /// <summary>
         /// Legacy: Detection server port (alias for DEPTH_RESULTS_PORT)
         /// </summary>
+        [System.Obsolete("Use DEPTH_RESULTS_PORT instead")]
         public const int DETECTION_SERVER_PORT = DEPTH_RESULTS_PORT;
 
         /// <summary>
@@ -168,6 +176,21 @@ namespace Core
         /// Output buffer size for process streaming (bytes)
         /// </summary>
         public const int OUTPUT_BUFFER_SIZE = 4096;
+
+        /// <summary>
+        /// Thread join timeout when stopping receive threads (milliseconds)
+        /// </summary>
+        public const int THREAD_JOIN_TIMEOUT_MS = 1000;
+
+        /// <summary>
+        /// Maximum JSON message size (10MB)
+        /// </summary>
+        public const int MAX_JSON_LENGTH = 10 * 1024 * 1024;
+
+        /// <summary>
+        /// Auto-reconnect interval after connection loss (seconds)
+        /// </summary>
+        public const float RECONNECT_INTERVAL = 2f;
     }
 
     /// <summary>

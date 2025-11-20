@@ -58,7 +58,7 @@ namespace PythonCommunication
                 _detectionConnection.Initialize(this);
 
                 Debug.Log(
-                    $"{_logPrefix} ✓ Initialized with two connection handlers (ports 5010, 5007)"
+                    $"{_logPrefix} Initialized with two connection handlers (ports 5010, 5007)"
                 );
             }
             else
@@ -139,7 +139,7 @@ namespace PythonCommunication
                 string durationInfo =
                     result.metadata != null ? $"{result.metadata.duration_seconds:F2}s" : "?";
                 Debug.Log(
-                    $"{_logPrefix} 📥 LLM Result for {result.camera_id}:\n  Response: {result.response}\n  Model: {modelInfo}\n  Duration: {durationInfo}"
+                    $"{_logPrefix} LLM Result for {result.camera_id}: response={result.response}, model={modelInfo}, duration={durationInfo}"
                 );
             }
 
@@ -169,25 +169,25 @@ namespace PythonCommunication
                 int detectionCount = result.detections != null ? result.detections.Length : 0;
 
                 Debug.Log(
-                    $"{_logPrefix} 📏 Depth Result for {result.camera_id}: {detectionCount} objects detected in {durationInfo}"
+                    $"{_logPrefix} Depth Result for {result.camera_id}: {detectionCount} objects in {durationInfo}"
                 );
 
+                // Only log first 3 detections to reduce verbosity
                 if (result.detections != null)
                 {
-                    foreach (var detection in result.detections)
+                    for (int i = 0; i < Math.Min(3, result.detections.Length); i++)
                     {
+                        var detection = result.detections[i];
                         if (detection.world_position != null)
                         {
                             Debug.Log(
-                                $"{_logPrefix}  - {detection.color.ToUpper()} cube at ({detection.world_position.x:F3}, {detection.world_position.y:F3}, {detection.world_position.z:F3})m, depth={detection.depth_m:F3}m, confidence={detection.confidence:F2}"
+                                $"{_logPrefix}  {detection.color} at ({detection.world_position.x:F3},{detection.world_position.y:F3},{detection.world_position.z:F3})m conf={detection.confidence:F2}"
                             );
                         }
-                        else
-                        {
-                            Debug.Log(
-                                $"{_logPrefix}  - {detection.color.ToUpper()} cube at pixel ({detection.pixel_center.x}, {detection.pixel_center.y}), confidence={detection.confidence:F2}"
-                            );
-                        }
+                    }
+                    if (result.detections.Length > 3)
+                    {
+                        Debug.Log($"{_logPrefix}  ... and {result.detections.Length - 3} more");
                     }
                 }
             }
@@ -223,7 +223,7 @@ namespace PythonCommunication
             public void Initialize(UnifiedPythonReceiver parent)
             {
                 _parent = parent;
-                _serverPort = CommunicationConstants.RESULTS_SERVER_PORT; // Port 5010 - LLM results from RunAnalyzer
+                _serverPort = CommunicationConstants.LLM_RESULTS_PORT; // Port 5010 - LLM results from RunAnalyzer
                 _autoConnect = true;
             }
 
@@ -263,7 +263,7 @@ namespace PythonCommunication
                 // Stop receive thread
                 if (_receiveThread != null && _receiveThread.IsAlive)
                 {
-                    _receiveThread.Join(1000); // Wait up to 1 second
+                    _receiveThread.Join(CommunicationConstants.THREAD_JOIN_TIMEOUT_MS);
                 }
             }
 
@@ -348,7 +348,9 @@ namespace PythonCommunication
                                 _resultQueue.Enqueue((requestId, json));
                             }
 
+#if UNITY_EDITOR
                             Debug.Log($"{_logPrefix} [req={requestId}] Received result ({dataLength} bytes)");
+#endif
                         }
                         catch (Exception parseEx)
                         {
@@ -385,27 +387,16 @@ namespace PythonCommunication
                 if (string.IsNullOrEmpty(json))
                     return;
 
-                try
+                // Parse as LLM result using centralized parser (port 5010 only receives LLM results)
+                if (!JsonParser.TryParseWithLogging<LLMResult>(json, out LLMResult result, _logPrefix))
                 {
-                    // Parse as LLM result (port 5010 only receives LLM results)
-                    LLMResult result = JsonUtility.FromJson<LLMResult>(json);
-
-                    if (result != null)
-                    {
-                        // Set request_id from protocol header (Protocol V2)
-                        result.request_id = requestId;
-
-                        _parent.RouteLLMResult(result);
-                    }
-                    else
-                    {
-                        Debug.LogError($"{_logPrefix} Failed to parse LLM result from JSON");
-                    }
+                    return;
                 }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"{_logPrefix} Error processing LLM result: {ex.Message}");
-                }
+
+                // Set request_id from protocol header (Protocol V2)
+                result.request_id = requestId;
+
+                _parent.RouteLLMResult(result);
             }
 
             /// <summary>
@@ -431,15 +422,13 @@ namespace PythonCommunication
 
             private UnifiedPythonReceiver _parent;
             private Thread _receiveThread;
-            private Queue<byte[]> _messageQueue = new Queue<byte[]>();
+            private Queue<(uint requestId, byte[] data)> _messageQueue = new Queue<(uint requestId, byte[] data)>();
             private readonly object _queueLock = new object();
-
-            private const int MAX_JSON_LENGTH = 10 * 1024 * 1024; // 10MB max
 
             public void Initialize(UnifiedPythonReceiver parent)
             {
                 _parent = parent;
-                _serverPort = CommunicationConstants.DETECTION_SERVER_PORT; // Port 5007 - Depth results from RunStereoDetector
+                _serverPort = CommunicationConstants.DEPTH_RESULTS_PORT; // Port 5007 - Depth results from RunStereoDetector
                 _autoConnect = true;
             }
 
@@ -452,8 +441,8 @@ namespace PythonCommunication
                 {
                     while (_messageQueue.Count > 0)
                     {
-                        byte[] message = _messageQueue.Dequeue();
-                        HandleIncomingData(message);
+                        var (requestId, message) = _messageQueue.Dequeue();
+                        HandleIncomingData(requestId, message);
                     }
                 }
             }
@@ -482,7 +471,7 @@ namespace PythonCommunication
                 // Stop receive thread
                 if (_receiveThread != null && _receiveThread.IsAlive)
                 {
-                    _receiveThread.Join(1000); // Wait up to 1 second
+                    _receiveThread.Join(CommunicationConstants.THREAD_JOIN_TIMEOUT_MS);
                 }
             }
 
@@ -539,7 +528,7 @@ namespace PythonCommunication
 
                         int messageLength = BitConverter.ToInt32(lengthBuffer, 0);
 
-                        if (messageLength <= 0 || messageLength > MAX_JSON_LENGTH)
+                        if (messageLength <= 0 || messageLength > CommunicationConstants.MAX_JSON_LENGTH)
                         {
                             Debug.LogError($"{_logPrefix} [req={requestId}] Invalid message length: {messageLength}");
                             continue;
@@ -560,13 +549,15 @@ namespace PythonCommunication
                         Array.Copy(lengthBuffer, 0, fullMessage, 0, 4);
                         Array.Copy(messageData, 0, fullMessage, 4, messageLength);
 
-                        // Queue for processing on main thread
+                        // Queue for processing on main thread with request_id (Protocol V2)
                         lock (_queueLock)
                         {
-                            _messageQueue.Enqueue(fullMessage);
+                            _messageQueue.Enqueue((requestId, fullMessage));
                         }
 
+#if UNITY_EDITOR
                         Debug.Log($"{_logPrefix} [req={requestId}] Received depth result ({messageLength} bytes)");
+#endif
                     }
                 }
                 catch (System.IO.IOException ex)
@@ -590,31 +581,31 @@ namespace PythonCommunication
             }
 
             /// <summary>
-            /// Handles incoming detection result data (called on main thread)
+            /// Handles incoming detection result data (called on main thread) - Protocol V2
             /// </summary>
-            private void HandleIncomingData(byte[] data)
+            private void HandleIncomingData(uint requestId, byte[] data)
             {
                 try
                 {
                     // Format: [json_length (4 bytes)][json_data]
                     if (data.Length < 4)
                     {
-                        Debug.LogError($"{_logPrefix} Invalid data: too short");
+                        Debug.LogError($"{_logPrefix} [req={requestId}] Invalid data: too short");
                         return;
                     }
 
                     int jsonLength = BitConverter.ToInt32(data, 0);
 
-                    if (jsonLength <= 0 || jsonLength > MAX_JSON_LENGTH)
+                    if (jsonLength <= 0 || jsonLength > CommunicationConstants.MAX_JSON_LENGTH)
                     {
-                        Debug.LogError($"{_logPrefix} Invalid JSON length: {jsonLength}");
+                        Debug.LogError($"{_logPrefix} [req={requestId}] Invalid JSON length: {jsonLength}");
                         return;
                     }
 
                     if (data.Length < 4 + jsonLength)
                     {
                         Debug.LogError(
-                            $"{_logPrefix} Incomplete data: expected {4 + jsonLength} bytes, got {data.Length}"
+                            $"{_logPrefix} [req={requestId}] Incomplete data: expected {4 + jsonLength} bytes, got {data.Length}"
                         );
                         return;
                     }
@@ -622,19 +613,19 @@ namespace PythonCommunication
                     // Extract JSON string
                     string jsonString = Encoding.UTF8.GetString(data, 4, jsonLength);
 
-                    // Parse JSON as DepthResult (stereo detection with 3D coordinates)
-                    DepthResult result = JsonUtility.FromJson<DepthResult>(jsonString);
-
-                    if (result == null)
+                    // Parse JSON as DepthResult using centralized parser (stereo detection with 3D coordinates)
+                    if (!JsonParser.TryParseWithLogging<DepthResult>(jsonString, out DepthResult result, _logPrefix))
                     {
-                        Debug.LogError($"{_logPrefix} Failed to parse depth result");
                         return;
                     }
+
+                    // Set request_id from protocol header (Protocol V2)
+                    result.request_id = requestId;
 
                     if (_parent._logResults)
                     {
                         Debug.Log(
-                            $"{_logPrefix} Received DepthResult: camera={result.camera_id}, detections={result.detections?.Length ?? 0}"
+                            $"{_logPrefix} [req={requestId}] Received DepthResult: camera={result.camera_id}, detections={result.detections?.Length ?? 0}"
                         );
                     }
 
@@ -643,7 +634,7 @@ namespace PythonCommunication
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"{_logPrefix} Error handling data: {ex.Message}");
+                    Debug.LogError($"{_logPrefix} [req={requestId}] Error handling data: {ex.Message}");
                 }
             }
 

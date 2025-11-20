@@ -47,7 +47,7 @@ namespace PythonCommunication
                 Instance = this;
                 DontDestroyOnLoad(gameObject);
                 _serverPort = CommunicationConstants.RAG_SERVER_PORT; // Port 5011
-                Debug.Log($"{_logPrefix} ✓ Initialized (port {_serverPort})");
+                Debug.Log($"{_logPrefix} Initialized (port {_serverPort})");
             }
             else
             {
@@ -61,7 +61,7 @@ namespace PythonCommunication
 
         protected override void OnConnected()
         {
-            Debug.Log($"{_logPrefix} ✓ Connected to RAG server at {ConnectionInfo}");
+            Debug.Log($"{_logPrefix} Connected to {ConnectionInfo}");
 
             // Start background receive thread
             _receiveThread = new Thread(ReceiveLoop)
@@ -74,24 +74,24 @@ namespace PythonCommunication
 
         protected override void OnConnectionFailed(Exception exception)
         {
-            Debug.LogWarning(
-                $"{_logPrefix} ⚠️ Connection failed: {exception.Message}. Will retry in {_reconnectInterval}s"
-            );
+            // Only log if auto-reconnect is disabled
+            if (!_autoReconnect)
+            {
+                Debug.LogWarning($"{_logPrefix} Connection failed: {exception.Message}");
+            }
         }
 
         protected override void OnDisconnecting()
         {
-            Debug.Log($"{_logPrefix} Disconnecting from RAG server...");
+            // Removed redundant log - connection state changes are logged elsewhere
         }
 
         protected override void OnDisconnected()
         {
-            Debug.Log($"{_logPrefix} ✓ Disconnected from RAG server");
-
             // Wait for receive thread to finish
             if (_receiveThread != null && _receiveThread.IsAlive)
             {
-                _receiveThread.Join(1000); // Wait up to 1 second
+                _receiveThread.Join(CommunicationConstants.THREAD_JOIN_TIMEOUT_MS);
             }
         }
 
@@ -158,7 +158,7 @@ namespace PythonCommunication
                 if (success && _logQueries)
                 {
                     string filterInfo = filters != null ? $", filters={filtersJson}" : "";
-                    Debug.Log($"{_logPrefix} [req={requestId}] 📤 Sent query: '{query}' (topK={topK}{filterInfo})");
+                    Debug.Log($"{_logPrefix} [req={requestId}] Sent query: '{query}' (topK={topK}{filterInfo})");
                 }
 
                 return success;
@@ -324,22 +324,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Helper method to read exactly N bytes into buffer starting at offset
-        /// </summary>
-        private int ReadExactly(System.Net.Sockets.NetworkStream stream, byte[] buffer, int count, int offset = 0)
-        {
-            int totalRead = 0;
-            while (totalRead < count)
-            {
-                int read = stream.Read(buffer, offset + totalRead, count - totalRead);
-                if (read == 0)
-                    return totalRead; // Connection closed
-                totalRead += read;
-            }
-            return totalRead;
-        }
-
         #endregion
 
         #region Response Processing
@@ -370,50 +354,29 @@ namespace PythonCommunication
         /// </summary>
         private void ProcessResponse(string jsonResponse)
         {
+            // Parse JSON using centralized parser
+            if (!JsonParser.TryParseWithLogging<RagResult>(jsonResponse, out RagResult result, _logPrefix))
+            {
+                return;
+            }
+
+            if (_logQueries)
+            {
+                Debug.Log(
+                    $"{_logPrefix} Received {result.num_results} operation(s) for query: '{result.query}'"
+                );
+            }
+
+            // Fire event
             try
             {
-                // Parse JSON to RagResult
-                RagResult result = JsonUtility.FromJson<RagResult>(jsonResponse);
-
-                if (result == null)
-                {
-                    Debug.LogError($"{_logPrefix} Failed to parse RAG response");
-                    return;
-                }
-
-                if (_logQueries)
-                {
-                    Debug.Log(
-                        $"{_logPrefix} 📥 Received {result.num_results} operation(s) for query: '{result.query}'"
-                    );
-
-                    if (result.operations != null)
-                    {
-                        for (int i = 0; i < result.operations.Length && i < 3; i++)
-                        {
-                            var op = result.operations[i];
-                            Debug.Log(
-                                $"{_logPrefix}   {i + 1}. {op.name} (score={op.similarity_score:F3}, category={op.category})"
-                            );
-                        }
-                    }
-                }
-
-                // Fire event
-                try
-                {
-                    OnRagResultReceived?.Invoke(result);
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError(
-                        $"{_logPrefix} Error in OnRagResultReceived event handler: {ex.Message}"
-                    );
-                }
+                OnRagResultReceived?.Invoke(result);
             }
             catch (Exception ex)
             {
-                Debug.LogError($"{_logPrefix} Error processing response: {ex.Message}");
+                Debug.LogError(
+                    $"{_logPrefix} Error in OnRagResultReceived event handler: {ex.Message}"
+                );
             }
         }
 

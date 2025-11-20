@@ -47,6 +47,7 @@ namespace PythonCommunication
         public string timestamp;
         public ObjectDetection[] detections;
         public DepthMetadata metadata;
+        public uint request_id; // Protocol V2: for request/response correlation
     }
 
     [Serializable]

@@ -74,15 +74,12 @@ namespace PythonCommunication
         [SerializeField]
         private float _stereoStreamInterval = 0.5f;
 
-        // Internal connections (one per port)
-        private SingleImageConnection _singleConnection; // Port 5005
-        private StereoImageConnection _stereoConnection; // Port 5006
+        private SingleImageConnection _singleConnection;
+        private StereoImageConnection _stereoConnection;
 
-        // Streaming timers
         private float _singleStreamTimer = 0f;
         private float _stereoStreamTimer = 0f;
 
-        // Helper variables
         private const string _logPrefix = "[UNIFIED_PYTHON_SENDER]";
 
         #region Singleton
@@ -97,7 +94,6 @@ namespace PythonCommunication
                 Instance = this;
                 DontDestroyOnLoad(gameObject);
 
-                // Create connection handlers
                 GameObject singleConnObj = new GameObject("SingleImageConnection");
                 singleConnObj.transform.SetParent(transform);
                 _singleConnection = singleConnObj.AddComponent<SingleImageConnection>();
@@ -107,7 +103,7 @@ namespace PythonCommunication
                 _stereoConnection = stereoConnObj.AddComponent<StereoImageConnection>();
 
                 Debug.Log(
-                    $"{_logPrefix} ✓ Initialized with two connection handlers (ports 5005, 5006)"
+                    $"{_logPrefix} Initialized with two connection handlers (ports 5005, 5006)"
                 );
             }
             else
@@ -125,7 +121,6 @@ namespace PythonCommunication
         /// </summary>
         private void Update()
         {
-            // Single camera streaming
             if (
                 _enableSingleStreaming
                 && _singleStreamCamera != null
@@ -141,7 +136,6 @@ namespace PythonCommunication
                 }
             }
 
-            // Stereo streaming
             if (
                 _enableStereoStreaming
                 && _stereoLeftCamera != null
@@ -386,6 +380,62 @@ namespace PythonCommunication
 
         #endregion
 
+        #region Image Capture Utilities
+
+        /// <summary>
+        /// Capture image from camera and encode to JPEG.
+        /// Handles RenderTexture creation, rendering, and cleanup.
+        /// </summary>
+        /// <param name="cam">Camera to capture from</param>
+        /// <param name="jpegQuality">JPEG quality (1-100)</param>
+        /// <returns>Encoded JPEG bytes, or null on error</returns>
+        private static byte[] CaptureFromCamera(Camera cam, int jpegQuality)
+        {
+            if (cam == null)
+            {
+                Debug.LogError("[CAPTURE_HELPER] Camera is null");
+                return null;
+            }
+
+            RenderTexture rt = null;
+            Texture2D texture = null;
+
+            try
+            {
+                // Create temporary render texture
+                rt = new RenderTexture(cam.pixelWidth, cam.pixelHeight, 24);
+                cam.targetTexture = rt;
+                cam.Render();
+
+                // Read pixels
+                RenderTexture.active = rt;
+                texture = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
+                texture.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+                texture.Apply();
+
+                // Encode to JPEG
+                return texture.EncodeToJPG(jpegQuality);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[CAPTURE_HELPER] Error capturing image: {ex.Message}");
+                return null;
+            }
+            finally
+            {
+                // Cleanup
+                if (cam != null)
+                    cam.targetTexture = null;
+                RenderTexture.active = null;
+                if (rt != null)
+                    UnityEngine.Object.Destroy(rt);
+                if (texture != null)
+                    UnityEngine.Object.Destroy(texture);
+            }
+        }
+
+        #endregion
+
         #region Inner Connection Classes
 
         /// <summary>
@@ -400,14 +450,6 @@ namespace PythonCommunication
                 _serverPort = CommunicationConstants.STREAMING_SERVER_PORT; // StreamingServer port
                 _autoConnect = true;
             }
-
-            protected override void OnConnected() { }
-
-            protected override void OnConnectionFailed(Exception exception) { }
-
-            protected override void OnDisconnecting() { }
-
-            protected override void OnDisconnected() { }
 
             /// <summary>
             /// Send pre-encoded image (protocol: [camera_id_len][camera_id][prompt_len][prompt][image_len][image_data])
@@ -488,12 +530,14 @@ namespace PythonCommunication
                     _stream.Write(message, 0, message.Length);
                     _stream.Flush();
 
+#if UNITY_EDITOR
                     string promptInfo = string.IsNullOrEmpty(prompt)
                         ? ""
                         : $" with prompt: '{prompt}'";
                     Debug.Log(
                         $"{_logPrefix} [req={requestId}] Sent {imageBytes.Length} bytes for camera '{cameraId}'{promptInfo}"
                     );
+#endif
 
                     return true;
                 }
@@ -522,56 +566,19 @@ namespace PythonCommunication
             /// </summary>
             public bool CaptureAndSend(Camera cam, string cameraId, string prompt, int jpegQuality)
             {
-                if (cam == null)
-                {
-                    Debug.LogError($"{_logPrefix} Camera is null");
-                    return false;
-                }
-
                 if (!IsConnected)
                 {
                     Debug.LogWarning($"{_logPrefix} Cannot send - not connected");
                     return false;
                 }
 
-                RenderTexture rt = null;
-                Texture2D texture = null;
-
-                try
+                byte[] imageData = UnifiedPythonSender.CaptureFromCamera(cam, jpegQuality);
+                if (imageData == null)
                 {
-                    // Create temporary render texture
-                    rt = new RenderTexture(cam.pixelWidth, cam.pixelHeight, 24);
-                    cam.targetTexture = rt;
-                    cam.Render();
-
-                    // Read pixels
-                    RenderTexture.active = rt;
-                    texture = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
-                    texture.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
-                    texture.Apply();
-
-                    // Encode to JPEG
-                    byte[] imageData = texture.EncodeToJPG(jpegQuality);
-
-                    // Send
-                    return SendImage(imageData, cameraId, prompt);
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"{_logPrefix} Error capturing/sending: {ex.Message}");
                     return false;
                 }
-                finally
-                {
-                    // Cleanup
-                    if (cam != null)
-                        cam.targetTexture = null;
-                    RenderTexture.active = null;
-                    if (rt != null)
-                        UnityEngine.Object.Destroy(rt);
-                    if (texture != null)
-                        UnityEngine.Object.Destroy(texture);
-                }
+
+                return SendImage(imageData, cameraId, prompt);
             }
         }
 
@@ -587,14 +594,6 @@ namespace PythonCommunication
                 _serverPort = CommunicationConstants.STEREO_DETECTION_SERVER_PORT; // StereoDetectionServer port
                 _autoConnect = false; // Only connect when actually used
             }
-
-            protected override void OnConnected() { }
-
-            protected override void OnConnectionFailed(Exception exception) { }
-
-            protected override void OnDisconnecting() { }
-
-            protected override void OnDisconnected() { }
 
             /// <summary>
             /// Send stereo pair (protocol: [pair_id_len][pair_id][left_id_len][left_id][right_id_len][right_id][prompt_len][prompt][left_img_len][left_img][right_img_len][right_img])
@@ -667,12 +666,14 @@ namespace PythonCommunication
                     _stream.Write(message, 0, message.Length);
                     _stream.Flush();
 
+#if UNITY_EDITOR
                     string promptInfo = string.IsNullOrEmpty(prompt)
                         ? ""
                         : $" with prompt: '{prompt}'";
                     Debug.Log(
                         $"{_logPrefix} [req={requestId}] Sent stereo pair '{cameraPairId}' (L:{leftImageBytes.Length}B, R:{rightImageBytes.Length}B){promptInfo}"
                     );
+#endif
 
                     return true;
                 }
@@ -697,12 +698,6 @@ namespace PythonCommunication
                 int jpegQuality
             )
             {
-                if (leftCam == null || rightCam == null)
-                {
-                    Debug.LogError($"{_logPrefix} Left or right camera is null");
-                    return false;
-                }
-
                 if (!IsConnected)
                 {
                     Debug.LogWarning($"{_logPrefix} Not connected - attempting to connect");
@@ -714,81 +709,25 @@ namespace PythonCommunication
                     }
                 }
 
-                RenderTexture rtLeft = null;
-                RenderTexture rtRight = null;
-                Texture2D textureLeft = null;
-                Texture2D textureRight = null;
+                // Capture both cameras
+                byte[] imageLeftData = UnifiedPythonSender.CaptureFromCamera(leftCam, jpegQuality);
+                byte[] imageRightData = UnifiedPythonSender.CaptureFromCamera(rightCam, jpegQuality);
 
-                try
+                if (imageLeftData == null || imageRightData == null)
                 {
-                    // Capture left
-                    rtLeft = new RenderTexture(leftCam.pixelWidth, leftCam.pixelHeight, 24);
-                    leftCam.targetTexture = rtLeft;
-                    leftCam.Render();
-
-                    RenderTexture.active = rtLeft;
-                    textureLeft = new Texture2D(
-                        rtLeft.width,
-                        rtLeft.height,
-                        TextureFormat.RGB24,
-                        false
-                    );
-                    textureLeft.ReadPixels(new Rect(0, 0, rtLeft.width, rtLeft.height), 0, 0);
-                    textureLeft.Apply();
-
-                    // Capture right
-                    rtRight = new RenderTexture(rightCam.pixelWidth, rightCam.pixelHeight, 24);
-                    rightCam.targetTexture = rtRight;
-                    rightCam.Render();
-
-                    RenderTexture.active = rtRight;
-                    textureRight = new Texture2D(
-                        rtRight.width,
-                        rtRight.height,
-                        TextureFormat.RGB24,
-                        false
-                    );
-                    textureRight.ReadPixels(new Rect(0, 0, rtRight.width, rtRight.height), 0, 0);
-                    textureRight.Apply();
-
-                    // Encode
-                    byte[] imageLeftData = textureLeft.EncodeToJPG(jpegQuality);
-                    byte[] imageRightData = textureRight.EncodeToJPG(jpegQuality);
-
-                    // Send
-                    return SendStereoPair(
-                        imageLeftData,
-                        imageRightData,
-                        cameraPairId,
-                        cameraLeftId,
-                        cameraRightId,
-                        prompt
-                    );
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError(
-                        $"{_logPrefix} Error capturing/sending stereo pair: {ex.Message}"
-                    );
+                    Debug.LogError($"{_logPrefix} Failed to capture left or right camera image");
                     return false;
                 }
-                finally
-                {
-                    // Cleanup
-                    if (leftCam != null)
-                        leftCam.targetTexture = null;
-                    if (rightCam != null)
-                        rightCam.targetTexture = null;
-                    RenderTexture.active = null;
-                    if (rtLeft != null)
-                        UnityEngine.Object.Destroy(rtLeft);
-                    if (rtRight != null)
-                        UnityEngine.Object.Destroy(rtRight);
-                    if (textureLeft != null)
-                        UnityEngine.Object.Destroy(textureLeft);
-                    if (textureRight != null)
-                        UnityEngine.Object.Destroy(textureRight);
-                }
+
+                // Send
+                return SendStereoPair(
+                    imageLeftData,
+                    imageRightData,
+                    cameraPairId,
+                    cameraLeftId,
+                    cameraRightId,
+                    prompt
+                );
             }
         }
 

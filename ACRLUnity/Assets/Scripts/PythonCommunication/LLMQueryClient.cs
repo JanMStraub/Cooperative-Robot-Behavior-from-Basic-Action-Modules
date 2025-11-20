@@ -126,11 +126,11 @@ namespace PythonCommunication
             if (RAGClient.Instance != null)
             {
                 RAGClient.Instance.OnRagResultReceived += HandleRagResult;
-                Debug.Log($"{_logPrefix} ✓ Subscribed to RAG results");
+                Debug.Log($"{_logPrefix} Subscribed to RAG results");
             }
             else
             {
-                Debug.LogWarning($"{_logPrefix} ⚠️ RAGClient instance not found - will retry");
+                Debug.LogWarning($"{_logPrefix} RAGClient instance not found - will retry");
             }
         }
 
@@ -154,20 +154,20 @@ namespace PythonCommunication
             if (RAGClient.Instance == null)
             {
                 Debug.LogError(
-                    $"{_logPrefix} ⚠️ RAGClient not found! Please add RAGClient GameObject to scene."
+                    $"{_logPrefix} RAGClient not found! Please add RAGClient GameObject to scene."
                 );
                 _lastQueryStatus = "ERROR: RAGClient not found";
             }
             else if (!RAGClient.Instance.IsConnected)
             {
                 Debug.LogWarning(
-                    $"{_logPrefix} ⚠️ RAGClient not connected. Ensure Python RAGServer is running."
+                    $"{_logPrefix} RAGClient not connected. Ensure Python RAGServer is running."
                 );
                 _lastQueryStatus = "WAITING: RAGServer not connected";
             }
             else
             {
-                Debug.Log($"{_logPrefix} ✓ Ready to query RAG system");
+                Debug.Log($"{_logPrefix} Ready to query RAG system");
                 _lastQueryStatus = "Ready";
             }
         }
@@ -183,21 +183,21 @@ namespace PythonCommunication
         {
             if (string.IsNullOrEmpty(_prompt))
             {
-                Debug.LogWarning($"{_logPrefix} ⚠️ Prompt is empty");
+                Debug.LogWarning($"{_logPrefix} Prompt is empty");
                 _lastQueryStatus = "ERROR: Empty prompt";
                 return;
             }
 
             if (RAGClient.Instance == null)
             {
-                Debug.LogError($"{_logPrefix} ⚠️ RAGClient not found");
+                Debug.LogError($"{_logPrefix} RAGClient not found");
                 _lastQueryStatus = "ERROR: RAGClient not found";
                 return;
             }
 
             if (!RAGClient.Instance.IsConnected)
             {
-                Debug.LogWarning($"{_logPrefix} ⚠️ RAGClient not connected");
+                Debug.LogWarning($"{_logPrefix} RAGClient not connected");
                 _lastQueryStatus = "ERROR: Not connected to RAGServer";
                 return;
             }
@@ -206,18 +206,18 @@ namespace PythonCommunication
             RagQueryFilters filters = BuildFilters();
 
             // Send query
-            Debug.Log($"{_logPrefix} 📤 Sending query: '{_prompt}'");
+            Debug.Log($"{_logPrefix} Sending query: '{_prompt}'");
             bool success = RAGClient.Instance.Query(_prompt, _topK, filters);
 
             if (success)
             {
                 _lastQueryStatus = $"SENT: Waiting for results...";
-                Debug.Log($"{_logPrefix} ✓ Query sent successfully");
+                Debug.Log($"{_logPrefix} Query sent successfully");
             }
             else
             {
                 _lastQueryStatus = "ERROR: Failed to send query";
-                Debug.LogError($"{_logPrefix} ❌ Failed to send query");
+                Debug.LogError($"{_logPrefix} Failed to send query");
             }
         }
 
@@ -228,7 +228,7 @@ namespace PythonCommunication
         {
             if (_lastResult == null || _lastResult.operations == null || _lastResult.operations.Length == 0)
             {
-                Debug.LogWarning($"{_logPrefix} ⚠️ No operations available to execute");
+                Debug.LogWarning($"{_logPrefix} No operations available to execute");
                 _lastQueryStatus = "ERROR: No operations to execute";
                 return;
             }
@@ -259,13 +259,13 @@ namespace PythonCommunication
 
             if (result == null)
             {
-                Debug.LogError($"{_logPrefix} ❌ Received null result");
+                Debug.LogError($"{_logPrefix} Received null result");
                 _lastQueryStatus = "ERROR: Null result";
                 return;
             }
 
             Debug.Log(
-                $"{_logPrefix} 📥 Received {result.num_results} operation(s) for: '{result.query}'"
+                $"{_logPrefix} Received {result.num_results} operation(s) for: '{result.query}'"
             );
 
             // Update status
@@ -312,7 +312,7 @@ namespace PythonCommunication
                 if (_skipUnimplemented && !IsOperationImplemented(topOp.name))
                 {
                     Debug.Log(
-                        $"{_logPrefix} ⏭️ Skipping auto-execute for unimplemented operation: {topOp.name}"
+                        $"{_logPrefix} Skipping auto-execute for unimplemented operation: {topOp.name}"
                     );
                     Debug.Log(
                         $"{_logPrefix} 💡 Disable 'Skip Unimplemented' or click 'Execute Top Operation' to run anyway"
@@ -333,7 +333,7 @@ namespace PythonCommunication
         {
             if (operation == null)
             {
-                Debug.LogError($"{_logPrefix} ❌ Cannot execute null operation");
+                Debug.LogError($"{_logPrefix} Cannot execute null operation");
                 return;
             }
 
@@ -371,7 +371,7 @@ namespace PythonCommunication
             if (!targetPos.HasValue)
             {
                 Debug.LogWarning(
-                    $"{_logPrefix} ⚠️ Could not parse coordinates from prompt. Using default position (0.3, 0.15, 0.1)"
+                    $"{_logPrefix} Could not parse coordinates from prompt. Using default position (0.3, 0.15, 0.1)"
                 );
                 targetPos = new Vector3(0.3f, 0.15f, 0.1f);
             }
@@ -398,12 +398,12 @@ namespace PythonCommunication
             };
 
             string commandJson = JsonUtility.ToJson(command, true);
-            Debug.Log($"{_logPrefix} 📤 Command JSON: {commandJson}");
+            Debug.Log($"{_logPrefix} Command JSON: {commandJson}");
 
             // Execute directly using RobotManager
             if (RobotManager.Instance == null)
             {
-                Debug.LogError($"{_logPrefix} ❌ RobotManager.Instance is null!");
+                Debug.LogError($"{_logPrefix} RobotManager.Instance is null!");
                 _lastQueryStatus = "ERROR: RobotManager not found";
                 return;
             }
@@ -411,7 +411,7 @@ namespace PythonCommunication
             if (!RobotManager.Instance.RobotInstances.TryGetValue(_robotId, out RobotInstance robotInstance))
             {
                 Debug.LogError(
-                    $"{_logPrefix} ❌ Robot '{_robotId}' not found in RobotManager. "
+                    $"{_logPrefix} Robot '{_robotId}' not found in RobotManager. "
                     + $"Available robots: {string.Join(", ", RobotManager.Instance.RobotInstances.Keys)}"
                 );
                 _lastQueryStatus = $"ERROR: Robot '{_robotId}' not found";
@@ -421,7 +421,7 @@ namespace PythonCommunication
             RobotController controller = robotInstance.controller;
             if (controller == null)
             {
-                Debug.LogError($"{_logPrefix} ❌ Robot '{_robotId}' has no RobotController component");
+                Debug.LogError($"{_logPrefix} Robot '{_robotId}' has no RobotController component");
                 _lastQueryStatus = "ERROR: No RobotController";
                 return;
             }
@@ -433,7 +433,7 @@ namespace PythonCommunication
             _lastOperationExecuted = $"move_to_coordinate({targetPos.Value.x:F2}, {targetPos.Value.y:F2}, {targetPos.Value.z:F2})";
             _lastQueryStatus = $"EXECUTED: {operation.name}";
 
-            Debug.Log($"{_logPrefix} ✓ Movement command executed on {_robotId}");
+            Debug.Log($"{_logPrefix} Movement command executed on {_robotId}");
         }
 
         /// <summary>
@@ -446,7 +446,7 @@ namespace PythonCommunication
             // Check if StatusClient is available
             if (StatusClient.Instance == null)
             {
-                Debug.LogError($"{_logPrefix} ❌ StatusClient.Instance is null!");
+                Debug.LogError($"{_logPrefix} StatusClient.Instance is null!");
                 _lastQueryStatus = "ERROR: StatusClient not found";
                 return;
             }
@@ -461,12 +461,12 @@ namespace PythonCommunication
             {
                 _lastOperationExecuted = $"check_robot_status({_robotId}, detailed={detailed})";
                 _lastQueryStatus = $"EXECUTED: {operation.name}";
-                Debug.Log($"{_logPrefix} ✓ Status query sent for {_robotId}");
+                Debug.Log($"{_logPrefix} Status query sent for {_robotId}");
             }
             else
             {
                 _lastQueryStatus = "ERROR: Failed to send status query";
-                Debug.LogError($"{_logPrefix} ❌ Failed to send status query");
+                Debug.LogError($"{_logPrefix} Failed to send status query");
             }
         }
 
@@ -486,7 +486,7 @@ namespace PythonCommunication
             if (!shouldOpen && !shouldClose && !specificPosition.HasValue)
             {
                 Debug.LogWarning(
-                    $"{_logPrefix} ⚠️ Could not parse gripper action from prompt. Use 'open', 'close', or specify position (0.0-1.0)"
+                    $"{_logPrefix} Could not parse gripper action from prompt. Use 'open', 'close', or specify position (0.0-1.0)"
                 );
                 _lastQueryStatus = "ERROR: Could not parse gripper action";
                 return;
@@ -495,7 +495,7 @@ namespace PythonCommunication
             // Get robot instance from RobotManager
             if (RobotManager.Instance == null)
             {
-                Debug.LogError($"{_logPrefix} ❌ RobotManager.Instance is null!");
+                Debug.LogError($"{_logPrefix} RobotManager.Instance is null!");
                 _lastQueryStatus = "ERROR: RobotManager not found";
                 return;
             }
@@ -503,7 +503,7 @@ namespace PythonCommunication
             if (!RobotManager.Instance.RobotInstances.TryGetValue(_robotId, out RobotInstance robotInstance))
             {
                 Debug.LogError(
-                    $"{_logPrefix} ❌ Robot '{_robotId}' not found in RobotManager. "
+                    $"{_logPrefix} Robot '{_robotId}' not found in RobotManager. "
                     + $"Available robots: {string.Join(", ", RobotManager.Instance.RobotInstances.Keys)}"
                 );
                 _lastQueryStatus = $"ERROR: Robot '{_robotId}' not found";
@@ -514,7 +514,7 @@ namespace PythonCommunication
             GripperController gripperController = robotInstance.robotGameObject.GetComponentInChildren<GripperController>();
             if (gripperController == null)
             {
-                Debug.LogError($"{_logPrefix} ❌ Robot '{_robotId}' has no GripperController component");
+                Debug.LogError($"{_logPrefix} Robot '{_robotId}' has no GripperController component");
                 _lastQueryStatus = "ERROR: No GripperController";
                 return;
             }
@@ -541,7 +541,7 @@ namespace PythonCommunication
             }
 
             _lastQueryStatus = $"EXECUTED: {operation.name}";
-            Debug.Log($"{_logPrefix} ✓ Gripper command executed on {_robotId}");
+            Debug.Log($"{_logPrefix} Gripper command executed on {_robotId}");
         }
 
         #endregion
@@ -573,7 +573,7 @@ namespace PythonCommunication
         private void LogOperationNotImplemented(OperationInfo operation)
         {
             Debug.LogWarning(
-                $"{_logPrefix} ⚠️ Operation '{operation.name}' not yet implemented in LLMQueryClient"
+                $"{_logPrefix} Operation '{operation.name}' not yet implemented in LLMQueryClient"
             );
 
             // Show helpful information about the operation
