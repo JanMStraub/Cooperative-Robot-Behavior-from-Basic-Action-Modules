@@ -81,6 +81,12 @@ namespace Robotics
                 {
                     _simulationManager.NotifyTargetReached(robotId, setting);
                 }
+
+                // Fire event when target is reached
+                if (setting)
+                {
+                    OnTargetReached?.Invoke();
+                }
             }
         }
 

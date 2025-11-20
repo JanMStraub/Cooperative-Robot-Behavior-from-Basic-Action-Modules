@@ -151,6 +151,11 @@ namespace Core
         public const int STATUS_SERVER_PORT = 5012;
 
         /// <summary>
+        /// Sequence server port (multi-command sequence execution)
+        /// </summary>
+        public const int SEQUENCE_SERVER_PORT = 5013;
+
+        /// <summary>
         /// Legacy: Default results server port (alias for LLM_RESULTS_PORT)
         /// </summary>
         [System.Obsolete("Use LLM_RESULTS_PORT instead")]
