@@ -26,6 +26,7 @@ namespace PythonCommunication
         public float speed_multiplier;
         public float approach_offset;
         public bool detailed; // For status queries
+        public bool open_gripper; // For gripper control
     }
 
     [System.Serializable]
@@ -75,6 +76,10 @@ namespace PythonCommunication
 
         private UnifiedPythonReceiver _resultsReceiver;
         private RobotManager _robotManager;
+
+        // Track active commands for completion notification
+        private System.Collections.Generic.Dictionary<string, uint> _activeCommands =
+            new System.Collections.Generic.Dictionary<string, uint>();
 
         // Helper variable
         private const string _logPrefix = "[PYTHON_COMMAND_HANDLER]";
@@ -230,6 +235,10 @@ namespace PythonCommunication
                     ExecuteMoveToCoordinate(command);
                     break;
 
+                case "control_gripper":
+                    ExecuteControlGripper(command);
+                    break;
+
                 case "check_robot_status":
                     ExecuteCheckRobotStatus(command);
                     break;
@@ -351,6 +360,23 @@ namespace PythonCommunication
                     }
                 }
 
+                // Subscribe to completion event
+                string commandKey = $"move_{command.robot_id}_{command.request_id}";
+                _activeCommands[commandKey] = command.request_id;
+
+                // Create completion handler
+                System.Action onComplete = null;
+                onComplete = () =>
+                {
+                    controller.OnTargetReached -= onComplete;
+                    if (_activeCommands.ContainsKey(commandKey))
+                    {
+                        _activeCommands.Remove(commandKey);
+                        SendCommandCompletion(command.robot_id, "move_to_coordinate", true, command.request_id);
+                    }
+                };
+                controller.OnTargetReached += onComplete;
+
                 // Execute movement
                 controller.SetTarget(targetPosition);
 
@@ -372,6 +398,90 @@ namespace PythonCommunication
             {
                 Debug.LogError(
                     $"{_logPrefix} Error executing move_to_coordinate: {ex.Message}\n{ex.StackTrace}"
+                );
+                _failedCommands++;
+            }
+        }
+
+        /// <summary>
+        /// Execute control_gripper command
+        /// </summary>
+        private void ExecuteControlGripper(RobotCommand command)
+        {
+            try
+            {
+                // Validate robot and get instance
+                if (
+                    !ValidateAndGetRobot(
+                        command.robot_id,
+                        "control_gripper",
+                        out RobotInstance robotInstance,
+                        out _
+                    )
+                )
+                {
+                    return;
+                }
+
+                // Validate parameters
+                if (command.parameters == null)
+                {
+                    Debug.LogError($"{_logPrefix} control_gripper: Missing parameters");
+                    _failedCommands++;
+                    return;
+                }
+
+                // Get gripper controller from robot
+                GripperController gripperController = robotInstance.robotGameObject.GetComponentInChildren<GripperController>();
+                if (gripperController == null)
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} control_gripper: Robot '{command.robot_id}' has no GripperController component"
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                // Subscribe to completion event
+                string commandKey = $"gripper_{command.robot_id}_{command.request_id}";
+                _activeCommands[commandKey] = command.request_id;
+
+                // Create completion handler
+                System.Action onComplete = null;
+                onComplete = () =>
+                {
+                    gripperController.OnGripperActionComplete -= onComplete;
+                    if (_activeCommands.ContainsKey(commandKey))
+                    {
+                        _activeCommands.Remove(commandKey);
+                        SendCommandCompletion(command.robot_id, "control_gripper", true, command.request_id);
+                    }
+                };
+                gripperController.OnGripperActionComplete += onComplete;
+
+                // Execute gripper action
+                bool openGripper = command.parameters.open_gripper;
+                if (openGripper)
+                {
+                    gripperController.OpenGrippers();
+                }
+                else
+                {
+                    gripperController.CloseGrippers();
+                }
+
+                if (_verboseLogging)
+                {
+                    string action = openGripper ? "Opening" : "Closing";
+                    Debug.Log($"{_logPrefix} {action} gripper on {command.robot_id}");
+                }
+
+                _successfulCommands++;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"{_logPrefix} Error executing control_gripper: {ex.Message}\n{ex.StackTrace}"
                 );
                 _failedCommands++;
             }
@@ -518,6 +628,35 @@ namespace PythonCommunication
             }
 
             return jointAngles;
+        }
+
+        /// <summary>
+        /// Send command completion notification to Python via StatusServer
+        /// </summary>
+        private void SendCommandCompletion(string robotId, string commandType, bool success, uint requestId)
+        {
+            var completionData = new
+            {
+                type = "command_completion",
+                robot_id = robotId,
+                command_type = commandType,
+                success = success,
+                request_id = requestId,
+                timestamp = Time.time
+            };
+
+            string json = JsonUtility.ToJson(completionData);
+
+            if (_verboseLogging)
+            {
+                Debug.Log($"{_logPrefix} [req={requestId}] Sending completion for {commandType}: success={success}");
+            }
+
+            // Send via StatusResponseSender
+            if (!SendStatusResponseToPython(json, requestId))
+            {
+                Debug.LogWarning($"{_logPrefix} [req={requestId}] Failed to send completion notification");
+            }
         }
 
         /// <summary>

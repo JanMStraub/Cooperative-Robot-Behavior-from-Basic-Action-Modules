@@ -88,8 +88,20 @@ namespace Robotics
         private float _currentVelocity;
         private float _currentTarget;
         private const string _logPrefix = "[GRIPPER_CONTROLLER]";
+        private bool _isMoving;
+        private float _completionThreshold = 0.01f; // Threshold for considering gripper at target
 
         public float CurrentPosition => leftGripper?.jointPosition[0] ?? 0f;
+
+        /// <summary>
+        /// Event fired when gripper reaches its target position
+        /// </summary>
+        public event System.Action OnGripperActionComplete;
+
+        /// <summary>
+        /// Whether the gripper is currently moving to a target
+        /// </summary>
+        public bool IsMoving => _isMoving;
 
         /// <summary>
         /// Configures the articulation drive parameters for a gripper joint.
@@ -141,6 +153,7 @@ namespace Robotics
         public void OpenGrippers()
         {
             targetPosition = 1.0f;
+            _isMoving = true;
         }
 
         /// <summary>
@@ -149,6 +162,7 @@ namespace Robotics
         public void CloseGrippers()
         {
             targetPosition = 0.0f;
+            _isMoving = true;
         }
 
         /// <summary>
@@ -207,6 +221,13 @@ namespace Robotics
             );
 
             ApplyTargetToGrippers(_currentTarget);
+
+            // Check for completion
+            if (_isMoving && Mathf.Abs(_currentTarget - mappedTarget) < _completionThreshold)
+            {
+                _isMoving = false;
+                OnGripperActionComplete?.Invoke();
+            }
         }
     }
 }

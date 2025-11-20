@@ -17,6 +17,7 @@ pkill -9 -f "RunStereoDetector.py" 2>/dev/null && echo "  ✓ Killed RunStereoDe
 pkill -9 -f "RunDetector.py" 2>/dev/null && echo "  ✓ Killed RunDetector.py"
 pkill -9 -f "RunRAGServer.py" 2>/dev/null && echo "  ✓ Killed RunRAGServer.py"
 pkill -9 -f "RunStatusServer.py" 2>/dev/null && echo "  ✓ Killed RunStatusServer.py"
+pkill -9 -f "RunSequenceServer.py" 2>/dev/null && echo "  ✓ Killed RunSequenceServer.py"
 
 # Also kill by orchestrator module pattern
 pkill -9 -f "orchestrators.RunAnalyzer" 2>/dev/null
@@ -24,6 +25,7 @@ pkill -9 -f "orchestrators.RunStereoDetector" 2>/dev/null
 pkill -9 -f "orchestrators.RunDetector" 2>/dev/null
 pkill -9 -f "orchestrators.RunRAGServer" 2>/dev/null
 pkill -9 -f "orchestrators.RunStatusServer" 2>/dev/null
+pkill -9 -f "orchestrators.RunSequenceServer" 2>/dev/null
 
 # Wait for processes to fully terminate
 sleep 2
@@ -68,6 +70,13 @@ cd "$SCRIPT_DIR"
 STATUS_PID=$!
 cd "$SCRIPT_DIR"
 
+# RunSequenceServer uses port 5013 (SequenceServer for multi-command execution)
+# NOTE: Uses --no-results-server and --no-status-server since they're already running
+cd "$SCRIPT_DIR"
+"$SCRIPT_DIR/acrl/bin/python" -u -m orchestrators.RunSequenceServer --no-results-server --no-status-server &
+SEQUENCE_PID=$!
+cd "$SCRIPT_DIR"
+
 sleep 3
 
 echo ""
@@ -87,6 +96,9 @@ echo "Started RunStatusServer.py (PID: $STATUS_PID)"
 echo "  - StatusServer: port 5012 (receives status queries from Unity)"
 echo "  - Connects to ResultsServer (port 5010) as TCP client"
 
+echo "Started RunSequenceServer.py (PID: $SEQUENCE_PID)"
+echo "  - SequenceServer: port 5013 (multi-command sequence execution)"
+
 echo ""
 echo "All servers are running. Logs will appear below."
 echo "Press Ctrl+C to stop all servers."
@@ -102,6 +114,7 @@ cleanup() {
     kill $STEREO_PID 2>/dev/null
     kill $RAG_PID 2>/dev/null
     kill $STATUS_PID 2>/dev/null
+    kill $SEQUENCE_PID 2>/dev/null
     echo "Servers stopped."
     echo "======================================================================"
     echo ""
