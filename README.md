@@ -148,7 +148,15 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
 - **LLM Vision** (LM Studio): Scene understanding and natural language descriptions
 - **Object Detection**: HSV color-based cube detection with bounding boxes
 - **Stereo Depth**: 3D localization using stereo disparity estimation
-- **TCP Communication**: Real-time image streaming between Unity and Python (ports 5005, 5006, 5007, 5010)
+- **TCP Communication**: Real-time image streaming between Unity and Python
+
+**TCP Port Reference**:
+- **5005**: StreamingServer (Unity → Python single camera images)
+- **5006**: StereoDetectionServer (Unity → Python stereo image pairs)
+- **5007**: ResultsServer (Python → Unity depth detection results)
+- **5010**: ResultsServer (Python → Unity LLM analysis and commands)
+- **5011**: RAGServer (Unity ↔ Python semantic operation search)
+- **5012**: StatusServer (Unity ↔ Python bidirectional robot status queries)
 
 **LLM-Driven Control Systems**:
 - **Operations System**: Structured framework for defining robot operations with parameters, preconditions, and failure modes
@@ -222,7 +230,8 @@ Default settings:
 ## Development Branches
 
 - `main` - Stable release branch
-- `feature_detect_object` - Current development (object detection and stereo vision)
+- `feature_rag` - **CURRENT**: RAG system integration and Protocol V2 migration
+- `feature_detect_object` - Object detection and stereo vision systems
 - `navigate_to_object` - Navigation to detected objects
 - `feature_gripper` - Gripper control implementation
 - `feature_ml` - ML-Agents integration features
@@ -243,15 +252,15 @@ Default settings:
 
 **For Vision/Detection**:
 1. Setup Python environment: `cd ACRLPython && source acrl/bin/activate`
-2. Run object detector: `python -m LLMCommunication.orchestrators.RunDetector`
+2. Run object detector: `python -m orchestrators.RunDetector`
 3. In Unity: Use CameraController to send images and receive detection results
 
 **For LLM-Driven Control** (Operations + RAG):
 1. Setup Python environment: `cd ACRLPython && source acrl/bin/activate`
 2. Start LM Studio with embedding model (e.g., nomic-embed-text)
-3. Test operations: `python -m LLMCommunication.operations.example_usage`
-4. Use RAG for semantic search: See `ACRLPython/LLMCommunication/rag/README.md`
-5. Documentation: See `ACRLPython/LLMCommunication/operations/README.md` and `RAG_OPERATIONS_GUIDE.md`
+3. Test operations: `python -m operations.ExampleUsage`
+4. Use RAG for semantic search: See `ACRLPython/rag/README.md`
+5. Documentation: See `ACRLPython/operations/README.md` and `RAG_OPERATIONS_GUIDE.md`
 
 ## License
 

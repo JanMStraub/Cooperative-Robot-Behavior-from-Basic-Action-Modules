@@ -41,12 +41,15 @@ class ImageStorage:
     _instance = None
     _cameras: Dict[str, Tuple[np.ndarray, float, str]] = {}
     _lock = threading.Lock()
+    _instance_lock = threading.Lock()
 
     @classmethod
     def get_instance(cls) -> "ImageStorage":
-        """Get the singleton instance"""
+        """Get the singleton instance with thread-safe double-check locking"""
         if cls._instance is None:
-            cls._instance = cls()
+            with cls._instance_lock:
+                if cls._instance is None:  # Double-check after acquiring lock
+                    cls._instance = cls()
         return cls._instance
 
     def store_image(self, camera_id: str, image: np.ndarray, prompt: str = ""):

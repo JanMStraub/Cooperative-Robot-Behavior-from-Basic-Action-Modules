@@ -35,6 +35,11 @@ namespace PythonCommunication.Core
         private const string _logPrefix = "[TCP_CLIENT_BASE]";
 
         // Properties
+
+        /// <summary>
+        /// Check if the client is currently connected to the server.
+        /// Fast check suitable for conditional logic.
+        /// </summary>
         public bool IsConnected
         {
             get
@@ -54,8 +59,19 @@ namespace PythonCommunication.Core
                 }
             }
         }
+        /// <summary>
+        /// Get the server host address
+        /// </summary>
         public string ServerHost => _serverHost;
+
+        /// <summary>
+        /// Get the server port number
+        /// </summary>
         public int ServerPort => _serverPort;
+
+        /// <summary>
+        /// Get formatted connection info (host:port)
+        /// </summary>
         public string ConnectionInfo => $"{_serverHost}:{_serverPort}";
 
         #region Unity Lifecycle
@@ -115,7 +131,6 @@ namespace PythonCommunication.Core
         {
             if (IsConnected)
             {
-                Debug.Log($"{_logPrefix} Already connected");
                 return;
             }
 
@@ -185,32 +200,32 @@ namespace PythonCommunication.Core
 
         #endregion
 
-        #region Abstract Methods (Must Override)
+        #region Lifecycle Hooks (Optional Override)
 
         /// <summary>
         /// Called when connection is successfully established.
         /// Override to start background threads, initialize state, etc.
         /// </summary>
-        protected abstract void OnConnected();
+        protected virtual void OnConnected() { }
 
         /// <summary>
         /// Called when connection attempt fails.
         /// Override to handle specific error cases.
         /// </summary>
         /// <param name="exception">The exception that occurred</param>
-        protected abstract void OnConnectionFailed(Exception exception);
+        protected virtual void OnConnectionFailed(Exception exception) { }
 
         /// <summary>
         /// Called just before disconnecting.
         /// Override to stop background threads, save state, etc.
         /// </summary>
-        protected abstract void OnDisconnecting();
+        protected virtual void OnDisconnecting() { }
 
         /// <summary>
         /// Called after disconnection is complete.
         /// Override to clean up resources.
         /// </summary>
-        protected abstract void OnDisconnected();
+        protected virtual void OnDisconnected() { }
 
         #endregion
 
@@ -253,15 +268,20 @@ namespace PythonCommunication.Core
         }
 
         /// <summary>
-        /// Read exactly N bytes from the stream.
+        /// Read exactly N bytes from the stream into buffer starting at offset.
         /// Returns the number of bytes read (may be less than requested if connection closed).
         /// </summary>
-        protected int ReadExactly(NetworkStream stream, byte[] buffer, int count)
+        /// <param name="stream">Network stream to read from</param>
+        /// <param name="buffer">Buffer to read data into</param>
+        /// <param name="count">Number of bytes to read</param>
+        /// <param name="offset">Starting offset in buffer (default: 0)</param>
+        /// <returns>Number of bytes actually read</returns>
+        protected int ReadExactly(NetworkStream stream, byte[] buffer, int count, int offset = 0)
         {
             int totalRead = 0;
             while (totalRead < count)
             {
-                int read = stream.Read(buffer, totalRead, count - totalRead);
+                int read = stream.Read(buffer, offset + totalRead, count - totalRead);
                 if (read == 0)
                     return totalRead; // Connection closed
                 totalRead += read;

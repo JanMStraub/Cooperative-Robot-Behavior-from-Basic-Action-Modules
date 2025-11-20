@@ -1,4 +1,5 @@
 using System;
+using Core;
 using Robotics;
 using UnityEngine;
 
@@ -127,7 +128,7 @@ namespace PythonCommunication
             // Subscribe to results from Python
             _resultsReceiver.OnLLMResultReceived += HandlePythonResult;
 
-            Debug.Log($"{_logPrefix} ✓ Initialized and listening for Python commands");
+            Debug.Log($"{_logPrefix} Initialized and listening for Python commands");
         }
 
         /// <summary>
@@ -161,9 +162,15 @@ namespace PythonCommunication
             try
             {
                 // Debug log the raw JSON for troubleshooting
-                if (_verboseLogging && result.response != null && result.response.Contains("command_type"))
+                if (
+                    _verboseLogging
+                    && result.response != null
+                    && result.response.Contains("command_type")
+                )
                 {
-                    Debug.Log($"{_logPrefix} [req={result.request_id}] Received potential command: {result.response}");
+                    Debug.Log(
+                        $"{_logPrefix} [req={result.request_id}] Received potential command: {result.response}"
+                    );
                 }
 
                 RobotCommand command = JsonUtility.FromJson<RobotCommand>(result.response);
@@ -191,8 +198,8 @@ namespace PythonCommunication
                     if (result.response != null && result.response.Contains("command_type"))
                     {
                         Debug.LogError(
-                            $"{_logPrefix} [req={result.request_id}] Failed to parse command JSON: {ex.Message}\n" +
-                            $"JSON: {result.response}"
+                            $"{_logPrefix} [req={result.request_id}] Failed to parse command JSON: {ex.Message}\n"
+                                + $"JSON: {result.response}"
                         );
                     }
                     else
@@ -213,7 +220,7 @@ namespace PythonCommunication
             if (_verboseLogging)
             {
                 Debug.Log(
-                    $"{_logPrefix} 📨 Processing command: {command.command_type} for robot: {command.robot_id}"
+                    $"{_logPrefix} Processing command: {command.command_type} for robot: {command.robot_id}"
                 );
             }
 
@@ -236,6 +243,62 @@ namespace PythonCommunication
 
         #endregion
 
+        #region Validation Helpers
+
+        /// <summary>
+        /// Validate and retrieve robot instance with controller.
+        /// Handles error logging and failed command counting.
+        /// </summary>
+        /// <param name="robotId">Robot identifier</param>
+        /// <param name="commandName">Command name for error messages</param>
+        /// <param name="robotInstance">Output: robot instance if found</param>
+        /// <param name="controller">Output: robot controller if found</param>
+        /// <returns>True if validation passed, false if failed</returns>
+        private bool ValidateAndGetRobot(
+            string robotId,
+            string commandName,
+            out RobotInstance robotInstance,
+            out RobotController controller
+        )
+        {
+            robotInstance = null;
+            controller = null;
+
+            // Validate robot ID
+            if (string.IsNullOrEmpty(robotId))
+            {
+                Debug.LogError($"{_logPrefix} {commandName}: robot_id is null or empty");
+                _failedCommands++;
+                return false;
+            }
+
+            // Find robot instance
+            if (!_robotManager.RobotInstances.TryGetValue(robotId, out robotInstance))
+            {
+                Debug.LogError(
+                    $"{_logPrefix} {commandName}: Robot '{robotId}' not found in RobotManager. "
+                        + $"Available robots: {string.Join(", ", _robotManager.RobotInstances.Keys)}"
+                );
+                _failedCommands++;
+                return false;
+            }
+
+            // Get robot controller
+            controller = robotInstance.controller;
+            if (controller == null)
+            {
+                Debug.LogError(
+                    $"{_logPrefix} {commandName}: Robot '{robotId}' has no RobotController component"
+                );
+                _failedCommands++;
+                return false;
+            }
+
+            return true;
+        }
+
+        #endregion
+
         #region Command Implementations
 
         /// <summary>
@@ -245,27 +308,16 @@ namespace PythonCommunication
         {
             try
             {
-                // Validate robot ID
-                if (string.IsNullOrEmpty(command.robot_id))
-                {
-                    Debug.LogError($"{_logPrefix} move_to_coordinate: robot_id is null or empty");
-                    _failedCommands++;
-                    return;
-                }
-
-                // Find robot instance
+                // Validate robot and get controller
                 if (
-                    !_robotManager.RobotInstances.TryGetValue(
+                    !ValidateAndGetRobot(
                         command.robot_id,
-                        out RobotInstance robotInstance
+                        "move_to_coordinate",
+                        out _,
+                        out RobotController controller
                     )
                 )
                 {
-                    Debug.LogError(
-                        $"{_logPrefix} move_to_coordinate: Robot '{command.robot_id}' not found in RobotManager. "
-                            + $"Available robots: {string.Join(", ", _robotManager.RobotInstances.Keys)}"
-                    );
-                    _failedCommands++;
                     return;
                 }
 
@@ -285,17 +337,6 @@ namespace PythonCommunication
                     command.parameters.target_position.y,
                     command.parameters.target_position.z
                 );
-
-                // Get robot controller
-                RobotController controller = robotInstance.controller;
-                if (controller == null)
-                {
-                    Debug.LogError(
-                        $"{_logPrefix} move_to_coordinate: Robot '{command.robot_id}' has no RobotController component"
-                    );
-                    _failedCommands++;
-                    return;
-                }
 
                 // Apply speed multiplier if enabled
                 if (_applySpeedMultiplier && command.parameters.speed_multiplier > 0)
@@ -320,7 +361,7 @@ namespace PythonCommunication
                             ? $" (offset: {command.parameters.approach_offset:F3}m)"
                             : "";
                     Debug.Log(
-                        $"{_logPrefix} ✓ Moving {command.robot_id} to position: "
+                        $"{_logPrefix} Moving {command.robot_id} to position: "
                             + $"({targetPosition.x:F3}, {targetPosition.y:F3}, {targetPosition.z:F3}){offsetInfo}"
                     );
                 }
@@ -343,149 +384,32 @@ namespace PythonCommunication
         {
             try
             {
-                // Validate robot ID
-                if (string.IsNullOrEmpty(command.robot_id))
-                {
-                    Debug.LogError($"{_logPrefix} get_robot_status: robot_id is null or empty");
-                    _failedCommands++;
-                    return;
-                }
-
-                // Find robot instance
                 if (
-                    !_robotManager.RobotInstances.TryGetValue(
+                    !ValidateAndGetRobot(
                         command.robot_id,
-                        out RobotInstance robotInstance
+                        "get_robot_status",
+                        out _,
+                        out RobotController controller
                     )
                 )
                 {
-                    Debug.LogError(
-                        $"{_logPrefix} get_robot_status: Robot '{command.robot_id}' not found in RobotManager. "
-                            + $"Available robots: {string.Join(", ", _robotManager.RobotInstances.Keys)}"
-                    );
-                    _failedCommands++;
-
-                    // Send error response to Python (Protocol V2)
                     SendStatusErrorResponse(
                         command.robot_id,
-                        "ROBOT_NOT_FOUND",
-                        $"Robot '{command.robot_id}' not found in RobotManager",
+                        "VALIDATION_FAILED",
+                        $"Failed to validate robot '{command.robot_id}'",
                         command.request_id
                     );
                     return;
                 }
 
-                // Get parameters
-                bool detailed = false;
-                if (command.parameters != null)
-                {
-                    detailed = command.parameters.detailed;
-                }
+                bool detailed = command.parameters?.detailed ?? false;
+                string statusJson = GatherRobotStatus(command.robot_id, controller, detailed);
 
-                // Get robot controller
-                RobotController controller = robotInstance.controller;
-                if (controller == null)
+                if (!SendStatusResponseToPython(statusJson, command.request_id))
                 {
-                    Debug.LogError(
-                        $"{_logPrefix} get_robot_status: Robot '{command.robot_id}' has no RobotController component"
+                    Debug.LogWarning(
+                        $"{_logPrefix} [req={command.request_id}] Failed to send status response to Python"
                     );
-                    _failedCommands++;
-
-                    SendStatusErrorResponse(
-                        command.robot_id,
-                        "NO_CONTROLLER",
-                        $"Robot '{command.robot_id}' has no RobotController component",
-                        command.request_id
-                    );
-                    return;
-                }
-
-                // Gather robot status data
-                Vector3 currentPosition = controller.endEffectorBase != null
-                    ? controller.endEffectorBase.position
-                    : Vector3.zero;
-
-                Quaternion currentRotation = controller.endEffectorBase != null
-                    ? controller.endEffectorBase.rotation
-                    : Quaternion.identity;
-
-                // Get joint angles if detailed
-                float[] jointAngles = null;
-                if (detailed && controller.robotJoints != null)
-                {
-                    jointAngles = new float[controller.robotJoints.Length];
-                    for (int i = 0; i < controller.robotJoints.Length; i++)
-                    {
-                        var joint = controller.robotJoints[i];
-                        if (joint != null && joint.jointType == ArticulationJointType.RevoluteJoint)
-                        {
-                            // Get current joint position
-                            jointAngles[i] = joint.jointPosition[0]; // Radians
-                        }
-                    }
-                }
-                else
-                {
-                    // Empty array for non-detailed
-                    jointAngles = new float[0];
-                }
-
-                // Get target position from controller's GetCurrentTarget method
-                Vector3? targetPositionNullable = controller.GetCurrentTarget();
-                Vector3 targetPosition = targetPositionNullable ?? Vector3.zero;
-
-                float distanceToTarget = controller.GetDistanceToTarget();
-                bool isMoving = distanceToTarget > 0.01f; // Consider moving if distance > 1cm
-
-                // Create status response
-                var statusResponse = new
-                {
-                    success = true,
-                    robot_id = command.robot_id,
-                    detailed = detailed,
-                    status = new
-                    {
-                        position = new { x = currentPosition.x, y = currentPosition.y, z = currentPosition.z },
-                        rotation = new
-                        {
-                            x = currentRotation.x,
-                            y = currentRotation.y,
-                            z = currentRotation.z,
-                            w = currentRotation.w
-                        },
-                        joint_angles = jointAngles,
-                        target_position = new
-                        {
-                            x = targetPosition.x,
-                            y = targetPosition.y,
-                            z = targetPosition.z
-                        },
-                        distance_to_target = distanceToTarget,
-                        is_moving = isMoving,
-                        current_action = isMoving ? "moving_to_target" : "idle"
-                    },
-                    error = (object)null
-                };
-
-                // Convert to JSON
-                string statusJson = JsonUtility.ToJson(statusResponse);
-
-                if (_verboseLogging)
-                {
-                    Debug.Log(
-                        $"{_logPrefix} ✓ Gathered status for {command.robot_id}:\n"
-                            + $"  Position: ({currentPosition.x:F3}, {currentPosition.y:F3}, {currentPosition.z:F3})\n"
-                            + $"  Target: ({targetPosition.x:F3}, {targetPosition.y:F3}, {targetPosition.z:F3})\n"
-                            + $"  Distance: {distanceToTarget:F3}m, Moving: {isMoving}"
-                    );
-                }
-
-                // Send status response back to Python StatusServer (Protocol V2)
-                bool sent = SendStatusResponseToPython(statusJson, command.request_id);
-
-                if (!sent)
-                {
-                    Debug.LogWarning($"{_logPrefix} [req={command.request_id}] Failed to send status response to Python");
                 }
 
                 _successfulCommands++;
@@ -507,9 +431,104 @@ namespace PythonCommunication
         }
 
         /// <summary>
+        /// Gather robot status data and return as JSON
+        /// </summary>
+        private string GatherRobotStatus(string robotId, RobotController controller, bool detailed)
+        {
+            Vector3 currentPosition =
+                controller.endEffectorBase != null
+                    ? controller.endEffectorBase.position
+                    : Vector3.zero;
+
+            Quaternion currentRotation =
+                controller.endEffectorBase != null
+                    ? controller.endEffectorBase.rotation
+                    : Quaternion.identity;
+
+            float[] jointAngles = GatherJointAngles(controller, detailed);
+            Vector3 targetPosition = controller.GetCurrentTarget() ?? Vector3.zero;
+            float distanceToTarget = controller.GetDistanceToTarget();
+            bool isMoving = distanceToTarget > RobotConstants.MOVEMENT_THRESHOLD;
+
+            var statusResponse = new
+            {
+                success = true,
+                robot_id = robotId,
+                detailed = detailed,
+                status = new
+                {
+                    position = new
+                    {
+                        x = currentPosition.x,
+                        y = currentPosition.y,
+                        z = currentPosition.z,
+                    },
+                    rotation = new
+                    {
+                        x = currentRotation.x,
+                        y = currentRotation.y,
+                        z = currentRotation.z,
+                        w = currentRotation.w,
+                    },
+                    joint_angles = jointAngles,
+                    target_position = new
+                    {
+                        x = targetPosition.x,
+                        y = targetPosition.y,
+                        z = targetPosition.z,
+                    },
+                    distance_to_target = distanceToTarget,
+                    is_moving = isMoving,
+                    current_action = isMoving ? "moving_to_target" : "idle",
+                },
+                error = (object)null,
+            };
+
+            if (_verboseLogging)
+            {
+                Debug.Log(
+                    $"{_logPrefix} Gathered status for {robotId}:\n"
+                        + $"  Position: ({currentPosition.x:F3}, {currentPosition.y:F3}, {currentPosition.z:F3})\n"
+                        + $"  Target: ({targetPosition.x:F3}, {targetPosition.y:F3}, {targetPosition.z:F3})\n"
+                        + $"  Distance: {distanceToTarget:F3}m, Moving: {isMoving}"
+                );
+            }
+
+            return JsonUtility.ToJson(statusResponse);
+        }
+
+        /// <summary>
+        /// Gather joint angles from robot controller
+        /// </summary>
+        private float[] GatherJointAngles(RobotController controller, bool detailed)
+        {
+            if (!detailed || controller.robotJoints == null)
+            {
+                return new float[0];
+            }
+
+            float[] jointAngles = new float[controller.robotJoints.Length];
+            for (int i = 0; i < controller.robotJoints.Length; i++)
+            {
+                var joint = controller.robotJoints[i];
+                if (joint != null && joint.jointType == ArticulationJointType.RevoluteJoint)
+                {
+                    jointAngles[i] = joint.jointPosition[0];
+                }
+            }
+
+            return jointAngles;
+        }
+
+        /// <summary>
         /// Send status error response to Python (Protocol V2)
         /// </summary>
-        private void SendStatusErrorResponse(string robotId, string errorCode, string errorMessage, uint requestId = 0)
+        private void SendStatusErrorResponse(
+            string robotId,
+            string errorCode,
+            string errorMessage,
+            uint requestId = 0
+        )
         {
             var errorResponse = new
             {
@@ -517,7 +536,7 @@ namespace PythonCommunication
                 robot_id = robotId,
                 detailed = false,
                 status = (object)null,
-                error = new { code = errorCode, message = errorMessage }
+                error = new { code = errorCode, message = errorMessage },
             };
 
             string errorJson = JsonUtility.ToJson(errorResponse);
@@ -527,7 +546,9 @@ namespace PythonCommunication
 
             if (!sent)
             {
-                Debug.LogWarning($"{_logPrefix} [req={requestId}] Failed to send error response to Python: {errorJson}");
+                Debug.LogWarning(
+                    $"{_logPrefix} [req={requestId}] Failed to send error response to Python: {errorJson}"
+                );
             }
         }
 

@@ -8,6 +8,16 @@ using UnityEngine;
 namespace PythonCommunication
 {
     /// <summary>
+    /// Simple error info for JSON serialization (Python compatibility)
+    /// </summary>
+    [System.Serializable]
+    public class SimpleErrorInfo
+    {
+        public string code;
+        public string message;
+    }
+
+    /// <summary>
     /// Data model for robot status result
     /// </summary>
     [System.Serializable]
@@ -17,7 +27,7 @@ namespace PythonCommunication
         public string robot_id;
         public bool detailed;
         public RobotStatusData status;
-        public ErrorInfo error;
+        public SimpleErrorInfo error;
     }
 
     [System.Serializable]
@@ -30,13 +40,6 @@ namespace PythonCommunication
         public float distance_to_target;
         public bool is_moving;
         public string current_action;
-    }
-
-    [System.Serializable]
-    public class ErrorInfo
-    {
-        public string code;
-        public string message;
     }
 
     /// <summary>
@@ -76,7 +79,7 @@ namespace PythonCommunication
                 Instance = this;
                 DontDestroyOnLoad(gameObject);
                 _serverPort = CommunicationConstants.STATUS_SERVER_PORT; // Port 5012
-                Debug.Log($"{_logPrefix} ✓ Initialized (port {_serverPort})");
+                Debug.Log($"{_logPrefix} Initialized (port {_serverPort})");
             }
             else
             {
@@ -90,7 +93,7 @@ namespace PythonCommunication
 
         protected override void OnConnected()
         {
-            Debug.Log($"{_logPrefix} ✓ Connected to Status server at {ConnectionInfo}");
+            Debug.Log($"{_logPrefix} Connected to {ConnectionInfo}");
 
             // Start background receive thread
             _receiveThread = new Thread(ReceiveLoop)
@@ -103,24 +106,24 @@ namespace PythonCommunication
 
         protected override void OnConnectionFailed(Exception exception)
         {
-            Debug.LogWarning(
-                $"{_logPrefix} ⚠️ Connection failed: {exception.Message}. Will retry in {_reconnectInterval}s"
-            );
+            // Only log if auto-reconnect is disabled
+            if (!_autoReconnect)
+            {
+                Debug.LogWarning($"{_logPrefix} Connection failed: {exception.Message}");
+            }
         }
 
         protected override void OnDisconnecting()
         {
-            Debug.Log($"{_logPrefix} Disconnecting from Status server...");
+            // Removed redundant log - connection state changes are logged elsewhere
         }
 
         protected override void OnDisconnected()
         {
-            Debug.Log($"{_logPrefix} ✓ Disconnected from Status server");
-
             // Wait for receive thread to finish
             if (_receiveThread != null && _receiveThread.IsAlive)
             {
-                _receiveThread.Join(1000); // Wait up to 1 second
+                _receiveThread.Join(CommunicationConstants.THREAD_JOIN_TIMEOUT_MS);
             }
         }
 
@@ -177,7 +180,7 @@ namespace PythonCommunication
                 if (success && _logQueries)
                 {
                     Debug.Log(
-                        $"{_logPrefix} [req={requestId}] 📤 Sent status query: robot='{robotId}' detailed={detailed}"
+                        $"{_logPrefix} [req={requestId}] Sent status query: robot='{robotId}' detailed={detailed}"
                     );
                 }
 
@@ -253,7 +256,7 @@ namespace PythonCommunication
                         // Parse message length
                         int messageLength = BitConverter.ToInt32(lengthBuffer, 0);
 
-                        if (messageLength <= 0 || messageLength > UnityProtocol.MAX_STRING_LENGTH)
+                        if (messageLength <= 0 || messageLength > UnityProtocol.MAX_IMAGE_SIZE)
                         {
                             Debug.LogError($"{_logPrefix} [req={requestId}] Invalid message length: {messageLength}");
                             break;
@@ -303,27 +306,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Helper method to read exactly N bytes into buffer starting at offset
-        /// </summary>
-        private int ReadExactly(
-            System.Net.Sockets.NetworkStream stream,
-            byte[] buffer,
-            int count,
-            int offset = 0
-        )
-        {
-            int totalRead = 0;
-            while (totalRead < count)
-            {
-                int read = stream.Read(buffer, offset + totalRead, count - totalRead);
-                if (read == 0)
-                    return totalRead; // Connection closed
-                totalRead += read;
-            }
-            return totalRead;
-        }
-
         #endregion
 
         #region Response Processing
@@ -354,60 +336,39 @@ namespace PythonCommunication
         /// </summary>
         private void ProcessResponse(string jsonResponse)
         {
-            try
+            // Parse JSON using centralized parser
+            if (!JsonParser.TryParseWithLogging<RobotStatusResult>(jsonResponse, out RobotStatusResult result, _logPrefix))
             {
-                // Parse JSON to RobotStatusResult
-                RobotStatusResult result = JsonUtility.FromJson<RobotStatusResult>(jsonResponse);
+                return;
+            }
 
-                if (result == null)
+            if (_logQueries)
+            {
+                if (result.success && result.status != null)
                 {
-                    Debug.LogError($"{_logPrefix} Failed to parse status response");
-                    return;
+                    Debug.Log(
+                        $"{_logPrefix} Status '{result.robot_id}': pos=({result.status.position.x:F3},{result.status.position.y:F3},{result.status.position.z:F3}), " +
+                        $"dist={result.status.distance_to_target:F3}m, moving={result.status.is_moving}, action={result.status.current_action ?? "None"}"
+                    );
                 }
-
-                if (_logQueries)
+                else if (!result.success && result.error != null)
                 {
-                    if (result.success && result.status != null)
-                    {
-                        Debug.Log(
-                            $"{_logPrefix} 📥 Received status for '{result.robot_id}':\n"
-                                + $"  Position: ({result.status.position.x:F3}, {result.status.position.y:F3}, {result.status.position.z:F3})\n"
-                                + $"  Target: ({result.status.target_position.x:F3}, {result.status.target_position.y:F3}, {result.status.target_position.z:F3})\n"
-                                + $"  Distance: {result.status.distance_to_target:F3}m\n"
-                                + $"  Moving: {result.status.is_moving}\n"
-                                + $"  Action: {result.status.current_action ?? "None"}"
-                        );
-
-                        if (result.detailed && result.status.joint_angles != null)
-                        {
-                            Debug.Log(
-                                $"{_logPrefix}   Joint Angles: [{string.Join(", ", result.status.joint_angles)}]"
-                            );
-                        }
-                    }
-                    else if (!result.success && result.error != null)
-                    {
-                        Debug.LogWarning(
-                            $"{_logPrefix} ⚠️ Status query failed for '{result.robot_id}': {result.error.code} - {result.error.message}"
-                        );
-                    }
-                }
-
-                // Fire event
-                try
-                {
-                    OnStatusResultReceived?.Invoke(result);
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError(
-                        $"{_logPrefix} Error in OnStatusResultReceived event handler: {ex.Message}"
+                    Debug.LogWarning(
+                        $"{_logPrefix} Status query failed for '{result.robot_id}': {result.error.code} - {result.error.message}"
                     );
                 }
             }
+
+            // Fire event
+            try
+            {
+                OnStatusResultReceived?.Invoke(result);
+            }
             catch (Exception ex)
             {
-                Debug.LogError($"{_logPrefix} Error processing response: {ex.Message}");
+                Debug.LogError(
+                    $"{_logPrefix} Error in OnStatusResultReceived event handler: {ex.Message}"
+                );
             }
         }
 

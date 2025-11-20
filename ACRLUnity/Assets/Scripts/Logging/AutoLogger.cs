@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Core;
 using Robotics;
 using UnityEngine;
 using Utilities;
@@ -112,7 +113,7 @@ namespace Logging
             Vector3 currentTarget = currentTargetNullable.Value;
 
             // Target changed
-            if (Vector3.Distance(currentTarget, _lastTarget) > 0.01f)
+            if (Vector3.Distance(currentTarget, _lastTarget) > RobotConstants.MOVEMENT_THRESHOLD)
             {
                 // Complete previous movement if exists
                 if (!string.IsNullOrEmpty(_currentMovementActionId))
@@ -127,7 +128,7 @@ namespace Logging
             // Target reached
             else if (
                 !string.IsNullOrEmpty(_currentMovementActionId)
-                && _robotController.GetDistanceToTarget() < 0.1f
+                && _robotController.GetDistanceToTarget() < RobotConstants.DEFAULT_CONVERGENCE_THRESHOLD
             )
             {
                 CompleteMovement(true);
@@ -154,7 +155,7 @@ namespace Logging
             // Gripper reached target
             else if (
                 !string.IsNullOrEmpty(_currentGripperActionId)
-                && Mathf.Abs(_gripperController.targetPosition - currentPosition) < 0.01f
+                && Mathf.Abs(_gripperController.targetPosition - currentPosition) < RobotConstants.MOVEMENT_THRESHOLD
             )
             {
                 CompleteGripperAction();
@@ -228,9 +229,9 @@ namespace Logging
             float upperLimit = _gripperController.leftGripper?.xDrive.upperLimit ?? 1f;
             float lowerLimit = _gripperController.leftGripper?.xDrive.lowerLimit ?? 0f;
 
-            if (Mathf.Abs(targetPosition - upperLimit) < 0.1f)
+            if (Mathf.Abs(targetPosition - upperLimit) < RobotConstants.DEFAULT_CONVERGENCE_THRESHOLD)
                 return "open_gripper";
-            else if (Mathf.Abs(targetPosition - lowerLimit) < 0.1f)
+            else if (Mathf.Abs(targetPosition - lowerLimit) < RobotConstants.DEFAULT_CONVERGENCE_THRESHOLD)
                 return "close_gripper";
             else
                 return "adjust_gripper";

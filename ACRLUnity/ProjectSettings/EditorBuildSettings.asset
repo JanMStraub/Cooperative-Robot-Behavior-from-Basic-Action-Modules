@@ -6,8 +6,8 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/DemoScene.unity
-    guid: 99c9720ab356a0642a771bea13969a05
+    path: Assets/Scenes/1xAR4Scene.unity
+    guid: 316424938a3e64e6b88bf8d4271fae2f
   m_configObjects:
     com.unity.input.settings: {fileID: 11400000, guid: 83cc23b9dd69d486392bb603e8533d8d, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
