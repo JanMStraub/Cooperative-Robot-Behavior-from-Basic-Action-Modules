@@ -6,7 +6,6 @@ This module implements movement-related operations for controlling the robot arm
 through Unity's RobotController via TCP communication.
 """
 
-from typing import Dict, Any
 import time
 import logging
 from servers.ResultsServer import ResultsBroadcaster
@@ -34,7 +33,7 @@ def move_to_coordinate(
     z: float,
     speed: float = 1.0,
     approach_offset: float = 0.0,
-) -> Dict[str, Any]:
+) -> OperationResult:
     """
     Move robot end effector to specified 3D coordinate.
 
@@ -97,93 +96,69 @@ def move_to_coordinate(
     try:
         # Validate robot_id
         if not robot_id or not isinstance(robot_id, str):
-            return {
-                "success": False,
-                "result": None,
-                "error": {
-                    "code": "INVALID_ROBOT_ID",
-                    "message": f"Robot ID must be a non-empty string, got: {robot_id}",
-                    "recovery_suggestions": [
-                        "Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')",
-                        "Check RobotManager in Unity for available robot IDs",
-                    ],
-                },
-            }
+            return OperationResult.error_result(
+                "INVALID_ROBOT_ID",
+                f"Robot ID must be a non-empty string, got: {robot_id}",
+                [
+                    "Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')",
+                    "Check RobotManager in Unity for available robot IDs",
+                ],
+            )
 
         # Validate X coordinate
         if not (-0.5 <= x <= 0.5):
-            return {
-                "success": False,
-                "result": None,
-                "error": {
-                    "code": "INVALID_X_COORDINATE",
-                    "message": f"X coordinate {x} out of range [-0.5, 0.5]",
-                    "recovery_suggestions": [
-                        "Adjust X to be within robot workspace [-0.5, 0.5]",
-                        "Use detect_object to get valid coordinates",
-                    ],
-                },
-            }
+            return OperationResult.error_result(
+                "INVALID_X_COORDINATE",
+                f"X coordinate {x} out of range [-0.5, 0.5]",
+                [
+                    "Adjust X to be within robot workspace [-0.5, 0.5]",
+                    "Use detect_object to get valid coordinates",
+                ],
+            )
 
         # Validate Y coordinate
         if not (-0.5 <= y <= 0.5):
-            return {
-                "success": False,
-                "result": None,
-                "error": {
-                    "code": "INVALID_Y_COORDINATE",
-                    "message": f"Y coordinate {y} out of range [-0.5, 0.5]",
-                    "recovery_suggestions": [
-                        "Adjust Y to be within robot workspace [-0.5, 0.5]",
-                        "Use detect_object to get valid coordinates",
-                    ],
-                },
-            }
+            return OperationResult.error_result(
+                "INVALID_Y_COORDINATE",
+                f"Y coordinate {y} out of range [-0.5, 0.5]",
+                [
+                    "Adjust Y to be within robot workspace [-0.5, 0.5]",
+                    "Use detect_object to get valid coordinates",
+                ],
+            )
 
         # Validate Z coordinate
         if not (0.0 <= z <= 0.6):
-            return {
-                "success": False,
-                "result": None,
-                "error": {
-                    "code": "INVALID_Z_COORDINATE",
-                    "message": f"Z coordinate {z} out of range [0.0, 0.6]",
-                    "recovery_suggestions": [
-                        "Adjust Z to be within robot workspace [0.0, 0.6]",
-                        "Ensure height is above table surface (z > 0.0)",
-                    ],
-                },
-            }
+            return OperationResult.error_result(
+                "INVALID_Z_COORDINATE",
+                f"Z coordinate {z} out of range [0.0, 0.6]",
+                [
+                    "Adjust Z to be within robot workspace [0.0, 0.6]",
+                    "Ensure height is above table surface (z > 0.0)",
+                ],
+            )
 
         # Validate speed
         if not (0.1 <= speed <= 2.0):
-            return {
-                "success": False,
-                "result": None,
-                "error": {
-                    "code": "INVALID_SPEED",
-                    "message": f"Speed {speed} out of range [0.1, 2.0]",
-                    "recovery_suggestions": [
-                        "Use speed between 0.1 (very slow) and 2.0 (fast)",
-                        "Typical values: 0.2 (precise), 1.0 (normal), 1.5 (fast)",
-                    ],
-                },
-            }
+            return OperationResult.error_result(
+                "INVALID_SPEED",
+                f"Speed {speed} out of range [0.1, 2.0]",
+                [
+                    "Use speed between 0.1 (very slow) and 2.0 (fast)",
+                    "Typical values: 0.2 (precise), 1.0 (normal), 1.5 (fast)",
+                ],
+            )
 
         # Validate approach_offset
         if not (0.0 <= approach_offset <= 0.1):
-            return {
-                "success": False,
-                "result": None,
-                "error": {
-                    "code": "INVALID_APPROACH_OFFSET",
-                    "message": f"Approach offset {approach_offset} out of range [0.0, 0.1]",
-                    "recovery_suggestions": [
-                        "Use offset between 0.0 (exact position) and 0.1 (10cm before)",
-                        "Typical approach offset: 0.05 (5cm)",
-                    ],
-                },
-            }
+            return OperationResult.error_result(
+                "INVALID_APPROACH_OFFSET",
+                f"Approach offset {approach_offset} out of range [0.0, 0.1]",
+                [
+                    "Use offset between 0.0 (exact position) and 0.1 (10cm before)",
+                    "Typical approach offset: 0.05 (5cm)",
+                ],
+            )
 
         # Apply approach offset to target position
         actual_x = x
@@ -211,54 +186,42 @@ def move_to_coordinate(
         success = ResultsBroadcaster.send_result(command)
 
         if not success:
-            return {
-                "success": False,
-                "result": None,
-                "error": {
-                    "code": "COMMUNICATION_FAILED",
-                    "message": "Failed to send command to Unity - no clients connected",
-                    "recovery_suggestions": [
-                        "Ensure Unity is running with LLMResultsReceiver active",
-                        "Verify ResultsServer is running (port 5006)",
-                        "Check Unity console for connection errors",
-                        "Restart ResultsServer: python -m LLMCommunication.orchestrators.RunAnalyzer",
-                    ],
-                },
-            }
+            return OperationResult.error_result(
+                "COMMUNICATION_FAILED",
+                "Failed to send command to Unity - no clients connected",
+                [
+                    "Ensure Unity is running with LLMResultsReceiver active",
+                    "Verify ResultsServer is running (port 5006)",
+                    "Check Unity console for connection errors",
+                    "Restart ResultsServer: python -m LLMCommunication.orchestrators.RunAnalyzer",
+                ],
+            )
 
         #  Return success
         logger.info(f"Successfully sent move_to_coordinate command to {robot_id}")
 
-        return {
-            "success": True,
-            "result": {
-                "robot_id": robot_id,
-                "target_position": {"x": actual_x, "y": actual_y, "z": actual_z},
-                "original_target": {"x": x, "y": y, "z": z},
-                "speed": speed,
-                "approach_offset": approach_offset,
-                "status": "command_sent",
-                "timestamp": time.time(),
-            },
-            "error": None,
-        }
+        return OperationResult.success_result({
+            "robot_id": robot_id,
+            "target_position": {"x": actual_x, "y": actual_y, "z": actual_z},
+            "original_target": {"x": x, "y": y, "z": z},
+            "speed": speed,
+            "approach_offset": approach_offset,
+            "status": "command_sent",
+            "timestamp": time.time(),
+        })
 
     except Exception as e:
         logger.error(f"Unexpected error in move_to_coordinate: {e}", exc_info=True)
-        return {
-            "success": False,
-            "result": None,
-            "error": {
-                "code": "UNEXPECTED_ERROR",
-                "message": f"Unexpected error occurred: {str(e)}",
-                "recovery_suggestions": [
-                    "Check logs for detailed error information",
-                    "Verify all parameters are correct types",
-                    "Retry the operation",
-                    "Report bug if error persists",
-                ],
-            },
-        }
+        return OperationResult.error_result(
+            "UNEXPECTED_ERROR",
+            f"Unexpected error occurred: {str(e)}",
+            [
+                "Check logs for detailed error information",
+                "Verify all parameters are correct types",
+                "Retry the operation",
+                "Report bug if error persists",
+            ],
+        )
 
 
 # ============================================================================

@@ -6,7 +6,6 @@ This module implements open and close operations for the robot gripper
 through Unity's GripperController via TCP communication.
 """
 
-from typing import Dict, Any
 import time
 import logging
 from servers.ResultsServer import ResultsBroadcaster
@@ -28,7 +27,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 
-def control_gripper(robot_id: str, open_gripper: bool) -> Dict[str, Any]:
+def control_gripper(robot_id: str, open_gripper: bool) -> OperationResult:
     """
     Open or close the robot gripper.
 
@@ -76,32 +75,24 @@ def control_gripper(robot_id: str, open_gripper: bool) -> Dict[str, Any]:
     try:
         # Validate robot_id
         if not robot_id or not isinstance(robot_id, str):
-            return {
-                "success": False,
-                "result": None,
-                "error": {
-                    "code": "INVALID_ROBOT_ID",
-                    "message": f"Robot ID must be a non-empty string, got: {robot_id}",
-                    "recovery_suggestions": [
-                        "Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')",
-                        "Check RobotManager in Unity for available robot IDs",
-                    ],
-                },
-            }
+            return OperationResult.error_result(
+                "INVALID_ROBOT_ID",
+                f"Robot ID must be a non-empty string, got: {robot_id}",
+                [
+                    "Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')",
+                    "Check RobotManager in Unity for available robot IDs",
+                ],
+            )
 
         # Validate open_gripper parameter
         if not isinstance(open_gripper, bool):
-            return {
-                "success": False,
-                "result": None,
-                "error": {
-                    "code": "INVALID_OPEN_GRIPPER_PARAMETER",
-                    "message": f"open_gripper must be a boolean, got: {type(open_gripper).__name__}",
-                    "recovery_suggestions": [
-                        "Use open_gripper=True to open the gripper or open_gripper=False to close it",
-                    ],
-                },
-            }
+            return OperationResult.error_result(
+                "INVALID_OPEN_GRIPPER_PARAMETER",
+                f"open_gripper must be a boolean, got: {type(open_gripper).__name__}",
+                [
+                    "Use open_gripper=True to open the gripper or open_gripper=False to close it",
+                ],
+            )
 
         # Construct command for Unity
         command = {
@@ -121,51 +112,39 @@ def control_gripper(robot_id: str, open_gripper: bool) -> Dict[str, Any]:
         success = ResultsBroadcaster.send_result(command)
 
         if not success:
-            return {
-                "success": False,
-                "result": None,
-                "error": {
-                    "code": "COMMUNICATION_FAILED",
-                    "message": "Failed to send command to Unity - no clients connected",
-                    "recovery_suggestions": [
-                        "Ensure Unity is running with UnifiedPythonReceiver active",
-                        "Verify ResultsServer is running (port 5010)",
-                        "Check Unity console for connection errors",
-                        "Restart ResultsServer or run analyzer",
-                    ],
-                },
-            }
+            return OperationResult.error_result(
+                "COMMUNICATION_FAILED",
+                "Failed to send command to Unity - no clients connected",
+                [
+                    "Ensure Unity is running with UnifiedPythonReceiver active",
+                    "Verify ResultsServer is running (port 5010)",
+                    "Check Unity console for connection errors",
+                    "Restart ResultsServer or run analyzer",
+                ],
+            )
 
         # Return success
         logger.info(f"Successfully sent control_gripper command to {robot_id}")
 
-        return {
-            "success": True,
-            "result": {
-                "robot_id": robot_id,
-                "open_gripper": open_gripper,
-                "status": "command_sent",
-                "timestamp": time.time(),
-            },
-            "error": None,
-        }
+        return OperationResult.success_result({
+            "robot_id": robot_id,
+            "open_gripper": open_gripper,
+            "status": "command_sent",
+            "timestamp": time.time(),
+        })
 
     except Exception as e:
         logger.error(f"Unexpected error in control_gripper: {e}", exc_info=True)
-        return {
-            "success": False,
-            "result": None,
-            "error": {
-                "code": "UNEXPECTED_ERROR",
-                "message": f"Unexpected error occurred: {str(e)}",
-                "recovery_suggestions": [
-                    "Check logs for detailed error information",
-                    "Verify all parameters are correct types",
-                    "Retry the operation",
-                    "Report bug if error persists",
-                ],
-            },
-        }
+        return OperationResult.error_result(
+            "UNEXPECTED_ERROR",
+            f"Unexpected error occurred: {str(e)}",
+            [
+                "Check logs for detailed error information",
+                "Verify all parameters are correct types",
+                "Retry the operation",
+                "Report bug if error persists",
+            ],
+        )
 
 
 # ============================================================================

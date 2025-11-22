@@ -1,7 +1,10 @@
 using System;
+using System.Collections;
+using System.Linq;
 using Core;
 using Robotics;
 using UnityEngine;
+using Vision;
 
 namespace PythonCommunication
 {
@@ -12,7 +15,9 @@ namespace PythonCommunication
     public class RobotCommand
     {
         public string command_type;
+        public string target_type; // "robot" or "camera" - determines routing
         public string robot_id;
+        public string camera_id; // For camera-targeted commands
         public CommandParameters parameters;
         public float timestamp;
         public uint request_id; // Protocol V2: for request/response correlation
@@ -27,6 +32,11 @@ namespace PythonCommunication
         public float approach_offset;
         public bool detailed; // For status queries
         public bool open_gripper; // For gripper control
+
+        // Perception parameters (for depth detection)
+        public string[] object_types;
+        public float min_confidence;
+        public float max_distance;
     }
 
     [System.Serializable]
@@ -222,15 +232,19 @@ namespace PythonCommunication
         /// </summary>
         private void ProcessCommand(RobotCommand command)
         {
+            // Determine target type for logging
+            string targetInfo = command.target_type == "camera"
+                ? $"camera: {command.camera_id}"
+                : $"robot: {command.robot_id}";
+
             if (_verboseLogging)
             {
-                Debug.Log(
-                    $"{_logPrefix} Processing command: {command.command_type} for robot: {command.robot_id}"
-                );
+                Debug.Log($"{_logPrefix} Processing command: {command.command_type} for {targetInfo}");
             }
 
             switch (command.command_type)
             {
+                // Robot-targeted commands
                 case "move_to_coordinate":
                     ExecuteMoveToCoordinate(command);
                     break;
@@ -241,6 +255,15 @@ namespace PythonCommunication
 
                 case "check_robot_status":
                     ExecuteCheckRobotStatus(command);
+                    break;
+
+                case "return_to_start_position":
+                    ExecuteReturnToStartPosition(command);
+                    break;
+
+                // Camera-targeted commands (perception)
+                case "calculate_object_coordinates":
+                    ExecuteCalculateObjectCoordinates(command);
                     break;
 
                 default:
@@ -488,6 +511,142 @@ namespace PythonCommunication
         }
 
         /// <summary>
+        /// Execute return_to_start_position command - move robot joints back to initial positions
+        /// </summary>
+        private void ExecuteReturnToStartPosition(RobotCommand command)
+        {
+            try
+            {
+                // Validate robot and get controller
+                if (
+                    !ValidateAndGetRobot(
+                        command.robot_id,
+                        "return_to_start_position",
+                        out RobotInstance robotInstance,
+                        out RobotController controller
+                    )
+                )
+                {
+                    return;
+                }
+
+                // Validate start joint targets exist
+                if (robotInstance.startJointTargets == null || robotInstance.startJointTargets.Length == 0)
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} return_to_start_position: No start joint targets saved for robot '{command.robot_id}'"
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                if (_verboseLogging)
+                {
+                    Debug.Log(
+                        $"{_logPrefix} Returning {command.robot_id} to start position with joint targets: "
+                            + $"[{string.Join(", ", robotInstance.startJointTargets.Select(a => a.ToString("F3")))}]"
+                    );
+                }
+
+                // Start coroutine to smoothly interpolate joint targets
+                StartCoroutine(ReturnToStartPositionCoroutine(
+                    controller,
+                    robotInstance.startJointTargets,
+                    command.robot_id,
+                    command.request_id,
+                    2.0f
+                ));
+
+                _successfulCommands++;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"{_logPrefix} Error executing return_to_start_position: {ex.Message}\n{ex.StackTrace}"
+                );
+                _failedCommands++;
+            }
+        }
+
+        /// <summary>
+        /// Coroutine to smoothly interpolate joint targets to start position
+        /// </summary>
+        private IEnumerator ReturnToStartPositionCoroutine(
+            RobotController controller,
+            float[] targetJoints,
+            string robotId,
+            uint requestId,
+            float duration)
+        {
+            if (controller == null || controller.robotJoints == null)
+            {
+                SendCommandCompletion(robotId, "return_to_start_position", false, requestId);
+                yield break;
+            }
+
+            // Store initial joint positions from the actual drive targets
+            float[] startJoints = new float[controller.robotJoints.Length];
+            for (int i = 0; i < controller.robotJoints.Length && i < startJoints.Length; i++)
+            {
+                startJoints[i] = controller.robotJoints[i].xDrive.target;
+            }
+
+            float elapsed = 0f;
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.fixedDeltaTime;
+                float t = Mathf.Clamp01(elapsed / duration);
+
+                // Smooth interpolation using ease-in-out
+                float smoothT = t * t * (3f - 2f * t);
+
+                // Interpolate each joint
+                for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
+                {
+                    // Target joints are in radians, drive targets are in degrees
+                    float startDeg = startJoints[i];
+                    float targetDeg = targetJoints[i] * Mathf.Rad2Deg;
+                    float currentTarget = Mathf.Lerp(startDeg, targetDeg, smoothT);
+
+                    controller.jointDriveTargets[i] = currentTarget * Mathf.Deg2Rad;
+
+                    var joint = controller.robotJoints[i];
+                    if (joint != null)
+                    {
+                        var drive = joint.xDrive;
+                        drive.target = currentTarget;
+                        joint.xDrive = drive;
+                    }
+                }
+
+                yield return new WaitForFixedUpdate();
+            }
+
+            // Ensure final positions are exact
+            for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
+            {
+                controller.jointDriveTargets[i] = targetJoints[i];
+
+                var joint = controller.robotJoints[i];
+                if (joint != null)
+                {
+                    var drive = joint.xDrive;
+                    drive.target = targetJoints[i] * Mathf.Rad2Deg;
+                    joint.xDrive = drive;
+                }
+            }
+
+            if (_verboseLogging)
+            {
+                Debug.Log($"{_logPrefix} Return to start position completed for {robotId}");
+            }
+
+            // Send completion notification
+            SendCommandCompletion(robotId, "return_to_start_position", true, requestId);
+        }
+
+        /// <summary>
         /// Execute get_robot_status command - gather robot state and send back to Python
         /// </summary>
         private void ExecuteCheckRobotStatus(RobotCommand command)
@@ -536,6 +695,130 @@ namespace PythonCommunication
                     "EXCEPTION",
                     $"Error gathering status: {ex.Message}",
                     command.request_id
+                );
+            }
+        }
+
+        /// <summary>
+        /// Execute calculate_object_coordinates command - triggers stereo depth detection
+        /// </summary>
+        private void ExecuteCalculateObjectCoordinates(RobotCommand command)
+        {
+            try
+            {
+                // Validate camera_id
+                string cameraId = command.camera_id;
+                if (string.IsNullOrEmpty(cameraId))
+                {
+                    cameraId = "stereo_main"; // Default camera
+                }
+
+                // Find stereo camera controller
+                StereoCameraController stereoCamera = FindStereoCameraById(cameraId);
+                if (stereoCamera == null)
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} calculate_object_coordinates: Camera '{cameraId}' not found"
+                    );
+                    SendPerceptionErrorResponse(
+                        cameraId,
+                        "CAMERA_NOT_FOUND",
+                        $"Stereo camera '{cameraId}' not found in scene",
+                        command.request_id
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                // Extract parameters
+                string[] objectTypes = command.parameters?.object_types;
+                float minConfidence = command.parameters?.min_confidence ?? 0.5f;
+                float maxDistance = command.parameters?.max_distance ?? 5.0f;
+
+                if (_verboseLogging)
+                {
+                    string typesStr = objectTypes != null ? string.Join(", ", objectTypes) : "all";
+                    Debug.Log(
+                        $"{_logPrefix} Triggering depth detection on {cameraId}: "
+                            + $"types=[{typesStr}], confidence>={minConfidence:F2}, distance<={maxDistance:F1}m"
+                    );
+                }
+
+                // Trigger the stereo capture and detection
+                // The results will be sent back via the normal detection pipeline (port 5007)
+                stereoCamera.CaptureAndDetect(objectTypes, minConfidence, maxDistance);
+
+                _successfulCommands++;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"{_logPrefix} Error executing calculate_object_coordinates: {ex.Message}\n{ex.StackTrace}"
+                );
+                _failedCommands++;
+
+                SendPerceptionErrorResponse(
+                    command.camera_id ?? "unknown",
+                    "EXCEPTION",
+                    $"Error during depth detection: {ex.Message}",
+                    command.request_id
+                );
+            }
+        }
+
+        /// <summary>
+        /// Find a stereo camera controller by ID
+        /// </summary>
+        private StereoCameraController FindStereoCameraById(string cameraId)
+        {
+            // Find all stereo cameras in scene
+            StereoCameraController[] cameras = FindObjectsByType<StereoCameraController>(FindObjectsSortMode.None);
+
+            foreach (var camera in cameras)
+            {
+                // Check if camera name or ID matches
+                if (camera.CameraId == cameraId || camera.gameObject.name == cameraId)
+                {
+                    return camera;
+                }
+            }
+
+            // If only one camera and using default ID, return it
+            if (cameras.Length == 1 && cameraId == "stereo_main")
+            {
+                return cameras[0];
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Send perception error response to Python
+        /// </summary>
+        private void SendPerceptionErrorResponse(
+            string cameraId,
+            string errorCode,
+            string errorMessage,
+            uint requestId
+        )
+        {
+            var errorResponse = new
+            {
+                success = false,
+                camera_id = cameraId,
+                detections = (object)null,
+                error = new { code = errorCode, message = errorMessage },
+            };
+
+            string errorJson = JsonUtility.ToJson(errorResponse);
+
+            // Send via depth results channel (port 5007) or status response
+            bool sent = SendStatusResponseToPython(errorJson, requestId);
+
+            if (!sent)
+            {
+                Debug.LogWarning(
+                    $"{_logPrefix} [req={requestId}] Failed to send perception error response: {errorJson}"
                 );
             }
         }

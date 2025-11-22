@@ -55,18 +55,15 @@ def run_analyzer_loop(args):
     """
     try:
         # Wait for server to initialize
-        logging.info("Waiting for StreamingServer to initialize...")
         time.sleep(cfg.SERVER_INIT_WAIT_TIME)
 
         # Initialize LM Studio processor
-        logging.info("Initializing LM Studio vision processor...")
         processor = LMStudioVisionProcessor(model=args.model, base_url=args.base_url)
 
         # Create output directory if needed
         output_dir = Path(args.output_dir)
         if not args.no_save:
             output_dir.mkdir(parents=True, exist_ok=True)
-            logging.info(f"Saving responses to: {output_dir}")
 
         # Track processed images to avoid reprocessing
         # Store (timestamp, image_hash) to detect when images actually change
@@ -83,13 +80,7 @@ def run_analyzer_loop(args):
         # Determine which cameras to monitor
         monitor_cameras = args.camera  # None = all cameras
 
-        logging.info("Starting continuous monitoring mode...")
-        logging.info(f"Check interval: {check_interval}s")
-        logging.info(f"Image age window: {min_age}s - {max_age}s")
-        if monitor_cameras:
-            logging.info(f"Monitoring cameras: {', '.join(monitor_cameras)}")
-        else:
-            logging.info("Monitoring all available cameras")
+        logging.info(f"Monitoring (interval={check_interval}s, age={min_age}-{max_age}s)")
 
         # Get the ImageStorage instance (same process, so this works!)
         storage = ImageStorage.get_instance()
@@ -154,14 +145,10 @@ def run_analyzer_loop(args):
                             continue  # Same image sent too quickly, skip
 
                     # Process the NEW image
-                    logging.info("\n" + "=" *70)
-                    logging.info(f"🔍 PROCESSING NEW IMAGE FROM: {cam_id}")
-                    logging.info(f"📝 Prompt: '{prompt}'")
-                    if cam_id in processed_images:
-                        logging.info(f"✨ Image content has changed since last screenshot")
-                    else:
-                        logging.info(f"🆕 First screenshot from this camera")
-                    logging.info("=" *70)
+                    logging.info("=" * 60)
+                    logging.info(f"Processing: {cam_id}")
+                    logging.info(f"Prompt: '{prompt}'")
+                    logging.info("=" * 60)
 
                     result = processor.send_images(
                         images=[image],
@@ -170,21 +157,14 @@ def run_analyzer_loop(args):
                         temperature=args.temperature,
                     )
 
-                    # Display response prominently
-                    logging.info("\n" + "=" *70)
-                    logging.info(f"🤖 LM STUDIO RESPONSE FOR {cam_id}")
-                    logging.info("=" *70)
+                    # Display response
+                    logging.info("=" * 60)
+                    logging.info(f"Response ({result['metadata']['duration_seconds']:.2f}s):")
                     logging.info(result["response"])
-                    logging.info("=" *70)
-                    logging.info(
-                        f"⏱️  Processing time: {result['metadata']['duration_seconds']:.2f}s"
-                    )
-                    logging.info(f"📊 Model: {result['metadata']['model']}")
-                    logging.info("=" *70 + "\n")
+                    logging.info("=" * 60)
 
                     # Send result to Unity
                     ResultsBroadcaster.send_result(result)
-                    logging.info(f"📤 Sent result to Unity for camera: {cam_id}")
 
                     # Save response
                     if not args.no_save:
@@ -323,12 +303,17 @@ Note: This script runs both the StreamingServer and AnalyzeImage in the same pro
         streaming_config = ServerConfig(host=args.server_host, port=args.server_port)
         results_config = ServerConfig(host=args.server_host, port=args.results_port)
 
-        # Start StreamingServer in background thread
-        logging.info("Starting StreamingServer in background...")
-        run_streaming_server_background(streaming_config)
+        # Print startup banner
+        logging.info("=" * 60)
+        logging.info("LLM Vision Analyzer")
+        logging.info("=" * 60)
+        logging.info(f"Streaming: {args.server_host}:{args.server_port}")
+        logging.info(f"Results:   {args.server_host}:{args.results_port}")
+        logging.info(f"Model:     {args.model}")
+        logging.info("=" * 60)
 
-        # Start ResultsServer in background thread
-        logging.info("Starting ResultsServer in background...")
+        # Start servers in background
+        run_streaming_server_background(streaming_config)
         run_results_server_background(results_config)
 
         # Run analyzer in main thread

@@ -66,7 +66,6 @@ class SequenceQueryHandler:
             self._parser: Optional[CommandParser] = None
             self._executor: Optional[SequenceExecutor] = None
             self._initialized = True
-            logger.info("SequenceQueryHandler singleton created")
 
     def initialize(
         self,
@@ -93,7 +92,6 @@ class SequenceQueryHandler:
             self._executor = SequenceExecutor(
                 check_completion=check_completion
             )
-            logger.info("✓ SequenceQueryHandler initialized")
             return True
         except Exception as e:
             logger.error(f"Failed to initialize SequenceQueryHandler: {e}")
@@ -177,7 +175,6 @@ class SequenceServer(TCPServerBase):
                 port=cfg.SEQUENCE_SERVER_PORT
             )
         super().__init__(config)
-        logger.info(f"SequenceServer initialized on port {config.port}")
 
     def handle_client_connection(self, client: socket.socket, address: tuple):
         """

@@ -81,22 +81,16 @@ Examples:
     server_config = ServerConfig(host=args.host, port=args.port)
 
     # Print startup banner
-    logging.info("=" * 70)
-    logging.info("RAG SERVER - Semantic Search for Robot Operations")
-    logging.info("=" * 70)
-    logging.info(f"Host:          {args.host}")
-    logging.info(f"Port:          {args.port}")
-    logging.info(f"Rebuild Index: {args.rebuild_index}")
-    logging.info(f"Test Mode:     {args.test}")
-    logging.info("=" * 70)
+    logging.info("=" * 60)
+    logging.info("RAG Server")
+    logging.info("=" * 60)
+    logging.info(f"Port: {args.port}")
+    logging.info(f"Rebuild: {args.rebuild_index}")
+    logging.info("=" * 60)
 
     if args.test:
-        # Test mode - run sample queries
-        logging.info("\n🧪 TEST MODE - Running sample queries\n")
         run_test_mode(args.rebuild_index)
     else:
-        # Normal mode - start server
-        logging.info("🚀 Starting RAG server...")
         run_rag_server(server_config, rebuild_index=args.rebuild_index)
 
 
@@ -156,11 +150,9 @@ def run_test_mode(rebuild_index: bool):
 
             print()
 
-        logging.info("=" * 70)
-        logging.info("Test completed successfully!")
-        logging.info("=" * 70)
-        logging.info("\nTo start the server, run without --test flag:")
-        logging.info(f"  python -m orchestrators.RunRAGServer")
+        logging.info("=" * 60)
+        logging.info("Test completed")
+        logging.info("=" * 60)
 
     except Exception as e:
         logging.info(f"❌ ERROR: Failed to initialize RAG system: {e}")

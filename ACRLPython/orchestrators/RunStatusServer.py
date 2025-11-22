@@ -61,16 +61,14 @@ def main():
     args = parser.parse_args()
 
     # Print startup banner
-    logging.info("=" * 70)
-    logging.info("Robot Status Server")
-    logging.info("=" * 70)
-    logging.info(f"Host: {args.host}")
-    logging.info(f"Status Port: {args.port}")
-    logging.info(f"Results Port: {cfg.RESULTS_SERVER_PORT} (TCP client connection)")
-    logging.info("=" * 70)
+    logging.info("=" * 60)
+    logging.info("Status Server")
+    logging.info("=" * 60)
+    logging.info(f"Port: {args.port}")
+    logging.info(f"Results: {cfg.RESULTS_SERVER_PORT}")
+    logging.info("=" * 60)
 
     # Verify ResultsServer is available
-    logging.info("Checking for ResultsServer availability...")
     results_available = False
     try:
         test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -79,29 +77,18 @@ def main():
         test_socket.close()
         if result == 0:
             results_available = True
-            logging.info(f"✓ ResultsServer is available on port {cfg.RESULTS_SERVER_PORT}")
     except Exception as e:
         logging.warning(f"Error checking ResultsServer: {e}")
 
     if not results_available:
-        logging.info("=" * 70)
-        logging.info("ERROR: ResultsServer is not running on port 5010")
-
-        logging.info("StatusServer requires ResultsServer to send commands to Unity.")
-        logging.info("Please start RunAnalyzer first, which will start ResultsServer:")
-
-        logging.info("  ./acrl/bin/python -m orchestrators.RunAnalyzer --model <model-name>")
-
-        logging.info("Then start this StatusServer in a separate terminal.")
-        logging.info("=" * 70)
+        logging.error("ResultsServer not running on port 5010")
+        logging.error("Start RunAnalyzer first")
         return 1
 
     # Create status server config
     status_config = ServerConfig(host=args.host, port=args.port)
 
     try:
-        # Start status server (blocking)
-        logging.info("Starting StatusServer (port 5012)...")
         run_status_server(status_config)
     except KeyboardInterrupt:
         logging.info("\nShutting down StatusServer...")

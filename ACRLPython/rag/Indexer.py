@@ -65,7 +65,6 @@ class OperationIndexer:
             logger.warning("No operations found in registry")
             return VectorStore()
 
-        logger.info(f"Building index for {len(operations)} operations...")
 
         # Create new vector store
         store = VectorStore()
@@ -95,7 +94,6 @@ class OperationIndexer:
             )
 
         # Generate embeddings for all operations
-        logger.info(f"Generating embeddings for {len(texts_to_embed)} operations...")
         embeddings = self.embedding_generator.generate_embeddings(texts_to_embed)
 
         # Add to vector store
@@ -106,7 +104,6 @@ class OperationIndexer:
                 metadata=data["metadata"],
             )
 
-        logger.info(f"✓ Index built with {len(store)} operations")
 
         # Save to disk
         if save and config.AUTO_SAVE_INDEX:
@@ -121,7 +118,6 @@ class OperationIndexer:
         Returns:
             New VectorStore with fresh index
         """
-        logger.info("Rebuilding index from scratch...")
         return self.build_index(save=True)
 
     def update_index(self, existing_store: VectorStore) -> VectorStore:
@@ -138,9 +134,7 @@ class OperationIndexer:
             Currently rebuilds entire index. Incremental updates
             could be added in the future.
         """
-        logger.info("Updating index (full rebuild)...")
         # For now, just rebuild the entire index
-        # Future enhancement: Implement incremental updates for better performance
         return self.build_index(save=True)
 
     def get_indexer_stats(self) -> dict:

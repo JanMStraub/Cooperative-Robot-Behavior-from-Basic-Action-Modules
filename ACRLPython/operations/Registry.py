@@ -14,6 +14,8 @@ from .Base import BasicOperation, OperationCategory, OperationComplexity
 from .MoveOperations import MOVE_TO_COORDINATE_OPERATION
 from .StatusOperations import CHECK_ROBOT_STATUS_OPERATION
 from .GripperOperations import CONTROL_GRIPPER_OPERATION
+from .DepthDetectionOperation import CALCULATE_OBJECT_COORDINATES_OPERATION
+from .DefaultPositionOperation import RETURN_TO_START_POSITION_OPERATION
 
 class OperationRegistry:
     """
@@ -37,6 +39,8 @@ class OperationRegistry:
             MOVE_TO_COORDINATE_OPERATION,
             CHECK_ROBOT_STATUS_OPERATION,
             CONTROL_GRIPPER_OPERATION,
+            CALCULATE_OBJECT_COORDINATES_OPERATION,
+            RETURN_TO_START_POSITION_OPERATION,
             # Add more operations here as they are implemented...
         ]
 

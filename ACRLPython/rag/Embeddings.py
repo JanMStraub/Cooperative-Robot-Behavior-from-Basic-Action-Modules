@@ -57,17 +57,12 @@ class EmbeddingGenerator:
             self.client = OpenAI(base_url=self.base_url, api_key=self.api_key)
 
             # Test connection with a simple embedding
+            assert self.client is not None  # For type checker
             test_response = self.client.embeddings.create(
                 input="test", model=self.model, timeout=config.EMBEDDING_TIMEOUT
             )
 
             if test_response and test_response.data:
-                logger.info(
-                    f"✓ Connected to LM Studio at {self.base_url} with model '{self.model}'"
-                )
-                logger.info(
-                    f"  Embedding dimension: {len(test_response.data[0].embedding)}"
-                )
                 self.use_lm_studio = True
             else:
                 raise Exception("Invalid response from LM Studio")
@@ -87,9 +82,6 @@ class EmbeddingGenerator:
             max_features=config.TFIDF_MAX_FEATURES,
             stop_words="english",
             ngram_range=(1, 2),  # Unigrams and bigrams
-        )
-        logger.info(
-            f"  TF-IDF vectorizer initialized (max_features={config.TFIDF_MAX_FEATURES})"
         )
 
     def generate_embedding(self, text: str) -> np.ndarray:

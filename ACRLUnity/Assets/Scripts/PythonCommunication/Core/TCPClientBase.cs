@@ -162,6 +162,10 @@ namespace PythonCommunication.Core
         {
             _shouldRun = false;
 
+            // Skip if already disconnected
+            if (_client == null && _stream == null)
+                return;
+
             try
             {
                 OnDisconnecting();

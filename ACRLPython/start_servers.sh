@@ -34,7 +34,7 @@ echo ""
 
 echo "Starting servers..."
 echo "All servers will run in the background."
-echo "======================================================================"   
+echo "============================================================"   
 echo ""
 
 # Set PYTHONPATH to include root
@@ -80,7 +80,7 @@ cd "$SCRIPT_DIR"
 sleep 3
 
 echo ""
-echo "======================================================================"
+echo "============================================================"
 echo "Started RunAnalyzer.py with LM Studio (PID: $ANALYZER_PID)"
 echo "  - StreamingServer: port 5005"
 echo "  - ResultsServer (LLM): port 5010"
@@ -102,13 +102,13 @@ echo "  - SequenceServer: port 5013 (multi-command sequence execution)"
 echo ""
 echo "All servers are running. Logs will appear below."
 echo "Press Ctrl+C to stop all servers."
-echo "======================================================================"
+echo "============================================================"
 echo ""
 
 # Function to kill all processes on exit
 cleanup() {
     echo ""
-    echo "======================================================================"
+    echo "============================================================"
     echo "Stopping servers..."
     kill $ANALYZER_PID 2>/dev/null
     kill $STEREO_PID 2>/dev/null
@@ -116,7 +116,7 @@ cleanup() {
     kill $STATUS_PID 2>/dev/null
     kill $SEQUENCE_PID 2>/dev/null
     echo "Servers stopped."
-    echo "======================================================================"
+    echo "============================================================"
     echo ""
     exit 0
 }

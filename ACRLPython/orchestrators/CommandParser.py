@@ -45,7 +45,7 @@ class CommandParser:
         self,
         lm_studio_url: Optional[str] = None,
         model: Optional[str] = None,
-        use_rag_validation: bool = True
+        use_rag_validation: bool = True,
     ):
         """
         Initialize the CommandParser.
@@ -64,7 +64,6 @@ class CommandParser:
             try:
                 self.rag = RAGSystem()
                 self.registry = get_global_registry()
-                logger.info("✓ CommandParser initialized with RAG validation")
             except Exception as e:
                 logger.warning(f"Failed to initialize RAG: {e}. Validation disabled.")
                 self.rag = None
@@ -74,10 +73,7 @@ class CommandParser:
             self.registry = get_global_registry()
 
     def parse(
-        self,
-        command_text: str,
-        robot_id: str = "Robot1",
-        use_llm: bool = True
+        self, command_text: str, robot_id: str = "Robot1", use_llm: bool = True
     ) -> Dict[str, Any]:
         """
         Parse a compound command into a sequence of operations.
@@ -99,18 +95,16 @@ class CommandParser:
             }
         """
         if not command_text or not command_text.strip():
-            return {
-                "success": False,
-                "commands": [],
-                "error": "Empty command text"
-            }
+            return {"success": False, "commands": [], "error": "Empty command text"}
 
         # Try LLM parsing first
         if use_llm:
             result = self._parse_with_llm(command_text, robot_id)
             if result["success"]:
                 return result
-            logger.warning(f"LLM parsing failed: {result.get('error')}. Falling back to regex.")
+            logger.warning(
+                f"LLM parsing failed: {result.get('error')}. Falling back to regex."
+            )
 
         # Fallback to regex parsing
         return self._parse_with_regex(command_text, robot_id)
@@ -139,20 +133,23 @@ class CommandParser:
                 json={
                     "model": self.model,
                     "messages": [
-                        {"role": "system", "content": "You are a robot command parser. Output only valid JSON."},
-                        {"role": "user", "content": prompt}
+                        {
+                            "role": "system",
+                            "content": "You are a robot command parser. Output only valid JSON.",
+                        },
+                        {"role": "user", "content": prompt},
                     ],
                     "temperature": 0.1,  # Low temperature for deterministic parsing
-                    "max_tokens": 1000
+                    "max_tokens": 1000,
                 },
-                timeout=30
+                timeout=30,
             )
 
             if response.status_code != 200:
                 return {
                     "success": False,
                     "commands": [],
-                    "error": f"LLM request failed with status {response.status_code}"
+                    "error": f"LLM request failed with status {response.status_code}",
                 }
 
             # Extract content from response
@@ -165,39 +162,33 @@ class CommandParser:
                 return {
                     "success": False,
                     "commands": [],
-                    "error": f"Failed to extract JSON from LLM response: {content[:200]}"
+                    "error": f"Failed to extract JSON from LLM response: {content[:200]}",
                 }
 
             # Validate operations
             commands = parsed.get("commands", [])
             validated_commands = self._validate_commands(commands, robot_id)
 
-            return {
-                "success": True,
-                "commands": validated_commands,
-                "error": None
-            }
+            return {"success": True, "commands": validated_commands, "error": None}
 
         except requests.exceptions.Timeout:
-            return {
-                "success": False,
-                "commands": [],
-                "error": "LLM request timed out"
-            }
+            return {"success": False, "commands": [], "error": "LLM request timed out"}
         except requests.exceptions.ConnectionError:
             return {
                 "success": False,
                 "commands": [],
-                "error": f"Cannot connect to LM Studio at {self.lm_studio_url}"
+                "error": f"Cannot connect to LM Studio at {self.lm_studio_url}",
             }
         except Exception as e:
             return {
                 "success": False,
                 "commands": [],
-                "error": f"LLM parsing error: {str(e)}"
+                "error": f"LLM parsing error: {str(e)}",
             }
 
-    def _build_parsing_prompt(self, command_text: str, robot_id: str, available_ops: str) -> str:
+    def _build_parsing_prompt(
+        self, command_text: str, robot_id: str, available_ops: str
+    ) -> str:
         """Build the prompt for LLM command parsing."""
         return f"""Parse the following robot command into a sequence of operations.
 
@@ -243,7 +234,7 @@ Output only the JSON, no explanation."""
             pass
 
         # Try to find JSON in markdown code block
-        json_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', content, re.DOTALL)
+        json_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", content, re.DOTALL)
         if json_match:
             try:
                 return json.loads(json_match.group(1))
@@ -251,7 +242,7 @@ Output only the JSON, no explanation."""
                 pass
 
         # Try to find JSON object in text
-        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        json_match = re.search(r"\{.*\}", content, re.DOTALL)
         if json_match:
             try:
                 return json.loads(json_match.group(0))
@@ -260,7 +251,9 @@ Output only the JSON, no explanation."""
 
         return None
 
-    def _validate_commands(self, commands: List[Dict], default_robot_id: str) -> List[Dict]:
+    def _validate_commands(
+        self, commands: List[Dict], default_robot_id: str
+    ) -> List[Dict]:
         """
         Validate and normalize parsed commands.
 
@@ -286,10 +279,7 @@ Output only the JSON, no explanation."""
                 logger.warning(f"Unknown operation: {operation}, skipping")
                 continue
 
-            validated.append({
-                "operation": operation,
-                "params": params
-            })
+            validated.append({"operation": operation, "params": params})
 
         return validated
 
@@ -308,7 +298,7 @@ Output only the JSON, no explanation."""
         text = command_text.lower()
 
         # Split by common conjunctions
-        parts = re.split(r'\s+(?:and|then|after that|,)\s+', text)
+        parts = re.split(r"\s+(?:and|then|after that|,)\s+", text)
 
         for part in parts:
             part = part.strip()
@@ -317,9 +307,9 @@ Output only the JSON, no explanation."""
 
             # Parse move commands
             move_match = re.search(
-                r'move\s+(?:to\s+)?(?:\(?\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)?|'
-                r'x\s*=?\s*(-?[\d.]+).*?y\s*=?\s*(-?[\d.]+).*?z\s*=?\s*(-?[\d.]+))',
-                part
+                r"move\s+(?:to\s+)?(?:\(?\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)?|"
+                r"x\s*=?\s*(-?[\d.]+).*?y\s*=?\s*(-?[\d.]+).*?z\s*=?\s*(-?[\d.]+))",
+                part,
             )
             if move_match:
                 groups = move_match.groups()
@@ -328,59 +318,76 @@ Output only the JSON, no explanation."""
                 else:
                     x, y, z = float(groups[3]), float(groups[4]), float(groups[5])
 
-                commands.append({
-                    "operation": "move_to_coordinate",
-                    "params": {
-                        "robot_id": robot_id,
-                        "x": x,
-                        "y": y,
-                        "z": z
+                commands.append(
+                    {
+                        "operation": "move_to_coordinate",
+                        "params": {"robot_id": robot_id, "x": x, "y": y, "z": z},
                     }
-                })
+                )
                 continue
 
             # Parse gripper commands
-            if re.search(r'close\s+(?:the\s+)?gripper|grasp|grip|grab', part):
-                commands.append({
-                    "operation": "control_gripper",
-                    "params": {
-                        "robot_id": robot_id,
-                        "open_gripper": False
+            if re.search(r"close\s+(?:the\s+)?gripper|grasp|grip|grab", part):
+                commands.append(
+                    {
+                        "operation": "control_gripper",
+                        "params": {"robot_id": robot_id, "open_gripper": False},
                     }
-                })
+                )
                 continue
 
-            if re.search(r'open\s+(?:the\s+)?gripper|release|drop', part):
-                commands.append({
-                    "operation": "control_gripper",
-                    "params": {
-                        "robot_id": robot_id,
-                        "open_gripper": True
+            if re.search(r"open\s+(?:the\s+)?gripper|release|drop", part):
+                commands.append(
+                    {
+                        "operation": "control_gripper",
+                        "params": {"robot_id": robot_id, "open_gripper": True},
                     }
-                })
+                )
                 continue
 
             # Parse status check
-            if re.search(r'check\s+(?:robot\s+)?status|get\s+status', part):
-                commands.append({
-                    "operation": "check_robot_status",
-                    "params": {
-                        "robot_id": robot_id
+            if re.search(r"check\s+(?:robot\s+)?status|get\s+status", part):
+                commands.append(
+                    {
+                        "operation": "check_robot_status",
+                        "params": {"robot_id": robot_id},
                     }
-                })
+                )
+                continue
+
+            # Parse return to start position
+            if re.search(
+                r"return\s+(?:to\s+)?(?:start|home|default|initial)\s*(?:position)?|go\s+(?:to\s+)?home|home\s+position",
+                part,
+            ):
+                commands.append(
+                    {
+                        "operation": "return_to_start_position",
+                        "params": {"robot_id": robot_id},
+                    }
+                )
+                continue
+
+            # Parse object detection / depth detection
+            if re.search(
+                r"detect\s+(?:objects?|cubes?)|find\s+(?:objects?|cubes?)|calculate\s+(?:object\s+)?coordinates|look\s+for|scan\s+for",
+                part,
+            ):
+                commands.append(
+                    {
+                        "operation": "calculate_object_coordinates",
+                        "params": {"camera_id": "stereo_main"},
+                    }
+                )
                 continue
 
         if commands:
-            return {
-                "success": True,
-                "commands": commands,
-                "error": None
-            }
+            return {"success": True, "commands": commands, "error": None}
         else:
             return {
                 "success": False,
                 "commands": [],
-                "error": f"Could not parse command: {command_text}"
+                "error": f"Could not parse command: {command_text}",
             }
 
     def get_supported_patterns(self) -> List[str]:
@@ -391,7 +398,9 @@ Output only the JSON, no explanation."""
             "close gripper / grasp / grip / grab - Close the gripper",
             "open gripper / release / drop - Open the gripper",
             "check status / get status - Get robot status",
-            "Commands can be chained with 'and', 'then', 'after that', or commas"
+            "return to start / go home / home position - Return to start position",
+            "detect objects / find cubes / scan for - Detect objects with stereo camera",
+            "Commands can be chained with 'and', 'then', 'after that', or commas",
         ]
 
 

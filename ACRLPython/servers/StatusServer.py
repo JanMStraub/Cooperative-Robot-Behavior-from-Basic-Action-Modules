@@ -211,7 +211,6 @@ class StatusServer(TCPServerBase):
         self._results_host = results_host or cfg.DEFAULT_HOST
         self._results_port = results_port or cfg.RESULTS_SERVER_PORT
 
-        logging.info(f"StatusServer initialized (will connect to ResultsServer at {self._results_host}:{self._results_port})")
 
     def handle_client_connection(self, client: socket.socket, address: tuple):
         """
@@ -595,7 +594,6 @@ def run_status_server(server_config: ServerConfig, setup_signals: bool = True):
 
     try:
         server.start()
-        logging.info("StatusServer ready to handle queries from Unity")
 
         # Keep server running
         while server.is_running():
@@ -628,7 +626,6 @@ def run_status_server_background(server_config: ServerConfig):
         daemon=True,
     )
     thread.start()
-    logging.info("StatusServer started in background thread")
     return thread
 
 

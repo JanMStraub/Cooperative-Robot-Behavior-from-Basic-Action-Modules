@@ -8,7 +8,7 @@ Runs the complete stereo detection system:
 3. Processing loop - detects objects with 3D positions using stereo disparity
 
 Usage:
-    python RunStereoDetector.py --baseline 0.1 --fov 70
+    python RunStereoDetector.py --baseline 0.1 --fov 60
 """
 
 import logging
@@ -69,18 +69,13 @@ class StereoDetectorOrchestrator:
         # Shutdown flag
         self.shutdown_flag = False
 
-        logging.info("Stereo detector orchestrator initialized")
-        logging.info(
-            f"Camera config: baseline={camera_config.baseline}m, FOV={camera_config.fov}°"
-        )
-
     def process_loop(self):
         """
         Main processing loop.
 
         Continuously monitors for new stereo image pairs and processes them.
         """
-        logging.info("Starting stereo detection processing loop")
+        logging.info("Waiting for stereo image pairs...")
 
         while not self.shutdown_flag:
             try:
@@ -159,21 +154,10 @@ class StereoDetectorOrchestrator:
             # Prompt is not JSON, use as-is
             pass
 
-        # Print visual separator and processing header
-        logging.info("=" * 70)
-        logging.info(f"🔍 PROCESSING STEREO PAIR: {camera_pair_id}")
-        if actual_prompt:
-            logging.info(f"📝 Prompt: '{actual_prompt}'")
-        logging.info(f"📷 Camera params: baseline={camera_config.baseline:.4f}m, FOV={camera_config.fov:.1f}°")
-        if camera_position:
-            logging.info(
-                f"📍 Camera position: ({camera_position[0]:.3f}, {camera_position[1]:.3f}, {camera_position[2]:.3f})m"
-            )
-        if camera_rotation:
-            logging.info(
-                f"🔄 Camera rotation: ({camera_rotation[0]:.1f}, {camera_rotation[1]:.1f}, {camera_rotation[2]:.1f})°"
-            )
-        logging.info("=" * 70)
+        # Print processing header
+        logging.info("=" * 60)
+        logging.info(f"Processing: {camera_pair_id}")
+        logging.info("=" * 60)
 
         try:
             # Run stereo detection with depth estimation
@@ -207,40 +191,14 @@ class StereoDetectorOrchestrator:
             # Broadcast results to Unity
             self.results_broadcaster.send_result(result_dict)
 
-            # Print visual result summary
-            logging.info("")
-            logging.info("=" * 70)
-            logging.info(f"✓ STEREO DETECTION COMPLETE")
-            logging.info("=" * 70)
-            logging.info(f"⏱️  Processing time: {duration:.2f}s")
-            logging.info(f"🎯 Detected objects: {len(result.detections)}")
-
-            if result.detections:
-                logging.info("=" * 70)
-                for i, det in enumerate(result.detections, 1):
-                    if det.world_position:
-                        depth_str = f", depth={det.depth_m:.3f}m" if det.depth_m else ""
-                        disp_str = f", disp={det.disparity:.1f}px" if det.disparity else ""
-                        logging.info(
-                            f"  [{i}] {det.color.upper()} cube:"
-                        )
-                        logging.info(
-                            f"      📍 World position: ({det.world_position[0]:.3f}, {det.world_position[1]:.3f}, {det.world_position[2]:.3f})m"
-                        )
-                        logging.info(
-                            f"      📷 Pixel position: ({det.center_x}, {det.center_y})"
-                        )
-                        if det.depth_m:
-                            logging.info(f"      📏 Depth: {det.depth_m:.3f}m")
-                        if det.disparity:
-                            logging.info(f"      🔢 Disparity: {det.disparity:.1f}px")
-                        logging.info(f"      ✓ Confidence: {det.confidence:.2f}")
-                        if i < len(result.detections):
-                            logging.info("      " + "-" * 70)
-
-            logging.info("=" * 70)
-            logging.info(f"📤 Sent results to Unity")
-            logging.info("=" * 70)
+            # Print result summary
+            logging.info("=" * 60)
+            logging.info(f"Detected: {len(result.detections)} objects ({duration:.2f}s)")
+            for det in result.detections:
+                if det.world_position:
+                    pos = det.world_position
+                    logging.info(f"  {det.color}: ({pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f})m")
+            logging.info("=" * 60)
 
         except Exception as e:
             logging.error(f"Failed to process stereo pair: {e}")
@@ -277,7 +235,7 @@ def main():
         "--fov",
         type=float,
         default=cfg.DEFAULT_STEREO_FOV,
-        help="Camera field of view in degrees (default: 70)",
+        help="Camera field of view in degrees (default: 60)",
     )
     parser.add_argument(
         "--detection-host",
@@ -320,19 +278,14 @@ def main():
     # Create camera configuration
     camera_config = CameraConfig(fov=args.fov, baseline=args.baseline)
 
-    logging.info("=" * 70)
-    logging.info("Stereo Object Detector with 3D Position Estimation")
-    logging.info("=" * 70)
-    logging.info(f"Camera baseline: {args.baseline}m")
-    logging.info(f"Camera FOV: {args.fov}°")
-    logging.info(
-        f"Stereo detection server: {args.detection_host}:{args.detection_port}"
-    )
-    logging.info(f"Results server: {args.results_host}:{args.results_port}")
-    logging.info("=" * 70)
-
-    # Start servers
-    logging.info("Starting servers...")
+    # Print startup banner
+    logging.info("=" * 60)
+    logging.info("Stereo Object Detector")
+    logging.info("=" * 60)
+    logging.info(f"Detection: {args.detection_host}:{args.detection_port}")
+    logging.info(f"Results:   {args.results_host}:{args.results_port}")
+    logging.info(f"Baseline:  {args.baseline}m, FOV: {args.fov}°")
+    logging.info("=" * 60)
 
     # Start stereo detection server (receives stereo images from Unity)
     stereo_server = run_stereo_detection_server_background(
@@ -342,15 +295,9 @@ def main():
     # Start results server if requested
     results_server = None
     if not args.no_results_server:
-        logging.info(f"Starting ResultsServer on port {args.results_port}")
         from core.TCPServerBase import ServerConfig
-
         results_config = ServerConfig(host=args.results_host, port=args.results_port)
         results_server = run_results_server_background(results_config)
-    else:
-        logging.info(
-            "Skipping ResultsServer startup (using shared ResultsBroadcaster from RunAnalyzer)"
-        )
 
     # Wait for servers to start
     time.sleep(1.0)
@@ -367,10 +314,6 @@ def main():
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-
-    # Start processing loop
-    logging.info("Stereo detector ready - waiting for stereo image pairs from Unity")
-    logging.info("Press Ctrl+C to stop")
 
     try:
         orchestrator.process_loop()
