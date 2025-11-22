@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 
-def control_gripper(robot_id: str, open_gripper: bool) -> OperationResult:
+def control_gripper(robot_id: str, open_gripper: bool, request_id: int = 0) -> OperationResult:
     """
     Open or close the robot gripper.
 
@@ -102,6 +102,7 @@ def control_gripper(robot_id: str, open_gripper: bool) -> OperationResult:
                 "open_gripper": open_gripper,
             },
             "timestamp": time.time(),
+            "request_id": request_id,
         }
 
         # Send to Unity via ResultsBroadcaster

@@ -91,6 +91,11 @@ def main():
         action="store_true",
         help="Rebuild RAG index before starting"
     )
+    parser.add_argument(
+        "--no-completion-check",
+        action="store_true",
+        help="Disable waiting for Unity completion signals (for testing)"
+    )
     args = parser.parse_args()
 
     # Print startup banner
@@ -124,10 +129,16 @@ def main():
         )
         time.sleep(0.5)
 
+    # Determine if completion checking should be enabled
+    check_completion = not args.no_completion_check
+    if not check_completion:
+        logger.info("Completion checking DISABLED - commands will fire without waiting")
+
     sequence_server = run_sequence_server_background(
         cfg.get_sequence_config(),
         model=args.model,
-        setup_signals=False
+        setup_signals=False,
+        check_completion=check_completion
     )
     time.sleep(0.5)
 

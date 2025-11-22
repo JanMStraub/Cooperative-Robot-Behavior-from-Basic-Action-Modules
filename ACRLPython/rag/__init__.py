@@ -34,6 +34,12 @@ from .Embeddings import EmbeddingGenerator
 from .VectorStore import VectorStore
 from .Indexer import OperationIndexer
 from .QueryEngine import QueryEngine
+from .ConfidenceScorer import (
+    compute_confidence_score,
+    get_confidence_level,
+    apply_confidence_boosting,
+    ConfidenceLevel,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -284,4 +290,8 @@ __all__ = [
     "OperationIndexer",
     "QueryEngine",
     "config",
+    "compute_confidence_score",
+    "get_confidence_level",
+    "apply_confidence_boosting",
+    "ConfidenceLevel",
 ]

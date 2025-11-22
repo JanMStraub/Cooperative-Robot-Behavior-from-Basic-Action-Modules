@@ -192,8 +192,12 @@ namespace PythonCommunication
 
                 if (command != null && !string.IsNullOrEmpty(command.command_type))
                 {
-                    // Set request_id from LLMResult (Protocol V2)
-                    command.request_id = result.request_id;
+                    // Use request_id from command JSON if set, otherwise fall back to LLMResult (Protocol V2)
+                    // This supports both direct commands (with request_id in JSON) and LLM results
+                    if (command.request_id == 0)
+                    {
+                        command.request_id = result.request_id;
+                    }
 
                     ProcessCommand(command);
                 }

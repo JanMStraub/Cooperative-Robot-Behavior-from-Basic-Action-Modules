@@ -27,6 +27,7 @@ class TestOperationIndexer:
         mock_op.description = "Test operation"
         mock_op.average_duration_ms = 1000.0
         mock_op.success_rate = 0.95
+        mock_op.parameters = []  # Empty list of parameters
         mock_op.to_rag_document.return_value = "Test operation document"
 
         mock_reg = Mock()

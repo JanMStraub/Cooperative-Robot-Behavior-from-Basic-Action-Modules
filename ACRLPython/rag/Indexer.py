@@ -78,7 +78,7 @@ class OperationIndexer:
             rag_text = op.to_rag_document()
             texts_to_embed.append(rag_text)
 
-            # Store operation data
+            # Store operation data including parameters for confidence scoring
             operation_data.append(
                 {
                     "operation_id": op.operation_id,
@@ -89,6 +89,7 @@ class OperationIndexer:
                         "description": op.description,
                         "average_duration_ms": op.average_duration_ms,
                         "success_rate": op.success_rate,
+                        "parameters": [p.name for p in op.parameters],
                     },
                 }
             )

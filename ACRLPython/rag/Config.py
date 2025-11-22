@@ -41,6 +41,15 @@ class RAGConfig:
         self.DEFAULT_TOP_K: int = int(os.getenv("DEFAULT_TOP_K", "5"))
         self.MIN_SIMILARITY_SCORE: float = float(os.getenv("MIN_SIMILARITY_SCORE", "0.5"))
 
+        # Confidence scoring settings
+        self.CONFIDENCE_STRATEGY: str = os.getenv("CONFIDENCE_STRATEGY", "balanced")  # strict, balanced, permissive
+        self.ENABLE_CONFIDENCE_SCORING: bool = os.getenv("ENABLE_CONFIDENCE_SCORING", "true").lower() == "true"
+        self.CONFIDENCE_TIERS: dict = {
+            "high": 0.75,
+            "medium": 0.5,
+            "low": 0.25,
+        }
+
         # Fallback settings
         self.USE_TFIDF_FALLBACK: bool = os.getenv("USE_TFIDF_FALLBACK", "true").lower() == "true"
         self.TFIDF_MAX_FEATURES: int = int(os.getenv("TFIDF_MAX_FEATURES", "500"))
@@ -63,6 +72,9 @@ class RAGConfig:
 
         if not (0.0 <= self.MIN_SIMILARITY_SCORE <= 1.0):
             return False, "MIN_SIMILARITY_SCORE must be between 0.0 and 1.0"
+
+        if self.CONFIDENCE_STRATEGY not in ["strict", "balanced", "permissive"]:
+            return False, "CONFIDENCE_STRATEGY must be 'strict', 'balanced', or 'permissive'"
 
         return True, None
 
@@ -87,6 +99,10 @@ Vector Store:
 Search:
   - Default Top-K: {self.DEFAULT_TOP_K}
   - Min Similarity: {self.MIN_SIMILARITY_SCORE}
+
+Confidence:
+  - Scoring Enabled: {self.ENABLE_CONFIDENCE_SCORING}
+  - Strategy: {self.CONFIDENCE_STRATEGY}
 
 Fallback:
   - TF-IDF Enabled: {self.USE_TFIDF_FALLBACK}
