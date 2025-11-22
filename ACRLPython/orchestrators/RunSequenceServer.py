@@ -57,9 +57,9 @@ def run_test_sequence():
             for cmd in result.get("parsed_commands", []):
                 logger.info(f"  - {cmd['operation']}: {cmd['params']}")
         else:
-            logger.error(f"✗ Failed: {result.get('error')}")
+            logger.error(f"Failed: {result.get('error')}")
 
-    logger.info("\n" + "=" * 60)
+    logger.info("=" * 60)
 
 
 def main():
@@ -93,50 +93,43 @@ def main():
     )
     args = parser.parse_args()
 
+    # Print startup banner
     logger.info("=" * 60)
-    logger.info("Starting Sequence Server Orchestrator")
+    logger.info("Sequence Server")
+    logger.info("=" * 60)
+    logger.info(f"Port:  {cfg.SEQUENCE_SERVER_PORT}")
+    logger.info(f"Model: {args.model}")
     logger.info("=" * 60)
 
-    # Initialize RAG system if needed
-    logger.info("Initializing RAG system...")
+    # Initialize RAG system
     try:
         rag = RAGSystem()
         if args.rebuild_index or not rag.is_ready():
-            logger.info("Building RAG index...")
             rag.index_operations(rebuild=args.rebuild_index)
-        logger.info("✓ RAG system ready")
     except Exception as e:
-        logger.warning(f"RAG initialization failed: {e}. Continuing without RAG validation.")
+        logger.warning(f"RAG init failed: {e}")
 
-    # Start ResultsServer for sending commands to Unity
+    # Start servers
     results_server = None
     if not args.no_results_server:
-        logger.info(f"Starting ResultsServer on port {cfg.LLM_RESULTS_PORT}...")
         results_server = run_results_server_background(
             cfg.get_results_config()  # type: ignore[arg-type]
         )
         time.sleep(0.5)
-        logger.info("✓ ResultsServer started")
 
-    # Start StatusServer for receiving completion signals from Unity
     status_server = None
     if not args.no_status_server:
-        logger.info(f"Starting StatusServer on port {cfg.STATUS_SERVER_PORT}...")
         status_server = run_status_server_background(
             cfg.get_status_config()  # type: ignore[arg-type]
         )
         time.sleep(0.5)
-        logger.info("✓ StatusServer started")
 
-    # Start SequenceServer
-    logger.info(f"Starting SequenceServer on port {cfg.SEQUENCE_SERVER_PORT}...")
     sequence_server = run_sequence_server_background(
         cfg.get_sequence_config(),
         model=args.model,
         setup_signals=False
     )
     time.sleep(0.5)
-    logger.info("✓ SequenceServer started")
 
     # Run test if requested
     if args.test:
@@ -157,20 +150,7 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    # Print status
-    logger.info("")
-    logger.info("=" * 60)
-    logger.info("Sequence Server is running")
-    logger.info("=" * 60)
-    logger.info(f"  SequenceServer: port {cfg.SEQUENCE_SERVER_PORT}")
-    if results_server:
-        logger.info(f"  ResultsServer:  port {cfg.LLM_RESULTS_PORT}")
-    if status_server:
-        logger.info(f"  StatusServer:   port {cfg.STATUS_SERVER_PORT}")
-    logger.info(f"  Model:          {args.model}")
-    logger.info("")
-    logger.info("Press Ctrl+C to stop")
-    logger.info("=" * 60)
+    logger.info("Servers started, waiting for commands...")
 
     # Main loop
     try:

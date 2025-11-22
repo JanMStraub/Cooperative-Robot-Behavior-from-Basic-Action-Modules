@@ -104,6 +104,7 @@ namespace Vision
         // Properties
         public bool IsProcessing => _isProcessing;
         public int CaptureCount => _captureCounter;
+        public string CameraId => _cameraPairId ?? name;
 
         // Camera
         private Camera _leftCamera;
@@ -272,6 +273,29 @@ namespace Vision
             }
 
             StartCoroutine(CaptureAndSendCoroutine());
+        }
+
+        /// <summary>
+        /// Capture stereo pair and detect specific object types with filtering parameters.
+        /// This is called by PythonCommandHandler for the calculate_object_coordinates operation.
+        /// </summary>
+        /// <param name="objectTypes">Object types to detect (null for all)</param>
+        /// <param name="minConfidence">Minimum confidence threshold</param>
+        /// <param name="maxDistance">Maximum detection distance in meters</param>
+        public void CaptureAndDetect(string[] objectTypes, float minConfidence, float maxDistance)
+        {
+            // Store filter parameters for use in result processing
+            // Note: These could be sent as metadata to Python for server-side filtering
+            // For now, we trigger the capture and let Python handle filtering
+
+            if (objectTypes != null && objectTypes.Length > 0)
+            {
+                Debug.Log($"{_logPrefix} Detection filter: types=[{string.Join(", ", objectTypes)}], "
+                    + $"confidence>={minConfidence:F2}, distance<={maxDistance:F1}m");
+            }
+
+            // Trigger capture - filtering is handled by the Python stereo detector
+            CaptureAndSend();
         }
 
         /// <summary>

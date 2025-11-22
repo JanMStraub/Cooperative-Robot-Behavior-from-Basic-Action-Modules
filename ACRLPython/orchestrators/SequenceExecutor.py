@@ -280,6 +280,11 @@ class SequenceExecutor:
             is_moving = status.get("is_moving", True)
             return not is_moving
 
+        elif operation == "return_to_start_position":
+            # Check if robot is no longer moving (similar to move_to_coordinate)
+            is_moving = status.get("is_moving", True)
+            return not is_moving
+
         elif operation == "control_gripper":
             # Gripper operations are fast, consider complete after short delay
             # Could also check gripper state in status
@@ -287,6 +292,10 @@ class SequenceExecutor:
 
         elif operation == "check_robot_status":
             # Status check is immediate
+            return True
+
+        elif operation == "calculate_object_coordinates":
+            # Detection is immediate (results sent via separate channel)
             return True
 
         # Default: assume complete

@@ -1,9 +1,11 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using Core;
 using PythonCommunication.Core;
 using Robotics;
 using UnityEngine;
+using Vision;
 
 namespace PythonCommunication
 {
@@ -46,9 +48,13 @@ namespace PythonCommunication
         [SerializeField]
         private string _prompt = "Move robot to position x=0.3, y=0.15, z=0.1";
 
-        [Tooltip("Robot ID to use for operations")]
+        [Tooltip("Robot ID to use for robot operations")]
         [SerializeField]
         private string _robotId = "Robot1";
+
+        [Tooltip("Camera ID to use for perception operations")]
+        [SerializeField]
+        private string _cameraId = "stereo_main";
 
         [Tooltip("Number of RAG results to return")]
         [Range(1, 10)]
@@ -342,6 +348,7 @@ namespace PythonCommunication
             // Handle different operation types
             switch (operation.name)
             {
+                // Robot-targeted operations
                 case "move_to_coordinate":
                     ExecuteMoveToCoordinate(operation);
                     break;
@@ -349,9 +356,18 @@ namespace PythonCommunication
                 case "check_robot_status":
                     ExecuteCheckRobotStatus(operation);
                     break;
-                
+
                 case "control_gripper":
                     ExecuteControlGripper(operation);
+                    break;
+
+                case "return_to_start_position":
+                    ExecuteReturnToStartPosition(operation);
+                    break;
+
+                // Camera-targeted operations (perception)
+                case "calculate_object_coordinates":
+                    ExecuteCalculateObjectCoordinates(operation);
                     break;
 
                 default:
@@ -544,6 +560,249 @@ namespace PythonCommunication
             Debug.Log($"{_logPrefix} Gripper command executed on {_robotId}");
         }
 
+        /// <summary>
+        /// Execute return_to_start_position operation
+        /// </summary>
+        private void ExecuteReturnToStartPosition(OperationInfo operation)
+        {
+            Debug.Log($"{_logPrefix} 🏠 Returning {_robotId} to start position");
+
+            // Get robot instance from RobotManager
+            if (RobotManager.Instance == null)
+            {
+                Debug.LogError($"{_logPrefix} RobotManager.Instance is null!");
+                _lastQueryStatus = "ERROR: RobotManager not found";
+                return;
+            }
+
+            if (!RobotManager.Instance.RobotInstances.TryGetValue(_robotId, out RobotInstance robotInstance))
+            {
+                Debug.LogError(
+                    $"{_logPrefix} Robot '{_robotId}' not found in RobotManager. "
+                    + $"Available robots: {string.Join(", ", RobotManager.Instance.RobotInstances.Keys)}"
+                );
+                _lastQueryStatus = $"ERROR: Robot '{_robotId}' not found";
+                return;
+            }
+
+            RobotController controller = robotInstance.controller;
+            if (controller == null)
+            {
+                Debug.LogError($"{_logPrefix} Robot '{_robotId}' has no RobotController component");
+                _lastQueryStatus = "ERROR: No RobotController";
+                return;
+            }
+
+            // Validate start joint targets exist
+            if (robotInstance.startJointTargets == null || robotInstance.startJointTargets.Length == 0)
+            {
+                Debug.LogError($"{_logPrefix} No start joint targets saved for robot '{_robotId}'");
+                _lastQueryStatus = "ERROR: No start joint targets saved";
+                return;
+            }
+
+            // Start coroutine to smoothly interpolate joint targets
+            StartCoroutine(ReturnToStartPositionCoroutine(controller, robotInstance.startJointTargets, 2.0f));
+
+            // Update status
+            _lastOperationExecuted = $"return_to_start_position({_robotId})";
+            _lastQueryStatus = $"EXECUTED: {operation.name}";
+
+            Debug.Log($"{_logPrefix} Return to start position initiated on {_robotId}");
+        }
+
+        /// <summary>
+        /// Coroutine to smoothly interpolate joint targets to start position
+        /// </summary>
+        private IEnumerator ReturnToStartPositionCoroutine(RobotController controller, float[] targetJoints, float duration)
+        {
+            if (controller == null || controller.robotJoints == null)
+                yield break;
+
+            // Store initial joint positions from the actual drive targets
+            float[] startJoints = new float[controller.robotJoints.Length];
+            for (int i = 0; i < controller.robotJoints.Length && i < startJoints.Length; i++)
+            {
+                startJoints[i] = controller.robotJoints[i].xDrive.target;
+            }
+
+            float elapsed = 0f;
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.fixedDeltaTime;
+                float t = Mathf.Clamp01(elapsed / duration);
+
+                // Smooth interpolation using ease-in-out
+                float smoothT = t * t * (3f - 2f * t);
+
+                // Interpolate each joint
+                for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
+                {
+                    // Target joints are in radians, drive targets are in degrees
+                    float startDeg = startJoints[i];
+                    float targetDeg = targetJoints[i] * Mathf.Rad2Deg;
+                    float currentTarget = Mathf.Lerp(startDeg, targetDeg, smoothT);
+
+                    controller.jointDriveTargets[i] = currentTarget * Mathf.Deg2Rad;
+
+                    var joint = controller.robotJoints[i];
+                    if (joint != null)
+                    {
+                        var drive = joint.xDrive;
+                        drive.target = currentTarget;
+                        joint.xDrive = drive;
+                    }
+                }
+
+                yield return new WaitForFixedUpdate();
+            }
+
+            // Ensure final positions are exact
+            for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
+            {
+                controller.jointDriveTargets[i] = targetJoints[i];
+
+                var joint = controller.robotJoints[i];
+                if (joint != null)
+                {
+                    var drive = joint.xDrive;
+                    drive.target = targetJoints[i] * Mathf.Rad2Deg;
+                    joint.xDrive = drive;
+                }
+            }
+
+            Debug.Log($"{_logPrefix} Return to start position completed");
+        }
+
+        /// <summary>
+        /// Execute calculate_object_coordinates operation for stereo depth detection
+        /// </summary>
+        private void ExecuteCalculateObjectCoordinates(OperationInfo operation)
+        {
+            Debug.Log($"{_logPrefix} 📷 Detecting objects with camera {_cameraId}");
+
+            // Parse parameters from prompt
+            string[] objectTypes = TryParseObjectTypes(_prompt);
+            float minConfidence = TryParseConfidence(_prompt) ?? 0.5f;
+            float maxDistance = TryParseMaxDistance(_prompt) ?? 5.0f;
+
+            // Find stereo camera
+            StereoCameraController[] cameras = UnityEngine.Object.FindObjectsByType<StereoCameraController>(FindObjectsSortMode.None);
+            StereoCameraController stereoCamera = null;
+
+            foreach (var camera in cameras)
+            {
+                if (camera.CameraId == _cameraId || camera.gameObject.name == _cameraId)
+                {
+                    stereoCamera = camera;
+                    break;
+                }
+            }
+
+            // If only one camera and using default ID, use it
+            if (stereoCamera == null && cameras.Length == 1 && _cameraId == "stereo_main")
+            {
+                stereoCamera = cameras[0];
+            }
+
+            if (stereoCamera == null)
+            {
+                Debug.LogError($"{_logPrefix} Stereo camera '{_cameraId}' not found in scene");
+                _lastQueryStatus = $"ERROR: Camera '{_cameraId}' not found";
+                return;
+            }
+
+            // Log what we're doing
+            string typesStr = objectTypes != null ? string.Join(", ", objectTypes) : "all";
+            Debug.Log(
+                $"{_logPrefix} Detection params: types=[{typesStr}], confidence>={minConfidence:F2}, distance<={maxDistance:F1}m"
+            );
+
+            // Trigger detection
+            stereoCamera.CaptureAndDetect(objectTypes, minConfidence, maxDistance);
+
+            // Update status
+            _lastOperationExecuted = $"calculate_object_coordinates({_cameraId}, types=[{typesStr}])";
+            _lastQueryStatus = $"EXECUTED: {operation.name}";
+
+            Debug.Log($"{_logPrefix} Depth detection triggered on {_cameraId}");
+        }
+
+        /// <summary>
+        /// Try to parse object types from prompt (e.g., "detect red cube" or "find red and blue cubes")
+        /// </summary>
+        private string[] TryParseObjectTypes(string prompt)
+        {
+            if (string.IsNullOrEmpty(prompt))
+                return null;
+
+            string lower = prompt.ToLower();
+            List<string> types = new List<string>();
+
+            // Check for common object types
+            if (lower.Contains("red"))
+                types.Add("red_cube");
+            if (lower.Contains("green"))
+                types.Add("green_cube");
+            if (lower.Contains("blue"))
+                types.Add("blue_cube");
+
+            return types.Count > 0 ? types.ToArray() : null;
+        }
+
+        /// <summary>
+        /// Try to parse confidence threshold from prompt (e.g., "confidence 0.8" or "confidence=0.7")
+        /// </summary>
+        private float? TryParseConfidence(string prompt)
+        {
+            if (string.IsNullOrEmpty(prompt))
+                return null;
+
+            string lower = prompt.ToLower();
+
+            // Pattern: "confidence=0.8" or "confidence 0.8"
+            string[] parts = prompt.Split(new[] { ' ', '=', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (parts[i].ToLower() == "confidence" && i + 1 < parts.Length)
+                {
+                    if (float.TryParse(parts[i + 1], out float conf) && conf >= 0.0f && conf <= 1.0f)
+                    {
+                        return conf;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Try to parse max distance from prompt (e.g., "distance 2.0" or "within 1.5m")
+        /// </summary>
+        private float? TryParseMaxDistance(string prompt)
+        {
+            if (string.IsNullOrEmpty(prompt))
+                return null;
+
+            string[] parts = prompt.Split(new[] { ' ', '=', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < parts.Length; i++)
+            {
+                string word = parts[i].ToLower();
+                if ((word == "distance" || word == "within" || word == "range") && i + 1 < parts.Length)
+                {
+                    // Remove trailing 'm' if present
+                    string valueStr = parts[i + 1].TrimEnd('m');
+                    if (float.TryParse(valueStr, out float dist) && dist >= 0.1f && dist <= 10.0f)
+                    {
+                        return dist;
+                    }
+                }
+            }
+
+            return null;
+        }
+
         #endregion
 
         #region Helper Methods
@@ -555,9 +814,13 @@ namespace PythonCommunication
         {
             switch (operationName)
             {
+                // Robot-targeted operations
                 case "move_to_coordinate":
                 case "check_robot_status":
                 case "control_gripper":
+                case "return_to_start_position":
+                // Camera-targeted operations
+                case "calculate_object_coordinates":
                     return true;
 
                 // Add new implemented operations here

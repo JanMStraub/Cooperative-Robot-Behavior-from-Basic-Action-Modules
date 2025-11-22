@@ -12,12 +12,13 @@ namespace Robotics
     {
         public string robotId;
         public GameObject robotGameObject;
-        public GameObject targetGameObject; // TODO: Change to Vector3
+        public GameObject targetGameObject;
         public RobotController controller;
         public RobotConfig profile;
         public bool isActive;
         public float lastTargetChangeTime;
         public Vector3 lastTargetPosition;
+        public float[] startJointTargets;
     }
 
     public class RobotManager : MonoBehaviour
@@ -315,6 +316,7 @@ namespace Robotics
                     isActive = true,
                     lastTargetChangeTime = Time.time,
                     lastTargetPosition = targetObject?.transform.position ?? Vector3.zero,
+                    startJointTargets = (float[])controller.jointDriveTargets.Clone(),
                 };
 
                 _robotInstances[robotId] = instance;

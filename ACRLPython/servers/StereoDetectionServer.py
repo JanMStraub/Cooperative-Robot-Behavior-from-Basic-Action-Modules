@@ -162,7 +162,6 @@ class StereoDetectionServer(TCPServerBase):
 
         super().__init__(server_config)
         self.image_storage = StereoImageStorage()
-        logging.info("StereoDetectionServer initialized")
 
     def handle_client_connection(self, client: socket.socket, address: tuple):
         """
@@ -398,7 +397,7 @@ def run_stereo_detection_server_background(
     server = StereoDetectionServer(config)
     thread = threading.Thread(target=server.start, daemon=True)
     thread.start()
-    logging.info(f"Stereo detection server started on {host}:{port} (background)")
+
     return server
 
 

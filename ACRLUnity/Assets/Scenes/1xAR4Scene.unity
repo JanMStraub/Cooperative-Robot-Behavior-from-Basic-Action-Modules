@@ -777,13 +777,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PythonCommunication.LLMQueryClient
   _prompt: Move robot to position x=0.3, y=0.15, z=0.1
   _robotId: Robot1
+  _cameraId: TableStereoCamera
   _topK: 3
   _categoryFilter: 0
   _complexityFilter: 0
-  _minScore: 0.5
+  _minScore: 0.75
   _autoExecuteTopResult: 0
   _skipUnimplemented: 1
-  _logDetailedResults: 1
+  _logDetailedResults: 0
   _lastQueryStatus: Ready
   _lastOperationExecuted: None
 --- !u!114 &1595579025

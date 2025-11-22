@@ -126,9 +126,6 @@ namespace EditorScripts
             DrawRecentOperations(client);
 
             EditorGUILayout.Space(10);
-
-            // Help Section
-            DrawHelpSection();
         }
 
         /// <summary>
@@ -173,12 +170,12 @@ namespace EditorScripts
 
             if (GUILayout.Button("Move to Position", EditorStyles.miniButton))
             {
-                client.Prompt = "Move robot to position x=0.3, y=0.15, z=0.1";
+                client.Prompt = "Move robot to position x=0, y=0.3, z=0";
             }
 
-            if (GUILayout.Button("Move Home", EditorStyles.miniButton))
+            if (GUILayout.Button("Start Position", EditorStyles.miniButton))
             {
-                client.Prompt = "Move robot to home position x=0.0, y=0.0, z=0.3";
+                client.Prompt = "Move the robot to the start position";
             }
 
             EditorGUILayout.EndHorizontal();
@@ -193,6 +190,34 @@ namespace EditorScripts
             if (GUILayout.Button("Place Object", EditorStyles.miniButton))
             {
                 client.Prompt = "Place object at x=0.2, y=0.0, z=0.1";
+            }
+
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginHorizontal();
+
+            if (GUILayout.Button("Open Gripper", EditorStyles.miniButton))
+            {
+                client.Prompt = "Open gripper";
+            }
+
+            if (GUILayout.Button("Close Gripper", EditorStyles.miniButton))
+            {
+                client.Prompt = "Close gripper";
+            }
+
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginHorizontal();
+
+            if (GUILayout.Button("Find blue cube", EditorStyles.miniButton))
+            {
+                client.Prompt = "Calculate the coordinates of the blue cube on the left";
+            }
+
+            if (GUILayout.Button("None", EditorStyles.miniButton))
+            {
+                client.Prompt = "None";
             }
 
             EditorGUILayout.EndHorizontal();
@@ -279,40 +304,6 @@ namespace EditorScripts
 
             EditorGUILayout.EndVertical();
             EditorGUILayout.Space(3);
-        }
-
-        /// <summary>
-        /// Draw help section with usage instructions
-        /// </summary>
-        private void DrawHelpSection()
-        {
-            EditorGUILayout.BeginVertical(GUI.skin.box);
-            EditorGUILayout.LabelField("💡 Help & Usage", EditorStyles.boldLabel);
-
-            EditorGUILayout.LabelField(
-                "1. Ensure Python RAGServer is running:",
-                EditorStyles.miniLabel
-            );
-            EditorGUILayout.LabelField(
-                "   python -m LLMCommunication.orchestrators.RunRAGServer",
-                EditorStyles.miniLabel
-            );
-            EditorGUILayout.Space(3);
-
-            EditorGUILayout.LabelField(
-                "2. Enter a natural language prompt in the 'Prompt' field",
-                EditorStyles.miniLabel
-            );
-            EditorGUILayout.LabelField(
-                "3. Click 'Send Query' to search for relevant operations",
-                EditorStyles.miniLabel
-            );
-            EditorGUILayout.LabelField(
-                "4. Operations will auto-execute (if enabled) or click 'Execute Top Operation'",
-                EditorStyles.miniLabel
-            );
-
-            EditorGUILayout.EndVertical();
         }
     }
 }

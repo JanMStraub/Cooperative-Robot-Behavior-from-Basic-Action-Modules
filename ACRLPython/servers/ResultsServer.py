@@ -49,7 +49,6 @@ class ResultsBroadcaster:
         if cls._instance is None:
             cls._instance = cls()
         cls._server = server
-        logging.info("ResultsBroadcaster initialized")
 
     @classmethod
     def send_result(cls, result: Dict) -> bool:
@@ -152,7 +151,6 @@ class ResultsServer(TCPServerBase):
 
         super().__init__(server_config)
         ResultsBroadcaster.initialize(self)
-        logging.info("ResultsServer initialized")
 
     def handle_client_connection(self, client: socket.socket, address: tuple):
         """
@@ -220,7 +218,6 @@ def run_results_server(server_config: ServerConfig, setup_signals: bool = True):
 
     try:
         server.start()
-        logging.info("ResultsServer ready to send results to Unity")
 
         # Keep server running
         while server.is_running():
@@ -242,7 +239,6 @@ def run_results_server_background(server_config: ServerConfig):
         daemon=True,
     )
     thread.start()
-    logging.info("ResultsServer started in background thread")
     return thread
 
 

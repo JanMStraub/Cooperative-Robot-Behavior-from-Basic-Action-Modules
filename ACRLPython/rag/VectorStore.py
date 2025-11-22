@@ -195,9 +195,6 @@ class VectorStore:
         try:
             with open(path, "wb") as f:
                 pickle.dump(data, f)
-            logger.info(
-                f"Saved vector store to {path} ({len(self.operation_ids)} operations)"
-            )
         except Exception as e:
             logger.error(f"Failed to save vector store: {e}")
             raise
@@ -229,9 +226,6 @@ class VectorStore:
             store.metadata = data["metadata"]
             store.embedding_dimension = data["embedding_dimension"]
 
-            logger.info(
-                f"Loaded vector store from {path} ({len(store.operation_ids)} operations)"
-            )
             return store
 
         except FileNotFoundError:
