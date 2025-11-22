@@ -33,6 +33,7 @@ def move_to_coordinate(
     z: float,
     speed: float = 1.0,
     approach_offset: float = 0.0,
+    request_id: int = 0,
 ) -> OperationResult:
     """
     Move robot end effector to specified 3D coordinate.
@@ -176,6 +177,7 @@ def move_to_coordinate(
                 "approach_offset": approach_offset,
             },
             "timestamp": time.time(),
+            "request_id": request_id,
         }
 
         # Send to Unity via ResultsBroadcaster

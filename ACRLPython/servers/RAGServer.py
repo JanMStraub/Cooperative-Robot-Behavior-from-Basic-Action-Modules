@@ -196,11 +196,14 @@ class RAGQueryHandler:
                         min_score=min_score,
                     )
 
-                    # Convert search results to context format
+                    # Convert search results to context format with confidence
                     operations = []
                     for result in search_results:
                         op_data = result.get("metadata", {})
                         op_data["similarity_score"] = result.get("score", 0.0)
+                        # Include confidence details if available
+                        if "confidence" in result:
+                            op_data["confidence"] = result["confidence"]
                         operations.append(op_data)
 
                     result_container["result"] = {
@@ -558,8 +561,11 @@ if __name__ == "__main__":
 
             if results.get("num_results", 0) > 0:
                 for i, op in enumerate(results["operations"], 1):
+                    score = op.get('similarity_score', 0)
+                    confidence = op.get('confidence', {})
+                    level = confidence.get('confidence_level', 'unknown')
                     print(
-                        f"  {i}. {op['name']} (score: {op.get('similarity_score', 0):.3f})"
+                        f"  {i}. {op['name']} (score: {score:.3f}, confidence: {level})"
                     )
             else:
                 print("  No results found")

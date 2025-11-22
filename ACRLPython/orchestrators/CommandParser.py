@@ -326,21 +326,21 @@ Output only the JSON, no explanation."""
                 )
                 continue
 
-            # Parse gripper commands
-            if re.search(r"close\s+(?:the\s+)?gripper|grasp|grip|grab", part):
-                commands.append(
-                    {
-                        "operation": "control_gripper",
-                        "params": {"robot_id": robot_id, "open_gripper": False},
-                    }
-                )
-                continue
-
+            # Parse gripper commands - check open first to avoid "grip" matching "gripper"
             if re.search(r"open\s+(?:the\s+)?gripper|release|drop", part):
                 commands.append(
                     {
                         "operation": "control_gripper",
                         "params": {"robot_id": robot_id, "open_gripper": True},
+                    }
+                )
+                continue
+
+            if re.search(r"close\s+(?:the\s+)?gripper|grasp\b|grip\b|grab\b", part):
+                commands.append(
+                    {
+                        "operation": "control_gripper",
+                        "params": {"robot_id": robot_id, "open_gripper": False},
                     }
                 )
                 continue

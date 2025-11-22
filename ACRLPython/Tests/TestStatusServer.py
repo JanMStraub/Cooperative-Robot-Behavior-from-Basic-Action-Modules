@@ -410,10 +410,14 @@ class TestStatusServerTCPClient(unittest.TestCase):
 
     def setUp(self):
         """Set up mock ResultsServer and StatusServer"""
+        # Use unique ports for each test to avoid conflicts
+        import random
+        base_port = 16000 + random.randint(0, 1000)
+
         # StatusServer config (test port)
-        self.status_config = ServerConfig(host="127.0.0.1", port=15014)
+        self.status_config = ServerConfig(host="127.0.0.1", port=base_port)
         # ResultsServer mock config
-        self.results_port = 15010
+        self.results_port = base_port + 1
         self.results_host = "127.0.0.1"
 
         self.status_server = None

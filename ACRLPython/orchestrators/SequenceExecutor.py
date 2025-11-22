@@ -37,14 +37,14 @@ class SequenceExecutor:
 
     def __init__(
         self,
-        default_timeout: float = 30.0,
+        default_timeout: float = 60.0,
         check_completion: bool = True
     ):
         """
         Initialize the SequenceExecutor.
 
         Args:
-            default_timeout: Default timeout in seconds for each operation
+            default_timeout: Default timeout in seconds for each operation (60s for movements)
             check_completion: Whether to check for operation completion via StatusServer
         """
         self.registry = get_global_registry()
@@ -172,45 +172,61 @@ class SequenceExecutor:
         Returns:
             Operation result
         """
-        # Execute the operation
-        op_result = self.registry.execute_operation_by_name(operation, **params)
+        # Generate request_id for this operation (for completion tracking)
+        request_id = int(time.time() * 1000) % (2**32)
 
-        if not op_result.success:
-            return {
-                "success": False,
-                "result": None,
-                "error": op_result.error.get("message") if op_result.error else "Unknown error"
-            }
+        # If completion checking is enabled, create queue before sending command
+        if self.check_completion:
+            StatusResponseHandler.create_request_queue(request_id)
+            logger.debug(f"Created completion queue for request_id {request_id}")
 
-        # If completion checking is disabled, return immediately
-        if not self.check_completion:
+        try:
+            # Add request_id to params so operation includes it in command to Unity
+            params_with_request_id = {**params, "request_id": request_id}
+
+            # Execute the operation
+            op_result = self.registry.execute_operation_by_name(operation, **params_with_request_id)
+
+            if not op_result.success:
+                return {
+                    "success": False,
+                    "result": None,
+                    "error": op_result.error.get("message") if op_result.error else "Unknown error"
+                }
+
+            # If completion checking is disabled, return immediately
+            if not self.check_completion:
+                return {
+                    "success": True,
+                    "result": op_result.result,
+                    "error": None
+                }
+
+            # Wait for completion using the same request_id
+            completed = self._wait_for_completion(operation, request_id, timeout)
+
+            if not completed:
+                return {
+                    "success": False,
+                    "result": op_result.result,
+                    "error": f"Operation timed out after {timeout}s"
+                }
+
             return {
                 "success": True,
                 "result": op_result.result,
                 "error": None
             }
-
-        # Wait for completion (for movement/gripper operations)
-        robot_id = params.get("robot_id", "Robot1")
-        completed = self._wait_for_completion(operation, robot_id, timeout)
-
-        if not completed:
-            return {
-                "success": False,
-                "result": op_result.result,
-                "error": f"Operation timed out after {timeout}s"
-            }
-
-        return {
-            "success": True,
-            "result": op_result.result,
-            "error": None
-        }
+        finally:
+            # Always clean up the queue to prevent accumulation
+            if self.check_completion:
+                StatusResponseHandler.remove_request_queue(request_id)
+                logger.debug(f"Removed completion queue for request_id {request_id}")
 
     def _wait_for_completion(
         self,
         operation: str,
-        robot_id: str,
+        request_id: int,
         timeout: float
     ) -> bool:
         """
@@ -221,7 +237,7 @@ class SequenceExecutor:
 
         Args:
             operation: Operation name
-            robot_id: Robot ID
+            request_id: Request ID for completion tracking (must match ID sent to Unity)
             timeout: Timeout in seconds
 
         Returns:
@@ -230,9 +246,7 @@ class SequenceExecutor:
         start_time = time.time()
         poll_interval = 0.1  # Poll every 100ms
 
-        # Create a unique request ID for this wait
-        request_id = int(time.time() * 1000) % (2**32)
-        StatusResponseHandler.create_request_queue(request_id)
+        # Queue was already created in _execute_single_command
 
         while time.time() - start_time < timeout:
             if self._abort_flag:

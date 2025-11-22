@@ -9,7 +9,7 @@ Port: 5013 (SEQUENCE_SERVER_PORT)
 
 Protocol:
     Query (Unity → Python):
-        [request_id:4][command_len:4][command_text:N][robot_id_len:4][robot_id:N]
+        [request_id:4][command_len:4][command_text:N][robot_id_len:4][robot_id:N][camera_id_len:4][camera_id:N][auto_execute:1]
 
     Response (Python → Unity):
         [request_id:4][response_len:4][response_json:N]
@@ -101,6 +101,8 @@ class SequenceQueryHandler:
         self,
         command_text: str,
         robot_id: str = "Robot1",
+        camera_id: str = "TableStereoCamera",
+        auto_execute: bool = True,
         timeout: float = 30.0
     ) -> Dict[str, Any]:
         """
@@ -109,6 +111,8 @@ class SequenceQueryHandler:
         Args:
             command_text: Natural language command
             robot_id: Default robot ID
+            camera_id: Camera ID for perception operations (depth detection)
+            auto_execute: Whether to automatically execute parsed operations
             timeout: Timeout per command
 
         Returns:
@@ -138,6 +142,24 @@ class SequenceQueryHandler:
                 "commands": []
             }
 
+        # Add camera_id to commands that need it (perception operations)
+        for cmd in commands:
+            if cmd.get("operation") in ["detect_objects", "get_depth", "stereo_detect"]:
+                cmd["camera_id"] = camera_id
+
+        # If auto_execute is False, just return parsed commands without executing
+        if not auto_execute:
+            return {
+                "success": True,
+                "parsed_commands": commands,
+                "original_command": command_text,
+                "auto_execute": False,
+                "total_commands": len(commands),
+                "completed_commands": 0,
+                "results": [],
+                "total_duration_ms": 0
+            }
+
         # Execute the sequence
         exec_result = self._executor.execute_sequence(
             commands,
@@ -147,6 +169,7 @@ class SequenceQueryHandler:
         # Add parsed commands to result
         exec_result["parsed_commands"] = commands
         exec_result["original_command"] = command_text
+        exec_result["camera_id"] = camera_id
 
         return exec_result
 
@@ -229,11 +252,30 @@ class SequenceServer(TCPServerBase):
                     if robot_id_bytes:
                         robot_id = robot_id_bytes.decode('utf-8')
 
-                logger.info(f"Received sequence query (id={request_id}): {command_text[:100]}")
+                # Read camera_id length (4 bytes)
+                camera_id_len_bytes = self._recv_exact(client, 4)
+                if not camera_id_len_bytes:
+                    break
+                camera_id_len = struct.unpack("!I", camera_id_len_bytes)[0]
+
+                # Read camera_id
+                camera_id = "TableStereoCamera"
+                if camera_id_len > 0:
+                    camera_id_bytes = self._recv_exact(client, camera_id_len)
+                    if camera_id_bytes:
+                        camera_id = camera_id_bytes.decode('utf-8')
+
+                # Read auto_execute flag (1 byte)
+                auto_execute_bytes = self._recv_exact(client, 1)
+                if not auto_execute_bytes:
+                    break
+                auto_execute = auto_execute_bytes[0] == 1
+
+                logger.info(f"Received sequence query (id={request_id}): {command_text[:100]} (camera={camera_id}, auto_execute={auto_execute})")
 
                 # Execute the sequence
                 handler = SequenceQueryHandler()
-                result = handler.execute_sequence(command_text, robot_id)
+                result = handler.execute_sequence(command_text, robot_id, camera_id, auto_execute)
 
                 # Send response
                 self._send_response(client, request_id, result)
@@ -314,7 +356,8 @@ def run_sequence_server_background(
     config: Optional[Dict[str, Any]] = None,
     lm_studio_url: Optional[str] = None,
     model: Optional[str] = None,
-    setup_signals: bool = False
+    setup_signals: bool = False,
+    check_completion: bool = True
 ) -> SequenceServer:
     """
     Start the SequenceServer in the background.
@@ -324,13 +367,14 @@ def run_sequence_server_background(
         lm_studio_url: LM Studio URL for parsing
         model: Model name for parsing
         setup_signals: Whether to set up signal handlers (False for threads)
+        check_completion: Whether to wait for Unity completion signals
 
     Returns:
         SequenceServer instance
     """
     # Initialize the query handler
     handler = SequenceQueryHandler()
-    handler.initialize(lm_studio_url=lm_studio_url, model=model)
+    handler.initialize(lm_studio_url=lm_studio_url, model=model, check_completion=check_completion)
 
     # Create server config
     if config:

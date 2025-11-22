@@ -137,7 +137,6 @@ class TestRunAnalyzerIntegration:
 class TestRunAnalyzerImageProcessing:
     """Integration tests for image processing in RunAnalyzer"""
 
-    @pytest.mark.skip(reason="Requires LM Studio running locally")
     def test_process_image_with_real_lmstudio(self, analyzer_servers, integration_args):
         """
         Test processing an image with real LM Studio instance
@@ -145,6 +144,17 @@ class TestRunAnalyzerImageProcessing:
         NOTE: This test requires LM Studio to be running locally on port 1234
         with a vision model loaded. Skip if LM Studio is not available.
         """
+        from vision.AnalyzeImage import LMStudioVisionProcessor
+        import requests
+
+        # Check if LM Studio is available
+        try:
+            response = requests.get(f"{cfg.LMSTUDIO_BASE_URL}/models", timeout=2)
+            if response.status_code != 200:
+                pytest.skip("LM Studio not available")
+        except requests.exceptions.ConnectionError:
+            pytest.skip("LM Studio not running")
+
         streaming_server, results_server = analyzer_servers
 
         # Add a test image to ImageStorage
@@ -152,25 +162,32 @@ class TestRunAnalyzerImageProcessing:
         test_image[200:280, 270:370, 2] = 255  # Red square
 
         storage = ImageStorage.get_instance()
-        storage.store_image("test_camera", test_image, "What color is the cube?")
+        storage.store_image("test_camera", test_image, "What color is the rectangle?")
 
-        # Run analyzer for a short time
-        import threading
+        # Process the image directly instead of running the infinite loop
+        processor = LMStudioVisionProcessor(
+            model=integration_args.model,
+            base_url=integration_args.base_url
+        )
 
-        def stop_after_delay():
-            time.sleep(5.0)  # Give it time to process
-            raise KeyboardInterrupt()
+        # Get the stored image and process it
+        image_data = storage.get_camera_image("test_camera")
+        prompt = storage.get_camera_prompt("test_camera")
 
-        stop_thread = threading.Thread(target=stop_after_delay, daemon=True)
-        stop_thread.start()
+        assert image_data is not None, "Image should be stored"
+        assert prompt is not None, "Prompt should be stored"
 
-        try:
-            run_analyzer_loop(integration_args)
-        except KeyboardInterrupt:
-            pass
+        # Process with LM Studio
+        result = processor.send_images([image_data], ["test_camera"], prompt)
 
-        # Check that results were broadcast (would be in ResultsBroadcaster queue)
-        # This is a basic smoke test - actual verification would require Unity client
+        assert result is not None, "LM Studio should return a result"
+        assert "response" in result or "error" in result, "Result should have response or error"
+
+        # If successful, check the response mentions the color
+        if "response" in result:
+            response_text = result["response"].lower()
+            # The image has a red rectangle
+            assert "red" in response_text, f"Response should mention red color: {result['response']}"
 
 
 if __name__ == "__main__":
