@@ -28,7 +28,7 @@ import LLMConfig as cfg
 from servers.ResultsServer import run_results_server_background
 from servers.StatusServer import run_status_server_background
 from servers.SequenceServer import run_sequence_server_background, SequenceQueryHandler
-from rag import RAGSystem
+from servers.StreamingServer import run_streaming_server_background
 
 logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
 logger = logging.getLogger(__name__)
@@ -87,9 +87,9 @@ def main():
         help="Don't start StatusServer (if already running)"
     )
     parser.add_argument(
-        "--rebuild-index",
+        "--no-streaming-server",
         action="store_true",
-        help="Rebuild RAG index before starting"
+        help="Don't start StreamingServer (if already running)"
     )
     parser.add_argument(
         "--no-completion-check",
@@ -106,15 +106,15 @@ def main():
     logger.info(f"Model: {args.model}")
     logger.info("=" * 60)
 
-    # Initialize RAG system
-    try:
-        rag = RAGSystem()
-        if args.rebuild_index or not rag.is_ready():
-            rag.index_operations(rebuild=args.rebuild_index)
-    except Exception as e:
-        logger.warning(f"RAG init failed: {e}")
-
     # Start servers
+    streaming_server = None
+    if not args.no_streaming_server:
+        streaming_server = run_streaming_server_background(
+            cfg.get_streaming_config()  # type: ignore[arg-type]
+        )
+        logger.info(f"StreamingServer started on port {cfg.STREAMING_SERVER_PORT}")
+        time.sleep(0.5)
+
     results_server = None
     if not args.no_results_server:
         results_server = run_results_server_background(
@@ -180,6 +180,10 @@ def main():
 
             if status_server and not status_server.is_alive():
                 logger.error("StatusServer stopped unexpectedly!")
+                break
+
+            if streaming_server and not streaming_server.is_alive():
+                logger.error("StreamingServer stopped unexpectedly!")
                 break
 
     except KeyboardInterrupt:

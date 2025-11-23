@@ -4,7 +4,6 @@ using System.Linq;
 using Core;
 using Robotics;
 using UnityEngine;
-using Vision;
 
 namespace PythonCommunication
 {
@@ -32,11 +31,6 @@ namespace PythonCommunication
         public float approach_offset;
         public bool detailed; // For status queries
         public bool open_gripper; // For gripper control
-
-        // Perception parameters (for depth detection)
-        public string[] object_types;
-        public float min_confidence;
-        public float max_distance;
     }
 
     [System.Serializable]
@@ -50,17 +44,19 @@ namespace PythonCommunication
     /// <summary>
     /// Handles commands from Python operations and executes them on Unity robots.
     ///
-    /// This handler listens to UnifiedPythonReceiver for incoming commands from Python
-    /// operations (e.g., move_to_coordinate) and executes them using RobotManager
-    /// and RobotController.
+    /// This handler listens to SequenceClient for incoming commands from Python
+    /// SequenceServer and executes them using RobotManager and RobotController.
     ///
     /// Supported Commands:
     /// - move_to_coordinate: Move robot end effector to target position
+    /// - control_gripper: Open or close the gripper
+    /// - check_robot_status: Get current robot state
+    /// - return_to_start_position: Move robot back to initial position
     ///
     /// Usage:
     /// 1. Attach this component to a GameObject in your scene
-    /// 2. Ensure UnifiedPythonReceiver and RobotManager are active
-    /// 3. Python operations will automatically send commands via ResultsServer
+    /// 2. Ensure SequenceClient and RobotManager are active
+    /// 3. Python SequenceServer will send commands via port 5013
     /// </summary>
     public class PythonCommandHandler : MonoBehaviour
     {
@@ -84,7 +80,7 @@ namespace PythonCommunication
         [SerializeField]
         private int _failedCommands = 0;
 
-        private UnifiedPythonReceiver _resultsReceiver;
+        private CommandReceiver _commandReceiver;
         private RobotManager _robotManager;
 
         // Track active commands for completion notification
@@ -114,17 +110,17 @@ namespace PythonCommunication
         }
 
         /// <summary>
-        /// Subscribe to UnifiedPythonReceiver events when component starts
+        /// Subscribe to CommandReceiver events when component starts
         /// </summary>
         private void Start()
         {
-            // Get UnifiedPythonReceiver instance
-            _resultsReceiver = UnifiedPythonReceiver.Instance;
-            if (_resultsReceiver == null)
+            // Get CommandReceiver instance
+            _commandReceiver = CommandReceiver.Instance;
+            if (_commandReceiver == null)
             {
                 Debug.LogError(
-                    $"{_logPrefix} UnifiedPythonReceiver.Instance is null! "
-                        + "Ensure UnifiedPythonReceiver GameObject is in the scene."
+                    $"{_logPrefix} CommandReceiver.Instance is null! "
+                        + "Ensure CommandReceiver GameObject is in the scene."
                 );
                 return;
             }
@@ -140,8 +136,8 @@ namespace PythonCommunication
                 return;
             }
 
-            // Subscribe to results from Python
-            _resultsReceiver.OnLLMResultReceived += HandlePythonResult;
+            // Subscribe to commands from Python via ResultsServer (port 5010)
+            _commandReceiver.OnCommandReceived += HandlePythonCommand;
 
             Debug.Log($"{_logPrefix} Initialized and listening for Python commands");
         }
@@ -153,9 +149,9 @@ namespace PythonCommunication
         {
             if (Instance == this)
             {
-                if (_resultsReceiver != null)
+                if (_commandReceiver != null)
                 {
-                    _resultsReceiver.OnLLMResultReceived -= HandlePythonResult;
+                    _commandReceiver.OnCommandReceived -= HandlePythonCommand;
                 }
                 Instance = null;
             }
@@ -166,69 +162,21 @@ namespace PythonCommunication
         #region Command Processing
 
         /// <summary>
-        /// Handle incoming results from Python (may be LLM results or robot commands)
+        /// Handle incoming commands from Python SequenceServer
         /// </summary>
-        private void HandlePythonResult(LLMResult result)
+        private void HandlePythonCommand(RobotCommand command)
         {
-            if (result == null)
+            if (command == null)
                 return;
 
-            // Try to parse as robot command
-            try
+            if (_verboseLogging)
             {
-                // Debug log the raw JSON for troubleshooting
-                if (
-                    _verboseLogging
-                    && result.response != null
-                    && result.response.Contains("command_type")
-                )
-                {
-                    Debug.Log(
-                        $"{_logPrefix} [req={result.request_id}] Received potential command: {result.response}"
-                    );
-                }
-
-                RobotCommand command = JsonUtility.FromJson<RobotCommand>(result.response);
-
-                if (command != null && !string.IsNullOrEmpty(command.command_type))
-                {
-                    // Use request_id from command JSON if set, otherwise fall back to LLMResult (Protocol V2)
-                    // This supports both direct commands (with request_id in JSON) and LLM results
-                    if (command.request_id == 0)
-                    {
-                        command.request_id = result.request_id;
-                    }
-
-                    ProcessCommand(command);
-                }
-                else if (_verboseLogging)
-                {
-                    Debug.Log(
-                        $"{_logPrefix} Received non-command result (likely LLM response): {result.response}"
-                    );
-                }
+                Debug.Log(
+                    $"{_logPrefix} [req={command.request_id}] Received command: {command.command_type}"
+                );
             }
-            catch (Exception ex)
-            {
-                // Not a command - likely an LLM text response, which is fine
-                if (_verboseLogging)
-                {
-                    // Check if it looks like a command that failed to parse
-                    if (result.response != null && result.response.Contains("command_type"))
-                    {
-                        Debug.LogError(
-                            $"{_logPrefix} [req={result.request_id}] Failed to parse command JSON: {ex.Message}\n"
-                                + $"JSON: {result.response}"
-                        );
-                    }
-                    else
-                    {
-                        Debug.Log(
-                            $"{_logPrefix} Received non-JSON or LLM text result: {result.response?.Substring(0, Math.Min(50, result.response?.Length ?? 0))}..."
-                        );
-                    }
-                }
-            }
+
+            ProcessCommand(command);
         }
 
         /// <summary>
@@ -263,11 +211,6 @@ namespace PythonCommunication
 
                 case "return_to_start_position":
                     ExecuteReturnToStartPosition(command);
-                    break;
-
-                // Camera-targeted commands (perception)
-                case "calculate_object_coordinates":
-                    ExecuteCalculateObjectCoordinates(command);
                     break;
 
                 default:
@@ -699,130 +642,6 @@ namespace PythonCommunication
                     "EXCEPTION",
                     $"Error gathering status: {ex.Message}",
                     command.request_id
-                );
-            }
-        }
-
-        /// <summary>
-        /// Execute calculate_object_coordinates command - triggers stereo depth detection
-        /// </summary>
-        private void ExecuteCalculateObjectCoordinates(RobotCommand command)
-        {
-            try
-            {
-                // Validate camera_id
-                string cameraId = command.camera_id;
-                if (string.IsNullOrEmpty(cameraId))
-                {
-                    cameraId = "stereo_main"; // Default camera
-                }
-
-                // Find stereo camera controller
-                StereoCameraController stereoCamera = FindStereoCameraById(cameraId);
-                if (stereoCamera == null)
-                {
-                    Debug.LogError(
-                        $"{_logPrefix} calculate_object_coordinates: Camera '{cameraId}' not found"
-                    );
-                    SendPerceptionErrorResponse(
-                        cameraId,
-                        "CAMERA_NOT_FOUND",
-                        $"Stereo camera '{cameraId}' not found in scene",
-                        command.request_id
-                    );
-                    _failedCommands++;
-                    return;
-                }
-
-                // Extract parameters
-                string[] objectTypes = command.parameters?.object_types;
-                float minConfidence = command.parameters?.min_confidence ?? 0.5f;
-                float maxDistance = command.parameters?.max_distance ?? 5.0f;
-
-                if (_verboseLogging)
-                {
-                    string typesStr = objectTypes != null ? string.Join(", ", objectTypes) : "all";
-                    Debug.Log(
-                        $"{_logPrefix} Triggering depth detection on {cameraId}: "
-                            + $"types=[{typesStr}], confidence>={minConfidence:F2}, distance<={maxDistance:F1}m"
-                    );
-                }
-
-                // Trigger the stereo capture and detection
-                // The results will be sent back via the normal detection pipeline (port 5007)
-                stereoCamera.CaptureAndDetect(objectTypes, minConfidence, maxDistance);
-
-                _successfulCommands++;
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError(
-                    $"{_logPrefix} Error executing calculate_object_coordinates: {ex.Message}\n{ex.StackTrace}"
-                );
-                _failedCommands++;
-
-                SendPerceptionErrorResponse(
-                    command.camera_id ?? "unknown",
-                    "EXCEPTION",
-                    $"Error during depth detection: {ex.Message}",
-                    command.request_id
-                );
-            }
-        }
-
-        /// <summary>
-        /// Find a stereo camera controller by ID
-        /// </summary>
-        private StereoCameraController FindStereoCameraById(string cameraId)
-        {
-            // Find all stereo cameras in scene
-            StereoCameraController[] cameras = FindObjectsByType<StereoCameraController>(FindObjectsSortMode.None);
-
-            foreach (var camera in cameras)
-            {
-                // Check if camera name or ID matches
-                if (camera.CameraId == cameraId || camera.gameObject.name == cameraId)
-                {
-                    return camera;
-                }
-            }
-
-            // If only one camera and using default ID, return it
-            if (cameras.Length == 1 && cameraId == "stereo_main")
-            {
-                return cameras[0];
-            }
-
-            return null;
-        }
-
-        /// <summary>
-        /// Send perception error response to Python
-        /// </summary>
-        private void SendPerceptionErrorResponse(
-            string cameraId,
-            string errorCode,
-            string errorMessage,
-            uint requestId
-        )
-        {
-            var errorResponse = new
-            {
-                success = false,
-                camera_id = cameraId,
-                detections = (object)null,
-                error = new { code = errorCode, message = errorMessage },
-            };
-
-            string errorJson = JsonUtility.ToJson(errorResponse);
-
-            // Send via depth results channel (port 5007) or status response
-            bool sent = SendStatusResponseToPython(errorJson, requestId);
-
-            if (!sent)
-            {
-                Debug.LogWarning(
-                    $"{_logPrefix} [req={requestId}] Failed to send perception error response: {errorJson}"
                 );
             }
         }

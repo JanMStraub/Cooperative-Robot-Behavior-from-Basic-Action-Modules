@@ -21,7 +21,7 @@ class TestCommandParser:
 
     def setup_method(self):
         """Set up test fixtures"""
-        self.parser = CommandParser(use_rag_validation=False)
+        self.parser = CommandParser(use_rag=False)
 
     def test_parse_simple_move(self):
         """Test parsing a simple move command"""

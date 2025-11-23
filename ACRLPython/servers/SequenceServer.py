@@ -378,10 +378,14 @@ def run_sequence_server_background(
 
     # Create server config
     if config:
-        server_config = ServerConfig(
-            host=config.get("host", cfg.DEFAULT_HOST),
-            port=config.get("port", cfg.SEQUENCE_SERVER_PORT)
-        )
+        # Handle both ServerConfig objects and dicts
+        if isinstance(config, ServerConfig):
+            server_config = config
+        else:
+            server_config = ServerConfig(
+                host=config.get("host", cfg.DEFAULT_HOST),
+                port=config.get("port", cfg.SEQUENCE_SERVER_PORT)
+            )
     else:
         server_config = ServerConfig(
             host=cfg.DEFAULT_HOST,
