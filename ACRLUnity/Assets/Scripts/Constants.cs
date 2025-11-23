@@ -121,23 +121,26 @@ namespace Core
     public static class CommunicationConstants
     {
         /// <summary>
-        /// Default streaming server port (receives images from Unity)
+        /// [DEPRECATED] Streaming server port - RunAnalyzer/RunDetector removed
         /// </summary>
+        [System.Obsolete("StreamingServer removed - use SequenceServer instead")]
         public const int STREAMING_SERVER_PORT = 5005;
 
         /// <summary>
-        /// Stereo detection server port (receives stereo image pairs)
+        /// [DEPRECATED] Stereo detection server port - RunStereoDetector removed
         /// </summary>
+        [System.Obsolete("StereoDetectionServer removed - use SequenceServer instead")]
         public const int STEREO_DETECTION_SERVER_PORT = 5006;
 
         /// <summary>
-        /// LLM results server port (sends LLM analysis results to Unity from RunAnalyzer)
+        /// Results server port (receives commands from SequenceServer)
         /// </summary>
         public const int LLM_RESULTS_PORT = 5010;
 
         /// <summary>
-        /// Depth results server port (sends depth detection results with 3D coordinates from RunStereoDetector)
+        /// [DEPRECATED] Depth results server port - RunStereoDetector removed
         /// </summary>
+        [System.Obsolete("DepthResults removed - use SequenceServer instead")]
         public const int DEPTH_RESULTS_PORT = 5007;
 
         /// <summary>

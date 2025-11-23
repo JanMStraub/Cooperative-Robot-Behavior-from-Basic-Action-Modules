@@ -177,7 +177,7 @@ def get_server_config(
     timeout: float = SOCKET_ACCEPT_TIMEOUT,
 ):
     """
-    Get a ServerConfig dict with defaults.
+    Get a ServerConfig object with defaults.
 
     Args:
         port: Server port
@@ -187,15 +187,16 @@ def get_server_config(
         timeout: Socket accept timeout
 
     Returns:
-        Dictionary with server configuration
+        ServerConfig object
     """
-    return {
-        "host": host,
-        "port": port,
-        "max_connections": max_connections,
-        "max_client_threads": max_threads,
-        "socket_timeout": timeout,
-    }
+    from core.TCPServerBase import ServerConfig
+    return ServerConfig(
+        host=host,
+        port=port,
+        max_connections=max_connections,
+        max_client_threads=max_threads,
+        socket_timeout=timeout,
+    )
 
 
 def get_streaming_config():

@@ -3,7 +3,7 @@ Command Parser for Multi-Command Sequences
 ==========================================
 
 This module parses natural language compound commands into structured operation sequences
-using an LLM for intelligent parsing and RAG for operation validation.
+using an LLM for intelligent parsing with operation registry validation.
 
 Example:
     >>> parser = CommandParser()
@@ -37,7 +37,7 @@ class CommandParser:
     """
     Parses compound natural language commands into structured operation sequences.
 
-    Uses LLM for intelligent parsing and RAG for operation validation.
+    Uses LLM for intelligent parsing with operation registry validation.
     Falls back to regex patterns when LLM is unavailable.
     """
 
@@ -45,7 +45,7 @@ class CommandParser:
         self,
         lm_studio_url: Optional[str] = None,
         model: Optional[str] = None,
-        use_rag_validation: bool = True,
+        use_rag: bool = True,
     ):
         """
         Initialize the CommandParser.
@@ -53,24 +53,22 @@ class CommandParser:
         Args:
             lm_studio_url: LM Studio base URL (default from config)
             model: Model name for parsing (default from config)
-            use_rag_validation: Validate operations against RAG system
+            use_rag: Whether to use RAG for semantic operation context
         """
         self.lm_studio_url = lm_studio_url or cfg.LMSTUDIO_BASE_URL
         self.model = model or cfg.DEFAULT_LMSTUDIO_MODEL
-        self.use_rag_validation = use_rag_validation
+        self.registry = get_global_registry()
 
-        # Initialize RAG for operation validation
-        if use_rag_validation:
+        # Initialize RAG system for semantic operation search
+        self.rag = None
+        if use_rag:
             try:
                 self.rag = RAGSystem()
-                self.registry = get_global_registry()
+                if not self.rag.is_ready():
+                    self.rag.index_operations()
+                logger.info("RAG system initialized for command parsing")
             except Exception as e:
-                logger.warning(f"Failed to initialize RAG: {e}. Validation disabled.")
-                self.rag = None
-                self.registry = get_global_registry()
-        else:
-            self.rag = None
-            self.registry = get_global_registry()
+                logger.warning(f"Failed to initialize RAG: {e}. Using registry only.")
 
     def parse(
         self, command_text: str, robot_id: str = "Robot1", use_llm: bool = True
@@ -120,8 +118,8 @@ class CommandParser:
         Returns:
             Parsed command structure
         """
-        # Get available operations for the prompt
-        available_ops = self._get_available_operations_summary()
+        # Get available operations for the prompt (use RAG for semantic context)
+        available_ops = self._get_available_operations_summary(command_text)
 
         # Build prompt for LLM
         prompt = self._build_parsing_prompt(command_text, robot_id, available_ops)
@@ -216,8 +214,53 @@ Output JSON format:
 
 Output only the JSON, no explanation."""
 
-    def _get_available_operations_summary(self) -> str:
-        """Get a summary of available operations for the LLM prompt."""
+    def _get_available_operations_summary(self, command_text: str = "") -> str:
+        """
+        Get a summary of available operations for the LLM prompt.
+
+        If RAG is available and command_text is provided, uses semantic search
+        to prioritize the most relevant operations for the given command.
+
+        Args:
+            command_text: The command being parsed (for RAG context)
+
+        Returns:
+            Formatted string of operations for LLM prompt
+        """
+        # If RAG is available, get semantically relevant operations first
+        if self.rag and command_text:
+            try:
+                # Search for relevant operations
+                rag_results = self.rag.search(command_text, top_k=5)
+                relevant_ops = set()
+
+                summary_lines = []
+
+                # Add RAG-matched operations first (most relevant)
+                if rag_results:
+                    summary_lines.append("Most relevant operations for this command:")
+                    for result in rag_results:
+                        op = self.registry.get_operation_by_name(result.get("name", ""))
+                        if op:
+                            relevant_ops.add(op.name)
+                            params = ", ".join([f"{p.name}: {p.type}" for p in op.parameters])
+                            score = result.get("similarity_score", 0)
+                            summary_lines.append(f"- {op.name}({params}): {op.description} [relevance: {score:.2f}]")
+
+                    summary_lines.append("\nOther available operations:")
+
+                # Add remaining operations
+                for op in self.registry.get_all_operations():
+                    if op.name not in relevant_ops:
+                        params = ", ".join([f"{p.name}: {p.type}" for p in op.parameters])
+                        summary_lines.append(f"- {op.name}({params}): {op.description}")
+
+                return "\n".join(summary_lines)
+
+            except Exception as e:
+                logger.warning(f"RAG search failed, using registry: {e}")
+
+        # Fallback: return all operations from registry
         ops = self.registry.get_all_operations()
         summary_lines = []
         for op in ops:
@@ -368,15 +411,28 @@ Output only the JSON, no explanation."""
                 )
                 continue
 
-            # Parse object detection / depth detection
+            # Parse stereo detection with depth (3D positions)
             if re.search(
-                r"detect\s+(?:objects?|cubes?)|find\s+(?:objects?|cubes?)|calculate\s+(?:object\s+)?coordinates|look\s+for|scan\s+for",
+                r"detect.*(?:depth|3d|position|stereo)|find.*(?:3d|position)|calculate\s+(?:object\s+)?coordinates|locate\s+(?:objects?|cubes?)\s+in\s+3d",
                 part,
             ):
                 commands.append(
                     {
-                        "operation": "calculate_object_coordinates",
-                        "params": {"camera_id": "stereo_main"},
+                        "operation": "detect_with_depth",
+                        "params": {"robot_id": robot_id},
+                    }
+                )
+                continue
+
+            # Parse simple object detection (2D pixel coordinates)
+            if re.search(
+                r"detect\s+(?:objects?|cubes?)|find\s+(?:objects?|cubes?)|look\s+for|scan\s+for|locate\s+(?:objects?|cubes?)",
+                part,
+            ):
+                commands.append(
+                    {
+                        "operation": "detect_objects",
+                        "params": {"robot_id": robot_id},
                     }
                 )
                 continue
@@ -399,7 +455,8 @@ Output only the JSON, no explanation."""
             "open gripper / release / drop - Open the gripper",
             "check status / get status - Get robot status",
             "return to start / go home / home position - Return to start position",
-            "detect objects / find cubes / scan for - Detect objects with stereo camera",
+            "detect objects / find cubes / scan for - Detect objects (2D)",
+            "detect with depth / find 3d positions / detect stereo - Detect objects with 3D positions",
             "Commands can be chained with 'and', 'then', 'after that', or commas",
         ]
 
