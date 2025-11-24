@@ -10,7 +10,7 @@ not robots directly.
 from typing import List, Optional
 import time
 import logging
-from servers.ResultsServer import ResultsBroadcaster
+from servers.CommandServer import get_command_broadcaster
 from .Base import (
     BasicOperation,
     OperationCategory,
@@ -36,6 +36,7 @@ def calculate_object_coordinates(
     object_types: Optional[List[str]] = None,
     min_confidence: float = 0.5,
     max_distance: float = 5.0,
+    request_id: int = 0,
 ) -> OperationResult:
     """
     Calculate 3D world coordinates of detected objects using stereo vision.
@@ -158,12 +159,13 @@ def calculate_object_coordinates(
                 "max_distance": max_distance,
             },
             "timestamp": time.time(),
+            "request_id": request_id,
         }
 
-        # Send to Unity via ResultsBroadcaster
+        # Send to Unity via CommandBroadcaster
         logger.info(f"Sending depth detection command to camera {camera_id}")
 
-        success = ResultsBroadcaster.send_result(command)
+        success = get_command_broadcaster().send_command(command, request_id)
 
         if not success:
             return OperationResult.error_result(

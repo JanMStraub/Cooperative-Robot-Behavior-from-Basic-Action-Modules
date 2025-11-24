@@ -20,7 +20,8 @@ import logging
 import threading
 
 from operations.Registry import get_global_registry
-from servers.StatusServer import StatusResponseHandler
+from operations.Base import OperationCategory
+from servers.CommandServer import get_command_broadcaster
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -33,6 +34,10 @@ class SequenceExecutor:
 
     Each command is executed and the executor waits for completion before
     proceeding to the next command in the sequence.
+
+    Supports variable passing between operations:
+        detect_object -> $target
+        move_to_coordinate with position=$target
     """
 
     def __init__(
@@ -53,6 +58,7 @@ class SequenceExecutor:
         self._abort_flag = False
         self._current_sequence_id: Optional[str] = None
         self._progress_callbacks: List[Callable] = []
+        self._variables: Dict[str, Any] = {}  # Variable storage for passing results between operations
 
     def execute_sequence(
         self,
@@ -94,6 +100,9 @@ class SequenceExecutor:
         self._current_sequence_id = sequence_id or f"seq_{int(time.time() * 1000)}"
         timeout = timeout_per_command or self.default_timeout
 
+        # Clear variables for new sequence
+        self._variables = {}
+
         start_time = time.time()
         results = []
         completed = 0
@@ -107,6 +116,10 @@ class SequenceExecutor:
 
             operation = cmd.get("operation", "")
             params = cmd.get("params", {})
+            capture_var = cmd.get("capture_var")  # Variable name to capture result
+
+            # Resolve variable references in params
+            params = self._resolve_variables(params)
 
             logger.info(f"Executing command {i + 1}/{len(commands)}: {operation}")
             self._notify_progress(i, len(commands), operation, "executing")
@@ -129,6 +142,11 @@ class SequenceExecutor:
                 completed += 1
                 self._notify_progress(i, len(commands), operation, "completed")
                 logger.info(f"Command {i + 1} completed successfully in {cmd_duration:.0f}ms")
+
+                # Capture result to variable if specified
+                if capture_var and cmd_result.get("result"):
+                    self._variables[capture_var] = cmd_result["result"]
+                    logger.debug(f"Captured result to ${capture_var}")
             else:
                 self._notify_progress(i, len(commands), operation, "failed")
                 logger.error(f"Command {i + 1} failed: {cmd_result.get('error')}")
@@ -177,7 +195,7 @@ class SequenceExecutor:
 
         # If completion checking is enabled, create queue before sending command
         if self.check_completion:
-            StatusResponseHandler.create_request_queue(request_id)
+            get_command_broadcaster().create_completion_queue(request_id)
             logger.debug(f"Created completion queue for request_id {request_id}")
 
         try:
@@ -202,6 +220,16 @@ class SequenceExecutor:
                     "error": None
                 }
 
+            # Skip completion waiting for perception operations (they complete immediately)
+            op_def = self.registry.get_operation_by_name(operation)
+            if op_def and op_def.category == OperationCategory.PERCEPTION:
+                logger.debug(f"Skipping completion wait for perception operation: {operation}")
+                return {
+                    "success": True,
+                    "result": op_result.result,
+                    "error": None
+                }
+
             # Wait for completion using the same request_id
             completed = self._wait_for_completion(operation, request_id, timeout)
 
@@ -220,7 +248,7 @@ class SequenceExecutor:
         finally:
             # Always clean up the queue to prevent accumulation
             if self.check_completion:
-                StatusResponseHandler.remove_request_queue(request_id)
+                get_command_broadcaster().remove_completion_queue(request_id)
                 logger.debug(f"Removed completion queue for request_id {request_id}")
 
     def _wait_for_completion(
@@ -254,7 +282,7 @@ class SequenceExecutor:
 
             try:
                 # Wait for completion signal from Unity
-                response = StatusResponseHandler.get_response(request_id, timeout=poll_interval)
+                response = get_command_broadcaster().get_completion(request_id, timeout=poll_interval)
 
                 if response:
                     # Check if this is a completion signal
@@ -335,6 +363,54 @@ class SequenceExecutor:
                 callback(index, total, operation, status)
             except Exception as e:
                 logger.error(f"Progress callback error: {e}")
+
+    def _resolve_variables(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Resolve variable references in parameters.
+
+        Variables are referenced with $ prefix (e.g., $target).
+        Special handling for position variables from detect_object results.
+
+        Args:
+            params: Parameters that may contain variable references
+
+        Returns:
+            Parameters with variables resolved
+        """
+        resolved = {}
+        for key, value in params.items():
+            if isinstance(value, str) and value.startswith('$'):
+                var_name = value[1:]  # Remove $ prefix
+
+                if var_name in self._variables:
+                    var_value = self._variables[var_name]
+
+                    # Special handling for position/coordinate parameters
+                    if key in ['x', 'y', 'z'] and isinstance(var_value, dict):
+                        # Extract coordinate from detection result
+                        resolved[key] = var_value.get(key, 0.0)
+                    elif key == 'position' and isinstance(var_value, dict):
+                        # Expand position variable to x, y, z
+                        resolved['x'] = var_value.get('x', 0.0)
+                        resolved['y'] = var_value.get('y', 0.0)
+                        resolved['z'] = var_value.get('z', 0.0)
+                    else:
+                        resolved[key] = var_value
+                else:
+                    logger.warning(f"Variable ${var_name} not found")
+                    resolved[key] = value
+            else:
+                resolved[key] = value
+
+        return resolved
+
+    def get_variable(self, name: str) -> Optional[Any]:
+        """Get a stored variable value."""
+        return self._variables.get(name)
+
+    def set_variable(self, name: str, value: Any):
+        """Set a variable value manually."""
+        self._variables[name] = value
 
 
 class AsyncSequenceExecutor:

@@ -230,7 +230,7 @@ namespace PythonCommunication
                 if (success && _logCommands)
                 {
                     Debug.Log(
-                        $"{_logPrefix} [req={requestId}] Sent sequence: '{command}' (robot={robot})"
+                        $"{_logPrefix} [req={requestId}] Sent sequence: '{command}' (robot={robot}, camera={_cameraId})"
                     );
                 }
 

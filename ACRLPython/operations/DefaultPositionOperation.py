@@ -8,7 +8,7 @@ by restoring the start joint targets saved when the robot was registered.
 
 import time
 import logging
-from servers.ResultsServer import ResultsBroadcaster
+from servers.CommandServer import get_command_broadcaster
 from .Base import (
     BasicOperation,
     OperationCategory,
@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 def return_to_start_position(
     robot_id: str,
     speed: float = 1.0,
+    request_id: int = 0,
 ) -> OperationResult:
     """
     Return robot to its initial start position using saved joint targets.
@@ -109,12 +110,13 @@ def return_to_start_position(
                 "speed_multiplier": speed,
             },
             "timestamp": time.time(),
+            "request_id": request_id,
         }
 
-        # Send to Unity via ResultsBroadcaster
+        # Send to Unity via CommandBroadcaster
         logger.info(f"Sending return_to_start_position command to {robot_id}")
 
-        success = ResultsBroadcaster.send_result(command)
+        success = get_command_broadcaster().send_command(command, request_id)
 
         if not success:
             return OperationResult.error_result(

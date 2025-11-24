@@ -296,8 +296,8 @@ class CubeDetector:
             )
             object_id += 1
 
-        # Save debug image if enabled
-        if self.enable_debug and len(all_detections) > 0:
+        # Save debug image if enabled (save even with 0 detections for debugging)
+        if self.enable_debug:
             self._save_debug_image(image, all_detections, camera_id)
 
         logging.info(f"Detected {len(all_detections)} objects")

@@ -3,6 +3,7 @@ using System.Collections;
 using System.Linq;
 using Core;
 using Robotics;
+using Vision;
 using UnityEngine;
 
 namespace PythonCommunication
@@ -39,6 +40,17 @@ namespace PythonCommunication
         public float x;
         public float y;
         public float z;
+    }
+
+    [System.Serializable]
+    public class CommandCompletionData
+    {
+        public string type;
+        public string robot_id;
+        public string command_type;
+        public bool success;
+        public uint request_id;
+        public float timestamp;
     }
 
     /// <summary>
@@ -162,6 +174,14 @@ namespace PythonCommunication
         #region Command Processing
 
         /// <summary>
+        /// Public method to handle commands routed from UnifiedPythonReceiver
+        /// </summary>
+        public void HandleCommand(RobotCommand command)
+        {
+            HandlePythonCommand(command);
+        }
+
+        /// <summary>
         /// Handle incoming commands from Python SequenceServer
         /// </summary>
         private void HandlePythonCommand(RobotCommand command)
@@ -211,6 +231,11 @@ namespace PythonCommunication
 
                 case "return_to_start_position":
                     ExecuteReturnToStartPosition(command);
+                    break;
+
+                // Camera-targeted commands
+                case "capture_stereo_images":
+                    ExecuteCaptureSteroImages(command);
                     break;
 
                 default:
@@ -594,6 +619,47 @@ namespace PythonCommunication
         }
 
         /// <summary>
+        /// Execute capture_stereo_images command - capture and send stereo images to Python
+        /// </summary>
+        private void ExecuteCaptureSteroImages(RobotCommand command)
+        {
+            try
+            {
+                string cameraId = command.camera_id;
+                if (string.IsNullOrEmpty(cameraId))
+                {
+                    Debug.LogError($"{_logPrefix} capture_stereo_images: camera_id is null or empty");
+                    _failedCommands++;
+                    return;
+                }
+
+                // Find StereoCameraController in scene
+                var stereoController = FindFirstObjectByType<StereoCameraController>();
+                if (stereoController == null)
+                {
+                    Debug.LogError($"{_logPrefix} capture_stereo_images: No StereoCameraController found in scene");
+                    _failedCommands++;
+                    return;
+                }
+
+                if (_verboseLogging)
+                {
+                    Debug.Log($"{_logPrefix} [req={command.request_id}] Capturing stereo images for {cameraId}");
+                }
+
+                // Capture and send stereo images
+                stereoController.CaptureAndSendToServer(cameraId);
+
+                _successfulCommands++;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"{_logPrefix} Error executing capture_stereo_images: {ex.Message}\n{ex.StackTrace}");
+                _failedCommands++;
+            }
+        }
+
+        /// <summary>
         /// Execute get_robot_status command - gather robot state and send back to Python
         /// </summary>
         private void ExecuteCheckRobotStatus(RobotCommand command)
@@ -741,7 +807,7 @@ namespace PythonCommunication
         /// </summary>
         private void SendCommandCompletion(string robotId, string commandType, bool success, uint requestId)
         {
-            var completionData = new
+            var completionData = new CommandCompletionData
             {
                 type = "command_completion",
                 robot_id = robotId,
@@ -798,20 +864,20 @@ namespace PythonCommunication
         }
 
         /// <summary>
-        /// Send status response (success or error) to Python StatusServer (Protocol V2)
+        /// Send status response (success or error) to Python on the same connection (Protocol V2)
         /// </summary>
         private bool SendStatusResponseToPython(string statusJson, uint requestId)
         {
-            // Use StatusResponseSender to send response to StatusServer (port 5012)
-            if (StatusResponseSender.Instance == null)
+            // Use UnifiedPythonReceiver to send response on the same connection that received the command
+            if (UnifiedPythonReceiver.Instance == null)
             {
                 Debug.LogWarning(
-                    $"{_logPrefix} StatusResponseSender not available. Ensure StatusResponseSender GameObject is in the scene."
+                    $"{_logPrefix} UnifiedPythonReceiver not available. Ensure UnifiedPythonReceiver GameObject is in the scene."
                 );
                 return false;
             }
 
-            return StatusResponseSender.Instance.SendStatusResponse(statusJson, requestId);
+            return UnifiedPythonReceiver.Instance.SendCompletion(statusJson, requestId);
         }
 
         #endregion

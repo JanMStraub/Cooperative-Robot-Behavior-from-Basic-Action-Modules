@@ -174,7 +174,6 @@ GameObject:
   - component: {fileID: 627489885}
   - component: {fileID: 627489888}
   - component: {fileID: 627489886}
-  - component: {fileID: 627489889}
   m_Layer: 0
   m_Name: MainCamera
   m_TagString: Untagged
@@ -292,26 +291,6 @@ Camera:
   m_OcclusionCulling: 1
   m_StereoConvergence: 10
   m_StereoSeparation: 0.022
---- !u!114 &627489889
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 627489884}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 500fcb0ba4ef349809caeda6e7317003, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _imageWidth: 1024
-  _imageHeight: 1024
-  _resolutionScale: 1
-  _grayscaleMode: 0
-  _grayscaleMaterial: {fileID: 2100000, guid: 85731220826fe4971bb3613c9b92cf5a, type: 2}
-  _compressionPreset: 1
-  _includeTimestamp: 1
-  _llmPrompt: Analyze the image
 --- !u!1 &662395067
 GameObject:
   m_ObjectHideFlags: 0
@@ -356,7 +335,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 94d36cbc3e24945949771a0032098589, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PythonCommunication.CameraManager
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Vision.CameraManager
 --- !u!1 &1032633142
 GameObject:
   m_ObjectHideFlags: 0
@@ -424,11 +403,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   config: {fileID: 11400000, guid: 1c6ca8dd9c7e2451aba210581aa5f7bc, type: 2}
---- !u!20 &1118579538 stripped
-Camera:
-  m_CorrespondingSourceObject: {fileID: 1924621710956839310, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-  m_PrefabInstance: {fileID: 9060350412813614532}
-  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1168411245
 GameObject:
   m_ObjectHideFlags: 0
@@ -566,7 +540,6 @@ GameObject:
   m_Component:
   - component: {fileID: 1170887387}
   - component: {fileID: 1170887386}
-  - component: {fileID: 1170887388}
   - component: {fileID: 1170887390}
   m_Layer: 0
   m_Name: RobotManager
@@ -607,21 +580,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1170887388
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1170887385}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: bb7eabb090fa24dbd9fe4880524d2a56, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::ObjectNavigationController
-  leftRobotId: Robot1
-  rightRobotId: Robot2
-  targetObjectColor: blue
 --- !u!114 &1170887390
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -650,9 +608,9 @@ GameObject:
   m_Component:
   - component: {fileID: 1595579018}
   - component: {fileID: 1595579019}
-  - component: {fileID: 1595579021}
   - component: {fileID: 1595579020}
-  - component: {fileID: 1595579022}
+  - component: {fileID: 1595579028}
+  - component: {fileID: 1595579027}
   - component: {fileID: 1595579026}
   m_Layer: 0
   m_Name: CommunicationManager
@@ -704,48 +662,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8dacc2a4d9d8a4f18ad49f1e9a1b0b8d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PythonCommunication.UnifiedPythonSender
-  _jpegQuality: 85
-  _enableSingleStreaming: 0
-  _singleStreamCamera: {fileID: 627489888}
-  _singleStreamCameraId: MainCamera
-  _singleStreamPrompt: 
-  _singleStreamInterval: 0.2
-  _enableStereoStreaming: 0
-  _stereoLeftCamera: {fileID: 1118579538}
-  _stereoRightCamera: {fileID: 1998407037}
-  _stereoPairId: TableStereoCamera
-  _stereoLeftId: L
-  _stereoRightId: R
-  _stereoStreamPrompt: 
-  _stereoStreamInterval: 0.5
---- !u!114 &1595579021
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1595579014}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 512c050872bf6405c8bba9b54f38f177, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PythonCommunication.UnifiedPythonReceiver
-  _logResults: 1
---- !u!114 &1595579022
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1595579014}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 35a0179aade2f43d78e57196476649be, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::PythonCommunication.StatusResponseSender
-  _autoConnect: 1
-  _autoReconnect: 1
-  _logResponses: 1
+  _defaultRobotId: Robot1
+  _defaultCameraId: TableStereoCamera
 --- !u!114 &1595579026
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -760,7 +678,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp-ACRL::PythonCommunication.SequenceClient
   _autoConnect: 1
   _autoReconnect: 1
-  _prompt: Move robot to position x=0, y=0.3, z=0
+  _prompt: Calculate the coordinates of the blue cube on the left
   _defaultRobotId: Robot1
   _cameraId: TableStereoCamera
   _logCommands: 1
@@ -768,11 +686,34 @@ MonoBehaviour:
   _lastSequenceStatus: Ready
   _commandsCompleted: 0
   _commandsTotal: 0
---- !u!20 &1998407037 stripped
-Camera:
-  m_CorrespondingSourceObject: {fileID: 5567977826561441543, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-  m_PrefabInstance: {fileID: 9060350412813614532}
+--- !u!114 &1595579027
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1595579014}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 512c050872bf6405c8bba9b54f38f177, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::PythonCommunication.UnifiedPythonReceiver
+  _logResults: 1
+--- !u!114 &1595579028
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1595579014}
+  m_Enabled: 0
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e9c8506393c6d460ba3950fa54e8432d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::PythonCommunication.CommandReceiver
+  _autoConnect: 1
+  _autoReconnect: 1
+  _logCommands: 1
 --- !u!1001 &9060350412813614532
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -781,13 +722,21 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 3149036954516521331, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: _useGraspPlanning
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 4194190411255862696, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+    - target: {fileID: 596947435951843946, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_IsActive
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 795938734311972712, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2219641187325193096, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4582788528901019201, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Enabled
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5271878870994714299, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.x
@@ -829,9 +778,17 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5517056044791005165, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Name
+      value: RightCamera
+      objectReference: {fileID: 0}
     - target: {fileID: 6897178052544332906, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
       value: Environment
+      objectReference: {fileID: 0}
+    - target: {fileID: 7271900281173631597, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Name
+      value: LeftCamera
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

@@ -17,6 +17,7 @@ from .GripperOperations import CONTROL_GRIPPER_OPERATION
 from .DepthDetectionOperation import CALCULATE_OBJECT_COORDINATES_OPERATION
 from .DefaultPositionOperation import RETURN_TO_START_POSITION_OPERATION
 from .DetectionOperations import DETECT_OBJECTS_OPERATION, DETECT_WITH_DEPTH_OPERATION
+from .VisionOperations import DETECT_OBJECT_OPERATION, ANALYZE_SCENE_OPERATION
 
 class OperationRegistry:
     """
@@ -44,6 +45,8 @@ class OperationRegistry:
             RETURN_TO_START_POSITION_OPERATION,
             DETECT_OBJECTS_OPERATION,
             DETECT_WITH_DEPTH_OPERATION,
+            DETECT_OBJECT_OPERATION,
+            ANALYZE_SCENE_OPERATION,
         ]
 
         for op in operations:

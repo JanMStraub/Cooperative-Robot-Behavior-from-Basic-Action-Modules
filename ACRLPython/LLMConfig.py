@@ -67,13 +67,14 @@ DUPLICATE_TIME_THRESHOLD = 0.1  # Time threshold for detecting duplicate sends (
 # ===========================
 
 # LM Studio server configuration
-LMSTUDIO_BASE_URL = "http://127.0.0.1:1234/v1"
+LMSTUDIO_BASE_URL = "http://127.0.0.1:1234/v1" # local
+# LMSTUDIO_BASE_URL = "http://192.168.178.53:1234" # GPU
 
 # Default LM Studio model (use model name shown in LM Studio)
 DEFAULT_LMSTUDIO_MODEL = "gemma-3-12b"
 
 # LLM generation parameters
-DEFAULT_TEMPERATURE = 0.7  # Sampling temperature (0.0-2.0)
+DEFAULT_TEMPERATURE = 0.2  # Sampling temperature (0.0-2.0)
 
 # Popular vision models compatible with LM Studio (for reference)
 VISION_MODELS = [
@@ -114,7 +115,7 @@ THREAD_CLEANUP_INTERVAL = 10.0  # How often to clean up completed threads (secon
 # Keepalive intervals
 RESULTS_SERVER_KEEPALIVE = 1.0  # Results server monitoring interval (seconds)
 STREAMING_SERVER_MONITOR = 60.0  # Streaming server monitoring interval (seconds)
-RAG_SERVER_TIMEOUT = 30.0  # RAG server query timeout (seconds)
+RAG_SERVER_TIMEOUT = 60.0  # RAG server query timeout (seconds)
 
 
 # ===========================
@@ -144,7 +145,7 @@ MIN_CONFIDENCE = 0.3  # Minimum detection confidence threshold (lower to catch m
 
 # Detection Processing
 DETECTION_CHECK_INTERVAL = 1.0  # Check for new images every N seconds
-ENABLE_DEBUG_IMAGES = False  # Save annotated images for debugging
+ENABLE_DEBUG_IMAGES = True  # Save annotated images for debugging
 DEBUG_IMAGES_DIR = "./debug_detections"
 
 # Disparity Map Debugging
@@ -159,6 +160,12 @@ DEBUG_DISPARITY_DIR = "./debug_detections"
 # Default stereo camera parameters
 DEFAULT_STEREO_BASELINE = 0.05  # meters, distance between stereo cameras
 DEFAULT_STEREO_FOV = 60.0  # degrees, field of view of cameras
+
+# Default stereo camera pose (must match Unity camera transform)
+# Position: [x, y, z] in world space
+# Rotation: [pitch, yaw, roll] in degrees (Unity convention)
+DEFAULT_STEREO_CAMERA_POSITION = [-0.025, 0.1, -0.65]  # Example: camera above and behind origin
+DEFAULT_STEREO_CAMERA_ROTATION = [0.0, 0.0, 0.0]  # Example: looking down at 30 degrees
 
 # Stereo processing
 STEREO_CHECK_INTERVAL = 0.5  # Check for new stereo pairs every N seconds
