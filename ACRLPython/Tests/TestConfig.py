@@ -13,12 +13,18 @@ class TestConfigConstants:
     def test_network_config(self):
         """Test network configuration constants"""
         assert cfg.DEFAULT_HOST == "127.0.0.1"
+        # Legacy ports (kept for backward compatibility)
         assert cfg.STREAMING_SERVER_PORT == 5005
         assert cfg.STEREO_DETECTION_PORT == 5006
         assert cfg.DEPTH_RESULTS_PORT == 5007
+        # Active ports
         assert cfg.LLM_RESULTS_PORT == 5010
-        assert cfg.RESULTS_SERVER_PORT == cfg.LLM_RESULTS_PORT  # Alias
-        assert cfg.DETECTION_SERVER_PORT == cfg.DEPTH_RESULTS_PORT  # Alias
+        assert cfg.RAG_SERVER_PORT == 5011
+        assert cfg.STATUS_SERVER_PORT == 5012
+        assert cfg.SEQUENCE_SERVER_PORT == 5013
+        # Aliases
+        assert cfg.RESULTS_SERVER_PORT == cfg.LLM_RESULTS_PORT
+        assert cfg.DETECTION_SERVER_PORT == cfg.DEPTH_RESULTS_PORT
         assert cfg.MAX_CONNECTIONS_BACKLOG > 0
         assert cfg.MAX_CLIENT_THREADS > 0
         assert cfg.SOCKET_ACCEPT_TIMEOUT > 0
@@ -126,6 +132,36 @@ class TestConfigHelpers:
 
         assert config.host == cfg.DEFAULT_HOST
         assert config.port == cfg.RESULTS_SERVER_PORT
+        assert hasattr(config, "max_connections")
+        assert hasattr(config, "max_client_threads")
+        assert hasattr(config, "socket_timeout")
+
+    def test_get_rag_config(self):
+        """Test get_rag_config returns correct port"""
+        config = cfg.get_rag_config()
+
+        assert config.host == cfg.DEFAULT_HOST
+        assert config.port == cfg.RAG_SERVER_PORT
+        assert hasattr(config, "max_connections")
+        assert hasattr(config, "max_client_threads")
+        assert hasattr(config, "socket_timeout")
+
+    def test_get_status_config(self):
+        """Test get_status_config returns correct port"""
+        config = cfg.get_status_config()
+
+        assert config.host == cfg.DEFAULT_HOST
+        assert config.port == cfg.STATUS_SERVER_PORT
+        assert hasattr(config, "max_connections")
+        assert hasattr(config, "max_client_threads")
+        assert hasattr(config, "socket_timeout")
+
+    def test_get_sequence_config(self):
+        """Test get_sequence_config returns correct port"""
+        config = cfg.get_sequence_config()
+
+        assert config.host == cfg.DEFAULT_HOST
+        assert config.port == cfg.SEQUENCE_SERVER_PORT
         assert hasattr(config, "max_connections")
         assert hasattr(config, "max_client_threads")
         assert hasattr(config, "socket_timeout")

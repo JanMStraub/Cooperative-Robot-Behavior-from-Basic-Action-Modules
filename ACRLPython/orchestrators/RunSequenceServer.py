@@ -120,6 +120,7 @@ def main():
         results_server = run_results_server_background(
             cfg.get_results_config()  # type: ignore[arg-type]
         )
+        logger.info(f"ResultsServer started on port {cfg.RESULTS_SERVER_PORT}")
         time.sleep(0.5)
 
     status_server = None
@@ -127,7 +128,10 @@ def main():
         status_server = run_status_server_background(
             cfg.get_status_config()  # type: ignore[arg-type]
         )
+        logger.info(f"StatusServer started on port {cfg.STATUS_SERVER_PORT}")
         time.sleep(0.5)
+    else:
+        logger.warning("StatusServer DISABLED - completion signals will not be received")
 
     # Determine if completion checking should be enabled
     check_completion = not args.no_completion_check

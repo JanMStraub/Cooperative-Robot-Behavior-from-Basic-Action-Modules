@@ -8,7 +8,7 @@ robot state without causing any movement or changes.
 
 import time
 import logging
-from servers.ResultsServer import ResultsBroadcaster
+from servers.CommandServer import get_command_broadcaster
 from .Base import (
     BasicOperation,
     OperationCategory,
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 
-def check_robot_status(robot_id: str, detailed: bool = False) -> OperationResult:
+def check_robot_status(robot_id: str, detailed: bool = False, request_id: int = 0) -> OperationResult:
     """
     Query the current status of a robot.
 
@@ -107,12 +107,13 @@ def check_robot_status(robot_id: str, detailed: bool = False) -> OperationResult
                 "detailed": detailed,
             },
             "timestamp": time.time(),
+            "request_id": request_id,
         }
 
-        # Send to Unity via ResultsBroadcaster
+        # Send to Unity via CommandBroadcaster
         logger.info(f"Sending status check to {robot_id} (detailed={detailed})")
 
-        success = ResultsBroadcaster.send_result(command)
+        success = get_command_broadcaster().send_command(command, request_id)
 
         if not success:
             return OperationResult.error_result(

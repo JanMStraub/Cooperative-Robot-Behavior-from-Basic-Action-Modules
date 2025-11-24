@@ -14,7 +14,7 @@ import numpy as np
 from typing import List, Optional
 
 from servers.StreamingServer import ImageStorage
-from servers.ResultsServer import ResultsBroadcaster
+from servers.CommandServer import get_command_broadcaster
 from .Base import (
     BasicOperation,
     OperationCategory,
@@ -112,6 +112,8 @@ def detect_with_depth(
     right_camera: str = "right",
     baseline: float = 0.1,
     fov: float = 60.0,
+    camera_position: Optional[list] = None,
+    camera_rotation: Optional[list] = None,
 ) -> OperationResult:
     """
     Detect objects and calculate 3D world positions using stereo vision.
@@ -125,10 +127,22 @@ def detect_with_depth(
         right_camera: Right camera ID in ImageStorage
         baseline: Camera baseline distance in meters
         fov: Camera field of view in degrees
+        camera_position: Camera position [x, y, z] in world space
+        camera_rotation: Camera rotation [pitch, yaw, roll] in degrees
 
     Returns:
         OperationResult with 3D detection data
     """
+    # Import config for defaults
+    try:
+        import LLMConfig as cfg
+    except ImportError:
+        from .. import LLMConfig as cfg
+
+    if camera_position is None:
+        camera_position = cfg.DEFAULT_STEREO_CAMERA_POSITION
+    if camera_rotation is None:
+        camera_rotation = cfg.DEFAULT_STEREO_CAMERA_ROTATION
     try:
         # Get stereo images from storage
         image_storage = ImageStorage.get_instance()
@@ -167,8 +181,6 @@ def detect_with_depth(
         camera_config = CameraConfig(
             baseline=baseline,
             fov=fov,
-            image_width=left_image.shape[1],
-            image_height=left_image.shape[0],
         )
 
         # Run stereo detection
@@ -178,6 +190,8 @@ def detect_with_depth(
             right_image,
             camera_config,
             camera_id="stereo",
+            camera_rotation=camera_rotation,
+            camera_position=camera_position,
         )
 
         # Convert to dictionary format
@@ -355,6 +369,20 @@ def create_detect_with_depth_operation() -> BasicOperation:
                 required=False,
                 default=60.0,
                 valid_range=(20.0, 120.0),
+            ),
+            OperationParameter(
+                name="camera_position",
+                type="list",
+                description="Camera position [x, y, z] in world space",
+                required=False,
+                default=None,
+            ),
+            OperationParameter(
+                name="camera_rotation",
+                type="list",
+                description="Camera rotation [pitch, yaw, roll] in degrees",
+                required=False,
+                default=None,
             ),
         ],
 

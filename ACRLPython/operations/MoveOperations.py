@@ -8,7 +8,7 @@ through Unity's RobotController via TCP communication.
 
 import time
 import logging
-from servers.ResultsServer import ResultsBroadcaster
+from servers.CommandServer import get_command_broadcaster
 from .Base import (
     BasicOperation,
     OperationCategory,
@@ -48,9 +48,9 @@ def move_to_coordinate(
 
     Args:
         robot_id: ID of the robot to move (e.g., "AR4_Robot", "Robot1")
-        x: X coordinate in meters (forward/back from robot base), range: [-0.5, 0.5]
-        y: Y coordinate in meters (left/right from robot base), range: [-0.5, 0.5]
-        z: Z coordinate in meters (height above robot base), range: [0.0, 0.6]
+        x: X coordinate in meters (forward/back from robot base), range: [-1.0, 1.0]
+        y: Y coordinate in meters (left/right from robot base), range: [-1.0, 1.0]
+        z: Z coordinate in meters (height above robot base), range: [-0.5, 0.6]
         speed: Speed multiplier (0.1=slow, 1.0=normal, 2.0=fast), range: [0.1, 2.0]
         approach_offset: Stop distance before target in meters, range: [0.0, 0.1]
 
@@ -107,35 +107,35 @@ def move_to_coordinate(
             )
 
         # Validate X coordinate
-        if not (-0.5 <= x <= 0.5):
+        if not (-1.0 <= x <= 1.0):
             return OperationResult.error_result(
                 "INVALID_X_COORDINATE",
-                f"X coordinate {x} out of range [-0.5, 0.5]",
+                f"X coordinate {x} out of range [-1.0, 1.0]",
                 [
-                    "Adjust X to be within robot workspace [-0.5, 0.5]",
+                    "Adjust X to be within robot workspace [-1.0, 1.0]",
                     "Use detect_object to get valid coordinates",
                 ],
             )
 
         # Validate Y coordinate
-        if not (-0.5 <= y <= 0.5):
+        if not (-1.0 <= y <= 1.0):
             return OperationResult.error_result(
                 "INVALID_Y_COORDINATE",
-                f"Y coordinate {y} out of range [-0.5, 0.5]",
+                f"Y coordinate {y} out of range [-1.0, 1.0]",
                 [
-                    "Adjust Y to be within robot workspace [-0.5, 0.5]",
+                    "Adjust Y to be within robot workspace [-1.0, 1.0]",
                     "Use detect_object to get valid coordinates",
                 ],
             )
 
         # Validate Z coordinate
-        if not (0.0 <= z <= 0.6):
+        if not (-0.5 <= z <= 0.6):
             return OperationResult.error_result(
                 "INVALID_Z_COORDINATE",
-                f"Z coordinate {z} out of range [0.0, 0.6]",
+                f"Z coordinate {z} out of range [-0.5, 0.6]",
                 [
-                    "Adjust Z to be within robot workspace [0.0, 0.6]",
-                    "Ensure height is above table surface (z > 0.0)",
+                    "Adjust Z to be within robot workspace [-0.5, 0.6]",
+                    "Z can be negative (below robot base level)",
                 ],
             )
 
@@ -180,12 +180,12 @@ def move_to_coordinate(
             "request_id": request_id,
         }
 
-        # Send to Unity via ResultsBroadcaster
+        # Send to Unity via CommandBroadcaster
         logger.info(
             f"Sending move_to_coordinate command to {robot_id}: ({actual_x:.3f}, {actual_y:.3f}, {actual_z:.3f})"
         )
 
-        success = ResultsBroadcaster.send_result(command)
+        success = get_command_broadcaster().send_command(command, request_id)
 
         if not success:
             return OperationResult.error_result(
@@ -275,21 +275,21 @@ def create_move_to_coordinate_operation() -> BasicOperation:
                 type="float",
                 description="X coordinate in meters (forward/back from robot base)",
                 required=True,
-                valid_range=(-0.5, 0.5),
+                valid_range=(-1.0, 1.0),
             ),
             OperationParameter(
                 name="y",
                 type="float",
                 description="Y coordinate in meters (left/right from robot base)",
                 required=True,
-                valid_range=(-0.5, 0.5),
+                valid_range=(-1.0, 1.0),
             ),
             OperationParameter(
                 name="z",
                 type="float",
                 description="Z coordinate in meters (height above robot base)",
                 required=True,
-                valid_range=(0.0, 0.6),
+                valid_range=(-0.5, 0.6),
             ),
             OperationParameter(
                 name="speed",

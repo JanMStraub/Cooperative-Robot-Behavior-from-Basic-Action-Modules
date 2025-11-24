@@ -64,9 +64,9 @@ class CommandParser:
         if use_rag:
             try:
                 self.rag = RAGSystem()
-                if not self.rag.is_ready():
-                    self.rag.index_operations()
-                logger.info("RAG system initialized for command parsing")
+                # Always rebuild index on startup to prevent dimension mismatches
+                self.rag.index_operations(rebuild=True)
+                logger.info("RAG system initialized for command parsing (index rebuilt)")
             except Exception as e:
                 logger.warning(f"Failed to initialize RAG: {e}. Using registry only.")
 
@@ -140,7 +140,7 @@ class CommandParser:
                     "temperature": 0.1,  # Low temperature for deterministic parsing
                     "max_tokens": 1000,
                 },
-                timeout=30,
+                timeout=60,
             )
 
             if response.status_code != 200:
@@ -153,6 +153,7 @@ class CommandParser:
             # Extract content from response
             result = response.json()
             content = result["choices"][0]["message"]["content"]
+            logger.info(f"LLM response: {content[:500]}")
 
             # Parse JSON from response
             parsed = self._extract_json_from_response(content)
@@ -163,9 +164,12 @@ class CommandParser:
                     "error": f"Failed to extract JSON from LLM response: {content[:200]}",
                 }
 
+            logger.info(f"Parsed {len(parsed.get('commands', []))} commands from LLM")
+
             # Validate operations
             commands = parsed.get("commands", [])
             validated_commands = self._validate_commands(commands, robot_id)
+            logger.info(f"Validated {len(validated_commands)} commands")
 
             return {"success": True, "commands": validated_commands, "error": None}
 
@@ -203,6 +207,18 @@ Rules:
 4. "open gripper" or "release" means control_gripper with open_gripper=true
 5. Include robot_id in every operation's params
 6. Preserve the order of operations as specified in the command
+7. IMPORTANT: When detect_object is followed by "move to it/there/that", use variable passing:
+   - Add "capture_var": "target" to the detect_object command
+   - Use "position": "$target" in the move_to_coordinate params (NOT x, y, z)
+
+   Example for "detect blue cube, move to it, close gripper":
+   {{
+     "commands": [
+       {{"operation": "detect_object", "params": {{"robot_id": "Robot1", "color": "blue"}}, "capture_var": "target"}},
+       {{"operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "position": "$target"}}}},
+       {{"operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": false}}}}
+     ]
+   }}
 
 Output JSON format:
 {{
@@ -322,7 +338,13 @@ Output only the JSON, no explanation."""
                 logger.warning(f"Unknown operation: {operation}, skipping")
                 continue
 
-            validated.append({"operation": operation, "params": params})
+            validated_cmd = {"operation": operation, "params": params}
+
+            # Preserve capture_var if present
+            if "capture_var" in cmd:
+                validated_cmd["capture_var"] = cmd["capture_var"]
+
+            validated.append(validated_cmd)
 
         return validated
 
@@ -343,12 +365,47 @@ Output only the JSON, no explanation."""
         # Split by common conjunctions
         parts = re.split(r"\s+(?:and|then|after that|,)\s+", text)
 
+        # Track if we detected something (for "move to it" pattern)
+        last_detection_var = None
+
         for part in parts:
             part = part.strip()
             if not part:
                 continue
 
-            # Parse move commands
+            # Parse detect colored object (new - for vision operations)
+            detect_color_match = re.search(
+                r"detect\s+(?:the\s+)?(\w+)\s+(?:cube|object|block)",
+                part,
+            )
+            if detect_color_match:
+                color = detect_color_match.group(1).lower()
+                if color in ["red", "green", "blue"]:
+                    last_detection_var = "target"
+                    commands.append(
+                        {
+                            "operation": "detect_object",
+                            "params": {"robot_id": robot_id, "color": color},
+                            "capture_var": last_detection_var,
+                        }
+                    )
+                    continue
+
+            # Parse "move to it" / "move to the coordinates" (uses last detection)
+            if re.search(r"move\s+to\s+(?:it|the\s+coordinates?|there|that)", part):
+                if last_detection_var:
+                    commands.append(
+                        {
+                            "operation": "move_to_coordinate",
+                            "params": {
+                                "robot_id": robot_id,
+                                "position": f"${last_detection_var}"
+                            },
+                        }
+                    )
+                    continue
+
+            # Parse move commands with explicit coordinates
             move_match = re.search(
                 r"move\s+(?:to\s+)?(?:\(?\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)?|"
                 r"x\s*=?\s*(-?[\d.]+).*?y\s*=?\s*(-?[\d.]+).*?z\s*=?\s*(-?[\d.]+))",

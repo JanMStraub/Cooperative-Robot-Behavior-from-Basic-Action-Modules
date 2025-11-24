@@ -35,6 +35,8 @@ from .Registry import (
     get_global_registry
 )
 
+# VisionOperations are imported by Registry
+
 __all__ = [
     # Base classes
     'BasicOperation',

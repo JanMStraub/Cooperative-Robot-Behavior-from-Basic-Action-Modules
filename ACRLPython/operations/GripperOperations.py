@@ -8,7 +8,7 @@ through Unity's GripperController via TCP communication.
 
 import time
 import logging
-from servers.ResultsServer import ResultsBroadcaster
+from servers.CommandServer import get_command_broadcaster
 from .Base import (
     BasicOperation,
     OperationCategory,
@@ -105,12 +105,12 @@ def control_gripper(robot_id: str, open_gripper: bool, request_id: int = 0) -> O
             "request_id": request_id,
         }
 
-        # Send to Unity via ResultsBroadcaster
+        # Send to Unity via CommandBroadcaster
         logger.info(
             f"Sending control_gripper command to {robot_id} (open_gripper={open_gripper})"
         )
 
-        success = ResultsBroadcaster.send_result(command)
+        success = get_command_broadcaster().send_command(command, request_id)
 
         if not success:
             return OperationResult.error_result(

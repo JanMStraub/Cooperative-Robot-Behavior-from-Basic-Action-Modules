@@ -20,7 +20,7 @@ import struct
 import json
 import logging
 import threading
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 
 from core.TCPServerBase import TCPServerBase, ServerConfig
 from orchestrators.CommandParser import CommandParser
@@ -143,9 +143,18 @@ class SequenceQueryHandler:
             }
 
         # Add camera_id to commands that need it (perception operations)
+        perception_ops = [
+            "detect_object",
+            "detect_objects",
+            "analyze_scene",
+            "calculate_object_coordinates",
+            "detect_with_depth"
+        ]
         for cmd in commands:
-            if cmd.get("operation") in ["detect_objects", "get_depth", "stereo_detect"]:
-                cmd["camera_id"] = camera_id
+            if cmd.get("operation") in perception_ops:
+                if "params" not in cmd:
+                    cmd["params"] = {}
+                cmd["params"]["camera_id"] = camera_id
 
         # If auto_execute is False, just return parsed commands without executing
         if not auto_execute:
@@ -353,7 +362,7 @@ class SequenceServer(TCPServerBase):
 
 
 def run_sequence_server_background(
-    config: Optional[Dict[str, Any]] = None,
+    config: Optional[Union[ServerConfig, Dict[str, Any]]] = None,
     lm_studio_url: Optional[str] = None,
     model: Optional[str] = None,
     setup_signals: bool = False,

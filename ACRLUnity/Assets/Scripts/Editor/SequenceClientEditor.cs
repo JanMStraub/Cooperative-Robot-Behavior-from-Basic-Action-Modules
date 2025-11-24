@@ -164,13 +164,6 @@ namespace EditorScripts
                 }
                 GUI.backgroundColor = Color.white;
 
-                GUI.backgroundColor = _errorColor;
-                if (GUILayout.Button("Disconnect", _dangerButtonStyle))
-                {
-                    client.Disconnect();
-                }
-                GUI.backgroundColor = Color.white;
-
                 EditorGUILayout.EndHorizontal();
             });
 
