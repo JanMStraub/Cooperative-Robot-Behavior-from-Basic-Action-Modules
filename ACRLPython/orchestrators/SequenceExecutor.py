@@ -336,8 +336,8 @@ class SequenceExecutor:
             # Status check is immediate
             return True
 
-        elif operation == "calculate_object_coordinates":
-            # Detection is immediate (results sent via separate channel)
+        elif operation == "detect_object_stereo":
+            # Stereo detection is immediate (results sent via separate channel)
             return True
 
         # Default: assume complete

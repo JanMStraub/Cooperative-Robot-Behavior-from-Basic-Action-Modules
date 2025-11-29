@@ -14,10 +14,9 @@ from .Base import BasicOperation, OperationCategory, OperationComplexity
 from .MoveOperations import MOVE_TO_COORDINATE_OPERATION
 from .StatusOperations import CHECK_ROBOT_STATUS_OPERATION
 from .GripperOperations import CONTROL_GRIPPER_OPERATION
-from .DepthDetectionOperation import CALCULATE_OBJECT_COORDINATES_OPERATION
 from .DefaultPositionOperation import RETURN_TO_START_POSITION_OPERATION
-from .DetectionOperations import DETECT_OBJECTS_OPERATION, DETECT_WITH_DEPTH_OPERATION
-from .VisionOperations import DETECT_OBJECT_OPERATION, ANALYZE_SCENE_OPERATION
+from .DetectionOperations import DETECT_OBJECTS_OPERATION
+from .VisionOperations import ANALYZE_SCENE_OPERATION, DETECT_OBJECT_STEREO_OPERATION
 
 class OperationRegistry:
     """
@@ -41,16 +40,20 @@ class OperationRegistry:
             MOVE_TO_COORDINATE_OPERATION,
             CHECK_ROBOT_STATUS_OPERATION,
             CONTROL_GRIPPER_OPERATION,
-            CALCULATE_OBJECT_COORDINATES_OPERATION,
             RETURN_TO_START_POSITION_OPERATION,
             DETECT_OBJECTS_OPERATION,
-            DETECT_WITH_DEPTH_OPERATION,
-            DETECT_OBJECT_OPERATION,
+            DETECT_OBJECT_STEREO_OPERATION,
             ANALYZE_SCENE_OPERATION,
         ]
 
         for op in operations:
             self.operations[op.operation_id] = op
+
+        # Backward compatibility aliases - map old operation IDs to unified operation
+        # This allows old code to continue working without changes
+        self.operations["perception_detect_object_001"] = DETECT_OBJECT_STEREO_OPERATION
+        self.operations["perception_detect_depth_001"] = DETECT_OBJECT_STEREO_OPERATION
+        self.operations["perception_depth_detect_001"] = DETECT_OBJECT_STEREO_OPERATION
 
     def get_operation(self, operation_id: str) -> Optional[BasicOperation]:
         """

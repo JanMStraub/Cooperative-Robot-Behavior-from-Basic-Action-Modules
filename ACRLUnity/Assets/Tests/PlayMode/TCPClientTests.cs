@@ -13,24 +13,6 @@ namespace Tests.PlayMode
     /// </summary>
     public class TCPClientTests
     {
-        #region CommandReceiver Tests
-
-        private GameObject _receiverObject;
-        private CommandReceiver _receiver;
-
-        [Test]
-        public void CommandReceiver_CanBeCreated()
-        {
-            _receiverObject = new GameObject("TestReceiver");
-            _receiver = _receiverObject.AddComponent<CommandReceiver>();
-
-            Assert.IsNotNull(_receiver);
-
-            UnityEngine.Object.DestroyImmediate(_receiverObject);
-        }
-
-        #endregion
-
         #region SequenceClient Tests
 
         private GameObject _clientObject;

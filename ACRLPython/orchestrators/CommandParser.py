@@ -373,7 +373,7 @@ Output only the JSON, no explanation."""
             if not part:
                 continue
 
-            # Parse detect colored object (new - for vision operations)
+            # Parse detect colored object (unified stereo detection)
             detect_color_match = re.search(
                 r"detect\s+(?:the\s+)?(\w+)\s+(?:cube|object|block)",
                 part,
@@ -384,7 +384,7 @@ Output only the JSON, no explanation."""
                     last_detection_var = "target"
                     commands.append(
                         {
-                            "operation": "detect_object",
+                            "operation": "detect_object_stereo",
                             "params": {"robot_id": robot_id, "color": color},
                             "capture_var": last_detection_var,
                         }
@@ -468,15 +468,15 @@ Output only the JSON, no explanation."""
                 )
                 continue
 
-            # Parse stereo detection with depth (3D positions)
+            # Parse stereo detection with depth (3D positions) - unified operation
             if re.search(
                 r"detect.*(?:depth|3d|position|stereo)|find.*(?:3d|position)|calculate\s+(?:object\s+)?coordinates|locate\s+(?:objects?|cubes?)\s+in\s+3d",
                 part,
             ):
                 commands.append(
                     {
-                        "operation": "detect_with_depth",
-                        "params": {"robot_id": robot_id},
+                        "operation": "detect_object_stereo",
+                        "params": {"robot_id": robot_id, "color": None},
                     }
                 )
                 continue

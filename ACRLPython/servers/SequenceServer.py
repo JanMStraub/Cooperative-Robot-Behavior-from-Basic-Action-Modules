@@ -144,11 +144,9 @@ class SequenceQueryHandler:
 
         # Add camera_id to commands that need it (perception operations)
         perception_ops = [
-            "detect_object",
-            "detect_objects",
-            "analyze_scene",
-            "calculate_object_coordinates",
-            "detect_with_depth"
+            "detect_object_stereo",  # Unified stereo detection operation
+            "detect_objects",        # 2D detection only
+            "analyze_scene",         # LLM vision analysis
         ]
         for cmd in commands:
             if cmd.get("operation") in perception_ops:

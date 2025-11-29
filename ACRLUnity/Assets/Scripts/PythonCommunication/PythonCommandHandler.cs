@@ -92,7 +92,6 @@ namespace PythonCommunication
         [SerializeField]
         private int _failedCommands = 0;
 
-        private CommandReceiver _commandReceiver;
         private RobotManager _robotManager;
 
         // Track active commands for completion notification
@@ -126,17 +125,6 @@ namespace PythonCommunication
         /// </summary>
         private void Start()
         {
-            // Get CommandReceiver instance
-            _commandReceiver = CommandReceiver.Instance;
-            if (_commandReceiver == null)
-            {
-                Debug.LogError(
-                    $"{_logPrefix} CommandReceiver.Instance is null! "
-                        + "Ensure CommandReceiver GameObject is in the scene."
-                );
-                return;
-            }
-
             // Get RobotManager instance
             _robotManager = RobotManager.Instance;
             if (_robotManager == null)
@@ -148,25 +136,7 @@ namespace PythonCommunication
                 return;
             }
 
-            // Subscribe to commands from Python via ResultsServer (port 5010)
-            _commandReceiver.OnCommandReceived += HandlePythonCommand;
-
             Debug.Log($"{_logPrefix} Initialized and listening for Python commands");
-        }
-
-        /// <summary>
-        /// Unsubscribe from events on destroy
-        /// </summary>
-        private void OnDestroy()
-        {
-            if (Instance == this)
-            {
-                if (_commandReceiver != null)
-                {
-                    _commandReceiver.OnCommandReceived -= HandlePythonCommand;
-                }
-                Instance = null;
-            }
         }
 
         #endregion
