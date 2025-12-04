@@ -13,134 +13,20 @@ namespace Tests.PlayMode
     /// </summary>
     public class TCPClientTests
     {
-        #region RAGClient Tests
+        #region SequenceClient Tests
 
-        private GameObject _ragClientObject;
-        private RAGClient _ragClient;
-
-        [SetUp]
-        public void SetupRAGClient()
-        {
-            if (RAGClient.Instance != null)
-            {
-                UnityEngine.Object.DestroyImmediate(RAGClient.Instance.gameObject);
-            }
-
-            _ragClientObject = new GameObject("TestRAGClient");
-            _ragClient = _ragClientObject.AddComponent<RAGClient>();
-        }
-
-        [TearDown]
-        public void TearDownRAGClient()
-        {
-            if (_ragClientObject != null)
-            {
-                UnityEngine.Object.DestroyImmediate(_ragClientObject);
-            }
-        }
+        private GameObject _clientObject;
+        private SequenceClient _client;
 
         [Test]
-        public void RAGClient_Singleton_IsSet()
+        public void SequenceClient_CanBeCreated()
         {
-            Assert.IsNotNull(RAGClient.Instance);
-            Assert.AreEqual(_ragClient, RAGClient.Instance);
-        }
+            _clientObject = new GameObject("TestClient");
+            _client = _clientObject.AddComponent<SequenceClient>();
 
-        [Test]
-        public void RAGClient_DefaultPort_IsCorrect()
-        {
-            Assert.AreEqual(CommunicationConstants.RAG_SERVER_PORT, _ragClient.ServerPort);
-        }
+            Assert.IsNotNull(_client);
 
-        [Test]
-        public void RAGClient_IsConnected_ReturnsFalseInitially()
-        {
-            Assert.IsFalse(_ragClient.IsConnected);
-        }
-
-        [UnityTest]
-        public IEnumerator RAGClient_QueryAsync_HandlesNoConnection()
-        {
-            yield return null;
-
-            // Query without connection should handle gracefully
-            Assert.IsFalse(_ragClient.IsConnected);
-        }
-
-        #endregion
-
-        #region StatusClient Tests
-
-        private GameObject _statusClientObject;
-        private StatusClient _statusClient;
-
-        [Test]
-        public void StatusClient_Singleton_CanBeCreated()
-        {
-            if (StatusClient.Instance != null)
-            {
-                UnityEngine.Object.DestroyImmediate(StatusClient.Instance.gameObject);
-            }
-
-            _statusClientObject = new GameObject("TestStatusClient");
-            _statusClient = _statusClientObject.AddComponent<StatusClient>();
-
-            Assert.IsNotNull(StatusClient.Instance);
-            Assert.AreEqual(_statusClient, StatusClient.Instance);
-
-            UnityEngine.Object.DestroyImmediate(_statusClientObject);
-        }
-
-        [Test]
-        public void StatusClient_DefaultPort_IsCorrect()
-        {
-            if (StatusClient.Instance != null)
-            {
-                UnityEngine.Object.DestroyImmediate(StatusClient.Instance.gameObject);
-            }
-
-            _statusClientObject = new GameObject("TestStatusClient");
-            _statusClient = _statusClientObject.AddComponent<StatusClient>();
-
-            Assert.AreEqual(CommunicationConstants.STATUS_SERVER_PORT, _statusClient.ServerPort);
-
-            UnityEngine.Object.DestroyImmediate(_statusClientObject);
-        }
-
-        #endregion
-
-        #region UnifiedPythonReceiver Tests
-
-        private GameObject _receiverObject;
-        private UnifiedPythonReceiver _receiver;
-
-        [Test]
-        public void UnifiedPythonReceiver_CanBeCreated()
-        {
-            _receiverObject = new GameObject("TestReceiver");
-            _receiver = _receiverObject.AddComponent<UnifiedPythonReceiver>();
-
-            Assert.IsNotNull(_receiver);
-
-            UnityEngine.Object.DestroyImmediate(_receiverObject);
-        }
-
-        #endregion
-
-        #region UnifiedPythonSender Tests
-
-        private GameObject _senderObject;
-        private UnifiedPythonSender _sender;
-
-        [Test]
-        public void UnifiedPythonSender_CanBeCreated()
-        {
-            _senderObject = new GameObject("TestSender");
-            _sender = _senderObject.AddComponent<UnifiedPythonSender>();
-
-            Assert.IsNotNull(_sender);
-
-            UnityEngine.Object.DestroyImmediate(_senderObject);
+            UnityEngine.Object.DestroyImmediate(_clientObject);
         }
 
         #endregion
@@ -177,48 +63,34 @@ namespace Tests.PlayMode
         }
 
         [Test]
-        public void DepthResult_CanBeCreated()
+        public void SequenceResult_CanBeCreated()
         {
-            var result = new DepthResult
+            var result = new SequenceResult
             {
                 success = true,
-                camera_id = "StereoPair1",
-                detections = new ObjectDetection[0]
+                sequence_id = "seq_123",
+                total_commands = 3,
+                completed_commands = 3
             };
 
             Assert.IsTrue(result.success);
-            Assert.AreEqual("StereoPair1", result.camera_id);
+            Assert.AreEqual("seq_123", result.sequence_id);
+            Assert.AreEqual(3, result.total_commands);
         }
 
         [Test]
-        public void ObjectDetection_CanBeCreated()
+        public void RobotCommand_CanBeCreated()
         {
-            var detection = new ObjectDetection
+            var command = new RobotCommand
             {
-                color = "red_cube",
-                confidence = 0.98f,
-                world_position = new Detection3DPosition { x = 1.0f, y = 2.0f, z = 3.0f }
-            };
-
-            Assert.AreEqual("red_cube", detection.color);
-            Assert.AreEqual(0.98f, detection.confidence);
-            Assert.AreEqual(1.0f, detection.world_position.x);
-        }
-
-        [Test]
-        public void LLMResult_CanBeCreated()
-        {
-            var result = new LLMResult
-            {
-                success = true,
-                response = "Test response",
-                camera_id = "Camera1",
+                command_type = "move_to_coordinate",
+                robot_id = "Robot1",
                 request_id = 123
             };
 
-            Assert.IsTrue(result.success);
-            Assert.AreEqual("Test response", result.response);
-            Assert.AreEqual(123u, result.request_id);
+            Assert.AreEqual("move_to_coordinate", command.command_type);
+            Assert.AreEqual("Robot1", command.robot_id);
+            Assert.AreEqual(123u, command.request_id);
         }
 
         [Test]
@@ -240,16 +112,14 @@ namespace Tests.PlayMode
         #region Communication Constants Tests
 
         [Test]
-        public void CommunicationConstants_AllPorts_AreDifferent()
+        public void CommunicationConstants_ActivePorts_AreDifferent()
         {
             var ports = new int[]
             {
-                CommunicationConstants.STREAMING_SERVER_PORT,
-                CommunicationConstants.STEREO_DETECTION_SERVER_PORT,
                 CommunicationConstants.LLM_RESULTS_PORT,
-                CommunicationConstants.DEPTH_RESULTS_PORT,
                 CommunicationConstants.RAG_SERVER_PORT,
-                CommunicationConstants.STATUS_SERVER_PORT
+                CommunicationConstants.STATUS_SERVER_PORT,
+                CommunicationConstants.SEQUENCE_SERVER_PORT
             };
 
             var uniquePorts = new System.Collections.Generic.HashSet<int>(ports);

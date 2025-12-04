@@ -3,7 +3,7 @@ Command Parser for Multi-Command Sequences
 ==========================================
 
 This module parses natural language compound commands into structured operation sequences
-using an LLM for intelligent parsing and RAG for operation validation.
+using an LLM for intelligent parsing with operation registry validation.
 
 Example:
     >>> parser = CommandParser()
@@ -37,7 +37,7 @@ class CommandParser:
     """
     Parses compound natural language commands into structured operation sequences.
 
-    Uses LLM for intelligent parsing and RAG for operation validation.
+    Uses LLM for intelligent parsing with operation registry validation.
     Falls back to regex patterns when LLM is unavailable.
     """
 
@@ -45,7 +45,7 @@ class CommandParser:
         self,
         lm_studio_url: Optional[str] = None,
         model: Optional[str] = None,
-        use_rag_validation: bool = True
+        use_rag: bool = True,
     ):
         """
         Initialize the CommandParser.
@@ -53,31 +53,25 @@ class CommandParser:
         Args:
             lm_studio_url: LM Studio base URL (default from config)
             model: Model name for parsing (default from config)
-            use_rag_validation: Validate operations against RAG system
+            use_rag: Whether to use RAG for semantic operation context
         """
         self.lm_studio_url = lm_studio_url or cfg.LMSTUDIO_BASE_URL
         self.model = model or cfg.DEFAULT_LMSTUDIO_MODEL
-        self.use_rag_validation = use_rag_validation
+        self.registry = get_global_registry()
 
-        # Initialize RAG for operation validation
-        if use_rag_validation:
+        # Initialize RAG system for semantic operation search
+        self.rag = None
+        if use_rag:
             try:
                 self.rag = RAGSystem()
-                self.registry = get_global_registry()
-                logger.info("✓ CommandParser initialized with RAG validation")
+                # Always rebuild index on startup to prevent dimension mismatches
+                self.rag.index_operations(rebuild=True)
+                logger.info("RAG system initialized for command parsing (index rebuilt)")
             except Exception as e:
-                logger.warning(f"Failed to initialize RAG: {e}. Validation disabled.")
-                self.rag = None
-                self.registry = get_global_registry()
-        else:
-            self.rag = None
-            self.registry = get_global_registry()
+                logger.warning(f"Failed to initialize RAG: {e}. Using registry only.")
 
     def parse(
-        self,
-        command_text: str,
-        robot_id: str = "Robot1",
-        use_llm: bool = True
+        self, command_text: str, robot_id: str = "Robot1", use_llm: bool = True
     ) -> Dict[str, Any]:
         """
         Parse a compound command into a sequence of operations.
@@ -99,18 +93,16 @@ class CommandParser:
             }
         """
         if not command_text or not command_text.strip():
-            return {
-                "success": False,
-                "commands": [],
-                "error": "Empty command text"
-            }
+            return {"success": False, "commands": [], "error": "Empty command text"}
 
         # Try LLM parsing first
         if use_llm:
             result = self._parse_with_llm(command_text, robot_id)
             if result["success"]:
                 return result
-            logger.warning(f"LLM parsing failed: {result.get('error')}. Falling back to regex.")
+            logger.warning(
+                f"LLM parsing failed: {result.get('error')}. Falling back to regex."
+            )
 
         # Fallback to regex parsing
         return self._parse_with_regex(command_text, robot_id)
@@ -126,8 +118,8 @@ class CommandParser:
         Returns:
             Parsed command structure
         """
-        # Get available operations for the prompt
-        available_ops = self._get_available_operations_summary()
+        # Get available operations for the prompt (use RAG for semantic context)
+        available_ops = self._get_available_operations_summary(command_text)
 
         # Build prompt for LLM
         prompt = self._build_parsing_prompt(command_text, robot_id, available_ops)
@@ -139,25 +131,29 @@ class CommandParser:
                 json={
                     "model": self.model,
                     "messages": [
-                        {"role": "system", "content": "You are a robot command parser. Output only valid JSON."},
-                        {"role": "user", "content": prompt}
+                        {
+                            "role": "system",
+                            "content": "You are a robot command parser. Output only valid JSON.",
+                        },
+                        {"role": "user", "content": prompt},
                     ],
                     "temperature": 0.1,  # Low temperature for deterministic parsing
-                    "max_tokens": 1000
+                    "max_tokens": 1000,
                 },
-                timeout=30
+                timeout=90,
             )
 
             if response.status_code != 200:
                 return {
                     "success": False,
                     "commands": [],
-                    "error": f"LLM request failed with status {response.status_code}"
+                    "error": f"LLM request failed with status {response.status_code}",
                 }
 
             # Extract content from response
             result = response.json()
             content = result["choices"][0]["message"]["content"]
+            logger.info(f"LLM response: {content[:500]}")
 
             # Parse JSON from response
             parsed = self._extract_json_from_response(content)
@@ -165,39 +161,36 @@ class CommandParser:
                 return {
                     "success": False,
                     "commands": [],
-                    "error": f"Failed to extract JSON from LLM response: {content[:200]}"
+                    "error": f"Failed to extract JSON from LLM response: {content[:200]}",
                 }
+
+            logger.info(f"Parsed {len(parsed.get('commands', []))} commands from LLM")
 
             # Validate operations
             commands = parsed.get("commands", [])
             validated_commands = self._validate_commands(commands, robot_id)
+            logger.info(f"Validated {len(validated_commands)} commands")
 
-            return {
-                "success": True,
-                "commands": validated_commands,
-                "error": None
-            }
+            return {"success": True, "commands": validated_commands, "error": None}
 
         except requests.exceptions.Timeout:
-            return {
-                "success": False,
-                "commands": [],
-                "error": "LLM request timed out"
-            }
+            return {"success": False, "commands": [], "error": "LLM request timed out"}
         except requests.exceptions.ConnectionError:
             return {
                 "success": False,
                 "commands": [],
-                "error": f"Cannot connect to LM Studio at {self.lm_studio_url}"
+                "error": f"Cannot connect to LM Studio at {self.lm_studio_url}",
             }
         except Exception as e:
             return {
                 "success": False,
                 "commands": [],
-                "error": f"LLM parsing error: {str(e)}"
+                "error": f"LLM parsing error: {str(e)}",
             }
 
-    def _build_parsing_prompt(self, command_text: str, robot_id: str, available_ops: str) -> str:
+    def _build_parsing_prompt(
+        self, command_text: str, robot_id: str, available_ops: str
+    ) -> str:
         """Build the prompt for LLM command parsing."""
         return f"""Parse the following robot command into a sequence of operations.
 
@@ -214,6 +207,18 @@ Rules:
 4. "open gripper" or "release" means control_gripper with open_gripper=true
 5. Include robot_id in every operation's params
 6. Preserve the order of operations as specified in the command
+7. IMPORTANT: When detect_object is followed by "move to it/there/that", use variable passing:
+   - Add "capture_var": "target" to the detect_object command
+   - Use "position": "$target" in the move_to_coordinate params (NOT x, y, z)
+
+   Example for "detect blue cube, move to it, close gripper":
+   {{
+     "commands": [
+       {{"operation": "detect_object", "params": {{"robot_id": "Robot1", "color": "blue"}}, "capture_var": "target"}},
+       {{"operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "position": "$target"}}}},
+       {{"operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": false}}}}
+     ]
+   }}
 
 Output JSON format:
 {{
@@ -225,8 +230,53 @@ Output JSON format:
 
 Output only the JSON, no explanation."""
 
-    def _get_available_operations_summary(self) -> str:
-        """Get a summary of available operations for the LLM prompt."""
+    def _get_available_operations_summary(self, command_text: str = "") -> str:
+        """
+        Get a summary of available operations for the LLM prompt.
+
+        If RAG is available and command_text is provided, uses semantic search
+        to prioritize the most relevant operations for the given command.
+
+        Args:
+            command_text: The command being parsed (for RAG context)
+
+        Returns:
+            Formatted string of operations for LLM prompt
+        """
+        # If RAG is available, get semantically relevant operations first
+        if self.rag and command_text:
+            try:
+                # Search for relevant operations
+                rag_results = self.rag.search(command_text, top_k=5)
+                relevant_ops = set()
+
+                summary_lines = []
+
+                # Add RAG-matched operations first (most relevant)
+                if rag_results:
+                    summary_lines.append("Most relevant operations for this command:")
+                    for result in rag_results:
+                        op = self.registry.get_operation_by_name(result.get("name", ""))
+                        if op:
+                            relevant_ops.add(op.name)
+                            params = ", ".join([f"{p.name}: {p.type}" for p in op.parameters])
+                            score = result.get("similarity_score", 0)
+                            summary_lines.append(f"- {op.name}({params}): {op.description} [relevance: {score:.2f}]")
+
+                    summary_lines.append("\nOther available operations:")
+
+                # Add remaining operations
+                for op in self.registry.get_all_operations():
+                    if op.name not in relevant_ops:
+                        params = ", ".join([f"{p.name}: {p.type}" for p in op.parameters])
+                        summary_lines.append(f"- {op.name}({params}): {op.description}")
+
+                return "\n".join(summary_lines)
+
+            except Exception as e:
+                logger.warning(f"RAG search failed, using registry: {e}")
+
+        # Fallback: return all operations from registry
         ops = self.registry.get_all_operations()
         summary_lines = []
         for op in ops:
@@ -243,7 +293,7 @@ Output only the JSON, no explanation."""
             pass
 
         # Try to find JSON in markdown code block
-        json_match = re.search(r'```(?:json)?\s*\n?(.*?)\n?```', content, re.DOTALL)
+        json_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", content, re.DOTALL)
         if json_match:
             try:
                 return json.loads(json_match.group(1))
@@ -251,7 +301,7 @@ Output only the JSON, no explanation."""
                 pass
 
         # Try to find JSON object in text
-        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        json_match = re.search(r"\{.*\}", content, re.DOTALL)
         if json_match:
             try:
                 return json.loads(json_match.group(0))
@@ -260,7 +310,9 @@ Output only the JSON, no explanation."""
 
         return None
 
-    def _validate_commands(self, commands: List[Dict], default_robot_id: str) -> List[Dict]:
+    def _validate_commands(
+        self, commands: List[Dict], default_robot_id: str
+    ) -> List[Dict]:
         """
         Validate and normalize parsed commands.
 
@@ -286,10 +338,13 @@ Output only the JSON, no explanation."""
                 logger.warning(f"Unknown operation: {operation}, skipping")
                 continue
 
-            validated.append({
-                "operation": operation,
-                "params": params
-            })
+            validated_cmd = {"operation": operation, "params": params}
+
+            # Preserve capture_var if present
+            if "capture_var" in cmd:
+                validated_cmd["capture_var"] = cmd["capture_var"]
+
+            validated.append(validated_cmd)
 
         return validated
 
@@ -308,18 +363,53 @@ Output only the JSON, no explanation."""
         text = command_text.lower()
 
         # Split by common conjunctions
-        parts = re.split(r'\s+(?:and|then|after that|,)\s+', text)
+        parts = re.split(r"\s+(?:and|then|after that|,)\s+", text)
+
+        # Track if we detected something (for "move to it" pattern)
+        last_detection_var = None
 
         for part in parts:
             part = part.strip()
             if not part:
                 continue
 
-            # Parse move commands
+            # Parse detect colored object (unified stereo detection)
+            detect_color_match = re.search(
+                r"detect\s+(?:the\s+)?(\w+)\s+(?:cube|object|block)",
+                part,
+            )
+            if detect_color_match:
+                color = detect_color_match.group(1).lower()
+                if color in ["red", "green", "blue"]:
+                    last_detection_var = "target"
+                    commands.append(
+                        {
+                            "operation": "detect_object_stereo",
+                            "params": {"robot_id": robot_id, "color": color},
+                            "capture_var": last_detection_var,
+                        }
+                    )
+                    continue
+
+            # Parse "move to it" / "move to the coordinates" (uses last detection)
+            if re.search(r"move\s+to\s+(?:it|the\s+coordinates?|there|that)", part):
+                if last_detection_var:
+                    commands.append(
+                        {
+                            "operation": "move_to_coordinate",
+                            "params": {
+                                "robot_id": robot_id,
+                                "position": f"${last_detection_var}"
+                            },
+                        }
+                    )
+                    continue
+
+            # Parse move commands with explicit coordinates
             move_match = re.search(
-                r'move\s+(?:to\s+)?(?:\(?\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)?|'
-                r'x\s*=?\s*(-?[\d.]+).*?y\s*=?\s*(-?[\d.]+).*?z\s*=?\s*(-?[\d.]+))',
-                part
+                r"move\s+(?:to\s+)?(?:\(?\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)?|"
+                r"x\s*=?\s*(-?[\d.]+).*?y\s*=?\s*(-?[\d.]+).*?z\s*=?\s*(-?[\d.]+))",
+                part,
             )
             if move_match:
                 groups = move_match.groups()
@@ -328,59 +418,89 @@ Output only the JSON, no explanation."""
                 else:
                     x, y, z = float(groups[3]), float(groups[4]), float(groups[5])
 
-                commands.append({
-                    "operation": "move_to_coordinate",
-                    "params": {
-                        "robot_id": robot_id,
-                        "x": x,
-                        "y": y,
-                        "z": z
+                commands.append(
+                    {
+                        "operation": "move_to_coordinate",
+                        "params": {"robot_id": robot_id, "x": x, "y": y, "z": z},
                     }
-                })
+                )
                 continue
 
-            # Parse gripper commands
-            if re.search(r'close\s+(?:the\s+)?gripper|grasp|grip|grab', part):
-                commands.append({
-                    "operation": "control_gripper",
-                    "params": {
-                        "robot_id": robot_id,
-                        "open_gripper": False
+            # Parse gripper commands - check open first to avoid "grip" matching "gripper"
+            if re.search(r"open\s+(?:the\s+)?gripper|release|drop", part):
+                commands.append(
+                    {
+                        "operation": "control_gripper",
+                        "params": {"robot_id": robot_id, "open_gripper": True},
                     }
-                })
+                )
                 continue
 
-            if re.search(r'open\s+(?:the\s+)?gripper|release|drop', part):
-                commands.append({
-                    "operation": "control_gripper",
-                    "params": {
-                        "robot_id": robot_id,
-                        "open_gripper": True
+            if re.search(r"close\s+(?:the\s+)?gripper|grasp\b|grip\b|grab\b", part):
+                commands.append(
+                    {
+                        "operation": "control_gripper",
+                        "params": {"robot_id": robot_id, "open_gripper": False},
                     }
-                })
+                )
                 continue
 
             # Parse status check
-            if re.search(r'check\s+(?:robot\s+)?status|get\s+status', part):
-                commands.append({
-                    "operation": "check_robot_status",
-                    "params": {
-                        "robot_id": robot_id
+            if re.search(r"check\s+(?:robot\s+)?status|get\s+status", part):
+                commands.append(
+                    {
+                        "operation": "check_robot_status",
+                        "params": {"robot_id": robot_id},
                     }
-                })
+                )
+                continue
+
+            # Parse return to start position
+            if re.search(
+                r"return\s+(?:to\s+)?(?:start|home|default|initial)\s*(?:position)?|go\s+(?:to\s+)?home|home\s+position",
+                part,
+            ):
+                commands.append(
+                    {
+                        "operation": "return_to_start_position",
+                        "params": {"robot_id": robot_id},
+                    }
+                )
+                continue
+
+            # Parse stereo detection with depth (3D positions) - unified operation
+            if re.search(
+                r"detect.*(?:depth|3d|position|stereo)|find.*(?:3d|position)|calculate\s+(?:object\s+)?coordinates|locate\s+(?:objects?|cubes?)\s+in\s+3d",
+                part,
+            ):
+                commands.append(
+                    {
+                        "operation": "detect_object_stereo",
+                        "params": {"robot_id": robot_id, "color": None},
+                    }
+                )
+                continue
+
+            # Parse simple object detection (2D pixel coordinates)
+            if re.search(
+                r"detect\s+(?:objects?|cubes?)|find\s+(?:objects?|cubes?)|look\s+for|scan\s+for|locate\s+(?:objects?|cubes?)",
+                part,
+            ):
+                commands.append(
+                    {
+                        "operation": "detect_objects",
+                        "params": {"robot_id": robot_id},
+                    }
+                )
                 continue
 
         if commands:
-            return {
-                "success": True,
-                "commands": commands,
-                "error": None
-            }
+            return {"success": True, "commands": commands, "error": None}
         else:
             return {
                 "success": False,
                 "commands": [],
-                "error": f"Could not parse command: {command_text}"
+                "error": f"Could not parse command: {command_text}",
             }
 
     def get_supported_patterns(self) -> List[str]:
@@ -391,7 +511,10 @@ Output only the JSON, no explanation."""
             "close gripper / grasp / grip / grab - Close the gripper",
             "open gripper / release / drop - Open the gripper",
             "check status / get status - Get robot status",
-            "Commands can be chained with 'and', 'then', 'after that', or commas"
+            "return to start / go home / home position - Return to start position",
+            "detect objects / find cubes / scan for - Detect objects (2D)",
+            "detect with depth / find 3d positions / detect stereo - Detect objects with 3D positions",
+            "Commands can be chained with 'and', 'then', 'after that', or commas",
         ]
 
 

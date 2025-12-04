@@ -5,12 +5,10 @@ This package contains orchestrator scripts that coordinate multiple
 servers and processing modules for complete pipelines.
 
 Orchestrators:
-- RunAnalyzer: LLM vision pipeline (StreamingServer + ResultsServer + Ollama)
-- RunDetector: Single-camera object detection pipeline
-- RunStereoDetector: Stereo detection pipeline with 3D depth
+- RunSequenceServer: Main sequence execution pipeline (StreamingServer + ResultsServer + StatusServer + SequenceServer)
 """
 
 # Note: Orchestrators are typically run as scripts, not imported as modules
-# They can be executed directly: python -m orchestrators.RunAnalyzer
+# They can be executed directly: python -m orchestrators.RunSequenceServer
 
 __all__ = []

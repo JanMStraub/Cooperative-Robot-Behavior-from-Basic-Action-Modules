@@ -28,7 +28,7 @@ import LLMConfig as cfg
 from servers.ResultsServer import run_results_server_background
 from servers.StatusServer import run_status_server_background
 from servers.SequenceServer import run_sequence_server_background, SequenceQueryHandler
-from rag import RAGSystem
+from servers.StreamingServer import run_streaming_server_background
 
 logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
 logger = logging.getLogger(__name__)
@@ -57,9 +57,9 @@ def run_test_sequence():
             for cmd in result.get("parsed_commands", []):
                 logger.info(f"  - {cmd['operation']}: {cmd['params']}")
         else:
-            logger.error(f"✗ Failed: {result.get('error')}")
+            logger.error(f"Failed: {result.get('error')}")
 
-    logger.info("\n" + "=" * 60)
+    logger.info("=" * 60)
 
 
 def main():
@@ -87,56 +87,64 @@ def main():
         help="Don't start StatusServer (if already running)"
     )
     parser.add_argument(
-        "--rebuild-index",
+        "--no-streaming-server",
         action="store_true",
-        help="Rebuild RAG index before starting"
+        help="Don't start StreamingServer (if already running)"
+    )
+    parser.add_argument(
+        "--no-completion-check",
+        action="store_true",
+        help="Disable waiting for Unity completion signals (for testing)"
     )
     args = parser.parse_args()
 
+    # Print startup banner
     logger.info("=" * 60)
-    logger.info("Starting Sequence Server Orchestrator")
+    logger.info("Sequence Server")
+    logger.info("=" * 60)
+    logger.info(f"Port:  {cfg.SEQUENCE_SERVER_PORT}")
+    logger.info(f"Model: {args.model}")
     logger.info("=" * 60)
 
-    # Initialize RAG system if needed
-    logger.info("Initializing RAG system...")
-    try:
-        rag = RAGSystem()
-        if args.rebuild_index or not rag.is_ready():
-            logger.info("Building RAG index...")
-            rag.index_operations(rebuild=args.rebuild_index)
-        logger.info("✓ RAG system ready")
-    except Exception as e:
-        logger.warning(f"RAG initialization failed: {e}. Continuing without RAG validation.")
+    # Start servers
+    streaming_server = None
+    if not args.no_streaming_server:
+        streaming_server = run_streaming_server_background(
+            cfg.get_streaming_config()  # type: ignore[arg-type]
+        )
+        logger.info(f"StreamingServer started on port {cfg.STREAMING_SERVER_PORT}")
+        time.sleep(0.5)
 
-    # Start ResultsServer for sending commands to Unity
     results_server = None
     if not args.no_results_server:
-        logger.info(f"Starting ResultsServer on port {cfg.LLM_RESULTS_PORT}...")
         results_server = run_results_server_background(
             cfg.get_results_config()  # type: ignore[arg-type]
         )
+        logger.info(f"ResultsServer started on port {cfg.RESULTS_SERVER_PORT}")
         time.sleep(0.5)
-        logger.info("✓ ResultsServer started")
 
-    # Start StatusServer for receiving completion signals from Unity
     status_server = None
     if not args.no_status_server:
-        logger.info(f"Starting StatusServer on port {cfg.STATUS_SERVER_PORT}...")
         status_server = run_status_server_background(
             cfg.get_status_config()  # type: ignore[arg-type]
         )
+        logger.info(f"StatusServer started on port {cfg.STATUS_SERVER_PORT}")
         time.sleep(0.5)
-        logger.info("✓ StatusServer started")
+    else:
+        logger.warning("StatusServer DISABLED - completion signals will not be received")
 
-    # Start SequenceServer
-    logger.info(f"Starting SequenceServer on port {cfg.SEQUENCE_SERVER_PORT}...")
+    # Determine if completion checking should be enabled
+    check_completion = not args.no_completion_check
+    if not check_completion:
+        logger.info("Completion checking DISABLED - commands will fire without waiting")
+
     sequence_server = run_sequence_server_background(
         cfg.get_sequence_config(),
         model=args.model,
-        setup_signals=False
+        setup_signals=False,
+        check_completion=check_completion
     )
     time.sleep(0.5)
-    logger.info("✓ SequenceServer started")
 
     # Run test if requested
     if args.test:
@@ -157,20 +165,7 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    # Print status
-    logger.info("")
-    logger.info("=" * 60)
-    logger.info("Sequence Server is running")
-    logger.info("=" * 60)
-    logger.info(f"  SequenceServer: port {cfg.SEQUENCE_SERVER_PORT}")
-    if results_server:
-        logger.info(f"  ResultsServer:  port {cfg.LLM_RESULTS_PORT}")
-    if status_server:
-        logger.info(f"  StatusServer:   port {cfg.STATUS_SERVER_PORT}")
-    logger.info(f"  Model:          {args.model}")
-    logger.info("")
-    logger.info("Press Ctrl+C to stop")
-    logger.info("=" * 60)
+    logger.info("Servers started, waiting for commands...")
 
     # Main loop
     try:
@@ -189,6 +184,10 @@ def main():
 
             if status_server and not status_server.is_alive():
                 logger.error("StatusServer stopped unexpectedly!")
+                break
+
+            if streaming_server and not streaming_server.is_alive():
+                logger.error("StreamingServer stopped unexpectedly!")
                 break
 
     except KeyboardInterrupt:

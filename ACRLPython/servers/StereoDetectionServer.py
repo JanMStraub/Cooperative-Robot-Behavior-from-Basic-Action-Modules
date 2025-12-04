@@ -9,12 +9,13 @@ Port: 5006 (receives stereo images from Unity)
 Results sent via ResultsServer (port 5007 for depth detection)
 """
 
+import json
 import logging
 import socket
 import struct
 import threading
 import time
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 import numpy as np
 import cv2
 
@@ -72,22 +73,31 @@ class StereoImageStorage:
     def _init_storage(self):
         """Initialize storage structures"""
         self._images = {}  # camera_pair_id -> (imgL, imgR, prompt, timestamp)
+        self._metadata = {}  # camera_pair_id -> metadata dict
         self._data_lock = threading.Lock()
 
     def store_stereo_pair(
-        self, camera_pair_id: str, imgL: np.ndarray, imgR: np.ndarray, prompt: str
+        self,
+        camera_pair_id: str,
+        imgL: np.ndarray,
+        imgR: np.ndarray,
+        prompt: str,
+        metadata: Optional[Dict] = None
     ):
         """
-        Store a stereo image pair.
+        Store a stereo image pair with optional metadata.
 
         Args:
             camera_pair_id: Identifier for the camera pair (e.g., "AR4_Stereo")
             imgL: Left camera image
             imgR: Right camera image
             prompt: Associated prompt/metadata
+            metadata: Optional metadata dict (e.g., camera pose, baseline, FOV)
         """
         with self._data_lock:
             self._images[camera_pair_id] = (imgL, imgR, prompt, time.time())
+            if metadata:
+                self._metadata[camera_pair_id] = metadata
             logging.info(
                 f"Stored stereo pair for '{camera_pair_id}' (L: {imgL.shape}, R: {imgR.shape})"
             )
@@ -126,6 +136,19 @@ class StereoImageStorage:
                 return time.time() - timestamp
             return None
 
+    def get_stereo_metadata(self, camera_pair_id: str) -> Optional[Dict]:
+        """
+        Get metadata for a stereo camera pair.
+
+        Args:
+            camera_pair_id: Identifier for the camera pair
+
+        Returns:
+            Metadata dict or None if not available
+        """
+        with self._data_lock:
+            return self._metadata.get(camera_pair_id)
+
     def get_all_camera_pair_ids(self) -> list:
         """
         Get list of all camera pair IDs with stored images.
@@ -162,7 +185,6 @@ class StereoDetectionServer(TCPServerBase):
 
         super().__init__(server_config)
         self.image_storage = StereoImageStorage()
-        logging.info("StereoDetectionServer initialized")
 
     def handle_client_connection(self, client: socket.socket, address: tuple):
         """
@@ -300,6 +322,29 @@ class StereoDetectionServer(TCPServerBase):
                 if img_R_data is None:
                     break
 
+                # Read metadata length
+                metadata_len_data = self._receive_exactly(client, 4)
+                if metadata_len_data is None:
+                    break
+
+                metadata_len = struct.unpack("I", metadata_len_data)[0]
+                if metadata_len > cfg.MAX_METADATA_SIZE:
+                    logging.error(f"Metadata size {metadata_len} exceeds maximum")
+                    break
+
+                # Read metadata JSON
+                metadata_json = {}
+                if metadata_len > 0:
+                    metadata_data = self._receive_exactly(client, metadata_len)
+                    if metadata_data is None:
+                        break
+                    try:
+                        metadata_json = json.loads(metadata_data.decode("utf-8"))
+                        logging.debug(f"Received metadata: {metadata_json}")
+                    except json.JSONDecodeError as e:
+                        logging.error(f"Failed to parse metadata JSON: {e}")
+                        metadata_json = {}
+
                 # Decode images
                 imgL = cv2.imdecode(
                     np.frombuffer(img_L_data, np.uint8), cv2.IMREAD_COLOR
@@ -312,8 +357,10 @@ class StereoDetectionServer(TCPServerBase):
                     logging.error("Failed to decode stereo images")
                     continue
 
-                # Store stereo pair
-                self.image_storage.store_stereo_pair(cam_pair_id, imgL, imgR, prompt)
+                # Store stereo pair with metadata
+                self.image_storage.store_stereo_pair(
+                    cam_pair_id, imgL, imgR, prompt, metadata_json
+                )
 
                 # Format sizes nicely
                 size_L_kb = img_L_len / 1024
@@ -398,7 +445,7 @@ def run_stereo_detection_server_background(
     server = StereoDetectionServer(config)
     thread = threading.Thread(target=server.start, daemon=True)
     thread.start()
-    logging.info(f"Stereo detection server started on {host}:{port} (background)")
+
     return server
 
 

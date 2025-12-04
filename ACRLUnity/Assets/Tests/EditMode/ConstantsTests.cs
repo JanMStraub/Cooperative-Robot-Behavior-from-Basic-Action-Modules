@@ -125,23 +125,17 @@ namespace Tests.EditMode
         public void CommunicationConstants_Ports_AreValid()
         {
             // Valid port range is 1-65535
-            Assert.Greater(CommunicationConstants.STREAMING_SERVER_PORT, 0);
-            Assert.LessOrEqual(CommunicationConstants.STREAMING_SERVER_PORT, 65535);
-
-            Assert.Greater(CommunicationConstants.STEREO_DETECTION_SERVER_PORT, 0);
-            Assert.LessOrEqual(CommunicationConstants.STEREO_DETECTION_SERVER_PORT, 65535);
-
             Assert.Greater(CommunicationConstants.LLM_RESULTS_PORT, 0);
             Assert.LessOrEqual(CommunicationConstants.LLM_RESULTS_PORT, 65535);
-
-            Assert.Greater(CommunicationConstants.DEPTH_RESULTS_PORT, 0);
-            Assert.LessOrEqual(CommunicationConstants.DEPTH_RESULTS_PORT, 65535);
 
             Assert.Greater(CommunicationConstants.RAG_SERVER_PORT, 0);
             Assert.LessOrEqual(CommunicationConstants.RAG_SERVER_PORT, 65535);
 
             Assert.Greater(CommunicationConstants.STATUS_SERVER_PORT, 0);
             Assert.LessOrEqual(CommunicationConstants.STATUS_SERVER_PORT, 65535);
+
+            Assert.Greater(CommunicationConstants.SEQUENCE_SERVER_PORT, 0);
+            Assert.LessOrEqual(CommunicationConstants.SEQUENCE_SERVER_PORT, 65535);
         }
 
         [Test]
@@ -149,12 +143,10 @@ namespace Tests.EditMode
         {
             var ports = new[]
             {
-                CommunicationConstants.STREAMING_SERVER_PORT,
-                CommunicationConstants.STEREO_DETECTION_SERVER_PORT,
                 CommunicationConstants.LLM_RESULTS_PORT,
-                CommunicationConstants.DEPTH_RESULTS_PORT,
                 CommunicationConstants.RAG_SERVER_PORT,
-                CommunicationConstants.STATUS_SERVER_PORT
+                CommunicationConstants.STATUS_SERVER_PORT,
+                CommunicationConstants.SEQUENCE_SERVER_PORT
             };
 
             // Check all ports are unique
@@ -166,12 +158,10 @@ namespace Tests.EditMode
         public void CommunicationConstants_Ports_AreInExpectedRange()
         {
             // All ports should be in the 5000s range for this project
-            Assert.AreEqual(5005, CommunicationConstants.STREAMING_SERVER_PORT);
-            Assert.AreEqual(5006, CommunicationConstants.STEREO_DETECTION_SERVER_PORT);
-            Assert.AreEqual(5007, CommunicationConstants.DEPTH_RESULTS_PORT);
             Assert.AreEqual(5010, CommunicationConstants.LLM_RESULTS_PORT);
             Assert.AreEqual(5011, CommunicationConstants.RAG_SERVER_PORT);
             Assert.AreEqual(5012, CommunicationConstants.STATUS_SERVER_PORT);
+            Assert.AreEqual(5013, CommunicationConstants.SEQUENCE_SERVER_PORT);
         }
 
         [Test]

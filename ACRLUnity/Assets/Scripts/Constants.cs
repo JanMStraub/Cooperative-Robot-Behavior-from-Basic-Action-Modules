@@ -121,24 +121,14 @@ namespace Core
     public static class CommunicationConstants
     {
         /// <summary>
-        /// Default streaming server port (receives images from Unity)
-        /// </summary>
-        public const int STREAMING_SERVER_PORT = 5005;
-
-        /// <summary>
         /// Stereo detection server port (receives stereo image pairs)
         /// </summary>
-        public const int STEREO_DETECTION_SERVER_PORT = 5006;
+        public const int STEREO_DETECTION_PORT = 5006;
 
         /// <summary>
-        /// LLM results server port (sends LLM analysis results to Unity from RunAnalyzer)
+        /// CommandServer port - receives all results (LLM and depth) and bidirectional commands
         /// </summary>
         public const int LLM_RESULTS_PORT = 5010;
-
-        /// <summary>
-        /// Depth results server port (sends depth detection results with 3D coordinates from RunStereoDetector)
-        /// </summary>
-        public const int DEPTH_RESULTS_PORT = 5007;
 
         /// <summary>
         /// RAG server port (semantic search for robot operations)
@@ -151,21 +141,9 @@ namespace Core
         public const int STATUS_SERVER_PORT = 5012;
 
         /// <summary>
-        /// Sequence server port (multi-command sequence execution)
+        /// Sequence server port (multi-command sequence execution) - primary communication port
         /// </summary>
         public const int SEQUENCE_SERVER_PORT = 5013;
-
-        /// <summary>
-        /// Legacy: Default results server port (alias for LLM_RESULTS_PORT)
-        /// </summary>
-        [System.Obsolete("Use LLM_RESULTS_PORT instead")]
-        public const int RESULTS_SERVER_PORT = LLM_RESULTS_PORT;
-
-        /// <summary>
-        /// Legacy: Detection server port (alias for DEPTH_RESULTS_PORT)
-        /// </summary>
-        [System.Obsolete("Use DEPTH_RESULTS_PORT instead")]
-        public const int DETECTION_SERVER_PORT = DEPTH_RESULTS_PORT;
 
         /// <summary>
         /// Default timeout for Python processes (seconds)
