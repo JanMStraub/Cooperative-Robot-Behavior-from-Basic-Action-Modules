@@ -44,6 +44,7 @@ SOCKET_RECEIVE_TIMEOUT = 300.0  # Timeout for idle connections (5 minutes)
 # Wire protocol limits
 MAX_STRING_LENGTH = 256  # Max length for camera_id and prompt strings
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB max image size
+MAX_METADATA_SIZE = 10 * 1024  # 10KB max metadata JSON size
 
 
 # ===========================
@@ -71,7 +72,7 @@ LMSTUDIO_BASE_URL = "http://127.0.0.1:1234/v1" # local
 # LMSTUDIO_BASE_URL = "http://192.168.178.53:1234" # GPU
 
 # Default LM Studio model (use model name shown in LM Studio)
-DEFAULT_LMSTUDIO_MODEL = "gemma-3-12b"
+DEFAULT_LMSTUDIO_MODEL = "qwen3-vl-8b"
 
 # LLM generation parameters
 DEFAULT_TEMPERATURE = 0.2  # Sampling temperature (0.0-2.0)
