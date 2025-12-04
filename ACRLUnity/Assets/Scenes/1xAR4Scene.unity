@@ -609,7 +609,6 @@ GameObject:
   - component: {fileID: 1595579018}
   - component: {fileID: 1595579019}
   - component: {fileID: 1595579020}
-  - component: {fileID: 1595579028}
   - component: {fileID: 1595579027}
   - component: {fileID: 1595579026}
   m_Layer: 0
@@ -678,7 +677,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp-ACRL::PythonCommunication.SequenceClient
   _autoConnect: 1
   _autoReconnect: 1
-  _prompt: Calculate the coordinates of the blue cube on the left
+  _prompt: Calculate the coordinates of the blue cube on the left and move to it
+    and close the gripper
   _defaultRobotId: Robot1
   _cameraId: TableStereoCamera
   _logCommands: 1
@@ -699,21 +699,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp-ACRL::PythonCommunication.UnifiedPythonReceiver
   _logResults: 1
---- !u!114 &1595579028
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1595579014}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e9c8506393c6d460ba3950fa54e8432d, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-ACRL::PythonCommunication.CommandReceiver
-  _autoConnect: 1
-  _autoReconnect: 1
-  _logCommands: 1
 --- !u!1001 &9060350412813614532
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -722,6 +707,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 590060560836442683, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 596947435951843946, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -730,8 +719,20 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 1774938081313906251, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 2219641187325193096, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2794463736414520206, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3149036954516521331, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _useGraspPlanning
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4582788528901019201, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}

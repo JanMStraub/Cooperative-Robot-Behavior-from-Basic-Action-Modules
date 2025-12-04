@@ -140,7 +140,7 @@ class CommandParser:
                     "temperature": 0.1,  # Low temperature for deterministic parsing
                     "max_tokens": 1000,
                 },
-                timeout=60,
+                timeout=90,
             )
 
             if response.status_code != 200:

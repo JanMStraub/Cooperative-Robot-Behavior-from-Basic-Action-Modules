@@ -110,6 +110,48 @@ class TestStereoImageStorage:
         assert pair is None
         assert age is None
 
+    def test_store_and_retrieve_metadata(self, cleanup_singletons, sample_stereo_pair):
+        """Test storing and retrieving metadata with stereo pairs"""
+        imgL, imgR = sample_stereo_pair
+        storage = StereoImageStorage()
+        pair_id = "test_pair"
+        prompt = "detect objects"
+        metadata = {
+            "baseline": 0.1,
+            "fov": 60.0,
+            "camera_position": [0.5, 1.2, -0.3],
+            "camera_rotation": [10.5, 45.0, 0.0]
+        }
+
+        # Store with metadata
+        storage.store_stereo_pair(pair_id, imgL, imgR, prompt, metadata)
+
+        # Retrieve metadata
+        retrieved_metadata = storage.get_stereo_metadata(pair_id)
+        assert retrieved_metadata is not None
+        assert retrieved_metadata == metadata
+
+        # Verify images still retrievable
+        pair_result = storage.get_stereo_pair(pair_id)
+        assert pair_result is not None
+
+    def test_store_without_metadata(self, cleanup_singletons, sample_stereo_pair):
+        """Test storing stereo pair without metadata (backward compatibility)"""
+        imgL, imgR = sample_stereo_pair
+        storage = StereoImageStorage()
+        pair_id = "test_pair"
+
+        # Store without metadata (old behavior)
+        storage.store_stereo_pair(pair_id, imgL, imgR, "test")
+
+        # Metadata should be None
+        metadata = storage.get_stereo_metadata(pair_id)
+        assert metadata is None
+
+        # Images should still be retrievable
+        pair_result = storage.get_stereo_pair(pair_id)
+        assert pair_result is not None
+
     def test_update_existing_pair(self, cleanup_singletons, sample_stereo_pair):
         """Test updating an existing stereo pair"""
         imgL, imgR = sample_stereo_pair

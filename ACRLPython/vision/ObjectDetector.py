@@ -433,10 +433,12 @@ class CubeDetector:
             detections_with_depth.append(det_with_depth)
 
             if world_pos:
+                depth_str = f"{depth_m:.3f}m" if depth_m is not None else "N/A"
+                disp_str = f"{disp_value:.1f}px" if disp_value is not None else "N/A"
                 logging.debug(
                     f"{det.color.upper()} cube: pixel ({det.center_x}, {det.center_y}) "
                     f"→ world ({world_pos[0]:.3f}, {world_pos[1]:.3f}, {world_pos[2]:.3f})m, "
-                    f"depth={depth_m:.3f}m, disp={disp_value:.1f}px"
+                    f"depth={depth_str}, disp={disp_str}"
                 )
             else:
                 logging.debug(
