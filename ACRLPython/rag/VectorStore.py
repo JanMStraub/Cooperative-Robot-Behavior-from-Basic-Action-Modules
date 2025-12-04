@@ -11,6 +11,7 @@ import logging
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from .Config import config
+from .ConfidenceScorer import apply_confidence_boosting, get_category_min_score
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -79,6 +80,8 @@ class VectorStore:
         min_score: Optional[float] = None,
         category_filter: Optional[str] = None,
         complexity_filter: Optional[str] = None,
+        query_text: str = "",
+        enable_confidence: bool = True,
     ) -> List[Dict[str, Any]]:
         """
         Search for similar operations using cosine similarity.
@@ -89,9 +92,11 @@ class VectorStore:
             min_score: Minimum similarity score to include
             category_filter: Filter by operation category
             complexity_filter: Filter by operation complexity
+            query_text: Original query for confidence scoring
+            enable_confidence: Whether to apply confidence scoring
 
         Returns:
-            List of dicts with keys: operation_id, score, metadata
+            List of dicts with keys: operation_id, score, metadata, confidence
 
         Example:
             >>> store = VectorStore()
@@ -129,10 +134,14 @@ class VectorStore:
             ):
                 continue
 
-            # Apply min score threshold
-            min_threshold = (
-                min_score if min_score is not None else config.MIN_SIMILARITY_SCORE
-            )
+            # Apply min score threshold (use category-specific if available)
+            if min_score is not None:
+                min_threshold = min_score
+            elif category_filter:
+                min_threshold = get_category_min_score(category_filter)
+            else:
+                min_threshold = config.MIN_SIMILARITY_SCORE
+
             if score < min_threshold:
                 continue
 
@@ -146,6 +155,15 @@ class VectorStore:
 
         # Sort by score descending
         results.sort(key=lambda x: x["score"], reverse=True)
+
+        # Apply confidence scoring if enabled
+        if enable_confidence and config.ENABLE_CONFIDENCE_SCORING and results:
+            results = apply_confidence_boosting(
+                results,
+                query_text=query_text,
+                category_filter=category_filter,
+                complexity_filter=complexity_filter,
+            )
 
         # Return top-k
         return results[:top_k]
@@ -195,9 +213,6 @@ class VectorStore:
         try:
             with open(path, "wb") as f:
                 pickle.dump(data, f)
-            logger.info(
-                f"Saved vector store to {path} ({len(self.operation_ids)} operations)"
-            )
         except Exception as e:
             logger.error(f"Failed to save vector store: {e}")
             raise
@@ -229,9 +244,6 @@ class VectorStore:
             store.metadata = data["metadata"]
             store.embedding_dimension = data["embedding_dimension"]
 
-            logger.info(
-                f"Loaded vector store from {path} ({len(store.operation_ids)} operations)"
-            )
             return store
 
         except FileNotFoundError:

@@ -86,7 +86,6 @@ class RAGQueryHandler:
             if validate:
                 cls._validate_initialization()
 
-            logging.info("RAG system initialized and validated")
 
         except Exception as e:
             error_msg = f"Failed to initialize RAG system: {e}"
@@ -197,11 +196,14 @@ class RAGQueryHandler:
                         min_score=min_score,
                     )
 
-                    # Convert search results to context format
+                    # Convert search results to context format with confidence
                     operations = []
                     for result in search_results:
                         op_data = result.get("metadata", {})
                         op_data["similarity_score"] = result.get("score", 0.0)
+                        # Include confidence details if available
+                        if "confidence" in result:
+                            op_data["confidence"] = result["confidence"]
                         operations.append(op_data)
 
                     result_container["result"] = {
@@ -343,7 +345,6 @@ class RAGServer(TCPServerBase):
             server_config = cfg.get_rag_config()
 
         super().__init__(server_config)
-        logging.info("RAGServer initialized")
 
     def handle_client_connection(self, client: socket.socket, address: tuple):
         """
@@ -469,7 +470,6 @@ def run_rag_server(
 
     try:
         server.start()
-        logging.info("RAGServer ready to handle queries from Unity")
 
         # Keep server running
         while server.is_running():
@@ -497,7 +497,6 @@ def run_rag_server_background(server_config: ServerConfig, rebuild_index: bool =
     server_config = server_config or cfg.get_rag_config()
 
     # Initialize RAG in main thread (faster startup)
-    logging.info("Initializing RAG query handler...")
     RAGQueryHandler.initialize(rebuild_index=rebuild_index)
 
     # Start server in background thread
@@ -511,7 +510,6 @@ def run_rag_server_background(server_config: ServerConfig, rebuild_index: bool =
         daemon=True,
     )
     thread.start()
-    logging.info("RAGServer started in background thread")
     return thread
 
 
@@ -563,8 +561,11 @@ if __name__ == "__main__":
 
             if results.get("num_results", 0) > 0:
                 for i, op in enumerate(results["operations"], 1):
+                    score = op.get('similarity_score', 0)
+                    confidence = op.get('confidence', {})
+                    level = confidence.get('confidence_level', 'unknown')
                     print(
-                        f"  {i}. {op['name']} (score: {op.get('similarity_score', 0):.3f})"
+                        f"  {i}. {op['name']} (score: {score:.3f}, confidence: {level})"
                     )
             else:
                 print("  No results found")

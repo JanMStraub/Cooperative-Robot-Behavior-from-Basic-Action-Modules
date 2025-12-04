@@ -15,14 +15,62 @@ namespace PythonCommunication
     {
         public static SequenceClient Instance { get; private set; }
 
+        [Header("Query Settings")]
+        [Tooltip("Natural language command sequence")]
+        [TextArea(3, 10)]
+        [SerializeField]
+        private string _prompt = "move to (0.3, 0.2, 0.1) and close the gripper";
+
+        [Tooltip("Default robot ID for commands")]
+        [SerializeField]
+        private string _defaultRobotId = "Robot1";
+
+        [Tooltip("Camera ID to use for perception operations")]
+        [SerializeField]
+        private string _cameraId = "TableStereoCamera";
+
         [Header("Sequence Client Settings")]
         [Tooltip("Log all commands and responses to console")]
         [SerializeField]
         private bool _logCommands = true;
 
-        [Tooltip("Default robot ID for commands")]
+        [Header("Auto-Execute Settings")]
+        [Tooltip("Automatically execute the operations")]
         [SerializeField]
-        private string _defaultRobotId = "Robot1";
+        private bool _autoExecuteResult = true;
+
+        [Header("Status (Read-Only)")]
+        [SerializeField]
+        private string _lastSequenceStatus = "Ready";
+
+        [SerializeField]
+        private int _commandsCompleted = 0;
+
+        [SerializeField]
+        private int _commandsTotal = 0;
+
+        // Recent sequence results
+        private SequenceResult _lastResult;
+        private List<string> _recentCommands = new List<string>();
+
+        /// <summary>
+        /// Current prompt text (for Editor access)
+        /// </summary>
+        public string Prompt
+        {
+            get => _prompt;
+            set => _prompt = value;
+        }
+
+        /// <summary>
+        /// Last sequence result
+        /// </summary>
+        public SequenceResult LastResult => _lastResult;
+
+        /// <summary>
+        /// List of recent commands sent
+        /// </summary>
+        public List<string> RecentCommands => _recentCommands;
 
         /// <summary>
         /// Event fired when a sequence result is received
@@ -66,7 +114,7 @@ namespace PythonCommunication
             _receiveThread = new Thread(ReceiveLoop)
             {
                 IsBackground = true,
-                Name = "SequenceClient_ReceiveThread"
+                Name = "SequenceClient_ReceiveThread",
             };
             _receiveThread.Start();
         }
@@ -107,6 +155,46 @@ namespace PythonCommunication
         #region Public API
 
         /// <summary>
+        /// Send the current prompt as a sequence command.
+        /// Called from the Inspector UI.
+        /// </summary>
+        public void SendSequence()
+        {
+            if (string.IsNullOrEmpty(_prompt))
+            {
+                Debug.LogWarning($"{_logPrefix} Prompt is empty");
+                _lastSequenceStatus = "Error: Empty prompt";
+                return;
+            }
+
+            _lastSequenceStatus = "Sending...";
+            bool success = ExecuteSequence(_prompt, _defaultRobotId);
+
+            if (success)
+            {
+                // Add to recent commands
+                _recentCommands.Insert(0, _prompt);
+                if (_recentCommands.Count > 10)
+                    _recentCommands.RemoveAt(_recentCommands.Count - 1);
+
+                _lastSequenceStatus = "Sent - waiting for result";
+            }
+            else
+            {
+                _lastSequenceStatus = "Failed to send";
+            }
+        }
+
+        /// <summary>
+        /// Clear the current prompt.
+        /// </summary>
+        public void ClearPrompt()
+        {
+            _prompt = "";
+            Debug.Log($"{_logPrefix} Prompt cleared");
+        }
+
+        /// <summary>
         /// Execute a compound command sequence.
         /// </summary>
         /// <param name="command">Natural language command (e.g., "move to (0.3, 0.2, 0.1) and close the gripper")</param>
@@ -141,7 +229,9 @@ namespace PythonCommunication
 
                 if (success && _logCommands)
                 {
-                    Debug.Log($"{_logPrefix} [req={requestId}] Sent sequence: '{command}' (robot={robot})");
+                    Debug.Log(
+                        $"{_logPrefix} [req={requestId}] Sent sequence: '{command}' (robot={robot}, camera={_cameraId})"
+                    );
                 }
 
                 return success;
@@ -174,7 +264,8 @@ namespace PythonCommunication
         public bool Pick(float x, float y, float z, float liftHeight = 0.1f, string robotId = null)
         {
             float liftZ = z + liftHeight;
-            string command = $"move to ({x}, {y}, {z}), then close the gripper, then move to ({x}, {y}, {liftZ})";
+            string command =
+                $"move to ({x}, {y}, {z}), then close the gripper, then move to ({x}, {y}, {liftZ})";
             return ExecuteSequence(command, robotId);
         }
 
@@ -184,7 +275,8 @@ namespace PythonCommunication
         public bool Place(float x, float y, float z, float liftHeight = 0.1f, string robotId = null)
         {
             float liftZ = z + liftHeight;
-            string command = $"move to ({x}, {y}, {z}), then open the gripper, then move to ({x}, {y}, {liftZ})";
+            string command =
+                $"move to ({x}, {y}, {z}), then open the gripper, then move to ({x}, {y}, {liftZ})";
             return ExecuteSequence(command, robotId);
         }
 
@@ -194,14 +286,15 @@ namespace PythonCommunication
 
         /// <summary>
         /// Encode a sequence query message.
-        /// Protocol: [request_id:4][command_len:4][command:N][robot_id_len:4][robot_id:N]
+        /// Protocol: [request_id:4][command_len:4][command:N][robot_id_len:4][robot_id:N][camera_id_len:4][camera_id:N][auto_execute:1]
         /// </summary>
         private byte[] EncodeSequenceQuery(string command, string robotId, uint requestId)
         {
             byte[] commandBytes = System.Text.Encoding.UTF8.GetBytes(command);
             byte[] robotIdBytes = System.Text.Encoding.UTF8.GetBytes(robotId);
+            byte[] cameraIdBytes = System.Text.Encoding.UTF8.GetBytes(_cameraId);
 
-            int totalLength = 4 + 4 + commandBytes.Length + 4 + robotIdBytes.Length;
+            int totalLength = 4 + 4 + commandBytes.Length + 4 + robotIdBytes.Length + 4 + cameraIdBytes.Length + 1;
             byte[] message = new byte[totalLength];
             int offset = 0;
 
@@ -232,6 +325,21 @@ namespace PythonCommunication
 
             // Robot ID
             Array.Copy(robotIdBytes, 0, message, offset, robotIdBytes.Length);
+            offset += robotIdBytes.Length;
+
+            // Camera ID length (4 bytes, big-endian)
+            byte[] cameraIdLenBytes = BitConverter.GetBytes(cameraIdBytes.Length);
+            if (BitConverter.IsLittleEndian)
+                Array.Reverse(cameraIdLenBytes);
+            Array.Copy(cameraIdLenBytes, 0, message, offset, 4);
+            offset += 4;
+
+            // Camera ID
+            Array.Copy(cameraIdBytes, 0, message, offset, cameraIdBytes.Length);
+            offset += cameraIdBytes.Length;
+
+            // Auto-execute flag (1 byte)
+            message[offset] = _autoExecuteResult ? (byte)1 : (byte)0;
 
             return message;
         }
@@ -277,7 +385,9 @@ namespace PythonCommunication
 
                         if (bytesRead < 4)
                         {
-                            Debug.LogWarning($"{_logPrefix} [req={requestId}] Incomplete length header");
+                            Debug.LogWarning(
+                                $"{_logPrefix} [req={requestId}] Incomplete length header"
+                            );
                             break;
                         }
 
@@ -286,9 +396,14 @@ namespace PythonCommunication
                             Array.Reverse(lengthBuffer);
                         int messageLength = BitConverter.ToInt32(lengthBuffer, 0);
 
-                        if (messageLength <= 0 || messageLength > CommunicationConstants.MAX_JSON_LENGTH)
+                        if (
+                            messageLength <= 0
+                            || messageLength > CommunicationConstants.MAX_JSON_LENGTH
+                        )
                         {
-                            Debug.LogError($"{_logPrefix} [req={requestId}] Invalid message length: {messageLength}");
+                            Debug.LogError(
+                                $"{_logPrefix} [req={requestId}] Invalid message length: {messageLength}"
+                            );
                             break;
                         }
 
@@ -307,7 +422,9 @@ namespace PythonCommunication
 
                         if (_logCommands)
                         {
-                            Debug.Log($"{_logPrefix} [req={requestId}] Received sequence result ({messageLength} bytes)");
+                            Debug.Log(
+                                $"{_logPrefix} [req={requestId}] Received sequence result ({messageLength} bytes)"
+                            );
                         }
 
                         // Queue for main thread processing
@@ -361,20 +478,37 @@ namespace PythonCommunication
         private void ProcessResponse(string jsonResponse)
         {
             // Parse JSON
-            if (!JsonParser.TryParseWithLogging<SequenceResult>(jsonResponse, out SequenceResult result, _logPrefix))
+            if (
+                !JsonParser.TryParseWithLogging<SequenceResult>(
+                    jsonResponse,
+                    out SequenceResult result,
+                    _logPrefix
+                )
+            )
             {
+                _lastSequenceStatus = "Error: Failed to parse response";
                 return;
             }
+
+            // Store result
+            _lastResult = result;
+            _commandsCompleted = result.completed_commands;
+            _commandsTotal = result.total_commands;
 
             if (_logCommands)
             {
                 if (result.success)
                 {
-                    Debug.Log($"{_logPrefix} Sequence completed: {result.completed_commands}/{result.total_commands} commands in {result.total_duration_ms:F0}ms");
+                    Debug.Log(
+                        $"{_logPrefix} Sequence completed: {result.completed_commands}/{result.total_commands} commands in {result.total_duration_ms:F0}ms"
+                    );
+                    _lastSequenceStatus =
+                        $"✓ Success: {result.completed_commands}/{result.total_commands} in {result.total_duration_ms:F0}ms";
                 }
                 else
                 {
                     Debug.LogWarning($"{_logPrefix} Sequence failed: {result.error}");
+                    _lastSequenceStatus = $"✗ Failed: {result.error}";
                 }
             }
 
@@ -385,7 +519,9 @@ namespace PythonCommunication
             }
             catch (Exception ex)
             {
-                Debug.LogError($"{_logPrefix} Error in OnSequenceResultReceived handler: {ex.Message}");
+                Debug.LogError(
+                    $"{_logPrefix} Error in OnSequenceResultReceived handler: {ex.Message}"
+                );
             }
         }
 

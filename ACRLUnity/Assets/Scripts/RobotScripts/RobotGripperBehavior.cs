@@ -77,11 +77,11 @@ namespace Robotics
             {
                 string targetName = _currentTarget != null ? _currentTarget.name : "target";
                 Debug.Log(
-                    $"{_logPrefix} Target reached");
+                    $"{_logPrefix} Target {targetName} reached");
             }
 
             // Close gripper
-            _gripperController.CloseGrippers();
+            // _gripperController.CloseGrippers();
 
             // Log grasp execution
             if (_logger != null && _logGraspActions && !string.IsNullOrEmpty(_currentActionId))

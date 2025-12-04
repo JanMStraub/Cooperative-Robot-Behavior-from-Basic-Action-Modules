@@ -6,10 +6,9 @@ This module implements simple status checking operations that query
 robot state without causing any movement or changes.
 """
 
-from typing import Dict, Any
 import time
 import logging
-from servers.ResultsServer import ResultsBroadcaster
+from servers.CommandServer import get_command_broadcaster
 from .Base import (
     BasicOperation,
     OperationCategory,
@@ -28,7 +27,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 
-def check_robot_status(robot_id: str, detailed: bool = False) -> Dict[str, Any]:
+def check_robot_status(robot_id: str, detailed: bool = False, request_id: int = 0) -> OperationResult:
     """
     Query the current status of a robot.
 
@@ -81,32 +80,24 @@ def check_robot_status(robot_id: str, detailed: bool = False) -> Dict[str, Any]:
     try:
         # Validate robot_id
         if not robot_id or not isinstance(robot_id, str):
-            return {
-                "success": False,
-                "result": None,
-                "error": {
-                    "code": "INVALID_ROBOT_ID",
-                    "message": f"Robot ID must be a non-empty string, got: {robot_id}",
-                    "recovery_suggestions": [
-                        "Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')",
-                        "Check RobotManager in Unity for available robot IDs",
-                    ],
-                },
-            }
+            return OperationResult.error_result(
+                "INVALID_ROBOT_ID",
+                f"Robot ID must be a non-empty string, got: {robot_id}",
+                [
+                    "Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')",
+                    "Check RobotManager in Unity for available robot IDs",
+                ],
+            )
 
         # Validate detailed parameter
         if not isinstance(detailed, bool):
-            return {
-                "success": False,
-                "result": None,
-                "error": {
-                    "code": "INVALID_DETAILED_PARAMETER",
-                    "message": f"detailed must be a boolean, got: {type(detailed).__name__}",
-                    "recovery_suggestions": [
-                        "Use detailed=True for full status or detailed=False for basic status",
-                    ],
-                },
-            }
+            return OperationResult.error_result(
+                "INVALID_DETAILED_PARAMETER",
+                f"detailed must be a boolean, got: {type(detailed).__name__}",
+                [
+                    "Use detailed=True for full status or detailed=False for basic status",
+                ],
+            )
 
         # Construct status query command
         command = {
@@ -116,59 +107,48 @@ def check_robot_status(robot_id: str, detailed: bool = False) -> Dict[str, Any]:
                 "detailed": detailed,
             },
             "timestamp": time.time(),
+            "request_id": request_id,
         }
 
-        # Send to Unity via ResultsBroadcaster
+        # Send to Unity via CommandBroadcaster
         logger.info(f"Sending status check to {robot_id} (detailed={detailed})")
 
-        success = ResultsBroadcaster.send_result(command)
+        success = get_command_broadcaster().send_command(command, request_id)
 
         if not success:
-            return {
-                "success": False,
-                "result": None,
-                "error": {
-                    "code": "COMMUNICATION_FAILED",
-                    "message": "Failed to send command to Unity - no clients connected",
-                    "recovery_suggestions": [
-                        "Ensure Unity is running with LLMResultsReceiver active",
-                        "Verify ResultsServer is running (port 5010)",
-                        "Check Unity console for connection errors",
-                        "Restart ResultsServer: python -m LLMCommunication.orchestrators.RunAnalyzer",
-                    ],
-                },
-            }
+            return OperationResult.error_result(
+                "COMMUNICATION_FAILED",
+                "Failed to send command to Unity - no clients connected",
+                [
+                    "Ensure Unity is running with LLMResultsReceiver active",
+                    "Verify ResultsServer is running (port 5010)",
+                    "Check Unity console for connection errors",
+                    "Restart ResultsServer: python -m LLMCommunication.orchestrators.RunAnalyzer",
+                ],
+            )
 
         # Return success
         logger.info(f"Successfully sent status check to {robot_id}")
 
-        return {
-            "success": True,
-            "result": {
-                "robot_id": robot_id,
-                "detailed": detailed,
-                "status": "query_sent",
-                "timestamp": time.time(),
-            },
-            "error": None,
-        }
+        return OperationResult.success_result({
+            "robot_id": robot_id,
+            "detailed": detailed,
+            "status": "query_sent",
+            "timestamp": time.time(),
+        })
 
     except Exception as e:
         logger.error(f"Unexpected error in check_robot_status: {e}", exc_info=True)
-        return {
-            "success": False,
-            "result": None,
-            "error": {
-                "code": "UNEXPECTED_ERROR",
-                "message": f"Unexpected error occurred: {str(e)}",
-                "recovery_suggestions": [
-                    "Check logs for detailed error information",
-                    "Verify all parameters are correct types",
-                    "Retry the operation",
-                    "Report bug if error persists",
-                ],
-            },
-        }
+        return OperationResult.error_result(
+            "UNEXPECTED_ERROR",
+            f"Unexpected error occurred: {str(e)}",
+            [
+                "Check logs for detailed error information",
+                "Verify all parameters are correct types",
+                "Retry the operation",
+                "Report bug if error persists",
+            ],
+        )
 
 
 # ============================================================================

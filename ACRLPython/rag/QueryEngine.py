@@ -89,6 +89,7 @@ class QueryEngine:
             min_score=min_score,
             category_filter=category_filter,
             complexity_filter=complexity_filter,
+            query_text=query,
         )
 
         # Optionally include full operation objects
@@ -152,6 +153,7 @@ class QueryEngine:
                         "postconditions": operation.postconditions,
                         "failure_modes": operation.failure_modes,
                         "similarity_score": result["score"],
+                        "confidence": result.get("confidence", {}),
                     }
                 )
 

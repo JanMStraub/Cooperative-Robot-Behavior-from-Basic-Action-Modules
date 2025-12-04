@@ -865,7 +865,6 @@ GameObject:
   - component: {fileID: 9073587295881901830}
   - component: {fileID: 5671887344953058459}
   - component: {fileID: 7089106154839882417}
-  - component: {fileID: 915170239368182346}
   m_Layer: 7
   m_Name: RightRobot2Camera
   m_TagString: Untagged
@@ -985,26 +984,6 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
---- !u!114 &915170239368182346
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 392458898457232902}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 500fcb0ba4ef349809caeda6e7317003, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CameraController
-  _imageWidth: 128
-  _imageHeight: 128
-  _resolutionScale: 1
-  _grayscaleMode: 0
-  _grayscaleMaterial: {fileID: 2100000, guid: 85731220826fe4971bb3613c9b92cf5a, type: 2}
-  _compressionPreset: 0
-  _includeTimestamp: 0
-  _llmPrompt: Analyze the image
 --- !u!1 &571304770379154862
 GameObject:
   m_ObjectHideFlags: 0
@@ -1105,7 +1084,6 @@ GameObject:
   - component: {fileID: 1298245090670190658}
   - component: {fileID: 2195476092795013704}
   - component: {fileID: 9188615060150150068}
-  - component: {fileID: 2302941087024972683}
   m_Layer: 7
   m_Name: RightRobot1Camera
   m_TagString: Untagged
@@ -1225,26 +1203,6 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
---- !u!114 &2302941087024972683
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 590060560836442683}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 500fcb0ba4ef349809caeda6e7317003, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CameraController
-  _imageWidth: 128
-  _imageHeight: 128
-  _resolutionScale: 1
-  _grayscaleMode: 0
-  _grayscaleMaterial: {fileID: 2100000, guid: 85731220826fe4971bb3613c9b92cf5a, type: 2}
-  _compressionPreset: 0
-  _includeTimestamp: 0
-  _llmPrompt: Analyze the image
 --- !u!1 &596947435951843946
 GameObject:
   m_ObjectHideFlags: 0
@@ -2822,7 +2780,6 @@ GameObject:
   - component: {fileID: 1833936677515890556}
   - component: {fileID: 1356986101457679564}
   - component: {fileID: 7812316359078416456}
-  - component: {fileID: 8857229966707951807}
   m_Layer: 7
   m_Name: LeftRobot1Camera
   m_TagString: Untagged
@@ -2942,26 +2899,6 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
---- !u!114 &8857229966707951807
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2794463736414520206}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 500fcb0ba4ef349809caeda6e7317003, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CameraController
-  _imageWidth: 128
-  _imageHeight: 128
-  _resolutionScale: 1
-  _grayscaleMode: 0
-  _grayscaleMaterial: {fileID: 2100000, guid: 85731220826fe4971bb3613c9b92cf5a, type: 2}
-  _compressionPreset: 0
-  _includeTimestamp: 0
-  _llmPrompt: Analyze the image
 --- !u!1 &2906306481840707133
 GameObject:
   m_ObjectHideFlags: 0
@@ -3214,7 +3151,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e85eee7761a504444bf806fb10606fac, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RobotGripperBehavior
-  _useGraspPlanning: 1
+  _useGraspPlanning: 0
   _logGraspActions: 1
 --- !u!1 &3369921039827679538
 GameObject:
@@ -3576,7 +3513,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &8257033088092275378
 Transform:
   m_ObjectHideFlags: 0
@@ -4517,7 +4454,6 @@ GameObject:
   - component: {fileID: 9086981115628272307}
   - component: {fileID: 5567977826561441543}
   - component: {fileID: 1208559570474298127}
-  - component: {fileID: 6220892326357343062}
   m_Layer: 0
   m_Name: RightTableCamera
   m_TagString: Untagged
@@ -4636,26 +4572,6 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
---- !u!114 &6220892326357343062
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5517056044791005165}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 500fcb0ba4ef349809caeda6e7317003, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _imageWidth: 1920
-  _imageHeight: 1080
-  _resolutionScale: 1
-  _grayscaleMode: 0
-  _grayscaleMaterial: {fileID: 2100000, guid: 85731220826fe4971bb3613c9b92cf5a, type: 2}
-  _compressionPreset: 1
-  _includeTimestamp: 1
-  _llmPrompt: Identify all non-robot objects in the scene. List them concisely.
 --- !u!1 &5601357334862192273
 GameObject:
   m_ObjectHideFlags: 0
@@ -6403,7 +6319,6 @@ GameObject:
   - component: {fileID: 7507869540839737869}
   - component: {fileID: 1924621710956839310}
   - component: {fileID: 2466235137003102114}
-  - component: {fileID: 7936452986229446538}
   m_Layer: 0
   m_Name: LeftTableCamera
   m_TagString: Untagged
@@ -6522,26 +6437,6 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
---- !u!114 &7936452986229446538
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7271900281173631597}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 500fcb0ba4ef349809caeda6e7317003, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _imageWidth: 1000
-  _imageHeight: 1000
-  _resolutionScale: 1
-  _grayscaleMode: 0
-  _grayscaleMaterial: {fileID: 2100000, guid: 85731220826fe4971bb3613c9b92cf5a, type: 2}
-  _compressionPreset: 1
-  _includeTimestamp: 1
-  _llmPrompt: Identify all non-robot objects in the scene. List them concisely.
 --- !u!1 &7321787983054000499
 GameObject:
   m_ObjectHideFlags: 0
@@ -7951,7 +7846,6 @@ GameObject:
   - component: {fileID: 3178413146988344694}
   - component: {fileID: 3389079649549467342}
   - component: {fileID: 4747323788535905498}
-  - component: {fileID: 4465983709927806266}
   m_Layer: 7
   m_Name: LeftRobot2Camera
   m_TagString: Untagged
@@ -8071,26 +7965,6 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
---- !u!114 &4465983709927806266
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8472021029506024806}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 500fcb0ba4ef349809caeda6e7317003, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CameraController
-  _imageWidth: 128
-  _imageHeight: 128
-  _resolutionScale: 1
-  _grayscaleMode: 0
-  _grayscaleMaterial: {fileID: 2100000, guid: 85731220826fe4971bb3613c9b92cf5a, type: 2}
-  _compressionPreset: 0
-  _includeTimestamp: 0
-  _llmPrompt: Analyze the image
 --- !u!1 &8493368508599613516
 GameObject:
   m_ObjectHideFlags: 0

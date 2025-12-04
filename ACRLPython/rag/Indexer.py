@@ -65,7 +65,6 @@ class OperationIndexer:
             logger.warning("No operations found in registry")
             return VectorStore()
 
-        logger.info(f"Building index for {len(operations)} operations...")
 
         # Create new vector store
         store = VectorStore()
@@ -79,7 +78,7 @@ class OperationIndexer:
             rag_text = op.to_rag_document()
             texts_to_embed.append(rag_text)
 
-            # Store operation data
+            # Store operation data including parameters for confidence scoring
             operation_data.append(
                 {
                     "operation_id": op.operation_id,
@@ -90,12 +89,12 @@ class OperationIndexer:
                         "description": op.description,
                         "average_duration_ms": op.average_duration_ms,
                         "success_rate": op.success_rate,
+                        "parameters": [p.name for p in op.parameters],
                     },
                 }
             )
 
         # Generate embeddings for all operations
-        logger.info(f"Generating embeddings for {len(texts_to_embed)} operations...")
         embeddings = self.embedding_generator.generate_embeddings(texts_to_embed)
 
         # Add to vector store
@@ -106,7 +105,6 @@ class OperationIndexer:
                 metadata=data["metadata"],
             )
 
-        logger.info(f"✓ Index built with {len(store)} operations")
 
         # Save to disk
         if save and config.AUTO_SAVE_INDEX:
@@ -121,7 +119,6 @@ class OperationIndexer:
         Returns:
             New VectorStore with fresh index
         """
-        logger.info("Rebuilding index from scratch...")
         return self.build_index(save=True)
 
     def update_index(self, existing_store: VectorStore) -> VectorStore:
@@ -138,9 +135,7 @@ class OperationIndexer:
             Currently rebuilds entire index. Incremental updates
             could be added in the future.
         """
-        logger.info("Updating index (full rebuild)...")
         # For now, just rebuild the entire index
-        # Future enhancement: Implement incremental updates for better performance
         return self.build_index(save=True)
 
     def get_indexer_stats(self) -> dict:

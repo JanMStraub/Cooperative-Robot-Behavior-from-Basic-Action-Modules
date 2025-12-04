@@ -34,6 +34,12 @@ from .Embeddings import EmbeddingGenerator
 from .VectorStore import VectorStore
 from .Indexer import OperationIndexer
 from .QueryEngine import QueryEngine
+from .ConfidenceScorer import (
+    compute_confidence_score,
+    get_confidence_level,
+    apply_confidence_boosting,
+    ConfidenceLevel,
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -94,15 +100,12 @@ class RAGSystem:
                     embedding_generator=self.embedding_generator,
                     registry=self.registry,
                 )
-                logger.info("✓ RAG system ready with loaded index")
             except Exception as e:
                 logger.warning(f"Failed to load index: {e}")
                 self.vector_store = None
                 self.query_engine = None
         else:
-            logger.info(
-                "No cached index found. Call index_operations() to build index."
-            )
+            pass
 
     def index_operations(self, rebuild: bool = False) -> bool:
         """
@@ -126,10 +129,8 @@ class RAGSystem:
         """
         try:
             if rebuild or self.vector_store is None:
-                logger.info("Building operation index...")
                 self.vector_store = self.indexer.build_index(save=True)
             else:
-                logger.info("Updating operation index...")
                 self.vector_store = self.indexer.update_index(self.vector_store)
 
             # Create query engine with new vector store
@@ -139,7 +140,6 @@ class RAGSystem:
                 registry=self.registry,
             )
 
-            logger.info("✓ RAG system ready")
             return True
 
         except Exception as e:
@@ -290,4 +290,8 @@ __all__ = [
     "OperationIndexer",
     "QueryEngine",
     "config",
+    "compute_confidence_score",
+    "get_confidence_level",
+    "apply_confidence_boosting",
+    "ConfidenceLevel",
 ]

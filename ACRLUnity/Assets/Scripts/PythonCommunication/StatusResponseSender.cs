@@ -37,7 +37,7 @@ namespace PythonCommunication
             {
                 Instance = this;
                 DontDestroyOnLoad(gameObject);
-                _serverPort = CommunicationConstants.STATUS_SERVER_PORT; // Port 5012
+                _serverPort = CommunicationConstants.LLM_RESULTS_PORT; // Port 5010 - CommandServer
                 _autoConnect = true;
                 Debug.Log($"{_logPrefix} Initialized (port {_serverPort})");
             }

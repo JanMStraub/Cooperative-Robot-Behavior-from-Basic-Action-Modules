@@ -1,6 +1,9 @@
 using System;
+using System.Collections;
+using System.Linq;
 using Core;
 using Robotics;
+using Vision;
 using UnityEngine;
 
 namespace PythonCommunication
@@ -12,7 +15,9 @@ namespace PythonCommunication
     public class RobotCommand
     {
         public string command_type;
+        public string target_type; // "robot" or "camera" - determines routing
         public string robot_id;
+        public string camera_id; // For camera-targeted commands
         public CommandParameters parameters;
         public float timestamp;
         public uint request_id; // Protocol V2: for request/response correlation
@@ -37,20 +42,33 @@ namespace PythonCommunication
         public float z;
     }
 
+    [System.Serializable]
+    public class CommandCompletionData
+    {
+        public string type;
+        public string robot_id;
+        public string command_type;
+        public bool success;
+        public uint request_id;
+        public float timestamp;
+    }
+
     /// <summary>
     /// Handles commands from Python operations and executes them on Unity robots.
     ///
-    /// This handler listens to UnifiedPythonReceiver for incoming commands from Python
-    /// operations (e.g., move_to_coordinate) and executes them using RobotManager
-    /// and RobotController.
+    /// This handler listens to SequenceClient for incoming commands from Python
+    /// SequenceServer and executes them using RobotManager and RobotController.
     ///
     /// Supported Commands:
     /// - move_to_coordinate: Move robot end effector to target position
+    /// - control_gripper: Open or close the gripper
+    /// - check_robot_status: Get current robot state
+    /// - return_to_start_position: Move robot back to initial position
     ///
     /// Usage:
     /// 1. Attach this component to a GameObject in your scene
-    /// 2. Ensure UnifiedPythonReceiver and RobotManager are active
-    /// 3. Python operations will automatically send commands via ResultsServer
+    /// 2. Ensure SequenceClient and RobotManager are active
+    /// 3. Python SequenceServer will send commands via port 5013
     /// </summary>
     public class PythonCommandHandler : MonoBehaviour
     {
@@ -74,7 +92,6 @@ namespace PythonCommunication
         [SerializeField]
         private int _failedCommands = 0;
 
-        private UnifiedPythonReceiver _resultsReceiver;
         private RobotManager _robotManager;
 
         // Track active commands for completion notification
@@ -104,21 +121,10 @@ namespace PythonCommunication
         }
 
         /// <summary>
-        /// Subscribe to UnifiedPythonReceiver events when component starts
+        /// Subscribe to CommandReceiver events when component starts
         /// </summary>
         private void Start()
         {
-            // Get UnifiedPythonReceiver instance
-            _resultsReceiver = UnifiedPythonReceiver.Instance;
-            if (_resultsReceiver == null)
-            {
-                Debug.LogError(
-                    $"{_logPrefix} UnifiedPythonReceiver.Instance is null! "
-                        + "Ensure UnifiedPythonReceiver GameObject is in the scene."
-                );
-                return;
-            }
-
             // Get RobotManager instance
             _robotManager = RobotManager.Instance;
             if (_robotManager == null)
@@ -130,25 +136,7 @@ namespace PythonCommunication
                 return;
             }
 
-            // Subscribe to results from Python
-            _resultsReceiver.OnLLMResultReceived += HandlePythonResult;
-
             Debug.Log($"{_logPrefix} Initialized and listening for Python commands");
-        }
-
-        /// <summary>
-        /// Unsubscribe from events on destroy
-        /// </summary>
-        private void OnDestroy()
-        {
-            if (Instance == this)
-            {
-                if (_resultsReceiver != null)
-                {
-                    _resultsReceiver.OnLLMResultReceived -= HandlePythonResult;
-                }
-                Instance = null;
-            }
         }
 
         #endregion
@@ -156,65 +144,29 @@ namespace PythonCommunication
         #region Command Processing
 
         /// <summary>
-        /// Handle incoming results from Python (may be LLM results or robot commands)
+        /// Public method to handle commands routed from UnifiedPythonReceiver
         /// </summary>
-        private void HandlePythonResult(LLMResult result)
+        public void HandleCommand(RobotCommand command)
         {
-            if (result == null)
+            HandlePythonCommand(command);
+        }
+
+        /// <summary>
+        /// Handle incoming commands from Python SequenceServer
+        /// </summary>
+        private void HandlePythonCommand(RobotCommand command)
+        {
+            if (command == null)
                 return;
 
-            // Try to parse as robot command
-            try
+            if (_verboseLogging)
             {
-                // Debug log the raw JSON for troubleshooting
-                if (
-                    _verboseLogging
-                    && result.response != null
-                    && result.response.Contains("command_type")
-                )
-                {
-                    Debug.Log(
-                        $"{_logPrefix} [req={result.request_id}] Received potential command: {result.response}"
-                    );
-                }
-
-                RobotCommand command = JsonUtility.FromJson<RobotCommand>(result.response);
-
-                if (command != null && !string.IsNullOrEmpty(command.command_type))
-                {
-                    // Set request_id from LLMResult (Protocol V2)
-                    command.request_id = result.request_id;
-
-                    ProcessCommand(command);
-                }
-                else if (_verboseLogging)
-                {
-                    Debug.Log(
-                        $"{_logPrefix} Received non-command result (likely LLM response): {result.response}"
-                    );
-                }
+                Debug.Log(
+                    $"{_logPrefix} [req={command.request_id}] Received command: {command.command_type}"
+                );
             }
-            catch (Exception ex)
-            {
-                // Not a command - likely an LLM text response, which is fine
-                if (_verboseLogging)
-                {
-                    // Check if it looks like a command that failed to parse
-                    if (result.response != null && result.response.Contains("command_type"))
-                    {
-                        Debug.LogError(
-                            $"{_logPrefix} [req={result.request_id}] Failed to parse command JSON: {ex.Message}\n"
-                                + $"JSON: {result.response}"
-                        );
-                    }
-                    else
-                    {
-                        Debug.Log(
-                            $"{_logPrefix} Received non-JSON or LLM text result: {result.response?.Substring(0, Math.Min(50, result.response?.Length ?? 0))}..."
-                        );
-                    }
-                }
-            }
+
+            ProcessCommand(command);
         }
 
         /// <summary>
@@ -222,15 +174,19 @@ namespace PythonCommunication
         /// </summary>
         private void ProcessCommand(RobotCommand command)
         {
+            // Determine target type for logging
+            string targetInfo = command.target_type == "camera"
+                ? $"camera: {command.camera_id}"
+                : $"robot: {command.robot_id}";
+
             if (_verboseLogging)
             {
-                Debug.Log(
-                    $"{_logPrefix} Processing command: {command.command_type} for robot: {command.robot_id}"
-                );
+                Debug.Log($"{_logPrefix} Processing command: {command.command_type} for {targetInfo}");
             }
 
             switch (command.command_type)
             {
+                // Robot-targeted commands
                 case "move_to_coordinate":
                     ExecuteMoveToCoordinate(command);
                     break;
@@ -241,6 +197,15 @@ namespace PythonCommunication
 
                 case "check_robot_status":
                     ExecuteCheckRobotStatus(command);
+                    break;
+
+                case "return_to_start_position":
+                    ExecuteReturnToStartPosition(command);
+                    break;
+
+                // Camera-targeted commands
+                case "capture_stereo_images":
+                    ExecuteCaptureSteroImages(command);
                     break;
 
                 default:
@@ -488,6 +453,183 @@ namespace PythonCommunication
         }
 
         /// <summary>
+        /// Execute return_to_start_position command - move robot joints back to initial positions
+        /// </summary>
+        private void ExecuteReturnToStartPosition(RobotCommand command)
+        {
+            try
+            {
+                // Validate robot and get controller
+                if (
+                    !ValidateAndGetRobot(
+                        command.robot_id,
+                        "return_to_start_position",
+                        out RobotInstance robotInstance,
+                        out RobotController controller
+                    )
+                )
+                {
+                    return;
+                }
+
+                // Validate start joint targets exist
+                if (robotInstance.startJointTargets == null || robotInstance.startJointTargets.Length == 0)
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} return_to_start_position: No start joint targets saved for robot '{command.robot_id}'"
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                if (_verboseLogging)
+                {
+                    Debug.Log(
+                        $"{_logPrefix} Returning {command.robot_id} to start position with joint targets: "
+                            + $"[{string.Join(", ", robotInstance.startJointTargets.Select(a => a.ToString("F3")))}]"
+                    );
+                }
+
+                // Start coroutine to smoothly interpolate joint targets
+                StartCoroutine(ReturnToStartPositionCoroutine(
+                    controller,
+                    robotInstance.startJointTargets,
+                    command.robot_id,
+                    command.request_id,
+                    2.0f
+                ));
+
+                _successfulCommands++;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"{_logPrefix} Error executing return_to_start_position: {ex.Message}\n{ex.StackTrace}"
+                );
+                _failedCommands++;
+            }
+        }
+
+        /// <summary>
+        /// Coroutine to smoothly interpolate joint targets to start position
+        /// </summary>
+        private IEnumerator ReturnToStartPositionCoroutine(
+            RobotController controller,
+            float[] targetJoints,
+            string robotId,
+            uint requestId,
+            float duration)
+        {
+            if (controller == null || controller.robotJoints == null)
+            {
+                SendCommandCompletion(robotId, "return_to_start_position", false, requestId);
+                yield break;
+            }
+
+            // Store initial joint positions from the actual drive targets
+            float[] startJoints = new float[controller.robotJoints.Length];
+            for (int i = 0; i < controller.robotJoints.Length && i < startJoints.Length; i++)
+            {
+                startJoints[i] = controller.robotJoints[i].xDrive.target;
+            }
+
+            float elapsed = 0f;
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.fixedDeltaTime;
+                float t = Mathf.Clamp01(elapsed / duration);
+
+                // Smooth interpolation using ease-in-out
+                float smoothT = t * t * (3f - 2f * t);
+
+                // Interpolate each joint
+                for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
+                {
+                    // Target joints are in radians, drive targets are in degrees
+                    float startDeg = startJoints[i];
+                    float targetDeg = targetJoints[i] * Mathf.Rad2Deg;
+                    float currentTarget = Mathf.Lerp(startDeg, targetDeg, smoothT);
+
+                    controller.jointDriveTargets[i] = currentTarget * Mathf.Deg2Rad;
+
+                    var joint = controller.robotJoints[i];
+                    if (joint != null)
+                    {
+                        var drive = joint.xDrive;
+                        drive.target = currentTarget;
+                        joint.xDrive = drive;
+                    }
+                }
+
+                yield return new WaitForFixedUpdate();
+            }
+
+            // Ensure final positions are exact
+            for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
+            {
+                controller.jointDriveTargets[i] = targetJoints[i];
+
+                var joint = controller.robotJoints[i];
+                if (joint != null)
+                {
+                    var drive = joint.xDrive;
+                    drive.target = targetJoints[i] * Mathf.Rad2Deg;
+                    joint.xDrive = drive;
+                }
+            }
+
+            if (_verboseLogging)
+            {
+                Debug.Log($"{_logPrefix} Return to start position completed for {robotId}");
+            }
+
+            // Send completion notification
+            SendCommandCompletion(robotId, "return_to_start_position", true, requestId);
+        }
+
+        /// <summary>
+        /// Execute capture_stereo_images command - capture and send stereo images to Python
+        /// </summary>
+        private void ExecuteCaptureSteroImages(RobotCommand command)
+        {
+            try
+            {
+                string cameraId = command.camera_id;
+                if (string.IsNullOrEmpty(cameraId))
+                {
+                    Debug.LogError($"{_logPrefix} capture_stereo_images: camera_id is null or empty");
+                    _failedCommands++;
+                    return;
+                }
+
+                // Find StereoCameraController in scene
+                var stereoController = FindFirstObjectByType<StereoCameraController>();
+                if (stereoController == null)
+                {
+                    Debug.LogError($"{_logPrefix} capture_stereo_images: No StereoCameraController found in scene");
+                    _failedCommands++;
+                    return;
+                }
+
+                if (_verboseLogging)
+                {
+                    Debug.Log($"{_logPrefix} [req={command.request_id}] Capturing stereo images for {cameraId}");
+                }
+
+                // Capture and send stereo images
+                stereoController.CaptureAndSendToServer(cameraId);
+
+                _successfulCommands++;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"{_logPrefix} Error executing capture_stereo_images: {ex.Message}\n{ex.StackTrace}");
+                _failedCommands++;
+            }
+        }
+
+        /// <summary>
         /// Execute get_robot_status command - gather robot state and send back to Python
         /// </summary>
         private void ExecuteCheckRobotStatus(RobotCommand command)
@@ -635,7 +777,7 @@ namespace PythonCommunication
         /// </summary>
         private void SendCommandCompletion(string robotId, string commandType, bool success, uint requestId)
         {
-            var completionData = new
+            var completionData = new CommandCompletionData
             {
                 type = "command_completion",
                 robot_id = robotId,
@@ -692,20 +834,20 @@ namespace PythonCommunication
         }
 
         /// <summary>
-        /// Send status response (success or error) to Python StatusServer (Protocol V2)
+        /// Send status response (success or error) to Python on the same connection (Protocol V2)
         /// </summary>
         private bool SendStatusResponseToPython(string statusJson, uint requestId)
         {
-            // Use StatusResponseSender to send response to StatusServer (port 5012)
-            if (StatusResponseSender.Instance == null)
+            // Use UnifiedPythonReceiver to send response on the same connection that received the command
+            if (UnifiedPythonReceiver.Instance == null)
             {
                 Debug.LogWarning(
-                    $"{_logPrefix} StatusResponseSender not available. Ensure StatusResponseSender GameObject is in the scene."
+                    $"{_logPrefix} UnifiedPythonReceiver not available. Ensure UnifiedPythonReceiver GameObject is in the scene."
                 );
                 return false;
             }
 
-            return StatusResponseSender.Instance.SendStatusResponse(statusJson, requestId);
+            return UnifiedPythonReceiver.Instance.SendCompletion(statusJson, requestId);
         }
 
         #endregion

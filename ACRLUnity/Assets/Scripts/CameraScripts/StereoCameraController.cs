@@ -1,5 +1,7 @@
 using System;
 using System.Collections;
+using System.Net.Sockets;
+using Core;
 using PythonCommunication;
 using UnityEngine;
 #if UNITY_EDITOR
@@ -104,6 +106,7 @@ namespace Vision
         // Properties
         public bool IsProcessing => _isProcessing;
         public int CaptureCount => _captureCounter;
+        public string CameraId => _cameraPairId ?? name;
 
         // Camera
         private Camera _leftCamera;
@@ -154,6 +157,8 @@ namespace Vision
                 Transform leftChild = transform.GetChild(0);
                 Transform rightChild = transform.GetChild(1);
 
+                Debug.Log($"LeftChild: {leftChild.name}, rightChild: {rightChild.name}");
+
                 _leftCamera = leftChild.GetComponent<Camera>();
                 _rightCamera = rightChild.GetComponent<Camera>();
 
@@ -189,49 +194,33 @@ namespace Vision
 
             _cameraPairId = name;
 
-            // Register cameras with CameraManager
-            if (CameraManager.Instance != null)
-            {
-                // Register individual cameras with L/R suffixes
-                CameraManager.Instance.RegisterCamera(_cameraPairId + "_L", _leftCamera);
-                CameraManager.Instance.RegisterCamera(_cameraPairId + "_R", _rightCamera);
-
-                // Also register the pair ID (without suffix) pointing to left camera
-                // This is used by detection results that come with the pair ID
-                CameraManager.Instance.RegisterCamera(_cameraPairId, _leftCamera);
-            }
-            else
-            {
-                Debug.LogWarning(
-                    $"{_logPrefix} CameraManager not found. Create a CameraManager GameObject in the scene."
-                );
-            }
-
-            // Subscribe to depth results
+            // Subscribe to depth results via UnifiedPythonReceiver
             if (UnifiedPythonReceiver.Instance != null)
             {
                 UnifiedPythonReceiver.Instance.OnDepthResultReceived += HandleDepthResult;
-                float fov = GetCameraFOV();
-                float baseline = GetStereoBaseline();
-                Debug.Log(
-                    $"{_logPrefix} Initialized: {_cameraPairId}, Baseline={baseline}m, FOV={fov}°"
-                );
-
-                // Log camera positions for debugging
-                if (_leftCamera != null && _rightCamera != null)
-                {
-                    Vector3 leftPos = _leftCamera.transform.position;
-                    Vector3 rightPos = _rightCamera.transform.position;
-                    float actualDistance = Vector3.Distance(leftPos, rightPos);
-                    Debug.Log(
-                        $"{_logPrefix} Left camera: {leftPos}, Right camera: {rightPos}, Distance: {actualDistance}m"
-                    );
-                }
             }
             else
             {
                 Debug.LogWarning(
                     $"{_logPrefix} UnifiedPythonReceiver not found - results won't be received"
+                );
+            }
+
+            // Log initialization
+            float fov = GetCameraFOV();
+            float baseline = GetStereoBaseline();
+            Debug.Log(
+                $"{_logPrefix} Initialized: {_cameraPairId}, Baseline={baseline}m, FOV={fov}°"
+            );
+
+            // Log camera positions for debugging
+            if (_leftCamera != null && _rightCamera != null)
+            {
+                Vector3 leftPos = _leftCamera.transform.position;
+                Vector3 rightPos = _rightCamera.transform.position;
+                float actualDistance = Vector3.Distance(leftPos, rightPos);
+                Debug.Log(
+                    $"{_logPrefix} Left camera: {leftPos}, Right camera: {rightPos}, Distance: {actualDistance}m"
                 );
             }
         }
@@ -275,6 +264,29 @@ namespace Vision
         }
 
         /// <summary>
+        /// Capture stereo pair and detect specific object types with filtering parameters.
+        /// This is called by PythonCommandHandler for the calculate_object_coordinates operation.
+        /// </summary>
+        /// <param name="objectTypes">Object types to detect (null for all)</param>
+        /// <param name="minConfidence">Minimum confidence threshold</param>
+        /// <param name="maxDistance">Maximum detection distance in meters</param>
+        public void CaptureAndDetect(string[] objectTypes, float minConfidence, float maxDistance)
+        {
+            // Store filter parameters for use in result processing
+            // Note: These could be sent as metadata to Python for server-side filtering
+            // For now, we trigger the capture and let Python handle filtering
+
+            if (objectTypes != null && objectTypes.Length > 0)
+            {
+                Debug.Log($"{_logPrefix} Detection filter: types=[{string.Join(", ", objectTypes)}], "
+                    + $"confidence>={minConfidence:F2}, distance<={maxDistance:F1}m");
+            }
+
+            // Trigger capture - filtering is handled by the Python stereo detector
+            CaptureAndSend();
+        }
+
+        /// <summary>
         /// Coroutine to capture and send stereo pair
         /// </summary>
         private IEnumerator CaptureAndSendCoroutine()
@@ -287,59 +299,23 @@ namespace Vision
                 // Check if sender is available
                 if (
                     UnifiedPythonSender.Instance == null
-                    || !UnifiedPythonSender.Instance.IsStereoConnected
+                    || !UnifiedPythonSender.Instance.IsConnected
                 )
                 {
                     throw new Exception("UnifiedPythonSender not available or not connected");
                 }
 
-                // Capture left camera
-                byte[] leftImageBytes = CaptureImage(_leftCamera);
-                if (leftImageBytes == null)
-                    throw new Exception("Failed to capture left camera image");
-
-                // Capture right camera
-                byte[] rightImageBytes = CaptureImage(_rightCamera);
-                if (rightImageBytes == null)
-                    throw new Exception("Failed to capture right camera image");
-
-                // Encode camera parameters as JSON metadata
-                float fov = GetCameraFOV();
-                float baseline = GetStereoBaseline();
-
-                // Include left camera position and rotation for coordinate transformation
-                Vector3 leftPos = _leftCamera.transform.position;
-                Vector3 leftRot = _leftCamera.transform.eulerAngles;
-
-                // Create metadata using JsonUtility for proper formatting
-                StereoMetadata metadataObj = new StereoMetadata
-                {
-                    baseline = baseline,
-                    fov = fov,
-                    camera_position = new float[] { leftPos.x, leftPos.y, leftPos.z },
-                    camera_rotation = new float[] { leftRot.x, leftRot.y, leftRot.z },
-                };
-                string metadata = JsonUtility.ToJson(metadataObj);
-
-                // Send stereo pair
-                bool success = UnifiedPythonSender.Instance.SendStereoPair(
-                    leftImageBytes,
-                    rightImageBytes,
-                    _cameraPairId,
-                    _cameraPairId + "_L",
-                    _cameraPairId + "_R",
-                    metadata
-                );
+                // Send detect command via SequenceClient
+                bool success = UnifiedPythonSender.Instance.SendDetectCommand(_cameraPairId);
 
                 if (!success)
-                    throw new Exception("Failed to send stereo pair");
+                    throw new Exception("Failed to send detect command");
 
                 float captureTime = Time.realtimeSinceStartup - startTime;
                 _captureCounter++;
 
                 Debug.Log(
-                    $"{_logPrefix} Stereo pair sent successfully in {captureTime:F2}s "
-                        + $"(L:{leftImageBytes.Length / 1024f:F1} KB, R:{rightImageBytes.Length / 1024f:F1} KB). "
+                    $"{_logPrefix} Detect command sent for '{_cameraPairId}' in {captureTime:F2}s. "
                         + $"Waiting for depth detection..."
                 );
             }
@@ -350,6 +326,190 @@ namespace Vision
             }
 
             yield return null;
+        }
+
+        /// <summary>
+        /// Capture stereo images and send directly to Python StereoImageServer via TCP.
+        /// Called by PythonCommandHandler for the capture_stereo_images command.
+        /// </summary>
+        /// <param name="cameraId">Camera pair ID to use in the message</param>
+        public void CaptureAndSendToServer(string cameraId)
+        {
+            
+            FindCameras();
+
+            if (_leftCamera == null || _rightCamera == null)
+            {
+                Debug.LogError($"{_logPrefix} Cameras not initialized");
+                return;
+            }
+
+            try
+            {
+                // Capture both images
+                byte[] leftImage = CaptureImage(_leftCamera);
+                byte[] rightImage = CaptureImage(_rightCamera);
+
+                if (leftImage == null || rightImage == null)
+                {
+                    Debug.LogError($"{_logPrefix} Failed to capture stereo images");
+                    return;
+                }
+
+                // Send via TCP to StereoImageServer (port 5006)
+                SendStereoImagesTCP(cameraId, leftImage, rightImage);
+
+                _captureCounter++;
+                Debug.Log($"{_logPrefix} Sent stereo images for '{cameraId}' (L: {leftImage.Length} bytes, R: {rightImage.Length} bytes)");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"{_logPrefix} Error in CaptureAndSendToServer: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Send stereo images to Python StereoImageServer via TCP.
+        /// Protocol: [type:1][request_id:4][camera_pair_id][cam_L_id][cam_R_id][prompt][img_L][img_R]
+        /// </summary>
+        private void SendStereoImagesTCP(string cameraPairId, byte[] leftImage, byte[] rightImage)
+        {
+            try
+            {
+                using (TcpClient client = new TcpClient())
+                {
+                    client.Connect("127.0.0.1", CommunicationConstants.STEREO_DETECTION_PORT);
+                    NetworkStream stream = client.GetStream();
+
+                    // Build message
+                    byte[] message = EncodeStereoMessage(cameraPairId, leftImage, rightImage);
+
+                    // Send
+                    stream.Write(message, 0, message.Length);
+                    stream.Flush();
+
+                    Debug.Log($"{_logPrefix} Sent {message.Length} bytes to StereoImageServer");
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"{_logPrefix} TCP send failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Encode stereo image message in Protocol V2 format with metadata.
+        /// </summary>
+        private byte[] EncodeStereoMessage(string cameraPairId, byte[] leftImage, byte[] rightImage)
+        {
+            // Protocol V2 format:
+            // [type:1][request_id:4][camera_pair_id_len:4][camera_pair_id:N]
+            // [cam_L_id_len:4][cam_L_id:N][cam_R_id_len:4][cam_R_id:N]
+            // [prompt_len:4][prompt:N][img_L_len:4][img_L_data:N][img_R_len:4][img_R_data:N]
+            // [metadata_len:4][metadata_json:N]
+
+            string camLId = cameraPairId + "_L";
+            string camRId = cameraPairId + "_R";
+            string prompt = "";
+
+            // Build metadata with camera transform (use left camera position)
+            var metadata = new StereoMetadata
+            {
+                baseline = GetStereoBaseline(),
+                fov = GetCameraFOV(),
+                camera_position = new float[] {
+                    _leftCamera.transform.position.x,
+                    _leftCamera.transform.position.y,
+                    _leftCamera.transform.position.z
+                },
+                camera_rotation = new float[] {
+                    _leftCamera.transform.eulerAngles.x,  // pitch
+                    _leftCamera.transform.eulerAngles.y,  // yaw
+                    _leftCamera.transform.eulerAngles.z   // roll
+                }
+            };
+            string metadataJson = JsonUtility.ToJson(metadata);
+
+            byte[] cameraPairIdBytes = System.Text.Encoding.UTF8.GetBytes(cameraPairId);
+            byte[] camLIdBytes = System.Text.Encoding.UTF8.GetBytes(camLId);
+            byte[] camRIdBytes = System.Text.Encoding.UTF8.GetBytes(camRId);
+            byte[] promptBytes = System.Text.Encoding.UTF8.GetBytes(prompt);
+            byte[] metadataBytes = System.Text.Encoding.UTF8.GetBytes(metadataJson);
+
+            // Calculate total size
+            int totalSize = 1 + 4 // type + request_id
+                + 4 + cameraPairIdBytes.Length
+                + 4 + camLIdBytes.Length
+                + 4 + camRIdBytes.Length
+                + 4 + promptBytes.Length
+                + 4 + leftImage.Length
+                + 4 + rightImage.Length
+                + 4 + metadataBytes.Length;
+
+            byte[] message = new byte[totalSize];
+            int offset = 0;
+
+            // Type (7 = STEREO_IMAGE in Protocol V2)
+            message[offset++] = 0x07;
+
+            // Request ID (little-endian per Protocol V2)
+            uint requestId = (uint)(Time.time * 1000) % uint.MaxValue;
+            WriteUInt32LittleEndian(message, offset, requestId);
+            offset += 4;
+
+            // Camera pair ID
+            WriteUInt32LittleEndian(message, offset, (uint)cameraPairIdBytes.Length);
+            offset += 4;
+            Array.Copy(cameraPairIdBytes, 0, message, offset, cameraPairIdBytes.Length);
+            offset += cameraPairIdBytes.Length;
+
+            // Left camera ID
+            WriteUInt32LittleEndian(message, offset, (uint)camLIdBytes.Length);
+            offset += 4;
+            Array.Copy(camLIdBytes, 0, message, offset, camLIdBytes.Length);
+            offset += camLIdBytes.Length;
+
+            // Right camera ID
+            WriteUInt32LittleEndian(message, offset, (uint)camRIdBytes.Length);
+            offset += 4;
+            Array.Copy(camRIdBytes, 0, message, offset, camRIdBytes.Length);
+            offset += camRIdBytes.Length;
+
+            // Prompt
+            WriteUInt32LittleEndian(message, offset, (uint)promptBytes.Length);
+            offset += 4;
+            Array.Copy(promptBytes, 0, message, offset, promptBytes.Length);
+            offset += promptBytes.Length;
+
+            // Left image
+            WriteUInt32LittleEndian(message, offset, (uint)leftImage.Length);
+            offset += 4;
+            Array.Copy(leftImage, 0, message, offset, leftImage.Length);
+            offset += leftImage.Length;
+
+            // Right image
+            WriteUInt32LittleEndian(message, offset, (uint)rightImage.Length);
+            offset += 4;
+            Array.Copy(rightImage, 0, message, offset, rightImage.Length);
+            offset += rightImage.Length;
+
+            // Metadata JSON
+            WriteUInt32LittleEndian(message, offset, (uint)metadataBytes.Length);
+            offset += 4;
+            Array.Copy(metadataBytes, 0, message, offset, metadataBytes.Length);
+
+            return message;
+        }
+
+        /// <summary>
+        /// Write uint32 in little-endian format (Protocol V2 standard)
+        /// </summary>
+        private void WriteUInt32LittleEndian(byte[] buffer, int offset, uint value)
+        {
+            buffer[offset] = (byte)value;
+            buffer[offset + 1] = (byte)(value >> 8);
+            buffer[offset + 2] = (byte)(value >> 16);
+            buffer[offset + 3] = (byte)(value >> 24);
         }
 
         /// <summary>
@@ -404,14 +564,6 @@ namespace Vision
         /// </summary>
         private void OnDestroy()
         {
-            // Unregister cameras from CameraManager
-            if (CameraManager.Instance != null && !string.IsNullOrEmpty(_cameraPairId))
-            {
-                CameraManager.Instance.UnregisterCamera(_cameraPairId + "_L");
-                CameraManager.Instance.UnregisterCamera(_cameraPairId + "_R");
-                CameraManager.Instance.UnregisterCamera(_cameraPairId);
-            }
-
             // Unsubscribe from depth results
             if (UnifiedPythonReceiver.Instance != null)
             {

@@ -115,7 +115,6 @@ class StreamingServer(TCPServerBase):
 
         super().__init__(server_config)
         self._storage = ImageStorage.get_instance()
-        logging.info("StreamingServer initialized")
 
     def handle_client_connection(self, client: socket.socket, address: tuple):
         """
@@ -356,7 +355,6 @@ def run_streaming_server_background(server_config: ServerConfig):
         daemon=True,
     )
     thread.start()
-    logging.info("StreamingServer started in background thread")
     return thread
 
 

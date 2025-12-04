@@ -11,7 +11,7 @@ namespace PythonCommunication
 {
     /// <summary>
     /// Unified receiver for all Python result communication.
-    /// Handles LLM results (port 5010) and Depth results (port 5007).
+    /// Routes all results through CommandServer (port 5010).
     /// Replaces LLMResultsReceiver, DepthResultsReceiver, and DetectionResultsReceiver.
     /// </summary>
     public class UnifiedPythonReceiver : MonoBehaviour
@@ -27,9 +27,8 @@ namespace PythonCommunication
         public event Action<LLMResult> OnLLMResultReceived;
         public event Action<DepthResult> OnDepthResultReceived;
 
-        // Internal connection handlers (one per port)
-        private ResultsConnection _resultsConnection; // Port 5010 (LLM results)
-        private DetectionConnection _detectionConnection; // Port 5007 (Depth results)
+        // Single connection handler for all results (port 5010)
+        private ResultsConnection _resultsConnection;
 
         // Helper variable
         private const string _logPrefix = "[UNIFIED_PYTHON_RECEIVER]";
@@ -46,20 +45,13 @@ namespace PythonCommunication
                 Instance = this;
                 DontDestroyOnLoad(gameObject);
 
-                // Create connection handlers
+                // Create single connection handler for all results (port 5010)
                 GameObject resultsConnObj = new GameObject("ResultsConnection");
                 resultsConnObj.transform.SetParent(transform);
                 _resultsConnection = resultsConnObj.AddComponent<ResultsConnection>();
                 _resultsConnection.Initialize(this);
 
-                GameObject detectionConnObj = new GameObject("DetectionConnection");
-                detectionConnObj.transform.SetParent(transform);
-                _detectionConnection = detectionConnObj.AddComponent<DetectionConnection>();
-                _detectionConnection.Initialize(this);
-
-                Debug.Log(
-                    $"{_logPrefix} Initialized with two connection handlers (ports 5010, 5007)"
-                );
+                Debug.Log($"{_logPrefix} Initialized - all results route through port 5010");
             }
             else
             {
@@ -71,15 +63,9 @@ namespace PythonCommunication
         {
             if (Instance == this)
             {
-                // Gracefully disconnect all connections
                 if (_resultsConnection != null)
                 {
                     _resultsConnection.Disconnect();
-                }
-
-                if (_detectionConnection != null)
-                {
-                    _detectionConnection.Disconnect();
                 }
 
                 Instance = null;
@@ -91,15 +77,9 @@ namespace PythonCommunication
         /// </summary>
         private void OnApplicationQuit()
         {
-            // Stop all connections before Unity closes
             if (_resultsConnection != null)
             {
                 _resultsConnection.Disconnect();
-            }
-
-            if (_detectionConnection != null)
-            {
-                _detectionConnection.Disconnect();
             }
         }
 
@@ -114,15 +94,32 @@ namespace PythonCommunication
             _resultsConnection != null && _resultsConnection.IsConnected;
 
         /// <summary>
-        /// Check if detection connection (port 5007) is active
+        /// Check if detection connection is active (legacy - now same as IsResultsConnected)
         /// </summary>
-        public bool IsDetectionConnected =>
-            _detectionConnection != null && _detectionConnection.IsConnected;
+        public bool IsDetectionConnected => IsResultsConnected;
 
         /// <summary>
-        /// Check if both connections are active
+        /// Check if fully connected (legacy - now just checks single connection)
         /// </summary>
-        public bool IsFullyConnected => IsResultsConnected && IsDetectionConnected;
+        public bool IsFullyConnected => IsResultsConnected;
+
+        /// <summary>
+        /// Send a completion message back to Python on the results connection.
+        /// Used by PythonCommandHandler to notify Python when commands complete.
+        /// </summary>
+        /// <param name="completionJson">JSON string containing completion data</param>
+        /// <param name="requestId">Request ID for correlation</param>
+        /// <returns>True if sent successfully</returns>
+        public bool SendCompletion(string completionJson, uint requestId)
+        {
+            if (_resultsConnection == null || !_resultsConnection.IsConnected)
+            {
+                Debug.LogWarning($"{_logPrefix} Cannot send completion - results connection not available");
+                return false;
+            }
+
+            return _resultsConnection.SendCompletion(completionJson, requestId);
+        }
 
         #endregion
 
@@ -210,6 +207,7 @@ namespace PythonCommunication
 
         /// <summary>
         /// Handles results from port 5010 (LLM results only from RunAnalyzer)
+        /// Also sends completion messages back on the same connection.
         /// </summary>
         private class ResultsConnection : TCPClientBase
         {
@@ -219,6 +217,7 @@ namespace PythonCommunication
             private Thread _receiveThread;
             private Queue<(uint requestId, string json)> _resultQueue = new Queue<(uint requestId, string json)>();
             private readonly object _queueLock = new object();
+            private readonly object _writeLock = new object();
 
             public void Initialize(UnifiedPythonReceiver parent)
             {
@@ -380,23 +379,56 @@ namespace PythonCommunication
             }
 
             /// <summary>
-            /// Process received JSON and parse as LLM result (Protocol V2)
+            /// Process received JSON and parse as appropriate result type (Protocol V2)
+            /// Handles LLM results, Depth results, and robot commands through port 5010.
             /// </summary>
             private void ProcessResult(uint requestId, string json)
             {
                 if (string.IsNullOrEmpty(json))
                     return;
 
-                // Parse as LLM result using centralized parser (port 5010 only receives LLM results)
-                if (!JsonParser.TryParseWithLogging<LLMResult>(json, out LLMResult result, _logPrefix))
+                // Try to determine result type by checking for presence of specific fields
+                // Robot commands have "command_type"
+                // Depth results have "detections" array
+                // LLM results have "response" string
+                if (json.Contains("\"command_type\""))
                 {
-                    return;
+                    // Parse as RobotCommand and route to PythonCommandHandler
+                    if (!JsonParser.TryParseWithLogging<RobotCommand>(json, out RobotCommand command, _logPrefix))
+                    {
+                        return;
+                    }
+                    command.request_id = requestId;
+
+                    if (PythonCommandHandler.Instance != null)
+                    {
+                        PythonCommandHandler.Instance.HandleCommand(command);
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"{_logPrefix} PythonCommandHandler not available - command {command.command_type} not processed");
+                    }
                 }
-
-                // Set request_id from protocol header (Protocol V2)
-                result.request_id = requestId;
-
-                _parent.RouteLLMResult(result);
+                else if (json.Contains("\"detections\""))
+                {
+                    // Parse as DepthResult
+                    if (!JsonParser.TryParseWithLogging<DepthResult>(json, out DepthResult depthResult, _logPrefix))
+                    {
+                        return;
+                    }
+                    depthResult.request_id = requestId;
+                    _parent.RouteDepthResult(depthResult);
+                }
+                else
+                {
+                    // Parse as LLM result
+                    if (!JsonParser.TryParseWithLogging<LLMResult>(json, out LLMResult llmResult, _logPrefix))
+                    {
+                        return;
+                    }
+                    llmResult.request_id = requestId;
+                    _parent.RouteLLMResult(llmResult);
+                }
             }
 
             /// <summary>
@@ -411,243 +443,40 @@ namespace PythonCommunication
                     Connect();
                 }
             }
-        }
-
-        /// <summary>
-        /// Handles depth detection results from port 5007 (depth results from RunStereoDetector)
-        /// </summary>
-        private class DetectionConnection : TCPClientBase
-        {
-            private const string _logPrefix = "[DETECTION_CONNECTION]";
-
-            private UnifiedPythonReceiver _parent;
-            private Thread _receiveThread;
-            private Queue<(uint requestId, byte[] data)> _messageQueue = new Queue<(uint requestId, byte[] data)>();
-            private readonly object _queueLock = new object();
-
-            public void Initialize(UnifiedPythonReceiver parent)
-            {
-                _parent = parent;
-                _serverPort = CommunicationConstants.DEPTH_RESULTS_PORT; // Port 5007 - Depth results from RunStereoDetector
-                _autoConnect = true;
-            }
-
-            protected override void Update()
-            {
-                base.Update(); // Handle auto-reconnect
-
-                // Process queued messages on main thread
-                lock (_queueLock)
-                {
-                    while (_messageQueue.Count > 0)
-                    {
-                        var (requestId, message) = _messageQueue.Dequeue();
-                        HandleIncomingData(requestId, message);
-                    }
-                }
-            }
-
-            protected override void OnConnected()
-            {
-                // Start background thread to receive data
-                _receiveThread = new Thread(ReceiveLoop)
-                {
-                    IsBackground = true,
-                    Name = "DetectionReceiver",
-                };
-                _receiveThread.Start();
-            }
-
-            protected override void OnConnectionFailed(Exception error)
-            {
-                if (_autoReconnect)
-                {
-                    StartCoroutine(ReconnectCoroutine());
-                }
-            }
-
-            protected override void OnDisconnecting()
-            {
-                // Stop receive thread
-                if (_receiveThread != null && _receiveThread.IsAlive)
-                {
-                    _receiveThread.Join(CommunicationConstants.THREAD_JOIN_TIMEOUT_MS);
-                }
-            }
-
-            protected override void OnDisconnected()
-            {
-                // Clear message queue
-                lock (_queueLock)
-                {
-                    _messageQueue.Clear();
-                }
-            }
 
             /// <summary>
-            /// Background thread loop for receiving detection results (Protocol V2)
+            /// Send a completion message back to Python on the same connection.
+            /// This is used by PythonCommandHandler to notify Python when commands complete.
             /// </summary>
-            private void ReceiveLoop()
+            /// <param name="completionJson">JSON string containing completion data</param>
+            /// <param name="requestId">Request ID for correlation</param>
+            /// <returns>True if sent successfully</returns>
+            public bool SendCompletion(string completionJson, uint requestId)
             {
+                if (!_isConnected || _stream == null)
+                {
+                    Debug.LogWarning($"{_logPrefix} Cannot send completion - not connected");
+                    return false;
+                }
+
                 try
                 {
-                    while (IsConnected && _shouldRun)
+                    // Encode as STATUS_RESPONSE message (Protocol V2)
+                    byte[] message = UnityProtocol.EncodeStatusResponse(completionJson, requestId);
+
+                    lock (_writeLock)
                     {
-                        // Read Protocol V2 header: [type:1][request_id:4]
-                        byte[] headerBuffer = new byte[UnityProtocol.HEADER_SIZE];
-                        int bytesRead = ReadExactly(_stream, headerBuffer, UnityProtocol.HEADER_SIZE);
-
-                        if (bytesRead < UnityProtocol.HEADER_SIZE)
-                        {
-                            Debug.LogWarning($"{_logPrefix} Connection closed by server");
-                            break;
-                        }
-
-                        // Decode header
-                        MessageType messageType = (MessageType)headerBuffer[0];
-                        uint requestId = BitConverter.ToUInt32(headerBuffer, 1);
-
-                        // Validate message type (should be RESULT for depth detection)
-                        if (messageType != MessageType.RESULT)
-                        {
-                            Debug.LogError(
-                                $"{_logPrefix} Unexpected message type: {messageType} (expected RESULT)"
-                            );
-                            break;
-                        }
-
-                        // Read JSON length (4 bytes)
-                        byte[] lengthBuffer = new byte[4];
-                        bytesRead = ReadExactly(_stream, lengthBuffer, 4);
-
-                        if (bytesRead < 4)
-                        {
-                            Debug.LogWarning($"{_logPrefix} Connection closed while reading JSON length");
-                            break;
-                        }
-
-                        int messageLength = BitConverter.ToInt32(lengthBuffer, 0);
-
-                        if (messageLength <= 0 || messageLength > CommunicationConstants.MAX_JSON_LENGTH)
-                        {
-                            Debug.LogError($"{_logPrefix} [req={requestId}] Invalid message length: {messageLength}");
-                            continue;
-                        }
-
-                        // Read message data
-                        byte[] messageData = new byte[messageLength];
-                        bytesRead = ReadExactly(_stream, messageData, messageLength);
-
-                        if (bytesRead < messageLength)
-                        {
-                            Debug.LogWarning($"{_logPrefix} [req={requestId}] Incomplete message received");
-                            break;
-                        }
-
-                        // Combine length + data for HandleIncomingData (keeping original format for compatibility)
-                        byte[] fullMessage = new byte[4 + messageLength];
-                        Array.Copy(lengthBuffer, 0, fullMessage, 0, 4);
-                        Array.Copy(messageData, 0, fullMessage, 4, messageLength);
-
-                        // Queue for processing on main thread with request_id (Protocol V2)
-                        lock (_queueLock)
-                        {
-                            _messageQueue.Enqueue((requestId, fullMessage));
-                        }
-
-#if UNITY_EDITOR
-                        Debug.Log($"{_logPrefix} [req={requestId}] Received depth result ({messageLength} bytes)");
-#endif
+                        _stream.Write(message, 0, message.Length);
+                        _stream.Flush();
                     }
-                }
-                catch (System.IO.IOException ex)
-                {
-                    // Only log if it's an unexpected disconnection (not during shutdown)
-                    if (_shouldRun)
-                    {
-                        Debug.LogWarning($"{_logPrefix} Connection lost: {ex.Message}");
-                    }
-                    _isConnected = false;
+
+                    Debug.Log($"{_logPrefix} [req={requestId}] Sent completion ({message.Length} bytes)");
+                    return true;
                 }
                 catch (Exception ex)
                 {
-                    // Only log if it's an unexpected error (not during shutdown)
-                    if (_shouldRun)
-                    {
-                        Debug.LogError($"{_logPrefix} Error in receive loop: {ex.Message}");
-                    }
-                    _isConnected = false;
-                }
-            }
-
-            /// <summary>
-            /// Handles incoming detection result data (called on main thread) - Protocol V2
-            /// </summary>
-            private void HandleIncomingData(uint requestId, byte[] data)
-            {
-                try
-                {
-                    // Format: [json_length (4 bytes)][json_data]
-                    if (data.Length < 4)
-                    {
-                        Debug.LogError($"{_logPrefix} [req={requestId}] Invalid data: too short");
-                        return;
-                    }
-
-                    int jsonLength = BitConverter.ToInt32(data, 0);
-
-                    if (jsonLength <= 0 || jsonLength > CommunicationConstants.MAX_JSON_LENGTH)
-                    {
-                        Debug.LogError($"{_logPrefix} [req={requestId}] Invalid JSON length: {jsonLength}");
-                        return;
-                    }
-
-                    if (data.Length < 4 + jsonLength)
-                    {
-                        Debug.LogError(
-                            $"{_logPrefix} [req={requestId}] Incomplete data: expected {4 + jsonLength} bytes, got {data.Length}"
-                        );
-                        return;
-                    }
-
-                    // Extract JSON string
-                    string jsonString = Encoding.UTF8.GetString(data, 4, jsonLength);
-
-                    // Parse JSON as DepthResult using centralized parser (stereo detection with 3D coordinates)
-                    if (!JsonParser.TryParseWithLogging<DepthResult>(jsonString, out DepthResult result, _logPrefix))
-                    {
-                        return;
-                    }
-
-                    // Set request_id from protocol header (Protocol V2)
-                    result.request_id = requestId;
-
-                    if (_parent._logResults)
-                    {
-                        Debug.Log(
-                            $"{_logPrefix} [req={requestId}] Received DepthResult: camera={result.camera_id}, detections={result.detections?.Length ?? 0}"
-                        );
-                    }
-
-                    // Route to parent's depth result handler
-                    _parent.RouteDepthResult(result);
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogError($"{_logPrefix} [req={requestId}] Error handling data: {ex.Message}");
-                }
-            }
-
-            /// <summary>
-            /// Coroutine to handle reconnection after connection loss
-            /// </summary>
-            private IEnumerator ReconnectCoroutine()
-            {
-                yield return new WaitForSeconds(_reconnectInterval);
-
-                if (_shouldRun && !_isConnected)
-                {
-                    Connect();
+                    Debug.LogError($"{_logPrefix} [req={requestId}] Error sending completion: {ex.Message}");
+                    return false;
                 }
             }
         }
