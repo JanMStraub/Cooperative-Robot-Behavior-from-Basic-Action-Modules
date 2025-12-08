@@ -325,7 +325,7 @@ namespace Vision
 
                     case CaptureType.SendToServer:
 
-                        // Mono mode: send single image for 2D detection
+                        // Mono mode: send analysis command for LLM vision
                         if (
                             UnifiedPythonSender.Instance == null
                             || !UnifiedPythonSender.Instance.IsSingleCameraConnected
@@ -335,10 +335,15 @@ namespace Vision
                                 "UnifiedPythonSender not available or not connected."
                             );
                         }
-                        UnifiedPythonSender.Instance.SendImage(imageBytes, _cameraName, _llmPrompt);
+
+                        bool sent = UnifiedPythonSender.Instance.SendAnalyzeCommand(_cameraName, _llmPrompt);
+                        if (!sent)
+                        {
+                            throw new Exception("Failed to send analyze command to server.");
+                        }
 
                         Debug.Log(
-                            $"{_logPrefix} Image sent successfully ({imageBytes.Length / 1024f:F1} KB). Waiting for response..."
+                            $"{_logPrefix} Analysis command sent successfully. Waiting for response..."
                         );
 
                         // Track processing state

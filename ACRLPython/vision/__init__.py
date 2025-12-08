@@ -12,7 +12,8 @@ Modules:
 """
 
 from .AnalyzeImage import LMStudioVisionProcessor, get_images_from_server, save_response
-from .ObjectDetector import DetectionObject, DetectionResult, CubeDetector
+from .DetectionDataModels import DetectionObject, DetectionResult
+from .ObjectDetector import CubeDetector
 
 # DepthEstimator now has integrated disparity calculation (no external dependencies)
 from .DepthEstimator import (

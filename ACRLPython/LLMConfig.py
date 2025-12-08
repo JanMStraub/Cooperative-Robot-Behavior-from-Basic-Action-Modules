@@ -123,6 +123,12 @@ RAG_SERVER_TIMEOUT = 60.0  # RAG server query timeout (seconds)
 # Object Detection Configuration
 # ===========================
 
+# YOLO vs HSV Detection Toggle
+USE_YOLO = True  # Set to True to use YOLO detection, False for HSV color-based detection
+YOLO_MODEL_PATH = "./models/robot_detector.onnx"  # Path to trained YOLO model for cubes
+YOLO_CONFIDENCE_THRESHOLD = 0.5  # YOLO detection confidence threshold (0.0-1.0)
+YOLO_IOU_THRESHOLD = 0.45  # YOLO IoU threshold for NMS (Non-Maximum Suppression)
+
 # Color Ranges for Cube Detection (HSV)
 # OpenCV HSV: H=0-180, S=0-255, V=0-255
 # Red (RGB 255,0,0): H≈0-10 or H≈170-180 (wraps around)
@@ -146,7 +152,7 @@ MIN_CONFIDENCE = 0.3  # Minimum detection confidence threshold (lower to catch m
 
 # Detection Processing
 DETECTION_CHECK_INTERVAL = 1.0  # Check for new images every N seconds
-ENABLE_DEBUG_IMAGES = True  # Save annotated images for debugging
+ENABLE_DEBUG_IMAGES = False  # Save annotated images for debugging
 DEBUG_IMAGES_DIR = "./debug_detections"
 
 # Disparity Map Debugging
