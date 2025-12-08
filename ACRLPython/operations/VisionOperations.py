@@ -39,6 +39,44 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================================
+# Helper Functions
+# ============================================================================
+
+
+def color_matches(detection_color: str, query_color: str) -> bool:
+    """
+    Flexible color matching for both legacy and YOLO detectors.
+
+    Supports:
+    - Exact match: "blue" == "blue"
+    - Partial match: "blue" matches "blue_cube"
+    - Case-insensitive: "Blue" matches "blue_cube"
+
+    Args:
+        detection_color: Color from detector (e.g., "blue_cube", "blue", "red_cube")
+        query_color: Color to search for (e.g., "blue", "red")
+
+    Returns:
+        True if colors match
+    """
+    if detection_color is None or query_color is None:
+        return False
+
+    detection_lower = detection_color.lower()
+    query_lower = query_color.lower()
+
+    # Exact match (legacy CubeDetector: "blue" == "blue")
+    if detection_lower == query_lower:
+        return True
+
+    # Partial match (YOLO: "blue" in "blue_cube")
+    if query_lower in detection_lower:
+        return True
+
+    return False
+
+
+# ============================================================================
 # Implementation: Detect Object
 # ============================================================================
 
@@ -152,7 +190,7 @@ def detect_object(
         detector = CubeDetector()
         camera_config = CameraConfig(baseline=float(baseline), fov=float(fov))
 
-        detection_result = detector.detect_cubes_stereo(
+        detection_result = detector.detect_objects_stereo(
             imgL, imgR, camera_config, camera_id=camera_id,
             camera_rotation=camera_rotation, camera_position=camera_position
         )
@@ -164,13 +202,16 @@ def detect_object(
                 ["Ensure objects are visible", "Check lighting conditions"]
             )
 
-        # Filter by color
-        matching = [d for d in detection_result.detections if d.color == color]
+        # Filter by color (flexible matching for both CubeDetector and YOLODetector)
+        matching = [d for d in detection_result.detections if color_matches(d.color, color)]
         if not matching:
+            detected_colors = [d.color for d in detection_result.detections]
             return OperationResult.error_result(
                 "COLOR_NOT_FOUND",
                 f"No {color} objects detected",
-                [f"Looking for {color} objects", "Check color parameter"]
+                [f"Looking for {color} objects",
+                 f"Detected colors: {detected_colors}",
+                 "Check color parameter"]
             )
 
         # Get leftmost detection (smallest center_x coordinate)
@@ -586,7 +627,7 @@ def detect_object_stereo(
         detector = CubeDetector()
         camera_config = CameraConfig(baseline=float(baseline), fov=float(fov))
 
-        detection_result = detector.detect_cubes_stereo(
+        detection_result = detector.detect_objects_stereo(
             imgL, imgR, camera_config, camera_id=camera_id,
             camera_rotation=camera_rotation, camera_position=camera_position
         )
@@ -598,16 +639,18 @@ def detect_object_stereo(
                 ["Ensure objects are visible", "Check lighting conditions"]
             )
 
-        # Filter by color if specified
+        # Filter by color if specified (flexible matching for both CubeDetector and YOLODetector)
         detections = detection_result.detections
         if color is not None:
-            color_lower = color.lower()
-            detections = [d for d in detections if d.color == color_lower]
+            detections = [d for d in detections if color_matches(d.color, color)]
             if not detections:
+                detected_colors = [d.color for d in detection_result.detections]
                 return OperationResult.error_result(
                     "COLOR_NOT_FOUND",
                     f"No {color} objects detected",
-                    [f"Looking for {color} objects", "Check color parameter"]
+                    [f"Looking for {color} objects",
+                     f"Detected colors: {detected_colors}",
+                     "Check color parameter"]
                 )
 
         # Filter by confidence

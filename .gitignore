@@ -170,7 +170,6 @@ ACRLUnity/Recordings/
 # ML-Agents training outputs
 results/
 summaries/
-models/
 
 # Log files
 *.log
@@ -178,6 +177,7 @@ models/
 # Miscellaneous
 *.png
 *.jpg
+*.txt
 
 # Other
 CLAUDE.md
