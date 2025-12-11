@@ -17,6 +17,8 @@ from operations.Base import (
     OperationCategory,
     OperationComplexity,
     OperationResult,
+    ParameterFlow,
+    OperationRelationship,
 )
 
 # Import vision modules
@@ -43,7 +45,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 
-def color_matches(detection_color: str, query_color: str) -> bool:
+def color_matches(detection_color: str | None, query_color: str | None) -> bool:
     """
     Flexible color matching for both legacy and YOLO detectors.
 
@@ -471,6 +473,16 @@ def create_analyze_scene_operation() -> BasicOperation:
             "Vision model not loaded",
             "Image too dark or blurry",
         ],
+        relationships=OperationRelationship(
+            operation_id="perception_analyze_scene_001",
+            commonly_paired_with=["perception_stereo_detect_001", "status_check_robot_001"],
+            pairing_reasons={
+                "perception_stereo_detect_001": "Verify object detection results or gather additional context",
+                "status_check_robot_001": "Verify robot reached target position or analyze workspace state",
+            },
+            typical_before=[],
+            typical_after=[],
+        ),
         implementation=analyze_scene,
     )
 
@@ -847,6 +859,47 @@ def create_detect_object_stereo_operation() -> BasicOperation:
             "All detections below confidence threshold",
         ],
         commonly_paired_with=["move_to_coordinate", "control_gripper"],
+        relationships=OperationRelationship(
+            operation_id="perception_stereo_detect_001",
+            commonly_paired_with=["motion_move_to_coord_001", "manipulation_control_gripper_001", "spatial_move_relative_001"],
+            pairing_reasons={
+                "motion_move_to_coord_001": "Move robot to detected object's 3D position",
+                "manipulation_control_gripper_001": "Grasp object after positioning at detected coordinates",
+                "spatial_move_relative_001": "Move relative to detected object position (left_of, above, etc.)",
+            },
+            parameter_flows=[
+                ParameterFlow(
+                    source_operation="perception_stereo_detect_001",
+                    source_output_key="x",
+                    target_operation="motion_move_to_coord_001",
+                    target_input_param="x",
+                    description="Object X coordinate in world space for robot positioning",
+                ),
+                ParameterFlow(
+                    source_operation="perception_stereo_detect_001",
+                    source_output_key="y",
+                    target_operation="motion_move_to_coord_001",
+                    target_input_param="y",
+                    description="Object Y coordinate in world space for robot positioning",
+                ),
+                ParameterFlow(
+                    source_operation="perception_stereo_detect_001",
+                    source_output_key="z",
+                    target_operation="motion_move_to_coord_001",
+                    target_input_param="z",
+                    description="Object Z coordinate in world space for robot positioning",
+                ),
+                ParameterFlow(
+                    source_operation="perception_stereo_detect_001",
+                    source_output_key="x",
+                    target_operation="spatial_move_relative_001",
+                    target_input_param="object_ref",
+                    description="Object position for spatial relative movement",
+                ),
+            ],
+            typical_before=["motion_move_to_coord_001", "manipulation_control_gripper_001"],
+            typical_after=[],
+        ),
         implementation=detect_object_stereo,
     )
 

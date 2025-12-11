@@ -6,6 +6,11 @@ This module contains all configuration constants and defaults for the
 StreamingServer, ResultsServer, and image analysis systems.
 """
 
+from pathlib import Path
+
+# Get the directory containing this config file
+_CONFIG_DIR = Path(__file__).parent.absolute()
+
 # ===========================
 # Network Configuration
 # ===========================
@@ -15,7 +20,9 @@ DEFAULT_HOST = "127.0.0.1"
 
 # Port assignments
 STREAMING_SERVER_PORT = 5005  # Receives images from Unity (RunAnalyzer)
-STEREO_DETECTION_PORT = 5006  # Receives stereo image pairs from Unity (RunStereoDetector)
+STEREO_DETECTION_PORT = (
+    5006  # Receives stereo image pairs from Unity (RunStereoDetector)
+)
 LLM_RESULTS_PORT = 5010  # Sends LLM analysis results to Unity (RunAnalyzer)
 DEPTH_RESULTS_PORT = 5007  # Sends depth detection results with 3D coordinates to Unity (RunStereoDetector)
 RAG_SERVER_PORT = 5011  # RAG semantic search server for operation queries
@@ -68,14 +75,14 @@ DUPLICATE_TIME_THRESHOLD = 0.1  # Time threshold for detecting duplicate sends (
 # ===========================
 
 # LM Studio server configuration
-LMSTUDIO_BASE_URL = "http://127.0.0.1:1234/v1" # local
+LMSTUDIO_BASE_URL = "http://127.0.0.1:1234/v1"  # local
 # LMSTUDIO_BASE_URL = "http://192.168.178.53:1234" # GPU
 
 # Default LM Studio model (use model name shown in LM Studio)
-DEFAULT_LMSTUDIO_MODEL = "qwen3-vl-8b"
+DEFAULT_LMSTUDIO_MODEL = "mistral-3-3b"
 
 # LLM generation parameters
-DEFAULT_TEMPERATURE = 0.2  # Sampling temperature (0.0-2.0)
+DEFAULT_TEMPERATURE = 0.0  # Sampling temperature (0.0-2.0)
 
 # Popular vision models compatible with LM Studio (for reference)
 VISION_MODELS = [
@@ -83,6 +90,7 @@ VISION_MODELS = [
     "llama-3.2-vision",
     "llava",
     "qwen3-vl-8b",
+    "mistral-3-3b",
 ]
 
 
@@ -99,7 +107,7 @@ MAX_RESULT_QUEUE_SIZE = 100  # Max queued results when no clients connected
 # ===========================
 
 # Output directories
-DEFAULT_OUTPUT_DIR = "./llm_responses"  # Where to save LLM responses
+DEFAULT_OUTPUT_DIR = str(_CONFIG_DIR / "llm_responses")  # Where to save LLM responses
 
 # Logging format
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
@@ -124,8 +132,12 @@ RAG_SERVER_TIMEOUT = 60.0  # RAG server query timeout (seconds)
 # ===========================
 
 # YOLO vs HSV Detection Toggle
-USE_YOLO = True  # Set to True to use YOLO detection, False for HSV color-based detection
-YOLO_MODEL_PATH = "./models/robot_detector.onnx"  # Path to trained YOLO model for cubes
+USE_YOLO = (
+    True  # Set to True to use YOLO detection, False for HSV color-based detection
+)
+YOLO_MODEL_PATH = str(
+    _CONFIG_DIR / "yolo" / "models" / "robot_detector.onnx"
+)  # Path to trained YOLO model for cubes
 YOLO_CONFIDENCE_THRESHOLD = 0.5  # YOLO detection confidence threshold (0.0-1.0)
 YOLO_IOU_THRESHOLD = 0.45  # YOLO IoU threshold for NMS (Non-Maximum Suppression)
 
@@ -153,11 +165,11 @@ MIN_CONFIDENCE = 0.3  # Minimum detection confidence threshold (lower to catch m
 # Detection Processing
 DETECTION_CHECK_INTERVAL = 1.0  # Check for new images every N seconds
 ENABLE_DEBUG_IMAGES = False  # Save annotated images for debugging
-DEBUG_IMAGES_DIR = "./debug_detections"
+DEBUG_IMAGES_DIR = str(_CONFIG_DIR / "debug_detections")
 
 # Disparity Map Debugging
 SAVE_DEBUG_DISPARITY_MAPS = False  # Set to True to save disparity maps for debugging
-DEBUG_DISPARITY_DIR = "./debug_detections"
+DEBUG_DISPARITY_DIR = str(_CONFIG_DIR / "debug_detections")
 
 
 # ===========================
@@ -171,11 +183,79 @@ DEFAULT_STEREO_FOV = 60.0  # degrees, field of view of cameras
 # Default stereo camera pose (must match Unity camera transform)
 # Position: [x, y, z] in world space
 # Rotation: [pitch, yaw, roll] in degrees (Unity convention)
-DEFAULT_STEREO_CAMERA_POSITION = [-0.025, 0.1, -0.65]  # Example: camera above and behind origin
+DEFAULT_STEREO_CAMERA_POSITION = [
+    -0.025,
+    0.1,
+    -0.65,
+]  # Example: camera above and behind origin
 DEFAULT_STEREO_CAMERA_ROTATION = [0.0, 0.0, 0.0]  # Example: looking down at 30 degrees
 
 # Stereo processing
 STEREO_CHECK_INTERVAL = 0.5  # Check for new stereo pairs every N seconds
+
+
+# ===========================
+# Workspace and Coordination Configuration
+# ===========================
+
+# Workspace region definitions (meters, world coordinates)
+WORKSPACE_REGIONS = {
+    "left_workspace": {
+        "x_min": -0.5,
+        "x_max": -0.15,
+        "y_min": 0.0,
+        "y_max": 0.6,
+        "z_min": -0.45,
+        "z_max": 0.45,
+    },
+    "right_workspace": {
+        "x_min": 0.15,
+        "x_max": 0.5,
+        "y_min": 0.0,
+        "y_max": 0.6,
+        "z_min": -0.45,
+        "z_max": 0.45,
+    },
+    "shared_zone": {
+        "x_min": -0.15,
+        "x_max": 0.15,
+        "y_min": 0.0,
+        "y_max": 0.6,
+        "z_min": -0.45,
+        "z_max": 0.45,
+    },
+    "center": {
+        "x_min": -0.15,
+        "x_max": 0.15,
+        "y_min": 0.0,
+        "y_max": 0.5,
+        "z_min": -0.1,
+        "z_max": 0.1,
+    },
+}
+
+# Robot workspace assignments (default allocation)
+ROBOT_WORKSPACE_ASSIGNMENTS = {
+    "Robot1": "left_workspace",
+    "Robot2": "right_workspace",
+}
+
+# Robot base positions (world coordinates, meters)
+ROBOT_BASE_POSITIONS = {
+    "Robot1": (-0.4, 0.0, 0.0),
+    "Robot2": (0.4, 0.0, 0.0),
+}
+
+# Multi-robot coordination safety parameters
+COLLISION_SAFETY_MARGIN = 0.01  # Minimum safe distance between robots (meters)
+MIN_ROBOT_SEPARATION = (
+    0.2  # Minimum distance to maintain between robot end effectors (meters)
+)
+MAX_ROBOT_REACH = 0.8  # Maximum reach distance from base (meters)
+
+# State caching configuration
+ROBOT_STATUS_CACHE_TTL = 0.5  # Time-to-live for cached robot status (seconds)
+WORLD_STATE_UPDATE_INTERVAL = 0.1  # How often to update world state (seconds)
 
 
 # ===========================
@@ -204,6 +284,7 @@ def get_server_config(
         ServerConfig object
     """
     from core.TCPServerBase import ServerConfig
+
     return ServerConfig(
         host=host,
         port=port,

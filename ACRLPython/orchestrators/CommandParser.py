@@ -220,6 +220,19 @@ Rules:
      ]
    }}
 
+8. Spatial Reasoning Operations (Phase 2):
+   - "move above/below/left of/right of the object" uses move_relative_to_object
+     * Relations: "left_of", "right_of", "above", "below", "in_front_of", "behind"
+     * Example: "move above the cube" -> {{"operation": "move_relative_to_object", "params": {{"robot_id": "Robot1", "object_ref": "$target", "relation": "above", "offset": 0.1}}}}
+
+   - "move to the [workspace]" uses move_to_region
+     * Regions: "left_workspace", "right_workspace", "shared_zone", "center"
+     * Positions: "center", "near", "far"
+     * Example: "move to left workspace" -> {{"operation": "move_to_region", "params": {{"robot_id": "Robot1", "region_name": "left_workspace", "position_in_region": "center"}}}}
+
+   - "move between X and Y" uses move_between_objects
+     * Example: "move between cube1 and cube2" -> {{"operation": "move_between_objects", "params": {{"robot_id": "Robot1", "object1": "$object1", "object2": "$object2", "bias": 0.5}}}}
+
 Output JSON format:
 {{
     "commands": [

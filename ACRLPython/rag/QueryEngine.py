@@ -125,37 +125,68 @@ class QueryEngine:
         """
         results = self.search(query, top_k=top_k, include_full_operation=True)
 
-        # Build context with full operation details
+        # Build context with full operation details including relationships
         operations_context = []
         for result in results:
             operation = result.get("operation")
             if operation:
-                operations_context.append(
-                    {
-                        "operation_id": operation.operation_id,
-                        "name": operation.name,
-                        "category": operation.category.value,
-                        "complexity": operation.complexity.value,
-                        "description": operation.description,
-                        "parameters": [
+                context = {
+                    "operation_id": operation.operation_id,
+                    "name": operation.name,
+                    "category": operation.category.value,
+                    "complexity": operation.complexity.value,
+                    "description": operation.description,
+                    "parameters": [
+                        {
+                            "name": p.name,
+                            "type": p.type,
+                            "description": p.description,
+                            "required": p.required,
+                            "default": p.default,
+                            "valid_range": p.valid_range,
+                        }
+                        for p in operation.parameters
+                    ],
+                    "usage_examples": operation.usage_examples,
+                    "preconditions": operation.preconditions,
+                    "postconditions": operation.postconditions,
+                    "failure_modes": operation.failure_modes,
+                    "similarity_score": result["score"],
+                    "confidence": result.get("confidence", {}),
+                }
+
+                # Add relationship information if available
+                if operation.relationships:
+                    rel = operation.relationships
+                    context["relationships"] = {
+                        "required_operations": [
                             {
-                                "name": p.name,
-                                "type": p.type,
-                                "description": p.description,
-                                "required": p.required,
-                                "default": p.default,
-                                "valid_range": p.valid_range,
+                                "operation_id": op_id,
+                                "reason": rel.required_reasons.get(op_id, "Dependency required")
                             }
-                            for p in operation.parameters
+                            for op_id in rel.required_operations
                         ],
-                        "usage_examples": operation.usage_examples,
-                        "preconditions": operation.preconditions,
-                        "postconditions": operation.postconditions,
-                        "failure_modes": operation.failure_modes,
-                        "similarity_score": result["score"],
-                        "confidence": result.get("confidence", {}),
+                        "commonly_paired_with": [
+                            {
+                                "operation_id": op_id,
+                                "reason": rel.pairing_reasons.get(op_id, "Often used together")
+                            }
+                            for op_id in rel.commonly_paired_with
+                        ],
+                        "parameter_flows": [
+                            {
+                                "from": f"{pf.source_operation}.{pf.source_output_key}",
+                                "to": f"{pf.target_operation}.{pf.target_input_param}",
+                                "description": pf.description,
+                            }
+                            for pf in rel.parameter_flows
+                        ],
+                        "typical_before": rel.typical_before,
+                        "typical_after": rel.typical_after,
+                        "coordination_requirements": rel.coordination_requirements,
                     }
-                )
+
+                operations_context.append(context)
 
         return {
             "query": query,

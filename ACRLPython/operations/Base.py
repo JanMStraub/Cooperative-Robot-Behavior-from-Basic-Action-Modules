@@ -130,6 +130,119 @@ class OperationResult:
 
 
 @dataclass
+class ParameterFlow:
+    """
+    Defines how data flows from one operation's output to another's input.
+
+    This enables automatic parameter chaining, where the output of one operation
+    (e.g., detected object coordinates) can be used as input to another operation
+    (e.g., move_to_coordinate).
+
+    Attributes:
+        source_operation: Operation ID that produces the output
+        source_output_key: Key in the source operation's result dict
+        target_operation: Operation ID that consumes the input
+        target_input_param: Parameter name in the target operation
+        description: Human-readable explanation of the data flow
+        transform: Optional transformation function name (e.g., "meters_to_mm")
+
+    Example:
+        ParameterFlow(
+            source_operation="detect_object_stereo",
+            source_output_key="x",
+            target_operation="move_to_coordinate",
+            target_input_param="x",
+            description="Object X coordinate for robot positioning"
+        )
+    """
+
+    source_operation: str
+    source_output_key: str
+    target_operation: str
+    target_input_param: str
+    description: str
+    transform: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            "source_operation": self.source_operation,
+            "source_output_key": self.source_output_key,
+            "target_operation": self.target_operation,
+            "target_input_param": self.target_input_param,
+            "description": self.description,
+            "transform": self.transform,
+        }
+
+
+@dataclass
+class OperationRelationship:
+    """
+    Rich relationship metadata for an operation.
+
+    Extends basic relationship lists with explanations, parameter flows,
+    and temporal ordering hints to help LLMs understand operation sequences.
+
+    Attributes:
+        operation_id: The operation this relationship describes
+        required_operations: Operations that must exist/complete first
+        required_reasons: Why each required operation is needed (op_id -> reason)
+        commonly_paired_with: Operations often used together
+        pairing_reasons: Why operations are paired (op_id -> reason)
+        mutually_exclusive_with: Operations that conflict with this one
+        exclusion_reasons: Why operations are exclusive (op_id -> reason)
+        parameter_flows: Data connections from/to other operations
+        typical_before: Operations typically executed before this one
+        typical_after: Operations typically executed after this one
+        coordination_requirements: Multi-robot coordination constraints
+
+    Example:
+        OperationRelationship(
+            operation_id="detect_object_stereo",
+            commonly_paired_with=["move_to_coordinate", "control_gripper"],
+            pairing_reasons={
+                "move_to_coordinate": "Move robot to detected object position",
+                "control_gripper": "Grasp object after positioning"
+            },
+            typical_before=["move_to_coordinate"],
+            parameter_flows=[
+                ParameterFlow("detect_object_stereo", "x", "move_to_coordinate", "x", "X coordinate"),
+                ParameterFlow("detect_object_stereo", "y", "move_to_coordinate", "y", "Y coordinate"),
+                ParameterFlow("detect_object_stereo", "z", "move_to_coordinate", "z", "Z coordinate")
+            ]
+        )
+    """
+
+    operation_id: str
+    required_operations: List[str] = field(default_factory=list)
+    required_reasons: Dict[str, str] = field(default_factory=dict)
+    commonly_paired_with: List[str] = field(default_factory=list)
+    pairing_reasons: Dict[str, str] = field(default_factory=dict)
+    mutually_exclusive_with: List[str] = field(default_factory=list)
+    exclusion_reasons: Dict[str, str] = field(default_factory=dict)
+    parameter_flows: List[ParameterFlow] = field(default_factory=list)
+    typical_before: List[str] = field(default_factory=list)
+    typical_after: List[str] = field(default_factory=list)
+    coordination_requirements: Optional[Dict[str, Any]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization"""
+        return {
+            "operation_id": self.operation_id,
+            "required_operations": self.required_operations,
+            "required_reasons": self.required_reasons,
+            "commonly_paired_with": self.commonly_paired_with,
+            "pairing_reasons": self.pairing_reasons,
+            "mutually_exclusive_with": self.mutually_exclusive_with,
+            "exclusion_reasons": self.exclusion_reasons,
+            "parameter_flows": [pf.to_dict() for pf in self.parameter_flows],
+            "typical_before": self.typical_before,
+            "typical_after": self.typical_after,
+            "coordination_requirements": self.coordination_requirements,
+        }
+
+
+@dataclass
 class BasicOperation:
     """
     Complete definition of a basic operation that can be retrieved by RAG.
@@ -163,13 +276,34 @@ class BasicOperation:
     success_rate: float
     failure_modes: List[str]
 
-    # Relationships to other operations
+    # Relationships to other operations (deprecated - use relationships field)
     required_operations: List[str] = field(default_factory=list)
     commonly_paired_with: List[str] = field(default_factory=list)
     mutually_exclusive_with: List[str] = field(default_factory=list)
 
+    # Rich relationship metadata (preferred over simple lists above)
+    relationships: Optional[OperationRelationship] = None
+
     # The actual implementation function
     implementation: Optional[Callable] = None
+
+    def __post_init__(self):
+        """
+        Post-initialization to ensure backward compatibility.
+
+        If relationships is None but simple relationship lists are provided,
+        auto-convert to OperationRelationship for consistency.
+        """
+        if self.relationships is None and (
+            self.required_operations or self.commonly_paired_with or self.mutually_exclusive_with
+        ):
+            # Auto-convert simple lists to OperationRelationship
+            self.relationships = OperationRelationship(
+                operation_id=self.operation_id,
+                required_operations=self.required_operations,
+                commonly_paired_with=self.commonly_paired_with,
+                mutually_exclusive_with=self.mutually_exclusive_with,
+            )
 
     def execute(self, **kwargs) -> OperationResult:
         """
@@ -255,7 +389,11 @@ class BasicOperation:
     def to_rag_document(self) -> str:
         """
         Convert operation to a rich text document optimized for RAG retrieval.
+
+        Includes rich relationship metadata and parameter flow information
+        to help LLMs understand operation sequencing and data dependencies.
         """
+        # Build basic document sections
         doc = f"""
                 OPERATION: {self.name} (ID: {self.operation_id})
                 Category: {self.category.value} | Complexity: {self.complexity.value}
@@ -286,12 +424,61 @@ class BasicOperation:
 
                 KNOWN FAILURE MODES:
                 {chr(10).join(f"- {mode}" for mode in self.failure_modes)}
+              """
 
+        # Add enhanced relationship information if available
+        if self.relationships:
+            doc += "\n\n                OPERATION RELATIONSHIPS:\n"
+
+            # Required operations with reasons
+            if self.relationships.required_operations:
+                doc += "\n                Required Operations (must be available/complete first):\n"
+                for op_id in self.relationships.required_operations:
+                    reason = self.relationships.required_reasons.get(op_id, "Dependency required")
+                    doc += f"                - {op_id}: {reason}\n"
+
+            # Commonly paired operations with reasons
+            if self.relationships.commonly_paired_with:
+                doc += "\n                Commonly Paired With (frequently used together):\n"
+                for op_id in self.relationships.commonly_paired_with:
+                    reason = self.relationships.pairing_reasons.get(op_id, "Often used in workflows")
+                    doc += f"                - {op_id}: {reason}\n"
+
+            # Mutually exclusive operations with reasons
+            if self.relationships.mutually_exclusive_with:
+                doc += "\n                Mutually Exclusive With (cannot use simultaneously):\n"
+                for op_id in self.relationships.mutually_exclusive_with:
+                    reason = self.relationships.exclusion_reasons.get(op_id, "Conflicts with this operation")
+                    doc += f"                - {op_id}: {reason}\n"
+
+            # Parameter flows
+            if self.relationships.parameter_flows:
+                doc += "\n                Parameter Flows (data connections to other operations):\n"
+                for pf in self.relationships.parameter_flows:
+                    doc += f"                - Output '{pf.source_output_key}' → {pf.target_operation}.{pf.target_input_param}: {pf.description}\n"
+
+            # Temporal ordering hints
+            if self.relationships.typical_before:
+                doc += f"\n                Typical Sequence: Usually executed BEFORE {', '.join(self.relationships.typical_before)}\n"
+
+            if self.relationships.typical_after:
+                doc += f"                Typical Sequence: Usually executed AFTER {', '.join(self.relationships.typical_after)}\n"
+
+            # Coordination requirements for multi-robot operations
+            if self.relationships.coordination_requirements:
+                doc += "\n                Multi-Robot Coordination Requirements:\n"
+                for key, value in self.relationships.coordination_requirements.items():
+                    doc += f"                - {key}: {value}\n"
+
+        else:
+            # Fallback to simple relationship lists for backward compatibility
+            doc += f"""
                 RELATED OPERATIONS:
                 - Required operations: {', '.join(self.required_operations) if self.required_operations else 'None'}
                 - Commonly paired with: {', '.join(self.commonly_paired_with) if self.commonly_paired_with else 'None'}
                 - Mutually exclusive with: {', '.join(self.mutually_exclusive_with) if self.mutually_exclusive_with else 'None'}
               """
+
         return doc
 
     def to_json(self) -> str:

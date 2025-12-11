@@ -4,7 +4,7 @@ Simple YOLO Label Visualizer
 Manually select an image and its label file to visualize bounding boxes.
 
 Usage:
-    python visualize_yolo_labels.py
+    python VisualizeYoloLabels.py
 """
 
 import cv2

@@ -58,11 +58,12 @@ def sample_red_cube_image():
     Create a test image with a red cube for object detection testing
 
     Returns:
-        Numpy array with a red square in the center
+        Numpy array with a red square in the center (proper BGR format)
     """
     image = np.zeros((480, 640, 3), dtype=np.uint8)
-    # Add a red cube (BGR format)
-    image[200:280, 270:370, 2] = 255  # Red channel
+    # Add a red cube with proper BGR values
+    # Red in BGR = (0, 0, 255)
+    image[200:280, 270:370] = [0, 0, 255]  # BGR for red
     return image
 
 
@@ -72,11 +73,12 @@ def sample_blue_cube_image():
     Create a test image with a blue cube for object detection testing
 
     Returns:
-        Numpy array with a blue square in the center
+        Numpy array with a blue square in the center (proper BGR format)
     """
     image = np.zeros((480, 640, 3), dtype=np.uint8)
-    # Add a blue cube (BGR format)
-    image[200:280, 270:370, 0] = 255  # Blue channel
+    # Add a blue cube with proper BGR values
+    # Blue in BGR = (255, 0, 0)
+    image[200:280, 270:370] = [255, 0, 0]  # BGR for blue
     return image
 
 
@@ -358,3 +360,202 @@ def cleanup_rag_singletons():
         _global_registry = None
     except:
         pass
+
+
+# ============================================================================
+# Phase 2/3: Spatial Reasoning and Verification Fixtures
+# ============================================================================
+
+
+@pytest.fixture
+def mock_world_state():
+    """
+    Mock WorldState for testing predicates and verification
+
+    Returns:
+        Mock WorldState with sample robot status data
+    """
+    world_state = Mock()
+    world_state.get_robot_position = Mock(return_value=(0.3, 0.0, 0.1))
+    world_state.get_robot_status = Mock(return_value={
+        "is_initialized": True,
+        "is_moving": False,
+        "gripper_state": "open",
+        "position": (0.3, 0.0, 0.1)
+    })
+    world_state._robot_states = {}
+    world_state._objects = {}
+    world_state.get_workspace_owner = Mock(return_value=None)
+    return world_state
+
+
+@pytest.fixture
+def sample_robot_positions():
+    """
+    Sample robot base positions for testing
+
+    Returns:
+        Dict mapping robot IDs to base positions
+    """
+    return {
+        "Robot1": (-0.3, 0.0, 0.0),
+        "Robot2": (0.3, 0.0, 0.0),
+    }
+
+
+@pytest.fixture
+def sample_operation_with_conditions():
+    """
+    BasicOperation with preconditions and postconditions for verification testing
+
+    Returns:
+        Mock BasicOperation instance with test conditions
+    """
+    from operations.Base import OperationCategory, OperationComplexity
+
+    op = Mock()
+    op.name = "test_move"
+    op.category = OperationCategory.NAVIGATION
+    op.complexity = OperationComplexity.BASIC
+    op.preconditions = [
+        "target_within_reach(robot_id, x, y, z)",
+        "robot_is_initialized(robot_id)"
+    ]
+    op.postconditions = [
+        "robot_is_stationary(robot_id)"
+    ]
+    op.parameters = []
+    return op
+
+
+@pytest.fixture
+def cleanup_world_state():
+    """
+    Clean up WorldState singleton between tests
+
+    Yields control to test, then resets singleton
+    """
+    yield
+    try:
+        from operations.WorldState import WorldState
+        if WorldState._instance:
+            WorldState._instance.reset()
+        WorldState._instance = None
+    except:
+        pass
+
+
+@pytest.fixture
+def mock_world_state_with_objects():
+    """
+    Mock WorldState with sample objects for spatial operations testing
+
+    Returns:
+        Mock WorldState with objects registered
+    """
+    world_state = Mock()
+
+    # Sample objects
+    world_state._objects = {
+        "cube_01": Mock(position=(0.3, 0.2, 0.1), color="red", grasped_by=None),
+        "cube_02": Mock(position=(0.4, 0.3, 0.1), color="blue", grasped_by=None),
+    }
+
+    world_state.get_object_position = Mock(side_effect=lambda obj_id:
+        world_state._objects[obj_id].position if obj_id in world_state._objects else None
+    )
+
+    return world_state
+
+
+@pytest.fixture
+def mock_world_state_multi_robot():
+    """
+    Mock WorldState with multiple robots for coordination testing
+
+    Returns:
+        Mock WorldState with 2 robots and state tracking
+    """
+    from operations.WorldState import RobotState
+
+    world_state = Mock()
+
+    # Robot states
+    robot1_state = Mock(spec=RobotState)
+    robot1_state.robot_id = "Robot1"
+    robot1_state.position = (-0.3, 0.0, 0.1)
+    robot1_state.is_moving = False
+    robot1_state.target_position = None
+
+    robot2_state = Mock(spec=RobotState)
+    robot2_state.robot_id = "Robot2"
+    robot2_state.position = (0.3, 0.0, 0.1)
+    robot2_state.is_moving = False
+    robot2_state.target_position = None
+
+    world_state._robot_states = {
+        "Robot1": robot1_state,
+        "Robot2": robot2_state
+    }
+
+    world_state.get_robot_position = Mock(side_effect=lambda rid:
+        world_state._robot_states[rid].position if rid in world_state._robot_states else None
+    )
+
+    world_state.get_workspace_owner = Mock(return_value=None)
+    world_state.allocate_workspace = Mock(return_value=True)
+
+    world_state._objects = {
+        "test_object": Mock(position=(0.0, 0.0, 0.15), grasped_by=None)
+    }
+
+    return world_state
+
+
+@pytest.fixture
+def sample_navigation_params():
+    """
+    Sample navigation operation parameters
+
+    Returns:
+        Dict with navigation parameters
+    """
+    return {
+        "robot_id": "Robot1",
+        "x": 0.3,
+        "y": 0.2,
+        "z": 0.1
+    }
+
+
+@pytest.fixture
+def sample_manipulation_params():
+    """
+    Sample manipulation operation parameters
+
+    Returns:
+        Dict with manipulation parameters
+    """
+    return {
+        "robot_id": "Robot1",
+        "object_id": "cube_01",
+        "action": "grasp"
+    }
+
+
+@pytest.fixture
+def disable_yolo_detection():
+    """
+    Temporarily disable YOLO detection for HSV-based tests
+
+    This fixture is used for tests that rely on HSV color detection
+    with synthetic test images (pure color squares), which YOLO
+    may not detect well since it was trained on realistic cubes.
+
+    Yields control to test, then restores original USE_YOLO setting
+    """
+    import LLMConfig as cfg
+    original_use_yolo = cfg.USE_YOLO
+    cfg.USE_YOLO = False
+    yield
+    cfg.USE_YOLO = original_use_yolo

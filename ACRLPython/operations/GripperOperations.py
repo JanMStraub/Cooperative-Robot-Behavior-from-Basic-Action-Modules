@@ -15,6 +15,8 @@ from .Base import (
     OperationComplexity,
     OperationParameter,
     OperationResult,
+    ParameterFlow,
+    OperationRelationship,
 )
 
 # Configure logging
@@ -229,6 +231,21 @@ def create_control_gripper_operation() -> BasicOperation:
             "manipulation_control_gripper_001",  # Sequential open/close operations
         ],
         mutually_exclusive_with=[],
+        relationships=OperationRelationship(
+            operation_id="manipulation_control_gripper_001",
+            required_operations=["motion_move_to_coord_001"],
+            required_reasons={
+                "motion_move_to_coord_001": "Must position gripper at target location before grasping or releasing",
+            },
+            commonly_paired_with=["motion_move_to_coord_001", "perception_stereo_detect_001", "status_check_robot_001"],
+            pairing_reasons={
+                "motion_move_to_coord_001": "Position at target before gripper action, sequence: move → grasp or move → release",
+                "perception_stereo_detect_001": "Detect object before moving to grasp it",
+                "status_check_robot_001": "Verify gripper reached target position before closing to grasp",
+            },
+            typical_before=[],
+            typical_after=["motion_move_to_coord_001"],
+        ),
         implementation=control_gripper,
     )
 

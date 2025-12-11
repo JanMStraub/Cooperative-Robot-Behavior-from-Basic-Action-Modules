@@ -663,6 +663,7 @@ GameObject:
   - component: {fileID: 1032633146}
   - component: {fileID: 1032633144}
   - component: {fileID: 1032633147}
+  - component: {fileID: 1032633148}
   m_Layer: 0
   m_Name: SimulationManager
   m_TagString: Untagged
@@ -719,6 +720,60 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   config: {fileID: 11400000, guid: 1c6ca8dd9c7e2451aba210581aa5f7bc, type: 2}
+--- !u!114 &1032633148
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1032633142}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 20ad7259d5d24405da739409c4600ce5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Visualization.WorkspaceRegionVisualizer
+  _showRegions: 1
+  _showInSceneView: 1
+  _showInGameView: 0
+  _fillAlpha: 0.1
+  _regions:
+  - name: left_workspace
+    xMin: -1
+    xMax: -0.1
+    yMin: -1
+    yMax: 1
+    zMin: 0
+    zMax: 0.5
+    color: {r: 0, g: 0.5, b: 1, a: 1}
+  - name: right_workspace
+    xMin: 0.1
+    xMax: 1
+    yMin: -1
+    yMax: 1
+    zMin: 0
+    zMax: 0.5
+    color: {r: 1, g: 0.5, b: 0, a: 1}
+  - name: shared_zone
+    xMin: -0.1
+    xMax: 0.1
+    yMin: -1
+    yMax: 1
+    zMin: 0
+    zMax: 0.5
+    color: {r: 1, g: 1, b: 0, a: 1}
+  - name: center
+    xMin: -0.3
+    xMax: 0.3
+    yMin: -0.3
+    yMax: 0.3
+    zMin: 0
+    zMax: 0.5
+    color: {r: 0, g: 1, b: 0.5, a: 1}
+  _showRobotBases: 1
+  _robot1Base: {x: -0.3, y: 0, z: 0}
+  _robot2Base: {x: 0.3, y: 0, z: 0}
+  _baseMarkerSize: 0.05
+  _baseMarkerColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
 --- !u!1 &1148410071 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 5985811518645940055, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
@@ -779,14 +834,14 @@ Light:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1168411245}
   m_Enabled: 1
-  serializedVersion: 11
+  serializedVersion: 12
   m_Type: 1
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_Intensity: 2
   m_Range: 10
   m_SpotAngle: 30
   m_InnerSpotAngle: 21.80208
-  m_CookieSize: 10
+  m_CookieSize2D: {x: 10, y: 10}
   m_Shadows:
     m_Type: 0
     m_Resolution: -1
@@ -998,6 +1053,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PythonCommunication.PythonCommandHandler
   _verboseLogging: 0
   _applySpeedMultiplier: 1
+  _enablePythonVerification: 1
   _successfulCommands: 0
   _failedCommands: 0
 --- !u!114 &1595579020
@@ -1028,8 +1084,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp-ACRL::PythonCommunication.SequenceClient
   _autoConnect: 1
   _autoReconnect: 1
-  _prompt: Calculate the coordinates of the blue cube on the left and move to it
-    and close the gripper
+  _prompt: Robot1 and Robot2 pick up cubes simultaneously
   _defaultRobotId: Robot1
   _cameraId: TableStereoCamera
   _logCommands: 1
@@ -1093,6 +1148,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 182468285294666188, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Name
+      value: SensorBase
+      objectReference: {fileID: 0}
     - target: {fileID: 590060560836442683, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -1101,10 +1160,18 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 608026700499321620, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 795938734311972712, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 1155213296871173493, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: 'm_Materials.Array.data[0]'
+      value: 
+      objectReference: {fileID: 2100000, guid: d47df1ce21d2e44e88bf94bd9eb351ac, type: 2}
     - target: {fileID: 1774938081313906251, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -1125,6 +1192,10 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 2906306481840707133, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 3149036954516521331, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: _useGraspPlanning
       value: 1
@@ -1136,6 +1207,14 @@ PrefabInstance:
     - target: {fileID: 3369921039827679538, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_IsActive
       value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3801913598865588310, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Name
+      value: Base
+      objectReference: {fileID: 0}
+    - target: {fileID: 3973292696487865520, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Name
+      value: SensorTip
       objectReference: {fileID: 0}
     - target: {fileID: 4194190411255862696, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_IsActive
@@ -1233,6 +1312,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Plate
       objectReference: {fileID: 0}
+    - target: {fileID: 6201449187924864663, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Name
+      value: Sensor
+      objectReference: {fileID: 0}
     - target: {fileID: 6213130728709646461, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
       value: GripperJoint
@@ -1249,9 +1332,17 @@ PrefabInstance:
       propertyPath: m_Name
       value: LeftCamera
       objectReference: {fileID: 0}
+    - target: {fileID: 7332227619515935780, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8060378706425881170, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
       value: Plate
+      objectReference: {fileID: 0}
+    - target: {fileID: 8212556730235983087, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Name
+      value: Mid
       objectReference: {fileID: 0}
     - target: {fileID: 8296404777737279667, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_UseGravity

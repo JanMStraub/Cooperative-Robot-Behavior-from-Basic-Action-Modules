@@ -220,6 +220,7 @@ namespace Simulation
         /// <summary>
         /// Initializes the coordination strategy based on the current configuration.
         /// Uses the Strategy Pattern to allow different coordination modes.
+        /// Phase 4: Now includes CollaborativeStrategy with Python verification
         /// </summary>
         private void InitializeCoordinationStrategy()
         {
@@ -227,7 +228,7 @@ namespace Simulation
             {
                 RobotCoordinationMode.Sequential => new SequentialStrategy(),
                 RobotCoordinationMode.Independent => new IndependentStrategy(),
-                RobotCoordinationMode.Collaborative => new IndependentStrategy(), // TODO: Implement CollaborativeStrategy
+                RobotCoordinationMode.Collaborative => new CollaborativeStrategy(), // Phase 4: Implemented
                 RobotCoordinationMode.MasterSlave => new IndependentStrategy(), // TODO: Implement MasterSlaveStrategy
                 RobotCoordinationMode.Distributed => new IndependentStrategy(), // TODO: Implement DistributedStrategy
                 _ => new IndependentStrategy(),
@@ -236,6 +237,23 @@ namespace Simulation
             Debug.Log(
                 $"{_logPrefix} Initialized coordination strategy: {_coordinationStrategy.GetType().Name}"
             );
+
+            // Phase 4: Log workspace manager status
+            if (config.coordinationMode == RobotCoordinationMode.Collaborative)
+            {
+                if (WorkspaceManager.Instance != null)
+                {
+                    Debug.Log($"{_logPrefix} [Phase 4] WorkspaceManager active for collaborative coordination");
+                }
+                else
+                {
+                    Debug.LogWarning(
+                        $"{_logPrefix} [Phase 4] WorkspaceManager not found! "
+                            + "Collaborative mode will operate without workspace management. "
+                            + "Add WorkspaceManager GameObject to scene for full Phase 4 features."
+                    );
+                }
+            }
         }
 
         /// <summary>
