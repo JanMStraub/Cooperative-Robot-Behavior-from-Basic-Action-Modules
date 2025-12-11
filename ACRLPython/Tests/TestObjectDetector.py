@@ -172,7 +172,7 @@ class TestCubeDetectorDetection:
 
         # Create an empty (black) image instead of None
         empty_image = np.zeros((1, 1, 3), dtype=np.uint8)
-        result = detector.detect_cubes(empty_image, camera_id="test")
+        result = detector.detect_objects(empty_image, camera_id="test")
 
         assert result.camera_id == "test"
         # Image dimensions will be 1x1, not 0x0
@@ -185,18 +185,18 @@ class TestCubeDetectorDetection:
         detector = CubeDetector()
         image = np.zeros((480, 640, 3), dtype=np.uint8)
 
-        result = detector.detect_cubes(image, camera_id="test")
+        result = detector.detect_objects(image, camera_id="test")
 
         assert result.camera_id == "test"
         assert result.image_width == 640
         assert result.image_height == 480
         assert len(result.detections) == 0
 
-    def test_detect_cubes_red_cube(self, sample_red_cube_image):
-        """Test detection of red cube"""
+    def test_detect_cubes_red_cube(self, sample_red_cube_image, disable_yolo_detection):
+        """Test detection of red cube using HSV color detection"""
         detector = CubeDetector()
 
-        result = detector.detect_cubes(sample_red_cube_image, camera_id="test")
+        result = detector.detect_objects(sample_red_cube_image, camera_id="test")
 
         # Should detect at least one red cube
         assert len(result.detections) >= 1
@@ -211,11 +211,11 @@ class TestCubeDetectorDetection:
         assert det.bbox_w > 0
         assert det.bbox_h > 0
 
-    def test_detect_cubes_blue_cube(self, sample_blue_cube_image):
-        """Test detection of blue cube"""
+    def test_detect_cubes_blue_cube(self, sample_blue_cube_image, disable_yolo_detection):
+        """Test detection of blue cube using HSV color detection"""
         detector = CubeDetector()
 
-        result = detector.detect_cubes(sample_blue_cube_image, camera_id="test")
+        result = detector.detect_objects(sample_blue_cube_image, camera_id="test")
 
         # Should detect at least one blue cube
         assert len(result.detections) >= 1
@@ -239,7 +239,7 @@ class TestCubeDetectorDetection:
         image[100:180, 100:180, 2] = 255  # Red cube 1
         image[300:380, 400:480, 2] = 255  # Red cube 2
 
-        result = detector.detect_cubes(image, camera_id="test")
+        result = detector.detect_objects(image, camera_id="test")
 
         if len(result.detections) >= 2:
             ids = [d.object_id for d in result.detections]
@@ -256,7 +256,7 @@ class TestCubeDetectorDetection:
             255  # 5x5 red square (area=25, below MIN_CUBE_AREA_PX=100)
         )
 
-        result = detector.detect_cubes(image, camera_id="test")
+        result = detector.detect_objects(image, camera_id="test")
 
         # Should not detect the tiny cube
         assert len(result.detections) == 0
@@ -271,7 +271,7 @@ class TestCubeDetectorDetection:
             255  # 300x10 red rectangle (aspect=30, above MAX_ASPECT_RATIO=2.0)
         )
 
-        result = detector.detect_cubes(image, camera_id="test")
+        result = detector.detect_objects(image, camera_id="test")
 
         # Should not detect elongated shape (or very few detections)
         # Some noise might create valid detections, but the main elongated one should be filtered
@@ -284,7 +284,7 @@ class TestCubeDetectorDetection:
         # Create well-defined red square
         image[200:300, 270:370, 2] = 255
 
-        result = detector.detect_cubes(image, camera_id="test")
+        result = detector.detect_objects(image, camera_id="test")
 
         if len(result.detections) > 0:
             det = result.detections[0]
@@ -309,7 +309,7 @@ class TestCubeDetectorDebug:
         detector.enable_debug = True
         detector.debug_dir = tmp_path
 
-        result = detector.detect_cubes(sample_red_cube_image, camera_id="test")
+        result = detector.detect_objects(sample_red_cube_image, camera_id="test")
 
         if len(result.detections) > 0:
             # Debug image should be saved
@@ -332,7 +332,7 @@ class TestCubeDetectorStereo:
         imgL = np.zeros((480, 640, 3), dtype=np.uint8)
         imgR = np.zeros((480, 640, 3), dtype=np.uint8)
 
-        result = detector.detect_cubes_stereo(imgL, imgR, camera_id="test")
+        result = detector.detect_objects_stereo(imgL, imgR, camera_id="test")
 
         assert result.camera_id == "test"
         assert len(result.detections) == 0
@@ -343,7 +343,7 @@ class TestCubeDetectorStereo:
 
         # Create minimal empty images instead of None
         empty_image = np.zeros((1, 1, 3), dtype=np.uint8)
-        result = detector.detect_cubes_stereo(
+        result = detector.detect_objects_stereo(
             empty_image, empty_image, camera_id="test"
         )
 
@@ -355,7 +355,7 @@ class TestCubeDetectorStereo:
         imgL = np.zeros((480, 640, 3), dtype=np.uint8)
         imgR = np.zeros((240, 320, 3), dtype=np.uint8)  # Different size
 
-        result = detector.detect_cubes_stereo(imgL, imgR, camera_id="test")
+        result = detector.detect_objects_stereo(imgL, imgR, camera_id="test")
 
         assert len(result.detections) == 0
 
@@ -376,7 +376,7 @@ class TestCubeDetectorStereo:
         mock_camera_config.baseline = 0.1
         mock_camera_config.fov = 60.0
 
-        result = detector.detect_cubes_stereo(
+        result = detector.detect_objects_stereo(
             imgL, imgR, camera_config=mock_camera_config, camera_id="stereo_test"
         )
 

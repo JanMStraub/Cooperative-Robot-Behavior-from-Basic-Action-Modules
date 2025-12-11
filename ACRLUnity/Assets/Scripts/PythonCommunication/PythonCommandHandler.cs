@@ -83,6 +83,13 @@ namespace PythonCommunication
         [SerializeField]
         private bool _applySpeedMultiplier = true;
 
+        [Tooltip("Enable Python CoordinationVerifier checks before executing movements (Phase 4)")]
+        [SerializeField]
+        private bool _enablePythonVerification = true;
+
+        [Tooltip("Workspace Manager for coordination (Phase 4)")]
+        private Simulation.WorkspaceManager _workspaceManager;
+
         [Header("Runtime Info")]
         [Tooltip("Number of commands processed successfully")]
         [SerializeField]
@@ -134,6 +141,17 @@ namespace PythonCommunication
                         + "Ensure RobotManager GameObject is in the scene."
                 );
                 return;
+            }
+
+            // Get WorkspaceManager instance (Phase 4)
+            _workspaceManager = Simulation.WorkspaceManager.Instance;
+            if (_workspaceManager == null && _enablePythonVerification)
+            {
+                Debug.LogWarning(
+                    $"{_logPrefix} WorkspaceManager.Instance is null! "
+                        + "Workspace coordination will be disabled. "
+                        + "Add WorkspaceManager GameObject to enable Phase 4 features."
+                );
             }
 
             Debug.Log($"{_logPrefix} Initialized and listening for Python commands");
@@ -277,6 +295,7 @@ namespace PythonCommunication
 
         /// <summary>
         /// Execute move_to_coordinate command
+        /// Phase 4: Now includes Python CoordinationVerifier integration
         /// </summary>
         private void ExecuteMoveToCoordinate(RobotCommand command)
         {
@@ -312,6 +331,22 @@ namespace PythonCommunication
                     command.parameters.target_position.z
                 );
 
+                // Phase 4: Check Python CoordinationVerifier before executing
+                if (_enablePythonVerification)
+                {
+                    if (!VerifyMovementSafety(command.robot_id, targetPosition))
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} [Phase 4] Movement verification failed for {command.robot_id} "
+                                + $"to ({targetPosition.x:F3}, {targetPosition.y:F3}, {targetPosition.z:F3}). "
+                                + "Movement blocked by coordination check."
+                        );
+                        SendCommandCompletion(command.robot_id, "move_to_coordinate", false, command.request_id);
+                        _failedCommands++;
+                        return;
+                    }
+                }
+
                 // Apply speed multiplier if enabled
                 if (_applySpeedMultiplier && command.parameters.speed_multiplier > 0)
                 {
@@ -339,8 +374,29 @@ namespace PythonCommunication
                         _activeCommands.Remove(commandKey);
                         SendCommandCompletion(command.robot_id, "move_to_coordinate", true, command.request_id);
                     }
+
+                    // Phase 4: Release workspace region after movement completes
+                    if (_workspaceManager != null)
+                    {
+                        var region = _workspaceManager.GetRegionAtPosition(targetPosition);
+                        if (region != null && region.allocatedRobotId == command.robot_id)
+                        {
+                            _workspaceManager.ClearCollisionZone(region.regionName);
+                        }
+                    }
                 };
                 controller.OnTargetReached += onComplete;
+
+                // Phase 4: Allocate workspace region before movement starts
+                if (_workspaceManager != null)
+                {
+                    var region = _workspaceManager.GetRegionAtPosition(targetPosition);
+                    if (region != null)
+                    {
+                        _workspaceManager.AllocateRegion(command.robot_id, region.regionName);
+                        _workspaceManager.MarkCollisionZone(region.regionName);
+                    }
+                }
 
                 // Execute movement
                 controller.SetTarget(targetPosition);
@@ -848,6 +904,110 @@ namespace PythonCommunication
             }
 
             return UnifiedPythonReceiver.Instance.SendCompletion(statusJson, requestId);
+        }
+
+        #endregion
+
+        #region Phase 4: Python Verification Integration
+
+        /// <summary>
+        /// Verify movement safety using workspace manager and coordination checks
+        /// Phase 4: Integration with Python CoordinationVerifier
+        /// </summary>
+        /// <param name="robotId">Robot requesting movement</param>
+        /// <param name="targetPosition">Target position</param>
+        /// <returns>True if movement is safe, false if blocked</returns>
+        private bool VerifyMovementSafety(string robotId, Vector3 targetPosition)
+        {
+            if (_workspaceManager == null)
+            {
+                // No workspace manager, allow movement (fallback to independent mode)
+                return true;
+            }
+
+            // Check 1: Workspace region availability
+            var targetRegion = _workspaceManager.GetRegionAtPosition(targetPosition);
+            if (targetRegion != null)
+            {
+                if (!_workspaceManager.IsRegionAvailable(targetRegion.regionName, robotId))
+                {
+                    if (_verboseLogging)
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} [Phase 4] Workspace conflict: Region '{targetRegion.regionName}' "
+                                + $"is allocated to {targetRegion.allocatedRobotId}"
+                        );
+                    }
+                    return false;
+                }
+
+                // Check if region is currently a collision zone
+                if (_workspaceManager.IsCollisionZone(targetRegion.regionName))
+                {
+                    if (_verboseLogging)
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} [Phase 4] Collision zone: Region '{targetRegion.regionName}' "
+                                + "is currently in use by another robot"
+                        );
+                    }
+                    return false;
+                }
+            }
+
+            // Check 2: Minimum separation from other robots
+            var allRobots = _robotManager.RobotInstances;
+            foreach (var kvp in allRobots)
+            {
+                if (kvp.Key == robotId)
+                    continue; // Skip self
+
+                var otherController = kvp.Value.controller;
+                if (otherController == null)
+                    continue;
+
+                Vector3 otherPosition = otherController.GetCurrentEndEffectorPosition();
+                if (!_workspaceManager.IsSafeSeparation(targetPosition, otherPosition))
+                {
+                    if (_verboseLogging)
+                    {
+                        float distance = Vector3.Distance(targetPosition, otherPosition);
+                        Debug.LogWarning(
+                            $"{_logPrefix} [Phase 4] Collision risk: Target position too close to {kvp.Key} "
+                                + $"(distance: {distance:F3}m)"
+                        );
+                    }
+                    return false;
+                }
+
+                // Also check if other robot is moving towards a conflicting target
+                if (otherController.HasTarget)
+                {
+                    Vector3 otherTarget = otherController.GetTargetPosition();
+                    if (!_workspaceManager.IsSafeSeparation(targetPosition, otherTarget))
+                    {
+                        if (_verboseLogging)
+                        {
+                            Debug.LogWarning(
+                                $"{_logPrefix} [Phase 4] Path conflict: {kvp.Key} is moving to nearby position"
+                            );
+                        }
+                        return false;
+                    }
+                }
+            }
+
+            // All checks passed
+            return true;
+        }
+
+        /// <summary>
+        /// Enable or disable Python verification
+        /// </summary>
+        public void SetPythonVerificationEnabled(bool enabled)
+        {
+            _enablePythonVerification = enabled;
+            Debug.Log($"{_logPrefix} [Phase 4] Python verification {(enabled ? "enabled" : "disabled")}");
         }
 
         #endregion

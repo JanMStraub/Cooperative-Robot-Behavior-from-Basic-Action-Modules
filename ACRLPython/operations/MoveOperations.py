@@ -15,6 +15,8 @@ from .Base import (
     OperationComplexity,
     OperationParameter,
     OperationResult,
+    ParameterFlow,
+    OperationRelationship,
 )
 
 # Configure logging
@@ -336,6 +338,21 @@ def create_move_to_coordinate_operation() -> BasicOperation:
         required_operations=[],
         commonly_paired_with=["detect_object", "grip_object", "release_object"],
         mutually_exclusive_with=["rotate_gripper"],  # Can't rotate while moving
+        relationships=OperationRelationship(
+            operation_id="motion_move_to_coord_001",
+            required_operations=["status_check_robot_001"],
+            required_reasons={
+                "status_check_robot_001": "Verify robot is ready and not executing another command before moving",
+            },
+            commonly_paired_with=["perception_stereo_detect_001", "manipulation_control_gripper_001", "status_check_robot_001"],
+            pairing_reasons={
+                "perception_stereo_detect_001": "Move to detected object coordinates after detection",
+                "manipulation_control_gripper_001": "Position gripper before grasping or after releasing",
+                "status_check_robot_001": "Verify arrival at target position after movement",
+            },
+            typical_before=["manipulation_control_gripper_001"],
+            typical_after=["perception_stereo_detect_001", "spatial_move_relative_001"],
+        ),
         # Link to the actual implementation function
         implementation=move_to_coordinate,
     )

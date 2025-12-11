@@ -72,7 +72,7 @@ def detect_objects(
             from ..vision.ObjectDetector import CubeDetector
 
         detector = CubeDetector()
-        result = detector.detect_cubes(image, camera_id=camera_id)
+        result = detector.detect_objects(image, camera_id=camera_id)
 
         # Convert to dictionary format
         detections = [det.to_dict() for det in result.detections]

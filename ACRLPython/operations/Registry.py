@@ -17,6 +17,16 @@ from .GripperOperations import CONTROL_GRIPPER_OPERATION
 from .DefaultPositionOperation import RETURN_TO_START_POSITION_OPERATION
 from .DetectionOperations import DETECT_OBJECTS_OPERATION
 from .VisionOperations import ANALYZE_SCENE_OPERATION, DETECT_OBJECT_STEREO_OPERATION
+from .SpatialOperations import (
+    MOVE_RELATIVE_TO_OBJECT_OPERATION,
+    MOVE_BETWEEN_OBJECTS_OPERATION,
+    MOVE_TO_REGION_OPERATION,
+)
+from .CoordinationOperations import (
+    COORDINATE_SIMULTANEOUS_MOVE_OPERATION,
+    COORDINATE_HANDOFF_OPERATION,
+    ALLOCATE_WORKSPACE_REGION_OPERATION,
+)
 
 class OperationRegistry:
     """
@@ -44,6 +54,14 @@ class OperationRegistry:
             DETECT_OBJECTS_OPERATION,
             DETECT_OBJECT_STEREO_OPERATION,
             ANALYZE_SCENE_OPERATION,
+            # Spatial reasoning operations (Phase 2)
+            MOVE_RELATIVE_TO_OBJECT_OPERATION,
+            MOVE_BETWEEN_OBJECTS_OPERATION,
+            MOVE_TO_REGION_OPERATION,
+            # Coordination operations (Phase 3)
+            COORDINATE_SIMULTANEOUS_MOVE_OPERATION,
+            COORDINATE_HANDOFF_OPERATION,
+            ALLOCATE_WORKSPACE_REGION_OPERATION,
         ]
 
         for op in operations:

@@ -9,6 +9,7 @@ from typing import Optional
 import logging
 
 from operations.Registry import OperationRegistry, get_global_registry
+from operations.WorkflowPatterns import WorkflowPatternRegistry, get_global_workflow_registry
 
 from .Embeddings import EmbeddingGenerator
 from .VectorStore import VectorStore
@@ -30,6 +31,7 @@ class OperationIndexer:
     def __init__(
         self,
         registry: Optional[OperationRegistry] = None,
+        workflow_registry: Optional[WorkflowPatternRegistry] = None,
         embedding_generator: Optional[EmbeddingGenerator] = None,
     ):
         """
@@ -37,9 +39,11 @@ class OperationIndexer:
 
         Args:
             registry: Operation registry (default: global registry)
+            workflow_registry: Workflow pattern registry (default: global workflow registry)
             embedding_generator: Embedding generator (default: new instance)
         """
         self.registry = registry or get_global_registry()
+        self.workflow_registry = workflow_registry or get_global_workflow_registry()
         self.embedding_generator = embedding_generator or EmbeddingGenerator()
 
     def build_index(self, save: bool = True) -> VectorStore:
@@ -60,11 +64,13 @@ class OperationIndexer:
             Saved vector store to .rag_index.pkl (5 operations)
         """
         operations = self.registry.get_all_operations()
+        workflows = self.workflow_registry.get_all_patterns()
 
-        if not operations:
-            logger.warning("No operations found in registry")
+        if not operations and not workflows:
+            logger.warning("No operations or workflows found in registries")
             return VectorStore()
 
+        logger.info(f"Building index for {len(operations)} operations and {len(workflows)} workflow patterns...")
 
         # Create new vector store
         store = VectorStore()
@@ -73,6 +79,7 @@ class OperationIndexer:
         texts_to_embed = []
         operation_data = []
 
+        # Index operations
         for op in operations:
             # Generate RAG document text
             rag_text = op.to_rag_document()
@@ -90,6 +97,31 @@ class OperationIndexer:
                         "average_duration_ms": op.average_duration_ms,
                         "success_rate": op.success_rate,
                         "parameters": [p.name for p in op.parameters],
+                        "type": "operation",
+                    },
+                }
+            )
+
+        # Index workflow patterns
+        for workflow in workflows:
+            # Generate RAG document text
+            rag_text = workflow.to_rag_document()
+            texts_to_embed.append(rag_text)
+
+            # Store workflow data
+            operation_data.append(
+                {
+                    "operation_id": workflow.pattern_id,
+                    "metadata": {
+                        "name": workflow.name,
+                        "category": workflow.category.value,
+                        "complexity": "workflow",
+                        "description": workflow.description,
+                        "average_duration_ms": 0,  # Workflows don't have duration
+                        "success_rate": 1.0,
+                        "parameters": [],
+                        "type": "workflow",
+                        "step_count": len(workflow.steps),
                     },
                 }
             )

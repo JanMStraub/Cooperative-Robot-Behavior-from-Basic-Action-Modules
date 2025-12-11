@@ -3,9 +3,10 @@
 RunSequenceServer.py - Entry point for running the Sequence Server
 
 This orchestrator starts all required servers for multi-command sequence execution:
-- ResultsServer (port 5010) - Sends commands to Unity
-- StatusServer (port 5012) - Receives completion signals from Unity
+- ResultsServer (port 5010) - Bidirectional: sends commands and receives completions
 - SequenceServer (port 5013) - Receives compound commands from Unity
+
+Note: StatusServer was merged into ResultsServer/CommandServer (port 5010)
 
 Usage:
     python -m orchestrators.RunSequenceServer [--model MODEL] [--test]
@@ -26,7 +27,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import LLMConfig as cfg
 from servers.ResultsServer import run_results_server_background
-from servers.StatusServer import run_status_server_background
 from servers.SequenceServer import run_sequence_server_background, SequenceQueryHandler
 from servers.StreamingServer import run_streaming_server_background
 
@@ -82,11 +82,6 @@ def main():
         help="Don't start ResultsServer (if already running)"
     )
     parser.add_argument(
-        "--no-status-server",
-        action="store_true",
-        help="Don't start StatusServer (if already running)"
-    )
-    parser.add_argument(
         "--no-streaming-server",
         action="store_true",
         help="Don't start StreamingServer (if already running)"
@@ -120,18 +115,8 @@ def main():
         results_server = run_results_server_background(
             cfg.get_results_config()  # type: ignore[arg-type]
         )
-        logger.info(f"ResultsServer started on port {cfg.RESULTS_SERVER_PORT}")
+        logger.info(f"ResultsServer started on port {cfg.RESULTS_SERVER_PORT} (handles commands and completions)")
         time.sleep(0.5)
-
-    status_server = None
-    if not args.no_status_server:
-        status_server = run_status_server_background(
-            cfg.get_status_config()  # type: ignore[arg-type]
-        )
-        logger.info(f"StatusServer started on port {cfg.STATUS_SERVER_PORT}")
-        time.sleep(0.5)
-    else:
-        logger.warning("StatusServer DISABLED - completion signals will not be received")
 
     # Determine if completion checking should be enabled
     check_completion = not args.no_completion_check
@@ -177,13 +162,9 @@ def main():
                 logger.error("SequenceServer stopped unexpectedly!")
                 break
 
-            # results_server and status_server are daemon threads - they stop automatically
+            # results_server and streaming_server are daemon threads - they stop automatically
             if results_server and not results_server.is_alive():
                 logger.error("ResultsServer stopped unexpectedly!")
-                break
-
-            if status_server and not status_server.is_alive():
-                logger.error("StatusServer stopped unexpectedly!")
                 break
 
             if streaming_server and not streaming_server.is_alive():
@@ -199,7 +180,7 @@ def main():
         if sequence_server:
             sequence_server.stop()
 
-        # results_server and status_server are daemon threads - they stop automatically
+        # results_server and streaming_server are daemon threads - they stop automatically
         # when main thread exits
 
         logger.info("Shutdown complete")

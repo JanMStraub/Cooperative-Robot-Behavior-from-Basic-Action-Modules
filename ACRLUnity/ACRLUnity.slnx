@@ -1,0 +1,6 @@
+﻿<Solution>
+  <Project Path="Assembly-CSharp-ACRL.csproj" />
+  <Project Path="Tests.PlayMode.csproj" />
+  <Project Path="Assembly-CSharp-ACRL-Editor.csproj" />
+  <Project Path="Tests.EditMode.csproj" />
+</Solution>

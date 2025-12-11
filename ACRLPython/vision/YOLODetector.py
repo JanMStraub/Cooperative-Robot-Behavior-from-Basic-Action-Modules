@@ -53,7 +53,7 @@ import numpy as np
 import cv2
 
 try:
-    from ultralytics import YOLO
+    from ultralytics import YOLO # type: ignore
 
     YOLO_AVAILABLE = True
 except ImportError:
@@ -425,7 +425,7 @@ class YOLODetector:
                 # Create detection object
                 det = DetectionObject(
                     object_id=object_id,
-                    color=class_name,  # Use class_name instead of color
+                    color=class_name,  # Use full class name (e.g., "red_cube", "robot", "base")
                     bbox=(x, y, w, h),
                     confidence=confidence,
                 )

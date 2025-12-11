@@ -181,6 +181,31 @@ namespace Robotics
         }
 
         /// <summary>
+        /// Phase 4: Check if robot has an active target
+        /// </summary>
+        public bool HasTarget => _targetTransform != null;
+
+        /// <summary>
+        /// Phase 4: Get current target position (throws if no target set)
+        /// </summary>
+        public Vector3 GetTargetPosition()
+        {
+            if (_targetTransform == null)
+                throw new System.InvalidOperationException("No target is currently set");
+            return _targetTransform.position;
+        }
+
+        /// <summary>
+        /// Phase 4: Get current end effector position
+        /// </summary>
+        public Vector3 GetCurrentEndEffectorPosition()
+        {
+            if (endEffectorBase == null)
+                return Vector3.zero;
+            return endEffectorBase.position;
+        }
+
+        /// <summary>
         /// Initializes joint drive properties (stiffness, damping, limits, etc.)
         /// and allocates matrices for IK calculations.
         /// </summary>

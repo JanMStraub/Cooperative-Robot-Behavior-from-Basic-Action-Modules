@@ -276,11 +276,90 @@ class CommandServer(TCPServerBase):
         try:
             completion = json.loads(json_bytes.decode("utf-8"))
             completion["request_id"] = request_id
+
+            # Handle world state updates
+            if completion.get("type") == "world_state_update":
+                self._handle_world_state_update(completion)
+                # Don't return world state updates as completions
+                logger.debug(f"Processed world state update")
+                return None
+
             logger.debug(f"Received completion for request {request_id}: {completion.get('type', 'unknown')}")
             return completion
         except json.JSONDecodeError as e:
             logger.error(f"Invalid completion JSON: {e}")
             return None
+
+    def _handle_world_state_update(self, update: Dict[str, Any]):
+        """
+        Process a world state update from Unity and update the WorldState singleton.
+
+        Args:
+            update: World state update dictionary with 'robots' and 'objects' lists
+        """
+        try:
+            from operations.WorldState import get_world_state
+
+            world_state = get_world_state()
+
+            # Update robot states
+            robots = update.get("robots", [])
+            for robot_data in robots:
+                robot_id = robot_data.get("robot_id")
+                if not robot_id:
+                    continue
+
+                # Convert Unity format to WorldState format
+                position = robot_data.get("position")
+                if position:
+                    position = (position.get("x"), position.get("y"), position.get("z"))
+
+                rotation = robot_data.get("rotation")
+                if rotation:
+                    # WorldState expects (roll, pitch, yaw) in degrees
+                    # Unity sends quaternion (x, y, z, w)
+                    # For now, we'll store the quaternion as-is
+                    rotation = (rotation.get("x"), rotation.get("y"), rotation.get("z"), rotation.get("w"))
+
+                target_position = robot_data.get("target_position")
+                if target_position:
+                    target_position = (target_position.get("x"), target_position.get("y"), target_position.get("z"))
+
+                state_data = {
+                    "position": position,
+                    "rotation": rotation,
+                    "target_position": target_position,
+                    "gripper_state": robot_data.get("gripper_state", "unknown"),
+                    "is_moving": robot_data.get("is_moving", False),
+                    "is_initialized": robot_data.get("is_initialized", False),
+                    "joint_angles": robot_data.get("joint_angles", [])
+                }
+
+                world_state.update_robot_state(robot_id, state_data)
+
+            # Update object positions
+            objects = update.get("objects", [])
+            for obj_data in objects:
+                object_id = obj_data.get("object_id")
+                if not object_id:
+                    continue
+
+                position = obj_data.get("position")
+                if position:
+                    position = (position.get("x"), position.get("y"), position.get("z"))
+
+                    world_state.update_object_position(
+                        object_id=object_id,
+                        position=position,
+                        color=obj_data.get("color", "unknown"),
+                        object_type=obj_data.get("object_type", "unknown"),
+                        confidence=obj_data.get("confidence", 1.0)
+                    )
+
+            logger.debug(f"Updated world state: {len(robots)} robots, {len(objects)} objects")
+
+        except Exception as e:
+            logger.error(f"Error handling world state update: {e}", exc_info=True)
 
     def _recv_exact(self, client: socket.socket, num_bytes: int) -> Optional[bytes]:
         """Receive exactly num_bytes."""

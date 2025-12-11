@@ -21,6 +21,9 @@ import threading
 
 from operations.Registry import get_global_registry
 from operations.Base import OperationCategory
+from operations.Verification import OperationVerifier
+from operations.CoordinationVerifier import CoordinationVerifier
+from operations.WorldState import get_world_state
 from servers.CommandServer import get_command_broadcaster
 
 # Configure logging
@@ -43,7 +46,8 @@ class SequenceExecutor:
     def __init__(
         self,
         default_timeout: float = 60.0,
-        check_completion: bool = True
+        check_completion: bool = True,
+        enable_verification: bool = True
     ):
         """
         Initialize the SequenceExecutor.
@@ -51,14 +55,26 @@ class SequenceExecutor:
         Args:
             default_timeout: Default timeout in seconds for each operation (60s for movements)
             check_completion: Whether to check for operation completion via StatusServer
+            enable_verification: Whether to enable formal verification (preconditions/postconditions)
         """
         self.registry = get_global_registry()
         self.default_timeout = default_timeout
         self.check_completion = check_completion
+        self.enable_verification = enable_verification
         self._abort_flag = False
         self._current_sequence_id: Optional[str] = None
         self._progress_callbacks: List[Callable] = []
         self._variables: Dict[str, Any] = {}  # Variable storage for passing results between operations
+
+        # Initialize verification components
+        if enable_verification:
+            self.verifier = OperationVerifier()
+            self.coordination_verifier = CoordinationVerifier()
+            self.world_state = get_world_state()
+        else:
+            self.verifier = None
+            self.coordination_verifier = None
+            self.world_state = None
 
     def execute_sequence(
         self,
@@ -118,7 +134,11 @@ class SequenceExecutor:
             params = cmd.get("params", {})
             capture_var = cmd.get("capture_var")  # Variable name to capture result
 
-            # Resolve variable references in params
+            # === PRIORITY 2: Automatic Parameter Flow ===
+            # Auto-inject parameters from previous operations based on ParameterFlow definitions
+            params = self._auto_inject_parameters(operation, params)
+
+            # Resolve variable references in params (manual $ references)
             params = self._resolve_variables(params)
 
             logger.info(f"Executing command {i + 1}/{len(commands)}: {operation}")
@@ -143,10 +163,14 @@ class SequenceExecutor:
                 self._notify_progress(i, len(commands), operation, "completed")
                 logger.info(f"Command {i + 1} completed successfully in {cmd_duration:.0f}ms")
 
-                # Capture result to variable if specified
+                # Capture result to variable if specified (manual capture)
                 if capture_var and cmd_result.get("result"):
                     self._variables[capture_var] = cmd_result["result"]
                     logger.debug(f"Captured result to ${capture_var}")
+
+                # === PRIORITY 2: Automatic Parameter Flow ===
+                # Automatically capture outputs based on ParameterFlow definitions
+                self._auto_capture_outputs(operation, cmd_result.get("result", {}))
             else:
                 self._notify_progress(i, len(commands), operation, "failed")
                 logger.error(f"Command {i + 1} failed: {cmd_result.get('error')}")
@@ -199,11 +223,49 @@ class SequenceExecutor:
             logger.debug(f"Created completion queue for request_id {request_id}")
 
         try:
+            # Get operation definition for verification
+            op_def = self.registry.get_operation_by_name(operation)
+            if op_def is None:
+                return {
+                    "success": False,
+                    "result": None,
+                    "error": f"Operation '{operation}' not found in registry"
+                }
+
+            # === PRIORITY 3: Unified Verification ===
+            if self.enable_verification and self.verifier:
+                verification_result = self._verify_operation_safety(op_def, params)
+
+                if not verification_result["safe"]:
+                    return {
+                        "success": False,
+                        "result": None,
+                        "error": verification_result["error"],
+                        "verification_details": verification_result["details"]
+                    }
+
+                # Log any warnings
+                if verification_result["warnings"]:
+                    for warning in verification_result["warnings"]:
+                        logger.warning(f"Verification warning: {warning}")
+
             # Add request_id to params so operation includes it in command to Unity
             params_with_request_id = {**params, "request_id": request_id}
 
             # Execute the operation
             op_result = self.registry.execute_operation_by_name(operation, **params_with_request_id)
+
+            # === PHASE 3: Postcondition Verification ===
+            if self.enable_verification and self.verifier and op_result.success:
+                logger.debug(f"Verifying postconditions for {operation}")
+                post_result = self.verifier.verify_postconditions(
+                    op_def, op_result, params, self.world_state
+                )
+
+                # Postcondition failures are warnings, not blockers
+                if not post_result.success:
+                    violation_msgs = [f"{v.predicate}: {v.reason}" for v in post_result.violations]
+                    logger.warning(f"Postcondition verification failed: {violation_msgs}")
 
             if not op_result.success:
                 return {
@@ -363,6 +425,167 @@ class SequenceExecutor:
                 callback(index, total, operation, status)
             except Exception as e:
                 logger.error(f"Progress callback error: {e}")
+
+    def _verify_operation_safety(self, op_def, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Unified verification combining operation preconditions and multi-robot coordination checks.
+
+        This is PRIORITY 3: Single pre-execution safety check that combines both verifiers.
+
+        Args:
+            op_def: Operation definition from registry
+            params: Operation parameters
+
+        Returns:
+            Dict with structure:
+            {
+                "safe": bool,  # True if all checks passed
+                "error": str or None,  # Error message if not safe
+                "warnings": List[str],  # Non-critical warnings
+                "details": {
+                    "precondition_check": dict,
+                    "coordination_check": dict
+                }
+            }
+        """
+        warnings = []
+        details = {}
+
+        # === Step 1: Verify operation preconditions ===
+        logger.debug(f"Running unified verification for {op_def.name}")
+        pre_result = self.verifier.verify_preconditions(op_def, params, self.world_state)
+        details["precondition_check"] = pre_result.to_dict()
+
+        if not pre_result.execution_allowed:
+            violation_msgs = [f"{v.predicate}: {v.reason}" for v in pre_result.violations]
+            logger.error(f"Precondition verification failed: {violation_msgs}")
+            return {
+                "safe": False,
+                "error": f"Precondition failed: {'; '.join(violation_msgs)}",
+                "warnings": warnings,
+                "details": details
+            }
+
+        # Collect precondition warnings
+        if pre_result.warnings:
+            warnings.extend([f"Precondition - {w.predicate}: {w.reason}" for w in pre_result.warnings])
+
+        # === Step 2: Multi-robot coordination safety check ===
+        robot_id = params.get("robot_id")
+        if robot_id and self.coordination_verifier:
+            logger.debug(f"Checking multi-robot coordination safety")
+            coord_result = self.coordination_verifier.verify_multi_robot_safety(
+                robot_id, op_def.category, params, self.world_state
+            )
+            details["coordination_check"] = coord_result.to_dict()
+
+            if not coord_result.safe:
+                issue_msgs = [f"{i.issue_type}: {i.description}" for i in coord_result.issues]
+                logger.error(f"Coordination safety check failed: {issue_msgs}")
+                return {
+                    "safe": False,
+                    "error": f"Multi-robot coordination issue: {'; '.join(issue_msgs)}",
+                    "warnings": warnings,
+                    "details": details
+                }
+
+            # Collect coordination warnings
+            if coord_result.warnings:
+                warnings.extend([f"Coordination - {w.issue_type}: {w.description}" for w in coord_result.warnings])
+
+        # === All checks passed ===
+        logger.debug(f"Unified verification passed for {op_def.name}")
+        return {
+            "safe": True,
+            "error": None,
+            "warnings": warnings,
+            "details": details
+        }
+
+    def _auto_capture_outputs(self, operation_name: str, result: Dict[str, Any]):
+        """
+        Automatically capture operation outputs based on ParameterFlow definitions.
+
+        This enables automatic chaining: detect_object output → move_to_coordinate input.
+
+        Args:
+            operation_name: Name of the operation that just completed
+            result: Operation result containing output values
+        """
+        if not result:
+            return
+
+        # Get operation definition to access relationships
+        op_def = self.registry.get_operation_by_name(operation_name)
+        if not op_def or not op_def.relationships:
+            return
+
+        # Check if operation has parameter flows
+        param_flows = op_def.relationships.parameter_flows
+        if not param_flows:
+            return
+
+        # Capture each output defined in parameter flows
+        for flow in param_flows:
+            output_key = flow.source_output_key
+            if output_key in result:
+                # Store with a namespaced variable name: {operation}_{key}
+                var_name = f"{operation_name}_{output_key}"
+                self._variables[var_name] = result[output_key]
+                logger.debug(f"Auto-captured {output_key}={result[output_key]} to ${var_name} (from {operation_name})")
+
+                # Also store in operation-level dict for easier access
+                op_result_var = f"{operation_name}_result"
+                if op_result_var not in self._variables:
+                    self._variables[op_result_var] = {}
+                self._variables[op_result_var][output_key] = result[output_key]
+
+    def _auto_inject_parameters(self, operation_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Automatically inject parameters from previous operations based on ParameterFlow definitions.
+
+        This enables automatic chaining: previous operation output → current operation input.
+
+        Args:
+            operation_name: Name of the operation about to execute
+            params: Current parameters (may be incomplete)
+
+        Returns:
+            Parameters with auto-injected values from previous operations
+        """
+        # Get operation definition to access relationships
+        op_def = self.registry.get_operation_by_name(operation_name)
+        if not op_def or not op_def.relationships:
+            return params
+
+        # Check if operation has parameter flows (inputs from other operations)
+        param_flows = op_def.relationships.parameter_flows
+        if not param_flows:
+            return params
+
+        enhanced_params = dict(params)
+
+        # Inject parameters from previous operations
+        for flow in param_flows:
+            # Check if this flow targets the current operation
+            if flow.target_operation != op_def.operation_id and flow.target_operation != operation_name:
+                continue
+
+            # Check if parameter is already provided
+            target_param = flow.target_input_param
+            if target_param in enhanced_params:
+                logger.debug(f"Parameter {target_param} already provided, skipping auto-injection")
+                continue
+
+            # Try to get value from captured variables
+            source_var_name = f"{flow.source_operation}_{flow.source_output_key}"
+            if source_var_name in self._variables:
+                enhanced_params[target_param] = self._variables[source_var_name]
+                logger.info(f"Auto-injected {target_param}={self._variables[source_var_name]} from ${source_var_name}")
+            else:
+                logger.debug(f"No captured value for {source_var_name}, cannot auto-inject {target_param}")
+
+        return enhanced_params
 
     def _resolve_variables(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
