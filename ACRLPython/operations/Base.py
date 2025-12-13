@@ -45,6 +45,7 @@ class OperationParameter:
         required: Whether parameter is mandatory
         default: Default value if not required
         valid_range: Optional tuple of (min, max) for numeric parameters
+        valid_values: Optional list of valid values for enum-like parameters
     """
 
     name: str
@@ -53,6 +54,7 @@ class OperationParameter:
     required: bool = True
     default: Any = None
     valid_range: Optional[tuple] = None
+    valid_values: Optional[List[Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
@@ -63,6 +65,7 @@ class OperationParameter:
             "required": self.required,
             "default": self.default,
             "valid_range": self.valid_range,
+            "valid_values": self.valid_values,
         }
 
     def validate(self, value: Any) -> tuple[bool, Optional[str]]:
@@ -75,6 +78,15 @@ class OperationParameter:
         # Check required
         if self.required and value is None:
             return False, f"Parameter '{self.name}' is required"
+
+        # Check valid values (enum-like validation)
+        if self.valid_values and value is not None:
+            if value not in self.valid_values:
+                valid_str = ", ".join([f"'{v}'" for v in self.valid_values])
+                return (
+                    False,
+                    f"Parameter '{self.name}' value '{value}' not in valid values: {valid_str}",
+                )
 
         # Check range for numeric types
         if self.valid_range and value is not None:

@@ -62,7 +62,7 @@ namespace Simulation.CoordinationStrategies
             {
                 if (controller.HasTarget)
                 {
-                    _plannedTargets[controller.robotId] = controller.GetTargetPosition();
+                    _plannedTargets[controller.robotId] = controller.GetCurrentTarget().Value;
                     _activeRobots.Add(controller.robotId);
                 }
             }
@@ -107,8 +107,8 @@ namespace Simulation.CoordinationStrategies
         /// </summary>
         private void CheckRobotPairConflict(RobotController robot1, RobotController robot2)
         {
-            Vector3 target1 = robot1.GetTargetPosition();
-            Vector3 target2 = robot2.GetTargetPosition();
+            Vector3 target1 = robot1.GetCurrentTarget().Value;
+            Vector3 target2 = robot2.GetCurrentTarget().Value;
             Vector3 current1 = robot1.GetCurrentEndEffectorPosition();
             Vector3 current2 = robot2.GetCurrentEndEffectorPosition();
 

@@ -3410,7 +3410,6 @@ GameObject:
   - component: {fileID: 6851816749489167917}
   - component: {fileID: 978755434903592783}
   - component: {fileID: 634091199265105748}
-  - component: {fileID: 3149036954516521331}
   m_Layer: 7
   m_Name: Robot1
   m_TagString: Robot
@@ -3488,6 +3487,8 @@ MonoBehaviour:
   - 0
   - 0
   - 0
+  debugTarget: {fileID: 0}
+  _gripperController: {fileID: 0}
 --- !u!114 &634091199265105748
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3505,20 +3506,6 @@ MonoBehaviour:
   logMovement: 1
   logGripper: 1
   autoRegisterObjects: 1
---- !u!114 &3149036954516521331
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3238837518068886331}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e85eee7761a504444bf806fb10606fac, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RobotGripperBehavior
-  _useGraspPlanning: 0
-  _logGraspActions: 1
 --- !u!1 &3369921039827679538
 GameObject:
   m_ObjectHideFlags: 0
@@ -3811,6 +3798,7 @@ GameObject:
   - component: {fileID: 2851688770042148413}
   - component: {fileID: 1155213296871173493}
   - component: {fileID: 5306240913205018152}
+  - component: {fileID: 1966179564287834215}
   m_Layer: 0
   m_Name: sensortip
   m_TagString: Untagged
@@ -3911,6 +3899,20 @@ SphereCollider:
   serializedVersion: 3
   m_Radius: 0.5000001
   m_Center: {x: 0.000013828278, y: 0, z: -0.0000019073486}
+--- !u!114 &1966179564287834215
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3973292696487865520}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 81973d5876a324a59b2fa0abeae9459f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::ObjectAttacher
+  targetTag: Target
+  disablePhysicsOnAttach: 1
 --- !u!1 &4166479720334819438
 GameObject:
   m_ObjectHideFlags: 0
@@ -6090,7 +6092,6 @@ GameObject:
   - component: {fileID: 5100622569503124787}
   - component: {fileID: 6517560048216686290}
   - component: {fileID: 1879560100186494199}
-  - component: {fileID: 3107173954982903968}
   m_Layer: 7
   m_Name: Robot2
   m_TagString: Robot
@@ -6168,6 +6169,8 @@ MonoBehaviour:
   - 0
   - 0
   - 0
+  debugTarget: {fileID: 0}
+  _gripperController: {fileID: 0}
 --- !u!114 &1879560100186494199
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6185,20 +6188,6 @@ MonoBehaviour:
   logMovement: 1
   logGripper: 1
   autoRegisterObjects: 1
---- !u!114 &3107173954982903968
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6077284443812479320}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e85eee7761a504444bf806fb10606fac, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RobotGripperBehavior
-  _useGraspPlanning: 1
-  _logGraspActions: 1
 --- !u!1 &6086147611823037396
 GameObject:
   m_ObjectHideFlags: 0
