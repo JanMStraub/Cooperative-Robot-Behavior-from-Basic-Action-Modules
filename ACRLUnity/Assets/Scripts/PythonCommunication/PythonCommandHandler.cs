@@ -293,6 +293,13 @@ namespace PythonCommunication
 
         #region Command Implementations
 
+        // TODO: Future enhancement - expose grasp planning parameters to Python
+        // Example: Add to CommandParameters struct:
+        //   public bool use_grasp_planning;
+        //   public string grasp_approach;  // "top", "front", "side", or null for auto
+        // Then pass to controller.SetTarget() via GraspOptions struct
+        // This would enable LLM-driven grasp planning from Python operations
+
         /// <summary>
         /// Execute move_to_coordinate command
         /// Phase 4: Now includes Python CoordinationVerifier integration
@@ -983,7 +990,7 @@ namespace PythonCommunication
                 // Also check if other robot is moving towards a conflicting target
                 if (otherController.HasTarget)
                 {
-                    Vector3 otherTarget = otherController.GetTargetPosition();
+                    Vector3 otherTarget = otherController.GetCurrentTarget().Value;
                     if (!_workspaceManager.IsSafeSeparation(targetPosition, otherTarget))
                     {
                         if (_verboseLogging)

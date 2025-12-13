@@ -44,6 +44,29 @@ namespace Core
         /// Robot is considered moving if distance to target exceeds this value (1cm)
         /// </summary>
         public const float MOVEMENT_THRESHOLD = 0.01f;
+
+        // Target Finding
+        /// <summary>
+        /// Radius for searching for real objects when setting target by coordinate (meters)
+        /// </summary>
+        public const float OBJECT_FINDING_RADIUS = 0.15f;
+
+        /// <summary>
+        /// Distance threshold for matching coordinate to real object (meters, 10cm)
+        /// If found object is within this distance, use it instead of creating temp target
+        /// </summary>
+        public const float OBJECT_DISTANCE_THRESHOLD = 0.1f;
+
+        // GameObject Naming
+        /// <summary>
+        /// Suffix for temporary grasp target GameObjects
+        /// </summary>
+        public const string GRASP_TARGET_SUFFIX = "_GraspTarget";
+
+        /// <summary>
+        /// Suffix for temporary coordinate target GameObjects
+        /// </summary>
+        public const string TEMP_TARGET_SUFFIX = "_TempTarget";
     }
 
     /// <summary>

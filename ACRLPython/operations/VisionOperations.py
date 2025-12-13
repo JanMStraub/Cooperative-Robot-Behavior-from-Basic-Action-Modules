@@ -799,9 +799,10 @@ def create_detect_object_stereo_operation() -> BasicOperation:
             OperationParameter(
                 name="color",
                 type="str",
-                description="Color to detect: red, green, or blue (None for all colors)",
+                description="Color to detect (None for all colors)",
                 required=False,
                 default=None,
+                valid_values=["red", "green", "blue", None],
             ),
             OperationParameter(
                 name="camera_id",
@@ -835,9 +836,10 @@ def create_detect_object_stereo_operation() -> BasicOperation:
             OperationParameter(
                 name="selection",
                 type="str",
-                description="Selection strategy: leftmost, closest, first, or all",
+                description="Selection strategy when multiple objects found",
                 required=False,
                 default="leftmost",
+                valid_values=["leftmost", "closest", "first", "all"],
             ),
         ],
         preconditions=[

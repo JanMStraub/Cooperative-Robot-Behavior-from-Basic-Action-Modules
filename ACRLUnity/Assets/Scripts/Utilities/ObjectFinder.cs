@@ -138,14 +138,18 @@ namespace Utilities
             }
 
             // Sort objects by distance from search position
-            foundObjects.Sort((a, b) =>
-            {
-                float distanceA = Vector3.Distance(position, a.transform.position);
-                float distanceB = Vector3.Distance(position, b.transform.position);
-                return distanceA.CompareTo(distanceB);
-            });
+            foundObjects.Sort(
+                (a, b) =>
+                {
+                    float distanceA = Vector3.Distance(position, a.transform.position);
+                    float distanceB = Vector3.Distance(position, b.transform.position);
+                    return distanceA.CompareTo(distanceB);
+                }
+            );
 
-            Debug.Log($"{_logPrefix} Found {foundObjects.Count} graspable objects (sorted by distance)");
+            Debug.Log(
+                $"{_logPrefix} Found {foundObjects.Count} graspable objects (sorted by distance)"
+            );
             return foundObjects;
         }
 

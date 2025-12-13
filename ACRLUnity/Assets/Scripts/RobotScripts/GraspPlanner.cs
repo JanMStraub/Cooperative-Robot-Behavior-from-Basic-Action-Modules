@@ -8,8 +8,7 @@ namespace Robotics
     /// </summary>
     public static class GraspPlanner
     {
-        private const float TOP_APPROACH_OFFSET = 0.01f; // Distance above object to approach from
-        private const float SIDE_APPROACH_OFFSET = 0.02f; // Distance to side of object
+        private const float SIDE_APPROACH_OFFSET = 0.01f; // Distance to side of object
 
         /// <summary>
         /// Calculate grasp pose (position + rotation) for a target object.
@@ -35,25 +34,32 @@ namespace Robotics
             {
                 case GraspApproach.Top:
                     // Approach from above
-                    graspPosition = objectPosition + Vector3.up * (objectSize.y * 0.5f + TOP_APPROACH_OFFSET);
-                    // Gripper points downward (rotate -90 degrees around X axis)
+                    graspPosition =
+                        objectPosition + Vector3.up * (objectSize.y * 0.5f);
+                    // Gripper points downward (rotate 90 degrees around X axis)
                     graspRotation = Quaternion.Euler(90f, 0f, 0f);
-                    break;
-
-                case GraspApproach.Front:
-                    // Approach from front (along Z axis)
-                    graspPosition = objectPosition + Vector3.forward * (objectSize.z * 0.5f + SIDE_APPROACH_OFFSET);
-                    // Gripper points backward (rotate 180 degrees around Y axis)
-                    graspRotation = Quaternion.Euler(0f, 180f, 0f);
                     break;
 
                 case GraspApproach.Side:
                     // Approach from side (determine which side based on gripper position)
+
+                    float deltaZ = gripperPosition.z - objectPosition.z;
+                    float frontOffset = deltaZ > 0 ? SIDE_APPROACH_OFFSET : -SIDE_APPROACH_OFFSET;
+                    graspPosition =
+                        objectPosition + Vector3.forward * (objectSize.z * 0.3f + frontOffset);
+                    // Gripper points toward object center
+                    float rotationYFront = deltaZ > 0 ? 180f : 0f;
+                    graspRotation = Quaternion.Euler(0f, rotationYFront, 0f);
+                    break;
+
+                case GraspApproach.Front:
+                    // Approach from front/back (along Z axis, direction based on gripper position)
                     float deltaX = gripperPosition.x - objectPosition.x;
                     float sideOffset = deltaX > 0 ? SIDE_APPROACH_OFFSET : -SIDE_APPROACH_OFFSET;
-                    graspPosition = objectPosition + Vector3.right * (objectSize.x * 0.5f + sideOffset);
+                    graspPosition =
+                        objectPosition + Vector3.right * (objectSize.x * 0.3f + sideOffset);
                     // Gripper points toward object center
-                    float rotationY = deltaX > 0 ? 90f : -90f;
+                    float rotationY = deltaX > 0 ? -90f : 90f;
                     graspRotation = Quaternion.Euler(0f, rotationY, 0f);
                     break;
 
@@ -71,7 +77,7 @@ namespace Robotics
         /// </summary>
         /// <param name="obj">The object to measure</param>
         /// <returns>Size vector (x, y, z)</returns>
-        private static Vector3 GetObjectSize(GameObject obj)
+        public static Vector3 GetObjectSize(GameObject obj)
         {
             Collider collider = obj.GetComponent<Collider>();
             if (collider != null)
@@ -99,22 +105,42 @@ namespace Robotics
             // Calculate relative position
             Vector3 delta = gripperPosition - objectPosition;
 
-            // If gripper is significantly above object, approach from top
-            if (delta.y > objectSize.y * 0.5f)
+            float distanceX = Mathf.Abs(delta.x);
+            float distanceY = Mathf.Abs(delta.y);
+            float distanceZ = Mathf.Abs(delta.z);
+
+            // Threshold for "close enough" to consider that axis aligned
+            float alignmentThreshold = objectSize.x * 1.5f;
+
+            // If vertically close, check horizontal approaches first
+            if (distanceY < alignmentThreshold)
+            {
+                // If Z-aligned (object is in front/behind), prefer front approach
+                if (distanceZ < alignmentThreshold)
+                {
+                    return GraspApproach.Front;
+                }
+
+                // If X-aligned (object is to the side), prefer side approach
+                if (distanceX < alignmentThreshold)
+                {
+                    return GraspApproach.Side;
+                }
+            }
+
+            // Otherwise, choose based on smallest distance (easiest approach)
+            float minDistance = Mathf.Min(distanceX, distanceY, distanceZ);
+
+            if (distanceY == minDistance)
             {
                 return GraspApproach.Top;
             }
 
-            // Otherwise determine based on horizontal distance
-            float horizontalDist = new Vector2(delta.x, delta.z).magnitude;
-
-            // If close horizontally but at similar height, approach from side
-            if (horizontalDist < objectSize.x * 2f && Mathf.Abs(delta.y) < objectSize.y)
+            if (distanceZ == minDistance)
             {
-                return GraspApproach.Side;
+                return GraspApproach.Front;
             }
 
-            // Default to top approach (most reliable)
             return GraspApproach.Top;
         }
     }
@@ -124,8 +150,8 @@ namespace Robotics
     /// </summary>
     public enum GraspApproach
     {
-        Top,    // Approach from above (gripper pointing down)
-        Front,  // Approach from front (gripper pointing forward)
-        Side    // Approach from side (gripper pointing horizontally)
+        Top, // Approach from above (gripper pointing down)
+        Front, // Approach from front (gripper pointing forward)
+        Side, // Approach from side (gripper pointing horizontally)
     }
 }

@@ -233,6 +233,12 @@ Rules:
    - "move between X and Y" uses move_between_objects
      * Example: "move between cube1 and cube2" -> {{"operation": "move_between_objects", "params": {{"robot_id": "Robot1", "object1": "$object1", "object2": "$object2", "bias": 0.5}}}}
 
+9. Detection Parameter Constraints:
+   - detect_object_stereo "color" parameter: ONLY use "red", "green", "blue", or null (for all colors)
+   - detect_object_stereo "selection" parameter: ONLY use "leftmost", "closest", "first", or "all"
+   - DO NOT use "cube", "object", or other words for selection - these are invalid
+   - Example: {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "blue", "selection": "leftmost"}}}}
+
 Output JSON format:
 {{
     "commands": [
@@ -272,7 +278,7 @@ Output only the JSON, no explanation."""
                         op = self.registry.get_operation_by_name(result.get("name", ""))
                         if op:
                             relevant_ops.add(op.name)
-                            params = ", ".join([f"{p.name}: {p.type}" for p in op.parameters])
+                            params = self._format_parameters(op.parameters)
                             score = result.get("similarity_score", 0)
                             summary_lines.append(f"- {op.name}({params}): {op.description} [relevance: {score:.2f}]")
 
@@ -281,7 +287,7 @@ Output only the JSON, no explanation."""
                 # Add remaining operations
                 for op in self.registry.get_all_operations():
                     if op.name not in relevant_ops:
-                        params = ", ".join([f"{p.name}: {p.type}" for p in op.parameters])
+                        params = self._format_parameters(op.parameters)
                         summary_lines.append(f"- {op.name}({params}): {op.description}")
 
                 return "\n".join(summary_lines)
@@ -293,9 +299,29 @@ Output only the JSON, no explanation."""
         ops = self.registry.get_all_operations()
         summary_lines = []
         for op in ops:
-            params = ", ".join([f"{p.name}: {p.type}" for p in op.parameters])
+            params = self._format_parameters(op.parameters)
             summary_lines.append(f"- {op.name}({params}): {op.description}")
         return "\n".join(summary_lines)
+
+    def _format_parameters(self, parameters: List) -> str:
+        """
+        Format operation parameters for LLM prompt, including valid values.
+
+        Args:
+            parameters: List of OperationParameter objects
+
+        Returns:
+            Formatted parameter string
+        """
+        param_strs = []
+        for p in parameters:
+            param_str = f"{p.name}: {p.type}"
+            # Add valid values if specified
+            if hasattr(p, 'valid_values') and p.valid_values:
+                valid_vals = ", ".join([f"'{v}'" for v in p.valid_values])
+                param_str += f" (valid: {valid_vals})"
+            param_strs.append(param_str)
+        return ", ".join(param_strs)
 
     def _extract_json_from_response(self, content: str) -> Optional[Dict]:
         """Extract JSON object from LLM response text."""

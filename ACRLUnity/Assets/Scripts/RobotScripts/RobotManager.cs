@@ -48,7 +48,7 @@ namespace Robotics
         // Core components
         private MainLogger _logger;
 
-        // Robot management
+        // Robot managementxx
         private Dictionary<string, RobotInstance> _robotInstances =
             new Dictionary<string, RobotInstance>();
         private float _nextTargetCheckTime;
@@ -62,6 +62,8 @@ namespace Robotics
         public IReadOnlyDictionary<string, RobotInstance> RobotInstances => _robotInstances;
         public int ActiveRobotCount => _robotInstances.Values.Count(r => r.isActive);
         public RobotConfig RobotProfile => robotProfile;
+
+        public GameObject debugTarget;
 
         // Helper variables
         private const string _logPrefix = "[ROBOT_MANAGER]";
@@ -197,15 +199,18 @@ namespace Robotics
         /// </summary>
         private void CheckForTargetChanges()
         {
-            foreach (var robotEntry in _robotInstances)
+            foreach (var robotEntry in _robotInstances.ToList())
             {
                 var robot = robotEntry.Value;
                 if (robot.targetGameObject == null || !robot.isActive)
                     continue;
 
                 Vector3 currentPos = robot.targetGameObject.transform.position;
+
+                // Debug logging to understand what's happening
                 if (Vector3.Distance(currentPos, robot.lastTargetPosition) > 0.001f)
                 {
+
                     robot.lastTargetPosition = currentPos;
                     robot.lastTargetChangeTime = Time.time;
 
@@ -327,11 +332,14 @@ namespace Robotics
                 // Set target on the controller if available
                 if (targetObject != null && controller != null)
                 {
-                    controller.SetTarget(targetObject);
+                    controller.SetTarget(targetObject); 
                     Debug.Log(
                         $"{_logPrefix} Assigned target '{targetObject.name}' to robot '{robotId}'"
                     );
                 }
+
+                instance.targetGameObject = debugTarget;
+                controller.SetTarget(debugTarget);
 
                 string profileName =
                     instance.profile != null ? instance.profile.profileName : "default";
@@ -364,82 +372,6 @@ namespace Robotics
             {
                 _usedRobotIds.Remove(robotId);
                 Debug.Log($"{_logPrefix} Robot {robotId} unregistered");
-            }
-        }
-
-        /// <summary>
-        /// Sets the target GameObject for a specific robot.
-        /// </summary>
-        /// <param name="robotId">The robot identifier</param>
-        /// <param name="target">The target GameObject to assign</param>
-        public void SetRobotTarget(string robotId, GameObject target)
-        {
-            if (_robotInstances.TryGetValue(robotId, out RobotInstance robot))
-            {
-                robot.targetGameObject = target;
-                robot.lastTargetPosition = target?.transform.position ?? Vector3.zero;
-                robot.lastTargetChangeTime = Time.time;
-
-                if (robot.controller != null && target != null)
-                {
-                    robot.controller.SetTarget(target);
-                    OnTargetChanged?.Invoke(robotId, target);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Sets the target for a robot using a position coordinate.
-        /// Creates a temporary target object at the specified position.
-        /// </summary>
-        /// <param name="robotId">The robot identifier</param>
-        /// <param name="position">The target position in world coordinates</param>
-        public void SetRobotTarget(string robotId, Vector3 position)
-        {
-            if (_robotInstances.TryGetValue(robotId, out RobotInstance robot))
-            {
-                if (robot.controller != null)
-                {
-                    robot.controller.SetTarget(position);
-
-                    // Update robot instance tracking
-                    robot.targetGameObject = GameObject.Find($"{robotId}_TempTarget");
-                    robot.lastTargetPosition = position;
-                    robot.lastTargetChangeTime = Time.time;
-
-                    if (robot.targetGameObject != null)
-                    {
-                        OnTargetChanged?.Invoke(robotId, robot.targetGameObject);
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Sets the target for a robot using position and rotation coordinates.
-        /// Creates a temporary target object at the specified position and rotation.
-        /// </summary>
-        /// <param name="robotId">The robot identifier</param>
-        /// <param name="position">The target position in world coordinates</param>
-        /// <param name="rotation">The target rotation in world coordinates</param>
-        public void SetRobotTarget(string robotId, Vector3 position, Quaternion rotation)
-        {
-            if (_robotInstances.TryGetValue(robotId, out RobotInstance robot))
-            {
-                if (robot.controller != null)
-                {
-                    robot.controller.SetTarget(position, rotation);
-
-                    // Update robot instance tracking
-                    robot.targetGameObject = GameObject.Find($"{robotId}_TempTarget");
-                    robot.lastTargetPosition = position;
-                    robot.lastTargetChangeTime = Time.time;
-
-                    if (robot.targetGameObject != null)
-                    {
-                        OnTargetChanged?.Invoke(robotId, robot.targetGameObject);
-                    }
-                }
             }
         }
 
