@@ -26,9 +26,118 @@ from operations.CoordinationVerifier import CoordinationVerifier
 from operations.WorldState import get_world_state
 from servers.CommandServer import get_command_broadcaster
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging with safe handler for background threads
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+
+class SafeStreamHandler(logging.StreamHandler):
+    """
+    StreamHandler that silently ignores I/O errors from closed streams.
+
+    This prevents logging errors when pytest closes log handlers before
+    background threads finish executing.
+    """
+
+    def emit(self, record):
+        """
+        Emit a record, catching I/O errors from closed streams.
+
+        Args:
+            record: Log record to emit
+        """
+        try:
+            super().emit(record)
+        except (ValueError, OSError):
+            # Stream closed (e.g., during pytest teardown)
+            # Silently ignore - this is expected in test scenarios
+            pass
+
+    def handleError(self, record):
+        """
+        Handle errors during logging, suppressing I/O errors from closed streams.
+
+        Args:
+            record: Log record that caused the error
+        """
+        import sys
+        if sys.exc_info()[0] in (ValueError, OSError):
+            # Stream closed - silently ignore
+            pass
+        else:
+            # Other errors - use default handling
+            super().handleError(record)
+
+
+_patched_handlers = set()  # Track which handlers have been patched
+
+
+def _safe_log(log_func: Callable, message: str, *args, **kwargs):
+    """
+    Safely log a message, catching I/O errors from closed streams.
+
+    This prevents logging errors when pytest closes log handlers before
+    background threads finish executing.
+
+    Args:
+        log_func: Logger function (logger.info, logger.error, etc.)
+        message: Log message
+        *args: Additional positional arguments for log function
+        **kwargs: Additional keyword arguments for log function
+    """
+    # Lazily patch any new handlers (pytest adds handlers after module import)
+    for handler in logging.root.handlers + logger.handlers:
+        if id(handler) not in _patched_handlers:
+            _make_handler_safe(handler)
+            _patched_handlers.add(id(handler))
+
+    try:
+        log_func(message, *args, **kwargs)
+    except (ValueError, OSError):
+        # Stream closed (e.g., during pytest teardown)
+        # Silently ignore - this is expected in test scenarios
+        pass
+
+
+# Patch all existing handlers to safely handle closed streams
+def _make_handler_safe(handler):
+    """Patch a handler's emit method to catch I/O errors from closed streams"""
+    # Store original unbound method to avoid double-wrapping
+    if not hasattr(handler, '_original_emit'):
+        handler._original_emit = handler.__class__.emit
+        handler._original_handleError = handler.__class__.handleError
+
+    def safe_emit(record):
+        try:
+            handler._original_emit(handler, record)
+        except (ValueError, OSError):
+            # Stream closed (e.g., during pytest teardown)
+            # Silently ignore
+            pass
+
+    def safe_handleError(record):
+        """Override handleError to suppress I/O error diagnostics"""
+        import sys
+        exc_type, exc_val, exc_tb = sys.exc_info()
+        if exc_type in (ValueError, OSError):
+            # Stream closed - silently ignore diagnostics
+            pass
+        else:
+            # Other errors - use default handling
+            handler._original_handleError(handler, record)
+
+    handler.emit = safe_emit
+    handler.handleError = safe_handleError
+    return handler
+
+
+# Apply safe patching to all handlers (including pytest's handlers)
+for handler in logger.handlers[:]:  # Create copy to avoid modification during iteration
+    _make_handler_safe(handler)
+
+# Also patch root logger handlers (pytest uses these)
+for handler in logging.root.handlers[:]:
+    _make_handler_safe(handler)
 
 
 class SequenceExecutor:
@@ -83,7 +192,10 @@ class SequenceExecutor:
         timeout_per_command: Optional[float] = None
     ) -> Dict[str, Any]:
         """
-        Execute a sequence of commands sequentially.
+        Execute a sequence of commands sequentially or in parallel groups.
+
+        Supports parallel execution: commands with the same parallel_group number
+        execute concurrently, then wait for all to complete before next group.
 
         Args:
             commands: List of commands to execute
@@ -125,60 +237,89 @@ class SequenceExecutor:
 
         logger.info(f"Starting sequence {self._current_sequence_id} with {len(commands)} commands")
 
-        for i, cmd in enumerate(commands):
-            if self._abort_flag:
-                logger.warning(f"Sequence {self._current_sequence_id} aborted at command {i}")
-                break
+        # Check if commands use parallel_group
+        has_parallel_groups = any('parallel_group' in cmd for cmd in commands)
 
-            operation = cmd.get("operation", "")
-            params = cmd.get("params", {})
-            capture_var = cmd.get("capture_var")  # Variable name to capture result
+        if has_parallel_groups:
+            # Execute with parallel group support
+            logger.info("Parallel execution mode enabled (parallel_group detected)")
+            group_results, group_completed = self._execute_parallel_groups(commands, timeout)
+            results = group_results
+            completed = group_completed
+        else:
+            # Sequential execution (legacy mode)
+            logger.info("Sequential execution mode (no parallel_group)")
+            for i, cmd in enumerate(commands):
+                if self._abort_flag:
+                    logger.warning(f"Sequence {self._current_sequence_id} aborted at command {i}")
+                    break
 
-            # === PRIORITY 2: Automatic Parameter Flow ===
-            # Auto-inject parameters from previous operations based on ParameterFlow definitions
-            params = self._auto_inject_parameters(operation, params)
-
-            # Resolve variable references in params (manual $ references)
-            params = self._resolve_variables(params)
-
-            logger.info(f"Executing command {i + 1}/{len(commands)}: {operation}")
-            self._notify_progress(i, len(commands), operation, "executing")
-
-            cmd_start = time.time()
-            cmd_result = self._execute_single_command(operation, params, timeout)
-            cmd_duration = (time.time() - cmd_start) * 1000
-
-            result_entry = {
-                "index": i,
-                "operation": operation,
-                "success": cmd_result["success"],
-                "result": cmd_result.get("result"),
-                "error": cmd_result.get("error"),
-                "duration_ms": cmd_duration
-            }
-            results.append(result_entry)
-
-            if cmd_result["success"]:
-                completed += 1
-                self._notify_progress(i, len(commands), operation, "completed")
-                logger.info(f"Command {i + 1} completed successfully in {cmd_duration:.0f}ms")
-
-                # Capture result to variable if specified (manual capture)
-                if capture_var and cmd_result.get("result"):
-                    self._variables[capture_var] = cmd_result["result"]
-                    logger.debug(f"Captured result to ${capture_var}")
+                operation = cmd.get("operation", "")
+                params = cmd.get("params", {})
+                capture_var = cmd.get("capture_var")  # Variable name to capture result
 
                 # === PRIORITY 2: Automatic Parameter Flow ===
-                # Automatically capture outputs based on ParameterFlow definitions
-                self._auto_capture_outputs(operation, cmd_result.get("result", {}))
-            else:
-                self._notify_progress(i, len(commands), operation, "failed")
-                logger.error(f"Command {i + 1} failed: {cmd_result.get('error')}")
-                # Stop sequence on first failure
-                break
+                # Auto-inject parameters from previous operations based on ParameterFlow definitions
+                params = self._auto_inject_parameters(operation, params)
+
+                # Resolve variable references in params (manual $ references)
+                params = self._resolve_variables(params)
+
+                logger.info(f"Executing command {i + 1}/{len(commands)}: {operation}")
+                self._notify_progress(i, len(commands), operation, "executing")
+
+                cmd_start = time.time()
+                cmd_result = self._execute_single_command(operation, params, timeout)
+                cmd_duration = (time.time() - cmd_start) * 1000
+
+                result_entry = {
+                    "index": i,
+                    "operation": operation,
+                    "success": cmd_result["success"],
+                    "result": cmd_result.get("result"),
+                    "error": cmd_result.get("error"),
+                    "error_code": cmd_result.get("error_code"),
+                    "duration_ms": cmd_duration
+                }
+                results.append(result_entry)
+
+                if cmd_result["success"]:
+                    completed += 1
+                    self._notify_progress(i, len(commands), operation, "completed")
+                    logger.info(f"Command {i + 1} completed successfully in {cmd_duration:.0f}ms")
+
+                    # Capture result to variable if specified (manual capture)
+                    if capture_var and cmd_result.get("result"):
+                        self._variables[capture_var] = cmd_result["result"]
+                        logger.debug(f"Captured result to ${capture_var}")
+
+                    # === PRIORITY 2: Automatic Parameter Flow ===
+                    # Automatically capture outputs based on ParameterFlow definitions
+                    self._auto_capture_outputs(operation, cmd_result.get("result", {}))
+                else:
+                    self._notify_progress(i, len(commands), operation, "failed")
+                    _safe_log(logger.error, f"Command {i + 1} failed: {cmd_result.get('error')}")
+                    # Stop sequence on first failure
+                    break
 
         total_duration = (time.time() - start_time) * 1000
         success = completed == len(commands)
+
+        # Get error details from first failed command
+        error_message = None
+        if not success and results:
+            # Find the first failed result
+            failed_result = next((r for r in results if not r.get("success", False)), None)
+            if failed_result:
+                # Include error_code if present, otherwise just the error message
+                error_code = failed_result.get("error_code")
+                error_msg = failed_result.get("error", "Unknown error")
+                if error_code:
+                    error_message = f"{error_code}: {error_msg}"
+                else:
+                    error_message = error_msg
+            else:
+                error_message = f"Sequence failed at command {completed}"
 
         result = {
             "success": success,
@@ -187,15 +328,163 @@ class SequenceExecutor:
             "completed_commands": completed,
             "results": results,
             "total_duration_ms": total_duration,
-            "error": None if success else f"Sequence failed at command {completed}"
+            "error": error_message
         }
 
-        logger.info(
+        _safe_log(
+            logger.info,
             f"Sequence {self._current_sequence_id} finished: "
             f"{completed}/{len(commands)} commands in {total_duration:.0f}ms"
         )
 
         return result
+
+    def _execute_parallel_groups(
+        self,
+        commands: List[Dict[str, Any]],
+        timeout: float
+    ) -> tuple[List[Dict[str, Any]], int]:
+        """
+        Execute commands grouped by parallel_group number.
+
+        Commands with the same parallel_group execute concurrently,
+        then wait for all to complete before proceeding to next group.
+
+        Args:
+            commands: List of commands with parallel_group field
+            timeout: Timeout per command in seconds
+
+        Returns:
+            (results, completed_count)
+        """
+        from collections import defaultdict
+
+        # Group commands by parallel_group number
+        groups = defaultdict(list)
+        for i, cmd in enumerate(commands):
+            group_num = cmd.get('parallel_group', i)  # Default: each cmd is its own group
+            groups[group_num].append((i, cmd))
+
+        # Sort groups by group number
+        sorted_groups = sorted(groups.items())
+
+        results = [None] * len(commands)  # Pre-allocate results array
+        completed = 0
+
+        for group_num, group_commands in sorted_groups:
+            if self._abort_flag:
+                logger.warning(f"Parallel execution aborted at group {group_num}")
+                break
+
+            logger.info(f"Executing parallel group {group_num} with {len(group_commands)} commands")
+
+            # Execute all commands in this group concurrently
+            threads = []
+            thread_results = {}
+            result_lock = threading.Lock()
+
+            def execute_command_thread(index, cmd):
+                """Thread function to execute a single command"""
+                operation = cmd.get("operation", "")
+                params = cmd.get("params", {})
+                capture_var = cmd.get("capture_var")
+
+                # Parameter injection and resolution (thread-safe for reads)
+                params = self._auto_inject_parameters(operation, params)
+                params = self._resolve_variables(params)
+
+                logger.info(f"[Group {group_num}] Executing: {operation}")
+                self._notify_progress(index, len(commands), operation, "executing")
+
+                cmd_start = time.time()
+                cmd_result = self._execute_single_command(operation, params, timeout)
+                cmd_duration = (time.time() - cmd_start) * 1000
+
+                result_entry = {
+                    "index": index,
+                    "operation": operation,
+                    "success": cmd_result["success"],
+                    "result": cmd_result.get("result"),
+                    "error": cmd_result.get("error"),
+                    "duration_ms": cmd_duration,
+                    "parallel_group": group_num
+                }
+
+                # Store result (thread-safe)
+                with result_lock:
+                    thread_results[index] = (result_entry, cmd_result, capture_var)
+
+            # Launch all threads for this group
+            for idx, cmd in group_commands:
+                thread = threading.Thread(
+                    target=execute_command_thread,
+                    args=(idx, cmd),
+                    daemon=True
+                )
+                threads.append(thread)
+                thread.start()
+
+            # Wait for all threads in this group to complete
+            for thread in threads:
+                thread.join(timeout=timeout + 5.0)  # Add 5s buffer
+
+            # Process results from this group
+            group_success = True
+            for idx, cmd in group_commands:
+                if idx in thread_results:
+                    result_entry, cmd_result, capture_var = thread_results[idx]
+                    results[idx] = result_entry
+
+                    if cmd_result["success"]:
+                        completed += 1
+                        self._notify_progress(idx, len(commands), result_entry["operation"], "completed")
+                        logger.info(
+                            f"[Group {group_num}] Command {idx} completed in {result_entry['duration_ms']:.0f}ms"
+                        )
+
+                        # Capture variables (thread-safe write)
+                        if capture_var and cmd_result.get("result"):
+                            self._variables[capture_var] = cmd_result["result"]
+                            logger.debug(f"Captured result to ${capture_var}")
+
+                        # Auto-capture outputs
+                        self._auto_capture_outputs(result_entry["operation"], cmd_result.get("result", {}))
+                    else:
+                        group_success = False
+                        self._notify_progress(idx, len(commands), result_entry["operation"], "failed")
+                        logger.error(f"[Group {group_num}] Command {idx} failed: {cmd_result.get('error')}")
+                else:
+                    # Thread didn't complete
+                    group_success = False
+                    logger.error(f"[Group {group_num}] Command {idx} did not complete (thread timeout)")
+                    results[idx] = {
+                        "index": idx,
+                        "operation": cmd.get("operation", ""),
+                        "success": False,
+                        "result": None,
+                        "error": "Thread execution timeout",
+                        "duration_ms": timeout * 1000,
+                        "parallel_group": group_num
+                    }
+
+            # Stop if any command in the group failed
+            if not group_success:
+                logger.error(f"Parallel group {group_num} had failures, stopping sequence")
+                break
+
+        # Fill in any None results (shouldn't happen, but safety check)
+        for i in range(len(results)):
+            if results[i] is None:
+                results[i] = {
+                    "index": i,
+                    "operation": commands[i].get("operation", ""),
+                    "success": False,
+                    "result": None,
+                    "error": "Command not executed",
+                    "duration_ms": 0
+                }
+
+        return results, completed
 
     def _execute_single_command(
         self,
@@ -268,10 +557,13 @@ class SequenceExecutor:
                     logger.warning(f"Postcondition verification failed: {violation_msgs}")
 
             if not op_result.success:
+                error_msg = op_result.error.get("message") if op_result.error else "Unknown error"
+                error_code = op_result.error.get("code") if op_result.error else None
                 return {
                     "success": False,
                     "result": None,
-                    "error": op_result.error.get("message") if op_result.error else "Unknown error"
+                    "error": error_msg,
+                    "error_code": error_code
                 }
 
             # If completion checking is disabled, return immediately

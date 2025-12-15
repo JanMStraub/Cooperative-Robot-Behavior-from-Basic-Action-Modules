@@ -15,8 +15,8 @@ namespace Tests.PlayMode
         private GameObject _testRobotObject;
         private RobotController _robotController;
 
-        [SetUp]
-        public void SetUp()
+        [UnitySetUp]
+        public IEnumerator SetUp()
         {
             // Create minimal robot setup for testing
             _testRobotObject = new GameObject("TestRobot");
@@ -27,6 +27,13 @@ namespace Tests.PlayMode
             var endEffectorBase = new GameObject("EndEffectorBase");
             endEffectorBase.transform.SetParent(_testRobotObject.transform);
             _robotController.endEffectorBase = endEffectorBase.transform;
+
+            // Expect initialization warnings since we're not setting up full ArticulationBody chain
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of TestRobot");
+            LogAssert.Expect(LogType.Error, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+
+            // Wait for Start() to be called
+            yield return null;
         }
 
         [TearDown]

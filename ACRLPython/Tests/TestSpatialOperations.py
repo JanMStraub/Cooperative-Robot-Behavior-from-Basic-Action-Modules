@@ -331,7 +331,7 @@ class TestMoveToRegion:
     @patch('operations.SpatialOperations.move_to_coordinate')
     def test_move_to_region_center(self, mock_move, mock_broadcast, mock_get_ws):
         """Test center position calculation"""
-        mock_move.return_value = OperationResult.success_result({"final_position": (-0.55, 0.0, 0.25)})
+        mock_move.return_value = OperationResult.success_result({"final_position": (-0.325, 0.3, 0.0)})
         result = move_to_region(
             robot_id="Robot1",
             region_name="left_workspace",
@@ -339,19 +339,19 @@ class TestMoveToRegion:
         )
 
         assert result.success is True
-        # left_workspace: x_min=-1.0, x_max=-0.1, y_min=-1.0, y_max=1.0, z_min=0.0, z_max=0.5
-        # Center: x=-0.55, y=0.0, z=0.25
+        # left_workspace: x_min=-0.5, x_max=-0.15, y_min=0.0, y_max=0.6, z_min=-0.45, z_max=0.45
+        # Center: x=-0.325, y=0.3, z=0.0
         args = mock_move.call_args[1]
-        assert args["x"] == pytest.approx(-0.55)
-        assert args["y"] == pytest.approx(0.0)
-        assert args["z"] == pytest.approx(0.25)
+        assert args["x"] == pytest.approx(-0.325)
+        assert args["y"] == pytest.approx(0.3)
+        assert args["z"] == pytest.approx(0.0)
 
     @patch('operations.SpatialOperations.get_world_state')
     @patch('operations.SpatialOperations.get_command_broadcaster')
     @patch('operations.SpatialOperations.move_to_coordinate')
     def test_move_to_region_near(self, mock_move, mock_broadcast, mock_get_ws):
         """Test near position (near the workspace edge closest to robot)"""
-        mock_move.return_value = OperationResult.success_result({"final_position": (-0.4, 0.0, 0.15)})
+        mock_move.return_value = OperationResult.success_result({"final_position": (-0.25, 0.3, 0.0)})
         result = move_to_region(
             robot_id="Robot1",
             region_name="left_workspace",
@@ -359,19 +359,19 @@ class TestMoveToRegion:
         )
 
         assert result.success is True
-        # Robot1 base at (-0.3, 0.0, 0.0), left_workspace: x_min=-1.0, x_max=-0.1
-        # For left-side robot, "near" means near the right edge: x_max - 0.1 = -0.2
+        # Robot1 base at (-0.4, 0.0, 0.0), left_workspace: x_min=-0.5, x_max=-0.15
+        # For left-side robot, "near" means near the right edge: x_max - 0.1 = -0.25
         args = mock_move.call_args[1]
-        assert args["x"] == pytest.approx(-0.2)
-        assert args["y"] == pytest.approx(0.0)
-        assert args["z"] == pytest.approx(0.25)
+        assert args["x"] == pytest.approx(-0.25)
+        assert args["y"] == pytest.approx(0.3)
+        assert args["z"] == pytest.approx(0.0)
 
     @patch('operations.SpatialOperations.get_world_state')
     @patch('operations.SpatialOperations.get_command_broadcaster')
     @patch('operations.SpatialOperations.move_to_coordinate')
     def test_move_to_region_far(self, mock_move, mock_broadcast, mock_get_ws):
         """Test far position (farther from robot base)"""
-        mock_move.return_value = OperationResult.success_result({"final_position": (-0.7, 0.0, 0.35)})
+        mock_move.return_value = OperationResult.success_result({"final_position": (-0.4, 0.3, 0.0)})
         result = move_to_region(
             robot_id="Robot1",
             region_name="left_workspace",
@@ -379,10 +379,11 @@ class TestMoveToRegion:
         )
 
         assert result.success is True
-        # Far position should be farther from robot base
+        # Robot1 base at (-0.4, 0.0, 0.0), left_workspace: x_min=-0.5, x_max=-0.15
+        # For left-side robot, "far" means far from base: x_min + 0.1 = -0.4
         args = mock_move.call_args[1]
-        # Far position should have x farther than center from -0.3
-        assert args["x"] < -0.55
+        # Far position should have x farther than center from robot base
+        assert args["x"] == pytest.approx(-0.4)
 
     @patch('operations.SpatialOperations.get_world_state')
     @patch('operations.SpatialOperations.get_command_broadcaster')

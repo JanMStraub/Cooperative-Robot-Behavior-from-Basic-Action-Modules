@@ -289,7 +289,7 @@ SIMULTANEOUS_MOVE_PATTERN = WorkflowPattern(
     pattern_id="workflow_simultaneous_move_001",
     name="simultaneous_move",
     category=WorkflowCategory.MULTI_ROBOT,
-    description="Move two robots simultaneously to different targets with collision checking",
+    description="Move two robots simultaneously to different targets using atomic operations and sync primitives (LLM-driven coordination)",
     steps=[
         WorkflowStep(
             operation_id="status_check_robot_001",
@@ -302,14 +302,29 @@ SIMULTANEOUS_MOVE_PATTERN = WorkflowPattern(
             description="Check robot 2 status before moving"
         ),
         WorkflowStep(
-            operation_id="coordination_simultaneous_move_001",
+            operation_id="motion_move_to_coord_001",
             parameter_bindings={
-                "robot1_id": "robot1_id",
-                "target1": "target1_coords",
-                "robot2_id": "robot2_id",
-                "target2": "target2_coords",
+                "robot_id": "robot1_id",
+                "x": "target1_x",
+                "y": "target1_y",
+                "z": "target1_z",
             },
-            description="Execute collision-checked simultaneous movement"
+            description="Robot1 moves to target (parallel with Robot2)"
+        ),
+        WorkflowStep(
+            operation_id="motion_move_to_coord_001",
+            parameter_bindings={
+                "robot_id": "robot2_id",
+                "x": "target2_x",
+                "y": "target2_y",
+                "z": "target2_z",
+            },
+            description="Robot2 moves to target (parallel with Robot1)"
+        ),
+        WorkflowStep(
+            operation_id="sync_signal_001",
+            parameter_bindings={"event_name": "both_robots_positioned"},
+            description="Signal that both robots reached targets"
         ),
     ],
     variable_bindings={
@@ -318,13 +333,14 @@ SIMULTANEOUS_MOVE_PATTERN = WorkflowPattern(
     },
     success_criteria=[
         "Both robots ready to move",
-        "No collision predicted during movement",
         "Both robots reached targets successfully",
+        "Unity's CollaborativeStrategy handled collision checking automatically",
     ],
-    failure_recovery="If collision predicted, execute sequential movements instead",
+    failure_recovery="If robot movement fails, retry with sequential execution using wait_for_signal",
     usage_examples=[
         "Move Robot1 to (0.3, 0.1, 0.2) and Robot2 to (0.3, -0.1, 0.2) simultaneously",
-        "Coordinate dual-arm assembly task",
+        "Coordinate dual-arm assembly task with parallel movements",
+        "Use parallel_group in SequenceExecutor for true simultaneous execution",
     ],
 )
 
@@ -333,11 +349,11 @@ HANDOFF_PATTERN = WorkflowPattern(
     pattern_id="workflow_handoff_001",
     name="handoff",
     category=WorkflowCategory.MULTI_ROBOT,
-    description="Transfer object from one robot to another",
+    description="Transfer object from one robot to another using atomic operations and synchronization primitives (LLM-driven coordination)",
     steps=[
         WorkflowStep(
             operation_id="perception_stereo_detect_001",
-            parameter_bindings={"color": "object_color"},
+            parameter_bindings={"color": "object_color", "robot_id": "source_robot"},
             description="Detect object to handoff"
         ),
         WorkflowStep(
@@ -356,13 +372,59 @@ HANDOFF_PATTERN = WorkflowPattern(
             description="Source robot grasps object"
         ),
         WorkflowStep(
-            operation_id="coordination_handoff_001",
+            operation_id="sync_signal_001",
+            parameter_bindings={"event_name": "object_gripped"},
+            description="Signal that object has been gripped"
+        ),
+        WorkflowStep(
+            operation_id="sync_wait_for_signal_001",
+            parameter_bindings={"event_name": "object_gripped", "timeout_ms": "10000"},
+            description="Target robot waits for grip confirmation (in parallel)"
+        ),
+        WorkflowStep(
+            operation_id="motion_move_to_coord_001",
             parameter_bindings={
-                "source_robot": "source_robot",
-                "target_robot": "target_robot",
-                "handoff_position": "handoff_coords",
+                "robot_id": "source_robot",
+                "x": "handoff_x",
+                "y": "handoff_y",
+                "z": "handoff_z",
             },
-            description="Coordinate handoff at designated position"
+            description="Source robot moves to handoff position"
+        ),
+        WorkflowStep(
+            operation_id="motion_move_to_coord_001",
+            parameter_bindings={
+                "robot_id": "target_robot",
+                "x": "handoff_x",
+                "y": "handoff_y",
+                "z": "handoff_z",
+            },
+            description="Target robot moves to handoff position (parallel)"
+        ),
+        WorkflowStep(
+            operation_id="sync_signal_001",
+            parameter_bindings={"event_name": "both_at_handoff"},
+            description="Signal that both robots at handoff position"
+        ),
+        WorkflowStep(
+            operation_id="manipulation_control_gripper_001",
+            parameter_bindings={"robot_id": "target_robot", "open_gripper": "False"},
+            description="Target robot closes gripper to receive object"
+        ),
+        WorkflowStep(
+            operation_id="sync_wait_001",
+            parameter_bindings={"duration_ms": "500"},
+            description="Wait for gripper to fully close"
+        ),
+        WorkflowStep(
+            operation_id="manipulation_control_gripper_001",
+            parameter_bindings={"robot_id": "source_robot", "open_gripper": "True"},
+            description="Source robot releases object"
+        ),
+        WorkflowStep(
+            operation_id="sync_signal_001",
+            parameter_bindings={"event_name": "handoff_complete"},
+            description="Signal handoff completion"
         ),
     ],
     variable_bindings={
@@ -373,11 +435,125 @@ HANDOFF_PATTERN = WorkflowPattern(
         "Both robots positioned at handoff location",
         "Target robot successfully received object",
         "Source robot released object",
+        "Handoff completed without dropping object",
     ],
-    failure_recovery="If handoff fails, source robot returns object to original location",
+    failure_recovery="If handoff fails, source robot returns object to original location using reverse sequence",
     usage_examples=[
-        "Robot1 hands blue cube to Robot2 at (0.0, 0.0, 0.3)",
-        "Collaborative assembly with object transfer",
+        "Robot1 hands blue cube to Robot2 at (0.0, 0.0, 0.3) using signal/wait coordination",
+        "Collaborative assembly with synchronized object transfer",
+        "Use parallel_group in SequenceExecutor for Robot1 and Robot2 movements",
+    ],
+)
+
+
+LLM_DRIVEN_COORDINATION_PATTERN = WorkflowPattern(
+    pattern_id="workflow_llm_coordination_001",
+    name="llm_driven_coordination",
+    category=WorkflowCategory.MULTI_ROBOT,
+    description="Example of LLM-planned multi-robot coordination using only atomic operations and sync primitives - demonstrates the power of emergent coordination without hardcoded patterns",
+    steps=[
+        WorkflowStep(
+            operation_id="perception_stereo_detect_001",
+            parameter_bindings={"color": "red", "robot_id": "Robot1"},
+            description="Robot1: Detect red cube"
+        ),
+        WorkflowStep(
+            operation_id="motion_move_to_coord_001",
+            parameter_bindings={
+                "robot_id": "Robot1",
+                "x": "cube.x",
+                "y": "cube.y",
+                "z": "cube.z",
+            },
+            description="Robot1: Move to cube"
+        ),
+        WorkflowStep(
+            operation_id="manipulation_control_gripper_001",
+            parameter_bindings={"robot_id": "Robot1", "open_gripper": "False"},
+            description="Robot1: Grip cube"
+        ),
+        WorkflowStep(
+            operation_id="sync_signal_001",
+            parameter_bindings={"event_name": "cube_gripped"},
+            description="Robot1: Signal that cube is gripped"
+        ),
+        WorkflowStep(
+            operation_id="sync_wait_for_signal_001",
+            parameter_bindings={"event_name": "cube_gripped", "timeout_ms": "5000"},
+            description="Robot2: Wait for Robot1 to grip cube (parallel execution)"
+        ),
+        WorkflowStep(
+            operation_id="motion_move_to_coord_001",
+            parameter_bindings={
+                "robot_id": "Robot1",
+                "x": "0.0",
+                "y": "0.0",
+                "z": "0.3",
+            },
+            description="Robot1: Move to handoff position"
+        ),
+        WorkflowStep(
+            operation_id="motion_move_to_coord_001",
+            parameter_bindings={
+                "robot_id": "Robot2",
+                "x": "0.0",
+                "y": "0.0",
+                "z": "0.3",
+            },
+            description="Robot2: Move to handoff position (parallel with Robot1)"
+        ),
+        WorkflowStep(
+            operation_id="sync_signal_001",
+            parameter_bindings={"event_name": "robot1_ready"},
+            description="Robot1: Signal arrival at handoff"
+        ),
+        WorkflowStep(
+            operation_id="sync_signal_001",
+            parameter_bindings={"event_name": "robot2_ready"},
+            description="Robot2: Signal arrival at handoff"
+        ),
+        WorkflowStep(
+            operation_id="sync_wait_for_signal_001",
+            parameter_bindings={"event_name": "robot2_ready", "timeout_ms": "5000"},
+            description="Robot1: Wait for Robot2 to arrive"
+        ),
+        WorkflowStep(
+            operation_id="sync_wait_for_signal_001",
+            parameter_bindings={"event_name": "robot1_ready", "timeout_ms": "5000"},
+            description="Robot2: Wait for Robot1 to arrive"
+        ),
+        WorkflowStep(
+            operation_id="manipulation_control_gripper_001",
+            parameter_bindings={"robot_id": "Robot2", "open_gripper": "False"},
+            description="Robot2: Close gripper to receive cube"
+        ),
+        WorkflowStep(
+            operation_id="sync_wait_001",
+            parameter_bindings={"duration_ms": "500"},
+            description="Wait for gripper to stabilize"
+        ),
+        WorkflowStep(
+            operation_id="manipulation_control_gripper_001",
+            parameter_bindings={"robot_id": "Robot1", "open_gripper": "True"},
+            description="Robot1: Release cube"
+        ),
+    ],
+    variable_bindings={
+        "cube": "perception_stereo_detect_001.result",
+    },
+    success_criteria=[
+        "Cube detected by Robot1",
+        "Robot1 successfully gripped cube",
+        "Both robots synchronized at handoff position",
+        "Cube transferred to Robot2",
+        "Robot1 released cube safely",
+    ],
+    failure_recovery="Use signal/wait error codes to detect coordination failures and retry individual steps",
+    usage_examples=[
+        "LLM plans: 'Locate the red cube and give it to the other robot'",
+        "LLM generates this exact sequence from atomic operations knowledge",
+        "No hardcoded coordination - LLM decides sync points and parallel groups",
+        "Use parallel_group=[0,0,1,2,2,3,3,4,4,5,5,6,7,8] for optimal execution",
     ],
 )
 
@@ -407,6 +583,7 @@ class WorkflowPatternRegistry:
             VERIFY_AND_ACT_PATTERN,
             SIMULTANEOUS_MOVE_PATTERN,
             HANDOFF_PATTERN,
+            LLM_DRIVEN_COORDINATION_PATTERN,
         ]
 
         for pattern in patterns:

@@ -137,16 +137,27 @@ class RobotController:
 
         logger.info("Stopping RobotController...")
 
-        if self._image_server:
-            self._image_server.stop()
-
-        if self._command_server:
-            self._command_server.stop()
-
-        if self._sequence_server:
-            self._sequence_server.stop()
-
+        # Mark as stopped first to prevent re-entry
         self._running = False
+
+        try:
+            if self._image_server:
+                self._image_server.stop()
+        except Exception as e:
+            logger.error(f"Error stopping ImageServer: {e}")
+
+        try:
+            if self._command_server:
+                self._command_server.stop()
+        except Exception as e:
+            logger.error(f"Error stopping CommandServer: {e}")
+
+        try:
+            if self._sequence_server:
+                self._sequence_server.stop()
+        except Exception as e:
+            logger.error(f"Error stopping SequenceServer: {e}")
+
         logger.info("RobotController stopped")
 
     def is_running(self) -> bool:

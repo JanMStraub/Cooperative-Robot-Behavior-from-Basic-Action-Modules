@@ -924,6 +924,7 @@ MonoBehaviour:
   _enableTargetChangeDetection: 1
   _targetChangeCheckInterval: 0.1
   _logConfigurationChanges: 0
+  debugTarget: {fileID: 1148410071}
 --- !u!4 &1170887387
 Transform:
   m_ObjectHideFlags: 0
@@ -1191,6 +1192,14 @@ PrefabInstance:
       propertyPath: 'm_Materials.Array.data[0]'
       value: 
       objectReference: {fileID: 2100000, guid: d47df1ce21d2e44e88bf94bd9eb351ac, type: 2}
+    - target: {fileID: 1174470342800896596, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_JointFriction
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 1174470342800896596, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_XDrive.forceLimit
+      value: 100
+      objectReference: {fileID: 0}
     - target: {fileID: 1774938081313906251, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_IsActive
       value: 0
@@ -1210,6 +1219,18 @@ PrefabInstance:
     - target: {fileID: 1924621710956839310, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_CullingMask.m_Bits
       value: 247
+      objectReference: {fileID: 0}
+    - target: {fileID: 1990253158364777635, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_JointFriction
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 1990253158364777635, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LinearDamping
+      value: 0.05
+      objectReference: {fileID: 0}
+    - target: {fileID: 1990253158364777635, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_XDrive.forceLimit
+      value: 100
       objectReference: {fileID: 0}
     - target: {fileID: 2104309082079824041, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_UseGravity
@@ -1273,7 +1294,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4749562172011976917, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0
+      value: -0.2
       objectReference: {fileID: 0}
     - target: {fileID: 4749562172011976917, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalRotation.w
@@ -1393,11 +1414,15 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6077284443812479320, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 6086147611823037396, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
       value: Plate
+      objectReference: {fileID: 0}
+    - target: {fileID: 6155458069873169085, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: maxForce
+      value: 100
       objectReference: {fileID: 0}
     - target: {fileID: 6201449187924864663, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
@@ -1410,6 +1435,10 @@ PrefabInstance:
     - target: {fileID: 6579240078625439066, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_UseGravity
       value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6579240078625439066, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Constraints
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6579240078625439066, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_IsKinematic
@@ -1439,6 +1468,10 @@ PrefabInstance:
       propertyPath: m_UseGravity
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 8378674929302703819, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8418418933302581682, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
       value: GripperJoint
@@ -1446,6 +1479,14 @@ PrefabInstance:
     - target: {fileID: 8512587041632424183, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_TagString
       value: Robot
+      objectReference: {fileID: 0}
+    - target: {fileID: 8683789204731125865, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8917216387354379710, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Enabled
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents:
     - {fileID: 3149036954516521331, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}

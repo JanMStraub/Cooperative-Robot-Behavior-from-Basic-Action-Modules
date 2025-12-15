@@ -63,8 +63,6 @@ namespace Robotics
         public int ActiveRobotCount => _robotInstances.Values.Count(r => r.isActive);
         public RobotConfig RobotProfile => robotProfile;
 
-        public GameObject debugTarget;
-
         // Helper variables
         private const string _logPrefix = "[ROBOT_MANAGER]";
 
@@ -332,14 +330,11 @@ namespace Robotics
                 // Set target on the controller if available
                 if (targetObject != null && controller != null)
                 {
-                    controller.SetTarget(targetObject); 
+                    controller.SetTarget(targetObject);
                     Debug.Log(
                         $"{_logPrefix} Assigned target '{targetObject.name}' to robot '{robotId}'"
                     );
                 }
-
-                instance.targetGameObject = debugTarget;
-                controller.SetTarget(debugTarget);
 
                 string profileName =
                     instance.profile != null ? instance.profile.profileName : "default";

@@ -309,6 +309,7 @@ class TestSequenceExecutorEndToEnd:
         detect_op.category = OperationCategory.PERCEPTION
         detect_op.preconditions = []
         detect_op.postconditions = []
+        detect_op.relationships = None
 
         # Mock move operation
         move_op = Mock(spec=BasicOperation)
@@ -316,6 +317,7 @@ class TestSequenceExecutorEndToEnd:
         move_op.category = OperationCategory.NAVIGATION
         move_op.preconditions = []
         move_op.postconditions = []
+        move_op.relationships = None
 
         # Setup registry to return appropriate operations
         def get_op_by_name(name):
@@ -336,7 +338,7 @@ class TestSequenceExecutorEndToEnd:
                 return detect_result
             elif name == "move_to_coordinate":
                 return move_result
-            return OperationResult.error_result("UNKNOWN_OP", "Unknown operation")
+            return OperationResult.error_result("UNKNOWN_OP", "Unknown operation", [])
 
         mock_registry.return_value.execute_operation_by_name = Mock(side_effect=execute_op_by_name)
         mock_broadcaster.return_value.get_completion = Mock(return_value=None)
@@ -367,6 +369,9 @@ class TestSequenceExecutorEndToEnd:
             "control_gripper": Mock(spec=BasicOperation, name="control_gripper",
                                    category=OperationCategory.MANIPULATION, preconditions=[], postconditions=[])
         }
+        # Set relationships to None to prevent iteration
+        for op in operations.values():
+            op.relationships = None
 
         mock_registry.return_value.get_operation_by_name = Mock(side_effect=lambda name: operations.get(name))
 
@@ -378,7 +383,7 @@ class TestSequenceExecutorEndToEnd:
         }
 
         mock_registry.return_value.execute_operation_by_name = Mock(
-            side_effect=lambda name, **params: results.get(name, OperationResult.error_result("ERROR", "Unknown"))
+            side_effect=lambda name, **params: results.get(name, OperationResult.error_result("ERROR", "Unknown", []))
         )
         mock_broadcaster.return_value.get_completion = Mock(return_value=None)
 
@@ -401,6 +406,7 @@ class TestSequenceExecutorEndToEnd:
         """Test multi-robot coordinated movements"""
         move_op = Mock(spec=BasicOperation, name="move_to_coordinate",
                       category=OperationCategory.NAVIGATION, preconditions=[], postconditions=[])
+        move_op.relationships = None
 
         mock_registry.return_value.get_operation_by_name = Mock(return_value=move_op)
         mock_registry.return_value.execute_operation_by_name = Mock(
@@ -434,8 +440,10 @@ class TestSequenceExecutorErrorPropagation:
         """Test sequence stops when detection fails"""
         detect_op = Mock(spec=BasicOperation, name="detect_object_stereo",
                         category=OperationCategory.PERCEPTION, preconditions=[], postconditions=[])
+        detect_op.relationships = None
         move_op = Mock(spec=BasicOperation, name="move_to_coordinate",
                       category=OperationCategory.NAVIGATION, preconditions=[], postconditions=[])
+        move_op.relationships = None
 
         mock_registry.return_value.get_operation_by_name = Mock(
             side_effect=lambda name: detect_op if name == "detect_object_stereo" else move_op
@@ -443,7 +451,7 @@ class TestSequenceExecutorErrorPropagation:
 
         # Detection fails
         mock_registry.return_value.execute_operation_by_name = Mock(
-            return_value=OperationResult.error_result("NO_OBJECTS", "No objects detected")
+            return_value=OperationResult.error_result("NO_OBJECTS", "No objects detected", ["Adjust camera", "Check lighting"])
         )
 
         executor = SequenceExecutor(enable_verification=False, check_completion=False)
@@ -465,6 +473,7 @@ class TestSequenceExecutorErrorPropagation:
         """Test timeout handling during movement"""
         move_op = Mock(spec=BasicOperation, name="move_to_coordinate",
                       category=OperationCategory.NAVIGATION, preconditions=[], postconditions=[])
+        move_op.relationships = None
 
         mock_registry.return_value.get_operation_by_name = Mock(return_value=move_op)
         mock_registry.return_value.execute_operation_by_name = Mock(
@@ -487,17 +496,20 @@ class TestSequenceExecutorErrorPropagation:
         )
 
         assert result["success"] is False
-        assert "timeout" in result.get("error", "").lower() or "completion" in result.get("error", "").lower()
+        # Check for timeout or timed out in error message
+        error_msg = result.get("error", "").lower()
+        assert "timed out" in error_msg or "timeout" in error_msg
 
     @patch('orchestrators.SequenceExecutor.get_global_registry')
     def test_e2e_gripper_fails(self, mock_registry, cleanup_world_state):
         """Test gripper failure handling"""
         gripper_op = Mock(spec=BasicOperation, name="control_gripper",
                          category=OperationCategory.MANIPULATION, preconditions=[], postconditions=[])
+        gripper_op.relationships = None
 
         mock_registry.return_value.get_operation_by_name = Mock(return_value=gripper_op)
         mock_registry.return_value.execute_operation_by_name = Mock(
-            return_value=OperationResult.error_result("GRIPPER_JAMMED", "Gripper mechanism jammed")
+            return_value=OperationResult.error_result("GRIPPER_JAMMED", "Gripper mechanism jammed", ["Reset gripper", "Check for obstruction"])
         )
 
         executor = SequenceExecutor(enable_verification=False, check_completion=False)
@@ -517,6 +529,7 @@ class TestSequenceExecutorErrorPropagation:
         """Test coordination conflict during execution"""
         move_op = Mock(spec=BasicOperation, name="move_to_coordinate",
                       category=OperationCategory.NAVIGATION, preconditions=[], postconditions=[])
+        move_op.relationships = None
 
         mock_registry.return_value.get_operation_by_name = Mock(return_value=move_op)
 
@@ -527,7 +540,7 @@ class TestSequenceExecutorErrorPropagation:
             if call_count[0] == 1:
                 return OperationResult.success_result({"position": (0.3, 0.0, 0.1)})
             else:
-                return OperationResult.error_result("COLLISION", "Path blocked by Robot1")
+                return OperationResult.error_result("COLLISION", "Path blocked by Robot1", ["Wait for Robot1", "Use different path"])
 
         mock_registry.return_value.execute_operation_by_name = Mock(side_effect=execute_with_conflict)
         mock_broadcaster.return_value.get_completion = Mock(return_value=None)
@@ -563,6 +576,8 @@ class TestComplexSequences:
             "control_gripper": Mock(spec=BasicOperation, name="control_gripper",
                                    category=OperationCategory.MANIPULATION, preconditions=[], postconditions=[])
         }
+        for op in operations.values():
+            op.relationships = None
 
         mock_registry.return_value.get_operation_by_name = Mock(side_effect=lambda name: operations.get(name))
 
@@ -602,6 +617,7 @@ class TestComplexSequences:
         """Test parallel robot movements"""
         move_op = Mock(spec=BasicOperation, name="move_to_coordinate",
                       category=OperationCategory.NAVIGATION, preconditions=[], postconditions=[])
+        move_op.relationships = None
 
         mock_registry.return_value.get_operation_by_name = Mock(return_value=move_op)
         mock_registry.return_value.execute_operation_by_name = Mock(
@@ -637,6 +653,8 @@ class TestComplexSequences:
             "check_robot_status": Mock(spec=BasicOperation, name="check_robot_status",
                                       category=OperationCategory.STATE_CHECK, preconditions=[], postconditions=[])
         }
+        for op in operations.values():
+            op.relationships = None
 
         mock_registry.return_value.get_operation_by_name = Mock(side_effect=lambda name: operations.get(name))
 
@@ -683,8 +701,10 @@ class TestVariablePassingIntegration:
         """Test capturing detection result and using in move"""
         detect_op = Mock(spec=BasicOperation, name="detect_object_stereo",
                         category=OperationCategory.PERCEPTION, preconditions=[], postconditions=[])
+        detect_op.relationships = None
         move_op = Mock(spec=BasicOperation, name="move_to_coordinate",
                       category=OperationCategory.NAVIGATION, preconditions=[], postconditions=[])
+        move_op.relationships = None
 
         mock_registry.return_value.get_operation_by_name = Mock(
             side_effect=lambda name: detect_op if name == "detect_object_stereo" else move_op
@@ -724,8 +744,10 @@ class TestVariablePassingIntegration:
         """Test multiple variables in one command"""
         status_op = Mock(spec=BasicOperation, name="check_robot_status",
                         category=OperationCategory.STATE_CHECK, preconditions=[], postconditions=[])
+        status_op.relationships = None
         move_op = Mock(spec=BasicOperation, name="move_to_coordinate",
                       category=OperationCategory.NAVIGATION, preconditions=[], postconditions=[])
+        move_op.relationships = None
 
         mock_registry.return_value.get_operation_by_name = Mock(
             side_effect=lambda name: status_op if name == "check_robot_status" else move_op
@@ -764,6 +786,7 @@ class TestSequenceExecutorPerformance:
         """Test executing a large sequence (20+ commands)"""
         move_op = Mock(spec=BasicOperation, name="move_to_coordinate",
                       category=OperationCategory.NAVIGATION, preconditions=[], postconditions=[])
+        move_op.relationships = None
 
         mock_registry.return_value.get_operation_by_name = Mock(return_value=move_op)
         mock_registry.return_value.execute_operation_by_name = Mock(
@@ -795,6 +818,7 @@ class TestSequenceExecutorPerformance:
         """Test rapid execution of consecutive commands"""
         gripper_op = Mock(spec=BasicOperation, name="control_gripper",
                          category=OperationCategory.MANIPULATION, preconditions=[], postconditions=[])
+        gripper_op.relationships = None
 
         mock_registry.return_value.get_operation_by_name = Mock(return_value=gripper_op)
         mock_registry.return_value.execute_operation_by_name = Mock(
@@ -854,6 +878,7 @@ class TestSequenceExecutorEdgeCases:
         """Test partial failure and recovery in sequence"""
         move_op = Mock(spec=BasicOperation, name="move_to_coordinate",
                       category=OperationCategory.NAVIGATION, preconditions=[], postconditions=[])
+        move_op.relationships = None
 
         mock_registry.return_value.get_operation_by_name = Mock(return_value=move_op)
 
@@ -864,7 +889,7 @@ class TestSequenceExecutorEdgeCases:
             if call_count[0] == 1:
                 return OperationResult.success_result({"position": (0.1, 0.0, 0.1)})
             elif call_count[0] == 2:
-                return OperationResult.error_result("COLLISION", "Obstacle detected")
+                return OperationResult.error_result("COLLISION", "Obstacle detected", ["Clear obstacle", "Use different path"])
             else:
                 # Should not reach here
                 raise AssertionError("Should not execute commands after failure")

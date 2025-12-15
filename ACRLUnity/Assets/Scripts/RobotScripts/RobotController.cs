@@ -1,3 +1,4 @@
+using Configuration;
 using Core;
 using Simulation;
 using UnityEngine;
@@ -425,16 +426,16 @@ namespace Robotics
         /// </summary>
         private void InitializeRobot()
         {
-            int jointCount = robotJoints.Length;
-
             // Ensure robot joints are assigned
-            if (robotJoints == null || jointCount == 0)
+            if (robotJoints == null || robotJoints.Length == 0)
             {
                 Debug.LogError(
                     $"{_logPrefix} Robot joints are not assigned. Please assign ArticulationBodies."
                 );
                 return;
             }
+
+            int jointCount = robotJoints.Length;
 
             // Configure joint drives using RobotManager profiles
             for (int i = 0; i < jointCount; i++)
@@ -443,7 +444,8 @@ namespace Robotics
 
                 // Try to get robot instance and use its profile
                 if (
-                    _robotManager.RobotInstances.TryGetValue(robotId, out var robotInstance)
+                    _robotManager != null
+                    && _robotManager.RobotInstances.TryGetValue(robotId, out var robotInstance)
                     && robotInstance.profile?.joints != null
                     && i < robotInstance.profile.joints.Length
                 )
@@ -559,9 +561,26 @@ namespace Robotics
             int jointCount = robotJoints.Length;
 
             // Get robot's specific profile or fall back to default
-            var robotProfile = _robotManager.GetRobotProfile(robotId);
+            RobotConfig robotProfile = null;
+            float globalSpeedMultiplier = 1.0f; // Default fallback
+
+            if (_robotManager != null)
+            {
+                robotProfile = _robotManager.GetRobotProfile(robotId);
+                if (robotProfile == null)
+                    robotProfile = _robotManager.RobotProfile;
+                globalSpeedMultiplier = _robotManager.globalSpeedMultiplier;
+            }
+
+            // If still no profile, create minimal defaults for testing
             if (robotProfile == null)
-                robotProfile = _robotManager.RobotProfile;
+            {
+                // Create a temporary profile with default values from RobotConstants
+                robotProfile = ScriptableObject.CreateInstance<RobotConfig>();
+                robotProfile.convergenceThreshold = RobotConstants.DEFAULT_CONVERGENCE_THRESHOLD;
+                robotProfile.maxJointStepRad = RobotConstants.DEFAULT_MAX_JOINT_STEP_RAD;
+                robotProfile.adjustmentSpeed = 1.0f;
+            }
 
             // Early convergence check - skip expensive IK computation if already at target
             if (_distanceToTarget < robotProfile.convergenceThreshold)
@@ -650,7 +669,7 @@ namespace Robotics
 
             float stepScale =
                 robotProfile.adjustmentSpeed
-                * _robotManager.globalSpeedMultiplier
+                * globalSpeedMultiplier
                 * adaptiveGain
                 * approachMultiplier;
 

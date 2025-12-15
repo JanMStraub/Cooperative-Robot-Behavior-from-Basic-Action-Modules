@@ -207,6 +207,10 @@ namespace Robotics
         /// </summary>
         private void Update()
         {
+            // Early exit if grippers are not properly initialized
+            if (leftGripper == null || rightGripper == null)
+                return;
+
             // Map normalized position [0,1] to actual joint limits
             float lower = leftGripper.xDrive.lowerLimit;
             float upper = leftGripper.xDrive.upperLimit;

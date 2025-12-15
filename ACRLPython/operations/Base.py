@@ -30,7 +30,8 @@ class OperationCategory(Enum):
     NAVIGATION = "navigation"  # Movement and positioning
     MANIPULATION = "manipulation"  # Grasping and object manipulation
     STATE_CHECK = "state_check"  # Status and verification
-    COORDINATION = "coordination"  # Multi-robot coordination
+    COORDINATION = "coordination"  # Multi-robot coordination (deprecated)
+    SYNC = "sync"  # Synchronization primitives for multi-robot tasks
 
 
 @dataclass
@@ -119,6 +120,21 @@ class OperationResult:
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {"success": self.success, "result": self.result, "error": self.error}
+
+    def __getitem__(self, key: str) -> Any:
+        """Support dictionary-style access for backward compatibility"""
+        if key == "success":
+            return self.success
+        elif key == "result":
+            return self.result
+        elif key == "error":
+            return self.error
+        else:
+            raise KeyError(f"Invalid key: {key}")
+
+    def __contains__(self, key: str) -> bool:
+        """Support 'in' operator for backward compatibility"""
+        return key in ("success", "result", "error")
 
     @staticmethod
     def success_result(result_data: Dict[str, Any]) -> "OperationResult":

@@ -86,6 +86,8 @@ class TestQueryEngine:
         mock_op.preconditions = ["precondition 1"]
         mock_op.postconditions = ["postcondition 1"]
         mock_op.failure_modes = ["failure 1"]
+        # Mock relationships to be None (no relationships)
+        mock_op.relationships = None
 
         mock_reg = Mock()
         mock_reg.get_operation.return_value = mock_op

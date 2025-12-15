@@ -28,44 +28,65 @@ from servers.CommandServer import CommandBroadcaster
 
 
 # ============================================================================
+# Fixtures
+# ============================================================================
+
+@pytest.fixture
+def mock_broadcaster():
+    """
+    Create a mock CommandBroadcaster for testing operations without Unity.
+
+    Returns:
+        Mock CommandBroadcaster with send_command method
+    """
+    broadcaster = Mock()
+    broadcaster.send_command = Mock(return_value=True)
+    broadcaster._max_queue_size = 100
+    return broadcaster
+
+
+# ============================================================================
 # Test Extreme Coordinate Values
 # ============================================================================
 
 class TestExtremeCoordinateValues:
     """Test operations with extreme coordinate values"""
 
-    def test_move_with_maximum_valid_coordinates(self):
+    def test_move_with_maximum_valid_coordinates(self, mock_broadcaster):
         """Test movement at maximum valid coordinate limits"""
-        result = move_to_coordinate(
-            robot_id="Robot1",
-            x=1.0,   # Maximum X
-            y=1.0,   # Maximum Y
-            z=0.6    # Maximum Z
-        )
+        with patch('operations.MoveOperations.get_command_broadcaster', return_value=mock_broadcaster):
+            result = move_to_coordinate(
+                robot_id="Robot1",
+                x=1.0,   # Maximum X
+                y=1.0,   # Maximum Y
+                z=0.6    # Maximum Z
+            )
 
-        assert result["success"] is True
+            assert result["success"] is True
 
-    def test_move_with_minimum_valid_coordinates(self):
+    def test_move_with_minimum_valid_coordinates(self, mock_broadcaster):
         """Test movement at minimum valid coordinate limits"""
-        result = move_to_coordinate(
-            robot_id="Robot1",
-            x=-1.0,  # Minimum X
-            y=-1.0,  # Minimum Y
-            z=-0.5   # Minimum Z
-        )
+        with patch('operations.MoveOperations.get_command_broadcaster', return_value=mock_broadcaster):
+            result = move_to_coordinate(
+                robot_id="Robot1",
+                x=-1.0,  # Minimum X
+                y=-1.0,  # Minimum Y
+                z=-0.5   # Minimum Z
+            )
 
-        assert result["success"] is True
+            assert result["success"] is True
 
-    def test_move_with_zero_coordinates(self):
+    def test_move_with_zero_coordinates(self, mock_broadcaster):
         """Test movement to origin (0, 0, 0)"""
-        result = move_to_coordinate(
-            robot_id="Robot1",
-            x=0.0,
-            y=0.0,
-            z=0.0
-        )
+        with patch('operations.MoveOperations.get_command_broadcaster', return_value=mock_broadcaster):
+            result = move_to_coordinate(
+                robot_id="Robot1",
+                x=0.0,
+                y=0.0,
+                z=0.0
+            )
 
-        assert result["success"] is True
+            assert result["success"] is True
 
     def test_move_beyond_maximum_x(self):
         """Test movement beyond maximum X coordinate"""
@@ -91,16 +112,17 @@ class TestExtremeCoordinateValues:
         assert result["success"] is False
         assert "INVALID_Z_COORDINATE" in result["error"]["code"]
 
-    def test_move_with_very_small_increments(self):
+    def test_move_with_very_small_increments(self, mock_broadcaster):
         """Test movement with extremely small coordinate differences"""
-        result = move_to_coordinate(
-            robot_id="Robot1",
-            x=0.000001,  # Very small
-            y=0.000001,
-            z=0.000001
-        )
+        with patch('operations.MoveOperations.get_command_broadcaster', return_value=mock_broadcaster):
+            result = move_to_coordinate(
+                robot_id="Robot1",
+                x=0.000001,  # Very small
+                y=0.000001,
+                z=0.000001
+            )
 
-        assert result["success"] is True
+            assert result["success"] is True
 
 
 # ============================================================================
@@ -171,18 +193,19 @@ class TestUnicodeAndSpecialCharacters:
         # Regex parser might not understand Unicode, but should not crash
         assert "error" in result or "success" in result
 
-    def test_robot_id_with_special_characters(self):
+    def test_robot_id_with_special_characters(self, mock_broadcaster):
         """Test robot ID with special characters"""
-        result = move_to_coordinate(
-            robot_id="Robot-1_v2.0",  # Special chars in ID
-            x=0.3,
-            y=0.0,
-            z=0.1
-        )
+        with patch('operations.MoveOperations.get_command_broadcaster', return_value=mock_broadcaster):
+            result = move_to_coordinate(
+                robot_id="Robot-1_v2.0",  # Special chars in ID
+                x=0.3,
+                y=0.0,
+                z=0.1
+            )
 
-        # Should succeed - robot ID is just a string
-        assert result["success"] is True
-        assert result["result"]["robot_id"] == "Robot-1_v2.0"
+            # Should succeed - robot ID is just a string
+            assert result["success"] is True
+            assert result["result"]["robot_id"] == "Robot-1_v2.0"
 
     def test_command_with_sql_injection_attempt(self):
         """Test command with SQL injection-like string"""
@@ -257,7 +280,7 @@ class TestMalformedDataHandling:
 class TestResourceLimits:
     """Test behavior at resource limits"""
 
-    def test_image_storage_with_many_cameras(self):
+    def test_image_storage_with_many_cameras(self, cleanup_singletons):
         """Test storing images from many cameras simultaneously"""
         storage = ImageStorage.get_instance()
 
@@ -273,10 +296,7 @@ class TestResourceLimits:
         camera_ids = storage.get_all_camera_ids()
         assert len(camera_ids) == 100
 
-        # Cleanup
-        storage._cameras.clear()
-
-    def test_image_storage_with_very_large_image(self):
+    def test_image_storage_with_very_large_image(self, cleanup_singletons):
         """Test storing a very large image"""
         storage = ImageStorage.get_instance()
 
@@ -289,9 +309,6 @@ class TestResourceLimits:
         retrieved = storage.get_camera_image("large_cam")
         assert retrieved is not None
         assert retrieved.shape == large_image.shape
-
-        # Cleanup
-        storage._cameras.clear()
 
     def test_command_broadcaster_queue_overflow(self):
         """Test command queue behavior when full"""
@@ -324,20 +341,21 @@ class TestBoundaryTimeValues:
         # This is implementation-specific
         pass  # Placeholder - would need actual execution context
 
-    def test_very_long_timeout(self):
+    def test_very_long_timeout(self, mock_broadcaster):
         """Test operation with extremely long timeout"""
         # Should not cause overflow or issues
-        result = move_to_coordinate(
-            robot_id="Robot1",
-            x=0.3,
-            y=0.0,
-            z=0.1,
-            request_id=999999999  # Large request ID
-        )
+        with patch('operations.MoveOperations.get_command_broadcaster', return_value=mock_broadcaster):
+            result = move_to_coordinate(
+                robot_id="Robot1",
+                x=0.3,
+                y=0.0,
+                z=0.1,
+                request_id=999999999  # Large request ID
+            )
 
-        assert result["success"] is True
+            assert result["success"] is True
 
-    def test_image_age_calculation_wraparound(self):
+    def test_image_age_calculation_wraparound(self, cleanup_singletons):
         """Test image age with very old timestamp"""
         storage = ImageStorage.get_instance()
 
@@ -356,9 +374,6 @@ class TestBoundaryTimeValues:
         # Should calculate correctly
         assert age is not None
         assert age > 31535000  # Approximately 1 year
-
-        # Cleanup
-        storage._cameras.clear()
 
 
 # ============================================================================
