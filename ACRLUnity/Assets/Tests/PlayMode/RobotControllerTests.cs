@@ -15,8 +15,8 @@ namespace Tests.PlayMode
         private RobotController _robotController;
         private GameObject _endEffectorObject;
 
-        [SetUp]
-        public void SetUp()
+        [UnitySetUp]
+        public IEnumerator SetUp()
         {
             // Create minimal robot setup for testing
             _testRobotObject = new GameObject("TestRobot");
@@ -28,6 +28,23 @@ namespace Tests.PlayMode
             _endEffectorObject.transform.SetParent(_testRobotObject.transform);
             _endEffectorObject.transform.position = Vector3.zero;
             _robotController.endEffectorBase = _endEffectorObject.transform;
+
+            // Create mock ArticulationBody joints to prevent initialization errors
+            _robotController.robotJoints = new ArticulationBody[6];
+            for (int i = 0; i < 6; i++)
+            {
+                var jointObject = new GameObject($"Joint{i}");
+                jointObject.transform.SetParent(_testRobotObject.transform);
+                var articulationBody = jointObject.AddComponent<ArticulationBody>();
+                _robotController.robotJoints[i] = articulationBody;
+            }
+
+            // Suppress expected warning about missing GripperController
+            LogAssert.Expect(LogType.Warning,
+                "[ROBOT_CONTROLLER] No GripperController found in children of TestRobot");
+
+            // Wait one frame to allow Start() to be called
+            yield return null;
         }
 
         [TearDown]
@@ -39,12 +56,13 @@ namespace Tests.PlayMode
             }
         }
 
-        [Test]
-        public void HasTarget_ReturnsFalse_WhenNoTargetSet()
+        [UnityTest]
+        public IEnumerator HasTarget_ReturnsFalse_WhenNoTargetSet()
         {
             // Assert
             Assert.IsFalse(_robotController.HasTarget,
                 "HasTarget should be false when no target has been set");
+            yield return null;
         }
 
         [UnityTest]
@@ -54,8 +72,11 @@ namespace Tests.PlayMode
             var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
             targetObject.transform.position = new Vector3(1f, 1f, 1f);
 
+            // Expect GripperController error since we're not setting up gripper references
+            LogAssert.Expect(LogType.Error, "[GRIPPER_CONTROLLER] Gripper references not assigned!");
+
             // Add GripperController to test gripper behavior
-            var gripperController = _testRobotObject.AddComponent<GripperController>();
+            _testRobotObject.AddComponent<GripperController>();
             // Note: GripperController requires ArticulationBody setup, so this is a basic test
 
             // Act
@@ -115,18 +136,19 @@ namespace Tests.PlayMode
             Assert.Less(angle, 0.1f, $"Target rotation should match (angle difference: {angle})");
         }
 
-        [Test]
-        public void GetCurrentTarget_ReturnsNull_WhenNoTargetSet()
+        [UnityTest]
+        public IEnumerator GetCurrentTarget_ReturnsNull_WhenNoTargetSet()
         {
             // Act
             var target = _robotController.GetCurrentTarget();
 
             // Assert
             Assert.IsNull(target, "GetCurrentTarget should return null when no target is set");
+            yield return null;
         }
 
-        [Test]
-        public void GetCurrentTargetRotation_ReturnsNull_WhenNoTargetSet()
+        [UnityTest]
+        public IEnumerator GetCurrentTargetRotation_ReturnsNull_WhenNoTargetSet()
         {
             // Act
             var rotation = _robotController.GetCurrentTargetRotation();
@@ -134,6 +156,7 @@ namespace Tests.PlayMode
             // Assert
             Assert.IsNull(rotation,
                 "GetCurrentTargetRotation should return null when no target is set");
+            yield return null;
         }
 
         [UnityTest]
@@ -177,8 +200,8 @@ namespace Tests.PlayMode
                 "Distance should be 5.0 (3-4-5 triangle)");
         }
 
-        [Test]
-        public void GetCurrentEndEffectorPosition_ReturnsCorrectPosition()
+        [UnityTest]
+        public IEnumerator GetCurrentEndEffectorPosition_ReturnsCorrectPosition()
         {
             // Arrange
             Vector3 expectedPosition = new Vector3(1.2f, 3.4f, 5.6f);
@@ -190,6 +213,7 @@ namespace Tests.PlayMode
             // Assert
             Assert.AreEqual(expectedPosition, actualPosition,
                 "GetCurrentEndEffectorPosition should return end effector position");
+            yield return null;
         }
 
         [UnityTest]

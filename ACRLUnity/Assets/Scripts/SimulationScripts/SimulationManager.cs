@@ -262,7 +262,7 @@ namespace Simulation
         /// </summary>
         private void UpdateRobotCoordination()
         {
-            if (!IsRunning || _robotControllers == null || _coordinationStrategy == null)
+            if (!IsRunning || _robotControllers == null || _robotControllers.Length == 0 || _coordinationStrategy == null)
                 return;
 
             // Delegate coordination logic to the strategy
@@ -369,13 +369,16 @@ namespace Simulation
 
             try
             {
-                // Reset all robots
-                foreach (var robot in _robotControllers)
+                // Reset all robots (if any exist)
+                if (_robotControllers != null && _robotControllers.Length > 0)
                 {
-                    if (robot != null)
+                    foreach (var robot in _robotControllers)
                     {
-                        robot.ResetJointTargets();
-                        _robotTargetReached[robot.gameObject.name] = true;
+                        if (robot != null)
+                        {
+                            robot.ResetJointTargets();
+                            _robotTargetReached[robot.gameObject.name] = true;
+                        }
                     }
                 }
 

@@ -139,6 +139,16 @@ class WorldState:
                     cls._instance._initialized = False
         return cls._instance
 
+    @classmethod
+    def get_instance(cls):
+        """
+        Get the singleton instance of WorldState.
+
+        Returns:
+            WorldState singleton instance
+        """
+        return cls()
+
     def __init__(self):
         """Initialize world state manager."""
         if self._initialized:
@@ -283,6 +293,47 @@ class WorldState:
 
             logger.debug(f"Updated robot state for {robot_id}")
 
+    def update_robot(self, robot_id: str, position: Tuple[float, float, float] = None,
+                     rotation: Tuple[float, float, float] = None,
+                     joint_angles: list[float] = None,
+                     is_moving: bool = None, **kwargs):
+        """
+        Update robot state (simplified interface for tests).
+
+        Args:
+            robot_id: Robot identifier
+            position: Robot position (x, y, z)
+            rotation: Robot rotation (roll, pitch, yaw)
+            joint_angles: List of joint angles
+            is_moving: True if robot is moving
+            **kwargs: Additional state data
+        """
+        state_data = {}
+        if position is not None:
+            state_data["position"] = position
+        if rotation is not None:
+            state_data["rotation"] = rotation
+        if joint_angles is not None:
+            state_data["joint_angles"] = joint_angles
+        if is_moving is not None:
+            state_data["is_moving"] = is_moving
+        state_data.update(kwargs)
+
+        self.update_robot_state(robot_id, state_data)
+
+    def get_robot_state(self, robot_id: str) -> Optional[RobotState]:
+        """
+        Get robot state object.
+
+        Args:
+            robot_id: Robot identifier
+
+        Returns:
+            RobotState object or None if not found
+        """
+        with self._lock:
+            return self._robot_states.get(robot_id)
+
     # ========================================================================
     # Object Tracking
     # ========================================================================
@@ -370,6 +421,33 @@ class WorldState:
             if object_id in self._objects:
                 self._objects[object_id].grasped_by = None
                 logger.info(f"Object {object_id} released")
+
+    def register_object(self, object_id: str, object_type: str = "unknown",
+                        position: Tuple[float, float, float] = (0, 0, 0),
+                        graspable: bool = True, **kwargs):
+        """
+        Register a new object (simplified interface for tests).
+
+        Args:
+            object_id: Unique object identifier
+            object_type: Type of object (e.g., "cube")
+            position: Object position (x, y, z)
+            graspable: True if object can be grasped
+            **kwargs: Additional object properties
+        """
+        color = kwargs.get("color", "unknown")
+        confidence = kwargs.get("confidence", 1.0)
+        self.update_object_position(object_id, position, color, object_type, confidence)
+
+    def get_all_objects(self) -> list[ObjectState]:
+        """
+        Get all registered objects.
+
+        Returns:
+            List of all ObjectState instances
+        """
+        with self._lock:
+            return list(self._objects.values())
 
     # ========================================================================
     # Workspace Allocation

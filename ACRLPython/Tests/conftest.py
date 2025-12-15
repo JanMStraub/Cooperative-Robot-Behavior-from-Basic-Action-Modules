@@ -362,6 +362,26 @@ def cleanup_rag_singletons():
         pass
 
 
+@pytest.fixture
+def clean_registry():
+    """
+    Fixture to clean up operation registry singleton between tests
+
+    Cleans before yielding to ensure clean state, then again after
+    """
+    # Clean up BEFORE the test runs
+    def _cleanup():
+        try:
+            import operations.Registry as registry_module
+            registry_module._global_registry = None
+        except:
+            pass
+
+    _cleanup()  # Clean before test
+    yield
+    _cleanup()  # Clean after test
+
+
 # ============================================================================
 # Phase 2/3: Spatial Reasoning and Verification Fixtures
 # ============================================================================
@@ -559,3 +579,149 @@ def disable_yolo_detection():
     cfg.USE_YOLO = False
     yield
     cfg.USE_YOLO = original_use_yolo
+
+
+# ============================================================================
+# SYNCHRONIZATION OPERATION FIXTURES
+# ============================================================================
+
+@pytest.fixture
+def cleanup_event_bus():
+    """
+    Clean EventBus singleton between tests
+
+    Ensures clean state for each test by resetting all events
+    and waiter counts after test completion.
+
+    Yields control to test, then resets EventBus.
+    """
+    yield
+    try:
+        from operations.SyncOperations import EventBus
+        bus = EventBus()
+        bus.reset()
+    except Exception:
+        # If EventBus not available or already clean, ignore
+        pass
+
+
+@pytest.fixture
+def event_bus(cleanup_event_bus):
+    """
+    Provide a clean EventBus instance
+
+    Returns:
+        EventBus singleton instance with clean state
+    """
+    from operations.SyncOperations import EventBus
+    bus = EventBus()
+    bus.reset()
+    return bus
+
+
+@pytest.fixture
+def timing_helper():
+    """
+    Helper for timing verification with tolerance
+
+    Returns:
+        Function that verifies timing with configurable tolerance percentage
+    """
+    def verify_timing(actual_ms, expected_ms, tolerance_percent=10):
+        """
+        Verify actual timing is within tolerance of expected
+
+        Args:
+            actual_ms: Actual duration in milliseconds
+            expected_ms: Expected duration in milliseconds
+            tolerance_percent: Tolerance as percentage (default 10%)
+
+        Returns:
+            True if within tolerance, False otherwise
+        """
+        tolerance = expected_ms * (tolerance_percent / 100.0)
+        return abs(actual_ms - expected_ms) <= tolerance
+
+    return verify_timing
+
+
+@pytest.fixture
+def thread_barrier():
+    """
+    Synchronization barrier for concurrent tests
+
+    Ensures all threads start simultaneously to test race conditions.
+
+    Returns:
+        Function that creates threading.Barrier for coordinating thread starts
+    """
+    import threading
+
+    def create_barrier(num_threads):
+        """
+        Create a barrier for synchronizing thread starts
+
+        Args:
+            num_threads: Number of threads to synchronize
+
+        Returns:
+            threading.Barrier instance
+        """
+        return threading.Barrier(num_threads)
+
+    return create_barrier
+
+
+@pytest.fixture
+def thread_error_collector():
+    """
+    Thread-safe error collection for concurrent tests
+
+    Returns:
+        Tuple of (errors list, add_error function) for collecting errors
+        from multiple threads safely
+    """
+    import threading
+    errors = []
+    lock = threading.Lock()
+
+    def add_error(error):
+        """
+        Thread-safe error addition
+
+        Args:
+            error: Error to add to collection
+        """
+        with lock:
+            errors.append(error)
+
+    return errors, add_error
+
+
+@pytest.fixture
+def async_executor():
+    """
+    Helper for executing functions in background threads
+
+    Returns:
+        Function that executes callable in daemon thread and returns thread object
+    """
+    import threading
+
+    def execute_async(func, *args, **kwargs):
+        """
+        Execute function in background daemon thread
+
+        Args:
+            func: Callable to execute
+            *args: Positional arguments for func
+            **kwargs: Keyword arguments for func
+
+        Returns:
+            Thread object (already started)
+        """
+        thread = threading.Thread(target=func, args=args, kwargs=kwargs, daemon=True)
+        thread.start()
+        return thread
+
+    return execute_async

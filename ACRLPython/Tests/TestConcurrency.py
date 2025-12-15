@@ -257,13 +257,20 @@ class TestConcurrentRegistryOperations:
             category=OperationCategory.NAVIGATION,
             complexity=OperationComplexity.BASIC,
             description="Test operation for concurrency",
+            long_description="A simple test operation for concurrency testing",
+            usage_examples=["test_concurrent()"],
+            parameters=[],
+            preconditions=[],
+            postconditions=[],
+            average_duration_ms=10.0,
+            success_rate=1.0,
+            failure_modes=[],
             implementation=test_impl
         )
 
-        # Register manually if needed
+        # Register manually if needed (use correct dict name: operations)
         if registry.get_operation_by_name("test_concurrent") is None:
-            registry._operations_by_id["test_concurrent_001"] = op
-            registry._operations_by_name["test_concurrent"] = op
+            registry.operations["test_concurrent_001"] = op
 
         errors = []
         success_count = [0]
@@ -272,7 +279,7 @@ class TestConcurrentRegistryOperations:
             try:
                 for i in range(10):
                     result = registry.execute_operation_by_name("test_concurrent", thread_id=thread_id, index=i)
-                    if result and result.get("success"):
+                    if result and result.success:
                         success_count[0] += 1
             except Exception as e:
                 errors.append(e)
@@ -290,7 +297,7 @@ class TestConcurrentRegistryOperations:
         # All executions should succeed
         assert success_count[0] == 100  # 10 threads * 10 executions
 
-    def test_concurrent_registry_lookups(self):
+    def test_concurrent_registry_lookups(self, clean_registry):
         """Test concurrent operation lookups"""
         registry = get_global_registry()
 
@@ -305,8 +312,8 @@ class TestConcurrentRegistryOperations:
                     if op:
                         lookup_count[0] += 1
 
-                    # Look up by ID
-                    op = registry.get_operation_by_id("motion_move_to_coord_001")
+                    # Look up by ID (correct method name: get_operation)
+                    op = registry.get_operation("motion_move_to_coord_001")
                     if op:
                         lookup_count[0] += 1
 
@@ -324,8 +331,8 @@ class TestConcurrentRegistryOperations:
         # No errors should occur
         assert len(errors) == 0
 
-        # Lookups should have occurred
-        assert lookup_count[0] > 0
+        # Lookups should have occurred (10 threads * 100 iterations * 2 lookups = 2000)
+        assert lookup_count[0] == 2000
 
 
 # ============================================================================
@@ -573,18 +580,18 @@ class TestRaceConditions:
         # All commands should be tracked
         assert len(results) == 100
 
-    def test_operation_execution_race_condition(self, cleanup_world_state):
+    @patch('operations.MoveOperations.get_command_broadcaster')
+    def test_operation_execution_race_condition(self, mock_broadcaster, cleanup_world_state):
         """Test for race conditions during operation execution"""
+        # Mock broadcaster to return success
+        mock_broadcaster.return_value.send_command = Mock(return_value=True)
+
         execution_order = []
         lock = threading.Lock()
         errors = []
 
-        @patch('operations.MoveOperations.get_command_broadcaster')
-        def execute_move(mock_broadcaster, robot_id, x, y, z):
+        def execute_move(robot_id, x, y, z):
             try:
-                # Mock broadcaster
-                mock_broadcaster.return_value.send_command = Mock(return_value=True)
-
                 result = move_to_coordinate(
                     robot_id=robot_id,
                     x=x, y=y, z=z
@@ -595,7 +602,8 @@ class TestRaceConditions:
 
                 return result
             except Exception as e:
-                errors.append(e)
+                with lock:
+                    errors.append(e)
 
         # Execute moves for different robots simultaneously
         threads = [
@@ -609,7 +617,7 @@ class TestRaceConditions:
             t.join()
 
         # No errors should occur
-        assert len(errors) == 0
+        assert len(errors) == 0, f"Errors occurred: {errors}"
 
         # All robots should have executed
         assert len(execution_order) == 20

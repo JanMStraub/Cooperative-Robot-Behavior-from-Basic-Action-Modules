@@ -2,12 +2,23 @@
 Multi-Robot Coordination Operations
 ====================================
 
-This module implements coordination primitives for safe multi-robot operations.
+**DEPRECATED**: This module is deprecated as of the LLM-driven coordination refactoring.
+Use atomic operations (move_to_coordinate, control_gripper, etc.) combined with
+synchronization primitives (signal, wait_for_signal) instead.
 
-Operations:
+The LLM should plan multi-robot coordination using basic building blocks rather than
+pre-programmed coordination patterns.
+
+This file is kept for reference only. These operations are NOT registered in the
+global operation registry.
+
+Original Operations:
 - coordinate_simultaneous_move: Safe parallel movement with collision checking
+  → Replaced by: Two move_to_coordinate calls with parallel_group marking
 - coordinate_handoff: Object handoff between two robots
+  → Replaced by: LLM-planned sequence using detect, move, grip, signal primitives
 - allocate_workspace_region: Workspace allocation for exclusive access
+  → Replaced by: Automatic safety checks in Unity CollaborativeStrategy
 """
 
 import time

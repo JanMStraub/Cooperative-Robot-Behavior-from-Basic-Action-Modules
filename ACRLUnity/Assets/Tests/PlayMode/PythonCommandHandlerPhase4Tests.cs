@@ -92,6 +92,12 @@ namespace Tests.PlayMode
             // Initialize required fields
             controller.robotJoints = new ArticulationBody[0];
 
+            // Expect the warning message for missing gripper (this is expected in tests)
+            LogAssert.Expect(LogType.Warning, $"[ROBOT_CONTROLLER] No GripperController found in children of {robotId}");
+
+            // Expect the error message for missing joints (this is expected in tests)
+            LogAssert.Expect(LogType.Error, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+
             // Register the robot using the proper API
             _robotManager.RegisterRobot(robotId, robotObj);
         }

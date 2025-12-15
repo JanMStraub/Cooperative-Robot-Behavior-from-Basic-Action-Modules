@@ -164,6 +164,11 @@ class CommandParser:
                     "error": f"Failed to extract JSON from LLM response: {content[:200]}",
                 }
 
+            # Normalize multi-robot "plan" format to "commands" format
+            if "plan" in parsed and "commands" not in parsed:
+                logger.info(f"Multi-robot plan detected with reasoning: {parsed.get('reasoning', 'N/A')}")
+                parsed["commands"] = parsed["plan"]
+
             logger.info(f"Parsed {len(parsed.get('commands', []))} commands from LLM")
 
             # Validate operations
@@ -171,7 +176,12 @@ class CommandParser:
             validated_commands = self._validate_commands(commands, robot_id)
             logger.info(f"Validated {len(validated_commands)} commands")
 
-            return {"success": True, "commands": validated_commands, "error": None}
+            return {
+                "success": True,
+                "commands": validated_commands,
+                "error": None,
+                "reasoning": parsed.get("reasoning")  # Preserve reasoning if present
+            }
 
         except requests.exceptions.Timeout:
             return {"success": False, "commands": [], "error": "LLM request timed out"}
@@ -191,63 +201,103 @@ class CommandParser:
     def _build_parsing_prompt(
         self, command_text: str, robot_id: str, available_ops: str
     ) -> str:
-        """Build the prompt for LLM command parsing."""
-        return f"""Parse the following robot command into a sequence of operations.
+        """Build the prompt for LLM command parsing with multi-robot support."""
+        return f"""You are a robot coordinator planning tasks for multiple robots.
 
-Available operations:
+Available Robots:
+- Robot1 (left workspace, near x=0.3)
+- Robot2 (right workspace, near x=-0.3)
+
+Available Operations:
 {available_ops}
 
 Command to parse: "{command_text}"
 Default robot_id: "{robot_id}"
 
-Rules:
+=== MULTI-ROBOT COORDINATION ===
+
+When the task involves multiple robots:
+1. Decide which robot is best positioned for each subtask
+2. Use "parallel_group" to mark operations that can run concurrently
+3. Use synchronization primitives (signal, wait_for_signal) for robot-to-robot coordination
+4. Operations with the SAME parallel_group number execute in parallel
+5. Operations in LATER parallel_groups wait for ALL operations in previous groups to complete
+
+Example for multi-robot handoff:
+{{
+  "reasoning": "Robot1 detects and picks up cube. Robot2 waits for signal, then both move to handoff position. Robot2 grips, then Robot1 releases.",
+  "plan": [
+    {{"parallel_group": 1, "robot": "Robot1", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "capture_var": "cube"}},
+    {{"parallel_group": 2, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "position": "$cube"}}}},
+    {{"parallel_group": 3, "robot": "Robot1", "operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": false}}}},
+    {{"parallel_group": 3, "robot": "Robot1", "operation": "signal", "params": {{"event_name": "r1_gripped"}}}},
+    {{"parallel_group": 3, "robot": "Robot2", "operation": "wait_for_signal", "params": {{"event_name": "r1_gripped"}}}},
+    {{"parallel_group": 4, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": 0.0, "y": 0.3, "z": 0.15}}}},
+    {{"parallel_group": 4, "robot": "Robot2", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot2", "x": 0.0, "y": 0.3, "z": 0.15}}}},
+    {{"parallel_group": 5, "robot": "Robot2", "operation": "control_gripper", "params": {{"robot_id": "Robot2", "open_gripper": false}}}},
+    {{"parallel_group": 6, "robot": "Robot1", "operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": true}}}}
+  ]
+}}
+
+=== SYNCHRONIZATION PRIMITIVES ===
+
+- signal(event_name): Emit named event for other robots to wait on
+  * Example: {{"operation": "signal", "params": {{"event_name": "cube_gripped"}}}}
+
+- wait_for_signal(event_name, timeout_ms): Wait for event (default timeout: 30000ms)
+  * Example: {{"operation": "wait_for_signal", "params": {{"event_name": "cube_gripped"}}}}
+
+- wait(duration_ms): Simple time-based pause
+  * Example: {{"operation": "wait", "params": {{"duration_ms": 500}}}}
+
+=== SINGLE-ROBOT RULES ===
+
 1. Extract each distinct action as a separate operation
 2. Parse coordinates from text like "(0.3, 0.2, 0.1)" or "x=0.3, y=0.2, z=0.1"
 3. "close gripper" or "grasp" means control_gripper with open_gripper=false
 4. "open gripper" or "release" means control_gripper with open_gripper=true
 5. Include robot_id in every operation's params
 6. Preserve the order of operations as specified in the command
-7. IMPORTANT: When detect_object is followed by "move to it/there/that", use variable passing:
-   - Add "capture_var": "target" to the detect_object command
-   - Use "position": "$target" in the move_to_coordinate params (NOT x, y, z)
 
-   Example for "detect blue cube, move to it, close gripper":
-   {{
-     "commands": [
-       {{"operation": "detect_object", "params": {{"robot_id": "Robot1", "color": "blue"}}, "capture_var": "target"}},
-       {{"operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "position": "$target"}}}},
-       {{"operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": false}}}}
-     ]
-   }}
+=== VARIABLE PASSING ===
 
-8. Spatial Reasoning Operations (Phase 2):
-   - "move above/below/left of/right of the object" uses move_relative_to_object
-     * Relations: "left_of", "right_of", "above", "below", "in_front_of", "behind"
-     * Example: "move above the cube" -> {{"operation": "move_relative_to_object", "params": {{"robot_id": "Robot1", "object_ref": "$target", "relation": "above", "offset": 0.1}}}}
+When detect_object is followed by "move to it/there/that":
+- Add "capture_var": "target" to the detect_object command
+- Use "position": "$target" in the move_to_coordinate params (NOT x, y, z)
 
-   - "move to the [workspace]" uses move_to_region
-     * Regions: "left_workspace", "right_workspace", "shared_zone", "center"
-     * Positions: "center", "near", "far"
-     * Example: "move to left workspace" -> {{"operation": "move_to_region", "params": {{"robot_id": "Robot1", "region_name": "left_workspace", "position_in_region": "center"}}}}
-
-   - "move between X and Y" uses move_between_objects
-     * Example: "move between cube1 and cube2" -> {{"operation": "move_between_objects", "params": {{"robot_id": "Robot1", "object1": "$object1", "object2": "$object2", "bias": 0.5}}}}
-
-9. Detection Parameter Constraints:
-   - detect_object_stereo "color" parameter: ONLY use "red", "green", "blue", or null (for all colors)
-   - detect_object_stereo "selection" parameter: ONLY use "leftmost", "closest", "first", or "all"
-   - DO NOT use "cube", "object", or other words for selection - these are invalid
-   - Example: {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "blue", "selection": "leftmost"}}}}
-
-Output JSON format:
+Example:
 {{
-    "commands": [
-        {{"operation": "operation_name", "params": {{"param1": value1, ...}}}},
-        ...
-    ]
+  "plan": [
+    {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "blue"}}, "capture_var": "target"}},
+    {{"operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "position": "$target"}}}},
+    {{"operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": false}}}}
+  ]
 }}
 
-Output only the JSON, no explanation."""
+=== DETECTION CONSTRAINTS ===
+
+- detect_object_stereo "color": ONLY "red", "green", "blue", or null
+- detect_object_stereo "selection": ONLY "leftmost", "closest", "first", or "all"
+
+=== OUTPUT FORMAT ===
+
+For single-robot tasks:
+{{
+  "commands": [
+    {{"operation": "operation_name", "params": {{"robot_id": "Robot1", "param1": value1}}}}
+  ]
+}}
+
+For multi-robot tasks:
+{{
+  "reasoning": "Brief explanation of the multi-robot coordination strategy",
+  "plan": [
+    {{"parallel_group": 1, "robot": "Robot1", "operation": "...", "params": {{...}}}},
+    {{"parallel_group": 1, "robot": "Robot2", "operation": "...", "params": {{...}}}}
+  ]
+}}
+
+Output only valid JSON, no explanation."""
 
     def _get_available_operations_summary(self, command_text: str = "") -> str:
         """
@@ -367,9 +417,9 @@ Output only the JSON, no explanation."""
             operation = cmd.get("operation", "")
             params = cmd.get("params", {})
 
-            # Ensure robot_id is present
+            # Ensure robot_id is present (use "robot" field if specified in multi-robot plan)
             if "robot_id" not in params:
-                params["robot_id"] = default_robot_id
+                params["robot_id"] = cmd.get("robot", default_robot_id)
 
             # Verify operation exists
             op = self.registry.get_operation_by_name(operation)
@@ -382,6 +432,10 @@ Output only the JSON, no explanation."""
             # Preserve capture_var if present
             if "capture_var" in cmd:
                 validated_cmd["capture_var"] = cmd["capture_var"]
+
+            # Preserve parallel_group if present (for multi-robot coordination)
+            if "parallel_group" in cmd:
+                validated_cmd["parallel_group"] = cmd["parallel_group"]
 
             validated.append(validated_cmd)
 

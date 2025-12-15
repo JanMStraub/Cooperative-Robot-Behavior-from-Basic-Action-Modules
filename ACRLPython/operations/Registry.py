@@ -9,6 +9,7 @@ that can be queried by a RAG system to enable LLM-driven robot control.
 from typing import Dict, List, Optional
 import json
 import os
+import threading
 from .Base import BasicOperation, OperationCategory, OperationComplexity
 
 from .MoveOperations import MOVE_TO_COORDINATE_OPERATION
@@ -22,10 +23,16 @@ from .SpatialOperations import (
     MOVE_BETWEEN_OBJECTS_OPERATION,
     MOVE_TO_REGION_OPERATION,
 )
-from .CoordinationOperations import (
-    COORDINATE_SIMULTANEOUS_MOVE_OPERATION,
-    COORDINATE_HANDOFF_OPERATION,
-    ALLOCATE_WORKSPACE_REGION_OPERATION,
+# Coordination operations deprecated - use atomic operations + sync primitives instead
+# from .CoordinationOperations import (
+#     COORDINATE_SIMULTANEOUS_MOVE_OPERATION,
+#     COORDINATE_HANDOFF_OPERATION,
+#     ALLOCATE_WORKSPACE_REGION_OPERATION,
+# )
+from .SyncOperations import (
+    SIGNAL_OPERATION,
+    WAIT_FOR_SIGNAL_OPERATION,
+    WAIT_OPERATION,
 )
 
 class OperationRegistry:
@@ -47,6 +54,7 @@ class OperationRegistry:
     def _initialize_operations(self):
         """Load all available operations into the registry"""
         operations = [
+            # Core atomic operations
             MOVE_TO_COORDINATE_OPERATION,
             CHECK_ROBOT_STATUS_OPERATION,
             CONTROL_GRIPPER_OPERATION,
@@ -58,10 +66,15 @@ class OperationRegistry:
             MOVE_RELATIVE_TO_OBJECT_OPERATION,
             MOVE_BETWEEN_OBJECTS_OPERATION,
             MOVE_TO_REGION_OPERATION,
-            # Coordination operations (Phase 3)
-            COORDINATE_SIMULTANEOUS_MOVE_OPERATION,
-            COORDINATE_HANDOFF_OPERATION,
-            ALLOCATE_WORKSPACE_REGION_OPERATION,
+            # Synchronization primitives for multi-robot coordination
+            SIGNAL_OPERATION,
+            WAIT_FOR_SIGNAL_OPERATION,
+            WAIT_OPERATION,
+            # Coordination operations (Phase 3) - DEPRECATED
+            # Use atomic operations + sync primitives instead
+            # COORDINATE_SIMULTANEOUS_MOVE_OPERATION,
+            # COORDINATE_HANDOFF_OPERATION,
+            # ALLOCATE_WORKSPACE_REGION_OPERATION,
         ]
 
         for op in operations:
@@ -262,11 +275,12 @@ class OperationRegistry:
 
 # Global registry instance
 _global_registry: Optional[OperationRegistry] = None
+_registry_lock = threading.RLock()
 
 
 def get_global_registry() -> OperationRegistry:
     """
-    Get the global operation registry singleton.
+    Get the global operation registry singleton (thread-safe).
 
     Returns:
         The global OperationRegistry instance
@@ -278,5 +292,7 @@ def get_global_registry() -> OperationRegistry:
     """
     global _global_registry
     if _global_registry is None:
-        _global_registry = OperationRegistry()
+        with _registry_lock:
+            if _global_registry is None:
+                _global_registry = OperationRegistry()
     return _global_registry
