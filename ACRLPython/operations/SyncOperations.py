@@ -13,8 +13,7 @@ Operations:
 
 import time
 import threading
-from typing import Dict, Set, Optional
-from dataclasses import dataclass
+from typing import Dict, Optional
 
 from operations.Base import (
     BasicOperation,
@@ -32,7 +31,7 @@ class EventBus:
     Singleton pattern ensures all operations share the same event state.
     """
 
-    _instance: Optional['EventBus'] = None
+    _instance: Optional["EventBus"] = None
     _lock = threading.Lock()
 
     def __new__(cls):
@@ -123,7 +122,10 @@ class EventBus:
 # SIGNAL OPERATION
 # ============================================================================
 
-def _execute_signal(event_name: str, request_id: Optional[int] = None) -> OperationResult:
+
+def _execute_signal(
+    event_name: str, request_id: Optional[int] = None
+) -> OperationResult:
     """
     Emit a named event for other robots to wait on.
 
@@ -138,15 +140,14 @@ def _execute_signal(event_name: str, request_id: Optional[int] = None) -> Operat
         event_bus = EventBus()
         event_bus.signal(event_name)
 
-        return OperationResult.success_result({
-            "event_name": event_name,
-            "signaled_at": time.time()
-        })
+        return OperationResult.success_result(
+            {"event_name": event_name, "signaled_at": time.time()}
+        )
     except Exception as e:
         return OperationResult.error_result(
             error_code="SIGNAL_FAILED",
             message=f"Failed to signal event '{event_name}': {str(e)}",
-            recovery_suggestions=["Verify event_name is a valid string"]
+            recovery_suggestions=["Verify event_name is a valid string"],
         )
 
 
@@ -187,7 +188,10 @@ SIGNAL_OPERATION = BasicOperation(
 # WAIT_FOR_SIGNAL OPERATION
 # ============================================================================
 
-def _execute_wait_for_signal(event_name: str, timeout_ms: int = 30000, request_id: Optional[int] = None) -> OperationResult:
+
+def _execute_wait_for_signal(
+    event_name: str, timeout_ms: int = 30000, request_id: Optional[int] = None
+) -> OperationResult:
     """
     Block until a named event is received.
 
@@ -208,11 +212,9 @@ def _execute_wait_for_signal(event_name: str, timeout_ms: int = 30000, request_i
         elapsed_ms = (time.time() - start_time) * 1000
 
         if received:
-            return OperationResult.success_result({
-                "event_name": event_name,
-                "received": True,
-                "elapsed_ms": elapsed_ms
-            })
+            return OperationResult.success_result(
+                {"event_name": event_name, "received": True, "elapsed_ms": elapsed_ms}
+            )
         else:
             return OperationResult.error_result(
                 error_code="WAIT_TIMEOUT",
@@ -220,14 +222,17 @@ def _execute_wait_for_signal(event_name: str, timeout_ms: int = 30000, request_i
                 recovery_suggestions=[
                     f"Check if the signaling robot is executing signal('{event_name}')",
                     "Increase timeout_ms if operation takes longer than expected",
-                    "Verify execution order - signal must come after wait_for_signal starts"
-                ]
+                    "Verify execution order - signal must come after wait_for_signal starts",
+                ],
             )
     except Exception as e:
         return OperationResult.error_result(
             error_code="WAIT_FAILED",
             message=f"Failed to wait for event '{event_name}': {str(e)}",
-            recovery_suggestions=["Check event_name is a valid string", "Verify timeout_ms is a positive integer"]
+            recovery_suggestions=[
+                "Check event_name is a valid string",
+                "Verify timeout_ms is a positive integer",
+            ],
         )
 
 
@@ -276,7 +281,10 @@ WAIT_FOR_SIGNAL_OPERATION = BasicOperation(
 # WAIT OPERATION
 # ============================================================================
 
-def _execute_wait(duration_ms: int, request_id: Optional[int] = None) -> OperationResult:
+
+def _execute_wait(
+    duration_ms: int, request_id: Optional[int] = None
+) -> OperationResult:
     """
     Pause execution for specified duration.
 
@@ -292,22 +300,21 @@ def _execute_wait(duration_ms: int, request_id: Optional[int] = None) -> Operati
             return OperationResult.error_result(
                 error_code="INVALID_DURATION",
                 message=f"Duration must be non-negative, got {duration_ms}ms",
-                recovery_suggestions=["Provide a non-negative duration_ms value"]
+                recovery_suggestions=["Provide a non-negative duration_ms value"],
             )
 
         start_time = time.time()
         time.sleep(duration_ms / 1000.0)
         actual_ms = (time.time() - start_time) * 1000
 
-        return OperationResult.success_result({
-            "requested_ms": duration_ms,
-            "actual_ms": actual_ms
-        })
+        return OperationResult.success_result(
+            {"requested_ms": duration_ms, "actual_ms": actual_ms}
+        )
     except Exception as e:
         return OperationResult.error_result(
             error_code="WAIT_FAILED",
             message=f"Failed to wait for {duration_ms}ms: {str(e)}",
-            recovery_suggestions=["Verify duration_ms is a valid integer"]
+            recovery_suggestions=["Verify duration_ms is a valid integer"],
         )
 
 

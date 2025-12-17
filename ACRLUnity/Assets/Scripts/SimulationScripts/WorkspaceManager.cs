@@ -127,34 +127,35 @@ namespace Simulation
                 Debug.Log($"{LOG_PREFIX} No workspace regions configured, creating default dual-arm setup");
 
                 // Left workspace for Robot1
+                // IMPORTANT: Must match Python LLMConfig.py WORKSPACE_REGIONS
                 var leftRegion = new WorkspaceRegion(
                     "left_workspace",
-                    new Vector3(-1.0f, -1.0f, 0.0f),
-                    new Vector3(-0.1f, 1.0f, 0.5f)
+                    new Vector3(-0.5f, 0.0f, -0.45f),
+                    new Vector3(-0.15f, 0.6f, 0.45f)
                 );
                 leftRegion.debugColor = new Color(1f, 0.5f, 0.5f, 0.3f); // Light red
 
                 // Right workspace for Robot2
                 var rightRegion = new WorkspaceRegion(
                     "right_workspace",
-                    new Vector3(0.1f, -1.0f, 0.0f),
-                    new Vector3(1.0f, 1.0f, 0.5f)
+                    new Vector3(0.15f, 0.0f, -0.45f),
+                    new Vector3(0.5f, 0.6f, 0.45f)
                 );
                 rightRegion.debugColor = new Color(0.5f, 0.5f, 1f, 0.3f); // Light blue
 
                 // Shared zone (requires coordination)
                 var sharedZone = new WorkspaceRegion(
                     "shared_zone",
-                    new Vector3(-0.1f, -1.0f, 0.0f),
-                    new Vector3(0.1f, 1.0f, 0.5f)
+                    new Vector3(-0.15f, 0.0f, -0.45f),
+                    new Vector3(0.15f, 0.6f, 0.45f)
                 );
                 sharedZone.debugColor = new Color(1f, 1f, 0.5f, 0.3f); // Light yellow
 
                 // Center region
                 var centerRegion = new WorkspaceRegion(
                     "center",
-                    new Vector3(-0.3f, -0.3f, 0.0f),
-                    new Vector3(0.3f, 0.3f, 0.5f)
+                    new Vector3(-0.15f, 0.0f, -0.1f),
+                    new Vector3(0.15f, 0.5f, 0.1f)
                 );
                 centerRegion.debugColor = new Color(0.5f, 1f, 0.5f, 0.3f); // Light green
 

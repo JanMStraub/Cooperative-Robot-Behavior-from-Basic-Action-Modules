@@ -51,6 +51,7 @@ class TestGripperOperations:
             result = control_gripper("Robot1", open_gripper=True)
 
             assert result.success is True
+            assert result.result is not None
             assert result.result["robot_id"] == "Robot1"
             assert result.result["open_gripper"] is True
             assert result.result["status"] == "command_sent"
@@ -62,6 +63,7 @@ class TestGripperOperations:
             result = control_gripper("Robot1", open_gripper=False)
 
             assert result.success is True
+            assert result.result is not None
             assert result.result["robot_id"] == "Robot1"
             assert result.result["open_gripper"] is False
             mock_broadcaster.send_command.assert_called_once()
@@ -100,22 +102,25 @@ class TestGripperErrors:
             result = control_gripper("", open_gripper=True)
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_gripper_invalid_robot_id_none(self, mock_broadcaster):
         """Test gripper control with None robot ID."""
         with patch('operations.GripperOperations.get_command_broadcaster', return_value=mock_broadcaster):
-            result = control_gripper(None, open_gripper=True)
+            result = control_gripper(None, open_gripper=True)  # type: ignore[arg-type]
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_gripper_invalid_parameter_type(self, mock_broadcaster):
         """Test gripper control with invalid open_gripper parameter type."""
         with patch('operations.GripperOperations.get_command_broadcaster', return_value=mock_broadcaster):
-            result = control_gripper("Robot1", open_gripper="yes")  # Should be boolean
+            result = control_gripper("Robot1", open_gripper="yes")  # type: ignore[arg-type]
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "INVALID_OPEN_GRIPPER_PARAMETER"
 
     def test_gripper_communication_failed(self, mock_broadcaster):
@@ -126,6 +131,7 @@ class TestGripperErrors:
             result = control_gripper("Robot1", open_gripper=True)
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "COMMUNICATION_FAILED"
 
     def test_gripper_network_failure(self):
@@ -137,6 +143,7 @@ class TestGripperErrors:
             result = control_gripper("Robot1", open_gripper=True)
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "UNEXPECTED_ERROR"
 
 

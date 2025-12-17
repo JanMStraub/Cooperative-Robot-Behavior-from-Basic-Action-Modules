@@ -11,7 +11,13 @@ import logging
 from operations.Registry import OperationRegistry, get_global_registry
 from .Embeddings import EmbeddingGenerator
 from .VectorStore import VectorStore
-from .Config import config
+
+# Import config
+# Import config - try both import styles
+try:
+    import LLMConfig as config
+except ImportError:
+    from .. import LLMConfig as config
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -82,7 +88,7 @@ class QueryEngine:
         query_embedding = self.embedding_generator.generate_embedding(query)
 
         # Search vector store
-        k = top_k if top_k is not None else config.DEFAULT_TOP_K
+        k = top_k if top_k is not None else config.RAG_DEFAULT_TOP_K
         results = self.vector_store.search(
             query_embedding=query_embedding,
             top_k=k,

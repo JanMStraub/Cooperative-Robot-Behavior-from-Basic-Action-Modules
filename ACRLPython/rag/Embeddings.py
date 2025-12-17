@@ -11,7 +11,13 @@ import logging
 import numpy as np
 from openai import OpenAI
 from sklearn.feature_extraction.text import TfidfVectorizer
-from .Config import config
+
+# Import config
+# Import config - try both import styles
+try:
+    import LLMConfig as config
+except ImportError:
+    from .. import LLMConfig as config
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -40,9 +46,9 @@ class EmbeddingGenerator:
             api_key: API key (default from config, LM Studio doesn't need real key)
             model: Embedding model name (default from config)
         """
-        self.base_url = base_url or config.LM_STUDIO_BASE_URL
-        self.api_key = api_key or config.LM_STUDIO_API_KEY
-        self.model = model or config.LM_STUDIO_MODEL
+        self.base_url = base_url or config.LMSTUDIO_BASE_URL
+        self.api_key = api_key or config.RAG_LM_STUDIO_API_KEY
+        self.model = model or config.RAG_LM_STUDIO_MODEL
 
         self.client: Optional[OpenAI] = None
         self.use_lm_studio = True
@@ -59,7 +65,7 @@ class EmbeddingGenerator:
             # Test connection with a simple embedding
             assert self.client is not None  # For type checker
             test_response = self.client.embeddings.create(
-                input="test", model=self.model, timeout=config.EMBEDDING_TIMEOUT
+                input="test", model=self.model, timeout=config.RAG_EMBEDDING_TIMEOUT
             )
 
             if test_response and test_response.data:
@@ -69,7 +75,7 @@ class EmbeddingGenerator:
 
         except Exception as e:
             logger.warning(f"⚠ Failed to connect to LM Studio: {e}")
-            if config.USE_TFIDF_FALLBACK:
+            if config.RAG_USE_TFIDF_FALLBACK:
                 logger.info("  Falling back to TF-IDF embeddings")
                 self.use_lm_studio = False
                 self._initialize_tfidf()
@@ -79,7 +85,7 @@ class EmbeddingGenerator:
     def _initialize_tfidf(self):
         """Initialize TF-IDF vectorizer as fallback"""
         self.tfidf_vectorizer = TfidfVectorizer(
-            max_features=config.TFIDF_MAX_FEATURES,
+            max_features=config.RAG_TFIDF_MAX_FEATURES,
             stop_words="english",
             ngram_range=(1, 2),  # Unigrams and bigrams
         )
@@ -136,10 +142,10 @@ class EmbeddingGenerator:
         # Check if client is available
         if self.client is None:
             logger.error("LM Studio client not initialized")
-            return [np.zeros(config.EMBEDDING_DIMENSION, dtype=np.float32) for _ in texts]
+            return [np.zeros(config.RAG_EMBEDDING_DIMENSION, dtype=np.float32) for _ in texts]
 
         # Process in batches
-        batch_size = config.EMBEDDING_BATCH_SIZE
+        batch_size = config.RAG_EMBEDDING_BATCH_SIZE
         for i in range(0, len(texts), batch_size):
             batch = texts[i : i + batch_size]
 
@@ -147,7 +153,7 @@ class EmbeddingGenerator:
                 response = self.client.embeddings.create(
                     input=batch,
                     model=self.model,
-                    timeout=config.EMBEDDING_TIMEOUT,
+                    timeout=config.RAG_EMBEDDING_TIMEOUT,
                 )
 
                 for data in response.data:
@@ -162,7 +168,7 @@ class EmbeddingGenerator:
                 # Return zero vectors for failed batch
                 for _ in batch:
                     embeddings.append(
-                        np.zeros(config.EMBEDDING_DIMENSION, dtype=np.float32)
+                        np.zeros(config.RAG_EMBEDDING_DIMENSION, dtype=np.float32)
                     )
 
         return embeddings
@@ -175,7 +181,7 @@ class EmbeddingGenerator:
         # Check again after initialization
         if self.tfidf_vectorizer is None:
             logger.error("TF-IDF vectorizer initialization failed")
-            return [np.zeros(config.TFIDF_MAX_FEATURES, dtype=np.float32) for _ in texts]
+            return [np.zeros(config.RAG_TFIDF_MAX_FEATURES, dtype=np.float32) for _ in texts]
 
         try:
             # Fit and transform if not already fitted
@@ -190,10 +196,10 @@ class EmbeddingGenerator:
                 embedding = np.array(vectors.getrow(i).todense()).flatten().astype(np.float32)
 
                 # Pad to TFIDF_MAX_FEATURES if necessary
-                if len(embedding) < config.TFIDF_MAX_FEATURES:
+                if len(embedding) < config.RAG_TFIDF_MAX_FEATURES:
                     embedding = np.pad(
                         embedding,
-                        (0, config.TFIDF_MAX_FEATURES - len(embedding)),
+                        (0, config.RAG_TFIDF_MAX_FEATURES - len(embedding)),
                         mode='constant',
                         constant_values=0
                     )
@@ -207,7 +213,7 @@ class EmbeddingGenerator:
             logger.error(f"Error generating TF-IDF embeddings: {e}")
             # Return zero vectors
             return [
-                np.zeros(config.TFIDF_MAX_FEATURES, dtype=np.float32) for _ in texts
+                np.zeros(config.RAG_TFIDF_MAX_FEATURES, dtype=np.float32) for _ in texts
             ]
 
     def get_embedding_dimension(self) -> int:
@@ -218,9 +224,9 @@ class EmbeddingGenerator:
             Embedding dimension size
         """
         if self.use_lm_studio:
-            return config.EMBEDDING_DIMENSION
+            return config.RAG_EMBEDDING_DIMENSION
         else:
-            return config.TFIDF_MAX_FEATURES
+            return config.RAG_TFIDF_MAX_FEATURES
 
     def is_using_lm_studio(self) -> bool:
         """Check if using LM Studio (True) or TF-IDF fallback (False)"""
@@ -231,5 +237,5 @@ class EmbeddingGenerator:
             return f"EmbeddingGenerator(lm_studio, model={self.model}, url={self.base_url})"
         else:
             return (
-                f"EmbeddingGenerator(tfidf, max_features={config.TFIDF_MAX_FEATURES})"
+                f"EmbeddingGenerator(tfidf, max_features={config.RAG_TFIDF_MAX_FEATURES})"
             )

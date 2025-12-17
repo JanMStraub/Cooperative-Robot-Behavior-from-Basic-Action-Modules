@@ -199,6 +199,7 @@ class TestRegistryExecution:
         result = registry.execute_operation("nonexistent_op", robot_id="Robot1")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "OPERATION_NOT_FOUND"
 
     def test_execute_nonexistent_operation_by_name(self):
@@ -208,6 +209,7 @@ class TestRegistryExecution:
         result = registry.execute_operation_by_name("nonexistent", robot_id="Robot1")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "OPERATION_NOT_FOUND"
 
 

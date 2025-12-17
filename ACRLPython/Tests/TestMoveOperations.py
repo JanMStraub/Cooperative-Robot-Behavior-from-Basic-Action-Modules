@@ -51,6 +51,7 @@ class TestMoveOperations:
             result = move_to_coordinate("Robot1", x=0.3, y=0.2, z=0.1)
 
             assert result.success is True
+            assert result.result is not None
             assert result.result["robot_id"] == "Robot1"
             assert result.result["target_position"]["x"] == 0.3
             assert result.result["target_position"]["y"] == 0.2
@@ -64,6 +65,7 @@ class TestMoveOperations:
             result = move_to_coordinate("Robot1", x=0.3, y=0.2, z=0.1, speed=0.5)
 
             assert result.success is True
+            assert result.result is not None
             assert result.result["speed"] == 0.5
 
     def test_move_with_approach_offset(self, mock_broadcaster):
@@ -72,6 +74,7 @@ class TestMoveOperations:
             result = move_to_coordinate("Robot1", x=0.3, y=0.2, z=0.1, approach_offset=0.05)
 
             assert result.success is True
+            assert result.result is not None
             assert result.result["approach_offset"] == 0.05
             # Z coordinate should be offset (use approx for floating point comparison)
             assert result.result["target_position"]["z"] == pytest.approx(0.15)  # 0.1 + 0.05
@@ -113,6 +116,7 @@ class TestMoveCoordinateValidation:
             result = move_to_coordinate("Robot1", x=1.5, y=0.0, z=0.1)
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "INVALID_X_COORDINATE"
 
     def test_move_invalid_x_coordinate_too_low(self, mock_broadcaster):
@@ -121,6 +125,7 @@ class TestMoveCoordinateValidation:
             result = move_to_coordinate("Robot1", x=-1.5, y=0.0, z=0.1)
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "INVALID_X_COORDINATE"
 
     def test_move_invalid_y_coordinate(self, mock_broadcaster):
@@ -129,6 +134,7 @@ class TestMoveCoordinateValidation:
             result = move_to_coordinate("Robot1", x=0.3, y=2.0, z=0.1)
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "INVALID_Y_COORDINATE"
 
     def test_move_invalid_z_coordinate_too_high(self, mock_broadcaster):
@@ -137,6 +143,7 @@ class TestMoveCoordinateValidation:
             result = move_to_coordinate("Robot1", x=0.3, y=0.2, z=1.0)
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "INVALID_Z_COORDINATE"
 
     def test_move_invalid_z_coordinate_too_low(self, mock_broadcaster):
@@ -145,6 +152,7 @@ class TestMoveCoordinateValidation:
             result = move_to_coordinate("Robot1", x=0.3, y=0.2, z=-1.0)
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "INVALID_Z_COORDINATE"
 
     def test_move_with_negative_z_valid(self, mock_broadcaster):
@@ -169,6 +177,7 @@ class TestMoveParameterValidation:
             result = move_to_coordinate("Robot1", x=0.3, y=0.2, z=0.1, speed=0.05)
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "INVALID_SPEED"
 
     def test_move_invalid_speed_too_high(self, mock_broadcaster):
@@ -177,6 +186,7 @@ class TestMoveParameterValidation:
             result = move_to_coordinate("Robot1", x=0.3, y=0.2, z=0.1, speed=5.0)
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "INVALID_SPEED"
 
     def test_move_invalid_approach_offset_negative(self, mock_broadcaster):
@@ -185,6 +195,7 @@ class TestMoveParameterValidation:
             result = move_to_coordinate("Robot1", x=0.3, y=0.2, z=0.1, approach_offset=-0.05)
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "INVALID_APPROACH_OFFSET"
 
     def test_move_invalid_approach_offset_too_large(self, mock_broadcaster):
@@ -193,6 +204,7 @@ class TestMoveParameterValidation:
             result = move_to_coordinate("Robot1", x=0.3, y=0.2, z=0.1, approach_offset=0.5)
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "INVALID_APPROACH_OFFSET"
 
     def test_move_invalid_robot_id(self, mock_broadcaster):
@@ -201,6 +213,7 @@ class TestMoveParameterValidation:
             result = move_to_coordinate("", x=0.3, y=0.2, z=0.1)
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "INVALID_ROBOT_ID"
 
 
@@ -219,6 +232,7 @@ class TestMoveErrors:
             result = move_to_coordinate("Robot1", x=0.3, y=0.2, z=0.1)
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "COMMUNICATION_FAILED"
 
     def test_move_network_error(self):
@@ -230,6 +244,7 @@ class TestMoveErrors:
             result = move_to_coordinate("Robot1", x=0.3, y=0.2, z=0.1)
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "UNEXPECTED_ERROR"
 
 

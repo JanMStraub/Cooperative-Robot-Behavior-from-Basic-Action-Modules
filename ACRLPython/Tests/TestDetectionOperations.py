@@ -84,6 +84,7 @@ class TestDetectionOperations:
                 result = detect_objects("Robot1", camera_id="main")
 
                 assert result.success is True
+                assert result.result is not None
                 assert result.result["camera_id"] == "main"
                 assert result.result["count"] == 1
                 assert len(result.result["detections"]) == 1
@@ -95,6 +96,7 @@ class TestDetectionOperations:
                 result = detect_objects("Robot1")
 
                 assert result.success is True
+                assert result.result is not None
                 assert result.result["camera_id"] == "main"
 
     def test_detect_multiple_objects(self, mock_image_storage, mock_detector):
@@ -118,6 +120,7 @@ class TestDetectionOperations:
                 result = detect_objects("Robot1")
 
                 assert result.success is True
+                assert result.result is not None
                 assert result.result["count"] == 2
                 assert len(result.result["detections"]) == 2
 
@@ -135,6 +138,7 @@ class TestDetectionOperations:
                 result = detect_objects("Robot1")
 
                 assert result.success is True
+                assert result.result is not None
                 assert result.result["count"] == 0
                 assert len(result.result["detections"]) == 0
 
@@ -156,6 +160,7 @@ class TestDetectionErrors:
             result = detect_objects("Robot1", camera_id="missing_camera")
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "NO_IMAGE"
 
     def test_detect_detector_error(self, mock_image_storage):
@@ -168,6 +173,7 @@ class TestDetectionErrors:
                 result = detect_objects("Robot1")
 
                 assert result.success is False
+                assert result.error is not None
                 assert result.error["code"] == "DETECTION_ERROR"
 
 
@@ -185,6 +191,7 @@ class TestDetectionResultFormatting:
                 result = detect_objects("Robot1", camera_id="test_cam")
 
                 assert result.success is True
+                assert result.result is not None
                 assert "camera_id" in result.result
                 assert "detections" in result.result
                 assert "count" in result.result
@@ -198,6 +205,7 @@ class TestDetectionResultFormatting:
             with patch('vision.ObjectDetector.CubeDetector', return_value=mock_detector):
                 result = detect_objects("Robot1")
 
+                assert result.result is not None
                 detection = result.result["detections"][0]
                 assert "id" in detection
                 assert "color" in detection
@@ -221,6 +229,7 @@ class TestDetectionConfidence:
                 result = detect_objects("Robot1")
 
                 assert result.success is True
+                assert result.result is not None
                 # All returned detections should have passed detector's confidence filter
                 for detection in result.result["detections"]:
                     assert detection["confidence"] > 0.0

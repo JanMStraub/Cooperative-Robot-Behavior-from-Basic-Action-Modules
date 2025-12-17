@@ -503,8 +503,8 @@ class TestSignalOperation:
         result = _execute_signal("test_event")
 
         assert result.success is True
-        assert result.result["event_name"] == "test_event"
-        assert "signaled_at" in result.result
+        assert result.result is not None and result.result["event_name"] == "test_event"
+        assert result.result is not None and "signaled_at" in result.result
 
     def test_signal_returns_timestamp(self, cleanup_event_bus):
         """Test signal operation returns timestamp"""
@@ -513,7 +513,7 @@ class TestSignalOperation:
         after = time.time()
 
         assert result.success is True
-        assert before <= result.result["signaled_at"] <= after
+        assert result.result is not None and before <= result.result["signaled_at"] <= after
 
     def test_signal_invalid_event_name(self, cleanup_event_bus):
         """Test signal with various event name types"""
@@ -522,9 +522,9 @@ class TestSignalOperation:
         assert result.success is True
 
         # None gets converted to string "None" by Python, EventBus accepts it
-        result = _execute_signal(None)
+        result = _execute_signal(None)  # type: ignore[arg-type]
         # This actually succeeds because Python converts None to str
-        assert result.success is True or (result.success is False and result.error["code"] == "SIGNAL_FAILED")
+        assert result.success is True or (result.success is False and result.error is not None and result.error["code"] == "SIGNAL_FAILED")
 
     def test_signal_empty_string(self, cleanup_event_bus):
         """Test signal with empty string event name"""
@@ -536,10 +536,10 @@ class TestSignalOperation:
     def test_signal_exception_handling(self, cleanup_event_bus):
         """Test signal handles exceptions gracefully"""
         # Pass integer - Python converts to string, EventBus accepts it
-        result = _execute_signal(12345)
+        result = _execute_signal(12345)  # type: ignore[arg-type]
 
         # This succeeds because Python converts int to str
-        assert result.success is True or (result.success is False and result.error["code"] == "SIGNAL_FAILED")
+        assert result.success is True or (result.success is False and result.error is not None and result.error["code"] == "SIGNAL_FAILED")
 
 
 # ============================================================================
@@ -579,6 +579,7 @@ class TestWaitForSignalOperation:
         result = _execute_wait_for_signal(event_name, timeout_ms=500)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "WAIT_TIMEOUT"
         assert event_name in result.error["message"]
 
@@ -625,6 +626,7 @@ class TestWaitForSignalOperation:
         elapsed_ms = (time.time() - start) * 1000
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "WAIT_TIMEOUT"
         assert 250 <= elapsed_ms <= 400  # ~300ms ±20%
 
@@ -636,7 +638,7 @@ class TestWaitForSignalOperation:
         # It will timeout immediately
         result = _execute_wait_for_signal(event_name, timeout_ms=-100)
         # Should timeout immediately
-        assert result.success is False or result.result.get("elapsed_ms", 0) < 10
+        assert result.success is False or (result.result is not None and result.result.get("elapsed_ms", 0) < 10)
 
     def test_wait_negative_timeout(self, cleanup_event_bus):
         """Test wait_for_signal with negative timeout"""
@@ -645,7 +647,7 @@ class TestWaitForSignalOperation:
         result = _execute_wait_for_signal(event_name, timeout_ms=-1)
 
         # Should timeout immediately (negative timeout converted to 0)
-        assert result.success is False or result.result.get("elapsed_ms", 0) < 10
+        assert result.success is False or (result.result is not None and result.result.get("elapsed_ms", 0) < 10)
 
     def test_wait_zero_timeout(self, cleanup_event_bus):
         """Test wait_for_signal with zero timeout"""
@@ -654,7 +656,7 @@ class TestWaitForSignalOperation:
         result = _execute_wait_for_signal(event_name, timeout_ms=0)
 
         # Should timeout immediately
-        assert result.success is False or result.result.get("elapsed_ms", 0) < 10
+        assert result.success is False or (result.result is not None and result.result.get("elapsed_ms", 0) < 10)
 
     def test_wait_recovery_suggestions_on_timeout(self, cleanup_event_bus):
         """Test wait_for_signal provides recovery suggestions on timeout"""
@@ -663,6 +665,7 @@ class TestWaitForSignalOperation:
         result = _execute_wait_for_signal(event_name, timeout_ms=200)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "WAIT_TIMEOUT"
         assert "recovery_suggestions" in result.error
         assert len(result.error["recovery_suggestions"]) > 0
@@ -686,6 +689,7 @@ class TestWaitOperation:
         elapsed_ms = (time.time() - start) * 1000
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["requested_ms"] == duration_ms
         assert 180 <= elapsed_ms <= 250  # ~200ms ±15%
 
@@ -697,6 +701,7 @@ class TestWaitOperation:
             result = _execute_wait(duration_ms)
 
             assert result.success is True
+            assert result.result is not None
             actual_ms = result.result["actual_ms"]
             requested_ms = result.result["requested_ms"]
 
@@ -708,6 +713,7 @@ class TestWaitOperation:
         result = _execute_wait(0)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["requested_ms"] == 0
         assert result.result["actual_ms"] < 10  # Should be nearly instant
 
@@ -716,6 +722,7 @@ class TestWaitOperation:
         result = _execute_wait(-100)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_DURATION"
         assert "-100" in result.error["message"]
 
@@ -735,9 +742,10 @@ class TestWaitOperation:
     def test_wait_exception_handling(self):
         """Test wait handles exceptions gracefully"""
         # Pass invalid type
-        result = _execute_wait("invalid")
+        result = _execute_wait("invalid")  # type: ignore[arg-type]
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "WAIT_FAILED"
 
 
@@ -762,6 +770,7 @@ class TestSyncIntegrationBasic:
             timeout_ms=1000
         )
         assert wait_result.success is True
+        assert wait_result.result is not None
         assert wait_result.result["received"] is True
 
     def test_two_robot_handoff_pattern(self, cleanup_event_bus):

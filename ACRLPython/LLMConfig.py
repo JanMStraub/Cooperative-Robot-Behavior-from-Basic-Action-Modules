@@ -75,11 +75,11 @@ DUPLICATE_TIME_THRESHOLD = 0.1  # Time threshold for detecting duplicate sends (
 # ===========================
 
 # LM Studio server configuration
-LMSTUDIO_BASE_URL = "http://127.0.0.1:1234/v1"  # local
-# LMSTUDIO_BASE_URL = "http://192.168.178.53:1234" # GPU
+# LMSTUDIO_BASE_URL = "http://127.0.0.1:1234/v1"  # local
+LMSTUDIO_BASE_URL = "http://192.168.178.53:1234/v1" # GPU
 
 # Default LM Studio model (use model name shown in LM Studio)
-DEFAULT_LMSTUDIO_MODEL = "mistral-3-3b"
+DEFAULT_LMSTUDIO_MODEL = "mistralai/ministral-3-14b-reasoning"
 
 # LLM generation parameters
 DEFAULT_TEMPERATURE = 0.0  # Sampling temperature (0.0-2.0)
@@ -91,6 +91,7 @@ VISION_MODELS = [
     "llava",
     "qwen3-vl-8b",
     "mistral-3-3b",
+    "mistralai/ministral-3-14b-reasoning",
 ]
 
 
@@ -124,7 +125,7 @@ THREAD_CLEANUP_INTERVAL = 10.0  # How often to clean up completed threads (secon
 # Keepalive intervals
 RESULTS_SERVER_KEEPALIVE = 1.0  # Results server monitoring interval (seconds)
 STREAMING_SERVER_MONITOR = 60.0  # Streaming server monitoring interval (seconds)
-RAG_SERVER_TIMEOUT = 60.0  # RAG server query timeout (seconds)
+RAG_SERVER_TIMEOUT = 90.0  # RAG server query timeout (seconds)
 
 
 # ===========================
@@ -164,11 +165,11 @@ MIN_CONFIDENCE = 0.3  # Minimum detection confidence threshold (lower to catch m
 
 # Detection Processing
 DETECTION_CHECK_INTERVAL = 1.0  # Check for new images every N seconds
-ENABLE_DEBUG_IMAGES = False  # Save annotated images for debugging
+ENABLE_DEBUG_IMAGES = True  # Save annotated images for debugging
 DEBUG_IMAGES_DIR = str(_CONFIG_DIR / "debug_detections")
 
 # Disparity Map Debugging
-SAVE_DEBUG_DISPARITY_MAPS = False  # Set to True to save disparity maps for debugging
+SAVE_DEBUG_DISPARITY_MAPS = True  # Set to True to save disparity maps for debugging
 DEBUG_DISPARITY_DIR = str(_CONFIG_DIR / "debug_detections")
 
 
@@ -256,6 +257,42 @@ MAX_ROBOT_REACH = 0.8  # Maximum reach distance from base (meters)
 # State caching configuration
 ROBOT_STATUS_CACHE_TTL = 0.5  # Time-to-live for cached robot status (seconds)
 WORLD_STATE_UPDATE_INTERVAL = 0.1  # How often to update world state (seconds)
+
+
+# ===========================
+# RAG System Configuration
+# ===========================
+
+# LM Studio connection settings for RAG
+RAG_LM_STUDIO_URL = LMSTUDIO_BASE_URL  # Reuse main LM Studio URL
+RAG_LM_STUDIO_MODEL = "nomic-embed-text"  # Embedding model (must match LM Studio)
+RAG_LM_STUDIO_API_KEY = "lm-studio"  # LM Studio doesn't require real key
+
+# Embedding settings
+RAG_EMBEDDING_DIMENSION = 768  # Embedding vector dimension
+RAG_EMBEDDING_BATCH_SIZE = 10  # Batch size for embedding generation
+RAG_EMBEDDING_TIMEOUT = 30  # Timeout for embedding requests (seconds)
+
+# Vector store settings
+RAG_VECTOR_STORE_PATH = str(_CONFIG_DIR / "rag" / ".rag_index.pkl")  # Path to cached index
+RAG_AUTO_SAVE_INDEX = True  # Automatically save index after building
+
+# Search settings
+RAG_DEFAULT_TOP_K = 5  # Default number of search results to return
+RAG_MIN_SIMILARITY_SCORE = 0.5  # Minimum similarity score for search results (0.0-1.0)
+
+# Confidence scoring settings
+RAG_CONFIDENCE_STRATEGY = "balanced"  # Options: "strict", "balanced", "permissive"
+RAG_ENABLE_CONFIDENCE_SCORING = True  # Enable confidence score computation
+RAG_CONFIDENCE_TIERS = {
+    "high": 0.75,
+    "medium": 0.5,
+    "low": 0.25,
+}
+
+# Fallback settings
+RAG_USE_TFIDF_FALLBACK = True  # Use TF-IDF fallback when embeddings unavailable
+RAG_TFIDF_MAX_FEATURES = 500  # Max features for TF-IDF vectorization
 
 
 # ===========================

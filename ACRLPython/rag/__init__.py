@@ -29,7 +29,67 @@ import os
 import logging
 
 from operations.Registry import OperationRegistry, get_global_registry
-from .Config import config, RAGConfig
+
+# Import LLMConfig and create a simple config object with the expected interface
+try:
+    import LLMConfig as cfg
+
+    class _RAGConfigAdapter:
+        """Adapter to expose LLMConfig RAG settings with the expected interface"""
+        LM_STUDIO_BASE_URL = cfg.RAG_LM_STUDIO_URL
+        LM_STUDIO_API_KEY = cfg.RAG_LM_STUDIO_API_KEY
+        LM_STUDIO_MODEL = cfg.RAG_LM_STUDIO_MODEL
+        EMBEDDING_DIMENSION = cfg.RAG_EMBEDDING_DIMENSION
+        EMBEDDING_BATCH_SIZE = cfg.RAG_EMBEDDING_BATCH_SIZE
+        EMBEDDING_TIMEOUT = cfg.RAG_EMBEDDING_TIMEOUT
+        VECTOR_STORE_PATH = cfg.RAG_VECTOR_STORE_PATH
+        AUTO_SAVE_INDEX = cfg.RAG_AUTO_SAVE_INDEX
+        DEFAULT_TOP_K = cfg.RAG_DEFAULT_TOP_K
+        MIN_SIMILARITY_SCORE = cfg.RAG_MIN_SIMILARITY_SCORE
+        CONFIDENCE_STRATEGY = cfg.RAG_CONFIDENCE_STRATEGY
+        ENABLE_CONFIDENCE_SCORING = cfg.RAG_ENABLE_CONFIDENCE_SCORING
+        CONFIDENCE_TIERS = cfg.RAG_CONFIDENCE_TIERS
+        USE_TFIDF_FALLBACK = cfg.RAG_USE_TFIDF_FALLBACK
+        TFIDF_MAX_FEATURES = cfg.RAG_TFIDF_MAX_FEATURES
+
+        @staticmethod
+        def get_summary() -> str:
+            """Get a summary of current configuration"""
+            return f"""
+RAG System Configuration:
+========================
+LM Studio:
+  - Base URL: {cfg.RAG_LM_STUDIO_URL}
+  - Model: {cfg.RAG_LM_STUDIO_MODEL}
+  - Timeout: {cfg.RAG_EMBEDDING_TIMEOUT}s
+
+Embeddings:
+  - Dimension: {cfg.RAG_EMBEDDING_DIMENSION}
+  - Batch Size: {cfg.RAG_EMBEDDING_BATCH_SIZE}
+
+Vector Store:
+  - Path: {cfg.RAG_VECTOR_STORE_PATH}
+  - Auto-save: {cfg.RAG_AUTO_SAVE_INDEX}
+
+Search:
+  - Default Top-K: {cfg.RAG_DEFAULT_TOP_K}
+  - Min Similarity: {cfg.RAG_MIN_SIMILARITY_SCORE}
+
+Confidence:
+  - Scoring Enabled: {cfg.RAG_ENABLE_CONFIDENCE_SCORING}
+  - Strategy: {cfg.RAG_CONFIDENCE_STRATEGY}
+
+Fallback:
+  - TF-IDF Enabled: {cfg.RAG_USE_TFIDF_FALLBACK}
+"""
+
+    config = _RAGConfigAdapter()
+    RAGConfig = _RAGConfigAdapter  # For backward compatibility
+
+except ImportError:
+    # Fallback if LLMConfig import fails
+    from .Config import config, RAGConfig
+
 from .Embeddings import EmbeddingGenerator
 from .VectorStore import VectorStore
 from .Indexer import OperationIndexer

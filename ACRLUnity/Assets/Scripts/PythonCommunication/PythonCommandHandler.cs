@@ -642,6 +642,11 @@ namespace PythonCommunication
                 }
             }
 
+            // CRITICAL: Clear the target and mark as reached to prevent IK from running
+            // Without this, FixedUpdate() continues to call PerformInverseKinematicsStep()
+            // which pulls the robot back to the old target position
+            controller.SetTargetReached(true);
+
             if (_verboseLogging)
             {
                 Debug.Log($"{_logPrefix} Return to start position completed for {robotId}");
