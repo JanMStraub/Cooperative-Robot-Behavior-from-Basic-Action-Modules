@@ -10,8 +10,14 @@ import pickle
 import logging
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
-from .Config import config
 from .ConfidenceScorer import apply_confidence_boosting, get_category_min_score
+
+# Import config
+# Import config - try both import styles
+try:
+    import LLMConfig as config
+except ImportError:
+    from .. import LLMConfig as config
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -140,7 +146,7 @@ class VectorStore:
             elif category_filter:
                 min_threshold = get_category_min_score(category_filter)
             else:
-                min_threshold = config.MIN_SIMILARITY_SCORE
+                min_threshold = config.RAG_MIN_SIMILARITY_SCORE
 
             if score < min_threshold:
                 continue
@@ -157,7 +163,7 @@ class VectorStore:
         results.sort(key=lambda x: x["score"], reverse=True)
 
         # Apply confidence scoring if enabled
-        if enable_confidence and config.ENABLE_CONFIDENCE_SCORING and results:
+        if enable_confidence and config.RAG_ENABLE_CONFIDENCE_SCORING and results:
             results = apply_confidence_boosting(
                 results,
                 query_text=query_text,
@@ -201,7 +207,7 @@ class VectorStore:
             >>> store.save()
             Saved vector store to .rag_index.pkl
         """
-        path = file_path or config.VECTOR_STORE_PATH
+        path = file_path or config.RAG_VECTOR_STORE_PATH
 
         data = {
             "vectors": self.vectors,
@@ -232,7 +238,7 @@ class VectorStore:
             >>> store = VectorStore.load()
             Loaded vector store from .rag_index.pkl (5 operations)
         """
-        path = file_path or config.VECTOR_STORE_PATH
+        path = file_path or config.RAG_VECTOR_STORE_PATH
 
         try:
             with open(path, "rb") as f:

@@ -51,6 +51,7 @@ class TestStatusOperations:
             result = check_robot_status("Robot1")
 
             assert result.success is True
+            assert result.result is not None
             assert result.result["robot_id"] == "Robot1"
             assert result.result["detailed"] is False
             assert result.result["status"] == "query_sent"
@@ -62,6 +63,7 @@ class TestStatusOperations:
             result = check_robot_status("Robot1", detailed=True)
 
             assert result.success is True
+            assert result.result is not None
             assert result.result["detailed"] is True
 
     def test_status_command_structure(self, mock_broadcaster):
@@ -92,6 +94,8 @@ class TestStatusOperations:
 
             assert result1.success is True
             assert result2.success is True
+            assert result1.result is not None
+            assert result2.result is not None
             assert result1.result["robot_id"] == "Robot1"
             assert result2.result["robot_id"] == "Robot2"
             assert mock_broadcaster.send_command.call_count == 2
@@ -110,22 +114,25 @@ class TestStatusParameterValidation:
             result = check_robot_status("")
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_status_invalid_robot_id_none(self, mock_broadcaster):
         """Test status check with None robot ID."""
         with patch('operations.StatusOperations.get_command_broadcaster', return_value=mock_broadcaster):
-            result = check_robot_status(None)
+            result = check_robot_status(None)  # type: ignore[arg-type]
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_status_invalid_detailed_parameter(self, mock_broadcaster):
         """Test status check with invalid detailed parameter type."""
         with patch('operations.StatusOperations.get_command_broadcaster', return_value=mock_broadcaster):
-            result = check_robot_status("Robot1", detailed="yes")  # Should be boolean
+            result = check_robot_status("Robot1", detailed="yes")  # type: ignore[arg-type]
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "INVALID_DETAILED_PARAMETER"
 
 
@@ -144,6 +151,7 @@ class TestStatusErrors:
             result = check_robot_status("Robot1")
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "COMMUNICATION_FAILED"
 
     def test_status_network_error(self):
@@ -155,6 +163,7 @@ class TestStatusErrors:
             result = check_robot_status("Robot1")
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "UNEXPECTED_ERROR"
 
 

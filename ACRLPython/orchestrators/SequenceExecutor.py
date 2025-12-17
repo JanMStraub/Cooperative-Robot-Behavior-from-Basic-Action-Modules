@@ -309,7 +309,7 @@ class SequenceExecutor:
         error_message = None
         if not success and results:
             # Find the first failed result
-            failed_result = next((r for r in results if not r.get("success", False)), None)
+            failed_result = next((r for r in results if r is not None and not r.get("success", False)), None)
             if failed_result:
                 # Include error_code if present, otherwise just the error message
                 error_code = failed_result.get("error_code")
@@ -343,7 +343,7 @@ class SequenceExecutor:
         self,
         commands: List[Dict[str, Any]],
         timeout: float
-    ) -> tuple[List[Dict[str, Any]], int]:
+    ) -> tuple[List[Optional[Dict[str, Any]]], int]:
         """
         Execute commands grouped by parallel_group number.
 
@@ -368,7 +368,7 @@ class SequenceExecutor:
         # Sort groups by group number
         sorted_groups = sorted(groups.items())
 
-        results = [None] * len(commands)  # Pre-allocate results array
+        results: List[Optional[Dict[str, Any]]] = [None] * len(commands)  # Pre-allocate results array
         completed = 0
 
         for group_num, group_commands in sorted_groups:
@@ -743,6 +743,15 @@ class SequenceExecutor:
         warnings = []
         details = {}
 
+        # Sanity check - this method should only be called when verification is enabled
+        if not self.verifier:
+            return {
+                "safe": True,
+                "error": None,
+                "warnings": [],
+                "details": {}
+            }
+
         # === Step 1: Verify operation preconditions ===
         logger.debug(f"Running unified verification for {op_def.name}")
         pre_result = self.verifier.verify_preconditions(op_def, params, self.world_state)
@@ -884,7 +893,7 @@ class SequenceExecutor:
         Resolve variable references in parameters.
 
         Variables are referenced with $ prefix (e.g., $target).
-        Special handling for position variables from detect_object results.
+        Supports dotted notation (e.g., $target.x) and arithmetic expressions (e.g., $target.z + 0.05).
 
         Args:
             params: Parameters that may contain variable references
@@ -894,30 +903,158 @@ class SequenceExecutor:
         """
         resolved = {}
         for key, value in params.items():
-            if isinstance(value, str) and value.startswith('$'):
-                var_name = value[1:]  # Remove $ prefix
-
-                if var_name in self._variables:
-                    var_value = self._variables[var_name]
-
-                    # Special handling for position/coordinate parameters
-                    if key in ['x', 'y', 'z'] and isinstance(var_value, dict):
-                        # Extract coordinate from detection result
-                        resolved[key] = var_value.get(key, 0.0)
-                    elif key == 'position' and isinstance(var_value, dict):
-                        # Expand position variable to x, y, z
-                        resolved['x'] = var_value.get('x', 0.0)
-                        resolved['y'] = var_value.get('y', 0.0)
-                        resolved['z'] = var_value.get('z', 0.0)
+            if isinstance(value, str) and '$' in value:
+                # Handle expressions with arithmetic (e.g., "$target.z + 0.05")
+                if any(op in value for op in ['+', '-', '*', '/']):
+                    resolved_value = self._resolve_expression(value)
+                    if resolved_value is not None:
+                        resolved[key] = resolved_value
                     else:
-                        resolved[key] = var_value
+                        logger.warning(f"Could not resolve expression: {value}")
+                        resolved[key] = value
+                # Handle dotted notation (e.g., "$target.x")
+                elif '.' in value and value.startswith('$'):
+                    resolved_value = self._resolve_dotted_variable(value)
+                    if resolved_value is not None:
+                        resolved[key] = resolved_value
+                    else:
+                        logger.warning(f"Variable {value} not found")
+                        resolved[key] = value
+                # Handle simple variable reference (e.g., "$target")
+                elif value.startswith('$'):
+                    var_name = value[1:]  # Remove $ prefix
+
+                    if var_name in self._variables:
+                        var_value = self._variables[var_name]
+
+                        # Special handling for position/coordinate parameters
+                        if key in ['x', 'y', 'z'] and isinstance(var_value, dict):
+                            # Extract coordinate from detection result
+                            resolved[key] = var_value.get(key, 0.0)
+                        elif key == 'position' and isinstance(var_value, dict):
+                            # Expand position variable to x, y, z
+                            resolved['x'] = var_value.get('x', 0.0)
+                            resolved['y'] = var_value.get('y', 0.0)
+                            resolved['z'] = var_value.get('z', 0.0)
+                        else:
+                            resolved[key] = var_value
+                    else:
+                        logger.warning(f"Variable ${var_name} not found")
+                        resolved[key] = value
                 else:
-                    logger.warning(f"Variable ${var_name} not found")
                     resolved[key] = value
             else:
                 resolved[key] = value
 
         return resolved
+
+    def _resolve_dotted_variable(self, var_ref: str) -> Optional[Any]:
+        """
+        Resolve dotted variable notation (e.g., $target.x).
+
+        Args:
+            var_ref: Variable reference string (e.g., "$target.x")
+
+        Returns:
+            Resolved value or None if not found
+        """
+        if not var_ref.startswith('$'):
+            return None
+
+        # Remove $ prefix and split by dots
+        parts = var_ref[1:].split('.')
+
+        # Start with base variable
+        value = self._variables.get(parts[0])
+        if value is None:
+            return None
+
+        # Navigate through dotted path
+        for part in parts[1:]:
+            if isinstance(value, dict):
+                value = value.get(part)
+            elif hasattr(value, part):
+                value = getattr(value, part)
+            else:
+                return None
+
+        return value
+
+    def _resolve_expression(self, expr: str) -> Optional[float]:
+        """
+        Resolve arithmetic expressions containing variables (e.g., "$target.z + 0.05").
+
+        Args:
+            expr: Expression string containing variables and arithmetic
+
+        Returns:
+            Evaluated result or None if evaluation fails
+        """
+        import re
+
+        # Find all variable references (e.g., $target.x, $target.z)
+        var_pattern = r'\$[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*'
+        variables = re.findall(var_pattern, expr)
+
+        # Replace each variable with its value
+        resolved_expr = expr
+        for var_ref in variables:
+            value = self._resolve_dotted_variable(var_ref)
+            if value is None:
+                logger.warning(f"Could not resolve {var_ref} in expression: {expr}")
+                return None
+            resolved_expr = resolved_expr.replace(var_ref, str(value))
+
+        # Safely evaluate the expression
+        try:
+            # Only allow safe mathematical operations
+            import ast
+            import operator
+
+            # Parse the expression
+            node = ast.parse(resolved_expr, mode='eval')
+
+            # Define allowed operators
+            safe_operators = {
+                ast.Add: operator.add,
+                ast.Sub: operator.sub,
+                ast.Mult: operator.mul,
+                ast.Div: operator.truediv,
+                ast.USub: operator.neg,
+            }
+
+            def eval_node(node):
+                if isinstance(node, ast.Expression):
+                    return eval_node(node.body)
+                elif isinstance(node, ast.Constant):
+                    # ast.Constant handles all literal values (numbers, strings, etc.) since Python 3.8
+                    return node.value
+                elif isinstance(node, ast.BinOp):
+                    left = eval_node(node.left)
+                    right = eval_node(node.right)
+                    op = safe_operators.get(type(node.op))
+                    if op is None:
+                        raise ValueError(f"Unsupported operator: {type(node.op)}")
+                    return op(left, right)
+                elif isinstance(node, ast.UnaryOp):
+                    operand = eval_node(node.operand)
+                    op = safe_operators.get(type(node.op))
+                    if op is None:
+                        raise ValueError(f"Unsupported operator: {type(node.op)}")
+                    return op(operand)
+                else:
+                    raise ValueError(f"Unsupported node type: {type(node)}")
+
+            result = eval_node(node)
+            # Ensure we return a float, handle various numeric types
+            if isinstance(result, (int, float)):
+                return float(result)
+            else:
+                raise ValueError(f"Expression did not evaluate to a number: {result}")
+
+        except Exception as e:
+            logger.error(f"Error evaluating expression '{expr}': {e}")
+            return None
 
     def get_variable(self, name: str) -> Optional[Any]:
         """Get a stored variable value."""

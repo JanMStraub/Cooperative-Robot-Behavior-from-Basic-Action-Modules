@@ -909,3 +909,68 @@ class TestSequenceExecutorEdgeCases:
 
         assert result["success"] is False
         assert call_count[0] == 2  # Only first two should execute
+
+    def test_variable_resolution_dotted_notation(self, cleanup_world_state):
+        """Test variable resolution with dotted notation ($target.x)"""
+        executor = SequenceExecutor(enable_verification=False)
+
+        # Simulate a detection result
+        executor.set_variable('target', {'x': 0.197, 'y': 0.021, 'z': 0.189, 'color': 'blue'})
+
+        # Test dotted notation
+        params = {'x': '$target.x', 'y': '$target.y', 'z': '$target.z'}
+        resolved = executor._resolve_variables(params)
+
+        assert resolved['x'] == 0.197
+        assert resolved['y'] == 0.021
+        assert resolved['z'] == 0.189
+        assert isinstance(resolved['x'], float)
+        assert isinstance(resolved['y'], float)
+        assert isinstance(resolved['z'], float)
+
+    def test_variable_resolution_arithmetic_expressions(self, cleanup_world_state):
+        """Test variable resolution with arithmetic expressions ($target.z + 0.05)"""
+        executor = SequenceExecutor(enable_verification=False)
+
+        # Simulate a detection result
+        executor.set_variable('target', {'x': 0.197, 'y': 0.021, 'z': 0.189, 'color': 'blue'})
+
+        # Test arithmetic expression
+        params = {'x': '$target.x', 'y': '$target.y', 'z': '$target.z + 0.05'}
+        resolved = executor._resolve_variables(params)
+
+        assert resolved['x'] == 0.197
+        assert resolved['y'] == 0.021
+        assert resolved['z'] == pytest.approx(0.239, rel=1e-6)
+        assert isinstance(resolved['z'], float)
+
+    def test_variable_resolution_complex_expressions(self, cleanup_world_state):
+        """Test variable resolution with more complex arithmetic"""
+        executor = SequenceExecutor(enable_verification=False)
+
+        executor.set_variable('offset', 0.1)
+        executor.set_variable('target', {'x': 0.5, 'y': 0.2, 'z': 0.3})
+
+        # Test various expressions
+        params = {
+            'x': '$target.x - 0.1',
+            'y': '$target.y + $offset',
+            'z': '$target.z * 2'
+        }
+        resolved = executor._resolve_variables(params)
+
+        assert resolved['x'] == pytest.approx(0.4, rel=1e-6)
+        assert resolved['y'] == pytest.approx(0.3, rel=1e-6)
+        assert resolved['z'] == pytest.approx(0.6, rel=1e-6)
+
+    def test_variable_resolution_missing_variable(self, cleanup_world_state):
+        """Test that missing variables are handled gracefully"""
+        executor = SequenceExecutor(enable_verification=False)
+
+        # Don't set any variables
+        params = {'x': '$nonexistent.x', 'y': '0.5'}
+        resolved = executor._resolve_variables(params)
+
+        # Missing variable should be left as string
+        assert resolved['x'] == '$nonexistent.x'
+        assert resolved['y'] == '0.5'

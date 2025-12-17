@@ -9,7 +9,13 @@ import pytest
 import numpy as np
 from unittest.mock import Mock, patch
 from rag.Embeddings import EmbeddingGenerator
-from rag.Config import config
+
+# Import config
+# Import config - try both import styles
+try:
+    import LLMConfig as config
+except ImportError:
+    from .. import LLMConfig as config
 
 
 class TestEmbeddingGenerator:
@@ -71,7 +77,7 @@ class TestEmbeddingGenerator:
 
             assert len(embeddings) == 3
             assert all(isinstance(e, np.ndarray) for e in embeddings)
-            assert all(len(e) == config.TFIDF_MAX_FEATURES for e in embeddings)
+            assert all(len(e) == config.RAG_TFIDF_MAX_FEATURES for e in embeddings)
 
     @patch("rag.Embeddings.OpenAI")
     def test_batch_embedding_generation(self, mock_openai):
@@ -116,7 +122,7 @@ class TestEmbeddingGenerator:
         generator = EmbeddingGenerator()
         dim = generator.get_embedding_dimension()
 
-        assert dim == config.EMBEDDING_DIMENSION
+        assert dim == config.RAG_EMBEDDING_DIMENSION
 
     def test_is_using_lm_studio(self):
         """Test checking if using LM Studio or TF-IDF"""

@@ -205,8 +205,8 @@ class CommandParser:
         return f"""You are a robot coordinator planning tasks for multiple robots.
 
 Available Robots:
-- Robot1 (left workspace, near x=0.3)
-- Robot2 (right workspace, near x=-0.3)
+- Robot1 (left workspace, near x=-0.4)
+- Robot2 (right workspace, near x=0.4)
 
 Available Operations:
 {available_ops}

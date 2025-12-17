@@ -293,10 +293,10 @@ class WorldState:
 
             logger.debug(f"Updated robot state for {robot_id}")
 
-    def update_robot(self, robot_id: str, position: Tuple[float, float, float] = None,
-                     rotation: Tuple[float, float, float] = None,
-                     joint_angles: list[float] = None,
-                     is_moving: bool = None, **kwargs):
+    def update_robot(self, robot_id: str, position: Optional[Tuple[float, float, float]] = None,
+                     rotation: Optional[Tuple[float, float, float]] = None,
+                     joint_angles: Optional[list[float]] = None,
+                     is_moving: Optional[bool] = None, **kwargs):
         """
         Update robot state (simplified interface for tests).
 

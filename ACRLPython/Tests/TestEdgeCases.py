@@ -232,7 +232,7 @@ class TestMalformedDataHandling:
         try:
             result = move_to_coordinate(
                 robot_id="Robot1",
-                x="invalid",  # String instead of float
+                x="invalid",  # type: ignore[arg-type]  # String instead of float - intentional for testing
                 y=0.0,
                 z=0.1
             )
@@ -246,7 +246,7 @@ class TestMalformedDataHandling:
         """Test gripper control with invalid open_gripper parameter"""
         result = control_gripper(
             robot_id="Robot1",
-            open_gripper="maybe"  # Should be boolean
+            open_gripper="maybe"  # type: ignore[arg-type]  # Should be boolean - intentional for testing
         )
 
         assert result["success"] is False
@@ -258,7 +258,7 @@ class TestMalformedDataHandling:
 
         # Try to store None as image
         try:
-            storage.store_image("test_cam", None, "")
+            storage.store_image("test_cam", None, "")  # type: ignore[arg-type]  # None instead of ndarray - intentional for testing
             # If it doesn't raise, get should return None or handle gracefully
         except (TypeError, AttributeError):
             # Exception is acceptable
@@ -268,7 +268,7 @@ class TestMalformedDataHandling:
         """Test command parser with None input"""
         parser = CommandParser(use_rag=False)
 
-        result = parser.parse(None, robot_id="Robot1")
+        result = parser.parse(None, robot_id="Robot1")  # type: ignore[arg-type]  # None instead of str - intentional for testing
 
         assert result["success"] is False
 
@@ -398,7 +398,7 @@ class TestNullAndMissingParameters:
     def test_move_with_none_robot_id(self):
         """Test movement with None robot_id"""
         result = move_to_coordinate(
-            robot_id=None,
+            robot_id=None,  # type: ignore[arg-type]  # None instead of str - intentional for testing
             x=0.3,
             y=0.0,
             z=0.1
@@ -410,7 +410,7 @@ class TestNullAndMissingParameters:
         """Test gripper with None for open_gripper"""
         result = control_gripper(
             robot_id="Robot1",
-            open_gripper=None
+            open_gripper=None  # type: ignore[arg-type]  # None instead of bool - intentional for testing
         )
 
         assert result["success"] is False
