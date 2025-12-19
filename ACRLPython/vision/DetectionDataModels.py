@@ -24,6 +24,7 @@ class DetectionObject:
         world_position: Optional[Tuple[float, float, float]] = None,
         depth_m: Optional[float] = None,
         disparity: Optional[float] = None,
+        track_id: Optional[int] = None,
     ):
         """
         Initialize a detected object
@@ -36,6 +37,7 @@ class DetectionObject:
             world_position: Optional 3D world position (x, y, z) in meters
             depth_m: Optional depth in meters (Z distance from camera)
             disparity: Optional disparity value in pixels
+            track_id: Optional persistent track ID across frames (for object tracking)
         """
         self.object_id = object_id
         self.color = color
@@ -44,6 +46,7 @@ class DetectionObject:
         self.world_position = world_position
         self.depth_m = depth_m
         self.disparity = disparity
+        self.track_id = track_id
 
         # Calculate center point
         self.center_x = int(self.bbox_x + self.bbox_w / 2)
@@ -100,6 +103,10 @@ class DetectionObject:
                 "center_px": {"x": self.center_x, "y": self.center_y},
                 "confidence": round(self.confidence, 3),
             }
+
+        # Add track_id if available (for object tracking)
+        if self.track_id is not None:
+            result["track_id"] = self.track_id
 
         return result
 

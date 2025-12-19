@@ -527,10 +527,60 @@ class YOLODetector:
                 logging.error("No camera config available")
                 return DetectionResult(camera_id, 0, 0, [])
 
-        # First, detect objects in the left image using YOLO
-        detection_result = self.detect_objects(
-            imgL, camera_id=camera_id, filter_classes=filter_classes
-        )
+        # Import config for stereo validation check
+        try:
+            import LLMConfig as cfg
+        except ImportError:
+            from .. import LLMConfig as cfg
+
+        # Stereo validation: Detect in both images and match (optional)
+        enable_stereo_validation = getattr(cfg, "ENABLE_STEREO_VALIDATION", False)
+
+        if enable_stereo_validation:
+            logging.debug("Stereo validation enabled - detecting in both L/R images")
+
+            # Detect in left image
+            detection_result_left = self.detect_objects(
+                imgL, camera_id=camera_id + "_L", filter_classes=filter_classes
+            )
+
+            # Detect in right image
+            detection_result_right = self.detect_objects(
+                imgR, camera_id=camera_id + "_R", filter_classes=filter_classes
+            )
+
+            # Match detections between left and right
+            max_y_diff = getattr(cfg, "STEREO_MAX_Y_DIFF", 10)
+            max_size_ratio = getattr(cfg, "STEREO_MAX_SIZE_RATIO", 0.3)
+            min_iou = getattr(cfg, "STEREO_MIN_IOU", 0.0)
+
+            matched_pairs = self._match_stereo_detections(
+                detection_result_left.detections,
+                detection_result_right.detections,
+                max_y_diff=max_y_diff,
+                max_size_ratio=max_size_ratio,
+                min_iou=min_iou
+            )
+
+            # Use only validated detections (left image detections that matched right)
+            validated_detections = [pair[0] for pair in matched_pairs]
+            detection_result = DetectionResult(
+                camera_id,
+                detection_result_left.image_width,
+                detection_result_left.image_height,
+                validated_detections
+            )
+
+            logging.info(
+                f"Stereo validation: {len(detection_result_left.detections)} left, "
+                f"{len(detection_result_right.detections)} right → "
+                f"{len(validated_detections)} validated"
+            )
+        else:
+            # Standard mode: detect only in left image
+            detection_result = self.detect_objects(
+                imgL, camera_id=camera_id, filter_classes=filter_classes
+            )
 
         # If no detections, return early
         if len(detection_result.detections) == 0:
@@ -550,8 +600,14 @@ class YOLODetector:
             cv2.cvtColor(imgR, cv2.COLOR_BGR2GRAY) if len(imgR.shape) == 3 else imgR
         )
 
-        # Compute disparity map using default reconstruction config
+        # Compute disparity map using default reconstruction config (or adaptive preset)
         from .StereoConfig import DEFAULT_RECONSTRUCTION_CONFIG
+
+        # Import config
+        try:
+            import LLMConfig as cfg
+        except ImportError:
+            from .. import LLMConfig as cfg
 
         # Runtime check for stereo functions (sanity check)
         if (
@@ -564,7 +620,19 @@ class YOLODetector:
             return DetectionResult(camera_id, 0, 0, [])
 
         # Calculate stereo disparity map (shared across all detections for efficiency)
-        disparity = calc_disparity(imgL_gray, imgR_gray, DEFAULT_RECONSTRUCTION_CONFIG)
+        # Use adaptive SGBM if enabled, otherwise use default config
+        if getattr(cfg, "ENABLE_ADAPTIVE_SGBM", False):
+            # Import SGBM preset functions
+            try:
+                from .DepthEstimator import select_sgbm_preset, calc_disparity_with_preset
+            except ImportError:
+                from vision.DepthEstimator import select_sgbm_preset, calc_disparity_with_preset
+
+            # Use medium preset by default (no distance estimate yet)
+            preset = select_sgbm_preset(estimated_distance=None)
+            disparity = calc_disparity_with_preset(imgL_gray, imgR_gray, preset)
+        else:
+            disparity = calc_disparity(imgL_gray, imgR_gray, DEFAULT_RECONSTRUCTION_CONFIG)
 
         # Save disparity map for debugging (if enabled in config)
         if save_disparity_map_debug is not None:
@@ -574,26 +642,65 @@ class YOLODetector:
         detections_with_depth = []
         h, w = imgL.shape[:2]
 
+        # Import bbox-guided depth function if enabled
+        use_bbox_sampling = getattr(cfg, "DEPTH_SAMPLING_STRATEGY", None) is not None
+
+        # Import functions unconditionally to avoid "possibly unbound" errors
+        try:
+            from .DepthEstimator import estimate_depth_from_bbox, get_focal_length_pixels
+        except ImportError:
+            from vision.DepthEstimator import estimate_depth_from_bbox, get_focal_length_pixels
+
         for det in detection_result.detections:
-            # Extract disparity value at object center point
-            disp_value = None
-            if (
-                0 <= det.center_y < disparity.shape[0]
-                and 0 <= det.center_x < disparity.shape[1]
-            ):
-                disp_value = float(disparity[det.center_y, det.center_x])
-
-            # Calculate depth from disparity using camera parameters
-            # Depth = (baseline * focal_length) / disparity
-            depth_m = None
-            if disp_value is not None and disp_value > 1.0:  # Valid disparity threshold
+            # Bbox-guided depth sampling (NEW - more accurate than center point)
+            if use_bbox_sampling:
                 import math
+                focal_length_px = get_focal_length_pixels(camera_config, w, h)
 
-                # focal_length = (image_width / 2) / tan(FOV / 2)
-                focal_length = (w / 2.0) / math.tan(
-                    math.radians(camera_config.fov / 2.0)
+                bbox = (det.bbox_x, det.bbox_y, det.bbox_w, det.bbox_h)
+                strategy = getattr(cfg, "DEPTH_SAMPLING_STRATEGY", "median_inner_50pct")
+                inner_pct = getattr(cfg, "DEPTH_SAMPLE_INNER_PERCENT", 50)
+
+                bbox_result = estimate_depth_from_bbox(
+                    disparity,
+                    bbox,
+                    focal_length_px,
+                    camera_config.baseline,
+                    strategy=strategy,
+                    min_disparity_threshold=1.0,
+                    max_depth_threshold=10.0,
+                    inner_percent=inner_pct,
                 )
-                depth_m = (camera_config.baseline * focal_length) / disp_value
+
+                if bbox_result is not None:
+                    depth_m, disp_value, num_valid_pixels = bbox_result
+                    logging.debug(
+                        f"Bbox-guided depth: {depth_m:.3f}m from {num_valid_pixels} pixels "
+                        f"(strategy: {strategy})"
+                    )
+                else:
+                    depth_m = None
+                    disp_value = None
+            else:
+                # Legacy center-point sampling (for backward compatibility)
+                disp_value = None
+                if (
+                    0 <= det.center_y < disparity.shape[0]
+                    and 0 <= det.center_x < disparity.shape[1]
+                ):
+                    disp_value = float(disparity[det.center_y, det.center_x])
+
+                # Calculate depth from disparity using camera parameters
+                # Depth = (baseline * focal_length) / disparity
+                depth_m = None
+                if disp_value is not None and disp_value > 1.0:  # Valid disparity threshold
+                    import math
+
+                    # focal_length = (image_width / 2) / tan(FOV / 2)
+                    focal_length = (w / 2.0) / math.tan(
+                        math.radians(camera_config.fov / 2.0)
+                    )
+                    depth_m = (camera_config.baseline * focal_length) / disp_value
 
             # Estimate 3D world position using pre-computed disparity map (optimized)
             world_pos = estimate_object_world_position_from_disparity(
@@ -721,6 +828,120 @@ class YOLODetector:
         # Convert RGB to BGR for OpenCV
         bgr = (int(rgb[2] * 255), int(rgb[1] * 255), int(rgb[0] * 255))
         return bgr
+
+    def _calculate_iou(
+        self,
+        bbox1: Tuple[int, int, int, int],
+        bbox2: Tuple[int, int, int, int]
+    ) -> float:
+        """
+        Calculate Intersection over Union (IOU) of two bounding boxes.
+
+        Args:
+            bbox1: First bbox as (x, y, width, height)
+            bbox2: Second bbox as (x, y, width, height)
+
+        Returns:
+            IOU value between 0.0 and 1.0
+        """
+        x1, y1, w1, h1 = bbox1
+        x2, y2, w2, h2 = bbox2
+
+        # Calculate intersection rectangle
+        xi1 = max(x1, x2)
+        yi1 = max(y1, y2)
+        xi2 = min(x1 + w1, x2 + w2)
+        yi2 = min(y1 + h1, y2 + h2)
+
+        # Calculate intersection area
+        inter_area = max(0, xi2 - xi1) * max(0, yi2 - yi1)
+
+        # Calculate union area
+        box1_area = w1 * h1
+        box2_area = w2 * h2
+        union_area = box1_area + box2_area - inter_area
+
+        return inter_area / union_area if union_area > 0 else 0.0
+
+    def _match_stereo_detections(
+        self,
+        detections_left: List[DetectionObject],
+        detections_right: List[DetectionObject],
+        max_y_diff: int = 10,
+        max_size_ratio: float = 0.3,
+        min_iou: float = 0.0
+    ) -> List[Tuple[DetectionObject, DetectionObject]]:
+        """
+        Match detections between left and right stereo images.
+
+        Matching criteria (all must be satisfied):
+        - Same class (color/object type)
+        - Similar Y coordinate (±max_y_diff pixels, assuming rectified cameras)
+        - Similar bbox size (within max_size_ratio fraction)
+        - Right detection is LEFT of left detection (positive disparity)
+        - Optional: Minimum IOU threshold
+
+        Args:
+            detections_left: Detections from left image
+            detections_right: Detections from right image
+            max_y_diff: Maximum Y coordinate difference (pixels)
+            max_size_ratio: Maximum bbox size difference (fraction, e.g., 0.3 = 30%)
+            min_iou: Minimum IOU for match (0.0 = disabled)
+
+        Returns:
+            List of matched pairs: [(left_det, right_det), ...]
+        """
+        matched_pairs = []
+        used_right = set()
+
+        for det_l in detections_left:
+            best_match = None
+            best_score = 0
+
+            for idx, det_r in enumerate(detections_right):
+                if idx in used_right:
+                    continue
+
+                # 1. Same class?
+                if det_l.color != det_r.color:
+                    continue
+
+                # 2. Similar Y coordinate? (rectified cameras should have same Y)
+                y_diff = abs(det_l.center_y - det_r.center_y)
+                if y_diff > max_y_diff:
+                    continue
+
+                # 3. Similar size?
+                l_area = det_l.bbox_w * det_l.bbox_h
+                r_area = det_r.bbox_w * det_r.bbox_h
+                size_ratio = abs(l_area - r_area) / max(l_area, r_area)
+                if size_ratio > max_size_ratio:
+                    continue
+
+                # 4. Positive disparity? (right image LEFT of left image)
+                if det_r.center_x >= det_l.center_x:
+                    continue
+
+                # 5. Optional IOU check
+                if min_iou > 0:
+                    bbox_l = (det_l.bbox_x, det_l.bbox_y, det_l.bbox_w, det_l.bbox_h)
+                    bbox_r = (det_r.bbox_x, det_r.bbox_y, det_r.bbox_w, det_r.bbox_h)
+                    iou = self._calculate_iou(bbox_l, bbox_r)
+                    if iou < min_iou:
+                        continue
+
+                # Score based on Y difference (lower is better)
+                score = 1.0 / (1.0 + y_diff)
+
+                if score > best_score:
+                    best_score = score
+                    best_match = (det_r, idx)
+
+            if best_match:
+                matched_pairs.append((det_l, best_match[0]))
+                used_right.add(best_match[1])
+
+        return matched_pairs
 
     def _save_debug_image(
         self, image: np.ndarray, detections: List[DetectionObject], camera_id: str

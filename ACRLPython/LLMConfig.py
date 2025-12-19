@@ -196,6 +196,55 @@ STEREO_CHECK_INTERVAL = 0.5  # Check for new stereo pairs every N seconds
 
 
 # ===========================
+# Vision System Configuration (NEW)
+# ===========================
+# NOTE: Vision streaming settings only apply when RunRobotController starts
+# Changing these requires restarting the Python backend
+
+# ===== Streaming =====
+ENABLE_VISION_STREAMING = True  # Master switch for continuous vision processing (default: False for backward compat)
+VISION_STREAM_FPS = 5.0  # Streaming rate in frames per second (conservative default)
+STEREO_JPEG_QUALITY = 75  # JPEG compression quality (reduced from 85 for faster encoding)
+
+# ===== Depth Estimation =====
+DEFAULT_SGBM_PRESET = "medium"  # SGBM preset: "close" (<1m), "medium" (0.5-2m), "far" (>2m), "auto"
+ENABLE_ADAPTIVE_SGBM = False  # Auto-select SGBM preset based on estimated distance (default: False)
+DEPTH_SAMPLING_STRATEGY = "median_inner_50pct"  # Depth sampling: "median_inner_50pct", "mean_valid", "max_disparity"
+DEPTH_SAMPLE_INNER_PERCENT = 50  # Percentage of bbox to sample (default: 50 = inner 50%)
+
+# ===== Stereo Validation =====
+ENABLE_STEREO_VALIDATION = True  # Validate detections in both L/R images (default: False for backward compat)
+STEREO_MAX_Y_DIFF = 10  # Max Y coordinate difference for stereo matching (pixels)
+STEREO_MAX_SIZE_RATIO = 0.3  # Max bbox size difference for stereo matching (fraction, 0.3 = 30%)
+STEREO_MIN_IOU = 0.0  # Minimum IOU for stereo matching (0.0 = disabled)
+
+# ===== Object Tracking =====
+ENABLE_OBJECT_TRACKING = True  # Enable persistent object tracking across frames (default: False for backward compat)
+TRACKING_MAX_AGE = 5  # Max frames a track survives without detection
+TRACKING_MIN_IOU = 0.3  # Minimum IOU for track-detection association
+
+# ===== YOLO Model =====
+YOLO_MODEL_PATH = str(_CONFIG_DIR / "yolo" / "models" / "robot_detector.onnx")  # Path to ONNX detection model for vision streaming
+YOLO_TASK = "detect"  # YOLO task type: "detect" (bounding boxes) or "segment" (segmentation masks)
+YOLO_SEGMENTATION_MODEL = str(_CONFIG_DIR / "yolo" / "models" / "robot_detector_seg.onnx")
+YOLO_INPUT_SIZE = None  # Downscale images before YOLO inference for speed (None = use original, e.g., (640, 480))
+
+# ===== Multi-Robot Vision =====
+SHARED_VISION_STATE_ENABLED = True  # Enable shared vision state for multi-robot coordination (default: False)
+OBJECT_CLAIM_TIMEOUT = 10.0  # Object claim timeout in seconds (auto-release stale claims)
+CONFLICT_RESOLUTION_STRATEGY = "closest_robot"  # Conflict resolution: "closest_robot", "first_claim"
+CONFLICT_MIN_DISTANCE_DIFF = 0.05  # Min distance difference for "closest_robot" strategy (meters, 5cm)
+
+# ===== Visualization =====
+ENABLE_VISION_VISUALIZATION = True  # Show live video window with YOLO detections (default: False)
+
+# ===== Performance Optimizations =====
+ENABLE_DISPARITY_CACHE = True  # Cache disparity maps for repeat detections (default: False for backward compat)
+DISPARITY_CACHE_TTL = 0.5  # Disparity cache time-to-live in seconds
+ENABLE_PARALLEL_JPEG_ENCODING = True  # Enable parallel JPEG encoding in Unity (default: False for backward compat)
+
+
+# ===========================
 # Workspace and Coordination Configuration
 # ===========================
 

@@ -78,6 +78,7 @@ class RobotController:
         self._image_server = None
         self._command_server = None
         self._sequence_server = None
+        self._vision_processor = None
         self._running = False
 
     def start(self):
@@ -120,6 +121,61 @@ class RobotController:
 
         self._running = True
 
+        # Initialize vision streaming if enabled
+        if cfg.ENABLE_VISION_STREAMING:
+            try:
+                import os
+                import platform
+                from vision.YOLODetector import YOLODetector
+                from vision.VisionProcessor import VisionProcessor
+
+                # Check if YOLO model exists
+                if not os.path.exists(cfg.YOLO_MODEL_PATH):
+                    logger.warning(
+                        f"YOLO model not found at {cfg.YOLO_MODEL_PATH}. "
+                        "Vision streaming disabled. Please ensure the model file exists."
+                    )
+                else:
+                    logger.info(f"Initializing VisionProcessor with YOLO model: {cfg.YOLO_MODEL_PATH}")
+
+                    # Initialize YOLO detector
+                    detector = YOLODetector(model_path=cfg.YOLO_MODEL_PATH)
+
+                    # Determine if we should use main thread (macOS with visualization)
+                    use_main_thread = (
+                        platform.system() == 'Darwin' and
+                        cfg.ENABLE_VISION_VISUALIZATION
+                    )
+
+                    if use_main_thread:
+                        logger.info(
+                            "macOS detected with visualization enabled - "
+                            "VisionProcessor will run in main thread (blocking)"
+                        )
+
+                    # Create vision processor with config
+                    self._vision_processor = VisionProcessor(
+                        detector=detector,
+                        fps=cfg.VISION_STREAM_FPS,
+                        enable_tracking=cfg.ENABLE_OBJECT_TRACKING,
+                        enable_shared_state=cfg.SHARED_VISION_STATE_ENABLED,
+                        enable_visualization=cfg.ENABLE_VISION_VISUALIZATION,
+                        use_main_thread=use_main_thread
+                    )
+
+                    if use_main_thread:
+                        # Will run in main thread (blocking) - start it in wait() method
+                        logger.info("VisionProcessor initialized (will start in main thread)")
+                    else:
+                        # Start in background thread (non-blocking)
+                        self._vision_processor.start()
+                        logger.info("VisionProcessor started in background thread")
+
+            except Exception as e:
+                logger.error(f"Failed to initialize VisionProcessor: {e}", exc_info=True)
+                logger.warning("Continuing without vision streaming")
+                self._vision_processor = None
+
         logger.info("=" * 60)
         logger.info("RobotController started successfully!")
         logger.info("=" * 60)
@@ -128,6 +184,10 @@ class RobotController:
         logger.info(f"  Command Server:         {self._host}:{self._command_port}")
         logger.info(f"  Sequence Server:        {self._host}:{self._sequence_port}")
         logger.info(f"  LLM Model:              {self._model}")
+        if cfg.ENABLE_VISION_STREAMING and self._vision_processor:
+            logger.info(f"  Vision Streaming:       Enabled ({cfg.VISION_STREAM_FPS} FPS)")
+            if cfg.ENABLE_VISION_VISUALIZATION:
+                logger.info(f"  Visualization:          Enabled (press 'q' to close)")
         logger.info("=" * 60)
 
     def stop(self):
@@ -139,6 +199,14 @@ class RobotController:
 
         # Mark as stopped first to prevent re-entry
         self._running = False
+
+        # Stop vision processor first (may need to close OpenCV windows)
+        try:
+            if self._vision_processor:
+                self._vision_processor.stop()
+                logger.info("VisionProcessor stopped")
+        except Exception as e:
+            logger.error(f"Error stopping VisionProcessor: {e}")
 
         try:
             if self._image_server:
@@ -167,15 +235,25 @@ class RobotController:
     def wait(self):
         """Wait for controller to stop (blocking)."""
         try:
-            while self._running:
-                time.sleep(1)
+            # If VisionProcessor is configured for main thread, run it now (blocking)
+            if (self._vision_processor and
+                hasattr(self._vision_processor, 'use_main_thread') and
+                self._vision_processor.use_main_thread):
+                logger.info("Starting VisionProcessor in main thread (blocking until 'q' or Ctrl+C)")
+                self._vision_processor.run()  # Blocking call
+                # When run() returns, stop the controller
+                self.stop()
+            else:
+                # Normal wait loop
+                while self._running:
+                    time.sleep(1)
 
-                # Log status periodically
-                if self._image_server:
-                    storage = self._image_server.get_storage()
-                    cameras = storage.get_all_camera_ids()
-                    if cameras:
-                        logger.debug(f"Active cameras: {cameras}")
+                    # Log status periodically
+                    if self._image_server:
+                        storage = self._image_server.get_storage()
+                        cameras = storage.get_all_camera_ids()
+                        if cameras:
+                            logger.debug(f"Active cameras: {cameras}")
 
         except KeyboardInterrupt:
             pass
