@@ -24,19 +24,19 @@ class ReconstructionConfig:
     """Stereo reconstruction algorithm parameters"""
 
     # SGBM parameters
-    window_size: int = 5  # Increased from 2 for better matching
+    window_size: int = 7  # Larger window for high-res images (1920x1080)
     min_disparity: int = 0
     max_disparity: Optional[int] = (
-        160  # Set to 160 for close-range with reduced baseline (5cm baseline optimal)
+        256  # Increased from 160 - must be > actual disparity (~107px detected)
     )
-    uniqueness_ratio: int = 5  # Reduced from 40 for more lenient matching
-    speckle_window_size: int = 100  # Increased from 20 for better noise filtering
-    speckle_range: int = 2  # Increased from 1
-    disp12_max_diff: int = 1  # Reduced from 5 for stricter matching
+    uniqueness_ratio: int = 1  # More lenient for textured scenes (was 5)
+    speckle_window_size: int = 200  # Larger for high-res images
+    speckle_range: int = 2
+    disp12_max_diff: int = -1  # Disable check (-1 = no check, was 1)
 
-    # Smoothness parameters
-    p1_multiplier: int = 8  # Increased from 4
-    p2_multiplier: int = 32
+    # Smoothness parameters - reduced for high-res textured scenes
+    p1_multiplier: int = 4  # Reduced from 8 for less smoothing
+    p2_multiplier: int = 16  # Reduced from 32 for less smoothing
 
     # Filtering
     mask_edges: bool = False
@@ -97,6 +97,73 @@ class OutputConfig:
     disparity_dir: str = "disparity_maps"
     save_disparity: bool = True
     save_point_cloud: bool = True
+
+
+@dataclass
+class SGBMPreset:
+    """
+    SGBM parameter preset optimized for specific depth range.
+
+    Presets are designed for 5cm baseline stereo camera configuration:
+    - CLOSE: <1m (high disparity, small window, strict matching)
+    - MEDIUM: 0.5-2m (balanced, current default)
+    - FAR: >2m (lower disparity, larger window)
+    """
+
+    name: str
+    min_range: float  # meters
+    max_range: float  # meters
+    max_disparity: int
+    window_size: int
+    uniqueness_ratio: int
+    p1_multiplier: int
+    p2_multiplier: int
+    min_disparity: int = 0
+    speckle_window_size: int = 100
+    speckle_range: int = 2
+    disp12_max_diff: int = 1
+
+
+# SGBM Presets for different depth ranges
+SGBM_CLOSE = SGBMPreset(
+    name="close",
+    min_range=0.2,
+    max_range=1.0,
+    max_disparity=256,      # Higher max for close objects (high disparity)
+    window_size=3,          # Smaller window for detail preservation
+    uniqueness_ratio=10,    # Stricter matching for accuracy
+    p1_multiplier=8,
+    p2_multiplier=32
+)
+
+SGBM_MEDIUM = SGBMPreset(
+    name="medium",
+    min_range=0.5,
+    max_range=2.0,
+    max_disparity=160,      # Current default
+    window_size=5,
+    uniqueness_ratio=5,
+    p1_multiplier=8,
+    p2_multiplier=32
+)
+
+SGBM_FAR = SGBMPreset(
+    name="far",
+    min_range=2.0,
+    max_range=10.0,
+    max_disparity=96,       # Lower max for distant objects (low disparity)
+    window_size=7,          # Larger window for robustness
+    uniqueness_ratio=5,
+    p1_multiplier=8,
+    p2_multiplier=32
+)
+
+# Preset dictionary for easy lookup
+SGBM_PRESETS = {
+    "close": SGBM_CLOSE,
+    "medium": SGBM_MEDIUM,
+    "far": SGBM_FAR
+}
 
 
 # Default configurations

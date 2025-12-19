@@ -93,12 +93,26 @@ namespace Vision
         [Range(1, 100)]
         private int _JPEGQuality = 85;
 
+        [Header("Streaming Mode")]
+        [SerializeField]
+        [Tooltip("Enable continuous streaming mode (default: true for Python VisionProcessor)")]
+        private bool _enableStreaming = true;
+
+        [SerializeField]
+        [Tooltip("Streaming rate in FPS (frames per second)")]
+        [Range(1f, 30f)]
+        private float _streamingFPS = 5.0f;
+
         private float _stereoBaseline;
         private float _cameraFOV;
 
         // State
         private bool _isProcessing = false;
         private int _captureCounter = 0;
+
+        // Streaming state
+        private float _streamingInterval;
+        private float _timeSinceLastCapture = 0f;
 
         // Events
         public event Action<DepthResult> OnDepthResultReceived;
@@ -222,6 +236,34 @@ namespace Vision
                 Debug.Log(
                     $"{_logPrefix} Left camera: {leftPos}, Right camera: {rightPos}, Distance: {actualDistance}m"
                 );
+            }
+
+            // Initialize streaming mode
+            _streamingInterval = 1.0f / _streamingFPS;
+            if (_enableStreaming)
+            {
+                Debug.Log($"{_logPrefix} Streaming enabled at {_streamingFPS} FPS (interval: {_streamingInterval:F3}s)");
+            }
+        }
+
+        /// <summary>
+        /// Unity Update - handle streaming mode
+        /// </summary>
+        private void Update()
+        {
+            if (!_enableStreaming)
+                return;
+
+            _timeSinceLastCapture += Time.deltaTime;
+
+            if (_timeSinceLastCapture >= _streamingInterval)
+            {
+                // Only capture if not already processing
+                if (!_isProcessing)
+                {
+                    CaptureAndSendToServer(_cameraPairId);
+                }
+                _timeSinceLastCapture = 0f;
             }
         }
 

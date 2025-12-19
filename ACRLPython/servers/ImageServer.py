@@ -147,6 +147,21 @@ class UnifiedImageStorage:
             imgL, imgR, prompt, _, _ = self._stereo_images[latest_id]
             return latest_id, imgL.copy(), imgR.copy(), prompt
 
+    def get_latest_stereo_image(self) -> Optional[Tuple[np.ndarray, np.ndarray, str, float, dict]]:
+        """
+        Get the most recently stored stereo pair with full metadata.
+
+        Returns:
+            Tuple of (imgL, imgR, prompt, timestamp, metadata) or None if no stereo images
+        """
+        with self._data_lock:
+            if not self._stereo_images:
+                return None
+            latest_id = max(self._stereo_images.keys(),
+                          key=lambda k: self._stereo_images[k][3])
+            imgL, imgR, prompt, timestamp, metadata = self._stereo_images[latest_id]
+            return imgL.copy(), imgR.copy(), prompt, timestamp, metadata
+
     def get_all_stereo_ids(self) -> List[str]:
         """Get all stereo camera pair IDs."""
         with self._data_lock:
