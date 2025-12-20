@@ -8,4 +8,4 @@ between Unity and Python servers.
 from .TCPServerBase import TCPServerBase, ServerConfig
 from .UnityProtocol import UnityProtocol
 
-__all__ = ['TCPServerBase', 'ServerConfig', 'UnityProtocol']
+__all__ = ["TCPServerBase", "ServerConfig", "UnityProtocol"]

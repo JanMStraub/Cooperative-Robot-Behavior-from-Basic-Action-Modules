@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Core;
 using UnityEngine;
 
 namespace Simulation
@@ -30,9 +29,12 @@ namespace Simulation
         /// </summary>
         public bool ContainsPosition(Vector3 position)
         {
-            return position.x >= minBounds.x && position.x <= maxBounds.x &&
-                   position.y >= minBounds.y && position.y <= maxBounds.y &&
-                   position.z >= minBounds.z && position.z <= maxBounds.z;
+            return position.x >= minBounds.x
+                && position.x <= maxBounds.x
+                && position.y >= minBounds.y
+                && position.y <= maxBounds.y
+                && position.z >= minBounds.z
+                && position.z <= maxBounds.z;
         }
 
         /// <summary>
@@ -83,17 +85,9 @@ namespace Simulation
         [SerializeField]
         private float _minRobotSeparation = 0.2f;
 
-        [Header("Debug Visualization")]
-        [Tooltip("Show workspace region gizmos in scene view")]
-        [SerializeField]
-        private bool _showWorkspaceGizmos = true;
-
-        [Tooltip("Show allocated regions in different color")]
-        [SerializeField]
-        private bool _highlightAllocatedRegions = true;
-
         // State tracking
-        private Dictionary<string, string> _robotWorkspaceAllocation = new Dictionary<string, string>(); // robotId -> regionName
+        private Dictionary<string, string> _robotWorkspaceAllocation =
+            new Dictionary<string, string>(); // robotId -> regionName
         private HashSet<string> _collisionZones = new HashSet<string>(); // Regions currently in use
 
         // Constants
@@ -124,7 +118,9 @@ namespace Simulation
             // If no regions configured, create default dual-arm setup
             if (_workspaceRegions.Count == 0)
             {
-                Debug.Log($"{LOG_PREFIX} No workspace regions configured, creating default dual-arm setup");
+                Debug.Log(
+                    $"{LOG_PREFIX} No workspace regions configured, creating default dual-arm setup"
+                );
 
                 // Left workspace for Robot1
                 // IMPORTANT: Must match Python LLMConfig.py WORKSPACE_REGIONS
@@ -164,7 +160,9 @@ namespace Simulation
                 _workspaceRegions.Add(sharedZone);
                 _workspaceRegions.Add(centerRegion);
 
-                Debug.Log($"{LOG_PREFIX} Created {_workspaceRegions.Count} default workspace regions");
+                Debug.Log(
+                    $"{LOG_PREFIX} Created {_workspaceRegions.Count} default workspace regions"
+                );
             }
         }
 
@@ -185,7 +183,9 @@ namespace Simulation
 
             if (region.IsAllocated() && region.allocatedRobotId != robotId)
             {
-                Debug.LogWarning($"{LOG_PREFIX} Region '{regionName}' already allocated to {region.allocatedRobotId}");
+                Debug.LogWarning(
+                    $"{LOG_PREFIX} Region '{regionName}' already allocated to {region.allocatedRobotId}"
+                );
                 return false;
             }
 
@@ -203,7 +203,8 @@ namespace Simulation
         public void ReleaseRegion(string robotId, string regionName)
         {
             var region = GetRegion(regionName);
-            if (region == null) return;
+            if (region == null)
+                return;
 
             if (region.allocatedRobotId == robotId)
             {
@@ -239,10 +240,13 @@ namespace Simulation
         public bool IsRegionAvailable(string regionName, string requestingRobotId = null)
         {
             var region = GetRegion(regionName);
-            if (region == null) return false;
+            if (region == null)
+                return false;
 
-            if (!region.IsAllocated()) return true;
-            if (requestingRobotId != null && region.allocatedRobotId == requestingRobotId) return true;
+            if (!region.IsAllocated())
+                return true;
+            if (requestingRobotId != null && region.allocatedRobotId == requestingRobotId)
+                return true;
 
             return false;
         }
@@ -364,36 +368,6 @@ namespace Simulation
             _robotWorkspaceAllocation.Clear();
             _collisionZones.Clear();
             Debug.Log($"{LOG_PREFIX} Reset all workspace allocations");
-        }
-
-        /// <summary>
-        /// Draw workspace region gizmos in scene view
-        /// </summary>
-        private void OnDrawGizmos()
-        {
-            if (!_showWorkspaceGizmos) return;
-
-            foreach (var region in _workspaceRegions)
-            {
-                Color gizmoColor = region.debugColor;
-
-                // Highlight allocated regions
-                if (_highlightAllocatedRegions && region.IsAllocated())
-                {
-                    gizmoColor = new Color(1f, 0f, 0f, 0.5f); // Red for allocated
-                }
-
-                Gizmos.color = gizmoColor;
-
-                // Draw wire cube for region bounds
-                Vector3 center = region.GetCenter();
-                Vector3 size = region.maxBounds - region.minBounds;
-                Gizmos.DrawWireCube(center, size);
-
-                // Draw filled cube with transparency
-                Gizmos.color = new Color(gizmoColor.r, gizmoColor.g, gizmoColor.b, 0.1f);
-                Gizmos.DrawCube(center, size);
-            }
         }
 
 #if UNITY_EDITOR

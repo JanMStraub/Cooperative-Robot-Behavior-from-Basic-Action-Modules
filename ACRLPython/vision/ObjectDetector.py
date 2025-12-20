@@ -37,9 +37,10 @@ except ImportError:
 
 # Import YOLO detector if enabled
 YOLO_AVAILABLE = False
-if getattr(cfg, 'USE_YOLO', False):
+if getattr(cfg, "USE_YOLO", False):
     try:
         from .YOLODetector import YOLODetector
+
         YOLO_AVAILABLE = True
         logging.info("YOLO detection enabled")
     except ImportError as e:
@@ -117,14 +118,16 @@ class CubeDetector:
         Otherwise, uses HSV color-based detection.
         """
         # Check if YOLO should be used
-        self.use_yolo = YOLO_AVAILABLE and getattr(cfg, 'USE_YOLO', False)
+        self.use_yolo = YOLO_AVAILABLE and getattr(cfg, "USE_YOLO", False)
 
         if self.use_yolo and YOLO_AVAILABLE:
             # Initialize YOLO detector (only if import succeeded)
-            model_path = getattr(cfg, 'YOLO_MODEL_PATH', None)
+            model_path = getattr(cfg, "YOLO_MODEL_PATH", None)
             try:
                 self.yolo_detector = YOLODetector(model_path=model_path)  # type: ignore[name-defined]
-                logging.info(f"CubeDetector initialized with YOLO (model: {model_path})")
+                logging.info(
+                    f"CubeDetector initialized with YOLO (model: {model_path})"
+                )
             except Exception as e:
                 logging.error(f"Failed to initialize YOLO detector: {e}")
                 logging.info("Falling back to HSV color detection")
@@ -303,7 +306,10 @@ class CubeDetector:
         for det in detection_result.detections:
             # Extract disparity value at detection center
             disp_value = None
-            if 0 <= det.center_y < disparity.shape[0] and 0 <= det.center_x < disparity.shape[1]:
+            if (
+                0 <= det.center_y < disparity.shape[0]
+                and 0 <= det.center_x < disparity.shape[1]
+            ):
                 disp_value = float(disparity[det.center_y, det.center_x])
 
             # Calculate depth from disparity
@@ -312,7 +318,10 @@ class CubeDetector:
                 # Depth = (baseline * focal_length) / disparity
                 # focal_length = (image_width / 2) / tan(fov/2)
                 import math
-                focal_length = (w / 2.0) / math.tan(math.radians(camera_config.fov / 2.0))
+
+                focal_length = (w / 2.0) / math.tan(
+                    math.radians(camera_config.fov / 2.0)
+                )
                 depth_m = (camera_config.baseline * focal_length) / disp_value
 
             # Estimate world position using pre-computed disparity (OPTIMIZED)
@@ -456,7 +465,9 @@ class CubeDetector:
 
             # Summary log for each color
             if accepted_count > 0:
-                logging.info(f"  {color_name.upper()}: ✓ {accepted_count} cube(s) detected")
+                logging.info(
+                    f"  {color_name.upper()}: ✓ {accepted_count} cube(s) detected"
+                )
 
         return detections
 

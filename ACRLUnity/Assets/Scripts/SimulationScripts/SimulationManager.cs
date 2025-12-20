@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using Configuration;
-using Logging;
 using Robotics;
 using Simulation.CoordinationStrategies;
 using UnityEngine;
@@ -76,7 +75,6 @@ namespace Simulation
         public SimulationConfig config;
 
         // Core components
-        private MainLogger _logger;
         private RobotController[] _robotControllers;
 
         // State management
@@ -156,9 +154,6 @@ namespace Simulation
         {
             try
             {
-                // Get component reference
-                _logger = MainLogger.Instance;
-
                 // Find all robot controllers
                 _robotControllers = FindObjectsByType<RobotController>(
                     FindObjectsInactive.Exclude,
@@ -243,7 +238,9 @@ namespace Simulation
             {
                 if (WorkspaceManager.Instance != null)
                 {
-                    Debug.Log($"{_logPrefix} [Phase 4] WorkspaceManager active for collaborative coordination");
+                    Debug.Log(
+                        $"{_logPrefix} [Phase 4] WorkspaceManager active for collaborative coordination"
+                    );
                 }
                 else
                 {
@@ -262,7 +259,12 @@ namespace Simulation
         /// </summary>
         private void UpdateRobotCoordination()
         {
-            if (!IsRunning || _robotControllers == null || _robotControllers.Length == 0 || _coordinationStrategy == null)
+            if (
+                !IsRunning
+                || _robotControllers == null
+                || _robotControllers.Length == 0
+                || _coordinationStrategy == null
+            )
                 return;
 
             // Delegate coordination logic to the strategy
@@ -296,11 +298,6 @@ namespace Simulation
 
             Debug.LogError($"{_logPrefix} Error: {errorMessage}");
 
-            if (_logger != null)
-            {
-                Debug.LogError($"{_logPrefix} Error: {errorMessage}");
-            }
-
             if (config.resetOnError)
             {
                 Invoke(nameof(ResetSimulation), 2f); // Reset after 2 seconds
@@ -322,10 +319,7 @@ namespace Simulation
 
             ChangeState(SimulationState.Running);
 
-            if (_logger != null)
-            {
-                Debug.Log($"{_logPrefix} Started by user request");
-            }
+            Debug.Log($"{_logPrefix} Started by user request");
         }
 
         /// <summary>
@@ -337,10 +331,7 @@ namespace Simulation
             {
                 ChangeState(SimulationState.Paused);
 
-                if (_logger != null)
-                {
-                    Debug.Log($"{_logPrefix} Paused");
-                }
+                Debug.Log($"{_logPrefix} Paused");
             }
         }
 
@@ -353,10 +344,7 @@ namespace Simulation
             {
                 ChangeState(SimulationState.Running);
 
-                if (_logger != null)
-                {
-                    Debug.Log($"{_logPrefix} Resumed");
-                }
+                Debug.Log($"{_logPrefix} Resumed");
             }
         }
 
@@ -385,10 +373,7 @@ namespace Simulation
                 // Reset coordination strategy
                 _coordinationStrategy?.Reset();
 
-                if (_logger != null)
-                {
-                    Debug.Log($"{_logPrefix} Reset completed");
-                }
+                Debug.Log($"{_logPrefix} Reset completed");
 
                 // Restart if configured
                 if (config.autoStart)
@@ -458,10 +443,8 @@ namespace Simulation
         {
             if (Instance == this)
             {
-                if (_logger != null)
-                {
-                    Debug.Log($"{_logPrefix} SimulationManager destroyed");
-                }
+                Debug.Log($"{_logPrefix} SimulationManager destroyed");
+
                 Instance = null;
             }
         }

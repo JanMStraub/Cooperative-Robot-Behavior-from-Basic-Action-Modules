@@ -18,7 +18,6 @@ import argparse
 import logging
 import signal
 import time
-import threading
 
 # Import config
 try:
@@ -27,12 +26,9 @@ except ImportError:
     from .. import LLMConfig as cfg
 
 # Import servers
-from servers.ImageServer import ImageServer, run_image_server_background
-from servers.CommandServer import CommandServer, run_command_server_background, get_command_broadcaster
-from servers.SequenceServer import SequenceServer, SequenceQueryHandler, run_sequence_server_background
-
-# Import vision operations to register them
-from operations import VisionOperations
+from servers.ImageServer import ImageServer
+from servers.CommandServer import run_command_server_background, get_command_broadcaster
+from servers.SequenceServer import run_sequence_server_background
 
 logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
 logger = logging.getLogger(__name__)
@@ -53,7 +49,7 @@ class RobotController:
         command_port: int = cfg.LLM_RESULTS_PORT,
         sequence_port: int = cfg.SEQUENCE_SERVER_PORT,
         model: str = cfg.DEFAULT_LMSTUDIO_MODEL,
-        check_completion: bool = True
+        check_completion: bool = True,
     ):
         """
         Initialize the robot controller.
@@ -92,19 +88,17 @@ class RobotController:
         logger.info("=" * 60)
 
         # Start ImageServer (ports 5005, 5006)
-        logger.info(f"Starting ImageServer (single: {self._single_port}, stereo: {self._stereo_port})")
         self._image_server = ImageServer(
             single_port=self._single_port,
             stereo_port=self._stereo_port,
-            host=self._host
+            host=self._host,
         )
         self._image_server.start()
 
         # Start CommandServer (port 5010) - bidirectional for commands and completions
         logger.info(f"Starting CommandServer (port: {self._command_port})")
         self._command_server = run_command_server_background(
-            port=self._command_port,
-            host=self._host
+            port=self._command_port, host=self._host
         )
 
         # Initialize and start SequenceServer (port 5013)
@@ -112,7 +106,7 @@ class RobotController:
         self._sequence_server = run_sequence_server_background(
             lm_studio_url=cfg.LMSTUDIO_BASE_URL,
             model=self._model,
-            check_completion=self._check_completion
+            check_completion=self._check_completion,
         )
 
         # Share resources between servers
@@ -136,15 +130,17 @@ class RobotController:
                         "Vision streaming disabled. Please ensure the model file exists."
                     )
                 else:
-                    logger.info(f"Initializing VisionProcessor with YOLO model: {cfg.YOLO_MODEL_PATH}")
+                    logger.info(
+                        f"Initializing VisionProcessor with YOLO model: {cfg.YOLO_MODEL_PATH}"
+                    )
 
                     # Initialize YOLO detector
                     detector = YOLODetector(model_path=cfg.YOLO_MODEL_PATH)
 
                     # Determine if we should use main thread (macOS with visualization)
                     use_main_thread = (
-                        platform.system() == 'Darwin' and
-                        cfg.ENABLE_VISION_VISUALIZATION
+                        platform.system() == "Darwin"
+                        and cfg.ENABLE_VISION_VISUALIZATION
                     )
 
                     if use_main_thread:
@@ -160,19 +156,23 @@ class RobotController:
                         enable_tracking=cfg.ENABLE_OBJECT_TRACKING,
                         enable_shared_state=cfg.SHARED_VISION_STATE_ENABLED,
                         enable_visualization=cfg.ENABLE_VISION_VISUALIZATION,
-                        use_main_thread=use_main_thread
+                        use_main_thread=use_main_thread,
                     )
 
                     if use_main_thread:
                         # Will run in main thread (blocking) - start it in wait() method
-                        logger.info("VisionProcessor initialized (will start in main thread)")
+                        logger.info(
+                            "VisionProcessor initialized (will start in main thread)"
+                        )
                     else:
                         # Start in background thread (non-blocking)
                         self._vision_processor.start()
                         logger.info("VisionProcessor started in background thread")
 
             except Exception as e:
-                logger.error(f"Failed to initialize VisionProcessor: {e}", exc_info=True)
+                logger.error(
+                    f"Failed to initialize VisionProcessor: {e}", exc_info=True
+                )
                 logger.warning("Continuing without vision streaming")
                 self._vision_processor = None
 
@@ -185,7 +185,9 @@ class RobotController:
         logger.info(f"  Sequence Server:        {self._host}:{self._sequence_port}")
         logger.info(f"  LLM Model:              {self._model}")
         if cfg.ENABLE_VISION_STREAMING and self._vision_processor:
-            logger.info(f"  Vision Streaming:       Enabled ({cfg.VISION_STREAM_FPS} FPS)")
+            logger.info(
+                f"  Vision Streaming:       Enabled ({cfg.VISION_STREAM_FPS} FPS)"
+            )
             if cfg.ENABLE_VISION_VISUALIZATION:
                 logger.info(f"  Visualization:          Enabled (press 'q' to close)")
         logger.info("=" * 60)
@@ -236,10 +238,14 @@ class RobotController:
         """Wait for controller to stop (blocking)."""
         try:
             # If VisionProcessor is configured for main thread, run it now (blocking)
-            if (self._vision_processor and
-                hasattr(self._vision_processor, 'use_main_thread') and
-                self._vision_processor.use_main_thread):
-                logger.info("Starting VisionProcessor in main thread (blocking until 'q' or Ctrl+C)")
+            if (
+                self._vision_processor
+                and hasattr(self._vision_processor, "use_main_thread")
+                and self._vision_processor.use_main_thread
+            ):
+                logger.info(
+                    "Starting VisionProcessor in main thread (blocking until 'q' or Ctrl+C)"
+                )
                 self._vision_processor.run()  # Blocking call
                 # When run() returns, stop the controller
                 self.stop()
@@ -265,12 +271,17 @@ def main():
         description="Unified Robot Controller - Start all Python servers"
     )
     parser.add_argument("--host", default=cfg.DEFAULT_HOST, help="Host to bind to")
-    parser.add_argument("--model", default=cfg.DEFAULT_LMSTUDIO_MODEL,
-                       help="LLM model for command parsing")
-    parser.add_argument("--no-completion-check", action="store_true",
-                       help="Don't wait for Unity completion signals")
-    parser.add_argument("--verbose", action="store_true",
-                       help="Enable debug logging")
+    parser.add_argument(
+        "--model",
+        default=cfg.DEFAULT_LMSTUDIO_MODEL,
+        help="LLM model for command parsing",
+    )
+    parser.add_argument(
+        "--no-completion-check",
+        action="store_true",
+        help="Don't wait for Unity completion signals",
+    )
+    parser.add_argument("--verbose", action="store_true", help="Enable debug logging")
 
     args = parser.parse_args()
 
@@ -279,9 +290,7 @@ def main():
 
     # Create controller
     controller = RobotController(
-        host=args.host,
-        model=args.model,
-        check_completion=not args.no_completion_check
+        host=args.host, model=args.model, check_completion=not args.no_completion_check
     )
 
     # Handle shutdown signals

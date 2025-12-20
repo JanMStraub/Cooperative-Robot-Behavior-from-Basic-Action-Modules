@@ -176,6 +176,14 @@ namespace Robotics
         }
 
         /// <summary>
+        /// Getter for the gripper target position to determine if it is open or closed
+        /// </summary>
+        public float GetTargetPosition()
+        {
+            return targetPosition;
+        }
+
+        /// <summary>
         /// Resets a single gripper to its default state.
         /// </summary>
         /// <param name="gripper">The gripper ArticulationBody to reset</param>

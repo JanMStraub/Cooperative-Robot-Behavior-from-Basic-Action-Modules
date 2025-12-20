@@ -74,7 +74,12 @@ class Track:
         Args:
             detection: New detection to update this track with
         """
-        self.bbox = (detection.bbox_x, detection.bbox_y, detection.bbox_w, detection.bbox_h)
+        self.bbox = (
+            detection.bbox_x,
+            detection.bbox_y,
+            detection.bbox_w,
+            detection.bbox_h,
+        )
         self.color = detection.color
         self.age = 0
         self.hits += 1
@@ -161,9 +166,7 @@ class ObjectTracker:
         self.tracks: List[Track] = []
         self.next_id = 1
 
-        logging.info(
-            f"ObjectTracker initialized: max_age={max_age}, min_iou={min_iou}"
-        )
+        logging.info(f"ObjectTracker initialized: max_age={max_age}, min_iou={min_iou}")
 
     def update(self, detections: List[DetectionObject]) -> List[DetectionObject]:
         """
@@ -287,9 +290,7 @@ class ObjectTracker:
         for t_idx in range(len(self.tracks)):
             for d_idx in range(len(detections)):
                 if iou_matrix[t_idx, d_idx] >= self.min_iou:
-                    track_det_pairs.append(
-                        (t_idx, d_idx, iou_matrix[t_idx, d_idx])
-                    )
+                    track_det_pairs.append((t_idx, d_idx, iou_matrix[t_idx, d_idx]))
 
         track_det_pairs.sort(key=lambda x: x[2], reverse=True)  # Sort by IOU
 
@@ -376,7 +377,9 @@ class ObjectTracker:
         removed_count = before_count - len(self.tracks)
 
         if removed_count > 0:
-            logging.debug(f"Removed {removed_count} stale tracks (age > {self.max_age})")
+            logging.debug(
+                f"Removed {removed_count} stale tracks (age > {self.max_age})"
+            )
 
     def get_active_tracks(self) -> List[Track]:
         """

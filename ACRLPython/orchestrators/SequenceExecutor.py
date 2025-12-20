@@ -61,6 +61,7 @@ class SafeStreamHandler(logging.StreamHandler):
             record: Log record that caused the error
         """
         import sys
+
         if sys.exc_info()[0] in (ValueError, OSError):
             # Stream closed - silently ignore
             pass
@@ -103,7 +104,7 @@ def _safe_log(log_func: Callable, message: str, *args, **kwargs):
 def _make_handler_safe(handler):
     """Patch a handler's emit method to catch I/O errors from closed streams"""
     # Store original unbound method to avoid double-wrapping
-    if not hasattr(handler, '_original_emit'):
+    if not hasattr(handler, "_original_emit"):
         handler._original_emit = handler.__class__.emit
         handler._original_handleError = handler.__class__.handleError
 
@@ -118,6 +119,7 @@ def _make_handler_safe(handler):
     def safe_handleError(record):
         """Override handleError to suppress I/O error diagnostics"""
         import sys
+
         exc_type, exc_val, exc_tb = sys.exc_info()
         if exc_type in (ValueError, OSError):
             # Stream closed - silently ignore diagnostics
@@ -156,7 +158,7 @@ class SequenceExecutor:
         self,
         default_timeout: float = 60.0,
         check_completion: bool = True,
-        enable_verification: bool = True
+        enable_verification: bool = True,
     ):
         """
         Initialize the SequenceExecutor.
@@ -173,7 +175,9 @@ class SequenceExecutor:
         self._abort_flag = False
         self._current_sequence_id: Optional[str] = None
         self._progress_callbacks: List[Callable] = []
-        self._variables: Dict[str, Any] = {}  # Variable storage for passing results between operations
+        self._variables: Dict[str, Any] = (
+            {}
+        )  # Variable storage for passing results between operations
 
         # Initialize verification components
         if enable_verification:
@@ -189,7 +193,7 @@ class SequenceExecutor:
         self,
         commands: List[Dict[str, Any]],
         sequence_id: Optional[str] = None,
-        timeout_per_command: Optional[float] = None
+        timeout_per_command: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Execute a sequence of commands sequentially or in parallel groups.
@@ -235,15 +239,19 @@ class SequenceExecutor:
         results = []
         completed = 0
 
-        logger.info(f"Starting sequence {self._current_sequence_id} with {len(commands)} commands")
+        logger.info(
+            f"Starting sequence {self._current_sequence_id} with {len(commands)} commands"
+        )
 
         # Check if commands use parallel_group
-        has_parallel_groups = any('parallel_group' in cmd for cmd in commands)
+        has_parallel_groups = any("parallel_group" in cmd for cmd in commands)
 
         if has_parallel_groups:
             # Execute with parallel group support
             logger.info("Parallel execution mode enabled (parallel_group detected)")
-            group_results, group_completed = self._execute_parallel_groups(commands, timeout)
+            group_results, group_completed = self._execute_parallel_groups(
+                commands, timeout
+            )
             results = group_results
             completed = group_completed
         else:
@@ -251,7 +259,9 @@ class SequenceExecutor:
             logger.info("Sequential execution mode (no parallel_group)")
             for i, cmd in enumerate(commands):
                 if self._abort_flag:
-                    logger.warning(f"Sequence {self._current_sequence_id} aborted at command {i}")
+                    logger.warning(
+                        f"Sequence {self._current_sequence_id} aborted at command {i}"
+                    )
                     break
 
                 operation = cmd.get("operation", "")
@@ -279,14 +289,16 @@ class SequenceExecutor:
                     "result": cmd_result.get("result"),
                     "error": cmd_result.get("error"),
                     "error_code": cmd_result.get("error_code"),
-                    "duration_ms": cmd_duration
+                    "duration_ms": cmd_duration,
                 }
                 results.append(result_entry)
 
                 if cmd_result["success"]:
                     completed += 1
                     self._notify_progress(i, len(commands), operation, "completed")
-                    logger.info(f"Command {i + 1} completed successfully in {cmd_duration:.0f}ms")
+                    logger.info(
+                        f"Command {i + 1} completed successfully in {cmd_duration:.0f}ms"
+                    )
 
                     # Capture result to variable if specified (manual capture)
                     if capture_var and cmd_result.get("result"):
@@ -298,7 +310,10 @@ class SequenceExecutor:
                     self._auto_capture_outputs(operation, cmd_result.get("result", {}))
                 else:
                     self._notify_progress(i, len(commands), operation, "failed")
-                    _safe_log(logger.error, f"Command {i + 1} failed: {cmd_result.get('error')}")
+                    _safe_log(
+                        logger.error,
+                        f"Command {i + 1} failed: {cmd_result.get('error')}",
+                    )
                     # Stop sequence on first failure
                     break
 
@@ -309,7 +324,10 @@ class SequenceExecutor:
         error_message = None
         if not success and results:
             # Find the first failed result
-            failed_result = next((r for r in results if r is not None and not r.get("success", False)), None)
+            failed_result = next(
+                (r for r in results if r is not None and not r.get("success", False)),
+                None,
+            )
             if failed_result:
                 # Include error_code if present, otherwise just the error message
                 error_code = failed_result.get("error_code")
@@ -328,21 +346,19 @@ class SequenceExecutor:
             "completed_commands": completed,
             "results": results,
             "total_duration_ms": total_duration,
-            "error": error_message
+            "error": error_message,
         }
 
         _safe_log(
             logger.info,
             f"Sequence {self._current_sequence_id} finished: "
-            f"{completed}/{len(commands)} commands in {total_duration:.0f}ms"
+            f"{completed}/{len(commands)} commands in {total_duration:.0f}ms",
         )
 
         return result
 
     def _execute_parallel_groups(
-        self,
-        commands: List[Dict[str, Any]],
-        timeout: float
+        self, commands: List[Dict[str, Any]], timeout: float
     ) -> tuple[List[Optional[Dict[str, Any]]], int]:
         """
         Execute commands grouped by parallel_group number.
@@ -362,13 +378,17 @@ class SequenceExecutor:
         # Group commands by parallel_group number
         groups = defaultdict(list)
         for i, cmd in enumerate(commands):
-            group_num = cmd.get('parallel_group', i)  # Default: each cmd is its own group
+            group_num = cmd.get(
+                "parallel_group", i
+            )  # Default: each cmd is its own group
             groups[group_num].append((i, cmd))
 
         # Sort groups by group number
         sorted_groups = sorted(groups.items())
 
-        results: List[Optional[Dict[str, Any]]] = [None] * len(commands)  # Pre-allocate results array
+        results: List[Optional[Dict[str, Any]]] = [None] * len(
+            commands
+        )  # Pre-allocate results array
         completed = 0
 
         for group_num, group_commands in sorted_groups:
@@ -376,7 +396,9 @@ class SequenceExecutor:
                 logger.warning(f"Parallel execution aborted at group {group_num}")
                 break
 
-            logger.info(f"Executing parallel group {group_num} with {len(group_commands)} commands")
+            logger.info(
+                f"Executing parallel group {group_num} with {len(group_commands)} commands"
+            )
 
             # Execute all commands in this group concurrently
             threads = []
@@ -407,7 +429,7 @@ class SequenceExecutor:
                     "result": cmd_result.get("result"),
                     "error": cmd_result.get("error"),
                     "duration_ms": cmd_duration,
-                    "parallel_group": group_num
+                    "parallel_group": group_num,
                 }
 
                 # Store result (thread-safe)
@@ -417,9 +439,7 @@ class SequenceExecutor:
             # Launch all threads for this group
             for idx, cmd in group_commands:
                 thread = threading.Thread(
-                    target=execute_command_thread,
-                    args=(idx, cmd),
-                    daemon=True
+                    target=execute_command_thread, args=(idx, cmd), daemon=True
                 )
                 threads.append(thread)
                 thread.start()
@@ -437,7 +457,9 @@ class SequenceExecutor:
 
                     if cmd_result["success"]:
                         completed += 1
-                        self._notify_progress(idx, len(commands), result_entry["operation"], "completed")
+                        self._notify_progress(
+                            idx, len(commands), result_entry["operation"], "completed"
+                        )
                         logger.info(
                             f"[Group {group_num}] Command {idx} completed in {result_entry['duration_ms']:.0f}ms"
                         )
@@ -448,15 +470,23 @@ class SequenceExecutor:
                             logger.debug(f"Captured result to ${capture_var}")
 
                         # Auto-capture outputs
-                        self._auto_capture_outputs(result_entry["operation"], cmd_result.get("result", {}))
+                        self._auto_capture_outputs(
+                            result_entry["operation"], cmd_result.get("result", {})
+                        )
                     else:
                         group_success = False
-                        self._notify_progress(idx, len(commands), result_entry["operation"], "failed")
-                        logger.error(f"[Group {group_num}] Command {idx} failed: {cmd_result.get('error')}")
+                        self._notify_progress(
+                            idx, len(commands), result_entry["operation"], "failed"
+                        )
+                        logger.error(
+                            f"[Group {group_num}] Command {idx} failed: {cmd_result.get('error')}"
+                        )
                 else:
                     # Thread didn't complete
                     group_success = False
-                    logger.error(f"[Group {group_num}] Command {idx} did not complete (thread timeout)")
+                    logger.error(
+                        f"[Group {group_num}] Command {idx} did not complete (thread timeout)"
+                    )
                     results[idx] = {
                         "index": idx,
                         "operation": cmd.get("operation", ""),
@@ -464,12 +494,14 @@ class SequenceExecutor:
                         "result": None,
                         "error": "Thread execution timeout",
                         "duration_ms": timeout * 1000,
-                        "parallel_group": group_num
+                        "parallel_group": group_num,
                     }
 
             # Stop if any command in the group failed
             if not group_success:
-                logger.error(f"Parallel group {group_num} had failures, stopping sequence")
+                logger.error(
+                    f"Parallel group {group_num} had failures, stopping sequence"
+                )
                 break
 
         # Fill in any None results (shouldn't happen, but safety check)
@@ -481,16 +513,13 @@ class SequenceExecutor:
                     "success": False,
                     "result": None,
                     "error": "Command not executed",
-                    "duration_ms": 0
+                    "duration_ms": 0,
                 }
 
         return results, completed
 
     def _execute_single_command(
-        self,
-        operation: str,
-        params: Dict[str, Any],
-        timeout: float
+        self, operation: str, params: Dict[str, Any], timeout: float
     ) -> Dict[str, Any]:
         """
         Execute a single command and wait for completion.
@@ -518,7 +547,7 @@ class SequenceExecutor:
                 return {
                     "success": False,
                     "result": None,
-                    "error": f"Operation '{operation}' not found in registry"
+                    "error": f"Operation '{operation}' not found in registry",
                 }
 
             # === PRIORITY 3: Unified Verification ===
@@ -530,7 +559,7 @@ class SequenceExecutor:
                         "success": False,
                         "result": None,
                         "error": verification_result["error"],
-                        "verification_details": verification_result["details"]
+                        "verification_details": verification_result["details"],
                     }
 
                 # Log any warnings
@@ -542,7 +571,9 @@ class SequenceExecutor:
             params_with_request_id = {**params, "request_id": request_id}
 
             # Execute the operation
-            op_result = self.registry.execute_operation_by_name(operation, **params_with_request_id)
+            op_result = self.registry.execute_operation_by_name(
+                operation, **params_with_request_id
+            )
 
             # === PHASE 3: Postcondition Verification ===
             if self.enable_verification and self.verifier and op_result.success:
@@ -553,36 +584,38 @@ class SequenceExecutor:
 
                 # Postcondition failures are warnings, not blockers
                 if not post_result.success:
-                    violation_msgs = [f"{v.predicate}: {v.reason}" for v in post_result.violations]
-                    logger.warning(f"Postcondition verification failed: {violation_msgs}")
+                    violation_msgs = [
+                        f"{v.predicate}: {v.reason}" for v in post_result.violations
+                    ]
+                    logger.warning(
+                        f"Postcondition verification failed: {violation_msgs}"
+                    )
 
             if not op_result.success:
-                error_msg = op_result.error.get("message") if op_result.error else "Unknown error"
+                error_msg = (
+                    op_result.error.get("message")
+                    if op_result.error
+                    else "Unknown error"
+                )
                 error_code = op_result.error.get("code") if op_result.error else None
                 return {
                     "success": False,
                     "result": None,
                     "error": error_msg,
-                    "error_code": error_code
+                    "error_code": error_code,
                 }
 
             # If completion checking is disabled, return immediately
             if not self.check_completion:
-                return {
-                    "success": True,
-                    "result": op_result.result,
-                    "error": None
-                }
+                return {"success": True, "result": op_result.result, "error": None}
 
             # Skip completion waiting for perception operations (they complete immediately)
             op_def = self.registry.get_operation_by_name(operation)
             if op_def and op_def.category == OperationCategory.PERCEPTION:
-                logger.debug(f"Skipping completion wait for perception operation: {operation}")
-                return {
-                    "success": True,
-                    "result": op_result.result,
-                    "error": None
-                }
+                logger.debug(
+                    f"Skipping completion wait for perception operation: {operation}"
+                )
+                return {"success": True, "result": op_result.result, "error": None}
 
             # Wait for completion using the same request_id
             completed = self._wait_for_completion(operation, request_id, timeout)
@@ -591,14 +624,10 @@ class SequenceExecutor:
                 return {
                     "success": False,
                     "result": op_result.result,
-                    "error": f"Operation timed out after {timeout}s"
+                    "error": f"Operation timed out after {timeout}s",
                 }
 
-            return {
-                "success": True,
-                "result": op_result.result,
-                "error": None
-            }
+            return {"success": True, "result": op_result.result, "error": None}
         finally:
             # Always clean up the queue to prevent accumulation
             if self.check_completion:
@@ -606,10 +635,7 @@ class SequenceExecutor:
                 logger.debug(f"Removed completion queue for request_id {request_id}")
 
     def _wait_for_completion(
-        self,
-        operation: str,
-        request_id: int,
-        timeout: float
+        self, operation: str, request_id: int, timeout: float
     ) -> bool:
         """
         Wait for an operation to complete.
@@ -636,7 +662,9 @@ class SequenceExecutor:
 
             try:
                 # Wait for completion signal from Unity
-                response = get_command_broadcaster().get_completion(request_id, timeout=poll_interval)
+                response = get_command_broadcaster().get_completion(
+                    request_id, timeout=poll_interval
+                )
 
                 if response:
                     # Check if this is a completion signal
@@ -644,7 +672,9 @@ class SequenceExecutor:
                     if response_type == "command_completion":
                         success = response.get("success", False)
                         completed_cmd = response.get("command_type", "")
-                        logger.debug(f"Received completion for {completed_cmd}: {success}")
+                        logger.debug(
+                            f"Received completion for {completed_cmd}: {success}"
+                        )
                         return success
 
                     # Also check status-based completion (fallback)
@@ -718,7 +748,9 @@ class SequenceExecutor:
             except Exception as e:
                 logger.error(f"Progress callback error: {e}")
 
-    def _verify_operation_safety(self, op_def, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _verify_operation_safety(
+        self, op_def, params: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Unified verification combining operation preconditions and multi-robot coordination checks.
 
@@ -745,31 +777,35 @@ class SequenceExecutor:
 
         # Sanity check - this method should only be called when verification is enabled
         if not self.verifier:
-            return {
-                "safe": True,
-                "error": None,
-                "warnings": [],
-                "details": {}
-            }
+            return {"safe": True, "error": None, "warnings": [], "details": {}}
 
         # === Step 1: Verify operation preconditions ===
         logger.debug(f"Running unified verification for {op_def.name}")
-        pre_result = self.verifier.verify_preconditions(op_def, params, self.world_state)
+        pre_result = self.verifier.verify_preconditions(
+            op_def, params, self.world_state
+        )
         details["precondition_check"] = pre_result.to_dict()
 
         if not pre_result.execution_allowed:
-            violation_msgs = [f"{v.predicate}: {v.reason}" for v in pre_result.violations]
+            violation_msgs = [
+                f"{v.predicate}: {v.reason}" for v in pre_result.violations
+            ]
             logger.error(f"Precondition verification failed: {violation_msgs}")
             return {
                 "safe": False,
                 "error": f"Precondition failed: {'; '.join(violation_msgs)}",
                 "warnings": warnings,
-                "details": details
+                "details": details,
             }
 
         # Collect precondition warnings
         if pre_result.warnings:
-            warnings.extend([f"Precondition - {w.predicate}: {w.reason}" for w in pre_result.warnings])
+            warnings.extend(
+                [
+                    f"Precondition - {w.predicate}: {w.reason}"
+                    for w in pre_result.warnings
+                ]
+            )
 
         # === Step 2: Multi-robot coordination safety check ===
         robot_id = params.get("robot_id")
@@ -781,27 +817,29 @@ class SequenceExecutor:
             details["coordination_check"] = coord_result.to_dict()
 
             if not coord_result.safe:
-                issue_msgs = [f"{i.issue_type}: {i.description}" for i in coord_result.issues]
+                issue_msgs = [
+                    f"{i.issue_type}: {i.description}" for i in coord_result.issues
+                ]
                 logger.error(f"Coordination safety check failed: {issue_msgs}")
                 return {
                     "safe": False,
                     "error": f"Multi-robot coordination issue: {'; '.join(issue_msgs)}",
                     "warnings": warnings,
-                    "details": details
+                    "details": details,
                 }
 
             # Collect coordination warnings
             if coord_result.warnings:
-                warnings.extend([f"Coordination - {w.issue_type}: {w.description}" for w in coord_result.warnings])
+                warnings.extend(
+                    [
+                        f"Coordination - {w.issue_type}: {w.description}"
+                        for w in coord_result.warnings
+                    ]
+                )
 
         # === All checks passed ===
         logger.debug(f"Unified verification passed for {op_def.name}")
-        return {
-            "safe": True,
-            "error": None,
-            "warnings": warnings,
-            "details": details
-        }
+        return {"safe": True, "error": None, "warnings": warnings, "details": details}
 
     def _auto_capture_outputs(self, operation_name: str, result: Dict[str, Any]):
         """
@@ -833,7 +871,9 @@ class SequenceExecutor:
                 # Store with a namespaced variable name: {operation}_{key}
                 var_name = f"{operation_name}_{output_key}"
                 self._variables[var_name] = result[output_key]
-                logger.debug(f"Auto-captured {output_key}={result[output_key]} to ${var_name} (from {operation_name})")
+                logger.debug(
+                    f"Auto-captured {output_key}={result[output_key]} to ${var_name} (from {operation_name})"
+                )
 
                 # Also store in operation-level dict for easier access
                 op_result_var = f"{operation_name}_result"
@@ -841,7 +881,9 @@ class SequenceExecutor:
                     self._variables[op_result_var] = {}
                 self._variables[op_result_var][output_key] = result[output_key]
 
-    def _auto_inject_parameters(self, operation_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _auto_inject_parameters(
+        self, operation_name: str, params: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Automatically inject parameters from previous operations based on ParameterFlow definitions.
 
@@ -869,22 +911,31 @@ class SequenceExecutor:
         # Inject parameters from previous operations
         for flow in param_flows:
             # Check if this flow targets the current operation
-            if flow.target_operation != op_def.operation_id and flow.target_operation != operation_name:
+            if (
+                flow.target_operation != op_def.operation_id
+                and flow.target_operation != operation_name
+            ):
                 continue
 
             # Check if parameter is already provided
             target_param = flow.target_input_param
             if target_param in enhanced_params:
-                logger.debug(f"Parameter {target_param} already provided, skipping auto-injection")
+                logger.debug(
+                    f"Parameter {target_param} already provided, skipping auto-injection"
+                )
                 continue
 
             # Try to get value from captured variables
             source_var_name = f"{flow.source_operation}_{flow.source_output_key}"
             if source_var_name in self._variables:
                 enhanced_params[target_param] = self._variables[source_var_name]
-                logger.info(f"Auto-injected {target_param}={self._variables[source_var_name]} from ${source_var_name}")
+                logger.info(
+                    f"Auto-injected {target_param}={self._variables[source_var_name]} from ${source_var_name}"
+                )
             else:
-                logger.debug(f"No captured value for {source_var_name}, cannot auto-inject {target_param}")
+                logger.debug(
+                    f"No captured value for {source_var_name}, cannot auto-inject {target_param}"
+                )
 
         return enhanced_params
 
@@ -903,9 +954,9 @@ class SequenceExecutor:
         """
         resolved = {}
         for key, value in params.items():
-            if isinstance(value, str) and '$' in value:
+            if isinstance(value, str) and "$" in value:
                 # Handle expressions with arithmetic (e.g., "$target.z + 0.05")
-                if any(op in value for op in ['+', '-', '*', '/']):
+                if any(op in value for op in ["+", "-", "*", "/"]):
                     resolved_value = self._resolve_expression(value)
                     if resolved_value is not None:
                         resolved[key] = resolved_value
@@ -913,7 +964,7 @@ class SequenceExecutor:
                         logger.warning(f"Could not resolve expression: {value}")
                         resolved[key] = value
                 # Handle dotted notation (e.g., "$target.x")
-                elif '.' in value and value.startswith('$'):
+                elif "." in value and value.startswith("$"):
                     resolved_value = self._resolve_dotted_variable(value)
                     if resolved_value is not None:
                         resolved[key] = resolved_value
@@ -921,21 +972,21 @@ class SequenceExecutor:
                         logger.warning(f"Variable {value} not found")
                         resolved[key] = value
                 # Handle simple variable reference (e.g., "$target")
-                elif value.startswith('$'):
+                elif value.startswith("$"):
                     var_name = value[1:]  # Remove $ prefix
 
                     if var_name in self._variables:
                         var_value = self._variables[var_name]
 
                         # Special handling for position/coordinate parameters
-                        if key in ['x', 'y', 'z'] and isinstance(var_value, dict):
+                        if key in ["x", "y", "z"] and isinstance(var_value, dict):
                             # Extract coordinate from detection result
                             resolved[key] = var_value.get(key, 0.0)
-                        elif key == 'position' and isinstance(var_value, dict):
+                        elif key == "position" and isinstance(var_value, dict):
                             # Expand position variable to x, y, z
-                            resolved['x'] = var_value.get('x', 0.0)
-                            resolved['y'] = var_value.get('y', 0.0)
-                            resolved['z'] = var_value.get('z', 0.0)
+                            resolved["x"] = var_value.get("x", 0.0)
+                            resolved["y"] = var_value.get("y", 0.0)
+                            resolved["z"] = var_value.get("z", 0.0)
                         else:
                             resolved[key] = var_value
                     else:
@@ -958,11 +1009,11 @@ class SequenceExecutor:
         Returns:
             Resolved value or None if not found
         """
-        if not var_ref.startswith('$'):
+        if not var_ref.startswith("$"):
             return None
 
         # Remove $ prefix and split by dots
-        parts = var_ref[1:].split('.')
+        parts = var_ref[1:].split(".")
 
         # Start with base variable
         value = self._variables.get(parts[0])
@@ -993,7 +1044,7 @@ class SequenceExecutor:
         import re
 
         # Find all variable references (e.g., $target.x, $target.z)
-        var_pattern = r'\$[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*'
+        var_pattern = r"\$[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*"
         variables = re.findall(var_pattern, expr)
 
         # Replace each variable with its value
@@ -1012,7 +1063,7 @@ class SequenceExecutor:
             import operator
 
             # Parse the expression
-            node = ast.parse(resolved_expr, mode='eval')
+            node = ast.parse(resolved_expr, mode="eval")
 
             # Define allowed operators
             safe_operators = {
@@ -1086,7 +1137,7 @@ class AsyncSequenceExecutor:
         self,
         commands: List[Dict[str, Any]],
         sequence_id: Optional[str] = None,
-        timeout_per_command: Optional[float] = None
+        timeout_per_command: Optional[float] = None,
     ) -> str:
         """
         Execute a sequence in the background.
@@ -1120,7 +1171,9 @@ class AsyncSequenceExecutor:
         """Get the result of the last executed sequence."""
         return self._result
 
-    def wait_for_completion(self, timeout: Optional[float] = None) -> Optional[Dict[str, Any]]:
+    def wait_for_completion(
+        self, timeout: Optional[float] = None
+    ) -> Optional[Dict[str, Any]]:
         """
         Wait for the current sequence to complete.
 

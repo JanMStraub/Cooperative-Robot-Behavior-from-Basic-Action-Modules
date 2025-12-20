@@ -33,6 +33,7 @@ logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT
 
 class ConnectionState(Enum):
     """Connection state enumeration"""
+
     CONNECTED = "connected"
     IDLE = "idle"
     RECEIVING = "receiving"
@@ -44,6 +45,7 @@ class ConnectionState(Enum):
 @dataclass
 class ClientInfo:
     """Information about a connected client"""
+
     socket: socket.socket
     address: tuple
     state: ConnectionState
@@ -248,7 +250,7 @@ class TCPServerBase(ABC):
 
         if isinstance(error, OSError):
             # Check errno for specific connection errors
-            if hasattr(error, 'errno'):
+            if hasattr(error, "errno"):
                 if error.errno == errno.ECONNRESET:
                     return True, "Connection reset by peer"
                 elif error.errno == errno.EPIPE:
@@ -335,7 +337,7 @@ class TCPServerBase(ABC):
                         address=address,
                         state=ConnectionState.CONNECTED,
                         connected_at=now,
-                        last_activity=now
+                        last_activity=now,
                     )
 
                 # Handle client in separate thread

@@ -13,10 +13,8 @@ Operations:
 
 import time
 import logging
-import math
 from typing import Tuple, Union, Optional
 import LLMConfig
-from servers.CommandServer import get_command_broadcaster
 from operations.WorldState import get_world_state
 from operations.MoveOperations import move_to_coordinate
 from .Base import (
@@ -86,20 +84,27 @@ def move_relative_to_object(
                     [
                         "Run object detection first to locate objects",
                         "Verify object ID is correct",
-                        "Check that object is in camera view"
-                    ]
+                        "Check that object is in camera view",
+                    ],
                 )
         else:
             # Direct position
             position = object_ref
 
         # Validate relation
-        valid_relations = ["left_of", "right_of", "above", "below", "in_front_of", "behind"]
+        valid_relations = [
+            "left_of",
+            "right_of",
+            "above",
+            "below",
+            "in_front_of",
+            "behind",
+        ]
         if relation not in valid_relations:
             return OperationResult.error_result(
                 "INVALID_RELATION",
                 f"Invalid relation '{relation}'. Must be one of: {', '.join(valid_relations)}",
-                [f"Use one of the valid relations: {', '.join(valid_relations)}"]
+                [f"Use one of the valid relations: {', '.join(valid_relations)}"],
             )
 
         # Validate offset
@@ -107,7 +112,7 @@ def move_relative_to_object(
             return OperationResult.error_result(
                 "INVALID_OFFSET",
                 f"Offset {offset} out of range [0.0, 0.5]",
-                ["Use offset between 0.0 and 0.5 meters"]
+                ["Use offset between 0.0 and 0.5 meters"],
             )
 
         # Calculate target position based on relation
@@ -138,32 +143,30 @@ def move_relative_to_object(
         )
 
         move_result = move_to_coordinate(
-            robot_id=robot_id,
-            x=target_x,
-            y=target_y,
-            z=target_z,
-            request_id=request_id
+            robot_id=robot_id, x=target_x, y=target_y, z=target_z, request_id=request_id
         )
 
         if not move_result.success:
             return move_result
 
         # Return success with target info
-        return OperationResult.success_result({
-            "robot_id": robot_id,
-            "relation": relation,
-            "object_position": position,
-            "target_position": (target_x, target_y, target_z),
-            "offset": offset,
-            "timestamp": time.time()
-        })
+        return OperationResult.success_result(
+            {
+                "robot_id": robot_id,
+                "relation": relation,
+                "object_position": position,
+                "target_position": (target_x, target_y, target_z),
+                "offset": offset,
+                "timestamp": time.time(),
+            }
+        )
 
     except Exception as e:
         logger.error(f"Error in move_relative_to_object: {e}", exc_info=True)
         return OperationResult.error_result(
             "EXECUTION_ERROR",
             f"Unexpected error: {str(e)}",
-            ["Check logs for details", "Verify parameters are correct"]
+            ["Check logs for details", "Verify parameters are correct"],
         )
 
 
@@ -215,7 +218,7 @@ def move_between_objects(
                 return OperationResult.error_result(
                     "OBJECT1_NOT_FOUND",
                     f"Object '{object1}' not found in world state",
-                    ["Run object detection to locate objects"]
+                    ["Run object detection to locate objects"],
                 )
         else:
             pos1 = object1
@@ -227,7 +230,7 @@ def move_between_objects(
                 return OperationResult.error_result(
                     "OBJECT2_NOT_FOUND",
                     f"Object '{object2}' not found in world state",
-                    ["Run object detection to locate objects"]
+                    ["Run object detection to locate objects"],
                 )
         else:
             pos2 = object2
@@ -237,7 +240,7 @@ def move_between_objects(
             return OperationResult.error_result(
                 "INVALID_BIAS",
                 f"Bias {bias} out of range [0.0, 1.0]",
-                ["Use bias between 0.0 and 1.0"]
+                ["Use bias between 0.0 and 1.0"],
             )
 
         # Calculate interpolated position
@@ -254,33 +257,31 @@ def move_between_objects(
         )
 
         move_result = move_to_coordinate(
-            robot_id=robot_id,
-            x=target_x,
-            y=target_y,
-            z=target_z,
-            request_id=request_id
+            robot_id=robot_id, x=target_x, y=target_y, z=target_z, request_id=request_id
         )
 
         if not move_result.success:
             return move_result
 
         # Return success
-        return OperationResult.success_result({
-            "robot_id": robot_id,
-            "object1_position": pos1,
-            "object2_position": pos2,
-            "target_position": (target_x, target_y, target_z),
-            "bias": bias,
-            "z_offset": z_offset,
-            "timestamp": time.time()
-        })
+        return OperationResult.success_result(
+            {
+                "robot_id": robot_id,
+                "object1_position": pos1,
+                "object2_position": pos2,
+                "target_position": (target_x, target_y, target_z),
+                "bias": bias,
+                "z_offset": z_offset,
+                "timestamp": time.time(),
+            }
+        )
 
     except Exception as e:
         logger.error(f"Error in move_between_objects: {e}", exc_info=True)
         return OperationResult.error_result(
             "EXECUTION_ERROR",
             f"Unexpected error: {str(e)}",
-            ["Check logs for details", "Verify parameters are correct"]
+            ["Check logs for details", "Verify parameters are correct"],
         )
 
 
@@ -328,7 +329,7 @@ def move_to_region(
             return OperationResult.error_result(
                 "INVALID_REGION",
                 f"Unknown region '{region_name}'. Valid regions: {', '.join(valid_regions)}",
-                [f"Use one of: {', '.join(valid_regions)}"]
+                [f"Use one of: {', '.join(valid_regions)}"],
             )
 
         # Validate position_in_region
@@ -337,7 +338,7 @@ def move_to_region(
             return OperationResult.error_result(
                 "INVALID_POSITION",
                 f"Invalid position '{position_in_region}'. Must be one of: {', '.join(valid_positions)}",
-                [f"Use one of: {', '.join(valid_positions)}"]
+                [f"Use one of: {', '.join(valid_positions)}"],
             )
 
         # Get region bounds
@@ -354,7 +355,7 @@ def move_to_region(
             return OperationResult.error_result(
                 "UNKNOWN_ROBOT",
                 f"Robot '{robot_id}' not in ROBOT_BASE_POSITIONS",
-                ["Check robot ID is correct", "Add robot to LLMConfig"]
+                ["Check robot ID is correct", "Add robot to LLMConfig"],
             )
 
         # Calculate X position
@@ -389,31 +390,29 @@ def move_to_region(
         )
 
         move_result = move_to_coordinate(
-            robot_id=robot_id,
-            x=target_x,
-            y=target_y,
-            z=target_z,
-            request_id=request_id
+            robot_id=robot_id, x=target_x, y=target_y, z=target_z, request_id=request_id
         )
 
         if not move_result.success:
             return move_result
 
         # Return success
-        return OperationResult.success_result({
-            "robot_id": robot_id,
-            "region_name": region_name,
-            "position_in_region": position_in_region,
-            "target_position": (target_x, target_y, target_z),
-            "timestamp": time.time()
-        })
+        return OperationResult.success_result(
+            {
+                "robot_id": robot_id,
+                "region_name": region_name,
+                "position_in_region": position_in_region,
+                "target_position": (target_x, target_y, target_z),
+                "timestamp": time.time(),
+            }
+        )
 
     except Exception as e:
         logger.error(f"Error in move_to_region: {e}", exc_info=True)
         return OperationResult.error_result(
             "EXECUTION_ERROR",
             f"Unexpected error: {str(e)}",
-            ["Check logs for details", "Verify parameters are correct"]
+            ["Check logs for details", "Verify parameters are correct"],
         )
 
 
@@ -438,23 +437,42 @@ def create_move_relative_to_object_operation() -> BasicOperation:
         usage_examples=[
             "move_relative_to_object('Robot1', 'cube_01', 'above', offset=0.1)",
             "Position robot to the left of detected object",
-            "Approach object from above for grasping"
+            "Approach object from above for grasping",
         ],
         parameters=[
             OperationParameter("robot_id", "str", "Robot identifier", required=True),
-            OperationParameter("object_ref", "Union[str, Tuple]", "Object ID or position (x,y,z)", required=True),
-            OperationParameter("relation", "str", "Spatial relation (left_of, right_of, above, etc.)", required=True),
-            OperationParameter("offset", "float", "Distance from object in meters", required=False, default=0.1, valid_range=(0.0, 0.5)),
-            OperationParameter("z_override", "float", "Override Z coordinate", required=False),
+            OperationParameter(
+                "object_ref",
+                "Union[str, Tuple]",
+                "Object ID or position (x,y,z)",
+                required=True,
+            ),
+            OperationParameter(
+                "relation",
+                "str",
+                "Spatial relation (left_of, right_of, above, etc.)",
+                required=True,
+            ),
+            OperationParameter(
+                "offset",
+                "float",
+                "Distance from object in meters",
+                required=False,
+                default=0.1,
+                valid_range=(0.0, 0.5),
+            ),
+            OperationParameter(
+                "z_override", "float", "Override Z coordinate", required=False
+            ),
         ],
         preconditions=[
             "target_within_reach(robot_id, calculated_x, calculated_y, calculated_z)",
             "robot_is_initialized(robot_id)",
-            "Object exists if object_id provided"
+            "Object exists if object_id provided",
         ],
         postconditions=[
             "Robot moves to calculated relative position",
-            "Movement command sent to Unity"
+            "Movement command sent to Unity",
         ],
         average_duration_ms=2000.0,
         success_rate=0.95,
@@ -466,7 +484,11 @@ def create_move_relative_to_object_operation() -> BasicOperation:
             required_reasons={
                 "perception_stereo_detect_001": "Need object position to calculate relative target coordinates",
             },
-            commonly_paired_with=["perception_stereo_detect_001", "manipulation_control_gripper_001", "motion_move_to_coord_001"],
+            commonly_paired_with=[
+                "perception_stereo_detect_001",
+                "manipulation_control_gripper_001",
+                "motion_move_to_coord_001",
+            ],
             pairing_reasons={
                 "perception_stereo_detect_001": "Detect object to get reference position for spatial relation",
                 "manipulation_control_gripper_001": "Position relative to object before grasping (e.g., above for pick)",
@@ -484,7 +506,7 @@ def create_move_relative_to_object_operation() -> BasicOperation:
             typical_before=["manipulation_control_gripper_001"],
             typical_after=["perception_stereo_detect_001"],
         ),
-        implementation=move_relative_to_object
+        implementation=move_relative_to_object,
     )
 
 
@@ -504,23 +526,42 @@ def create_move_between_objects_operation() -> BasicOperation:
         usage_examples=[
             "move_between_objects('Robot1', 'cube_01', 'cube_02', bias=0.5)",
             "Position between two detected objects for handoff",
-            "Move closer to first object with bias=0.3"
+            "Move closer to first object with bias=0.3",
         ],
         parameters=[
             OperationParameter("robot_id", "str", "Robot identifier", required=True),
-            OperationParameter("object1", "Union[str, Tuple]", "First object ID or position", required=True),
-            OperationParameter("object2", "Union[str, Tuple]", "Second object ID or position", required=True),
-            OperationParameter("bias", "float", "Interpolation bias (0.0-1.0)", required=False, default=0.5, valid_range=(0.0, 1.0)),
-            OperationParameter("z_offset", "float", "Additional Z offset", required=False, default=0.0),
+            OperationParameter(
+                "object1",
+                "Union[str, Tuple]",
+                "First object ID or position",
+                required=True,
+            ),
+            OperationParameter(
+                "object2",
+                "Union[str, Tuple]",
+                "Second object ID or position",
+                required=True,
+            ),
+            OperationParameter(
+                "bias",
+                "float",
+                "Interpolation bias (0.0-1.0)",
+                required=False,
+                default=0.5,
+                valid_range=(0.0, 1.0),
+            ),
+            OperationParameter(
+                "z_offset", "float", "Additional Z offset", required=False, default=0.0
+            ),
         ],
         preconditions=[
             "target_within_reach(robot_id, calculated_x, calculated_y, calculated_z)",
             "robot_is_initialized(robot_id)",
-            "Both objects exist if object_ids provided"
+            "Both objects exist if object_ids provided",
         ],
         postconditions=[
             "Robot moves to interpolated position",
-            "Movement command sent to Unity"
+            "Movement command sent to Unity",
         ],
         average_duration_ms=2000.0,
         success_rate=0.95,
@@ -532,16 +573,23 @@ def create_move_between_objects_operation() -> BasicOperation:
             required_reasons={
                 "perception_stereo_detect_001": "Need positions of both objects to calculate midpoint",
             },
-            commonly_paired_with=["perception_stereo_detect_001", "coordination_handoff_001", "manipulation_control_gripper_001"],
+            commonly_paired_with=[
+                "perception_stereo_detect_001",
+                "coordination_handoff_001",
+                "manipulation_control_gripper_001",
+            ],
             pairing_reasons={
                 "perception_stereo_detect_001": "Detect both objects to get reference positions",
                 "coordination_handoff_001": "Position between robots for object handoff",
                 "manipulation_control_gripper_001": "Position before receiving/releasing object",
             },
-            typical_before=["manipulation_control_gripper_001", "coordination_handoff_001"],
+            typical_before=[
+                "manipulation_control_gripper_001",
+                "coordination_handoff_001",
+            ],
             typical_after=["perception_stereo_detect_001"],
         ),
-        implementation=move_between_objects
+        implementation=move_between_objects,
     )
 
 
@@ -561,34 +609,51 @@ def create_move_to_region_operation() -> BasicOperation:
         usage_examples=[
             "move_to_region('Robot1', 'shared_zone', 'center')",
             "Move to left workspace near position",
-            "Navigate to shared zone for handoff"
+            "Navigate to shared zone for handoff",
         ],
         parameters=[
             OperationParameter("robot_id", "str", "Robot identifier", required=True),
-            OperationParameter("region_name", "str", "Region name (left_workspace, right_workspace, etc.)", required=True),
-            OperationParameter("position_in_region", "str", "Position (center, near, far)", required=False, default="center"),
-            OperationParameter("z_height", "float", "Optional Z height override", required=False),
+            OperationParameter(
+                "region_name",
+                "str",
+                "Region name (left_workspace, right_workspace, etc.)",
+                required=True,
+            ),
+            OperationParameter(
+                "position_in_region",
+                "str",
+                "Position (center, near, far)",
+                required=False,
+                default="center",
+            ),
+            OperationParameter(
+                "z_height", "float", "Optional Z height override", required=False
+            ),
         ],
         preconditions=[
             "target_within_reach(robot_id, calculated_x, calculated_y, calculated_z)",
             "robot_is_initialized(robot_id)",
-            "Region exists in WORKSPACE_REGIONS"
+            "Region exists in WORKSPACE_REGIONS",
         ],
-        postconditions=[
-            "Robot moves to region",
-            "Movement command sent to Unity"
-        ],
+        postconditions=["Robot moves to region", "Movement command sent to Unity"],
         average_duration_ms=2000.0,
         success_rate=0.98,
         failure_modes=["Invalid region name", "Target out of reach"],
-        commonly_paired_with=["allocate_workspace_region", "coordinate_simultaneous_move"],
+        commonly_paired_with=[
+            "allocate_workspace_region",
+            "coordinate_simultaneous_move",
+        ],
         relationships=OperationRelationship(
             operation_id="spatial_move_to_region_001",
             required_operations=["coordination_allocate_workspace_001"],
             required_reasons={
                 "coordination_allocate_workspace_001": "Must allocate workspace region before moving to it for multi-robot coordination",
             },
-            commonly_paired_with=["coordination_allocate_workspace_001", "coordination_simultaneous_move_001", "coordination_handoff_001"],
+            commonly_paired_with=[
+                "coordination_allocate_workspace_001",
+                "coordination_simultaneous_move_001",
+                "coordination_handoff_001",
+            ],
             pairing_reasons={
                 "coordination_allocate_workspace_001": "Allocate region before navigating to ensure exclusive access",
                 "coordination_simultaneous_move_001": "Position robots in separate regions for coordinated parallel movement",
@@ -601,7 +666,7 @@ def create_move_to_region_operation() -> BasicOperation:
                 "safety": "Ensures robots stay in designated regions to avoid collisions",
             },
         ),
-        implementation=move_to_region
+        implementation=move_to_region,
     )
 
 

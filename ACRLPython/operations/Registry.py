@@ -23,12 +23,7 @@ from .SpatialOperations import (
     MOVE_BETWEEN_OBJECTS_OPERATION,
     MOVE_TO_REGION_OPERATION,
 )
-# Coordination operations deprecated - use atomic operations + sync primitives instead
-# from .CoordinationOperations import (
-#     COORDINATE_SIMULTANEOUS_MOVE_OPERATION,
-#     COORDINATE_HANDOFF_OPERATION,
-#     ALLOCATE_WORKSPACE_REGION_OPERATION,
-# )
+
 from .SyncOperations import (
     SIGNAL_OPERATION,
     WAIT_FOR_SIGNAL_OPERATION,
@@ -62,7 +57,7 @@ class OperationRegistry:
             DETECT_OBJECTS_OPERATION,
             DETECT_OBJECT_STEREO_OPERATION,
             ANALYZE_SCENE_OPERATION,
-            # Spatial reasoning operations (Phase 2)
+            # Spatial reasoning operations
             MOVE_RELATIVE_TO_OBJECT_OPERATION,
             MOVE_BETWEEN_OBJECTS_OPERATION,
             MOVE_TO_REGION_OPERATION,
@@ -70,11 +65,6 @@ class OperationRegistry:
             SIGNAL_OPERATION,
             WAIT_FOR_SIGNAL_OPERATION,
             WAIT_OPERATION,
-            # Coordination operations (Phase 3) - DEPRECATED
-            # Use atomic operations + sync primitives instead
-            # COORDINATE_SIMULTANEOUS_MOVE_OPERATION,
-            # COORDINATE_HANDOFF_OPERATION,
-            # ALLOCATE_WORKSPACE_REGION_OPERATION,
         ]
 
         for op in operations:

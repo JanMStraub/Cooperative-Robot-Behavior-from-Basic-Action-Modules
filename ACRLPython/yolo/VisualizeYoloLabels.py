@@ -8,21 +8,20 @@ Usage:
 """
 
 import cv2
-import numpy as np
 from tkinter import Tk, filedialog
 import os
 
 
 # Color palette for different classes (BGR format for OpenCV)
 COLORS = [
-    (0, 255, 0),      # Green - class 0
-    (255, 0, 0),      # Blue - class 1
-    (0, 0, 255),      # Red - class 2
-    (0, 255, 255),    # Yellow - class 3
-    (255, 0, 255),    # Magenta - class 4
-    (255, 255, 0),    # Cyan - class 5
-    (128, 0, 128),    # Purple - class 6
-    (0, 128, 255),    # Orange - class 7
+    (0, 255, 0),  # Green - class 0
+    (255, 0, 0),  # Blue - class 1
+    (0, 0, 255),  # Red - class 2
+    (0, 255, 255),  # Yellow - class 3
+    (255, 0, 255),  # Magenta - class 4
+    (255, 255, 0),  # Cyan - class 5
+    (128, 0, 128),  # Purple - class 6
+    (0, 128, 255),  # Orange - class 7
 ]
 
 
@@ -30,12 +29,9 @@ def select_file(title, file_types):
     """Open file dialog to select a file"""
     root = Tk()
     root.withdraw()  # Hide the main window
-    root.attributes('-topmost', True)  # Bring dialog to front
+    root.attributes("-topmost", True)  # Bring dialog to front
 
-    file_path = filedialog.askopenfilename(
-        title=title,
-        filetypes=file_types
-    )
+    file_path = filedialog.askopenfilename(title=title, filetypes=file_types)
     root.destroy()
     return file_path
 
@@ -52,7 +48,7 @@ def parse_yolo_label(label_path):
         print(f"Label file not found: {label_path}")
         return boxes
 
-    with open(label_path, 'r') as f:
+    with open(label_path, "r") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -119,11 +115,7 @@ def draw_bounding_boxes(image, boxes, class_names=None):
             label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1
         )
         cv2.rectangle(
-            result_image,
-            (x1, y1 - text_height - 10),
-            (x1 + text_width, y1),
-            color,
-            -1
+            result_image, (x1, y1 - text_height - 10), (x1 + text_width, y1), color, -1
         )
 
         # Draw label text
@@ -135,7 +127,7 @@ def draw_bounding_boxes(image, boxes, class_names=None):
             0.5,
             (255, 255, 255),
             1,
-            cv2.LINE_AA
+            cv2.LINE_AA,
         )
 
     return result_image
@@ -155,7 +147,7 @@ def load_class_names(label_path):
         classes_path = os.path.join(parent_dir, "classes.txt")
 
     if os.path.exists(classes_path):
-        with open(classes_path, 'r') as f:
+        with open(classes_path, "r") as f:
             class_names = [line.strip() for line in f if line.strip()]
         print(f"Loaded {len(class_names)} class names from: {classes_path}")
         return class_names
@@ -172,10 +164,7 @@ def main():
     print("\n1. Select an image file...")
     image_path = select_file(
         "Select Image File",
-        [
-            ("Image files", "*.jpg *.jpeg *.png *.bmp"),
-            ("All files", "*.*")
-        ]
+        [("Image files", "*.jpg *.jpeg *.png *.bmp"), ("All files", "*.*")],
     )
 
     if not image_path:
@@ -187,11 +176,7 @@ def main():
     # Select label file
     print("\n2. Select corresponding label file...")
     label_path = select_file(
-        "Select YOLO Label File",
-        [
-            ("Text files", "*.txt"),
-            ("All files", "*.*")
-        ]
+        "Select YOLO Label File", [("Text files", "*.txt"), ("All files", "*.*")]
     )
 
     if not label_path:
@@ -226,7 +211,11 @@ def main():
     print("Bounding Box Details:")
     print("=" * 60)
     for i, (class_id, x_center, y_center, width, height) in enumerate(boxes):
-        class_name = class_names[class_id] if class_names and class_id < len(class_names) else f"Class {class_id}"
+        class_name = (
+            class_names[class_id]
+            if class_names and class_id < len(class_names)
+            else f"Class {class_id}"
+        )
         print(f"Box {i+1}: {class_name}")
         print(f"  - Center: ({x_center:.4f}, {y_center:.4f})")
         print(f"  - Size: {width:.4f} x {height:.4f}")
@@ -246,14 +235,13 @@ def main():
     while True:
         key = cv2.waitKey(0) & 0xFF
 
-        if key == ord('q') or key == 27:  # 'q' or ESC
+        if key == ord("q") or key == 27:  # 'q' or ESC
             break
-        elif key == ord('s'):  # 's' for save
+        elif key == ord("s"):  # 's' for save
             # Save annotated image
             base_name = os.path.splitext(os.path.basename(image_path))[0]
             output_path = os.path.join(
-                os.path.dirname(image_path),
-                f"{base_name}_annotated.jpg"
+                os.path.dirname(image_path), f"{base_name}_annotated.jpg"
             )
             cv2.imwrite(output_path, result_image)
             print(f"\nSaved annotated image to: {output_path}")

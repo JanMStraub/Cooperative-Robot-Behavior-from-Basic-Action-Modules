@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Configuration;
-using Logging;
 using UnityEngine;
 
 namespace Robotics
@@ -40,13 +39,6 @@ namespace Robotics
 
         [SerializeField]
         private float _targetChangeCheckInterval = 0.1f;
-
-        [Header("Debug Settings")]
-        [SerializeField]
-        private bool _logConfigurationChanges = true;
-
-        // Core components
-        private MainLogger _logger;
 
         // Robot managementxx
         private Dictionary<string, RobotInstance> _robotInstances =
@@ -140,9 +132,6 @@ namespace Robotics
         {
             try
             {
-                // Get component references
-                _logger = MainLogger.Instance;
-
                 // Auto-discover robots
                 DiscoverRobots();
 
@@ -208,7 +197,6 @@ namespace Robotics
                 // Debug logging to understand what's happening
                 if (Vector3.Distance(currentPos, robot.lastTargetPosition) > 0.001f)
                 {
-
                     robot.lastTargetPosition = currentPos;
                     robot.lastTargetChangeTime = Time.time;
 
@@ -217,19 +205,6 @@ namespace Robotics
                     {
                         robot.controller.SetTarget(robot.targetGameObject);
                         OnTargetChanged?.Invoke(robot.robotId, robot.targetGameObject);
-
-                        if (_logConfigurationChanges && _logger != null)
-                        {
-                            string actionId = _logger.StartAction(
-                                actionName: "target_updated",
-                                type: Logging.ActionType.Movement,
-                                robotIds: new[] { robot.robotId },
-                                targetPos: currentPos,
-                                objectIds: new[] { robot.targetGameObject.name },
-                                description: $"Target updated to {robot.targetGameObject.name}"
-                            );
-                            _logger.CompleteAction(actionId, success: true, qualityScore: 1f);
-                        }
                     }
                 }
             }
@@ -418,18 +393,6 @@ namespace Robotics
 
                     joint.xDrive = drive;
                 }
-
-                if (_logConfigurationChanges && _logger != null)
-                {
-                    string actionId = _logger.StartAction(
-                        actionName: "configuration_applied",
-                        type: Logging.ActionType.Task,
-                        robotIds: new[] { robotId },
-                        objectIds: new[] { robot.profile.profileName },
-                        description: $"Applied configuration {robot.profile.profileName} to {robotId}"
-                    );
-                    _logger.CompleteAction(actionId, success: true, qualityScore: 1f);
-                }
             }
             catch (Exception ex)
             {
@@ -456,9 +419,6 @@ namespace Robotics
         /// </summary>
         private void LogConfigurationSummary()
         {
-            if (!_logConfigurationChanges)
-                return;
-
             string summary = $"RobotManager Configuration Summary:\n";
             summary += $"- Total Robots: {_robotInstances.Count}\n";
             summary += $"- Global Speed Multiplier: {globalSpeedMultiplier}\n";

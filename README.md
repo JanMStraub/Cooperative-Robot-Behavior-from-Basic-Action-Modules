@@ -4,40 +4,42 @@ A Unity-based reinforcement learning environment for training dual AR4 robotic a
 
 ## Description
 
-The goal of this project is to have two AR4 robot arms positioned side by side that learn to collaboratively solve tasks which would be impossible for a single robot to accomplish. The system uses Unity ML-Agents for reinforcement learning, implementing inverse kinematics control, multi-robot coordination patterns, vision-based object detection, and comprehensive data logging for LLM training.
+The goal of this project is to have two AR4 robot arms positioned side by side that learn to collaboratively solve tasks which would be impossible for a single robot to accomplish. The system uses implementing inverse kinematics control, multi-robot coordination patterns, vision-based object detection, and comprehensive data logging for LLM training.
 
 **Key Features**:
-- Unity 6000.2.5f1 simulation environment with physics-based ArticulationBody robots
+- Unity 6000.3.0f1 simulation environment with physics-based ArticulationBody robots
 - Damped least-squares inverse kinematics (6-DOF control)
-- PPO-based reinforcement learning with LSTM memory
-- Multiple coordination modes: Independent, Collaborative, Master-Slave, Distributed, Sequential
-- LLM vision integration (Ollama) for scene understanding
-- Object detection system (color-based HSV segmentation)
+- Multiple coordination modes: Independent (✅), Sequential (✅), Collaborative (⚠️ partial), Master-Slave (❌), Distributed (❌)
+- **Unified Python Backend**: Single entry point (RunRobotController) orchestrates all servers
+- **Operations System**: 17 registered operations including atomic actions, perception, and sync primitives
+- **Protocol V2**: Request ID correlation for reliable multi-robot communication
+- **Grasp Planning**: Approach-aware motion (Top/Front/Side) with automatic gripper control
+- LLM vision integration (Ollama) for scene understanding and natural language commands
+- Object detection with YOLO streaming support
 - Stereo vision depth estimation for 3D object localization
-- **Operations System**: Structured robot command framework with parameter validation and rich metadata
-- **RAG System**: Semantic search over robot operations using LM Studio embeddings for LLM-driven control
+- **Consolidated Servers**: 3 active servers replace 6+ legacy servers
+- **RAG System**: Integrated semantic search for operation matching in natural language commands
 - JSONL logging system for LLM training data generation
-- Python-Unity TCP communication for real-time vision processing
+- Python-Unity TCP communication with persistent connections and health checks
 
 ## Getting Started
 
 ### Prerequisites
 
-- **Unity Hub** with Unity Editor **6000.2.5f1** (exact version required)
-- **Python 3.8+** for ML-Agents training
+- **Unity Hub** with Unity Editor **6000.3.0f1** (exact version required)
+- **Python 3.8+** with virtual environment support
 - **Git** with submodule support
+- **Ollama** (optional, for LLM vision features)
 
 ### Dependencies
 
 **Unity Packages** (managed via Package Manager):
-- Unity ML-Agents (via git submodule)
 - NuGetForUnity (for MathNet.Numerics)
 - Unity Input System (1.14.2)
 - Universal Render Pipeline (17.2.0)
 - Unity Test Framework (1.5.1)
 
 **Python Dependencies**:
-- mlagents (Unity ML-Agents Toolkit) - installed in ml-agents submodule
 - torch (PyTorch for neural networks)
 - numpy, matplotlib (data processing)
 - opencv-python (computer vision, object detection)
@@ -51,20 +53,18 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
    cd Auto-Cooperative-Robot-Learning
    ```
 
-2. **Setup ML-Agents Python environment**:
+2. **Setup Python environment**:
    ```bash
-   cd ml-agents
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   pip install -e ./ml-agents-envs
-   pip install -e ./ml-agents
-   cd ..
+   cd ACRLPython
+   python -m venv acrl
+   source acrl/bin/activate  # On Windows: acrl\Scripts\activate
+   pip install -r requirements.txt
    ```
 
 3. **Open Unity project**:
    - Open Unity Hub
    - Add project from `ACRLUnity/` folder
-   - Ensure Unity version **6000.2.5f1** is installed
+   - Ensure Unity version **6000.3.0f1** is installed
    - Open the project (dependencies will auto-install)
 
 4. **Install NuGet packages** (if not auto-installed):
@@ -72,6 +72,27 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
    - Install `MathNet.Numerics` (required for IK computation)
 
 ### Executing Program
+
+#### Quick Start with Python Backend
+
+1. **Start the unified Python backend** (single command):
+
+   ```bash
+   cd ACRLPython
+   source acrl/bin/activate  # On Windows: acrl\Scripts\activate
+   python -m orchestrators.RunRobotController
+   ```
+
+   This starts all three servers: ImageServer (ports 5005/5006), CommandServer (port 5010), and SequenceServer (port 5013).
+
+2. **Run Unity simulation**:
+   - Open `ACRLUnity/Assets/Scenes/1xAR4Scene.unity` for single robot testing
+   - Press Play in Unity Editor
+   - Use natural language commands via SequenceClient:
+
+     ```csharp
+     SequenceClient.Instance.SendCommand("Detect the blue cube, move to it, close the gripper");
+     ```
 
 #### Running Simulations in Unity
 
@@ -90,34 +111,6 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
    - Use Inspector controls: Start, Pause, Resume, Reset
    - Configure coordination mode and settings via SimulationConfig asset
 
-#### Training with ML-Agents
-
-1. **Configure training parameters**:
-   ```
-   Edit: ACRLUnity/Assets/Configuration/RobotNavigation.yaml
-   ```
-
-2. **Run training** (from ml-agents directory):
-   ```bash
-   cd ml-agents
-   source venv/bin/activate
-   mlagents-learn ../ACRLUnity/Assets/Configuration/RobotNavigation.yaml --run-id=ar4_training
-   ```
-
-3. **Monitor training** (in separate terminal):
-   ```bash
-   tensorboard --logdir results/
-   ```
-
-4. **Trained models** are saved to:
-   ```
-   ml-agents/results/ar4_training/*.onnx
-   ```
-
-5. **Deploy model to Unity**:
-   - Copy `.onnx` file to `ACRLUnity/Assets/Data/`
-   - Assign to RobotAgent component's "Model" field
-
 #### Testing and Development
 
 **Run Unity Tests**:
@@ -130,6 +123,54 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
 - Select platform (PC, Mac & Linux Standalone recommended)
 - Click "Build" or "Build and Run"
 
+## Recent Major Updates (December 2025)
+
+### Unified Python Backend
+
+The Python backend has been consolidated from 6+ separate servers into a single unified architecture:
+
+**Before**: Multiple orchestrators (RunDetector, RunStereoDetector, RunAnalyzer, RunSequenceServer, RunRAGServer, RunStatusServer)
+
+**After**: Single entry point `RunRobotController` managing 3 consolidated servers
+
+**Benefits**:
+
+- Single command to start all backend services
+- Reduced complexity and improved maintainability
+- Centralized configuration via `LLMConfig.py`
+- Thread-safe image storage with `UnifiedImageStorage`
+- Integrated RAG system for natural language command parsing
+
+### Protocol V2
+
+Major protocol upgrade adding request ID correlation:
+
+- All messages include `request_id` (uint32) for matching queries with responses
+- Prevents race conditions in multi-robot scenarios
+- Persistent TCP connections with keepalive
+- Health checks and automatic recovery
+- Thread-safe request/response matching with dedicated queues
+
+### Grasp Planning System
+
+New approach-aware grasping:
+
+- Three grasp approaches: Top, Front, Side
+- Automatic approach calculation based on object geometry
+- Pre-grasp positioning with configurable offset
+- Automatic gripper control during grasp execution
+- Integration with vision system for object detection
+
+### Operations System
+
+17 registered operations providing structured robot control:
+
+- Type-safe parameter validation
+- Rich metadata (descriptions, examples, failure modes)
+- Variable passing between operations (`detect -> $target`)
+- Precondition checking and verification
+- Integrated with RAG for semantic search
+
 ## Architecture Overview
 
 ### Core Systems
@@ -141,28 +182,37 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
 
 **Robot Control Layers**:
 1. **RobotController**: Inverse kinematics computation using damped least-squares method
-2. **RobotAgent**: ML-Agents integration with PPO training and episode management
-3. **GripperController**: End-effector control with open/close commands
+2. **GripperController**: End-effector control with open/close commands
 
 **Vision & Perception Systems**:
-- **LLM Vision** (LM Studio): Scene understanding and natural language descriptions
-- **Object Detection**: HSV color-based cube detection with bounding boxes
-- **Stereo Depth**: 3D localization using stereo disparity estimation
-- **TCP Communication**: Real-time image streaming between Unity and Python
 
-**TCP Port Reference**:
-- **5005**: StreamingServer (Unity → Python single camera images)
-- **5006**: StereoDetectionServer (Unity → Python stereo image pairs)
-- **5007**: ResultsServer (Python → Unity depth detection results)
-- **5010**: ResultsServer (Python → Unity LLM analysis and commands)
-- **5011**: RAGServer (Unity ↔ Python semantic operation search)
-- **5012**: StatusServer (Unity ↔ Python bidirectional robot status queries)
+- **LLM Vision** (Ollama): Scene understanding and natural language descriptions
+- **Object Detection**: Color-based HSV segmentation + YOLO streaming support
+- **Stereo Depth**: 3D localization using stereo disparity estimation
+- **UnifiedImageStorage**: Thread-safe singleton for centralized image access
+
+**Python Backend Architecture (December 2025)**:
+
+- **Unified Entry Point**: `RunRobotController` orchestrates all servers
+- **3 Consolidated Servers** (replaces 6+ legacy servers):
+  - **ImageServer** (ports 5005/5006): Unified single and stereo image receiver
+  - **CommandServer** (port 5010): Bidirectional commands and completions
+  - **SequenceServer** (port 5013): Multi-command sequence orchestration
+- **Protocol V2**: Request ID correlation prevents race conditions in multi-robot scenarios
+- **Persistent Connections**: TCP keepalive with health checks and automatic recovery
 
 **LLM-Driven Control Systems**:
-- **Operations System**: Structured framework for defining robot operations with parameters, preconditions, and failure modes
-- **RAG System**: Semantic search using LM Studio embeddings to find relevant operations from natural language queries
-- **Operation Registry**: Central catalog of all available robot commands with validation and execution
-- **Parameter Validation**: Automatic validation with detailed error messages and recovery suggestions
+
+- **Operations System**: 17 registered operations (atomic actions, perception, sync primitives)
+  - Detection: `detect_object`, `detect_objects`
+  - Vision: `analyze_scene`
+  - Movement: `move_to_coordinate`, `move_relative_to_object`
+  - Manipulation: `control_gripper`, grasp operations with approach planning
+  - Synchronization: `signal`, `wait_for_signal`, `wait`
+  - Variable passing: `detect -> $target`, then `move to $target`
+- **Integrated RAG System**: Semantic search using LM Studio embeddings for natural language command parsing
+- **CommandParser**: LLM/regex hybrid parser with operation registry matching
+- **SequenceExecutor**: Sequential operation execution with state tracking
 
 **Data Logging**:
 - JSONL logging per robot or per session
@@ -174,19 +224,49 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
 
 ```
 Auto-Cooperative-Robot-Learning/
-├── ACRLUnity/                    # Unity project root
+├── ACRLUnity/                           # Unity project root
 │   ├── Assets/
-│   │   ├── Configuration/        # Robot configs and ML training params
-│   │   ├── Data/                 # Trained ML models (.onnx)
-│   │   ├── Scenes/               # 1xAR4Scene, 16xAR4Scene
-│   │   ├── Scripts/              # C# source code
-│   │   │   ├── ConfigScripts/    # ScriptableObject configs
-│   │   │   ├── Logging/          # Data logging system
-│   │   │   └── *.cs              # Core controllers and managers
-│   │   └── Prefabs/              # Robot and environment prefabs
-│   ├── Packages/                 # Unity package dependencies
-│   └── ProjectSettings/          # Unity project settings
-├── ml-agents/                    # ML-Agents submodule (Python)
+│   │   ├── Configuration/               # Robot configs and ML training params
+│   │   ├── Data/                        # Trained ML models (.onnx)
+│   │   ├── Scenes/                      # 1xAR4Scene, 16xAR4Scene
+│   │   ├── Scripts/                     # C# source code
+│   │   │   ├── ConfigScripts/           # ScriptableObject configs
+│   │   │   ├── Logging/                 # Data logging system
+│   │   │   ├── PythonCommunication/     # TCP clients and Protocol V2
+│   │   │   ├── RobotScripts/            # Robot control and IK
+│   │   │   ├── SimulationScripts/       # Coordination strategies
+│   │   │   └── *.cs                     # Core controllers and managers
+│   │   └── Prefabs/                     # Robot and environment prefabs
+│   ├── Packages/                        # Unity package dependencies
+│   └── ProjectSettings/                 # Unity project settings
+├── ACRLPython/                          # Python backend (December 2025)
+│   ├── core/                            # TCPServerBase, UnityProtocol V2
+│   ├── servers/                         # 3 active servers
+│   │   ├── ImageServer.py               # ✅ Unified image receiver
+│   │   ├── CommandServer.py             # ✅ Bidirectional commands
+│   │   └── SequenceServer.py            # ✅ Multi-command sequences
+│   ├── vision/                          # Object detection, depth estimation
+│   ├── orchestrators/                   # Unified backend orchestrator
+│   │   ├── RunRobotController.py        # ✅ PRIMARY entry point
+│   │   ├── CommandParser.py             # LLM/regex command parser
+│   │   └── SequenceExecutor.py          # Sequential operation executor
+│   ├── operations/                      # 17 registered operations
+│   │   ├── Base.py                      # Core operation classes
+│   │   ├── DetectionOperations.py       # detect_object, detect_objects
+│   │   ├── VisionOperations.py          # analyze_scene
+│   │   ├── MoveOperations.py            # move_to_coordinate
+│   │   ├── GripperOperations.py         # control_gripper
+│   │   ├── SpatialOperations.py         # move_relative_to_object
+│   │   ├── WorldState.py                # Shared world state tracking
+│   │   └── Registry.py                  # Operation registry
+│   ├── rag/                             # Integrated RAG system
+│   │   ├── Embeddings.py                # LM Studio embeddings
+│   │   ├── VectorStore.py               # Numpy vector storage
+│   │   ├── QueryEngine.py               # Semantic search
+│   │   └── .rag_index.pkl               # Cached index
+│   ├── Tests/                           # Comprehensive test suite
+│   ├── LLMConfig.py                     # Centralized configuration
+│   └── acrl/                            # Python virtual environment
 └── README.md
 ```
 
@@ -230,37 +310,65 @@ Default settings:
 ## Development Branches
 
 - `main` - Stable release branch
-- `feature_rag` - **CURRENT**: RAG system integration and Protocol V2 migration
+- `feature_streaming` - **CURRENT**: YOLO streaming, unified backend, Protocol V2
+- `feature_robot_cooperation` - Multi-robot coordination strategies
+- `feature_rag` - RAG system integration (merged into feature_streaming)
 - `feature_detect_object` - Object detection and stereo vision systems
 - `navigate_to_object` - Navigation to detected objects
 - `feature_gripper` - Gripper control implementation
-- `feature_ml` - ML-Agents integration features
-- `work_package_2` - Research milestone tracking
 
 ## Quick Start
 
 **5-Minute Start**:
-1. Clone repository: `git clone --recursive https://github.com/JanMStraub/Auto-Cooperative-Robot-Learning.git`
-2. Open `ACRLUnity/` in Unity Hub (version 6000.2.5f1 required)
-3. Open scene: `Assets/Scenes/1xAR4Scene.unity`
-4. Press Play to run simulation
 
-**For ML Training**:
-1. Setup ML-Agents: `cd ml-agents && python -m venv venv && source venv/bin/activate && pip install -e ./ml-agents`
-2. Run training: `mlagents-learn ../ACRLUnity/Assets/Configuration/RobotNavigation.yaml --run-id=test`
-3. Monitor: `tensorboard --logdir results/`
+1. Clone repository:
 
-**For Vision/Detection**:
-1. Setup Python environment: `cd ACRLPython && source acrl/bin/activate`
-2. Run object detector: `python -m orchestrators.RunDetector`
-3. In Unity: Use CameraController to send images and receive detection results
+   ```bash
+   git clone --recursive https://github.com/JanMStraub/Auto-Cooperative-Robot-Learning.git
+   cd Auto-Cooperative-Robot-Learning
+   ```
 
-**For LLM-Driven Control** (Operations + RAG):
-1. Setup Python environment: `cd ACRLPython && source acrl/bin/activate`
-2. Start LM Studio with embedding model (e.g., nomic-embed-text)
-3. Test operations: `python -m operations.ExampleUsage`
-4. Use RAG for semantic search: See `ACRLPython/rag/README.md`
-5. Documentation: See `ACRLPython/operations/README.md` and `RAG_OPERATIONS_GUIDE.md`
+2. Setup Python backend:
+
+   ```bash
+   cd ACRLPython
+   python -m venv acrl
+   source acrl/bin/activate  # On Windows: acrl\Scripts\activate
+   pip install -r requirements.txt
+   python -m orchestrators.RunRobotController
+   ```
+
+3. Run Unity simulation:
+   - Open `ACRLUnity/` in Unity Hub (version 6000.3.0f1 required)
+   - Open scene: `Assets/Scenes/1xAR4Scene.unity`
+   - Press Play
+
+**For Natural Language Control**:
+
+1. Ensure Python backend is running (see step 2 above)
+2. In Unity, send commands via SequenceClient:
+
+   ```csharp
+   // Example: Detect, move, and grasp
+   SequenceClient.Instance.SendCommand(
+       "Detect the blue cube, move to it, close the gripper"
+   );
+
+   // Example: Multi-robot coordination
+   SequenceClient.Instance.SendCommand(
+       "Robot1: detect red cube and signal ready; " +
+       "Robot2: wait for ready then move to blue cube"
+   );
+   ```
+
+**Available Operations** (17 total):
+
+- Detection: `detect_object`, `detect_objects`
+- Vision: `analyze_scene`
+- Movement: `move_to_coordinate`, `move_relative_to_object`, `move_to_region`
+- Manipulation: `control_gripper`, `grasp_object`, `place_object`
+- Synchronization: `signal`, `wait_for_signal`, `wait`
+- Status: `check_robot_status`, `verify_position`
 
 ## License
 
@@ -268,7 +376,6 @@ This project is licensed under the MIT License.
 
 ## Acknowledgments
 
-- [Unity ML-Agents](https://github.com/Unity-Technologies/ml-agents) - Reinforcement learning framework
 - [AR4 Robot](https://github.com/zebleck/AR4) - Robot model and gripper controller inspiration
 - [MathNet.Numerics](https://numerics.mathdotnet.com/) - Linear algebra for IK computation
 - Unity Technologies - ArticulationBody physics system

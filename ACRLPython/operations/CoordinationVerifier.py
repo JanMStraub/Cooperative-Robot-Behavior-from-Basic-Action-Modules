@@ -42,6 +42,7 @@ class CoordinationIssue:
         affected_robots: List of robot IDs involved
         resolution_suggestions: How to resolve the issue
     """
+
     issue_type: str
     severity: str
     description: str
@@ -61,6 +62,7 @@ class CoordinationCheckResult:
         checked_robots: List of robots that were checked
         recommendations: General recommendations for safer execution
     """
+
     safe: bool = True
     issues: List[CoordinationIssue] = field(default_factory=list)
     warnings: List[CoordinationIssue] = field(default_factory=list)
@@ -85,7 +87,7 @@ class CoordinationCheckResult:
                     "severity": i.severity,
                     "description": i.description,
                     "affected_robots": i.affected_robots,
-                    "resolution_suggestions": i.resolution_suggestions
+                    "resolution_suggestions": i.resolution_suggestions,
                 }
                 for i in self.issues
             ],
@@ -95,12 +97,12 @@ class CoordinationCheckResult:
                     "severity": w.severity,
                     "description": w.description,
                     "affected_robots": w.affected_robots,
-                    "resolution_suggestions": w.resolution_suggestions
+                    "resolution_suggestions": w.resolution_suggestions,
                 }
                 for w in self.warnings
             ],
             "checked_robots": self.checked_robots,
-            "recommendations": self.recommendations
+            "recommendations": self.recommendations,
         }
 
 
@@ -129,7 +131,7 @@ class CoordinationVerifier:
         robot_id: str,
         operation_category: OperationCategory,
         params: Dict[str, Any],
-        world_state=None
+        world_state=None,
     ) -> CoordinationCheckResult:
         """
         Verify safety of operation in multi-robot context.
@@ -163,7 +165,9 @@ class CoordinationVerifier:
         result.checked_robots.append(robot_id)
 
         # Get all other robots in system
-        other_robots = [rid for rid in LLMConfig.ROBOT_BASE_POSITIONS.keys() if rid != robot_id]
+        other_robots = [
+            rid for rid in LLMConfig.ROBOT_BASE_POSITIONS.keys() if rid != robot_id
+        ]
 
         # Check 1: Path collision with other robots
         if operation_category == OperationCategory.NAVIGATION:
@@ -201,15 +205,19 @@ class CoordinationVerifier:
 
         # Add general recommendations
         if not result.safe:
-            result.recommendations.extend([
-                "Consider serializing operations instead of parallel execution",
-                "Use coordinate_simultaneous_move for safe multi-robot movement",
-                "Allocate workspace regions before operations"
-            ])
+            result.recommendations.extend(
+                [
+                    "Consider serializing operations instead of parallel execution",
+                    "Use coordinate_simultaneous_move for safe multi-robot movement",
+                    "Allocate workspace regions before operations",
+                ]
+            )
 
         return result
 
-    def _extract_target_position(self, params: Dict[str, Any]) -> Optional[Tuple[float, float, float]]:
+    def _extract_target_position(
+        self, params: Dict[str, Any]
+    ) -> Optional[Tuple[float, float, float]]:
         """
         Extract target position from operation parameters.
 
@@ -232,7 +240,7 @@ class CoordinationVerifier:
         robot_id: str,
         target_pos: Tuple[float, float, float],
         other_robot_id: str,
-        world_state
+        world_state,
     ) -> Optional[CoordinationIssue]:
         """
         Check if robot will collide with another robot.
@@ -258,7 +266,7 @@ class CoordinationVerifier:
                 dx = target_pos[0] - other_robot_state.position[0]
                 dy = target_pos[1] - other_robot_state.position[1]
                 dz = target_pos[2] - other_robot_state.position[2]
-                distance = (dx*dx + dy*dy + dz*dz) ** 0.5
+                distance = (dx * dx + dy * dy + dz * dz) ** 0.5
 
                 min_sep = LLMConfig.MIN_ROBOT_SEPARATION
                 if distance < min_sep:
@@ -270,8 +278,8 @@ class CoordinationVerifier:
                         resolution_suggestions=[
                             f"Maintain minimum separation of {min_sep}m",
                             f"Wait for {other_robot_id} to move",
-                            "Choose different target position"
-                        ]
+                            "Choose different target position",
+                        ],
                     )
             return None
 
@@ -282,9 +290,7 @@ class CoordinationVerifier:
 
         # Use robots_will_collide predicate
         will_collide, reason = robots_will_collide(
-            robot_id, target_pos,
-            other_robot_id, other_target,
-            world_state
+            robot_id, target_pos, other_robot_id, other_target, world_state
         )
 
         if will_collide:
@@ -296,8 +302,8 @@ class CoordinationVerifier:
                 resolution_suggestions=[
                     "Serialize movements (one robot at a time)",
                     "Use coordinate_simultaneous_move for safe parallel movement",
-                    f"Wait for {other_robot_id} to complete movement"
-                ]
+                    f"Wait for {other_robot_id} to complete movement",
+                ],
             )
 
         return None
@@ -307,7 +313,7 @@ class CoordinationVerifier:
         robot_id: str,
         params: Dict[str, Any],
         other_robots: List[str],
-        world_state
+        world_state,
     ) -> Optional[CoordinationIssue]:
         """
         Check for workspace allocation conflicts.
@@ -347,8 +353,8 @@ class CoordinationVerifier:
                     f"Wait for {current_owner} to release workspace",
                     f"Use allocate_workspace_region to claim workspace first",
                     "Move to shared_zone instead",
-                    "Use different workspace"
-                ]
+                    "Use different workspace",
+                ],
             )
 
         return None
@@ -358,7 +364,7 @@ class CoordinationVerifier:
         robot_id: str,
         params: Dict[str, Any],
         other_robots: List[str],
-        world_state
+        world_state,
     ) -> Optional[CoordinationIssue]:
         """
         Check if multiple robots are trying to grasp same object.
@@ -391,8 +397,8 @@ class CoordinationVerifier:
                 resolution_suggestions=[
                     f"Wait for {obj_state.grasped_by} to release object",
                     "Use coordinate_handoff for transfer",
-                    "Target different object"
-                ]
+                    "Target different object",
+                ],
             )
 
         return None
@@ -402,7 +408,7 @@ class CoordinationVerifier:
         robot_id: str,
         params: Dict[str, Any],
         other_robots: List[str],
-        world_state
+        world_state,
     ) -> Optional[CoordinationIssue]:
         """
         Check for potential deadlock situations.
@@ -439,12 +445,16 @@ class CoordinationVerifier:
                 continue
 
             # Get other robot's target workspace
-            other_target_workspace = self._get_workspace_for_position(other_state.target_position)
+            other_target_workspace = self._get_workspace_for_position(
+                other_state.target_position
+            )
 
             # Potential deadlock: this robot going to other's workspace,
             # other robot going to this robot's workspace
-            if (target_workspace == other_state.target_position and
-                other_target_workspace == robot_current_workspace):
+            if (
+                target_workspace == other_state.target_position
+                and other_target_workspace == robot_current_workspace
+            ):
                 return CoordinationIssue(
                     issue_type="deadlock",
                     severity="warning",  # Warning, not blocking (may resolve naturally)
@@ -453,13 +463,15 @@ class CoordinationVerifier:
                     resolution_suggestions=[
                         "Serialize movements to avoid circular wait",
                         "One robot should complete movement first",
-                        "Use intermediate position via shared_zone"
-                    ]
+                        "Use intermediate position via shared_zone",
+                    ],
                 )
 
         return None
 
-    def _get_workspace_for_position(self, position: Tuple[float, float, float]) -> Optional[str]:
+    def _get_workspace_for_position(
+        self, position: Tuple[float, float, float]
+    ) -> Optional[str]:
         """
         Determine which workspace region contains a position.
 
@@ -471,9 +483,11 @@ class CoordinationVerifier:
         """
         x, y, z = position
         for region_name, bounds in LLMConfig.WORKSPACE_REGIONS.items():
-            if (bounds["x_min"] <= x <= bounds["x_max"] and
-                bounds["y_min"] <= y <= bounds["y_max"] and
-                bounds["z_min"] <= z <= bounds["z_max"]):
+            if (
+                bounds["x_min"] <= x <= bounds["x_max"]
+                and bounds["y_min"] <= y <= bounds["y_max"]
+                and bounds["z_min"] <= z <= bounds["z_max"]
+            ):
                 return region_name
         return None
 
@@ -484,9 +498,7 @@ class CoordinationVerifier:
 
 
 def quick_check_multi_robot_safety(
-    robot_id: str,
-    operation_category: OperationCategory,
-    params: Dict[str, Any]
+    robot_id: str, operation_category: OperationCategory, params: Dict[str, Any]
 ) -> Tuple[bool, CoordinationCheckResult]:
     """
     Quick helper to check if operation is safe in multi-robot context.

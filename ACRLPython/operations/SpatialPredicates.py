@@ -34,9 +34,11 @@ def register_predicate(name: str):
         def target_within_reach(robot_id, x, y, z, world_state=None):
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         PREDICATE_REGISTRY[name] = func
         return func
+
     return decorator
 
 
@@ -59,7 +61,9 @@ def get_predicate(name: str) -> Optional[Callable]:
 
 
 @register_predicate("target_within_reach")
-def target_within_reach(robot_id: str, x: float, y: float, z: float, world_state=None) -> Tuple[bool, str]:
+def target_within_reach(
+    robot_id: str, x: float, y: float, z: float, world_state=None
+) -> Tuple[bool, str]:
     """
     Check if a target position is within the robot's maximum reach distance.
 
@@ -81,12 +85,15 @@ def target_within_reach(robot_id: str, x: float, y: float, z: float, world_state
         dx = x - base_pos[0]
         dy = y - base_pos[1]
         dz = z - base_pos[2]
-        distance = math.sqrt(dx*dx + dy*dy + dz*dz)
+        distance = math.sqrt(dx * dx + dy * dy + dz * dz)
 
         # Check against maximum reach
         max_reach = LLMConfig.MAX_ROBOT_REACH
         if distance > max_reach:
-            return False, f"Target at ({x:.3f}, {y:.3f}, {z:.3f}) is {distance:.3f}m from robot base, exceeds max reach {max_reach}m"
+            return (
+                False,
+                f"Target at ({x:.3f}, {y:.3f}, {z:.3f}) is {distance:.3f}m from robot base, exceeds max reach {max_reach}m",
+            )
 
         return True, ""
 
@@ -96,7 +103,9 @@ def target_within_reach(robot_id: str, x: float, y: float, z: float, world_state
 
 
 @register_predicate("is_in_robot_workspace")
-def is_in_robot_workspace(robot_id: str, x: float, y: float, z: float, world_state=None) -> Tuple[bool, str]:
+def is_in_robot_workspace(
+    robot_id: str, x: float, y: float, z: float, world_state=None
+) -> Tuple[bool, str]:
     """
     Check if a position is within the robot's assigned workspace region.
 
@@ -117,17 +126,29 @@ def is_in_robot_workspace(robot_id: str, x: float, y: float, z: float, world_sta
         # Get workspace bounds
         workspace = LLMConfig.WORKSPACE_REGIONS.get(workspace_name)
         if workspace is None:
-            return False, f"Workspace '{workspace_name}' not defined in WORKSPACE_REGIONS"
+            return (
+                False,
+                f"Workspace '{workspace_name}' not defined in WORKSPACE_REGIONS",
+            )
 
         # Check bounds
         if not (workspace["x_min"] <= x <= workspace["x_max"]):
-            return False, f"X coordinate {x:.3f} outside workspace X range [{workspace['x_min']}, {workspace['x_max']}]"
+            return (
+                False,
+                f"X coordinate {x:.3f} outside workspace X range [{workspace['x_min']}, {workspace['x_max']}]",
+            )
 
         if not (workspace["y_min"] <= y <= workspace["y_max"]):
-            return False, f"Y coordinate {y:.3f} outside workspace Y range [{workspace['y_min']}, {workspace['y_max']}]"
+            return (
+                False,
+                f"Y coordinate {y:.3f} outside workspace Y range [{workspace['y_min']}, {workspace['y_max']}]",
+            )
 
         if not (workspace["z_min"] <= z <= workspace["z_max"]):
-            return False, f"Z coordinate {z:.3f} outside workspace Z range [{workspace['z_min']}, {workspace['z_max']}]"
+            return (
+                False,
+                f"Z coordinate {z:.3f} outside workspace Z range [{workspace['z_min']}, {workspace['z_max']}]",
+            )
 
         return True, ""
 
@@ -154,9 +175,9 @@ def is_in_shared_zone(x: float, y: float, z: float) -> Tuple[bool, str]:
 
         # Check bounds
         in_zone = (
-            shared_zone["x_min"] <= x <= shared_zone["x_max"] and
-            shared_zone["y_min"] <= y <= shared_zone["y_max"] and
-            shared_zone["z_min"] <= z <= shared_zone["z_max"]
+            shared_zone["x_min"] <= x <= shared_zone["x_max"]
+            and shared_zone["y_min"] <= y <= shared_zone["y_max"]
+            and shared_zone["z_min"] <= z <= shared_zone["z_max"]
         )
 
         if in_zone:
@@ -314,7 +335,9 @@ def gripper_is_closed(robot_id: str, world_state=None) -> Tuple[bool, str]:
 
 
 @register_predicate("object_accessible_by_robot")
-def object_accessible_by_robot(robot_id: str, object_position: Tuple[float, float, float], world_state=None) -> Tuple[bool, str]:
+def object_accessible_by_robot(
+    robot_id: str, object_position: Tuple[float, float, float], world_state=None
+) -> Tuple[bool, str]:
     """
     Check if an object at a given position is accessible by the robot.
 
@@ -342,7 +365,9 @@ def object_accessible_by_robot(robot_id: str, object_position: Tuple[float, floa
             return True, ""  # Shared zone objects accessible by all
 
         # Check if in robot's workspace
-        is_in_workspace, workspace_reason = is_in_robot_workspace(robot_id, x, y, z, world_state)
+        is_in_workspace, workspace_reason = is_in_robot_workspace(
+            robot_id, x, y, z, world_state
+        )
         if not is_in_workspace:
             return False, f"Object not in workspace: {workspace_reason}"
 
@@ -364,7 +389,7 @@ def robots_will_collide(
     target1: Tuple[float, float, float],
     robot2_id: str,
     target2: Tuple[float, float, float],
-    world_state=None
+    world_state=None,
 ) -> Tuple[bool, str]:
     """
     Check if two robots will collide if they move to their respective targets.
@@ -390,7 +415,7 @@ def robots_will_collide(
         dx = target1[0] - target2[0]
         dy = target1[1] - target2[1]
         dz = target1[2] - target2[2]
-        target_distance = math.sqrt(dx*dx + dy*dy + dz*dz)
+        target_distance = math.sqrt(dx * dx + dy * dy + dz * dz)
 
         min_separation = LLMConfig.MIN_ROBOT_SEPARATION
         if target_distance < min_separation:
@@ -408,7 +433,9 @@ def robots_will_collide(
                 # Calculate minimum distance between two line segments
                 # Line 1: pos1 -> target1
                 # Line 2: pos2 -> target2
-                min_path_distance = _calculate_segment_distance(pos1, target1, pos2, target2)
+                min_path_distance = _calculate_segment_distance(
+                    pos1, target1, pos2, target2
+                )
 
                 safety_margin = LLMConfig.COLLISION_SAFETY_MARGIN
                 if min_path_distance < safety_margin:
@@ -427,7 +454,11 @@ def robots_will_collide(
             workspace1 = _get_workspace_containing_point(*target1)
             workspace2 = _get_workspace_containing_point(*target2)
 
-            if workspace1 == workspace2 and workspace1 not in ["shared_zone", "center", None]:
+            if workspace1 == workspace2 and workspace1 not in [
+                "shared_zone",
+                "center",
+                None,
+            ]:
                 return True, (
                     f"Both robots targeting same exclusive workspace: {workspace1}"
                 )
@@ -444,7 +475,7 @@ def _calculate_segment_distance(
     p1_start: Tuple[float, float, float],
     p1_end: Tuple[float, float, float],
     p2_start: Tuple[float, float, float],
-    p2_end: Tuple[float, float, float]
+    p2_end: Tuple[float, float, float],
 ) -> float:
     """
     Calculate minimum distance between two line segments in 3D.
@@ -482,7 +513,7 @@ def _calculate_segment_distance(
         # Calculate distance from p2_start to segment 1
         t1 = max(0.0, min(1.0, -d / a if a > 1e-10 else 0.0))
         point1 = tuple(p1_start[i] + t1 * d1[i] for i in range(3))
-        dist = math.sqrt(sum((point1[i] - p2_start[i])**2 for i in range(3)))
+        dist = math.sqrt(sum((point1[i] - p2_start[i]) ** 2 for i in range(3)))
         return dist
 
     # Calculate parameters for closest points
@@ -498,7 +529,7 @@ def _calculate_segment_distance(
     point2 = tuple(p2_start[i] + t2 * d2[i] for i in range(3))
 
     # Calculate distance
-    dist = math.sqrt(sum((point1[i] - point2[i])**2 for i in range(3)))
+    dist = math.sqrt(sum((point1[i] - point2[i]) ** 2 for i in range(3)))
     return dist
 
 
@@ -513,9 +544,11 @@ def _get_workspace_containing_point(x: float, y: float, z: float) -> Optional[st
         Workspace region name or None if not in any region
     """
     for region_name, bounds in LLMConfig.WORKSPACE_REGIONS.items():
-        if (bounds["x_min"] <= x <= bounds["x_max"] and
-            bounds["y_min"] <= y <= bounds["y_max"] and
-            bounds["z_min"] <= z <= bounds["z_max"]):
+        if (
+            bounds["x_min"] <= x <= bounds["x_max"]
+            and bounds["y_min"] <= y <= bounds["y_max"]
+            and bounds["z_min"] <= z <= bounds["z_max"]
+        ):
             return region_name
     return None
 

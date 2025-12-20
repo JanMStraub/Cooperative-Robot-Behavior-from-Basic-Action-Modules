@@ -204,40 +204,16 @@ def cleanup_singletons():
     # Clean up BEFORE the test runs
     def _cleanup():
         try:
-            from servers.StreamingServer import ImageStorage
+            from servers.ImageServer import UnifiedImageStorage
 
-            ImageStorage._instance = None
-            ImageStorage._cameras = {}
+            UnifiedImageStorage._instance = None
         except:
             pass
 
         try:
-            from servers.ResultsServer import ResultsBroadcaster
+            from servers.CommandServer import CommandBroadcaster
 
-            ResultsBroadcaster._instance = None
-            ResultsBroadcaster._server = None
-            if hasattr(ResultsBroadcaster, '_result_queue'):
-                ResultsBroadcaster._result_queue.clear()
-        except:
-            pass
-
-        try:
-            from servers.DetectionServer import DetectionBroadcaster
-            import queue
-            import LLMConfig as cfg
-
-            DetectionBroadcaster._instance = None
-            DetectionBroadcaster._clients = []
-            DetectionBroadcaster._result_queue = queue.Queue(
-                maxsize=cfg.MAX_RESULT_QUEUE_SIZE
-            )
-        except:
-            pass
-
-        try:
-            from servers.StereoDetectionServer import StereoImageStorage
-
-            StereoImageStorage._instance = None
+            CommandBroadcaster._instance = None
         except:
             pass
 

@@ -168,14 +168,18 @@ class QueryEngine:
                         "required_operations": [
                             {
                                 "operation_id": op_id,
-                                "reason": rel.required_reasons.get(op_id, "Dependency required")
+                                "reason": rel.required_reasons.get(
+                                    op_id, "Dependency required"
+                                ),
                             }
                             for op_id in rel.required_operations
                         ],
                         "commonly_paired_with": [
                             {
                                 "operation_id": op_id,
-                                "reason": rel.pairing_reasons.get(op_id, "Often used together")
+                                "reason": rel.pairing_reasons.get(
+                                    op_id, "Often used together"
+                                ),
                             }
                             for op_id in rel.commonly_paired_with
                         ],

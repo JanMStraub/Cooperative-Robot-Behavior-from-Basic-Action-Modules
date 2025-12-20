@@ -23,11 +23,11 @@ namespace PythonCommunication
 
         [Tooltip("Default robot ID for commands")]
         [SerializeField]
-        private string _defaultRobotId = "Robot1";
+        private string _defaultRobotId = "Robot1"; // TODO Must be included in the prompt
 
         [Tooltip("Camera ID to use for perception operations")]
         [SerializeField]
-        private string _cameraId = "TableStereoCamera";
+        private string _cameraId = "TableStereoCamera"; // TODO Must be included in the prompt
 
         [Header("Sequence Client Settings")]
         [Tooltip("Log all commands and responses to console")]
@@ -39,7 +39,7 @@ namespace PythonCommunication
         [SerializeField]
         private bool _autoExecuteResult = true;
 
-        [Header("Status (Read-Only)")]
+        [Header("Status")]
         [SerializeField]
         private string _lastSequenceStatus = "Ready";
 
@@ -125,11 +125,6 @@ namespace PythonCommunication
             {
                 Debug.LogWarning($"{_logPrefix} Connection failed: {exception.Message}");
             }
-        }
-
-        protected override void OnDisconnecting()
-        {
-            // Connection state changes are logged elsewhere
         }
 
         protected override void OnDisconnected()
@@ -294,7 +289,15 @@ namespace PythonCommunication
             byte[] robotIdBytes = System.Text.Encoding.UTF8.GetBytes(robotId);
             byte[] cameraIdBytes = System.Text.Encoding.UTF8.GetBytes(_cameraId);
 
-            int totalLength = 4 + 4 + commandBytes.Length + 4 + robotIdBytes.Length + 4 + cameraIdBytes.Length + 1;
+            int totalLength =
+                4
+                + 4
+                + commandBytes.Length
+                + 4
+                + robotIdBytes.Length
+                + 4
+                + cameraIdBytes.Length
+                + 1;
             byte[] message = new byte[totalLength];
             int offset = 0;
 

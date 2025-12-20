@@ -9,7 +9,10 @@ from typing import Optional, List, Dict, Any
 import logging
 
 from operations.Registry import OperationRegistry, get_global_registry
-from operations.WorkflowPatterns import WorkflowPatternRegistry, get_global_workflow_registry
+from operations.WorkflowPatterns import (
+    WorkflowPatternRegistry,
+    get_global_workflow_registry,
+)
 
 from .Embeddings import EmbeddingGenerator
 from .VectorStore import VectorStore
@@ -95,17 +98,19 @@ class OperationIndexer:
         - Use center region (handoff zone) for object transfers between robots
         """
 
-        context_docs.append({
-            "text": workspace_doc,
-            "metadata": {
-                "operation_id": "context_workspace_layout",
-                "name": "workspace_layout",
-                "category": "multi_robot_context",
-                "complexity": "informational",
-                "description": "Multi-robot workspace layout and coordinate system",
-                "type": "context",
+        context_docs.append(
+            {
+                "text": workspace_doc,
+                "metadata": {
+                    "operation_id": "context_workspace_layout",
+                    "name": "workspace_layout",
+                    "category": "multi_robot_context",
+                    "complexity": "informational",
+                    "description": "Multi-robot workspace layout and coordinate system",
+                    "type": "context",
+                },
             }
-        })
+        )
 
         # Document 2: Coordination Patterns
         coordination_doc = """
@@ -153,17 +158,19 @@ class OperationIndexer:
         - Use the center handoff zone (x≈0.0) for object transfers
         """
 
-        context_docs.append({
-            "text": coordination_doc,
-            "metadata": {
-                "operation_id": "context_coordination_patterns",
-                "name": "coordination_patterns",
-                "category": "multi_robot_context",
-                "complexity": "informational",
-                "description": "Typical multi-robot coordination patterns using atomic operations",
-                "type": "context",
+        context_docs.append(
+            {
+                "text": coordination_doc,
+                "metadata": {
+                    "operation_id": "context_coordination_patterns",
+                    "name": "coordination_patterns",
+                    "category": "multi_robot_context",
+                    "complexity": "informational",
+                    "description": "Typical multi-robot coordination patterns using atomic operations",
+                    "type": "context",
+                },
             }
-        })
+        )
 
         # Document 3: Safety Constraints
         safety_doc = """
@@ -201,17 +208,19 @@ class OperationIndexer:
         - Retry individual steps rather than entire sequence
         """
 
-        context_docs.append({
-            "text": safety_doc,
-            "metadata": {
-                "operation_id": "context_safety_constraints",
-                "name": "safety_constraints",
-                "category": "multi_robot_context",
-                "complexity": "informational",
-                "description": "Safety constraints and guidelines for multi-robot operations",
-                "type": "context",
+        context_docs.append(
+            {
+                "text": safety_doc,
+                "metadata": {
+                    "operation_id": "context_safety_constraints",
+                    "name": "safety_constraints",
+                    "category": "multi_robot_context",
+                    "complexity": "informational",
+                    "description": "Safety constraints and guidelines for multi-robot operations",
+                    "type": "context",
+                },
             }
-        })
+        )
 
         # Document 4: Parallel Execution Guide
         parallel_doc = """
@@ -254,17 +263,19 @@ class OperationIndexer:
         - Omit parallel_group field = fully sequential execution
         """
 
-        context_docs.append({
-            "text": parallel_doc,
-            "metadata": {
-                "operation_id": "context_parallel_execution",
-                "name": "parallel_execution_guide",
-                "category": "multi_robot_context",
-                "complexity": "informational",
-                "description": "Guide for using parallel_group to execute operations concurrently",
-                "type": "context",
+        context_docs.append(
+            {
+                "text": parallel_doc,
+                "metadata": {
+                    "operation_id": "context_parallel_execution",
+                    "name": "parallel_execution_guide",
+                    "category": "multi_robot_context",
+                    "complexity": "informational",
+                    "description": "Guide for using parallel_group to execute operations concurrently",
+                    "type": "context",
+                },
             }
-        })
+        )
 
         return context_docs
 
@@ -293,7 +304,9 @@ class OperationIndexer:
             logger.warning("No operations or workflows found in registries")
             return VectorStore()
 
-        logger.info(f"Building index for {len(operations)} operations, {len(workflows)} workflows, and {len(context_docs)} context documents...")
+        logger.info(
+            f"Building index for {len(operations)} operations, {len(workflows)} workflows, and {len(context_docs)} context documents..."
+        )
 
         # Create new vector store
         store = VectorStore()
@@ -352,10 +365,12 @@ class OperationIndexer:
         # Index multi-robot context documents
         for context_doc in context_docs:
             texts_to_embed.append(context_doc["text"])
-            operation_data.append({
-                "operation_id": context_doc["metadata"]["operation_id"],
-                "metadata": context_doc["metadata"],
-            })
+            operation_data.append(
+                {
+                    "operation_id": context_doc["metadata"]["operation_id"],
+                    "metadata": context_doc["metadata"],
+                }
+            )
 
         # Generate embeddings for all documents
         embeddings = self.embedding_generator.generate_embeddings(texts_to_embed)
@@ -368,7 +383,9 @@ class OperationIndexer:
                 metadata=data["metadata"],
             )
 
-        logger.info(f"✓ Index built with {len(operations)} operations, {len(workflows)} workflows, {len(context_docs)} context docs")
+        logger.info(
+            f"✓ Index built with {len(operations)} operations, {len(workflows)} workflows, {len(context_docs)} context docs"
+        )
 
         # Save to disk
         if save and config.RAG_AUTO_SAVE_INDEX:

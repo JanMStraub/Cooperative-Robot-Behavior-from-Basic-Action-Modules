@@ -129,41 +129,37 @@ SGBM_CLOSE = SGBMPreset(
     name="close",
     min_range=0.2,
     max_range=1.0,
-    max_disparity=256,      # Higher max for close objects (high disparity)
-    window_size=3,          # Smaller window for detail preservation
-    uniqueness_ratio=10,    # Stricter matching for accuracy
+    max_disparity=256,  # Higher max for close objects (high disparity)
+    window_size=3,  # Smaller window for detail preservation
+    uniqueness_ratio=10,  # Stricter matching for accuracy
     p1_multiplier=8,
-    p2_multiplier=32
+    p2_multiplier=32,
 )
 
 SGBM_MEDIUM = SGBMPreset(
     name="medium",
     min_range=0.5,
     max_range=2.0,
-    max_disparity=160,      # Current default
+    max_disparity=160,  # Current default
     window_size=5,
     uniqueness_ratio=5,
     p1_multiplier=8,
-    p2_multiplier=32
+    p2_multiplier=32,
 )
 
 SGBM_FAR = SGBMPreset(
     name="far",
     min_range=2.0,
     max_range=10.0,
-    max_disparity=96,       # Lower max for distant objects (low disparity)
-    window_size=7,          # Larger window for robustness
+    max_disparity=96,  # Lower max for distant objects (low disparity)
+    window_size=7,  # Larger window for robustness
     uniqueness_ratio=5,
     p1_multiplier=8,
-    p2_multiplier=32
+    p2_multiplier=32,
 )
 
 # Preset dictionary for easy lookup
-SGBM_PRESETS = {
-    "close": SGBM_CLOSE,
-    "medium": SGBM_MEDIUM,
-    "far": SGBM_FAR
-}
+SGBM_PRESETS = {"close": SGBM_CLOSE, "medium": SGBM_MEDIUM, "far": SGBM_FAR}
 
 
 # Default configurations

@@ -41,6 +41,7 @@ class CachedValue:
         timestamp: Time when value was cached (defaults to current time)
         ttl: Time-to-live in seconds
     """
+
     value: Any
     ttl: float
     timestamp: float = field(default_factory=time.time)
@@ -72,6 +73,7 @@ class RobotState:
         joint_angles: List of joint angles in radians
         timestamp: Time of last update
     """
+
     robot_id: str
     position: Optional[Tuple[float, float, float]] = None
     rotation: Optional[Tuple[float, float, float]] = None
@@ -99,6 +101,7 @@ class ObjectState:
         confidence: Detection confidence (0.0 - 1.0)
         timestamp: Time of last detection
     """
+
     object_id: str
     position: Tuple[float, float, float]
     color: str = "unknown"
@@ -180,7 +183,9 @@ class WorldState:
     # Robot Status Queries
     # ========================================================================
 
-    def get_robot_status(self, robot_id: str, force_refresh: bool = False) -> Optional[Dict[str, Any]]:
+    def get_robot_status(
+        self, robot_id: str, force_refresh: bool = False
+    ) -> Optional[Dict[str, Any]]:
         """
         Get robot status with TTL-based caching.
 
@@ -205,7 +210,9 @@ class WorldState:
                 # Generate request ID for tracking
                 request_id = int(time.time() * 1000) % (2**32)
 
-                result = check_robot_status(robot_id, detailed=True, request_id=request_id)
+                result = check_robot_status(
+                    robot_id, detailed=True, request_id=request_id
+                )
 
                 if result.success:
                     # Note: This returns query_sent status, not actual robot state
@@ -215,7 +222,7 @@ class WorldState:
                     self._robot_cache[robot_id] = CachedValue(
                         value=status,
                         timestamp=time.time(),
-                        ttl=LLMConfig.ROBOT_STATUS_CACHE_TTL
+                        ttl=LLMConfig.ROBOT_STATUS_CACHE_TTL,
                     )
                     return status
                 else:
@@ -283,20 +290,31 @@ class WorldState:
             state = self._robot_states[robot_id]
             state.position = state_data.get("position", state.position)
             state.rotation = state_data.get("rotation", state.rotation)
-            state.target_position = state_data.get("target_position", state.target_position)
-            state.target_rotation = state_data.get("target_rotation", state.target_rotation)
+            state.target_position = state_data.get(
+                "target_position", state.target_position
+            )
+            state.target_rotation = state_data.get(
+                "target_rotation", state.target_rotation
+            )
             state.gripper_state = state_data.get("gripper_state", state.gripper_state)
             state.is_moving = state_data.get("is_moving", state.is_moving)
-            state.is_initialized = state_data.get("is_initialized", state.is_initialized)
+            state.is_initialized = state_data.get(
+                "is_initialized", state.is_initialized
+            )
             state.joint_angles = state_data.get("joint_angles", state.joint_angles)
             state.timestamp = time.time()
 
             logger.debug(f"Updated robot state for {robot_id}")
 
-    def update_robot(self, robot_id: str, position: Optional[Tuple[float, float, float]] = None,
-                     rotation: Optional[Tuple[float, float, float]] = None,
-                     joint_angles: Optional[list[float]] = None,
-                     is_moving: Optional[bool] = None, **kwargs):
+    def update_robot(
+        self,
+        robot_id: str,
+        position: Optional[Tuple[float, float, float]] = None,
+        rotation: Optional[Tuple[float, float, float]] = None,
+        joint_angles: Optional[list[float]] = None,
+        is_moving: Optional[bool] = None,
+        **kwargs,
+    ):
         """
         Update robot state (simplified interface for tests).
 
@@ -338,9 +356,14 @@ class WorldState:
     # Object Tracking
     # ========================================================================
 
-    def update_object_position(self, object_id: str, position: Tuple[float, float, float],
-                               color: str = "unknown", object_type: str = "unknown",
-                               confidence: float = 1.0):
+    def update_object_position(
+        self,
+        object_id: str,
+        position: Tuple[float, float, float],
+        color: str = "unknown",
+        object_type: str = "unknown",
+        confidence: float = 1.0,
+    ):
         """
         Update object position from detection results.
 
@@ -358,7 +381,7 @@ class WorldState:
                     position=position,
                     color=color,
                     object_type=object_type,
-                    confidence=confidence
+                    confidence=confidence,
                 )
             else:
                 obj = self._objects[object_id]
@@ -370,7 +393,9 @@ class WorldState:
 
             logger.debug(f"Updated object {object_id} at {position}")
 
-    def get_object_position(self, object_id: str) -> Optional[Tuple[float, float, float]]:
+    def get_object_position(
+        self, object_id: str
+    ) -> Optional[Tuple[float, float, float]]:
         """
         Get object position.
 
@@ -422,9 +447,14 @@ class WorldState:
                 self._objects[object_id].grasped_by = None
                 logger.info(f"Object {object_id} released")
 
-    def register_object(self, object_id: str, object_type: str = "unknown",
-                        position: Tuple[float, float, float] = (0, 0, 0),
-                        graspable: bool = True, **kwargs):
+    def register_object(
+        self,
+        object_id: str,
+        object_type: str = "unknown",
+        position: Tuple[float, float, float] = (0, 0, 0),
+        graspable: bool = True,
+        **kwargs,
+    ):
         """
         Register a new object (simplified interface for tests).
 
@@ -532,11 +562,13 @@ class WorldState:
             self._pending_commands[request_id] = {
                 "command": command,
                 "timestamp": time.time(),
-                "status": "pending"
+                "status": "pending",
             }
             logger.debug(f"Registered command {request_id}")
 
-    def update_command_status(self, request_id: int, status: str, result: Optional[Any] = None):
+    def update_command_status(
+        self, request_id: int, status: str, result: Optional[Any] = None
+    ):
         """
         Update status of a tracked command.
 

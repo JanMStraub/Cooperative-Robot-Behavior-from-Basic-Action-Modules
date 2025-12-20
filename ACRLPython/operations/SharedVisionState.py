@@ -262,9 +262,7 @@ class SharedVisionState:
             logging.info(f"Robot {robot_id} released object {object_id}")
             return True
 
-    def get_available_objects(
-        self, color: Optional[str] = None
-    ) -> List[ClaimedObject]:
+    def get_available_objects(self, color: Optional[str] = None) -> List[ClaimedObject]:
         """
         Get list of objects not currently claimed.
 
@@ -337,7 +335,9 @@ class SharedVisionState:
         """
         with self.lock:
             if object_id not in self.detections:
-                logging.warning(f"Cannot resolve conflict for unknown object: {object_id}")
+                logging.warning(
+                    f"Cannot resolve conflict for unknown object: {object_id}"
+                )
                 return robot1_id  # Default to first robot
 
             obj = self.detections[object_id]
@@ -366,9 +366,7 @@ class SharedVisionState:
                 else:
                     # Too close to call, use tie-breaker (alphabetical)
                     winner = robot1_id if robot1_id < robot2_id else robot2_id
-                    logging.info(
-                        f"Conflict tie-breaker (distances equal): {winner}"
-                    )
+                    logging.info(f"Conflict tie-breaker (distances equal): {winner}")
                     return winner
             else:
                 # "first_claim" strategy: first robot wins
@@ -421,7 +419,9 @@ class SharedVisionState:
         """
         with self.lock:
             total = len(self.detections)
-            claimed = sum(1 for obj in self.detections.values() if obj.claimed_by is not None)
+            claimed = sum(
+                1 for obj in self.detections.values() if obj.claimed_by is not None
+            )
             available = total - claimed
 
             return {

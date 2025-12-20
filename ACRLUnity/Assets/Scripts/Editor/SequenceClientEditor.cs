@@ -12,12 +12,10 @@ namespace EditorScripts
     public class SequenceClientEditor : Editor
     {
         // Styling
-        private GUIStyle _headerStyle;
         private GUIStyle _subHeaderStyle;
         private GUIStyle _buttonStyle;
         private GUIStyle _successButtonStyle;
         private GUIStyle _warningButtonStyle;
-        private GUIStyle _dangerButtonStyle;
         private GUIStyle _boxStyle;
         private GUIStyle _statusBoxStyle;
         private bool _stylesInitialized = false;
@@ -32,7 +30,6 @@ namespace EditorScripts
         private readonly Color _warningColor = new Color(1.0f, 0.7f, 0.0f);
         private readonly Color _errorColor = new Color(0.9f, 0.3f, 0.3f);
         private readonly Color _infoColor = new Color(0.4f, 0.7f, 1.0f);
-        private readonly Color _sectionBgColor = new Color(0.22f, 0.22f, 0.22f);
 
         /// <summary>
         /// Initialize custom styles
@@ -42,60 +39,44 @@ namespace EditorScripts
             if (_stylesInitialized && _boxStyle != null)
                 return;
 
-            _headerStyle = new GUIStyle(EditorStyles.boldLabel)
-            {
-                fontSize = 18,
-                alignment = TextAnchor.MiddleCenter,
-                normal = { textColor = _infoColor },
-                fontStyle = FontStyle.Bold,
-                padding = new RectOffset(0, 0, 5, 5),
-            };
-
             _subHeaderStyle = new GUIStyle(EditorStyles.boldLabel)
             {
                 fontSize = 12,
                 normal = { textColor = new Color(0.7f, 0.7f, 0.7f) },
-                padding = new RectOffset(5, 5, 3, 3),
+                padding = new RectOffset(5, 5, 5, 5),
             };
 
             _buttonStyle = new GUIStyle(GUI.skin.button)
             {
-                fontSize = 11,
-                fixedHeight = 28,
-                margin = new RectOffset(2, 2, 2, 2),
+                fontSize = 12,
+                fixedHeight = 20,
+                margin = new RectOffset(5, 5, 5, 5),
             };
 
             _successButtonStyle = new GUIStyle(GUI.skin.button)
             {
-                fontSize = 14,
-                fixedHeight = 40,
+                fontSize = 12,
+                fixedHeight = 20,
                 fontStyle = FontStyle.Bold,
                 margin = new RectOffset(5, 5, 5, 5),
             };
 
             _warningButtonStyle = new GUIStyle(GUI.skin.button)
             {
-                fontSize = 11,
-                fixedHeight = 28,
-                margin = new RectOffset(2, 2, 2, 2),
-            };
-
-            _dangerButtonStyle = new GUIStyle(GUI.skin.button)
-            {
-                fontSize = 11,
-                fixedHeight = 28,
-                margin = new RectOffset(2, 2, 2, 2),
+                fontSize = 12,
+                fixedHeight = 20,
+                margin = new RectOffset(5, 5, 5, 5),
             };
 
             _boxStyle = new GUIStyle(EditorStyles.helpBox)
             {
-                padding = new RectOffset(10, 10, 10, 10),
+                padding = new RectOffset(5, 5, 5, 5),
                 margin = new RectOffset(0, 0, 5, 5),
             };
 
             _statusBoxStyle = new GUIStyle(EditorStyles.helpBox)
             {
-                padding = new RectOffset(8, 8, 8, 8),
+                padding = new RectOffset(5, 5, 5, 5),
                 margin = new RectOffset(0, 0, 3, 3),
             };
 
@@ -111,19 +92,6 @@ namespace EditorScripts
 
             SequenceClient client = (SequenceClient)target;
 
-            // Title Section
-            EditorGUILayout.Space(5);
-            DrawSection(() =>
-            {
-                EditorGUILayout.LabelField("Sequence Client", _headerStyle);
-                EditorGUILayout.LabelField(
-                    "Send natural language commands to control robots",
-                    new GUIStyle(EditorStyles.centeredGreyMiniLabel) { alignment = TextAnchor.MiddleCenter }
-                );
-            });
-
-            EditorGUILayout.Space(5);
-
             // Connection Status
             DrawConnectionStatus(client);
 
@@ -132,7 +100,6 @@ namespace EditorScripts
             // Default Inspector (settings)
             DrawSection(() =>
             {
-                EditorGUILayout.LabelField("Settings", _subHeaderStyle);
                 DrawDefaultInspector();
             });
 
@@ -144,19 +111,13 @@ namespace EditorScripts
                 EditorGUILayout.LabelField("Actions", _subHeaderStyle);
                 EditorGUILayout.Space(5);
 
-                // Send Sequence Button (large and prominent)
+                EditorGUILayout.BeginHorizontal();
                 GUI.backgroundColor = _successColor;
                 if (GUILayout.Button("Send Prompt", _successButtonStyle))
                 {
                     client.SendSequence();
                 }
-                GUI.backgroundColor = Color.white;
-
-                EditorGUILayout.Space(3);
-
-                // Secondary actions row
-                EditorGUILayout.BeginHorizontal();
-
+                
                 GUI.backgroundColor = _warningColor;
                 if (GUILayout.Button("Clear Prompt", _warningButtonStyle))
                 {
@@ -170,7 +131,10 @@ namespace EditorScripts
             EditorGUILayout.Space(5);
 
             // Quick Action Templates
-            _showQuickActions = EditorGUILayout.BeginFoldoutHeaderGroup(_showQuickActions, "Quick Action Templates");
+            _showQuickActions = EditorGUILayout.BeginFoldoutHeaderGroup(
+                _showQuickActions,
+                "Quick Action Templates"
+            );
             if (_showQuickActions)
             {
                 DrawQuickActionTemplates(client);
@@ -180,7 +144,10 @@ namespace EditorScripts
             EditorGUILayout.Space(5);
 
             // Last Result Section
-            _showLastResult = EditorGUILayout.BeginFoldoutHeaderGroup(_showLastResult, "Last Sequence Result");
+            _showLastResult = EditorGUILayout.BeginFoldoutHeaderGroup(
+                _showLastResult,
+                "Last Sequence Result"
+            );
             if (_showLastResult)
             {
                 DrawLastResult(client);
@@ -190,7 +157,10 @@ namespace EditorScripts
             EditorGUILayout.Space(5);
 
             // Recent Commands Section
-            _showRecentCommands = EditorGUILayout.BeginFoldoutHeaderGroup(_showRecentCommands, "Recent Commands");
+            _showRecentCommands = EditorGUILayout.BeginFoldoutHeaderGroup(
+                _showRecentCommands,
+                "Recent Commands"
+            );
             if (_showRecentCommands)
             {
                 DrawRecentCommands(client);
@@ -234,7 +204,10 @@ namespace EditorScripts
             else if (client.IsConnected)
             {
                 GUI.color = _successColor;
-                EditorGUILayout.LabelField($"Connected ({client.ConnectionInfo})", EditorStyles.boldLabel);
+                EditorGUILayout.LabelField(
+                    $"Connected ({client.ConnectionInfo})",
+                    EditorStyles.boldLabel
+                );
             }
             else
             {
@@ -278,7 +251,7 @@ namespace EditorScripts
             }
             EditorGUILayout.EndHorizontal();
 
-            EditorGUILayout.Space(8);
+            EditorGUILayout.Space(5);
 
             // Compound Actions
             EditorGUILayout.LabelField("Compound Actions", EditorStyles.miniBoldLabel);
@@ -293,22 +266,24 @@ namespace EditorScripts
             }
             EditorGUILayout.EndHorizontal();
 
-            EditorGUILayout.Space(8);
+            EditorGUILayout.Space(5);
 
             // Pick & Place
             EditorGUILayout.LabelField("Pick & Place Sequences", EditorStyles.miniBoldLabel);
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("Pick Sequence", _buttonStyle))
             {
-                client.Prompt = "move to (0.3, 0.15, 0.05), then close the gripper, then move to (0.3, 0.15, 0.2)";
+                client.Prompt =
+                    "move to (0.3, 0.15, 0.05), then close the gripper, then move to (0.3, 0.15, 0.2)";
             }
             if (GUILayout.Button("Place Sequence", _buttonStyle))
             {
-                client.Prompt = "move to (0.1, 0.3, 0.2), then move to (0.1, 0.3, 0.05), then open the gripper, then move to (0.1, 0.3, 0.2)";
+                client.Prompt =
+                    "move to (0.1, 0.3, 0.2), then move to (0.1, 0.3, 0.05), then open the gripper, then move to (0.1, 0.3, 0.2)";
             }
             EditorGUILayout.EndHorizontal();
 
-            EditorGUILayout.Space(8);
+            EditorGUILayout.Space(5);
 
             // Perception
             EditorGUILayout.LabelField("Perception Commands", EditorStyles.miniBoldLabel);
@@ -339,7 +314,10 @@ namespace EditorScripts
 
             if (client.LastResult == null)
             {
-                EditorGUILayout.LabelField("No results yet - send a sequence!", EditorStyles.centeredGreyMiniLabel);
+                EditorGUILayout.LabelField(
+                    "No results yet - send a sequence!",
+                    EditorStyles.centeredGreyMiniLabel
+                );
             }
             else
             {
@@ -364,7 +342,10 @@ namespace EditorScripts
 
                 // Stats row
                 EditorGUILayout.BeginHorizontal();
-                EditorGUILayout.LabelField($"Commands: {result.completed_commands}/{result.total_commands}", GUILayout.Width(120));
+                EditorGUILayout.LabelField(
+                    $"Commands: {result.completed_commands}/{result.total_commands}",
+                    GUILayout.Width(120)
+                );
                 EditorGUILayout.LabelField($"Duration: {result.total_duration_ms:F0}ms");
                 EditorGUILayout.EndHorizontal();
 
@@ -373,7 +354,10 @@ namespace EditorScripts
                 {
                     EditorGUILayout.Space(5);
                     GUI.color = _errorColor;
-                    EditorGUILayout.LabelField($"Error: {result.error}", EditorStyles.wordWrappedMiniLabel);
+                    EditorGUILayout.LabelField(
+                        $"Error: {result.error}",
+                        EditorStyles.wordWrappedMiniLabel
+                    );
                     GUI.color = Color.white;
                 }
 
@@ -418,7 +402,10 @@ namespace EditorScripts
                         if (!string.IsNullOrEmpty(cmdResult.error))
                         {
                             GUI.color = _errorColor;
-                            EditorGUILayout.LabelField($"  └ {cmdResult.error}", EditorStyles.miniLabel);
+                            EditorGUILayout.LabelField(
+                                $"  └ {cmdResult.error}",
+                                EditorStyles.miniLabel
+                            );
                             GUI.color = Color.white;
                         }
                     }
@@ -437,7 +424,10 @@ namespace EditorScripts
 
             if (client.RecentCommands == null || client.RecentCommands.Count == 0)
             {
-                EditorGUILayout.LabelField("No recent commands", EditorStyles.centeredGreyMiniLabel);
+                EditorGUILayout.LabelField(
+                    "No recent commands",
+                    EditorStyles.centeredGreyMiniLabel
+                );
             }
             else
             {

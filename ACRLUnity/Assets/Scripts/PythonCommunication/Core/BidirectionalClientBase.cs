@@ -17,7 +17,8 @@ namespace PythonCommunication.Core
     /// - Request/response correlation via request_id
     /// </summary>
     /// <typeparam name="TResponse">Response data type</typeparam>
-    public abstract class BidirectionalClientBase<TResponse> : TCPClientBase where TResponse : class
+    public abstract class BidirectionalClientBase<TResponse> : TCPClientBase
+        where TResponse : class
     {
         // Response queue for thread-safe communication
         protected Queue<TResponse> _responseQueue = new Queue<TResponse>();
@@ -28,7 +29,8 @@ namespace PythonCommunication.Core
         protected bool _receiveShouldRun = false;
 
         // Pending requests for correlation
-        protected Dictionary<uint, Action<TResponse>> _pendingRequests = new Dictionary<uint, Action<TResponse>>();
+        protected Dictionary<uint, Action<TResponse>> _pendingRequests =
+            new Dictionary<uint, Action<TResponse>>();
         protected readonly object _pendingLock = new object();
 
         // Log prefix for this client
@@ -57,7 +59,7 @@ namespace PythonCommunication.Core
             _receiveThread = new Thread(ReceiveLoop)
             {
                 IsBackground = true,
-                Name = $"{LogPrefix}_ReceiveThread"
+                Name = $"{LogPrefix}_ReceiveThread",
             };
             _receiveThread.Start();
 

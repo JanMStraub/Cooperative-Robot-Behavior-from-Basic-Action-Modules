@@ -23,6 +23,10 @@ namespace PythonCommunication
         [SerializeField]
         private bool _logResults = true;
 
+        [Tooltip("Enable verbose logging (includes completion sends)")]
+        [SerializeField]
+        private bool _verboseLogging = false;
+
         // Events - All existing events preserved
         public event Action<LLMResult> OnLLMResultReceived;
         public event Action<DepthResult> OnDepthResultReceived;
@@ -50,6 +54,7 @@ namespace PythonCommunication
                 resultsConnObj.transform.SetParent(transform);
                 _resultsConnection = resultsConnObj.AddComponent<ResultsConnection>();
                 _resultsConnection.Initialize(this);
+                _resultsConnection.SetVerboseLogging(_verboseLogging);
 
                 Debug.Log($"{_logPrefix} Initialized - all results route through port 5010");
             }
@@ -88,22 +93,6 @@ namespace PythonCommunication
         #region Public API
 
         /// <summary>
-        /// Check if results connection (port 5010) is active
-        /// </summary>
-        public bool IsResultsConnected =>
-            _resultsConnection != null && _resultsConnection.IsConnected;
-
-        /// <summary>
-        /// Check if detection connection is active (legacy - now same as IsResultsConnected)
-        /// </summary>
-        public bool IsDetectionConnected => IsResultsConnected;
-
-        /// <summary>
-        /// Check if fully connected (legacy - now just checks single connection)
-        /// </summary>
-        public bool IsFullyConnected => IsResultsConnected;
-
-        /// <summary>
         /// Send a completion message back to Python on the results connection.
         /// Used by PythonCommandHandler to notify Python when commands complete.
         /// </summary>
@@ -114,11 +103,26 @@ namespace PythonCommunication
         {
             if (_resultsConnection == null || !_resultsConnection.IsConnected)
             {
-                Debug.LogWarning($"{_logPrefix} Cannot send completion - results connection not available");
+                Debug.LogWarning(
+                    $"{_logPrefix} Cannot send completion - results connection not available"
+                );
                 return false;
             }
 
             return _resultsConnection.SendCompletion(completionJson, requestId);
+        }
+
+        /// <summary>
+        /// Enable or disable verbose logging at runtime
+        /// </summary>
+        /// <param name="verbose">True to enable verbose logging</param>
+        public void SetVerboseLogging(bool verbose)
+        {
+            _verboseLogging = verbose;
+            if (_resultsConnection != null)
+            {
+                _resultsConnection.SetVerboseLogging(verbose);
+            }
         }
 
         #endregion
@@ -215,15 +219,22 @@ namespace PythonCommunication
 
             private UnifiedPythonReceiver _parent;
             private Thread _receiveThread;
-            private Queue<(uint requestId, string json)> _resultQueue = new Queue<(uint requestId, string json)>();
+            private Queue<(uint requestId, string json)> _resultQueue =
+                new Queue<(uint requestId, string json)>();
             private readonly object _queueLock = new object();
             private readonly object _writeLock = new object();
+            private bool _verboseLogging;
 
             public void Initialize(UnifiedPythonReceiver parent)
             {
                 _parent = parent;
                 _serverPort = CommunicationConstants.LLM_RESULTS_PORT; // Port 5010 - LLM results from RunAnalyzer
                 _autoConnect = true;
+            }
+
+            public void SetVerboseLogging(bool verbose)
+            {
+                _verboseLogging = verbose;
             }
 
             protected override void Update()
@@ -287,7 +298,11 @@ namespace PythonCommunication
                     while (_shouldRun && _isConnected)
                     {
                         // Read Protocol V2 header: [type:1][request_id:4]
-                        int bytesRead = ReadExactly(_stream, headerBuffer, UnityProtocol.HEADER_SIZE);
+                        int bytesRead = ReadExactly(
+                            _stream,
+                            headerBuffer,
+                            UnityProtocol.HEADER_SIZE
+                        );
                         if (bytesRead < UnityProtocol.HEADER_SIZE)
                         {
                             Debug.LogWarning($"{_logPrefix} Connection closed by server");
@@ -312,7 +327,9 @@ namespace PythonCommunication
                         bytesRead = ReadExactly(_stream, lengthBuffer, UnityProtocol.INT_SIZE);
                         if (bytesRead < UnityProtocol.INT_SIZE)
                         {
-                            Debug.LogWarning($"{_logPrefix} Connection closed while reading JSON length");
+                            Debug.LogWarning(
+                                $"{_logPrefix} Connection closed while reading JSON length"
+                            );
                             break;
                         }
 
@@ -348,7 +365,9 @@ namespace PythonCommunication
                             }
 
 #if UNITY_EDITOR
-                            Debug.Log($"{_logPrefix} [req={requestId}] Received result ({dataLength} bytes)");
+                            Debug.Log(
+                                $"{_logPrefix} [req={requestId}] Received result ({dataLength} bytes)"
+                            );
 #endif
                         }
                         catch (Exception parseEx)
@@ -394,7 +413,13 @@ namespace PythonCommunication
                 if (json.Contains("\"command_type\""))
                 {
                     // Parse as RobotCommand and route to PythonCommandHandler
-                    if (!JsonParser.TryParseWithLogging<RobotCommand>(json, out RobotCommand command, _logPrefix))
+                    if (
+                        !JsonParser.TryParseWithLogging<RobotCommand>(
+                            json,
+                            out RobotCommand command,
+                            _logPrefix
+                        )
+                    )
                     {
                         return;
                     }
@@ -406,13 +431,21 @@ namespace PythonCommunication
                     }
                     else
                     {
-                        Debug.LogWarning($"{_logPrefix} PythonCommandHandler not available - command {command.command_type} not processed");
+                        Debug.LogWarning(
+                            $"{_logPrefix} PythonCommandHandler not available - command {command.command_type} not processed"
+                        );
                     }
                 }
                 else if (json.Contains("\"detections\""))
                 {
                     // Parse as DepthResult
-                    if (!JsonParser.TryParseWithLogging<DepthResult>(json, out DepthResult depthResult, _logPrefix))
+                    if (
+                        !JsonParser.TryParseWithLogging<DepthResult>(
+                            json,
+                            out DepthResult depthResult,
+                            _logPrefix
+                        )
+                    )
                     {
                         return;
                     }
@@ -422,7 +455,13 @@ namespace PythonCommunication
                 else
                 {
                     // Parse as LLM result
-                    if (!JsonParser.TryParseWithLogging<LLMResult>(json, out LLMResult llmResult, _logPrefix))
+                    if (
+                        !JsonParser.TryParseWithLogging<LLMResult>(
+                            json,
+                            out LLMResult llmResult,
+                            _logPrefix
+                        )
+                    )
                     {
                         return;
                     }
@@ -470,12 +509,19 @@ namespace PythonCommunication
                         _stream.Flush();
                     }
 
-                    Debug.Log($"{_logPrefix} [req={requestId}] Sent completion ({message.Length} bytes)");
+                    if (_verboseLogging)
+                    {
+                        Debug.Log(
+                            $"{_logPrefix} [req={requestId}] Sent completion ({message.Length} bytes)"
+                        );
+                    }
                     return true;
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogError($"{_logPrefix} [req={requestId}] Error sending completion: {ex.Message}");
+                    Debug.LogError(
+                        $"{_logPrefix} [req={requestId}] Error sending completion: {ex.Message}"
+                    );
                     return false;
                 }
             }

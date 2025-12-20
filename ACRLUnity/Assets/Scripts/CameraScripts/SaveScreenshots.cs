@@ -1,11 +1,8 @@
-// SaveScreenshots.cs - Attach to camera in Unity scene
-using UnityEngine;
-using System.IO;
 using System.Collections;
 using System.Collections.Generic;
-using System.Text;
-using NUnit.Framework.Constraints;
+using System.IO;
 using Robotics;
+using UnityEngine;
 
 /// <summary>
 /// Captures screenshots of cubes from various angles by rotating camera around them
@@ -16,43 +13,50 @@ public class SaveScreenshots : MonoBehaviour
     public int numScreenshots = 10;
     public string outputDir = "YOLODataset/images";
     public string labelsDir = "YOLODataset/labels";
-    public GameObject[] objectsToLabel;  // Assign all objects to label (cubes, robot parts, etc.)
-    public RobotController[] robots;     // Assign robot controllers for joint randomization
+    public GameObject[] objectsToLabel; // Assign all objects to label (cubes, robot parts, etc.)
+    public RobotController[] robots; // Assign robot controllers for joint randomization
 
     [Header("Dataset Split Settings")]
     [Range(0f, 1f)]
-    public float trainSplit = 0.8f;  // 80% for training
+    public float trainSplit = 0.8f; // 80% for training
+
     [Range(0f, 1f)]
-    public float testSplit = 0.1f;   // 10% for testing
+    public float testSplit = 0.1f; // 10% for testing
+
     [Range(0f, 1f)]
-    public float validSplit = 0.1f;  // 10% for validation
+    public float validSplit = 0.1f; // 10% for validation
 
     [Header("Camera Orbit Settings")]
-    public float orbitRadius = 0.8f;  // Distance from center point
-    public float minElevation = 15f;  // Minimum camera elevation angle
-    public float maxElevation = 45f;  // Maximum camera elevation angle
-    public Vector3 orbitCenter = new Vector3(0f, 0.3f, 0f);  // Center point to orbit around
+    public float orbitRadius = 0.8f; // Distance from center point
+    public float minElevation = 15f; // Minimum camera elevation angle
+    public float maxElevation = 45f; // Maximum camera elevation angle
+    public Vector3 orbitCenter = new Vector3(0f, 0.3f, 0f); // Center point to orbit around
 
     [Header("Random Angle Variation")]
-    public float pitchVariation = 5f;  // Random pitch offset
-    public float yawVariation = 5f;    // Random yaw offset
+    public float pitchVariation = 5f; // Random pitch offset
+    public float yawVariation = 5f; // Random yaw offset
 
     [Header("Capture Settings")]
-    public int captureWidth = 640;   // Image width (YOLO standard)
-    public int captureHeight = 640;  // Image height (YOLO standard)
+    public int captureWidth = 640; // Image width (YOLO standard)
+    public int captureHeight = 640; // Image height (YOLO standard)
+
     [Range(0, 100)]
-    public int jpegQuality = 85;     // JPEG compression quality
+    public int jpegQuality = 85; // JPEG compression quality
 
     [Header("YOLO Label Settings")]
-    public bool generateLabels = true;  // Auto-generate YOLO labels
-    public string[] classNames;         // Class names for mapping (e.g., "red", "blue", "green")
+    public bool generateLabels = true; // Auto-generate YOLO labels
+    public string[] classNames; // Class names for mapping (e.g., "red", "blue", "green")
 
     [Range(0f, 1f)]
-    [Tooltip("Minimum visible area fraction (0-1) for object to be labeled. 0 = any visibility, 1 = fully visible only")]
+    [Tooltip(
+        "Minimum visible area fraction (0-1) for object to be labeled. 0 = any visibility, 1 = fully visible only"
+    )]
     public float minVisibleAreaThreshold = 0.1f;
 
     [Range(0f, 0.1f)]
-    [Tooltip("Minimum bbox width/height in viewport space (0-1). Filters out tiny slivers at edges. Default 0.02 = 2% of image")]
+    [Tooltip(
+        "Minimum bbox width/height in viewport space (0-1). Filters out tiny slivers at edges. Default 0.02 = 2% of image"
+    )]
     public float minBBoxSize = 0.02f;
 
     [Tooltip("Require object center to be in viewport for labeling")]
@@ -62,7 +66,9 @@ public class SaveScreenshots : MonoBehaviour
     public bool enableOcclusionDetection = true;
 
     [Range(0f, 1f)]
-    [Tooltip("Minimum fraction of sampled points that must be visible (0 = any point visible, 1 = all points visible)")]
+    [Tooltip(
+        "Minimum fraction of sampled points that must be visible (0 = any point visible, 1 = all points visible)"
+    )]
     public float occlusionVisibilityThreshold = 0.3f;
 
     private int captureCount = 0;
@@ -93,7 +99,9 @@ public class SaveScreenshots : MonoBehaviour
         float totalSplit = trainSplit + testSplit + validSplit;
         if (Mathf.Abs(totalSplit - 1f) > 0.01f)
         {
-            Debug.LogWarning($"Split ratios don't sum to 1.0 (current: {totalSplit:F2}). Normalizing...");
+            Debug.LogWarning(
+                $"Split ratios don't sum to 1.0 (current: {totalSplit:F2}). Normalizing..."
+            );
             trainSplit /= totalSplit;
             testSplit /= totalSplit;
             validSplit /= totalSplit;
@@ -177,34 +185,52 @@ public class SaveScreenshots : MonoBehaviour
         // (e.g., "gripperbase" must be checked before "base")
 
         // Gripper parts (most specific)
-        if (cleaned.Contains("gripperbase")) return "gripperbase";
-        if (cleaned.Contains("gripperjoint")) return "gripperjoint";
-        if (cleaned.Contains("jawleft")) return "gripperjawleft";
-        if (cleaned.Contains("jawright")) return "gripperjawright";
+        if (cleaned.Contains("gripperbase"))
+            return "gripperbase";
+        if (cleaned.Contains("gripperjoint"))
+            return "gripperjoint";
+        if (cleaned.Contains("jawleft"))
+            return "gripperjawleft";
+        if (cleaned.Contains("jawright"))
+            return "gripperjawright";
 
         // Wrist parts
-        if (cleaned.Contains("wrist1")) return "wrist1";
-        if (cleaned.Contains("wrist2")) return "wrist2";
-        if (cleaned.Contains("wrist3")) return "wrist3";
+        if (cleaned.Contains("wrist1"))
+            return "wrist1";
+        if (cleaned.Contains("wrist2"))
+            return "wrist2";
+        if (cleaned.Contains("wrist3"))
+            return "wrist3";
 
         // Other robot parts
-        if (cleaned.Contains("shoulder")) return "shoulder";
-        if (cleaned.Contains("elbow")) return "elbow";
-        if (cleaned.Contains("plate")) return "plate";
-        if (cleaned.Contains("base")) return "base";  // After gripperbase check
-        if (cleaned.Contains("joint")) return "joint";  // After gripperjoint check
+        if (cleaned.Contains("shoulder"))
+            return "shoulder";
+        if (cleaned.Contains("elbow"))
+            return "elbow";
+        if (cleaned.Contains("plate"))
+            return "plate";
+        if (cleaned.Contains("base"))
+            return "base"; // After gripperbase check
+        if (cleaned.Contains("joint"))
+            return "joint"; // After gripperjoint check
 
         // Generic robot
-        if (cleaned.Contains("robot")) return "robot";
+        if (cleaned.Contains("robot"))
+            return "robot";
 
         // Field objects
-        if (cleaned.Contains("fielda")) return "fielda";
-        if (cleaned.Contains("fieldb")) return "fieldb";
-        if (cleaned.Contains("fieldc")) return "fieldc";
+        if (cleaned.Contains("fielda"))
+            return "fielda";
+        if (cleaned.Contains("fieldb"))
+            return "fieldb";
+        if (cleaned.Contains("fieldc"))
+            return "fieldc";
 
         // Cube colors (check last to avoid conflicts with robot parts)
-        if (cleaned.Contains("red")) return "red";
-        if (cleaned.Contains("blue")) return "blue";
+        if (cleaned.Contains("red"))
+            return "red";
+        if (cleaned.Contains("blue"))
+            return "blue";
 
         // Fallback: return first word
         string[] parts = objectName.Split('_', ' ');
@@ -272,8 +298,8 @@ public class SaveScreenshots : MonoBehaviour
 
         // Add slight random angle variation
         transform.Rotate(
-            Random.Range(-pitchVariation, pitchVariation),  // Pitch
-            Random.Range(-yawVariation, yawVariation),      // Yaw
+            Random.Range(-pitchVariation, pitchVariation), // Pitch
+            Random.Range(-yawVariation, yawVariation), // Yaw
             0f,
             Space.Self
         );
@@ -392,8 +418,12 @@ public class SaveScreenshots : MonoBehaviour
                 }
 
                 // Count points actually inside viewport [0,1]
-                if (viewportPoint.x >= 0f && viewportPoint.x <= 1f &&
-                    viewportPoint.y >= 0f && viewportPoint.y <= 1f)
+                if (
+                    viewportPoint.x >= 0f
+                    && viewportPoint.x <= 1f
+                    && viewportPoint.y >= 0f
+                    && viewportPoint.y <= 1f
+                )
                 {
                     cornersInViewport++;
                 }
@@ -461,8 +491,12 @@ public class SaveScreenshots : MonoBehaviour
             // Optional: require center to be in viewport
             if (requireCenterInViewport)
             {
-                if (x_center_unity < 0f || x_center_unity > 1f ||
-                    y_center_unity < 0f || y_center_unity > 1f)
+                if (
+                    x_center_unity < 0f
+                    || x_center_unity > 1f
+                    || y_center_unity < 0f
+                    || y_center_unity > 1f
+                )
                     continue;
             }
 
@@ -479,10 +513,13 @@ public class SaveScreenshots : MonoBehaviour
             string className = ExtractClassName(obj.name);
 
             // Debug: log what we're detecting
-            Debug.Log($"Labeled {className} object '{obj.name}': center=({x_center_yolo:F3}, {y_center_yolo:F3}), size=({width_yolo:F3}, {height_yolo:F3}), visible={visibleFraction:F2}");
+            Debug.Log(
+                $"Labeled {className} object '{obj.name}': center=({x_center_yolo:F3}, {y_center_yolo:F3}), size=({width_yolo:F3}, {height_yolo:F3}), visible={visibleFraction:F2}"
+            );
 
             // Format: class_id x_center y_center width height
-            string label = $"{classId} {x_center_yolo:F6} {y_center_yolo:F6} {width_yolo:F6} {height_yolo:F6}";
+            string label =
+                $"{classId} {x_center_yolo:F6} {y_center_yolo:F6} {width_yolo:F6} {height_yolo:F6}";
             labels.Add(label);
         }
 
@@ -591,7 +628,7 @@ public class SaveScreenshots : MonoBehaviour
             center + new Vector3(extents.x, -extents.y, -extents.z),
             center + new Vector3(extents.x, -extents.y, extents.z),
             center + new Vector3(extents.x, extents.y, -extents.z),
-            center + new Vector3(extents.x, extents.y, extents.z)
+            center + new Vector3(extents.x, extents.y, extents.z),
         };
     }
 
@@ -620,10 +657,20 @@ public class SaveScreenshots : MonoBehaviour
             float distanceToCamera = directionToCamera.magnitude;
 
             // Raycast from point towards camera
-            if (Physics.Raycast(worldPoint, directionToCamera.normalized, out RaycastHit hit, distanceToCamera))
+            if (
+                Physics.Raycast(
+                    worldPoint,
+                    directionToCamera.normalized,
+                    out RaycastHit hit,
+                    distanceToCamera
+                )
+            )
             {
                 // Check if the hit object is part of our target object or its children
-                if (hit.collider.gameObject == obj || hit.collider.transform.IsChildOf(obj.transform))
+                if (
+                    hit.collider.gameObject == obj
+                    || hit.collider.transform.IsChildOf(obj.transform)
+                )
                 {
                     visiblePoints++;
                 }

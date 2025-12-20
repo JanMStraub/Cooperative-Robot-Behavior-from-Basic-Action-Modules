@@ -1,65 +1,11 @@
 using System;
-using System.Collections;
 using System.Net.Sockets;
 using Core;
 using PythonCommunication;
 using UnityEngine;
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
 
 namespace Vision
 {
-#if UNITY_EDITOR
-    [CustomEditor(typeof(StereoCameraController))]
-    public class StereoCameraControllerEditor : Editor
-    {
-        public override void OnInspectorGUI()
-        {
-            DrawDefaultInspector();
-            var controller = (StereoCameraController)target;
-
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Capture Controls", EditorStyles.boldLabel);
-
-            // Capture button
-            if (GUILayout.Button("Capture & Send for Depth Detection", GUILayout.Height(30)))
-                controller.CaptureAndSend();
-
-            if (!Application.isPlaying)
-                return;
-
-            bool isConnected =
-                UnifiedPythonSender.Instance != null
-                && UnifiedPythonSender.Instance.IsStereoConnected;
-            string statusText = isConnected ? "Connected to Stereo Detector" : "Disconnected";
-            Color statusColor = isConnected ? new Color(0.6f, 1f, 0.6f) : new Color(1f, 0.6f, 0.6f);
-
-            var originalColor = GUI.color;
-            GUI.color = statusColor;
-            EditorGUILayout.TextField("Stereo Server Status", statusText, EditorStyles.boldLabel);
-            GUI.color = originalColor;
-
-            // Processing indicator
-            if (controller.IsProcessing)
-            {
-                GUI.color = new Color(1f, 0.9f, 0.4f);
-                EditorGUILayout.TextField(
-                    "Detection Status",
-                    "Processing...",
-                    EditorStyles.boldLabel
-                );
-                GUI.color = originalColor;
-                Repaint();
-            }
-            else
-            {
-                EditorGUILayout.TextField("Detection Status", "Idle");
-            }
-        }
-    }
-#endif
-
     /// <summary>
     /// Metadata for stereo camera configuration
     /// </summary>
@@ -82,11 +28,11 @@ namespace Vision
         [Header("Image Settings")]
         [SerializeField]
         [Tooltip("Width of captured images in pixels")]
-        private int _imageWidth = 1280; // Good balance of quality and performance
+        private int _imageWidth = 1920; // Good balance of quality and performance
 
         [SerializeField]
         [Tooltip("Height of captured images in pixels")]
-        private int _imageHeight = 960; // Good balance of quality and performance
+        private int _imageHeight = 1080; // Good balance of quality and performance
 
         [SerializeField]
         [Tooltip("JPEG compression quality (1-100)")]
@@ -113,14 +59,6 @@ namespace Vision
         // Streaming state
         private float _streamingInterval;
         private float _timeSinceLastCapture = 0f;
-
-        // Events
-        public event Action<DepthResult> OnDepthResultReceived;
-
-        // Properties
-        public bool IsProcessing => _isProcessing;
-        public int CaptureCount => _captureCounter;
-        public string CameraId => _cameraPairId ?? name;
 
         // Camera
         private Camera _leftCamera;
@@ -171,7 +109,9 @@ namespace Vision
                 Transform leftChild = transform.GetChild(0);
                 Transform rightChild = transform.GetChild(1);
 
-                Debug.Log($"LeftChild: {leftChild.name}, rightChild: {rightChild.name}");
+                Debug.Log(
+                    $"{_logPrefix} LeftChild: {leftChild.name}, rightChild: {rightChild.name}"
+                );
 
                 _leftCamera = leftChild.GetComponent<Camera>();
                 _rightCamera = rightChild.GetComponent<Camera>();
@@ -242,7 +182,9 @@ namespace Vision
             _streamingInterval = 1.0f / _streamingFPS;
             if (_enableStreaming)
             {
-                Debug.Log($"{_logPrefix} Streaming enabled at {_streamingFPS} FPS (interval: {_streamingInterval:F3}s)");
+                Debug.Log(
+                    $"{_logPrefix} Streaming enabled at {_streamingFPS} FPS (interval: {_streamingInterval:F3}s)"
+                );
             }
         }
 
@@ -279,95 +221,7 @@ namespace Vision
             if (result.camera_id == _cameraPairId)
             {
                 _isProcessing = false;
-
-                // Forward to subscribers
-                OnDepthResultReceived?.Invoke(result);
             }
-        }
-
-        /// <summary>
-        /// Capture stereo pair and send for depth detection
-        /// </summary>
-        public void CaptureAndSend()
-        {
-            if (_isProcessing)
-            {
-                Debug.LogWarning($"{_logPrefix} Already processing a capture");
-                return;
-            }
-
-            if (!enabled)
-            {
-                Debug.LogWarning($"{_logPrefix} Component is disabled");
-                return;
-            }
-
-            StartCoroutine(CaptureAndSendCoroutine());
-        }
-
-        /// <summary>
-        /// Capture stereo pair and detect specific object types with filtering parameters.
-        /// This is called by PythonCommandHandler for the calculate_object_coordinates operation.
-        /// </summary>
-        /// <param name="objectTypes">Object types to detect (null for all)</param>
-        /// <param name="minConfidence">Minimum confidence threshold</param>
-        /// <param name="maxDistance">Maximum detection distance in meters</param>
-        public void CaptureAndDetect(string[] objectTypes, float minConfidence, float maxDistance)
-        {
-            // Store filter parameters for use in result processing
-            // Note: These could be sent as metadata to Python for server-side filtering
-            // For now, we trigger the capture and let Python handle filtering
-
-            if (objectTypes != null && objectTypes.Length > 0)
-            {
-                Debug.Log($"{_logPrefix} Detection filter: types=[{string.Join(", ", objectTypes)}], "
-                    + $"confidence>={minConfidence:F2}, distance<={maxDistance:F1}m");
-            }
-
-            // Trigger capture - filtering is handled by the Python stereo detector
-            CaptureAndSend();
-        }
-
-        /// <summary>
-        /// Coroutine to capture and send stereo pair
-        /// </summary>
-        private IEnumerator CaptureAndSendCoroutine()
-        {
-            _isProcessing = true;
-            float startTime = Time.realtimeSinceStartup;
-
-            try
-            {
-                // Check if sender is available
-                if (
-                    UnifiedPythonSender.Instance == null
-                    || !UnifiedPythonSender.Instance.IsConnected
-                )
-                {
-                    throw new Exception("UnifiedPythonSender not available or not connected");
-                }
-
-                // Send detect command via SequenceClient
-                bool success = UnifiedPythonSender.Instance.SendDetectCommand(_cameraPairId);
-
-                if (!success)
-                    throw new Exception("Failed to send detect command");
-
-                float captureTime = Time.realtimeSinceStartup - startTime;
-                _captureCounter++;
-
-                Debug.Log(
-                    $"{_logPrefix} Detect command sent for '{_cameraPairId}' in {captureTime:F2}s. "
-                        + $"Waiting for depth detection..."
-                );
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"{_logPrefix} Capture failed: {ex.Message}");
-                _isProcessing = false;
-            }
-
-            yield return null;
         }
 
         /// <summary>
@@ -377,9 +231,6 @@ namespace Vision
         /// <param name="cameraId">Camera pair ID to use in the message</param>
         public void CaptureAndSendToServer(string cameraId)
         {
-            
-            FindCameras();
-
             if (_leftCamera == null || _rightCamera == null)
             {
                 Debug.LogError($"{_logPrefix} Cameras not initialized");
@@ -398,11 +249,15 @@ namespace Vision
                     return;
                 }
 
+                _isProcessing = true;
+
                 // Send via TCP to StereoImageServer (port 5006)
                 SendStereoImagesTCP(cameraId, leftImage, rightImage);
 
                 _captureCounter++;
-                Debug.Log($"{_logPrefix} Sent stereo images for '{cameraId}' (L: {leftImage.Length} bytes, R: {rightImage.Length} bytes)");
+                Debug.Log(
+                    $"{_logPrefix} Sent stereo images for '{cameraId}' (L: {leftImage.Length} bytes, R: {rightImage.Length} bytes)"
+                );
             }
             catch (Exception ex)
             {
@@ -420,7 +275,10 @@ namespace Vision
             {
                 using (TcpClient client = new TcpClient())
                 {
-                    client.Connect("127.0.0.1", CommunicationConstants.STEREO_DETECTION_PORT);
+                    client.Connect(
+                        CommunicationConstants.SERVER_HOST,
+                        CommunicationConstants.STEREO_DETECTION_PORT
+                    );
                     NetworkStream stream = client.GetStream();
 
                     // Build message
@@ -452,23 +310,25 @@ namespace Vision
 
             string camLId = cameraPairId + "_L";
             string camRId = cameraPairId + "_R";
-            string prompt = "";
+            string prompt = ""; // Could be removed but Python protocol needs to be updated as well
 
             // Build metadata with camera transform (use left camera position)
             var metadata = new StereoMetadata
             {
                 baseline = GetStereoBaseline(),
                 fov = GetCameraFOV(),
-                camera_position = new float[] {
+                camera_position = new float[]
+                {
                     _leftCamera.transform.position.x,
                     _leftCamera.transform.position.y,
-                    _leftCamera.transform.position.z
+                    _leftCamera.transform.position.z,
                 },
-                camera_rotation = new float[] {
-                    _leftCamera.transform.eulerAngles.x,  // pitch
-                    _leftCamera.transform.eulerAngles.y,  // yaw
-                    _leftCamera.transform.eulerAngles.z   // roll
-                }
+                camera_rotation = new float[]
+                {
+                    _leftCamera.transform.eulerAngles.x, // pitch
+                    _leftCamera.transform.eulerAngles.y, // yaw
+                    _leftCamera.transform.eulerAngles.z, // roll
+                },
             };
             string metadataJson = JsonUtility.ToJson(metadata);
 
@@ -479,14 +339,23 @@ namespace Vision
             byte[] metadataBytes = System.Text.Encoding.UTF8.GetBytes(metadataJson);
 
             // Calculate total size
-            int totalSize = 1 + 4 // type + request_id
-                + 4 + cameraPairIdBytes.Length
-                + 4 + camLIdBytes.Length
-                + 4 + camRIdBytes.Length
-                + 4 + promptBytes.Length
-                + 4 + leftImage.Length
-                + 4 + rightImage.Length
-                + 4 + metadataBytes.Length;
+            int totalSize =
+                1
+                + 4 // type + request_id
+                + 4
+                + cameraPairIdBytes.Length
+                + 4
+                + camLIdBytes.Length
+                + 4
+                + camRIdBytes.Length
+                + 4
+                + promptBytes.Length
+                + 4
+                + leftImage.Length
+                + 4
+                + rightImage.Length
+                + 4
+                + metadataBytes.Length;
 
             byte[] message = new byte[totalSize];
             int offset = 0;

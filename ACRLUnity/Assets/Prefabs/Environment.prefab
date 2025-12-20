@@ -13,12 +13,12 @@ GameObject:
   - component: {fileID: 6677068797084141310}
   - component: {fileID: 2793760795132836448}
   m_Layer: 0
-  m_Name: sensor_base
+  m_Name: SensorBase
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &3238255205779794480
 Transform:
   m_ObjectHideFlags: 0
@@ -281,7 +281,7 @@ ArticulationBody:
     driveType: 0
   m_LinearDamping: 0.05
   m_AngularDamping: 0.05
-  m_JointFriction: 0.05
+  m_JointFriction: 10
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -311,7 +311,6 @@ MonoBehaviour:
   config:
     enableCollisionDetection: 1
     enableTargetReached: 1
-    enableCollisionLogging: 1
     collisionCooldown: 0.5
     robotLayerMask:
       serializedVersion: 2
@@ -967,7 +966,6 @@ MonoBehaviour:
   config:
     enableCollisionDetection: 1
     enableTargetReached: 1
-    enableCollisionLogging: 1
     collisionCooldown: 0.5
     robotLayerMask:
       serializedVersion: 2
@@ -1214,7 +1212,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1298245090670190658
 Transform:
   m_ObjectHideFlags: 0
@@ -1343,7 +1341,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &6024126139203299262
 Transform:
   m_ObjectHideFlags: 0
@@ -1376,6 +1374,8 @@ MonoBehaviour:
   _imageWidth: 1000
   _imageHeight: 1000
   _JPEGQuality: 85
+  _enableStreaming: 1
+  _streamingFPS: 5
 --- !u!1 &608026700499321620
 GameObject:
   m_ObjectHideFlags: 0
@@ -1800,7 +1800,7 @@ MeshCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 5
   m_Convex: 1
   m_CookingOptions: 30
@@ -1821,7 +1821,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &909514591633972003
 Transform:
   m_ObjectHideFlags: 0
@@ -1846,7 +1846,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 795938734311972712}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9a4bfe224d8184bb0bce97cde2cea0f2, type: 3}
   m_Name: 
@@ -1854,6 +1854,8 @@ MonoBehaviour:
   _imageWidth: 1920
   _imageHeight: 1080
   _JPEGQuality: 85
+  _enableStreaming: 1
+  _streamingFPS: 5
 --- !u!1 &900777202550183556
 GameObject:
   m_ObjectHideFlags: 0
@@ -3037,7 +3039,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1833936677515890556
 Transform:
   m_ObjectHideFlags: 0
@@ -3409,7 +3411,6 @@ GameObject:
   - component: {fileID: 6608382806723727468}
   - component: {fileID: 6851816749489167917}
   - component: {fileID: 978755434903592783}
-  - component: {fileID: 634091199265105748}
   m_Layer: 7
   m_Name: Robot1
   m_TagString: Robot
@@ -3487,25 +3488,8 @@ MonoBehaviour:
   - 0
   - 0
   - 0
-  debugTarget: {fileID: 0}
   _gripperController: {fileID: 0}
---- !u!114 &634091199265105748
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3238837518068886331}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: debbc6b38e9e94e2f96a98663a243eb5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Logging.AutoLogger
-  enableAutoLogging: 1
-  robotId: Robot1
-  logMovement: 1
-  logGripper: 1
-  autoRegisterObjects: 1
+  _closeGripperAfterReach: 0
 --- !u!1 &3369921039827679538
 GameObject:
   m_ObjectHideFlags: 0
@@ -3521,12 +3505,12 @@ GameObject:
   - component: {fileID: 2104309082079824041}
   - component: {fileID: 3885242413695322185}
   m_Layer: 6
-  m_Name: MiddleTarget
+  m_Name: redCube
   m_TagString: Target
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &5075431559166153548
 Transform:
   m_ObjectHideFlags: 0
@@ -3536,7 +3520,7 @@ Transform:
   m_GameObject: {fileID: 3369921039827679538}
   serializedVersion: 2
   m_LocalRotation: {x: 1, y: -0, z: -0, w: 0}
-  m_LocalPosition: {x: 0, y: 0.01, z: 0}
+  m_LocalPosition: {x: 0, y: 0.025, z: 0}
   m_LocalScale: {x: 0.13, y: 0.04, z: 0.02}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -3642,7 +3626,7 @@ Rigidbody:
     m_Bits: 0
   m_ImplicitCom: 1
   m_ImplicitTensor: 1
-  m_UseGravity: 0
+  m_UseGravity: 1
   m_IsKinematic: 0
   m_Interpolate: 0
   m_Constraints: 0
@@ -3662,7 +3646,6 @@ MonoBehaviour:
   config:
     enableCollisionDetection: 1
     enableTargetReached: 1
-    enableCollisionLogging: 1
     collisionCooldown: 0.5
     robotLayerMask:
       serializedVersion: 2
@@ -3685,7 +3668,7 @@ GameObject:
   - component: {fileID: 4619184645030711604}
   - component: {fileID: 303560565667190461}
   m_Layer: 0
-  m_Name: base
+  m_Name: Base
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3798,9 +3781,8 @@ GameObject:
   - component: {fileID: 2851688770042148413}
   - component: {fileID: 1155213296871173493}
   - component: {fileID: 5306240913205018152}
-  - component: {fileID: 1966179564287834215}
   m_Layer: 0
-  m_Name: sensortip
+  m_Name: SensorTip
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3854,7 +3836,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 183346716b2384cbca04d9b9098d524f, type: 2}
+  - {fileID: 2100000, guid: d47df1ce21d2e44e88bf94bd9eb351ac, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -3893,26 +3875,12 @@ SphereCollider:
     serializedVersion: 2
     m_Bits: 0
   m_LayerOverridePriority: 0
-  m_IsTrigger: 1
-  m_ProvidesContacts: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 1
   m_Enabled: 1
   serializedVersion: 3
-  m_Radius: 0.5000001
+  m_Radius: 1
   m_Center: {x: 0.000013828278, y: 0, z: -0.0000019073486}
---- !u!114 &1966179564287834215
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 3973292696487865520}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 81973d5876a324a59b2fa0abeae9459f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-ACRL::ObjectAttacher
-  targetTag: Target
-  disablePhysicsOnAttach: 1
 --- !u!1 &4166479720334819438
 GameObject:
   m_ObjectHideFlags: 0
@@ -4109,7 +4077,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &8257033088092275378
 Transform:
   m_ObjectHideFlags: 0
@@ -4434,7 +4402,7 @@ GameObject:
   - component: {fileID: 3407163256833045550}
   - component: {fileID: 8296404777737279667}
   m_Layer: 6
-  m_Name: RightTarget
+  m_Name: blueCube(1)
   m_TagString: Target
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4449,7 +4417,7 @@ Transform:
   m_GameObject: {fileID: 4699154504404944203}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.2, y: 0.01, z: -0.2}
+  m_LocalPosition: {x: 0.2, y: 0.01, z: 0.2}
   m_LocalScale: {x: 0.02, y: 0.02, z: 0.02}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -5169,7 +5137,7 @@ GameObject:
   - component: {fileID: 5567977826561441543}
   - component: {fileID: 1208559570474298127}
   m_Layer: 0
-  m_Name: RightTableCamera
+  m_Name: RightCamera
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5230,10 +5198,10 @@ Camera:
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
-    m_Bits: 65
+    m_Bits: 247
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 0}
-  m_TargetDisplay: 1
+  m_TargetDisplay: 2
   m_TargetEye: 3
   m_HDR: 1
   m_AllowMSAA: 1
@@ -5571,7 +5539,6 @@ MonoBehaviour:
   config:
     enableCollisionDetection: 1
     enableTargetReached: 1
-    enableCollisionLogging: 1
     collisionCooldown: 0.5
     robotLayerMask:
       serializedVersion: 2
@@ -5716,7 +5683,7 @@ GameObject:
   - component: {fileID: 3828271509751390217}
   m_Layer: 7
   m_Name: GripperFocus
-  m_TagString: Untagged
+  m_TagString: Robot
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -5750,7 +5717,7 @@ GameObject:
   - component: {fileID: 635416502689702480}
   - component: {fileID: 6579240078625439066}
   m_Layer: 6
-  m_Name: LeftTarget
+  m_Name: blueCube
   m_TagString: Target
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5844,7 +5811,7 @@ BoxCollider:
     m_Bits: 0
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
-  m_ProvidesContacts: 0
+  m_ProvidesContacts: 1
   m_Enabled: 1
   serializedVersion: 3
   m_Size: {x: 1, y: 1, z: 1}
@@ -5985,7 +5952,7 @@ MeshCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 5
   m_Convex: 1
   m_CookingOptions: 30
@@ -6091,7 +6058,6 @@ GameObject:
   - component: {fileID: 6061080234100086140}
   - component: {fileID: 5100622569503124787}
   - component: {fileID: 6517560048216686290}
-  - component: {fileID: 1879560100186494199}
   m_Layer: 7
   m_Name: Robot2
   m_TagString: Robot
@@ -6169,25 +6135,8 @@ MonoBehaviour:
   - 0
   - 0
   - 0
-  debugTarget: {fileID: 0}
   _gripperController: {fileID: 0}
---- !u!114 &1879560100186494199
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6077284443812479320}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: debbc6b38e9e94e2f96a98663a243eb5, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Logging.AutoLogger
-  enableAutoLogging: 1
-  robotId: Robot2
-  logMovement: 1
-  logGripper: 1
-  autoRegisterObjects: 1
+  _closeGripperAfterReach: 0
 --- !u!1 &6086147611823037396
 GameObject:
   m_ObjectHideFlags: 0
@@ -6201,7 +6150,7 @@ GameObject:
   - component: {fileID: 1788398963306593030}
   - component: {fileID: 4245293779803469922}
   m_Layer: 7
-  m_Name: BasePlate
+  m_Name: Plate
   m_TagString: Robot
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -6721,7 +6670,7 @@ GameObject:
   - component: {fileID: 2009188552253000839}
   - component: {fileID: 5253763418084091329}
   m_Layer: 0
-  m_Name: sensor
+  m_Name: Sensor
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -6836,7 +6785,7 @@ GameObject:
   - component: {fileID: 5090227897772878331}
   - component: {fileID: 9133176907297722851}
   m_Layer: 7
-  m_Name: Gripper
+  m_Name: GripperJoint
   m_TagString: Robot
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -7147,7 +7096,7 @@ GameObject:
   - component: {fileID: 1924621710956839310}
   - component: {fileID: 2466235137003102114}
   m_Layer: 0
-  m_Name: LeftTableCamera
+  m_Name: LeftCamera
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -7208,7 +7157,7 @@ Camera:
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
-    m_Bits: 65
+    m_Bits: 247
   m_RenderingPath: -1
   m_TargetTexture: {fileID: 0}
   m_TargetDisplay: 1
@@ -7373,7 +7322,7 @@ MeshCollider:
   m_LayerOverridePriority: 0
   m_IsTrigger: 0
   m_ProvidesContacts: 0
-  m_Enabled: 1
+  m_Enabled: 0
   serializedVersion: 5
   m_Convex: 1
   m_CookingOptions: 30
@@ -7396,7 +7345,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &4906557030971321035
 Transform:
   m_ObjectHideFlags: 0
@@ -7792,6 +7741,8 @@ MonoBehaviour:
   _imageWidth: 1920
   _imageHeight: 1080
   _JPEGQuality: 85
+  _enableStreaming: 1
+  _streamingFPS: 5
 --- !u!1 &7895265838431855440
 GameObject:
   m_ObjectHideFlags: 0
@@ -8281,7 +8232,7 @@ GameObject:
   - component: {fileID: 4038383724432315258}
   - component: {fileID: 5338838174622455644}
   m_Layer: 7
-  m_Name: BasePlate
+  m_Name: Plate
   m_TagString: Robot
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -8529,7 +8480,7 @@ GameObject:
   - component: {fileID: 4563995907709791179}
   - component: {fileID: 4848323122975368908}
   m_Layer: 0
-  m_Name: mid
+  m_Name: Mid
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -8734,7 +8685,7 @@ GameObject:
   - component: {fileID: 7344001910401543634}
   - component: {fileID: 3313674340588065715}
   m_Layer: 7
-  m_Name: Gripper
+  m_Name: GripperJoint
   m_TagString: Robot
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -9198,7 +9149,7 @@ ArticulationBody:
     driveType: 0
   m_LinearDamping: 0.05
   m_AngularDamping: 0.05
-  m_JointFriction: 0.05
+  m_JointFriction: 10
   m_CenterOfMass: {x: 0, y: 0, z: 0}
   m_InertiaTensor: {x: 1, y: 1, z: 1}
   m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
@@ -9228,7 +9179,6 @@ MonoBehaviour:
   config:
     enableCollisionDetection: 1
     enableTargetReached: 1
-    enableCollisionLogging: 1
     collisionCooldown: 0.5
     robotLayerMask:
       serializedVersion: 2
@@ -9249,7 +9199,7 @@ GameObject:
   - component: {fileID: 2441319199496912795}
   m_Layer: 7
   m_Name: GripperFocus
-  m_TagString: Untagged
+  m_TagString: Robot
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0

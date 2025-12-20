@@ -9,7 +9,7 @@ Provides operations that use camera images for perception:
 
 import logging
 import time
-from typing import Dict, Any, Optional
+from typing import Optional
 
 from operations.Base import (
     BasicOperation,
@@ -90,7 +90,7 @@ def detect_object(
     fov: Optional[float] = None,
     camera_position: Optional[list] = None,
     camera_rotation: Optional[list] = None,
-    **kwargs
+    **kwargs,
 ) -> OperationResult:
     """
     Detect a colored object using stereo cameras and return 3D coordinates.
@@ -126,13 +126,15 @@ def detect_object(
         # Request stereo image capture from Unity
         request_id = int(time.time() * 1000) % (2**32)
         request_time = time.time()
-        logger.info(f"Requesting stereo capture from {camera_id} (request_id={request_id})")
+        logger.info(
+            f"Requesting stereo capture from {camera_id} (request_id={request_id})"
+        )
 
         capture_command = {
             "command_type": "capture_stereo_images",
             "target_type": "camera",
             "camera_id": camera_id,
-            "request_id": request_id
+            "request_id": request_id,
         }
         broadcaster.send_command(capture_command, request_id)
 
@@ -149,13 +151,19 @@ def detect_object(
                 receive_time = storage.get_stereo_timestamp(camera_id)
                 if receive_time is not None and receive_time > request_time:
                     age = time.time() - receive_time
-                    logger.info(f"Received stereo images from {camera_id} (age={age:.2f}s)")
+                    logger.info(
+                        f"Received stereo images from {camera_id} (age={age:.2f}s)"
+                    )
                     break
             time.sleep(poll_interval)
 
         if stereo_data is None:
             # List available cameras for better debugging
-            available = storage.get_all_stereo_ids() if hasattr(storage, 'get_all_stereo_ids') else []
+            available = (
+                storage.get_all_stereo_ids()
+                if hasattr(storage, "get_all_stereo_ids")
+                else []
+            )
             hints = [
                 "Unity may not have received the capture request",
                 f"Check that StereoCameraController '{camera_id}' exists in Unity",
@@ -166,7 +174,7 @@ def detect_object(
             return OperationResult.error_result(
                 "NO_IMAGES",
                 f"Timeout waiting for stereo images from {camera_id}",
-                hints
+                hints,
             )
 
         imgL, imgR, prompt = stereo_data
@@ -176,55 +184,75 @@ def detect_object(
         logger.info(f"Metadata for {camera_id}: {metadata}")
         if metadata:
             # Use values from Unity metadata
-            if 'baseline' in metadata and metadata['baseline'] is not None:
-                baseline = float(metadata['baseline'])
-            if 'fov' in metadata and metadata['fov'] is not None:
-                fov = float(metadata['fov'])
-            if 'camera_position' in metadata and metadata['camera_position'] is not None:
-                camera_position = metadata['camera_position']
-            if 'camera_rotation' in metadata and metadata['camera_rotation'] is not None:
-                camera_rotation = metadata['camera_rotation']
-            logger.info(f"Using metadata from Unity: pos={camera_position}, rot={camera_rotation}")
+            if "baseline" in metadata and metadata["baseline"] is not None:
+                baseline = float(metadata["baseline"])
+            if "fov" in metadata and metadata["fov"] is not None:
+                fov = float(metadata["fov"])
+            if (
+                "camera_position" in metadata
+                and metadata["camera_position"] is not None
+            ):
+                camera_position = metadata["camera_position"]
+            if (
+                "camera_rotation" in metadata
+                and metadata["camera_rotation"] is not None
+            ):
+                camera_rotation = metadata["camera_rotation"]
+            logger.info(
+                f"Using metadata from Unity: pos={camera_position}, rot={camera_rotation}"
+            )
         else:
-            logger.warning(f"No metadata received from Unity, using defaults: pos={camera_position}, rot={camera_rotation}")
+            logger.warning(
+                f"No metadata received from Unity, using defaults: pos={camera_position}, rot={camera_rotation}"
+            )
 
         # Run detection using CubeDetector with stereo mode
         detector = CubeDetector()
         camera_config = CameraConfig(baseline=float(baseline), fov=float(fov))
 
         detection_result = detector.detect_objects_stereo(
-            imgL, imgR, camera_config, camera_id=camera_id,
-            camera_rotation=camera_rotation, camera_position=camera_position
+            imgL,
+            imgR,
+            camera_config,
+            camera_id=camera_id,
+            camera_rotation=camera_rotation,
+            camera_position=camera_position,
         )
 
         if not detection_result.detections:
             return OperationResult.error_result(
                 "NO_DETECTIONS",
                 "No objects detected in scene",
-                ["Ensure objects are visible", "Check lighting conditions"]
+                ["Ensure objects are visible", "Check lighting conditions"],
             )
 
         # Filter by color (flexible matching for both CubeDetector and YOLODetector)
-        matching = [d for d in detection_result.detections if color_matches(d.color, color)]
+        matching = [
+            d for d in detection_result.detections if color_matches(d.color, color)
+        ]
         if not matching:
             detected_colors = [d.color for d in detection_result.detections]
             return OperationResult.error_result(
                 "COLOR_NOT_FOUND",
                 f"No {color} objects detected",
-                [f"Looking for {color} objects",
-                 f"Detected colors: {detected_colors}",
-                 "Check color parameter"]
+                [
+                    f"Looking for {color} objects",
+                    f"Detected colors: {detected_colors}",
+                    "Check color parameter",
+                ],
             )
 
         # Get leftmost detection (smallest center_x coordinate)
         best = min(matching, key=lambda d: d.center_x)
-        logger.info(f"Selected leftmost {color} cube from {len(matching)} detections (center_x={best.center_x})")
+        logger.info(
+            f"Selected leftmost {color} cube from {len(matching)} detections (center_x={best.center_x})"
+        )
 
         if best.world_position is None:
             return OperationResult.error_result(
                 "NO_DEPTH",
                 f"Could not estimate depth for {color} object",
-                ["Object may be too close or too far", "Check stereo calibration"]
+                ["Object may be too close or too far", "Check stereo calibration"],
             )
 
         result = {
@@ -233,10 +261,12 @@ def detect_object(
             "z": best.world_position[2],
             "color": color,
             "confidence": best.confidence,
-            "camera_id": camera_id
+            "camera_id": camera_id,
         }
 
-        logger.info(f"Detected {color} object at ({result['x']:.3f}, {result['y']:.3f}, {result['z']:.3f})")
+        logger.info(
+            f"Detected {color} object at ({result['x']:.3f}, {result['y']:.3f}, {result['z']:.3f})"
+        )
 
         return OperationResult.success_result(result)
 
@@ -245,7 +275,7 @@ def detect_object(
         return OperationResult.error_result(
             "DETECTION_FAILED",
             str(e),
-            ["Check camera connection", "Ensure Python environment is configured"]
+            ["Check camera connection", "Ensure Python environment is configured"],
         )
 
 
@@ -346,7 +376,7 @@ def analyze_scene(
     prompt: str = "Describe what you see",
     camera_id: str = "MainCamera",
     model: Optional[str] = None,
-    **kwargs
+    **kwargs,
 ) -> OperationResult:
     """
     Analyze a scene using LLM vision.
@@ -365,6 +395,7 @@ def analyze_scene(
     try:
         # Get image storage
         from servers.ImageServer import UnifiedImageStorage
+
         storage = UnifiedImageStorage()
 
         # Try to get single camera image
@@ -380,7 +411,7 @@ def analyze_scene(
                 return OperationResult.error_result(
                     "NO_IMAGES",
                     "No images available for analysis",
-                    ["Ensure camera is connected", "Check camera_id parameter"]
+                    ["Ensure camera is connected", "Check camera_id parameter"],
                 )
 
         # Use LMStudioVisionProcessor
@@ -388,9 +419,7 @@ def analyze_scene(
 
         # Send image for analysis
         llm_result = processor.send_images(
-            images=[image],
-            camera_ids=[camera_id],
-            prompt=prompt
+            images=[image], camera_ids=[camera_id], prompt=prompt
         )
 
         response_text = llm_result.get("response", "")
@@ -399,7 +428,7 @@ def analyze_scene(
             "analysis": response_text,
             "camera_id": camera_id,
             "model": model,
-            "prompt": prompt
+            "prompt": prompt,
         }
 
         logger.info(f"Scene analysis completed: {response_text[:100]}...")
@@ -411,7 +440,7 @@ def analyze_scene(
         return OperationResult.error_result(
             "ANALYSIS_FAILED",
             str(e),
-            ["Check LM Studio is running", "Verify model is loaded"]
+            ["Check LM Studio is running", "Verify model is loaded"],
         )
 
 
@@ -475,7 +504,10 @@ def create_analyze_scene_operation() -> BasicOperation:
         ],
         relationships=OperationRelationship(
             operation_id="perception_analyze_scene_001",
-            commonly_paired_with=["perception_stereo_detect_001", "status_check_robot_001"],
+            commonly_paired_with=[
+                "perception_stereo_detect_001",
+                "status_check_robot_001",
+            ],
             pairing_reasons={
                 "perception_stereo_detect_001": "Verify object detection results or gather additional context",
                 "status_check_robot_001": "Verify robot reached target position or analyze workspace state",
@@ -496,25 +528,21 @@ def detect_object_stereo(
     # Primary parameters
     color: Optional[str] = None,
     camera_id: str = "StereoCamera",
-
     # Detection options
     request_fresh_capture: bool = True,
     min_confidence: float = 0.5,
     max_distance: Optional[float] = None,
-
     # Selection strategy when multiple objects found
     selection: str = "leftmost",
-
     # Camera configuration (optional overrides)
     baseline: Optional[float] = None,
     fov: Optional[float] = None,
     camera_position: Optional[list] = None,
     camera_rotation: Optional[list] = None,
-
     # Compatibility
     robot_id: Optional[str] = None,
     request_id: int = 0,
-    **kwargs
+    **kwargs,
 ) -> OperationResult:
     """
     Unified stereo detection operation with 3D coordinate estimation.
@@ -565,13 +593,15 @@ def detect_object_stereo(
         if request_fresh_capture:
             # Request fresh capture from Unity
             request_time = time.time()
-            logger.info(f"Requesting stereo capture from {camera_id} (request_id={request_id})")
+            logger.info(
+                f"Requesting stereo capture from {camera_id} (request_id={request_id})"
+            )
 
             capture_command = {
                 "command_type": "capture_stereo_images",
                 "target_type": "camera",
                 "camera_id": camera_id,
-                "request_id": request_id
+                "request_id": request_id,
             }
             broadcaster.send_command(capture_command, request_id)
 
@@ -587,12 +617,18 @@ def detect_object_stereo(
                     receive_time = storage.get_stereo_timestamp(camera_id)
                     if receive_time is not None and receive_time > request_time:
                         age = time.time() - receive_time
-                        logger.info(f"Received stereo images from {camera_id} (age={age:.2f}s)")
+                        logger.info(
+                            f"Received stereo images from {camera_id} (age={age:.2f}s)"
+                        )
                         break
                 time.sleep(poll_interval)
 
             if stereo_data is None:
-                available = storage.get_all_stereo_ids() if hasattr(storage, 'get_all_stereo_ids') else []
+                available = (
+                    storage.get_all_stereo_ids()
+                    if hasattr(storage, "get_all_stereo_ids")
+                    else []
+                )
                 hints = [
                     "Unity may not have received the capture request",
                     f"Check that StereoCameraController '{camera_id}' exists in Unity",
@@ -603,7 +639,7 @@ def detect_object_stereo(
                 return OperationResult.error_result(
                     "NO_IMAGES",
                     f"Timeout waiting for stereo images from {camera_id}",
-                    hints
+                    hints,
                 )
         else:
             # Use cached images from storage
@@ -612,8 +648,10 @@ def detect_object_stereo(
                 return OperationResult.error_result(
                     "NO_CACHED_IMAGES",
                     f"No cached stereo images available for {camera_id}",
-                    ["Request fresh capture with request_fresh_capture=True",
-                     "Ensure Unity is sending stereo images"]
+                    [
+                        "Request fresh capture with request_fresh_capture=True",
+                        "Ensure Unity is sending stereo images",
+                    ],
                 )
 
         imgL, imgR, prompt = stereo_data
@@ -623,32 +661,46 @@ def detect_object_stereo(
         logger.info(f"Metadata for {camera_id}: {metadata}")
         if metadata:
             # Use values from Unity metadata (override defaults)
-            if 'baseline' in metadata and metadata['baseline'] is not None:
-                baseline = float(metadata['baseline'])
-            if 'fov' in metadata and metadata['fov'] is not None:
-                fov = float(metadata['fov'])
-            if 'camera_position' in metadata and metadata['camera_position'] is not None:
-                camera_position = metadata['camera_position']
-            if 'camera_rotation' in metadata and metadata['camera_rotation'] is not None:
-                camera_rotation = metadata['camera_rotation']
-            logger.info(f"Using metadata from Unity: pos={camera_position}, rot={camera_rotation}")
+            if "baseline" in metadata and metadata["baseline"] is not None:
+                baseline = float(metadata["baseline"])
+            if "fov" in metadata and metadata["fov"] is not None:
+                fov = float(metadata["fov"])
+            if (
+                "camera_position" in metadata
+                and metadata["camera_position"] is not None
+            ):
+                camera_position = metadata["camera_position"]
+            if (
+                "camera_rotation" in metadata
+                and metadata["camera_rotation"] is not None
+            ):
+                camera_rotation = metadata["camera_rotation"]
+            logger.info(
+                f"Using metadata from Unity: pos={camera_position}, rot={camera_rotation}"
+            )
         else:
-            logger.warning(f"No metadata received from Unity, using defaults: pos={camera_position}, rot={camera_rotation}")
+            logger.warning(
+                f"No metadata received from Unity, using defaults: pos={camera_position}, rot={camera_rotation}"
+            )
 
         # Run detection using CubeDetector with stereo mode
         detector = CubeDetector()
         camera_config = CameraConfig(baseline=float(baseline), fov=float(fov))
 
         detection_result = detector.detect_objects_stereo(
-            imgL, imgR, camera_config, camera_id=camera_id,
-            camera_rotation=camera_rotation, camera_position=camera_position
+            imgL,
+            imgR,
+            camera_config,
+            camera_id=camera_id,
+            camera_rotation=camera_rotation,
+            camera_position=camera_position,
         )
 
         if not detection_result.detections:
             return OperationResult.error_result(
                 "NO_DETECTIONS",
                 "No objects detected in scene",
-                ["Ensure objects are visible", "Check lighting conditions"]
+                ["Ensure objects are visible", "Check lighting conditions"],
             )
 
         # Filter by color if specified (flexible matching for both CubeDetector and YOLODetector)
@@ -660,9 +712,11 @@ def detect_object_stereo(
                 return OperationResult.error_result(
                     "COLOR_NOT_FOUND",
                     f"No {color} objects detected",
-                    [f"Looking for {color} objects",
-                     f"Detected colors: {detected_colors}",
-                     "Check color parameter"]
+                    [
+                        f"Looking for {color} objects",
+                        f"Detected colors: {detected_colors}",
+                        "Check color parameter",
+                    ],
                 )
 
         # Filter by confidence
@@ -671,7 +725,7 @@ def detect_object_stereo(
             return OperationResult.error_result(
                 "LOW_CONFIDENCE",
                 f"No objects detected above confidence threshold {min_confidence}",
-                ["Lower min_confidence threshold", "Improve lighting conditions"]
+                ["Lower min_confidence threshold", "Improve lighting conditions"],
             )
 
         # Filter by distance if specified
@@ -679,7 +733,11 @@ def detect_object_stereo(
             detections_with_distance = []
             for d in detections:
                 if d.world_position is not None:
-                    distance = (d.world_position[0]**2 + d.world_position[1]**2 + d.world_position[2]**2)**0.5
+                    distance = (
+                        d.world_position[0] ** 2
+                        + d.world_position[1] ** 2
+                        + d.world_position[2] ** 2
+                    ) ** 0.5
                     if distance <= max_distance:
                         detections_with_distance.append(d)
             detections = detections_with_distance
@@ -688,18 +746,26 @@ def detect_object_stereo(
                 return OperationResult.error_result(
                     "OUT_OF_RANGE",
                     f"No objects detected within {max_distance}m",
-                    ["Increase max_distance", "Move objects closer"]
+                    ["Increase max_distance", "Move objects closer"],
                 )
 
         # Apply selection strategy
         if selection == "leftmost":
             best = min(detections, key=lambda d: d.center_x)
-            logger.info(f"Selected leftmost detection from {len(detections)} (center_x={best.center_x})")
+            logger.info(
+                f"Selected leftmost detection from {len(detections)} (center_x={best.center_x})"
+            )
         elif selection == "closest":
+
             def get_distance(d):
                 if d.world_position is None:
-                    return float('inf')
-                return (d.world_position[0]**2 + d.world_position[1]**2 + d.world_position[2]**2)**0.5
+                    return float("inf")
+                return (
+                    d.world_position[0] ** 2
+                    + d.world_position[1] ** 2
+                    + d.world_position[2] ** 2
+                ) ** 0.5
+
             best = min(detections, key=get_distance)
             logger.info(f"Selected closest detection from {len(detections)}")
         elif selection == "first":
@@ -727,7 +793,7 @@ def detect_object_stereo(
             return OperationResult.error_result(
                 "INVALID_SELECTION",
                 f"Invalid selection strategy: {selection}",
-                ["Use 'leftmost', 'closest', 'first', or 'all'"]
+                ["Use 'leftmost', 'closest', 'first', or 'all'"],
             )
 
         # Check if selected detection has world position
@@ -735,7 +801,7 @@ def detect_object_stereo(
             return OperationResult.error_result(
                 "NO_DEPTH",
                 f"Could not estimate depth for selected object",
-                ["Object may be too close or too far", "Check stereo calibration"]
+                ["Object may be too close or too far", "Check stereo calibration"],
             )
 
         # Return single best detection
@@ -746,10 +812,12 @@ def detect_object_stereo(
             "color": best.color,
             "confidence": best.confidence,
             "camera_id": camera_id,
-            "selection": selection
+            "selection": selection,
         }
 
-        logger.info(f"Detected {best.color if best.color else 'object'} at ({result['x']:.3f}, {result['y']:.3f}, {result['z']:.3f})")
+        logger.info(
+            f"Detected {best.color if best.color else 'object'} at ({result['x']:.3f}, {result['y']:.3f}, {result['z']:.3f})"
+        )
 
         return OperationResult.success_result(result)
 
@@ -758,7 +826,7 @@ def detect_object_stereo(
         return OperationResult.error_result(
             "DETECTION_FAILED",
             str(e),
-            ["Check camera connection", "Ensure Python environment is configured"]
+            ["Check camera connection", "Ensure Python environment is configured"],
         )
 
 
@@ -863,7 +931,11 @@ def create_detect_object_stereo_operation() -> BasicOperation:
         commonly_paired_with=["move_to_coordinate", "control_gripper"],
         relationships=OperationRelationship(
             operation_id="perception_stereo_detect_001",
-            commonly_paired_with=["motion_move_to_coord_001", "manipulation_control_gripper_001", "spatial_move_relative_001"],
+            commonly_paired_with=[
+                "motion_move_to_coord_001",
+                "manipulation_control_gripper_001",
+                "spatial_move_relative_001",
+            ],
             pairing_reasons={
                 "motion_move_to_coord_001": "Move robot to detected object's 3D position",
                 "manipulation_control_gripper_001": "Grasp object after positioning at detected coordinates",
@@ -899,7 +971,10 @@ def create_detect_object_stereo_operation() -> BasicOperation:
                     description="Object position for spatial relative movement",
                 ),
             ],
-            typical_before=["motion_move_to_coord_001", "manipulation_control_gripper_001"],
+            typical_before=[
+                "motion_move_to_coord_001",
+                "manipulation_control_gripper_001",
+            ],
             typical_after=[],
         ),
         implementation=detect_object_stereo,

@@ -54,11 +54,11 @@ try:
 except ImportError:
     from .. import LLMConfig as cfg
 
-# Import ImageStorage - try both import styles
+# Import UnifiedImageStorage - try both import styles
 try:
-    from servers.StreamingServer import ImageStorage
+    from servers.ImageServer import UnifiedImageStorage
 except ImportError:
-    from ..servers.StreamingServer import ImageStorage
+    from ..servers.ImageServer import UnifiedImageStorage
 
 # Configure logging
 logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
@@ -219,7 +219,7 @@ def get_images_from_server(
     camera_ids: Optional[List[str]] = None,
 ) -> tuple[List[np.ndarray], List[str], List[str]]:
     """
-    Get images from the StreamingServer
+    Get images from the ImageServer
 
     Args:
         camera_ids: List of specific camera IDs to fetch, or None for all cameras
@@ -227,7 +227,7 @@ def get_images_from_server(
     Returns:
         Tuple of (images list, camera_ids list, prompts list)
     """
-    storage = ImageStorage.get_instance()
+    storage = UnifiedImageStorage()
 
     # Get all available cameras if not specified
     if camera_ids is None:
@@ -235,7 +235,7 @@ def get_images_from_server(
 
     if not camera_ids:
         raise ValueError(
-            "No cameras available. Is the StreamingServer running and receiving images?"
+            "No cameras available. Is the ImageServer running and receiving images?"
         )
 
     images = []
@@ -243,10 +243,10 @@ def get_images_from_server(
     prompts = []
 
     for cam_id in camera_ids:
-        image = storage.get_camera_image(cam_id)
+        image = storage.get_single_image(cam_id)
         if image is not None:
-            age = storage.get_camera_age(cam_id)
-            prompt = storage.get_camera_prompt(cam_id) or ""
+            age = storage.get_single_age(cam_id)
+            prompt = storage.get_single_prompt(cam_id) or ""
             prompt_info = f", prompt: '{prompt}'" if prompt else ""
             logging.info(
                 f"  ✓ {cam_id}: {image.shape[1]}x{image.shape[0]}, {age:.1f}s ago{prompt_info}"
@@ -387,16 +387,19 @@ Note: StreamingServer.py must be running for this script to work.
     try:
         # List cameras mode
         if args.list_cameras:
-            storage = ImageStorage.get_instance()
+            storage = UnifiedImageStorage()
             camera_ids = storage.get_all_camera_ids()
             if camera_ids:
                 logging.info("Available cameras:")
                 for cam_id in camera_ids:
-                    age = storage.get_camera_age(cam_id)
-                    prompt = storage.get_camera_prompt(cam_id) or "(no prompt)"
+                    # Skip stereo camera entries (they have "(stereo)" suffix)
+                    if "(stereo)" in cam_id:
+                        continue
+                    age = storage.get_single_age(cam_id)
+                    prompt = storage.get_single_prompt(cam_id) or "(no prompt)"
                     logging.info(f"  • {cam_id} - age: {age:.1f}s, prompt: {prompt}")
             else:
-                logging.info("No cameras available. Is StreamingServer running?")
+                logging.info("No cameras available. Is ImageServer running?")
             sys.exit(0)
 
         # Initialize LM Studio processor
@@ -426,22 +429,24 @@ Note: StreamingServer.py must be running for this script to work.
         # Main processing loop
         while True:
             try:
-                storage = ImageStorage.get_instance()
+                storage = UnifiedImageStorage()
 
                 # Get camera IDs to check
                 if monitor_cameras:
                     camera_ids = monitor_cameras
                 else:
-                    camera_ids = storage.get_all_camera_ids()
+                    # Get only single camera IDs (exclude stereo)
+                    all_ids = storage.get_all_camera_ids()
+                    camera_ids = [cid for cid in all_ids if "(stereo)" not in cid]
 
                 # Check each camera for new images with prompts
                 for cam_id in camera_ids:
-                    image = storage.get_camera_image(cam_id)
+                    image = storage.get_single_image(cam_id)
                     if image is None:
                         continue
 
-                    prompt = storage.get_camera_prompt(cam_id)
-                    age = storage.get_camera_age(cam_id)
+                    prompt = storage.get_single_prompt(cam_id)
+                    age = storage.get_single_age(cam_id)
 
                     # Skip if age is None (shouldn't happen if image exists)
                     if age is None:

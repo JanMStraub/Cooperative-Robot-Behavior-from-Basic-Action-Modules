@@ -16,7 +16,7 @@ import re
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
-from operations.SpatialPredicates import get_predicate, evaluate_predicate
+from operations.SpatialPredicates import evaluate_predicate
 from operations.WorldState import get_world_state
 from operations.Base import BasicOperation, OperationResult
 
@@ -41,6 +41,7 @@ class PredicateViolation:
         severity: "error" (blocks execution) or "warning" (allowed but risky)
         recovery_suggestions: List of actions to fix the violation
     """
+
     predicate: str
     reason: str
     severity: str = "error"  # "error" or "warning"
@@ -59,20 +60,26 @@ class VerificationResult:
         checked_predicates: List of all predicates that were checked
         execution_allowed: True if operation can proceed despite warnings
     """
+
     success: bool
     violations: List[PredicateViolation] = field(default_factory=list)
     warnings: List[PredicateViolation] = field(default_factory=list)
     checked_predicates: List[str] = field(default_factory=list)
     execution_allowed: bool = True
 
-    def add_violation(self, predicate: str, reason: str, severity: str = "error",
-                      suggestions: Optional[List[str]] = None):
+    def add_violation(
+        self,
+        predicate: str,
+        reason: str,
+        severity: str = "error",
+        suggestions: Optional[List[str]] = None,
+    ):
         """Add a violation to the result."""
         violation = PredicateViolation(
             predicate=predicate,
             reason=reason,
             severity=severity,
-            recovery_suggestions=suggestions or []
+            recovery_suggestions=suggestions or [],
         )
         if severity == "error":
             self.violations.append(violation)
@@ -91,7 +98,7 @@ class VerificationResult:
                     "predicate": v.predicate,
                     "reason": v.reason,
                     "severity": v.severity,
-                    "recovery_suggestions": v.recovery_suggestions
+                    "recovery_suggestions": v.recovery_suggestions,
                 }
                 for v in self.violations
             ],
@@ -100,11 +107,11 @@ class VerificationResult:
                     "predicate": w.predicate,
                     "reason": w.reason,
                     "severity": w.severity,
-                    "recovery_suggestions": w.recovery_suggestions
+                    "recovery_suggestions": w.recovery_suggestions,
                 }
                 for w in self.warnings
             ],
-            "checked_predicates": self.checked_predicates
+            "checked_predicates": self.checked_predicates,
         }
 
 
@@ -126,7 +133,7 @@ class PredicateParser:
     """
 
     # Regex pattern to parse predicate calls
-    PREDICATE_PATTERN = re.compile(r'(\w+)\((.*?)\)')
+    PREDICATE_PATTERN = re.compile(r"(\w+)\((.*?)\)")
 
     @staticmethod
     def parse(predicate_str: str) -> Optional[Tuple[str, List[str]]]:
@@ -152,14 +159,16 @@ class PredicateParser:
 
         # Parse parameters (comma-separated, may have spaces)
         if params_str:
-            param_names = [p.strip() for p in params_str.split(',')]
+            param_names = [p.strip() for p in params_str.split(",")]
         else:
             param_names = []
 
         return predicate_name, param_names
 
     @staticmethod
-    def resolve_parameters(param_names: List[str], operation_params: Dict[str, Any]) -> Dict[str, Any]:
+    def resolve_parameters(
+        param_names: List[str], operation_params: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Resolve parameter names to actual values from operation parameters.
 
@@ -206,10 +215,7 @@ class OperationVerifier:
         self.world_state = get_world_state()
 
     def verify_preconditions(
-        self,
-        operation: BasicOperation,
-        params: Dict[str, Any],
-        world_state=None
+        self, operation: BasicOperation, params: Dict[str, Any], world_state=None
     ) -> VerificationResult:
         """
         Verify operation preconditions before execution.
@@ -254,7 +260,9 @@ class OperationVerifier:
 
             # Evaluate the predicate
             try:
-                is_valid, reason = evaluate_predicate(predicate_name, **predicate_params)
+                is_valid, reason = evaluate_predicate(
+                    predicate_name, **predicate_params
+                )
 
                 if not is_valid:
                     # Precondition failed
@@ -264,7 +272,7 @@ class OperationVerifier:
                         severity="error",
                         suggestions=self._suggest_recovery_for_predicate(
                             predicate_name, reason, params
-                        )
+                        ),
                     )
                     logger.warning(f"Precondition failed: {precondition} - {reason}")
                 else:
@@ -276,7 +284,10 @@ class OperationVerifier:
                     predicate=precondition,
                     reason=f"Evaluation error: {str(e)}",
                     severity="error",
-                    suggestions=["Check predicate parameters", "Verify world state is accessible"]
+                    suggestions=[
+                        "Check predicate parameters",
+                        "Verify world state is accessible",
+                    ],
                 )
 
         return result
@@ -286,7 +297,7 @@ class OperationVerifier:
         operation: BasicOperation,
         operation_result: OperationResult,
         params: Dict[str, Any],
-        world_state=None
+        world_state=None,
     ) -> VerificationResult:
         """
         Verify operation postconditions after execution.
@@ -316,8 +327,11 @@ class OperationVerifier:
                 predicate="operation_succeeded",
                 reason=f"Operation failed: {operation_result.error}",
                 severity="error",
-                suggestions=operation_result.error.get("recovery_suggestions", [])
-                if operation_result.error else []
+                suggestions=(
+                    operation_result.error.get("recovery_suggestions", [])
+                    if operation_result.error
+                    else []
+                ),
             )
             return result
 
@@ -340,7 +354,9 @@ class OperationVerifier:
 
             # Evaluate the predicate
             try:
-                is_valid, reason = evaluate_predicate(predicate_name, **predicate_params)
+                is_valid, reason = evaluate_predicate(
+                    predicate_name, **predicate_params
+                )
 
                 if not is_valid:
                     # Postcondition failed - may indicate operation didn't complete as expected
@@ -351,8 +367,8 @@ class OperationVerifier:
                         suggestions=[
                             "Operation may not have completed fully",
                             "Check robot status",
-                            "Consider retrying operation"
-                        ]
+                            "Consider retrying operation",
+                        ],
                     )
                     logger.warning(f"Postcondition failed: {postcondition} - {reason}")
 
@@ -362,16 +378,13 @@ class OperationVerifier:
                     predicate=postcondition,
                     reason=f"Evaluation error: {str(e)}",
                     severity="warning",
-                    suggestions=["Check world state", "Verify operation completed"]
+                    suggestions=["Check world state", "Verify operation completed"],
                 )
 
         return result
 
     def _suggest_recovery_for_predicate(
-        self,
-        predicate_name: str,
-        failure_reason: str,
-        params: Dict[str, Any]
+        self, predicate_name: str, failure_reason: str, params: Dict[str, Any]
     ) -> List[str]:
         """
         Generate recovery suggestions for a failed predicate.
@@ -387,40 +400,52 @@ class OperationVerifier:
         suggestions = []
 
         if predicate_name == "target_within_reach":
-            suggestions.extend([
-                "Move target closer to robot base",
-                "Use a different robot closer to target",
-                f"Current robot: {params.get('robot_id')}",
-                "Consider breaking movement into multiple steps"
-            ])
+            suggestions.extend(
+                [
+                    "Move target closer to robot base",
+                    "Use a different robot closer to target",
+                    f"Current robot: {params.get('robot_id')}",
+                    "Consider breaking movement into multiple steps",
+                ]
+            )
 
         elif predicate_name == "robot_is_initialized":
-            suggestions.extend([
-                "Initialize robot before commanding movement",
-                "Check Unity RobotManager has robot registered",
-                "Verify robot is powered on and connected"
-            ])
+            suggestions.extend(
+                [
+                    "Initialize robot before commanding movement",
+                    "Check Unity RobotManager has robot registered",
+                    "Verify robot is powered on and connected",
+                ]
+            )
 
         elif predicate_name == "robot_is_stationary":
-            suggestions.extend([
-                "Wait for current movement to complete",
-                "Cancel current movement before starting new one",
-                "Check robot is not stuck in motion"
-            ])
+            suggestions.extend(
+                [
+                    "Wait for current movement to complete",
+                    "Cancel current movement before starting new one",
+                    "Check robot is not stuck in motion",
+                ]
+            )
 
         elif predicate_name == "is_in_robot_workspace":
-            suggestions.extend([
-                "Target position outside robot workspace",
-                "Use move_to_region to navigate to correct workspace",
-                "Consider using shared_zone for handoff operations"
-            ])
+            suggestions.extend(
+                [
+                    "Target position outside robot workspace",
+                    "Use move_to_region to navigate to correct workspace",
+                    "Consider using shared_zone for handoff operations",
+                ]
+            )
 
-        elif predicate_name == "gripper_is_open" or predicate_name == "gripper_is_closed":
-            suggestions.extend([
-                "Send gripper command to change state",
-                "Use control_gripper operation",
-                "Check gripper is not obstructed"
-            ])
+        elif (
+            predicate_name == "gripper_is_open" or predicate_name == "gripper_is_closed"
+        ):
+            suggestions.extend(
+                [
+                    "Send gripper command to change state",
+                    "Use control_gripper operation",
+                    "Check gripper is not obstructed",
+                ]
+            )
 
         else:
             suggestions.append(f"Address issue: {failure_reason}")
@@ -434,9 +459,7 @@ class OperationVerifier:
 
 
 def quick_verify_operation(
-    operation: BasicOperation,
-    params: Dict[str, Any],
-    world_state=None
+    operation: BasicOperation, params: Dict[str, Any], world_state=None
 ) -> Tuple[bool, VerificationResult]:
     """
     Quick verification helper for checking if operation is safe to execute.

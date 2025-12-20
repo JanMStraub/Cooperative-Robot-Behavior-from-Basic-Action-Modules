@@ -15,7 +15,7 @@ namespace PythonCommunication.Core
         RAG_RESPONSE = 0x04,
         STATUS_QUERY = 0x05,
         STATUS_RESPONSE = 0x06,
-        STEREO_IMAGE = 0x07
+        STEREO_IMAGE = 0x07,
     }
 
     /// <summary>
@@ -65,7 +65,12 @@ namespace PythonCommunication.Core
         /// <param name="messageType">Decoded message type</param>
         /// <param name="requestId">Decoded request ID</param>
         /// <returns>New offset after header</returns>
-        public static int DecodeHeader(byte[] data, int offset, out MessageType messageType, out uint requestId)
+        public static int DecodeHeader(
+            byte[] data,
+            int offset,
+            out MessageType messageType,
+            out uint requestId
+        )
         {
             if (data == null || data.Length - offset < HEADER_SIZE)
             {
@@ -96,7 +101,12 @@ namespace PythonCommunication.Core
         /// <param name="imageBytes">Encoded image data (PNG/JPG)</param>
         /// <param name="requestId">Request ID for correlation (default 0)</param>
         /// <returns>Encoded message bytes</returns>
-        public static byte[] EncodeImageMessage(string cameraId, string prompt, byte[] imageBytes, uint requestId = 0)
+        public static byte[] EncodeImageMessage(
+            string cameraId,
+            string prompt,
+            byte[] imageBytes,
+            uint requestId = 0
+        )
         {
             // Validate inputs
             if (string.IsNullOrEmpty(cameraId))
@@ -143,11 +153,11 @@ namespace PythonCommunication.Core
 
             // Calculate total message size: header + 3 length fields + data
             int totalSize =
-                HEADER_SIZE +
-                INT_SIZE * 3 +
-                cameraIdBytes.Length +
-                promptBytes.Length +
-                imageBytes.Length;
+                HEADER_SIZE
+                + INT_SIZE * 3
+                + cameraIdBytes.Length
+                + promptBytes.Length
+                + imageBytes.Length;
             byte[] message = new byte[totalSize];
 
             int offset = 0;
@@ -158,19 +168,37 @@ namespace PythonCommunication.Core
             offset += HEADER_SIZE;
 
             // Write camera ID length and data
-            Buffer.BlockCopy(BitConverter.GetBytes(cameraIdBytes.Length), 0, message, offset, INT_SIZE);
+            Buffer.BlockCopy(
+                BitConverter.GetBytes(cameraIdBytes.Length),
+                0,
+                message,
+                offset,
+                INT_SIZE
+            );
             offset += INT_SIZE;
             Buffer.BlockCopy(cameraIdBytes, 0, message, offset, cameraIdBytes.Length);
             offset += cameraIdBytes.Length;
 
             // Write prompt length and data
-            Buffer.BlockCopy(BitConverter.GetBytes(promptBytes.Length), 0, message, offset, INT_SIZE);
+            Buffer.BlockCopy(
+                BitConverter.GetBytes(promptBytes.Length),
+                0,
+                message,
+                offset,
+                INT_SIZE
+            );
             offset += INT_SIZE;
             Buffer.BlockCopy(promptBytes, 0, message, offset, promptBytes.Length);
             offset += promptBytes.Length;
 
             // Write image length and data
-            Buffer.BlockCopy(BitConverter.GetBytes(imageBytes.Length), 0, message, offset, INT_SIZE);
+            Buffer.BlockCopy(
+                BitConverter.GetBytes(imageBytes.Length),
+                0,
+                message,
+                offset,
+                INT_SIZE
+            );
             offset += INT_SIZE;
             Buffer.BlockCopy(imageBytes, 0, message, offset, imageBytes.Length);
 
@@ -215,17 +243,23 @@ namespace PythonCommunication.Core
 
             if (string.IsNullOrEmpty(cameraRightId))
             {
-                throw new ArgumentException($"{_logPrefix} Camera right ID cannot be null or empty");
+                throw new ArgumentException(
+                    $"{_logPrefix} Camera right ID cannot be null or empty"
+                );
             }
 
             if (leftImageBytes == null || leftImageBytes.Length == 0)
             {
-                throw new ArgumentException($"{_logPrefix} Left image bytes cannot be null or empty");
+                throw new ArgumentException(
+                    $"{_logPrefix} Left image bytes cannot be null or empty"
+                );
             }
 
             if (rightImageBytes == null || rightImageBytes.Length == 0)
             {
-                throw new ArgumentException($"{_logPrefix} Right image bytes cannot be null or empty");
+                throw new ArgumentException(
+                    $"{_logPrefix} Right image bytes cannot be null or empty"
+                );
             }
 
             if (leftImageBytes.Length > MAX_IMAGE_SIZE)
@@ -285,14 +319,14 @@ namespace PythonCommunication.Core
 
             // Calculate total message size: header + 7 length fields + all data
             int totalSize =
-                HEADER_SIZE +
-                INT_SIZE * 7 +
-                pairIdBytes.Length +
-                leftIdBytes.Length +
-                rightIdBytes.Length +
-                promptBytes.Length +
-                leftImageBytes.Length +
-                rightImageBytes.Length;
+                HEADER_SIZE
+                + INT_SIZE * 7
+                + pairIdBytes.Length
+                + leftIdBytes.Length
+                + rightIdBytes.Length
+                + promptBytes.Length
+                + leftImageBytes.Length
+                + rightImageBytes.Length;
             byte[] message = new byte[totalSize];
 
             int offset = 0;
@@ -303,37 +337,73 @@ namespace PythonCommunication.Core
             offset += HEADER_SIZE;
 
             // Write camera pair ID length and data
-            Buffer.BlockCopy(BitConverter.GetBytes(pairIdBytes.Length), 0, message, offset, INT_SIZE);
+            Buffer.BlockCopy(
+                BitConverter.GetBytes(pairIdBytes.Length),
+                0,
+                message,
+                offset,
+                INT_SIZE
+            );
             offset += INT_SIZE;
             Buffer.BlockCopy(pairIdBytes, 0, message, offset, pairIdBytes.Length);
             offset += pairIdBytes.Length;
 
             // Write camera left ID length and data
-            Buffer.BlockCopy(BitConverter.GetBytes(leftIdBytes.Length), 0, message, offset, INT_SIZE);
+            Buffer.BlockCopy(
+                BitConverter.GetBytes(leftIdBytes.Length),
+                0,
+                message,
+                offset,
+                INT_SIZE
+            );
             offset += INT_SIZE;
             Buffer.BlockCopy(leftIdBytes, 0, message, offset, leftIdBytes.Length);
             offset += leftIdBytes.Length;
 
             // Write camera right ID length and data
-            Buffer.BlockCopy(BitConverter.GetBytes(rightIdBytes.Length), 0, message, offset, INT_SIZE);
+            Buffer.BlockCopy(
+                BitConverter.GetBytes(rightIdBytes.Length),
+                0,
+                message,
+                offset,
+                INT_SIZE
+            );
             offset += INT_SIZE;
             Buffer.BlockCopy(rightIdBytes, 0, message, offset, rightIdBytes.Length);
             offset += rightIdBytes.Length;
 
             // Write prompt length and data
-            Buffer.BlockCopy(BitConverter.GetBytes(promptBytes.Length), 0, message, offset, INT_SIZE);
+            Buffer.BlockCopy(
+                BitConverter.GetBytes(promptBytes.Length),
+                0,
+                message,
+                offset,
+                INT_SIZE
+            );
             offset += INT_SIZE;
             Buffer.BlockCopy(promptBytes, 0, message, offset, promptBytes.Length);
             offset += promptBytes.Length;
 
             // Write left image length and data
-            Buffer.BlockCopy(BitConverter.GetBytes(leftImageBytes.Length), 0, message, offset, INT_SIZE);
+            Buffer.BlockCopy(
+                BitConverter.GetBytes(leftImageBytes.Length),
+                0,
+                message,
+                offset,
+                INT_SIZE
+            );
             offset += INT_SIZE;
             Buffer.BlockCopy(leftImageBytes, 0, message, offset, leftImageBytes.Length);
             offset += leftImageBytes.Length;
 
             // Write right image length and data
-            Buffer.BlockCopy(BitConverter.GetBytes(rightImageBytes.Length), 0, message, offset, INT_SIZE);
+            Buffer.BlockCopy(
+                BitConverter.GetBytes(rightImageBytes.Length),
+                0,
+                message,
+                offset,
+                INT_SIZE
+            );
             offset += INT_SIZE;
             Buffer.BlockCopy(rightImageBytes, 0, message, offset, rightImageBytes.Length);
 
@@ -496,7 +566,9 @@ namespace PythonCommunication.Core
 
             if (topK < 1 || topK > 100)
             {
-                throw new ArgumentException($"{_logPrefix} topK must be between 1 and 100, got {topK}");
+                throw new ArgumentException(
+                    $"{_logPrefix} topK must be between 1 and 100, got {topK}"
+                );
             }
 
             // Encode strings to UTF-8
@@ -529,7 +601,13 @@ namespace PythonCommunication.Core
             offset += HEADER_SIZE;
 
             // Write query length and data
-            Buffer.BlockCopy(BitConverter.GetBytes(queryBytes.Length), 0, message, offset, INT_SIZE);
+            Buffer.BlockCopy(
+                BitConverter.GetBytes(queryBytes.Length),
+                0,
+                message,
+                offset,
+                INT_SIZE
+            );
             offset += INT_SIZE;
             Buffer.BlockCopy(queryBytes, 0, message, offset, queryBytes.Length);
             offset += queryBytes.Length;
@@ -539,7 +617,13 @@ namespace PythonCommunication.Core
             offset += INT_SIZE;
 
             // Write filters length and data
-            Buffer.BlockCopy(BitConverter.GetBytes(filtersBytes.Length), 0, message, offset, INT_SIZE);
+            Buffer.BlockCopy(
+                BitConverter.GetBytes(filtersBytes.Length),
+                0,
+                message,
+                offset,
+                INT_SIZE
+            );
             offset += INT_SIZE;
             Buffer.BlockCopy(filtersBytes, 0, message, offset, filtersBytes.Length);
 
@@ -561,7 +645,9 @@ namespace PythonCommunication.Core
 
             if (msgType != MessageType.RAG_QUERY)
             {
-                throw new ArgumentException($"{_logPrefix} Expected RAG_QUERY message, got {msgType}");
+                throw new ArgumentException(
+                    $"{_logPrefix} Expected RAG_QUERY message, got {msgType}"
+                );
             }
 
             // Read query
@@ -602,7 +688,9 @@ namespace PythonCommunication.Core
 
             if (msgType != MessageType.RAG_RESPONSE)
             {
-                throw new ArgumentException($"{_logPrefix} Expected RAG_RESPONSE message, got {msgType}");
+                throw new ArgumentException(
+                    $"{_logPrefix} Expected RAG_RESPONSE message, got {msgType}"
+                );
             }
 
             // Read JSON length
@@ -625,7 +713,9 @@ namespace PythonCommunication.Core
         {
             if (string.IsNullOrEmpty(operationContextJson))
             {
-                throw new ArgumentException($"{_logPrefix} Operation context JSON cannot be null or empty");
+                throw new ArgumentException(
+                    $"{_logPrefix} Operation context JSON cannot be null or empty"
+                );
             }
 
             byte[] jsonBytes = Encoding.UTF8.GetBytes(operationContextJson);
@@ -658,7 +748,11 @@ namespace PythonCommunication.Core
         /// <param name="detailed">If true, request detailed joint information</param>
         /// <param name="requestId">Request ID for correlation (default 0)</param>
         /// <returns>Encoded message bytes</returns>
-        public static byte[] EncodeStatusQuery(string robotId, bool detailed = false, uint requestId = 0)
+        public static byte[] EncodeStatusQuery(
+            string robotId,
+            bool detailed = false,
+            uint requestId = 0
+        )
         {
             // Validate inputs
             if (string.IsNullOrEmpty(robotId))
@@ -688,7 +782,13 @@ namespace PythonCommunication.Core
             offset += HEADER_SIZE;
 
             // Write robot ID length and data
-            Buffer.BlockCopy(BitConverter.GetBytes(robotIdBytes.Length), 0, message, offset, INT_SIZE);
+            Buffer.BlockCopy(
+                BitConverter.GetBytes(robotIdBytes.Length),
+                0,
+                message,
+                offset,
+                INT_SIZE
+            );
             offset += INT_SIZE;
             Buffer.BlockCopy(robotIdBytes, 0, message, offset, robotIdBytes.Length);
             offset += robotIdBytes.Length;
@@ -713,7 +813,9 @@ namespace PythonCommunication.Core
 
             if (msgType != MessageType.STATUS_QUERY)
             {
-                throw new ArgumentException($"{_logPrefix} Expected STATUS_QUERY message, got {msgType}");
+                throw new ArgumentException(
+                    $"{_logPrefix} Expected STATUS_QUERY message, got {msgType}"
+                );
             }
 
             // Read robot ID
@@ -748,7 +850,9 @@ namespace PythonCommunication.Core
 
             if (msgType != MessageType.STATUS_RESPONSE)
             {
-                throw new ArgumentException($"{_logPrefix} Expected STATUS_RESPONSE message, got {msgType}");
+                throw new ArgumentException(
+                    $"{_logPrefix} Expected STATUS_RESPONSE message, got {msgType}"
+                );
             }
 
             // Read JSON length
