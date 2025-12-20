@@ -31,7 +31,7 @@ class TestQueryEngine:
         )
 
     @patch("rag.QueryEngine.EmbeddingGenerator")
-    @patch("rag.QueryEngine.get_global_registry")
+    @patch("operations.Registry.get_global_registry")
     def test_search_basic(self, mock_registry, mock_embedding_gen):
         """Test basic search functionality"""
         # Mock embedding generator
@@ -58,7 +58,7 @@ class TestQueryEngine:
         assert results == []
 
     @patch("rag.QueryEngine.EmbeddingGenerator")
-    @patch("rag.QueryEngine.get_global_registry")
+    @patch("operations.Registry.get_global_registry")
     def test_search_with_category_filter(self, mock_registry, mock_embedding_gen):
         """Test search with category filtering"""
         mock_emb = Mock()
@@ -71,7 +71,7 @@ class TestQueryEngine:
         assert all(r["metadata"]["category"] == "navigation" for r in results)
 
     @patch("rag.QueryEngine.EmbeddingGenerator")
-    @patch("rag.QueryEngine.get_global_registry")
+    @patch("operations.Registry.get_global_registry")
     def test_get_operation_context(self, mock_registry, mock_embedding_gen):
         """Test getting full operation context"""
         # Mock registry

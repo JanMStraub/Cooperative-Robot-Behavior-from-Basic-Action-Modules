@@ -54,11 +54,11 @@ try:
 except ImportError:
     from .. import LLMConfig as cfg
 
-# Import UnifiedImageStorage - try both import styles
+# Import UnifiedImageStorage from core (not server to avoid circular dependency)
 try:
-    from servers.ImageServer import UnifiedImageStorage
+    from servers.ImageStorageCore import UnifiedImageStorage
 except ImportError:
-    from ..servers.ImageServer import UnifiedImageStorage
+    from ..servers.ImageStorageCore import UnifiedImageStorage
 
 # Configure logging
 logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)

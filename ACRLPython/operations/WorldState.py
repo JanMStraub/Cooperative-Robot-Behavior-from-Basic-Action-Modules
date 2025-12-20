@@ -18,8 +18,11 @@ import logging
 import threading
 from typing import Dict, Optional, Tuple, Any
 from dataclasses import dataclass, field
-import LLMConfig
-from operations.StatusOperations import check_robot_status
+try:
+    from .. import LLMConfig
+except ImportError:
+    import LLMConfig
+from .StatusOperations import check_robot_status
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

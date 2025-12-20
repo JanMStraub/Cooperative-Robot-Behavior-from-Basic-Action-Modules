@@ -75,8 +75,8 @@ DUPLICATE_TIME_THRESHOLD = 0.1  # Time threshold for detecting duplicate sends (
 # ===========================
 
 # LM Studio server configuration
-# LMSTUDIO_BASE_URL = "http://127.0.0.1:1234/v1"  # local
-LMSTUDIO_BASE_URL = "http://192.168.178.53:1234/v1"  # GPU
+LMSTUDIO_BASE_URL = "http://127.0.0.1:1234/v1"  # local
+# LMSTUDIO_BASE_URL = "http://192.168.178.53:1234/v1"  # GPU
 
 # Default LM Studio model (use model name shown in LM Studio)
 DEFAULT_LMSTUDIO_MODEL = "mistralai/ministral-3-14b-reasoning"

@@ -28,9 +28,14 @@ from typing import Optional, List, Dict, Any
 import os
 import logging
 
-from operations.Registry import OperationRegistry, get_global_registry
 
-# Import config
+def _get_registry():
+    """Get registry instance"""
+    # Lazy import to avoid circular dependency
+    from operations.Registry import get_global_registry
+
+    return get_global_registry()
+
 # Import config - try both import styles
 try:
     import LLMConfig as config
@@ -65,7 +70,7 @@ class RAGSystem:
         self,
         lm_studio_url: Optional[str] = None,
         embedding_model: Optional[str] = None,
-        registry: Optional[OperationRegistry] = None,
+        registry: Optional[Any] = None,  # Changed to Any to avoid circular import
         auto_load_index: bool = True,
     ):
         """
@@ -82,7 +87,7 @@ class RAGSystem:
             ✓ Connected to LM Studio at http://localhost:1234/v1
             Loaded vector store from .rag_index.pkl (5 operations)
         """
-        self.registry = registry or get_global_registry()
+        self.registry = registry or _get_registry()
         self.embedding_generator = EmbeddingGenerator(
             base_url=lm_studio_url, model=embedding_model
         )

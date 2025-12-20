@@ -25,10 +25,16 @@ try:
 except ImportError:
     from .. import LLMConfig as cfg
 
-# Import servers
-from servers.ImageServer import ImageServer
-from servers.CommandServer import run_command_server_background, get_command_broadcaster
-from servers.SequenceServer import run_sequence_server_background
+# Import servers - handle both direct execution and package import
+try:
+    from ..servers.ImageServer import ImageServer
+    from ..servers.CommandServer import run_command_server_background, get_command_broadcaster
+    from ..servers.SequenceServer import run_sequence_server_background
+except ImportError:
+    # Running as python -m orchestrators.RunRobotController
+    from servers.ImageServer import ImageServer
+    from servers.CommandServer import run_command_server_background, get_command_broadcaster
+    from servers.SequenceServer import run_sequence_server_background
 
 logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
 logger = logging.getLogger(__name__)

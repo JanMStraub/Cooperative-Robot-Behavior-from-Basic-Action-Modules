@@ -8,7 +8,6 @@ Semantic search and retrieval over operations.
 from typing import List, Dict, Any, Optional
 import logging
 
-from operations.Registry import OperationRegistry, get_global_registry
 from .Embeddings import EmbeddingGenerator
 from .VectorStore import VectorStore
 
@@ -36,7 +35,7 @@ class QueryEngine:
         self,
         vector_store: VectorStore,
         embedding_generator: Optional[EmbeddingGenerator] = None,
-        registry: Optional[OperationRegistry] = None,
+        registry: Optional[Any] = None,  # Changed to Any to avoid circular import
     ):
         """
         Initialize the query engine.
@@ -46,6 +45,9 @@ class QueryEngine:
             embedding_generator: Embedding generator (default: new instance)
             registry: Operation registry for full operation details
         """
+        # Lazy import to avoid circular dependency
+        from operations.Registry import get_global_registry
+
         self.vector_store = vector_store
         self.embedding_generator = embedding_generator or EmbeddingGenerator()
         self.registry = registry or get_global_registry()

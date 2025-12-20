@@ -1051,8 +1051,7 @@ class TestSyncWithSequenceExecutor:
         assert result["completed_commands"] == 3
         assert all(r["success"] for r in result["results"])
 
-    @patch('orchestrators.SequenceExecutor.get_command_broadcaster')
-    def test_parallel_group_with_signals(self, mock_broadcaster, cleanup_event_bus):
+    def test_parallel_group_with_signals(self, cleanup_event_bus):
         """Test parallel execution groups with signal synchronization"""
         from orchestrators.SequenceExecutor import SequenceExecutor
 

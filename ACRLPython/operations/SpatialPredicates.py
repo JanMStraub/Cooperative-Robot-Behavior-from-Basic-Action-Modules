@@ -12,7 +12,10 @@ All predicates are registered in PREDICATE_REGISTRY for dynamic lookup.
 import math
 import logging
 from typing import Tuple, Dict, Callable, Any, Optional
-import LLMConfig
+try:
+    from .. import LLMConfig
+except ImportError:
+    import LLMConfig
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

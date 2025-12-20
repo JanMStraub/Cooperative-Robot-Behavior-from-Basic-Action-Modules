@@ -11,7 +11,7 @@ import logging
 import time
 from typing import Optional
 
-from operations.Base import (
+from .Base import (
     BasicOperation,
     OperationParameter,
     OperationCategory,
@@ -21,15 +21,11 @@ from operations.Base import (
     OperationRelationship,
 )
 
-# Import vision modules
-try:
-    from vision.ObjectDetector import CubeDetector
-    from vision.AnalyzeImage import LMStudioVisionProcessor
-    from vision.StereoConfig import CameraConfig
-except ImportError:
-    from ..vision.ObjectDetector import CubeDetector
-    from ..vision.AnalyzeImage import LMStudioVisionProcessor
-    from ..vision.StereoConfig import CameraConfig
+# Lazy imports to avoid circular dependency
+# Vision modules are imported inside functions where they're needed
+# from vision.ObjectDetector import CubeDetector
+# from vision.AnalyzeImage import LMStudioVisionProcessor
+# from vision.StereoConfig import CameraConfig
 
 # Import config
 try:
@@ -117,7 +113,7 @@ def detect_object(
 
     try:
         # Get image storage and command broadcaster
-        from servers.ImageServer import UnifiedImageStorage
+        from servers.ImageStorageCore import UnifiedImageStorage
         from servers.CommandServer import get_command_broadcaster
 
         storage = UnifiedImageStorage()
@@ -205,6 +201,10 @@ def detect_object(
             logger.warning(
                 f"No metadata received from Unity, using defaults: pos={camera_position}, rot={camera_rotation}"
             )
+
+        # Lazy imports to avoid circular dependency
+        from vision.ObjectDetector import CubeDetector
+        from vision.StereoConfig import CameraConfig
 
         # Run detection using CubeDetector with stereo mode
         detector = CubeDetector()
@@ -394,7 +394,7 @@ def analyze_scene(
 
     try:
         # Get image storage
-        from servers.ImageServer import UnifiedImageStorage
+        from servers.ImageStorageCore import UnifiedImageStorage
 
         storage = UnifiedImageStorage()
 
@@ -413,6 +413,9 @@ def analyze_scene(
                     "No images available for analysis",
                     ["Ensure camera is connected", "Check camera_id parameter"],
                 )
+
+        # Lazy import to avoid circular dependency
+        from vision.AnalyzeImage import LMStudioVisionProcessor
 
         # Use LMStudioVisionProcessor
         processor = LMStudioVisionProcessor(model=model)
@@ -583,7 +586,7 @@ def detect_object_stereo(
 
     try:
         # Get image storage and command broadcaster
-        from servers.ImageServer import UnifiedImageStorage
+        from servers.ImageStorageCore import UnifiedImageStorage
         from servers.CommandServer import get_command_broadcaster
 
         storage = UnifiedImageStorage()
@@ -682,6 +685,10 @@ def detect_object_stereo(
             logger.warning(
                 f"No metadata received from Unity, using defaults: pos={camera_position}, rot={camera_rotation}"
             )
+
+        # Lazy imports to avoid circular dependency
+        from vision.ObjectDetector import CubeDetector
+        from vision.StereoConfig import CameraConfig
 
         # Run detection using CubeDetector with stereo mode
         detector = CubeDetector()

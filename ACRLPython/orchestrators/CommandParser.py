@@ -23,9 +23,16 @@ import re
 import logging
 import requests
 
-from rag import RAGSystem
-from operations.Registry import get_global_registry
-import LLMConfig as cfg
+# Handle both direct execution and package import
+try:
+    from ..rag import RAGSystem
+    # Lazy import to avoid circular dependency
+    # from ..operations.Registry import get_global_registry
+    from .. import LLMConfig as cfg
+except ImportError:
+    from rag import RAGSystem
+    # from operations.Registry import get_global_registry
+    import LLMConfig as cfg
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -54,6 +61,9 @@ class CommandParser:
             model: Model name for parsing (default from config)
             use_rag: Whether to use RAG for semantic operation context
         """
+        # Lazy import to avoid circular dependency
+        from operations.Registry import get_global_registry
+
         self.lm_studio_url = lm_studio_url or cfg.LMSTUDIO_BASE_URL
         self.model = model or cfg.DEFAULT_LMSTUDIO_MODEL
         self.registry = get_global_registry()

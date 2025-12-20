@@ -11,10 +11,17 @@ Active Servers (December 2025 Architecture):
 
 Legacy servers (DetectionServer, StreamingServer, StereoDetectionServer,
 ResultsServer, RAGServer) have been consolidated into the above three servers.
+
+Module Architecture:
+- ImageStorageCore: Core image storage singleton (no server dependencies)
+- ImageServer: TCP server that uses ImageStorageCore
 """
 
+# Import storage singleton from core module (avoids circular dependencies)
+from .ImageStorageCore import UnifiedImageStorage
+
+# Import server classes
 from .ImageServer import (
-    UnifiedImageStorage,
     ImageServer,
     run_image_server_background,
 )

@@ -16,9 +16,9 @@ import re
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
-from operations.SpatialPredicates import evaluate_predicate
-from operations.WorldState import get_world_state
-from operations.Base import BasicOperation, OperationResult
+from .SpatialPredicates import evaluate_predicate
+from .WorldState import get_world_state
+from .Base import BasicOperation, OperationResult
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

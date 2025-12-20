@@ -261,9 +261,9 @@ class TestGetImagesFromServer:
         """Test getting images from all cameras"""
         mock_storage = MagicMock()
         mock_storage.get_all_camera_ids.return_value = ["camera1", "camera2"]
-        mock_storage.get_single_image.return_value = sample_image
-        mock_storage.get_single_prompt.return_value = "test prompt"
-        mock_storage.get_single_age.return_value = 1.0
+        mock_storage.get_camera_image.return_value = sample_image
+        mock_storage.get_camera_prompt.return_value = "test prompt"
+        mock_storage.get_camera_age.return_value = 1.0
         mock_storage_class.return_value = mock_storage
 
         images, camera_ids, prompts = get_images_from_server()
@@ -277,9 +277,9 @@ class TestGetImagesFromServer:
     def test_get_images_specific_cameras(self, mock_storage_class, sample_image):
         """Test getting images from specific cameras"""
         mock_storage = MagicMock()
-        mock_storage.get_single_image.return_value = sample_image
-        mock_storage.get_single_prompt.return_value = "prompt"
-        mock_storage.get_single_age.return_value = 1.0
+        mock_storage.get_camera_image.return_value = sample_image
+        mock_storage.get_camera_prompt.return_value = "prompt"
+        mock_storage.get_camera_age.return_value = 1.0
         mock_storage_class.return_value = mock_storage
 
         images, camera_ids, prompts = get_images_from_server(["camera1"])
@@ -301,7 +301,7 @@ class TestGetImagesFromServer:
     def test_get_images_missing_camera(self, mock_storage_class):
         """Test handling of missing camera images"""
         mock_storage = MagicMock()
-        mock_storage.get_single_image.return_value = None
+        mock_storage.get_camera_image.return_value = None
         mock_storage_class.return_value = mock_storage
 
         with pytest.raises(ValueError, match="No images available"):

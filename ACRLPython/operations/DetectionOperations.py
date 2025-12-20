@@ -10,14 +10,25 @@ stored in ImageStorage and return detection results directly.
 import time
 import logging
 
-from servers.ImageServer import UnifiedImageStorage
-from .Base import (
-    BasicOperation,
-    OperationCategory,
-    OperationComplexity,
-    OperationParameter,
-    OperationResult,
-)
+# Handle both direct execution and package import
+try:
+    from ..servers.ImageStorageCore import UnifiedImageStorage
+    from .Base import (
+        BasicOperation,
+        OperationCategory,
+        OperationComplexity,
+        OperationParameter,
+        OperationResult,
+    )
+except ImportError:
+    from servers.ImageStorageCore import UnifiedImageStorage
+    from operations.Base import (
+        BasicOperation,
+        OperationCategory,
+        OperationComplexity,
+        OperationParameter,
+        OperationResult,
+    )
 
 # Configure logging
 logger = logging.getLogger(__name__)

@@ -144,13 +144,19 @@ class VisionProcessor:
         # Initialize shared state if enabled
         if self.enable_shared_state:
             try:
-                from ..operations.SharedVisionState import get_shared_vision_state
+                # Use absolute import to avoid "beyond top-level package" error
+                from operations.SharedVisionState import get_shared_vision_state
 
                 self.shared_state = get_shared_vision_state()
                 logging.info("Shared vision state enabled for VisionProcessor")
-            except ImportError:
+            except ImportError as e:
                 logging.warning(
-                    "SharedVisionState not available - shared state disabled"
+                    f"SharedVisionState not available - shared state disabled. ImportError: {e}"
+                )
+                self.enable_shared_state = False
+            except Exception as e:
+                logging.warning(
+                    f"SharedVisionState initialization failed - shared state disabled. Error: {type(e).__name__}: {e}"
                 )
                 self.enable_shared_state = False
 

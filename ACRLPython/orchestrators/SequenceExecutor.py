@@ -19,12 +19,22 @@ import time
 import logging
 import threading
 
-from operations.Registry import get_global_registry
-from operations.Base import OperationCategory
-from operations.Verification import OperationVerifier
-from operations.CoordinationVerifier import CoordinationVerifier
-from operations.WorldState import get_world_state
-from servers.CommandServer import get_command_broadcaster
+# Lazy imports to avoid circular dependency
+# Handle both direct execution and package import
+try:
+    # from ..operations.Registry import get_global_registry
+    from ..operations.Base import OperationCategory
+    from ..operations.Verification import OperationVerifier
+    from ..operations.CoordinationVerifier import CoordinationVerifier
+    from ..operations.WorldState import get_world_state
+    # from ..servers.CommandServer import get_command_broadcaster
+except ImportError:
+    # from operations.Registry import get_global_registry
+    from operations.Base import OperationCategory
+    from operations.Verification import OperationVerifier
+    from operations.CoordinationVerifier import CoordinationVerifier
+    from operations.WorldState import get_world_state
+    # from servers.CommandServer import get_command_broadcaster
 
 # Configure logging with safe handler for background threads
 logger = logging.getLogger(__name__)
@@ -168,6 +178,9 @@ class SequenceExecutor:
             check_completion: Whether to check for operation completion via StatusServer
             enable_verification: Whether to enable formal verification (preconditions/postconditions)
         """
+        # Lazy import to avoid circular dependency
+        from operations.Registry import get_global_registry
+
         self.registry = get_global_registry()
         self.default_timeout = default_timeout
         self.check_completion = check_completion
@@ -188,6 +201,11 @@ class SequenceExecutor:
             self.verifier = None
             self.coordination_verifier = None
             self.world_state = None
+
+    def _get_command_broadcaster(self):
+        """Lazy import of command broadcaster to avoid circular dependency"""
+        from servers.CommandServer import get_command_broadcaster
+        return get_command_broadcaster()
 
     def execute_sequence(
         self,
@@ -537,7 +555,7 @@ class SequenceExecutor:
 
         # If completion checking is enabled, create queue before sending command
         if self.check_completion:
-            get_command_broadcaster().create_completion_queue(request_id)
+            self._get_command_broadcaster().create_completion_queue(request_id)
             logger.debug(f"Created completion queue for request_id {request_id}")
 
         try:
@@ -631,7 +649,7 @@ class SequenceExecutor:
         finally:
             # Always clean up the queue to prevent accumulation
             if self.check_completion:
-                get_command_broadcaster().remove_completion_queue(request_id)
+                self._get_command_broadcaster().remove_completion_queue(request_id)
                 logger.debug(f"Removed completion queue for request_id {request_id}")
 
     def _wait_for_completion(
@@ -662,7 +680,7 @@ class SequenceExecutor:
 
             try:
                 # Wait for completion signal from Unity
-                response = get_command_broadcaster().get_completion(
+                response = self._get_command_broadcaster().get_completion(
                     request_id, timeout=poll_interval
                 )
 
