@@ -59,7 +59,9 @@ class UnifiedImageStorage:
         """Initialize storage structures."""
         self._single_images: Dict[str, Tuple[np.ndarray, float, str]] = {}
         # Stereo: (imgL, imgR, prompt, timestamp, metadata)
-        self._stereo_images: Dict[str, Tuple[np.ndarray, np.ndarray, str, float, dict]] = {}
+        self._stereo_images: Dict[
+            str, Tuple[np.ndarray, np.ndarray, str, float, dict]
+        ] = {}
         self._data_lock = threading.Lock()
 
     # Single camera methods
@@ -94,21 +96,38 @@ class UnifiedImageStorage:
         with self._data_lock:
             if not self._single_images:
                 return None
-            latest_id = max(self._single_images.keys(),
-                          key=lambda k: self._single_images[k][1])
+            latest_id = max(
+                self._single_images.keys(), key=lambda k: self._single_images[k][1]
+            )
             img, _, prompt = self._single_images[latest_id]
             return latest_id, img.copy(), prompt
 
     # Stereo camera methods
-    def store_stereo_pair(self, camera_pair_id: str, imgL: np.ndarray,
-                         imgR: np.ndarray, prompt: str = "", metadata: Optional[dict] = None):
+    def store_stereo_pair(
+        self,
+        camera_pair_id: str,
+        imgL: np.ndarray,
+        imgR: np.ndarray,
+        prompt: str = "",
+        metadata: Optional[dict] = None,
+    ):
         """Store a stereo image pair with optional metadata."""
         with self._data_lock:
-            self._stereo_images[camera_pair_id] = (imgL, imgR, prompt, time.time(), metadata or {})
-            logger.info(f"Stored stereo pair '{camera_pair_id}' "
-                       f"(L: {imgL.shape}, R: {imgR.shape})")
+            self._stereo_images[camera_pair_id] = (
+                imgL,
+                imgR,
+                prompt,
+                time.time(),
+                metadata or {},
+            )
+            logger.info(
+                f"Stored stereo pair '{camera_pair_id}' "
+                f"(L: {imgL.shape}, R: {imgR.shape})"
+            )
 
-    def get_stereo_pair(self, camera_pair_id: str) -> Optional[Tuple[np.ndarray, np.ndarray, str]]:
+    def get_stereo_pair(
+        self, camera_pair_id: str
+    ) -> Optional[Tuple[np.ndarray, np.ndarray, str]]:
         """Get a stereo image pair."""
         with self._data_lock:
             if camera_pair_id in self._stereo_images:
@@ -142,12 +161,15 @@ class UnifiedImageStorage:
         with self._data_lock:
             if not self._stereo_images:
                 return None
-            latest_id = max(self._stereo_images.keys(),
-                          key=lambda k: self._stereo_images[k][3])
+            latest_id = max(
+                self._stereo_images.keys(), key=lambda k: self._stereo_images[k][3]
+            )
             imgL, imgR, prompt, _, _ = self._stereo_images[latest_id]
             return latest_id, imgL.copy(), imgR.copy(), prompt
 
-    def get_latest_stereo_image(self) -> Optional[Tuple[np.ndarray, np.ndarray, str, float, dict]]:
+    def get_latest_stereo_image(
+        self,
+    ) -> Optional[Tuple[np.ndarray, np.ndarray, str, float, dict]]:
         """
         Get the most recently stored stereo pair with full metadata.
 
@@ -157,8 +179,9 @@ class UnifiedImageStorage:
         with self._data_lock:
             if not self._stereo_images:
                 return None
-            latest_id = max(self._stereo_images.keys(),
-                          key=lambda k: self._stereo_images[k][3])
+            latest_id = max(
+                self._stereo_images.keys(), key=lambda k: self._stereo_images[k][3]
+            )
             imgL, imgR, prompt, timestamp, metadata = self._stereo_images[latest_id]
             return imgL.copy(), imgR.copy(), prompt, timestamp, metadata
 
@@ -181,14 +204,20 @@ class UnifiedImageStorage:
             current = time.time()
 
             # Clean single images
-            to_remove = [k for k, v in self._single_images.items()
-                        if current - v[1] > max_age_seconds]
+            to_remove = [
+                k
+                for k, v in self._single_images.items()
+                if current - v[1] > max_age_seconds
+            ]
             for k in to_remove:
                 del self._single_images[k]
 
             # Clean stereo images
-            to_remove = [k for k, v in self._stereo_images.items()
-                        if current - v[3] > max_age_seconds]
+            to_remove = [
+                k
+                for k, v in self._stereo_images.items()
+                if current - v[3] > max_age_seconds
+            ]
             for k in to_remove:
                 del self._stereo_images[k]
 
@@ -200,10 +229,7 @@ class SingleImageServer(TCPServerBase):
 
     def __init__(self, config: Optional[ServerConfig] = None):
         if config is None:
-            config = ServerConfig(
-                host=cfg.DEFAULT_HOST,
-                port=cfg.STREAMING_SERVER_PORT
-            )
+            config = ServerConfig(host=cfg.DEFAULT_HOST, port=cfg.STREAMING_SERVER_PORT)
         super().__init__(config)
         self._storage = UnifiedImageStorage()
 
@@ -235,7 +261,7 @@ class SingleImageServer(TCPServerBase):
                 camera_id_bytes = self._recv_exactly(client, id_len)
                 if camera_id_bytes is None:
                     break
-                camera_id = camera_id_bytes.decode('utf-8')
+                camera_id = camera_id_bytes.decode("utf-8")
 
                 # Read prompt
                 prompt_len = self._read_int(client)
@@ -245,7 +271,7 @@ class SingleImageServer(TCPServerBase):
                     prompt_bytes = self._recv_exactly(client, prompt_len)
                     if prompt_bytes is None:
                         break
-                    prompt = prompt_bytes.decode('utf-8')
+                    prompt = prompt_bytes.decode("utf-8")
                 else:
                     prompt = ""
 
@@ -258,10 +284,14 @@ class SingleImageServer(TCPServerBase):
                     break
 
                 # Decode and store
-                image = cv2.imdecode(np.frombuffer(img_data, np.uint8), cv2.IMREAD_COLOR)
+                image = cv2.imdecode(
+                    np.frombuffer(img_data, np.uint8), cv2.IMREAD_COLOR
+                )
                 if image is not None:
                     self._storage.store_single_image(camera_id, image, prompt)
-                    logger.info(f"[req={request_id}] Received {camera_id}: {image.shape[1]}x{image.shape[0]}")
+                    logger.info(
+                        f"[req={request_id}] Received {camera_id}: {image.shape[1]}x{image.shape[0]}"
+                    )
 
         except Exception as e:
             logger.error(f"Error handling client {address}: {e}")
@@ -296,10 +326,7 @@ class StereoImageServer(TCPServerBase):
 
     def __init__(self, config: Optional[ServerConfig] = None):
         if config is None:
-            config = ServerConfig(
-                host=cfg.DEFAULT_HOST,
-                port=cfg.STEREO_DETECTION_PORT
-            )
+            config = ServerConfig(host=cfg.DEFAULT_HOST, port=cfg.STEREO_DETECTION_PORT)
         super().__init__(config)
         self._storage = UnifiedImageStorage()
 
@@ -331,7 +358,7 @@ class StereoImageServer(TCPServerBase):
                 pair_id_bytes = self._recv_exactly(client, pair_id_len)
                 if pair_id_bytes is None:
                     break
-                camera_pair_id = pair_id_bytes.decode('utf-8')
+                camera_pair_id = pair_id_bytes.decode("utf-8")
 
                 # Read camera_L_id (not used but part of protocol)
                 cam_L_len = self._read_int(client)
@@ -353,7 +380,7 @@ class StereoImageServer(TCPServerBase):
                     prompt_bytes = self._recv_exactly(client, prompt_len)
                     if prompt_bytes is None:
                         break
-                    prompt = prompt_bytes.decode('utf-8')
+                    prompt = prompt_bytes.decode("utf-8")
                 else:
                     prompt = ""
 
@@ -377,23 +404,36 @@ class StereoImageServer(TCPServerBase):
                 metadata = {}
                 try:
                     meta_len = self._read_int(client)
-                    if meta_len is not None and meta_len > 0 and meta_len < cfg.MAX_STRING_LENGTH * 10:
+                    if (
+                        meta_len is not None
+                        and meta_len > 0
+                        and meta_len < cfg.MAX_STRING_LENGTH * 10
+                    ):
                         meta_data = self._recv_exactly(client, meta_len)
                         if meta_data:
                             import json
-                            metadata = json.loads(meta_data.decode('utf-8'))
+
+                            metadata = json.loads(meta_data.decode("utf-8"))
                             logger.debug(f"Received metadata: {metadata}")
                 except Exception as e:
                     logger.debug(f"No metadata received (legacy client): {e}")
 
                 # Decode images
-                imgL = cv2.imdecode(np.frombuffer(img_L_data, np.uint8), cv2.IMREAD_COLOR)
-                imgR = cv2.imdecode(np.frombuffer(img_R_data, np.uint8), cv2.IMREAD_COLOR)
+                imgL = cv2.imdecode(
+                    np.frombuffer(img_L_data, np.uint8), cv2.IMREAD_COLOR
+                )
+                imgR = cv2.imdecode(
+                    np.frombuffer(img_R_data, np.uint8), cv2.IMREAD_COLOR
+                )
 
                 if imgL is not None and imgR is not None:
-                    self._storage.store_stereo_pair(camera_pair_id, imgL, imgR, prompt, metadata)
-                    logger.info(f"[req={request_id}] Received stereo '{camera_pair_id}' "
-                               f"(L: {img_L_len/1024:.1f}KB, R: {img_R_len/1024:.1f}KB)")
+                    self._storage.store_stereo_pair(
+                        camera_pair_id, imgL, imgR, prompt, metadata
+                    )
+                    logger.info(
+                        f"[req={request_id}] Received stereo '{camera_pair_id}' "
+                        f"(L: {img_L_len/1024:.1f}KB, R: {img_R_len/1024:.1f}KB)"
+                    )
 
         except Exception as e:
             logger.error(f"Error handling stereo client {address}: {e}")
@@ -434,9 +474,12 @@ class ImageServer:
         latest = storage.get_latest_stereo()
     """
 
-    def __init__(self, single_port: int = cfg.STREAMING_SERVER_PORT,
-                 stereo_port: int = cfg.STEREO_DETECTION_PORT,
-                 host: str = cfg.DEFAULT_HOST):
+    def __init__(
+        self,
+        single_port: int = cfg.STREAMING_SERVER_PORT,
+        stereo_port: int = cfg.STEREO_DETECTION_PORT,
+        host: str = cfg.DEFAULT_HOST,
+    ):
         """
         Initialize the unified image server.
 
@@ -454,8 +497,10 @@ class ImageServer:
 
     def start(self):
         """Start both image servers."""
-        logger.info(f"Starting ImageServer (single: {self._single_config.port}, "
-                   f"stereo: {self._stereo_config.port})")
+        logger.info(
+            f"Starting ImageServer (single: {self._single_config.port}, "
+            f"stereo: {self._stereo_config.port})"
+        )
         self._single_server.start()
         self._stereo_server.start()
 
@@ -474,9 +519,11 @@ class ImageServer:
         return self._storage
 
 
-def run_image_server_background(single_port: int = cfg.STREAMING_SERVER_PORT,
-                                stereo_port: int = cfg.STEREO_DETECTION_PORT,
-                                host: str = cfg.DEFAULT_HOST) -> ImageServer:
+def run_image_server_background(
+    single_port: int = cfg.STREAMING_SERVER_PORT,
+    stereo_port: int = cfg.STEREO_DETECTION_PORT,
+    host: str = cfg.DEFAULT_HOST,
+) -> ImageServer:
     """
     Start the ImageServer in background threads.
 

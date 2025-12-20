@@ -145,6 +145,7 @@ class VisionProcessor:
         if self.enable_shared_state:
             try:
                 from ..operations.SharedVisionState import get_shared_vision_state
+
                 self.shared_state = get_shared_vision_state()
                 logging.info("Shared vision state enabled for VisionProcessor")
             except ImportError:
@@ -160,7 +161,7 @@ class VisionProcessor:
                 import platform
 
                 # Warn about macOS threading limitations
-                if platform.system() == 'Darwin' and not use_main_thread:
+                if platform.system() == "Darwin" and not use_main_thread:
                     logging.warning(
                         "macOS detected: OpenCV GUI may not work in background threads. "
                         "Consider setting use_main_thread=True and calling run() instead of start()"
@@ -188,7 +189,9 @@ class VisionProcessor:
             return
 
         if self.use_main_thread:
-            logging.error("Cannot use start() with use_main_thread=True. Use run() instead.")
+            logging.error(
+                "Cannot use start() with use_main_thread=True. Use run() instead."
+            )
             return
 
         self.running = True
@@ -240,6 +243,7 @@ class VisionProcessor:
         if self.enable_visualization:
             try:
                 import cv2
+
                 cv2.destroyWindow(self.viz_window_name)
             except:
                 pass
@@ -257,7 +261,9 @@ class VisionProcessor:
         6. Sleep to maintain target FPS
         """
         if UnifiedImageStorage is None:
-            logging.error("UnifiedImageStorage not available - cannot run VisionProcessor")
+            logging.error(
+                "UnifiedImageStorage not available - cannot run VisionProcessor"
+            )
             self.running = False
             return
 
@@ -360,9 +366,12 @@ class VisionProcessor:
                         import platform
 
                         # Initialize window on first use (must be in same thread as imshow)
-                        if not hasattr(self, '_viz_initialized') or not self._viz_initialized:
+                        if (
+                            not hasattr(self, "_viz_initialized")
+                            or not self._viz_initialized
+                        ):
                             # macOS-specific: Try to start with COCOA backend
-                            if platform.system() == 'Darwin':
+                            if platform.system() == "Darwin":
                                 try:
                                     cv2.startWindowThread()
                                 except:
@@ -371,26 +380,32 @@ class VisionProcessor:
                             cv2.namedWindow(self.viz_window_name, cv2.WINDOW_NORMAL)
                             cv2.resizeWindow(self.viz_window_name, 800, 600)
                             self._viz_initialized = True
-                            logging.info(f"Visualization window created: {self.viz_window_name}")
+                            logging.info(
+                                f"Visualization window created: {self.viz_window_name}"
+                            )
 
                         vis_image = self._draw_detections(imgL, result.detections)
                         cv2.imshow(self.viz_window_name, vis_image)
 
                         # Increased waitKey time for macOS compatibility
-                        key = cv2.waitKey(10)  # Process window events (10ms for better macOS support)
+                        key = cv2.waitKey(
+                            10
+                        )  # Process window events (10ms for better macOS support)
 
                         # Check for 'q' key to quit
-                        if key == ord('q') or key == 27:  # 'q' or ESC
+                        if key == ord("q") or key == 27:  # 'q' or ESC
                             logging.info("User requested quit via keyboard")
                             self.running = False
                     except Exception as e:
                         logging.error(f"Error displaying visualization: {e}")
                         # Disable visualization after repeated failures
-                        if not hasattr(self, '_viz_error_count'):
+                        if not hasattr(self, "_viz_error_count"):
                             self._viz_error_count = 0
                         self._viz_error_count += 1
                         if self._viz_error_count > 5:
-                            logging.warning("Too many visualization errors - disabling visualization")
+                            logging.warning(
+                                "Too many visualization errors - disabling visualization"
+                            )
                             self.enable_visualization = False
 
                 # Update last processed timestamp
@@ -442,10 +457,10 @@ class VisionProcessor:
 
             # Color map for different object types
             color_map = {
-                "red": (0, 0, 255),      # Red in BGR
-                "blue": (255, 0, 0),     # Blue in BGR
-                "green": (0, 255, 0),    # Green in BGR
-                "yellow": (0, 255, 255), # Yellow in BGR
+                "red": (0, 0, 255),  # Red in BGR
+                "blue": (255, 0, 0),  # Blue in BGR
+                "green": (0, 255, 0),  # Green in BGR
+                "yellow": (0, 255, 255),  # Yellow in BGR
                 "default": (255, 255, 255),  # White
             }
 

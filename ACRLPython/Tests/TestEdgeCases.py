@@ -23,7 +23,7 @@ from operations.GripperOperations import control_gripper
 from operations.DetectionOperations import detect_objects
 from operations.Base import OperationResult
 from orchestrators.CommandParser import CommandParser
-from servers.StreamingServer import ImageStorage
+from servers.ImageServer import UnifiedImageStorage
 from servers.CommandServer import CommandBroadcaster
 
 
@@ -254,11 +254,11 @@ class TestMalformedDataHandling:
 
     def test_image_storage_with_null_image(self):
         """Test storing null image"""
-        storage = ImageStorage.get_instance()
+        storage = UnifiedImageStorage()
 
         # Try to store None as image
         try:
-            storage.store_image("test_cam", None, "")  # type: ignore[arg-type]  # None instead of ndarray - intentional for testing
+            storage.store_single_image("test_cam", None, "")  # type: ignore[arg-type]  # None instead of ndarray - intentional for testing
             # If it doesn't raise, get should return None or handle gracefully
         except (TypeError, AttributeError):
             # Exception is acceptable
@@ -282,7 +282,7 @@ class TestResourceLimits:
 
     def test_image_storage_with_many_cameras(self, cleanup_singletons):
         """Test storing images from many cameras simultaneously"""
-        storage = ImageStorage.get_instance()
+        storage = UnifiedImageStorage()
 
         # Create sample image
         image = np.zeros((100, 100, 3), dtype=np.uint8)
@@ -290,7 +290,7 @@ class TestResourceLimits:
         # Store images from 100 cameras
         for i in range(100):
             camera_id = f"camera_{i}"
-            storage.store_image(camera_id, image, f"prompt_{i}")
+            storage.store_single_image(camera_id, image, f"prompt_{i}")
 
         # All should be stored
         camera_ids = storage.get_all_camera_ids()
@@ -298,15 +298,15 @@ class TestResourceLimits:
 
     def test_image_storage_with_very_large_image(self, cleanup_singletons):
         """Test storing a very large image"""
-        storage = ImageStorage.get_instance()
+        storage = UnifiedImageStorage()
 
         # Create large image (4K resolution)
         large_image = np.zeros((3840, 2160, 3), dtype=np.uint8)
 
-        storage.store_image("large_cam", large_image, "")
+        storage.store_single_image("large_cam", large_image, "")
 
         # Should handle large images
-        retrieved = storage.get_camera_image("large_cam")
+        retrieved = storage.get_single_image("large_cam")
         assert retrieved is not None
         assert retrieved.shape == large_image.shape
 
@@ -357,10 +357,10 @@ class TestBoundaryTimeValues:
 
     def test_image_age_calculation_wraparound(self, cleanup_singletons):
         """Test image age with very old timestamp"""
-        storage = ImageStorage.get_instance()
+        storage = UnifiedImageStorage()
 
         image = np.zeros((100, 100, 3), dtype=np.uint8)
-        storage.store_image("old_cam", image, "")
+        storage.store_single_image("old_cam", image, "")
 
         # Manually set very old timestamp
         with storage._lock:
@@ -369,7 +369,7 @@ class TestBoundaryTimeValues:
                 # Set to 1 year ago
                 storage._cameras["old_cam"] = (img, time.time() - 31536000, prompt)
 
-        age = storage.get_camera_age("old_cam")
+        age = storage.get_single_age("old_cam")
 
         # Should calculate correctly
         assert age is not None

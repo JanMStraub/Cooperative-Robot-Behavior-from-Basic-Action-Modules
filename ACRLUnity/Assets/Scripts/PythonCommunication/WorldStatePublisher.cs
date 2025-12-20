@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Core;
 using Robotics;
 using UnityEngine;
@@ -134,7 +133,8 @@ namespace PythonCommunication
         private const string _logPrefix = "[WORLD_STATE_PUBLISHER]";
 
         // Cache detected objects from vision system
-        private Dictionary<string, ObjectStateData> _detectedObjects = new Dictionary<string, ObjectStateData>();
+        private Dictionary<string, ObjectStateData> _detectedObjects =
+            new Dictionary<string, ObjectStateData>();
 
         #region Unity Lifecycle
 
@@ -217,7 +217,7 @@ namespace PythonCommunication
                 {
                     robots = _publishRobots ? GatherRobotStates() : new List<RobotStateData>(),
                     objects = _publishObjects ? GatherObjectStates() : new List<ObjectStateData>(),
-                    timestamp = Time.time
+                    timestamp = Time.time,
                 };
 
                 // Convert to JSON and send via UnifiedPythonReceiver
@@ -246,7 +246,9 @@ namespace PythonCommunication
             }
             catch (Exception ex)
             {
-                Debug.LogError($"{_logPrefix} Error publishing world state: {ex.Message}\n{ex.StackTrace}");
+                Debug.LogError(
+                    $"{_logPrefix} Error publishing world state: {ex.Message}\n{ex.StackTrace}"
+                );
             }
         }
 
@@ -283,12 +285,18 @@ namespace PythonCommunication
 
                 // Get gripper state
                 string gripperState = "unknown";
-                var gripperController = robotInstance.robotGameObject.GetComponentInChildren<GripperController>();
+                var gripperController =
+                    robotInstance.robotGameObject.GetComponentInChildren<GripperController>();
                 if (gripperController != null)
                 {
-                    // Assuming GripperController has an IsOpen property or similar
-                    // You may need to adjust this based on actual GripperController API
-                    gripperState = "unknown"; // TODO: Get actual gripper state from GripperController
+                    if (gripperController.GetTargetPosition() > 0.9f)
+                    {
+                        gripperState = "open";
+                    }
+                    else
+                    {
+                        gripperState = "closed";
+                    }
                 }
 
                 // Get joint angles
@@ -303,7 +311,7 @@ namespace PythonCommunication
                     gripper_state = gripperState,
                     is_moving = isMoving,
                     is_initialized = true,
-                    joint_angles = jointAngles
+                    joint_angles = jointAngles,
                 };
 
                 robotStates.Add(robotState);
@@ -352,7 +360,7 @@ namespace PythonCommunication
                     position = new PositionData(obj.transform.position),
                     color = InferColorFromName(obj.name),
                     object_type = InferTypeFromName(obj.name),
-                    confidence = 1.0f
+                    confidence = 1.0f,
                 };
 
                 objectStates.Add(objectState);
@@ -425,7 +433,7 @@ namespace PythonCommunication
                 position = new PositionData(position),
                 color = color,
                 object_type = objectType,
-                confidence = confidence
+                confidence = confidence,
             };
 
             _detectedObjects[objectId] = objectState;

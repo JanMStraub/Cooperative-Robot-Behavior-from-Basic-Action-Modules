@@ -37,7 +37,8 @@ namespace PythonCommunication.Core
                 // Check if result is null (parsing failed silently)
                 if (result == null)
                 {
-                    errorMessage = $"Failed to parse JSON into type {typeof(T).Name} (result is null)";
+                    errorMessage =
+                        $"Failed to parse JSON into type {typeof(T).Name} (result is null)";
                     return false;
                 }
 
@@ -52,7 +53,8 @@ namespace PythonCommunication.Core
             catch (Exception ex)
             {
                 // Unexpected error
-                errorMessage = $"Unexpected error parsing JSON for type {typeof(T).Name}: {ex.Message}";
+                errorMessage =
+                    $"Unexpected error parsing JSON for type {typeof(T).Name}: {ex.Message}";
                 return false;
             }
         }
@@ -102,7 +104,8 @@ namespace PythonCommunication.Core
     /// </summary>
     public class JsonParseException : Exception
     {
-        public JsonParseException(string message) : base(message) { }
+        public JsonParseException(string message)
+            : base(message) { }
 
         public JsonParseException(string message, Exception innerException)
             : base(message, innerException) { }

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Core;
-using Logging;
 using UnityEngine;
 
 namespace Robotics
@@ -25,7 +24,6 @@ namespace Robotics
         [Header("Collision Behavior")]
         public bool enableCollisionDetection = true;
         public bool enableTargetReached = true;
-        public bool enableCollisionLogging = true;
         public float collisionCooldown = CollisionConstants.DEFAULT_COLLISION_COOLDOWN;
 
         [Header("Filtering")]
@@ -51,7 +49,6 @@ namespace Robotics
 
         // Core components
         private RobotManager _robotManager;
-        private MainLogger _logger;
 
         // Collision tracking
         private Dictionary<string, float> _lastCollisionTime = new Dictionary<string, float>();
@@ -85,7 +82,6 @@ namespace Robotics
             {
                 // Get component references
                 _robotManager = RobotManager.Instance;
-                _logger = MainLogger.Instance;
 
                 // Validate configuration
                 ValidateConfiguration();
@@ -255,12 +251,6 @@ namespace Robotics
                 // Update metrics
                 UpdateCollisionMetrics(robotId, collisionData);
 
-                // Log collision
-                if (config.enableCollisionLogging)
-                {
-                    LogCollision(collisionData);
-                }
-
                 Debug.Log(
                     $"{_logPrefix} Collision detected: {robotId} -> {targetId} ({collisionType}, Speed: {approachSpeed:F2})"
                 );
@@ -303,44 +293,6 @@ namespace Robotics
         private void UpdateCollisionMetrics(string robotId, CollisionData collisionData)
         {
             _totalCollisions++;
-        }
-
-        /// <summary>
-        /// Logs collision data to MainLogger
-        /// </summary>
-        /// <param name="collisionData">The collision data to log</param>
-        private void LogCollision(CollisionData collisionData)
-        {
-            try
-            {
-                // Log to MainLogger
-                if (_logger != null)
-                {
-                    string actionId = _logger.StartAction(
-                        actionName: "collision_detected",
-                        type: Logging.ActionType.Observation,
-                        robotIds: new[] { collisionData.robotId },
-                        targetPos: collisionData.collisionPoint,
-                        objectIds: new[] { targetId },
-                        description: $"Collision with {targetId}: {collisionData.collisionType}, Speed: {collisionData.approachSpeed:F2}"
-                    );
-                    var metrics = new System.Collections.Generic.Dictionary<string, float>
-                    {
-                        ["approach_speed"] = collisionData.approachSpeed,
-                        ["was_intended"] = collisionData.wasIntended ? 1f : 0f,
-                    };
-                    _logger.CompleteAction(
-                        actionId,
-                        success: true,
-                        qualityScore: collisionData.wasIntended ? 1f : 0.5f,
-                        metrics: metrics
-                    );
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"{_logPrefix} Failed to log collision data: {ex.Message}");
-            }
         }
 
         /// <summary>

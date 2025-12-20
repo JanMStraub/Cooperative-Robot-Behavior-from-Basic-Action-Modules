@@ -15,7 +15,6 @@ from .Base import (
     OperationComplexity,
     OperationParameter,
     OperationResult,
-    ParameterFlow,
     OperationRelationship,
 )
 
@@ -29,7 +28,9 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 
-def control_gripper(robot_id: str, open_gripper: bool, request_id: int = 0) -> OperationResult:
+def control_gripper(
+    robot_id: str, open_gripper: bool, request_id: int = 0
+) -> OperationResult:
     """
     Open or close the robot gripper.
 
@@ -129,12 +130,14 @@ def control_gripper(robot_id: str, open_gripper: bool, request_id: int = 0) -> O
         # Return success
         logger.info(f"Successfully sent control_gripper command to {robot_id}")
 
-        return OperationResult.success_result({
-            "robot_id": robot_id,
-            "open_gripper": open_gripper,
-            "status": "command_sent",
-            "timestamp": time.time(),
-        })
+        return OperationResult.success_result(
+            {
+                "robot_id": robot_id,
+                "open_gripper": open_gripper,
+                "status": "command_sent",
+                "timestamp": time.time(),
+            }
+        )
 
     except Exception as e:
         logger.error(f"Unexpected error in control_gripper: {e}", exc_info=True)
@@ -237,7 +240,11 @@ def create_control_gripper_operation() -> BasicOperation:
             required_reasons={
                 "motion_move_to_coord_001": "Must position gripper at target location before grasping or releasing",
             },
-            commonly_paired_with=["motion_move_to_coord_001", "perception_stereo_detect_001", "status_check_robot_001"],
+            commonly_paired_with=[
+                "motion_move_to_coord_001",
+                "perception_stereo_detect_001",
+                "status_check_robot_001",
+            ],
             pairing_reasons={
                 "motion_move_to_coord_001": "Position at target before gripper action, sequence: move → grasp or move → release",
                 "perception_stereo_detect_001": "Detect object before moving to grasp it",

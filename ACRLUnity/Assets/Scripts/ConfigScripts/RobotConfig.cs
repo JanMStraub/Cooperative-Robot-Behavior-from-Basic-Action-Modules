@@ -12,12 +12,6 @@ namespace Configuration
         public float upperLimit = 170f;
         public float lowerLimit = -170f;
 
-        [Header("Performance Settings")]
-        public float maxVelocity = 180f; // degrees per second
-        public float acceleration = 360f; // degrees per second squared
-
-        public JointConfiguration() { }
-
         public JointConfiguration(float stiff, float damp, float force, float upper, float lower)
         {
             stiffness = stiff;
@@ -47,12 +41,6 @@ namespace Configuration
 
         [Range(0.01f, 0.5f)]
         public float maxJointStepRad = 0.1f;
-
-        [Header("Performance Limits")]
-        public float maxReachDistance = 0.8f;
-        public float minReachDistance = 0.1f;
-        public int maxIKIterations = 100;
-        public float ikTimeout = 5f;
 
         public void InitializeDefaultAR4Profile()
         {

@@ -132,15 +132,19 @@ def return_to_start_position(
         # Return success
         logger.info(f"Successfully sent return_to_start_position command to {robot_id}")
 
-        return OperationResult.success_result({
-            "robot_id": robot_id,
-            "speed": speed,
-            "status": "command_sent",
-            "timestamp": time.time(),
-        })
+        return OperationResult.success_result(
+            {
+                "robot_id": robot_id,
+                "speed": speed,
+                "status": "command_sent",
+                "timestamp": time.time(),
+            }
+        )
 
     except Exception as e:
-        logger.error(f"Unexpected error in return_to_start_position: {e}", exc_info=True)
+        logger.error(
+            f"Unexpected error in return_to_start_position: {e}", exc_info=True
+        )
         return OperationResult.error_result(
             "UNEXPECTED_ERROR",
             f"Unexpected error occurred: {str(e)}",

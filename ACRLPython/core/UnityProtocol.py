@@ -68,6 +68,7 @@ logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT
 
 class MessageType(IntEnum):
     """Message type enumeration for protocol V2"""
+
     IMAGE = 0x01
     RESULT = 0x02
     RAG_QUERY = 0x03
@@ -126,18 +127,24 @@ class UnityProtocol:
             ValueError: If header is malformed
         """
         if len(data) - offset < UnityProtocol.HEADER_SIZE:
-            raise ValueError(f"Not enough data for header (need {UnityProtocol.HEADER_SIZE}, have {len(data) - offset})")
+            raise ValueError(
+                f"Not enough data for header (need {UnityProtocol.HEADER_SIZE}, have {len(data) - offset})"
+            )
 
         message_type = MessageType(data[offset])
         offset += UnityProtocol.TYPE_SIZE
 
-        request_id = struct.unpack(UnityProtocol.INT_FORMAT, data[offset:offset + UnityProtocol.INT_SIZE])[0]
+        request_id = struct.unpack(
+            UnityProtocol.INT_FORMAT, data[offset : offset + UnityProtocol.INT_SIZE]
+        )[0]
         offset += UnityProtocol.INT_SIZE
 
         return message_type, request_id, offset
 
     @staticmethod
-    def encode_image_message(camera_id: str, prompt: str, image_bytes: bytes, request_id: int = 0) -> bytes:
+    def encode_image_message(
+        camera_id: str, prompt: str, image_bytes: bytes, request_id: int = 0
+    ) -> bytes:
         """
         Encode an image message for sending to Python server.
 
@@ -383,7 +390,9 @@ class UnityProtocol:
         return byte_data, offset
 
     @staticmethod
-    def encode_rag_query(query: str, top_k: int = 5, filters: Optional[dict] = None, request_id: int = 0) -> bytes:
+    def encode_rag_query(
+        query: str, top_k: int = 5, filters: Optional[dict] = None, request_id: int = 0
+    ) -> bytes:
         """
         Encode a RAG query message for sending to Python server.
 
@@ -559,7 +568,9 @@ class UnityProtocol:
         message = bytearray()
 
         # Header
-        message.extend(UnityProtocol._encode_header(MessageType.RAG_RESPONSE, request_id))
+        message.extend(
+            UnityProtocol._encode_header(MessageType.RAG_RESPONSE, request_id)
+        )
 
         # JSON data
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(json_bytes)))
@@ -609,7 +620,9 @@ class UnityProtocol:
             raise ValueError(f"Failed to decode RAG response: {e}")
 
     @staticmethod
-    def encode_status_query(robot_id: str, detailed: bool = False, request_id: int = 0) -> bytes:
+    def encode_status_query(
+        robot_id: str, detailed: bool = False, request_id: int = 0
+    ) -> bytes:
         """
         Encode a status query message for sending to Python server.
 
@@ -641,7 +654,9 @@ class UnityProtocol:
         message = bytearray()
 
         # Header
-        message.extend(UnityProtocol._encode_header(MessageType.STATUS_QUERY, request_id))
+        message.extend(
+            UnityProtocol._encode_header(MessageType.STATUS_QUERY, request_id)
+        )
 
         # Robot ID
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(robot_id_bytes)))
@@ -755,7 +770,9 @@ class UnityProtocol:
         message = bytearray()
 
         # Header
-        message.extend(UnityProtocol._encode_header(MessageType.STATUS_RESPONSE, request_id))
+        message.extend(
+            UnityProtocol._encode_header(MessageType.STATUS_RESPONSE, request_id)
+        )
 
         # JSON data
         message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(json_bytes)))
@@ -782,7 +799,9 @@ class UnityProtocol:
             msg_type, request_id, offset = UnityProtocol._decode_header(data)
 
             if msg_type != MessageType.STATUS_RESPONSE:
-                raise ValueError(f"Expected STATUS_RESPONSE message, got {msg_type.name}")
+                raise ValueError(
+                    f"Expected STATUS_RESPONSE message, got {msg_type.name}"
+                )
 
             # Read JSON data
             if len(data) - offset < UnityProtocol.INT_SIZE:
@@ -822,8 +841,8 @@ if __name__ == "__main__":
     print(f"Encoded image message: {len(encoded)} bytes (with 5-byte header)")
 
     # Decode
-    request_id, decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(
-        encoded
+    request_id, decoded_id, decoded_prompt, decoded_image = (
+        UnityProtocol.decode_image_message(encoded)
     )
     assert request_id == test_request_id
     assert decoded_id == test_camera_id
@@ -841,18 +860,24 @@ if __name__ == "__main__":
     test_result_request_id = 67890
 
     # Encode
-    encoded_result = UnityProtocol.encode_result_message(test_result, test_result_request_id)
+    encoded_result = UnityProtocol.encode_result_message(
+        test_result, test_result_request_id
+    )
     print(f"Encoded result message: {len(encoded_result)} bytes (with 5-byte header)")
 
     # Decode
-    result_request_id, decoded_result = UnityProtocol.decode_result_message(encoded_result)
+    result_request_id, decoded_result = UnityProtocol.decode_result_message(
+        encoded_result
+    )
     assert result_request_id == test_result_request_id
     assert decoded_result == test_result
     print("✓ Result message encode/decode works")
 
     # Test RAG query
     rag_query_request_id = 99999
-    rag_encoded = UnityProtocol.encode_rag_query("move robot to position", top_k=5, request_id=rag_query_request_id)
+    rag_encoded = UnityProtocol.encode_rag_query(
+        "move robot to position", top_k=5, request_id=rag_query_request_id
+    )
     rag_request_id, rag_query_dict = UnityProtocol.decode_rag_query(rag_encoded)
     assert rag_request_id == rag_query_request_id
     assert rag_query_dict["query"] == "move robot to position"
@@ -860,8 +885,12 @@ if __name__ == "__main__":
 
     # Test status query
     status_query_request_id = 11111
-    status_encoded = UnityProtocol.encode_status_query("Robot1", detailed=True, request_id=status_query_request_id)
-    status_request_id, status_query_dict = UnityProtocol.decode_status_query(status_encoded)
+    status_encoded = UnityProtocol.encode_status_query(
+        "Robot1", detailed=True, request_id=status_query_request_id
+    )
+    status_request_id, status_query_dict = UnityProtocol.decode_status_query(
+        status_encoded
+    )
     assert status_request_id == status_query_request_id
     assert status_query_dict["robot_id"] == "Robot1"
     assert status_query_dict["detailed"] == True

@@ -23,32 +23,29 @@ from .Base import (
     OperationCategory,
     OperationComplexity,
     OperationParameter,
-    OperationResult
+    OperationResult,
 )
 from .MoveOperations import (
     move_to_coordinate,
     MOVE_TO_COORDINATE_OPERATION,
-    create_move_to_coordinate_operation
+    create_move_to_coordinate_operation,
 )
-from .Registry import (
-    OperationRegistry,
-    get_global_registry
-)
+from .Registry import OperationRegistry, get_global_registry
 
 # VisionOperations are imported by Registry
 
 __all__ = [
     # Base classes
-    'BasicOperation',
-    'OperationCategory',
-    'OperationComplexity',
-    'OperationParameter',
-    'OperationResult',
+    "BasicOperation",
+    "OperationCategory",
+    "OperationComplexity",
+    "OperationParameter",
+    "OperationResult",
     # Move operations
-    'move_to_coordinate',
-    'MOVE_TO_COORDINATE_OPERATION',
-    'create_move_to_coordinate_operation',
+    "move_to_coordinate",
+    "MOVE_TO_COORDINATE_OPERATION",
+    "create_move_to_coordinate_operation",
     # Registry
-    'OperationRegistry',
-    'get_global_registry'
+    "OperationRegistry",
+    "get_global_registry",
 ]

@@ -1,7 +1,6 @@
 using UnityEngine;
 using Robotics;
 using Simulation;
-using Logging;
 
 namespace Tests.PlayMode
 {
@@ -89,94 +88,7 @@ namespace Tests.PlayMode
             return (obj, manager);
         }
 
-        /// <summary>
-        /// Creates a fresh MainLogger instance, destroying any existing one.
-        /// </summary>
-        /// <param name="enableLogging">Whether to enable logging</param>
-        /// <returns>Tuple of (GameObject, MainLogger)</returns>
-        public static (GameObject gameObject, MainLogger logger) CreateMainLogger(bool enableLogging = false)
-        {
-            if (MainLogger.Instance != null)
-            {
-                UnityEngine.Object.DestroyImmediate(MainLogger.Instance.gameObject);
-            }
-
-            var obj = new GameObject("TestMainLogger");
-            var logger = obj.AddComponent<MainLogger>();
-            logger.enableLogging = enableLogging;
-            return (obj, logger);
-        }
-
-        #endregion
-
-        #region Data Creation
-
-        /// <summary>
-        /// Creates a test RobotAction with common fields populated.
-        /// </summary>
-        /// <param name="actionName">Name for the action</param>
-        /// <param name="type">Action type</param>
-        /// <returns>RobotAction instance</returns>
-        public static RobotAction CreateTestAction(string actionName = "test_action", ActionType type = ActionType.Movement)
-        {
-            return new RobotAction
-            {
-                actionId = System.Guid.NewGuid().ToString(),
-                actionName = actionName,
-                description = "Test action description",
-                type = type,
-                status = ActionStatus.Started,
-                robotIds = new[] { "Robot1" },
-                objectIds = new string[0],
-                timestamp = System.DateTime.UtcNow.ToString("o"),
-                gameTime = Time.time,
-                startPosition = Vector3.zero,
-                targetPosition = Vector3.one,
-                success = false,
-                qualityScore = 0f
-            };
-        }
-
-        /// <summary>
-        /// Creates a test SceneSnapshot with common fields populated.
-        /// </summary>
-        /// <returns>SceneSnapshot instance</returns>
-        public static SceneSnapshot CreateTestSnapshot()
-        {
-            return new SceneSnapshot
-            {
-                snapshotId = System.Guid.NewGuid().ToString(),
-                timestamp = System.DateTime.UtcNow.ToString("o"),
-                gameTime = Time.time,
-                totalObjects = 0,
-                graspableObjects = 0,
-                sceneDescription = "Test scene",
-                objects = new Logging.Object[0],
-                robots = new RobotState[0]
-            };
-        }
-
-        /// <summary>
-        /// Creates a test RobotState with common fields populated.
-        /// </summary>
-        /// <param name="robotId">Robot identifier</param>
-        /// <returns>RobotState instance</returns>
-        public static RobotState CreateTestRobotState(string robotId = "Robot1")
-        {
-            return new RobotState
-            {
-                robotId = robotId,
-                position = Vector3.zero,
-                rotation = Quaternion.identity,
-                jointAngles = new float[] { 0, 0, 0, 0, 0, 0 },
-                targetPosition = Vector3.one,
-                distanceToTarget = 1.73f,
-                isMoving = false,
-                currentAction = "idle"
-            };
-        }
-
-        #endregion
+        #endregion 
 
         #region Cleanup
 
@@ -208,11 +120,6 @@ namespace Tests.PlayMode
             if (RobotManager.Instance != null)
             {
                 UnityEngine.Object.DestroyImmediate(RobotManager.Instance.gameObject);
-            }
-
-            if (MainLogger.Instance != null)
-            {
-                UnityEngine.Object.DestroyImmediate(MainLogger.Instance.gameObject);
             }
         }
 

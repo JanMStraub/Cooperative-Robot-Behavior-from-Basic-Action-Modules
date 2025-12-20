@@ -6,7 +6,7 @@ This module provides embedding generation using LM Studio's OpenAI-compatible AP
 Falls back to TF-IDF if LM Studio is unavailable.
 """
 
-from typing import List, Optional, Union
+from typing import List, Optional
 import logging
 import numpy as np
 from openai import OpenAI
@@ -142,7 +142,10 @@ class EmbeddingGenerator:
         # Check if client is available
         if self.client is None:
             logger.error("LM Studio client not initialized")
-            return [np.zeros(config.RAG_EMBEDDING_DIMENSION, dtype=np.float32) for _ in texts]
+            return [
+                np.zeros(config.RAG_EMBEDDING_DIMENSION, dtype=np.float32)
+                for _ in texts
+            ]
 
         # Process in batches
         batch_size = config.RAG_EMBEDDING_BATCH_SIZE
@@ -181,7 +184,9 @@ class EmbeddingGenerator:
         # Check again after initialization
         if self.tfidf_vectorizer is None:
             logger.error("TF-IDF vectorizer initialization failed")
-            return [np.zeros(config.RAG_TFIDF_MAX_FEATURES, dtype=np.float32) for _ in texts]
+            return [
+                np.zeros(config.RAG_TFIDF_MAX_FEATURES, dtype=np.float32) for _ in texts
+            ]
 
         try:
             # Fit and transform if not already fitted
@@ -193,15 +198,17 @@ class EmbeddingGenerator:
             # Convert sparse matrix to dense numpy arrays and pad to max_features
             embeddings = []
             for i in range(vectors.shape[0]):
-                embedding = np.array(vectors.getrow(i).todense()).flatten().astype(np.float32)
+                embedding = (
+                    np.array(vectors.getrow(i).todense()).flatten().astype(np.float32)
+                )
 
                 # Pad to TFIDF_MAX_FEATURES if necessary
                 if len(embedding) < config.RAG_TFIDF_MAX_FEATURES:
                     embedding = np.pad(
                         embedding,
                         (0, config.RAG_TFIDF_MAX_FEATURES - len(embedding)),
-                        mode='constant',
-                        constant_values=0
+                        mode="constant",
+                        constant_values=0,
                     )
 
                 embeddings.append(embedding)
@@ -236,6 +243,4 @@ class EmbeddingGenerator:
         if self.use_lm_studio:
             return f"EmbeddingGenerator(lm_studio, model={self.model}, url={self.base_url})"
         else:
-            return (
-                f"EmbeddingGenerator(tfidf, max_features={config.RAG_TFIDF_MAX_FEATURES})"
-            )
+            return f"EmbeddingGenerator(tfidf, max_features={config.RAG_TFIDF_MAX_FEATURES})"

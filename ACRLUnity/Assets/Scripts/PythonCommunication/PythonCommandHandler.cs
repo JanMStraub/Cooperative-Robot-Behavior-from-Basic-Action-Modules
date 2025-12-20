@@ -3,8 +3,8 @@ using System.Collections;
 using System.Linq;
 using Core;
 using Robotics;
-using Vision;
 using UnityEngine;
+using Vision;
 
 namespace PythonCommunication
 {
@@ -193,13 +193,16 @@ namespace PythonCommunication
         private void ProcessCommand(RobotCommand command)
         {
             // Determine target type for logging
-            string targetInfo = command.target_type == "camera"
-                ? $"camera: {command.camera_id}"
-                : $"robot: {command.robot_id}";
+            string targetInfo =
+                command.target_type == "camera"
+                    ? $"camera: {command.camera_id}"
+                    : $"robot: {command.robot_id}";
 
             if (_verboseLogging)
             {
-                Debug.Log($"{_logPrefix} Processing command: {command.command_type} for {targetInfo}");
+                Debug.Log(
+                    $"{_logPrefix} Processing command: {command.command_type} for {targetInfo}"
+                );
             }
 
             switch (command.command_type)
@@ -348,7 +351,12 @@ namespace PythonCommunication
                                 + $"to ({targetPosition.x:F3}, {targetPosition.y:F3}, {targetPosition.z:F3}). "
                                 + "Movement blocked by coordination check."
                         );
-                        SendCommandCompletion(command.robot_id, "move_to_coordinate", false, command.request_id);
+                        SendCommandCompletion(
+                            command.robot_id,
+                            "move_to_coordinate",
+                            false,
+                            command.request_id
+                        );
                         _failedCommands++;
                         return;
                     }
@@ -379,7 +387,12 @@ namespace PythonCommunication
                     if (_activeCommands.ContainsKey(commandKey))
                     {
                         _activeCommands.Remove(commandKey);
-                        SendCommandCompletion(command.robot_id, "move_to_coordinate", true, command.request_id);
+                        SendCommandCompletion(
+                            command.robot_id,
+                            "move_to_coordinate",
+                            true,
+                            command.request_id
+                        );
                     }
 
                     // Phase 4: Release workspace region after movement completes
@@ -460,7 +473,8 @@ namespace PythonCommunication
                 }
 
                 // Get gripper controller from robot
-                GripperController gripperController = robotInstance.robotGameObject.GetComponentInChildren<GripperController>();
+                GripperController gripperController =
+                    robotInstance.robotGameObject.GetComponentInChildren<GripperController>();
                 if (gripperController == null)
                 {
                     Debug.LogError(
@@ -482,7 +496,12 @@ namespace PythonCommunication
                     if (_activeCommands.ContainsKey(commandKey))
                     {
                         _activeCommands.Remove(commandKey);
-                        SendCommandCompletion(command.robot_id, "control_gripper", true, command.request_id);
+                        SendCommandCompletion(
+                            command.robot_id,
+                            "control_gripper",
+                            true,
+                            command.request_id
+                        );
                     }
                 };
                 gripperController.OnGripperActionComplete += onComplete;
@@ -536,7 +555,10 @@ namespace PythonCommunication
                 }
 
                 // Validate start joint targets exist
-                if (robotInstance.startJointTargets == null || robotInstance.startJointTargets.Length == 0)
+                if (
+                    robotInstance.startJointTargets == null
+                    || robotInstance.startJointTargets.Length == 0
+                )
                 {
                     Debug.LogError(
                         $"{_logPrefix} return_to_start_position: No start joint targets saved for robot '{command.robot_id}'"
@@ -554,13 +576,15 @@ namespace PythonCommunication
                 }
 
                 // Start coroutine to smoothly interpolate joint targets
-                StartCoroutine(ReturnToStartPositionCoroutine(
-                    controller,
-                    robotInstance.startJointTargets,
-                    command.robot_id,
-                    command.request_id,
-                    2.0f
-                ));
+                StartCoroutine(
+                    ReturnToStartPositionCoroutine(
+                        controller,
+                        robotInstance.startJointTargets,
+                        command.robot_id,
+                        command.request_id,
+                        2.0f
+                    )
+                );
 
                 _successfulCommands++;
             }
@@ -581,7 +605,8 @@ namespace PythonCommunication
             float[] targetJoints,
             string robotId,
             uint requestId,
-            float duration)
+            float duration
+        )
         {
             if (controller == null || controller.robotJoints == null)
             {
@@ -666,7 +691,9 @@ namespace PythonCommunication
                 string cameraId = command.camera_id;
                 if (string.IsNullOrEmpty(cameraId))
                 {
-                    Debug.LogError($"{_logPrefix} capture_stereo_images: camera_id is null or empty");
+                    Debug.LogError(
+                        $"{_logPrefix} capture_stereo_images: camera_id is null or empty"
+                    );
                     _failedCommands++;
                     return;
                 }
@@ -675,14 +702,18 @@ namespace PythonCommunication
                 var stereoController = FindFirstObjectByType<StereoCameraController>();
                 if (stereoController == null)
                 {
-                    Debug.LogError($"{_logPrefix} capture_stereo_images: No StereoCameraController found in scene");
+                    Debug.LogError(
+                        $"{_logPrefix} capture_stereo_images: No StereoCameraController found in scene"
+                    );
                     _failedCommands++;
                     return;
                 }
 
                 if (_verboseLogging)
                 {
-                    Debug.Log($"{_logPrefix} [req={command.request_id}] Capturing stereo images for {cameraId}");
+                    Debug.Log(
+                        $"{_logPrefix} [req={command.request_id}] Capturing stereo images for {cameraId}"
+                    );
                 }
 
                 // Capture and send stereo images
@@ -692,7 +723,9 @@ namespace PythonCommunication
             }
             catch (Exception ex)
             {
-                Debug.LogError($"{_logPrefix} Error executing capture_stereo_images: {ex.Message}\n{ex.StackTrace}");
+                Debug.LogError(
+                    $"{_logPrefix} Error executing capture_stereo_images: {ex.Message}\n{ex.StackTrace}"
+                );
                 _failedCommands++;
             }
         }
@@ -843,7 +876,12 @@ namespace PythonCommunication
         /// <summary>
         /// Send command completion notification to Python via StatusServer
         /// </summary>
-        private void SendCommandCompletion(string robotId, string commandType, bool success, uint requestId)
+        private void SendCommandCompletion(
+            string robotId,
+            string commandType,
+            bool success,
+            uint requestId
+        )
         {
             var completionData = new CommandCompletionData
             {
@@ -852,20 +890,24 @@ namespace PythonCommunication
                 command_type = commandType,
                 success = success,
                 request_id = requestId,
-                timestamp = Time.time
+                timestamp = Time.time,
             };
 
             string json = JsonUtility.ToJson(completionData);
 
             if (_verboseLogging)
             {
-                Debug.Log($"{_logPrefix} [req={requestId}] Sending completion for {commandType}: success={success}");
+                Debug.Log(
+                    $"{_logPrefix} [req={requestId}] Sending completion for {commandType}: success={success}"
+                );
             }
 
             // Send via StatusResponseSender
             if (!SendStatusResponseToPython(json, requestId))
             {
-                Debug.LogWarning($"{_logPrefix} [req={requestId}] Failed to send completion notification");
+                Debug.LogWarning(
+                    $"{_logPrefix} [req={requestId}] Failed to send completion notification"
+                );
             }
         }
 
@@ -1019,7 +1061,9 @@ namespace PythonCommunication
         public void SetPythonVerificationEnabled(bool enabled)
         {
             _enablePythonVerification = enabled;
-            Debug.Log($"{_logPrefix} [Phase 4] Python verification {(enabled ? "enabled" : "disabled")}");
+            Debug.Log(
+                $"{_logPrefix} [Phase 4] Python verification {(enabled ? "enabled" : "disabled")}"
+            );
         }
 
         #endregion

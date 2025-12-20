@@ -112,7 +112,9 @@ class WorkflowPattern:
             if step.description:
                 doc += f": {step.description}"
             if step.parameter_bindings:
-                bindings_str = ", ".join(f"{k}=${v}" for k, v in step.parameter_bindings.items())
+                bindings_str = ", ".join(
+                    f"{k}=${v}" for k, v in step.parameter_bindings.items()
+                )
                 doc += f" [{bindings_str}]"
             if step.conditional:
                 doc += f" (if {step.conditional})"
@@ -152,7 +154,7 @@ DETECT_AND_APPROACH_PATTERN = WorkflowPattern(
         WorkflowStep(
             operation_id="perception_stereo_detect_001",
             parameter_bindings={},
-            description="Detect object with stereo vision to get 3D coordinates"
+            description="Detect object with stereo vision to get 3D coordinates",
         ),
         WorkflowStep(
             operation_id="motion_move_to_coord_001",
@@ -161,7 +163,7 @@ DETECT_AND_APPROACH_PATTERN = WorkflowPattern(
                 "y": "detect_result.y",
                 "z": "detect_result.z",
             },
-            description="Move robot to detected object position"
+            description="Move robot to detected object position",
         ),
     ],
     variable_bindings={
@@ -188,7 +190,7 @@ PICK_AND_PLACE_PATTERN = WorkflowPattern(
         WorkflowStep(
             operation_id="perception_stereo_detect_001",
             parameter_bindings={"color": "source_color"},
-            description="Detect source object to pick up"
+            description="Detect source object to pick up",
         ),
         WorkflowStep(
             operation_id="motion_move_to_coord_001",
@@ -198,12 +200,12 @@ PICK_AND_PLACE_PATTERN = WorkflowPattern(
                 "z": "source.z",
                 "approach_offset": "0.05",
             },
-            description="Approach source object with offset"
+            description="Approach source object with offset",
         ),
         WorkflowStep(
             operation_id="manipulation_control_gripper_001",
             parameter_bindings={"open_gripper": "False"},
-            description="Close gripper to grasp object"
+            description="Close gripper to grasp object",
         ),
         WorkflowStep(
             operation_id="motion_move_to_coord_001",
@@ -212,12 +214,12 @@ PICK_AND_PLACE_PATTERN = WorkflowPattern(
                 "y": "target_y",
                 "z": "target_z",
             },
-            description="Move to target placement location"
+            description="Move to target placement location",
         ),
         WorkflowStep(
             operation_id="manipulation_control_gripper_001",
             parameter_bindings={"open_gripper": "True"},
-            description="Open gripper to release object"
+            description="Open gripper to release object",
         ),
     ],
     variable_bindings={
@@ -246,12 +248,12 @@ VERIFY_AND_ACT_PATTERN = WorkflowPattern(
         WorkflowStep(
             operation_id="perception_analyze_scene_001",
             parameter_bindings={"prompt": "analysis_prompt"},
-            description="Use LLM vision to understand current scene state"
+            description="Use LLM vision to understand current scene state",
         ),
         WorkflowStep(
             operation_id="perception_stereo_detect_001",
             conditional="scene_analysis indicates object is present",
-            description="Detect object if LLM confirms it's visible"
+            description="Detect object if LLM confirms it's visible",
         ),
         WorkflowStep(
             operation_id="motion_move_to_coord_001",
@@ -261,7 +263,7 @@ VERIFY_AND_ACT_PATTERN = WorkflowPattern(
                 "z": "detection.z",
             },
             conditional="object detected successfully",
-            description="Move to detected object"
+            description="Move to detected object",
         ),
     ],
     variable_bindings={
@@ -294,12 +296,12 @@ SIMULTANEOUS_MOVE_PATTERN = WorkflowPattern(
         WorkflowStep(
             operation_id="status_check_robot_001",
             parameter_bindings={"robot_id": "robot1_id"},
-            description="Check robot 1 status before moving"
+            description="Check robot 1 status before moving",
         ),
         WorkflowStep(
             operation_id="status_check_robot_001",
             parameter_bindings={"robot_id": "robot2_id"},
-            description="Check robot 2 status before moving"
+            description="Check robot 2 status before moving",
         ),
         WorkflowStep(
             operation_id="motion_move_to_coord_001",
@@ -309,7 +311,7 @@ SIMULTANEOUS_MOVE_PATTERN = WorkflowPattern(
                 "y": "target1_y",
                 "z": "target1_z",
             },
-            description="Robot1 moves to target (parallel with Robot2)"
+            description="Robot1 moves to target (parallel with Robot2)",
         ),
         WorkflowStep(
             operation_id="motion_move_to_coord_001",
@@ -319,12 +321,12 @@ SIMULTANEOUS_MOVE_PATTERN = WorkflowPattern(
                 "y": "target2_y",
                 "z": "target2_z",
             },
-            description="Robot2 moves to target (parallel with Robot1)"
+            description="Robot2 moves to target (parallel with Robot1)",
         ),
         WorkflowStep(
             operation_id="sync_signal_001",
             parameter_bindings={"event_name": "both_robots_positioned"},
-            description="Signal that both robots reached targets"
+            description="Signal that both robots reached targets",
         ),
     ],
     variable_bindings={
@@ -354,7 +356,7 @@ HANDOFF_PATTERN = WorkflowPattern(
         WorkflowStep(
             operation_id="perception_stereo_detect_001",
             parameter_bindings={"color": "object_color", "robot_id": "source_robot"},
-            description="Detect object to handoff"
+            description="Detect object to handoff",
         ),
         WorkflowStep(
             operation_id="motion_move_to_coord_001",
@@ -364,22 +366,22 @@ HANDOFF_PATTERN = WorkflowPattern(
                 "y": "object.y",
                 "z": "object.z",
             },
-            description="Source robot approaches object"
+            description="Source robot approaches object",
         ),
         WorkflowStep(
             operation_id="manipulation_control_gripper_001",
             parameter_bindings={"robot_id": "source_robot", "open_gripper": "False"},
-            description="Source robot grasps object"
+            description="Source robot grasps object",
         ),
         WorkflowStep(
             operation_id="sync_signal_001",
             parameter_bindings={"event_name": "object_gripped"},
-            description="Signal that object has been gripped"
+            description="Signal that object has been gripped",
         ),
         WorkflowStep(
             operation_id="sync_wait_for_signal_001",
             parameter_bindings={"event_name": "object_gripped", "timeout_ms": "10000"},
-            description="Target robot waits for grip confirmation (in parallel)"
+            description="Target robot waits for grip confirmation (in parallel)",
         ),
         WorkflowStep(
             operation_id="motion_move_to_coord_001",
@@ -389,7 +391,7 @@ HANDOFF_PATTERN = WorkflowPattern(
                 "y": "handoff_y",
                 "z": "handoff_z",
             },
-            description="Source robot moves to handoff position"
+            description="Source robot moves to handoff position",
         ),
         WorkflowStep(
             operation_id="motion_move_to_coord_001",
@@ -399,32 +401,32 @@ HANDOFF_PATTERN = WorkflowPattern(
                 "y": "handoff_y",
                 "z": "handoff_z",
             },
-            description="Target robot moves to handoff position (parallel)"
+            description="Target robot moves to handoff position (parallel)",
         ),
         WorkflowStep(
             operation_id="sync_signal_001",
             parameter_bindings={"event_name": "both_at_handoff"},
-            description="Signal that both robots at handoff position"
+            description="Signal that both robots at handoff position",
         ),
         WorkflowStep(
             operation_id="manipulation_control_gripper_001",
             parameter_bindings={"robot_id": "target_robot", "open_gripper": "False"},
-            description="Target robot closes gripper to receive object"
+            description="Target robot closes gripper to receive object",
         ),
         WorkflowStep(
             operation_id="sync_wait_001",
             parameter_bindings={"duration_ms": "500"},
-            description="Wait for gripper to fully close"
+            description="Wait for gripper to fully close",
         ),
         WorkflowStep(
             operation_id="manipulation_control_gripper_001",
             parameter_bindings={"robot_id": "source_robot", "open_gripper": "True"},
-            description="Source robot releases object"
+            description="Source robot releases object",
         ),
         WorkflowStep(
             operation_id="sync_signal_001",
             parameter_bindings={"event_name": "handoff_complete"},
-            description="Signal handoff completion"
+            description="Signal handoff completion",
         ),
     ],
     variable_bindings={
@@ -455,7 +457,7 @@ LLM_DRIVEN_COORDINATION_PATTERN = WorkflowPattern(
         WorkflowStep(
             operation_id="perception_stereo_detect_001",
             parameter_bindings={"color": "red", "robot_id": "Robot1"},
-            description="Robot1: Detect red cube"
+            description="Robot1: Detect red cube",
         ),
         WorkflowStep(
             operation_id="motion_move_to_coord_001",
@@ -465,22 +467,22 @@ LLM_DRIVEN_COORDINATION_PATTERN = WorkflowPattern(
                 "y": "cube.y",
                 "z": "cube.z",
             },
-            description="Robot1: Move to cube"
+            description="Robot1: Move to cube",
         ),
         WorkflowStep(
             operation_id="manipulation_control_gripper_001",
             parameter_bindings={"robot_id": "Robot1", "open_gripper": "False"},
-            description="Robot1: Grip cube"
+            description="Robot1: Grip cube",
         ),
         WorkflowStep(
             operation_id="sync_signal_001",
             parameter_bindings={"event_name": "cube_gripped"},
-            description="Robot1: Signal that cube is gripped"
+            description="Robot1: Signal that cube is gripped",
         ),
         WorkflowStep(
             operation_id="sync_wait_for_signal_001",
             parameter_bindings={"event_name": "cube_gripped", "timeout_ms": "5000"},
-            description="Robot2: Wait for Robot1 to grip cube (parallel execution)"
+            description="Robot2: Wait for Robot1 to grip cube (parallel execution)",
         ),
         WorkflowStep(
             operation_id="motion_move_to_coord_001",
@@ -490,7 +492,7 @@ LLM_DRIVEN_COORDINATION_PATTERN = WorkflowPattern(
                 "y": "0.0",
                 "z": "0.3",
             },
-            description="Robot1: Move to handoff position"
+            description="Robot1: Move to handoff position",
         ),
         WorkflowStep(
             operation_id="motion_move_to_coord_001",
@@ -500,42 +502,42 @@ LLM_DRIVEN_COORDINATION_PATTERN = WorkflowPattern(
                 "y": "0.0",
                 "z": "0.3",
             },
-            description="Robot2: Move to handoff position (parallel with Robot1)"
+            description="Robot2: Move to handoff position (parallel with Robot1)",
         ),
         WorkflowStep(
             operation_id="sync_signal_001",
             parameter_bindings={"event_name": "robot1_ready"},
-            description="Robot1: Signal arrival at handoff"
+            description="Robot1: Signal arrival at handoff",
         ),
         WorkflowStep(
             operation_id="sync_signal_001",
             parameter_bindings={"event_name": "robot2_ready"},
-            description="Robot2: Signal arrival at handoff"
+            description="Robot2: Signal arrival at handoff",
         ),
         WorkflowStep(
             operation_id="sync_wait_for_signal_001",
             parameter_bindings={"event_name": "robot2_ready", "timeout_ms": "5000"},
-            description="Robot1: Wait for Robot2 to arrive"
+            description="Robot1: Wait for Robot2 to arrive",
         ),
         WorkflowStep(
             operation_id="sync_wait_for_signal_001",
             parameter_bindings={"event_name": "robot1_ready", "timeout_ms": "5000"},
-            description="Robot2: Wait for Robot1 to arrive"
+            description="Robot2: Wait for Robot1 to arrive",
         ),
         WorkflowStep(
             operation_id="manipulation_control_gripper_001",
             parameter_bindings={"robot_id": "Robot2", "open_gripper": "False"},
-            description="Robot2: Close gripper to receive cube"
+            description="Robot2: Close gripper to receive cube",
         ),
         WorkflowStep(
             operation_id="sync_wait_001",
             parameter_bindings={"duration_ms": "500"},
-            description="Wait for gripper to stabilize"
+            description="Wait for gripper to stabilize",
         ),
         WorkflowStep(
             operation_id="manipulation_control_gripper_001",
             parameter_bindings={"robot_id": "Robot1", "open_gripper": "True"},
-            description="Robot1: Release cube"
+            description="Robot1: Release cube",
         ),
     ],
     variable_bindings={
@@ -597,7 +599,9 @@ class WorkflowPatternRegistry:
         """Get all registered patterns"""
         return list(self.patterns.values())
 
-    def get_patterns_by_category(self, category: WorkflowCategory) -> List[WorkflowPattern]:
+    def get_patterns_by_category(
+        self, category: WorkflowCategory
+    ) -> List[WorkflowPattern]:
         """Get all patterns in a specific category"""
         return [p for p in self.patterns.values() if p.category == category]
 
@@ -607,9 +611,13 @@ class WorkflowPatternRegistry:
         matches = []
 
         for pattern in self.patterns.values():
-            if (query_lower in pattern.name.lower() or
-                query_lower in pattern.description.lower() or
-                any(query_lower in step.description.lower() for step in pattern.steps)):
+            if (
+                query_lower in pattern.name.lower()
+                or query_lower in pattern.description.lower()
+                or any(
+                    query_lower in step.description.lower() for step in pattern.steps
+                )
+            ):
                 matches.append(pattern)
 
         return matches

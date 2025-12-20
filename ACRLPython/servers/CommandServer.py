@@ -27,10 +27,10 @@ except ImportError:
 
 # Import base classes
 try:
-    from core.TCPServerBase import TCPServerBase, ServerConfig, ConnectionState
+    from core.TCPServerBase import TCPServerBase, ServerConfig
     from core.UnityProtocol import UnityProtocol
 except ImportError:
-    from ..core.TCPServerBase import TCPServerBase, ServerConfig, ConnectionState
+    from ..core.TCPServerBase import TCPServerBase, ServerConfig
     from ..core.UnityProtocol import UnityProtocol
 
 logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
@@ -255,7 +255,9 @@ class CommandServer(TCPServerBase):
         # Validate message type - accept both RESULT and STATUS_RESPONSE
         valid_types = [MessageType.RESULT, MessageType.STATUS_RESPONSE]
         if msg_type not in valid_types:
-            logger.warning(f"Unexpected message type: {msg_type} (expected RESULT or STATUS_RESPONSE)")
+            logger.warning(
+                f"Unexpected message type: {msg_type} (expected RESULT or STATUS_RESPONSE)"
+            )
             return None
 
         # Read JSON length
@@ -284,7 +286,9 @@ class CommandServer(TCPServerBase):
                 logger.debug(f"Processed world state update")
                 return None
 
-            logger.debug(f"Received completion for request {request_id}: {completion.get('type', 'unknown')}")
+            logger.debug(
+                f"Received completion for request {request_id}: {completion.get('type', 'unknown')}"
+            )
             return completion
         except json.JSONDecodeError as e:
             logger.error(f"Invalid completion JSON: {e}")
@@ -319,11 +323,20 @@ class CommandServer(TCPServerBase):
                     # WorldState expects (roll, pitch, yaw) in degrees
                     # Unity sends quaternion (x, y, z, w)
                     # For now, we'll store the quaternion as-is
-                    rotation = (rotation.get("x"), rotation.get("y"), rotation.get("z"), rotation.get("w"))
+                    rotation = (
+                        rotation.get("x"),
+                        rotation.get("y"),
+                        rotation.get("z"),
+                        rotation.get("w"),
+                    )
 
                 target_position = robot_data.get("target_position")
                 if target_position:
-                    target_position = (target_position.get("x"), target_position.get("y"), target_position.get("z"))
+                    target_position = (
+                        target_position.get("x"),
+                        target_position.get("y"),
+                        target_position.get("z"),
+                    )
 
                 state_data = {
                     "position": position,
@@ -332,7 +345,7 @@ class CommandServer(TCPServerBase):
                     "gripper_state": robot_data.get("gripper_state", "unknown"),
                     "is_moving": robot_data.get("is_moving", False),
                     "is_initialized": robot_data.get("is_initialized", False),
-                    "joint_angles": robot_data.get("joint_angles", [])
+                    "joint_angles": robot_data.get("joint_angles", []),
                 }
 
                 world_state.update_robot_state(robot_id, state_data)
@@ -353,10 +366,12 @@ class CommandServer(TCPServerBase):
                         position=position,
                         color=obj_data.get("color", "unknown"),
                         object_type=obj_data.get("object_type", "unknown"),
-                        confidence=obj_data.get("confidence", 1.0)
+                        confidence=obj_data.get("confidence", 1.0),
                     )
 
-            logger.debug(f"Updated world state: {len(robots)} robots, {len(objects)} objects")
+            logger.debug(
+                f"Updated world state: {len(robots)} robots, {len(objects)} objects"
+            )
 
         except Exception as e:
             logger.error(f"Error handling world state update: {e}", exc_info=True)

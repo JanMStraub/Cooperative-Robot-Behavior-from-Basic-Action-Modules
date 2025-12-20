@@ -71,7 +71,7 @@ class SequenceQueryHandler:
         self,
         lm_studio_url: Optional[str] = None,
         model: Optional[str] = None,
-        check_completion: bool = True  # Enabled - Unity sends completion signals
+        check_completion: bool = True,  # Enabled - Unity sends completion signals
     ) -> bool:
         """
         Initialize the parser and executor.
@@ -85,13 +85,8 @@ class SequenceQueryHandler:
             True if initialization succeeded
         """
         try:
-            self._parser = CommandParser(
-                lm_studio_url=lm_studio_url,
-                model=model
-            )
-            self._executor = SequenceExecutor(
-                check_completion=check_completion
-            )
+            self._parser = CommandParser(lm_studio_url=lm_studio_url, model=model)
+            self._executor = SequenceExecutor(check_completion=check_completion)
             return True
         except Exception as e:
             logger.error(f"Failed to initialize SequenceQueryHandler: {e}")
@@ -103,7 +98,7 @@ class SequenceQueryHandler:
         robot_id: str = "Robot1",
         camera_id: str = "TableStereoCamera",
         auto_execute: bool = True,
-        timeout: float = 30.0
+        timeout: float = 30.0,
     ) -> Dict[str, Any]:
         """
         Parse and execute a command sequence.
@@ -119,10 +114,7 @@ class SequenceQueryHandler:
             Execution result dictionary
         """
         if not self._parser or not self._executor:
-            return {
-                "success": False,
-                "error": "SequenceQueryHandler not initialized"
-            }
+            return {"success": False, "error": "SequenceQueryHandler not initialized"}
 
         # Parse the command
         parse_result = self._parser.parse(command_text, robot_id)
@@ -131,7 +123,7 @@ class SequenceQueryHandler:
             return {
                 "success": False,
                 "error": f"Parse failed: {parse_result.get('error')}",
-                "commands": []
+                "commands": [],
             }
 
         commands = parse_result["commands"]
@@ -139,14 +131,14 @@ class SequenceQueryHandler:
             return {
                 "success": False,
                 "error": "No commands parsed from input",
-                "commands": []
+                "commands": [],
             }
 
         # Add camera_id to commands that need it (perception operations)
         perception_ops = [
             "detect_object_stereo",  # Unified stereo detection operation
-            "detect_objects",        # 2D detection only
-            "analyze_scene",         # LLM vision analysis
+            "detect_objects",  # 2D detection only
+            "analyze_scene",  # LLM vision analysis
         ]
         for cmd in commands:
             if cmd.get("operation") in perception_ops:
@@ -164,13 +156,12 @@ class SequenceQueryHandler:
                 "total_commands": len(commands),
                 "completed_commands": 0,
                 "results": [],
-                "total_duration_ms": 0
+                "total_duration_ms": 0,
             }
 
         # Execute the sequence
         exec_result = self._executor.execute_sequence(
-            commands,
-            timeout_per_command=timeout
+            commands, timeout_per_command=timeout
         )
 
         # Add parsed commands to result
@@ -200,10 +191,7 @@ class SequenceServer(TCPServerBase):
             config: Server configuration (uses default if None)
         """
         if config is None:
-            config = ServerConfig(
-                host=cfg.DEFAULT_HOST,
-                port=cfg.SEQUENCE_SERVER_PORT
-            )
+            config = ServerConfig(host=cfg.DEFAULT_HOST, port=cfg.SEQUENCE_SERVER_PORT)
         super().__init__(config)
 
     def handle_client_connection(self, client: socket.socket, address: tuple):
@@ -244,7 +232,7 @@ class SequenceServer(TCPServerBase):
                 command_bytes = self._recv_exact(client, cmd_len)
                 if not command_bytes:
                     break
-                command_text = command_bytes.decode('utf-8')
+                command_text = command_bytes.decode("utf-8")
 
                 # Read robot_id length (4 bytes)
                 robot_id_len_bytes = self._recv_exact(client, 4)
@@ -257,7 +245,7 @@ class SequenceServer(TCPServerBase):
                 if robot_id_len > 0:
                     robot_id_bytes = self._recv_exact(client, robot_id_len)
                     if robot_id_bytes:
-                        robot_id = robot_id_bytes.decode('utf-8')
+                        robot_id = robot_id_bytes.decode("utf-8")
 
                 # Read camera_id length (4 bytes)
                 camera_id_len_bytes = self._recv_exact(client, 4)
@@ -270,7 +258,7 @@ class SequenceServer(TCPServerBase):
                 if camera_id_len > 0:
                     camera_id_bytes = self._recv_exact(client, camera_id_len)
                     if camera_id_bytes:
-                        camera_id = camera_id_bytes.decode('utf-8')
+                        camera_id = camera_id_bytes.decode("utf-8")
 
                 # Read auto_execute flag (1 byte)
                 auto_execute_bytes = self._recv_exact(client, 1)
@@ -278,11 +266,15 @@ class SequenceServer(TCPServerBase):
                     break
                 auto_execute = auto_execute_bytes[0] == 1
 
-                logger.info(f"Received sequence query (id={request_id}): {command_text[:100]} (camera={camera_id}, auto_execute={auto_execute})")
+                logger.info(
+                    f"Received sequence query (id={request_id}): {command_text[:100]} (camera={camera_id}, auto_execute={auto_execute})"
+                )
 
                 # Execute the sequence
                 handler = SequenceQueryHandler()
-                result = handler.execute_sequence(command_text, robot_id, camera_id, auto_execute)
+                result = handler.execute_sequence(
+                    command_text, robot_id, camera_id, auto_execute
+                )
 
                 # Send response
                 self._send_response(client, request_id, result)
@@ -311,7 +303,7 @@ class SequenceServer(TCPServerBase):
         Returns:
             Received bytes or None if connection closed
         """
-        data = b''
+        data = b""
         while len(data) < num_bytes:
             chunk = client.recv(num_bytes - len(data))
             if not chunk:
@@ -319,7 +311,9 @@ class SequenceServer(TCPServerBase):
             data += chunk
         return data
 
-    def _send_response(self, client: socket.socket, request_id: int, result: Dict[str, Any]):
+    def _send_response(
+        self, client: socket.socket, request_id: int, result: Dict[str, Any]
+    ):
         """
         Send response to client.
 
@@ -330,7 +324,7 @@ class SequenceServer(TCPServerBase):
         """
         try:
             # Encode result as JSON
-            result_json = json.dumps(result).encode('utf-8')
+            result_json = json.dumps(result).encode("utf-8")
 
             # Build response: [request_id:4][result_len:4][result_json:N]
             response = struct.pack("!I", request_id)
@@ -352,10 +346,7 @@ class SequenceServer(TCPServerBase):
             request_id: Request ID
             error_message: Error message
         """
-        result = {
-            "success": False,
-            "error": error_message
-        }
+        result = {"success": False, "error": error_message}
         self._send_response(client, request_id, result)
 
 
@@ -364,7 +355,7 @@ def run_sequence_server_background(
     lm_studio_url: Optional[str] = None,
     model: Optional[str] = None,
     setup_signals: bool = False,
-    check_completion: bool = True
+    check_completion: bool = True,
 ) -> SequenceServer:
     """
     Start the SequenceServer in the background.
@@ -381,7 +372,9 @@ def run_sequence_server_background(
     """
     # Initialize the query handler
     handler = SequenceQueryHandler()
-    handler.initialize(lm_studio_url=lm_studio_url, model=model, check_completion=check_completion)
+    handler.initialize(
+        lm_studio_url=lm_studio_url, model=model, check_completion=check_completion
+    )
 
     # Create server config
     if config:
@@ -391,12 +384,11 @@ def run_sequence_server_background(
         else:
             server_config = ServerConfig(
                 host=config.get("host", cfg.DEFAULT_HOST),
-                port=config.get("port", cfg.SEQUENCE_SERVER_PORT)
+                port=config.get("port", cfg.SEQUENCE_SERVER_PORT),
             )
     else:
         server_config = ServerConfig(
-            host=cfg.DEFAULT_HOST,
-            port=cfg.SEQUENCE_SERVER_PORT
+            host=cfg.DEFAULT_HOST, port=cfg.SEQUENCE_SERVER_PORT
         )
 
     # Create and start server
@@ -411,10 +403,18 @@ if __name__ == "__main__":
     import signal
     import time
 
-    parser = argparse.ArgumentParser(description="Run SequenceServer for multi-command execution")
+    parser = argparse.ArgumentParser(
+        description="Run SequenceServer for multi-command execution"
+    )
     parser.add_argument("--host", default=cfg.DEFAULT_HOST, help="Server host")
-    parser.add_argument("--port", type=int, default=cfg.SEQUENCE_SERVER_PORT, help="Server port")
-    parser.add_argument("--model", default=cfg.DEFAULT_LMSTUDIO_MODEL, help="LM Studio model for parsing")
+    parser.add_argument(
+        "--port", type=int, default=cfg.SEQUENCE_SERVER_PORT, help="Server port"
+    )
+    parser.add_argument(
+        "--model",
+        default=cfg.DEFAULT_LMSTUDIO_MODEL,
+        help="LM Studio model for parsing",
+    )
     args = parser.parse_args()
 
     # Initialize handler

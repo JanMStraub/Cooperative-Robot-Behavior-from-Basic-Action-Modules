@@ -143,6 +143,12 @@ namespace Core
     /// </summary>
     public static class CommunicationConstants
     {
+
+        /// <summary>
+        /// Hostname for server (default: 127.0.0.1)
+        /// </summary>
+        public const string SERVER_HOST = "127.0.0.1";
+
         /// <summary>
         /// Stereo detection server port (receives stereo image pairs)
         /// </summary>

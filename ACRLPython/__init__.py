@@ -1,42 +1,45 @@
 """
-LLMCommunication - Unity ↔ Python communication package for robot vision and AI
+ACRLPython - Unity ↔ Python communication package for robot vision and AI
 
 This package provides TCP servers, vision processing modules, and orchestrators
-for integrating LM Studio LLM vision analysis and object detection with Unity simulations.
+for integrating LLM vision analysis and object detection with Unity simulations.
 
 Subpackages:
 - core: Base classes and wire protocol (TCPServerBase, UnityProtocol)
-- servers: TCP servers for Unity communication (StreamingServer, ResultsServer, DetectionServer, StereoDetectionServer)
-- vision: Vision and AI processing (AnalyzeImage with LM Studio, ObjectDetector, DepthEstimator)
-- orchestrators: Main entry point scripts (RunAnalyzer, RunDetector, RunStereoDetector)
+- servers: TCP servers for Unity communication (ImageServer, CommandServer, SequenceServer)
+- vision: Vision and AI processing (AnalyzeImage with Ollama, ObjectDetector, DepthEstimator)
+- orchestrators: Main entry point (RunRobotController)
+- operations: Registered operations for command execution
+- rag: Semantic search for operation matching
 
 Configuration:
-- llm_config.py: Centralized configuration for all modules
+- LLMConfig.py: Centralized configuration for all modules
 
-For detailed usage, see RESTRUCTURING_SUMMARY.md
+Architecture (December 2025):
+- Unified backend via RunRobotController
+- 3 active servers: ImageServer (5005/5006), CommandServer (5010), SequenceServer (5013)
+- Operations system with 17 registered operations
+- Protocol V2 with request ID correlation
 """
 
 __version__ = "2.0.0"
-__author__ = "ACRL Team"
+__author__ = "Jan M. Straub"
 
 # Core exports
 from . import LLMConfig as config
 from .core import TCPServerBase, ServerConfig, UnityProtocol
 
-# Server exports
+# Server exports (December 2025 - Unified Architecture)
 from .servers import (
-    ImageStorage,
-    StreamingServer,
-    run_streaming_server_background,
-    ResultsBroadcaster,
-    ResultsServer,
-    run_results_server_background,
-    DetectionBroadcaster,
-    DetectionServer,
-    run_detection_server_background,
-    StereoImageStorage,
-    StereoDetectionServer,
-    run_stereo_detection_server_background,
+    UnifiedImageStorage,
+    ImageServer,
+    run_image_server_background,
+    CommandBroadcaster,
+    CommandServer,
+    run_command_server_background,
+    SequenceQueryHandler,
+    SequenceServer,
+    run_sequence_server_background,
 )
 
 # Vision exports (DepthEstimator excluded due to external dependencies)
@@ -55,19 +58,16 @@ __all__ = [
     "TCPServerBase",
     "ServerConfig",
     "UnityProtocol",
-    # Servers
-    "ImageStorage",
-    "StreamingServer",
-    "run_streaming_server_background",
-    "ResultsBroadcaster",
-    "ResultsServer",
-    "run_results_server_background",
-    "DetectionBroadcaster",
-    "DetectionServer",
-    "run_detection_server_background",
-    "StereoImageStorage",
-    "StereoDetectionServer",
-    "run_stereo_detection_server_background",
+    # Servers (Unified Architecture)
+    "UnifiedImageStorage",
+    "ImageServer",
+    "run_image_server_background",
+    "CommandBroadcaster",
+    "CommandServer",
+    "run_command_server_background",
+    "SequenceQueryHandler",
+    "SequenceServer",
+    "run_sequence_server_background",
     # Vision
     "LMStudioVisionProcessor",
     "get_images_from_server",

@@ -53,7 +53,7 @@ import numpy as np
 import cv2
 
 try:
-    from ultralytics import YOLO # type: ignore
+    from ultralytics import YOLO  # type: ignore
 
     YOLO_AVAILABLE = True
 except ImportError:
@@ -170,7 +170,7 @@ class YOLODetector:
         self,
         model_path: Optional[str] = None,
         class_mapping: Optional[dict] = None,
-        task: str = "detect", # Maybe use segment for object boundaries
+        task: str = "detect",  # Maybe use segment for object boundaries
     ):
         """
         Initialize YOLO detector for robot vision system
@@ -559,7 +559,7 @@ class YOLODetector:
                 detection_result_right.detections,
                 max_y_diff=max_y_diff,
                 max_size_ratio=max_size_ratio,
-                min_iou=min_iou
+                min_iou=min_iou,
             )
 
             # Use only validated detections (left image detections that matched right)
@@ -568,7 +568,7 @@ class YOLODetector:
                 camera_id,
                 detection_result_left.image_width,
                 detection_result_left.image_height,
-                validated_detections
+                validated_detections,
             )
 
             logging.info(
@@ -624,15 +624,23 @@ class YOLODetector:
         if getattr(cfg, "ENABLE_ADAPTIVE_SGBM", False):
             # Import SGBM preset functions
             try:
-                from .DepthEstimator import select_sgbm_preset, calc_disparity_with_preset
+                from .DepthEstimator import (
+                    select_sgbm_preset,
+                    calc_disparity_with_preset,
+                )
             except ImportError:
-                from vision.DepthEstimator import select_sgbm_preset, calc_disparity_with_preset
+                from vision.DepthEstimator import (
+                    select_sgbm_preset,
+                    calc_disparity_with_preset,
+                )
 
             # Use medium preset by default (no distance estimate yet)
             preset = select_sgbm_preset(estimated_distance=None)
             disparity = calc_disparity_with_preset(imgL_gray, imgR_gray, preset)
         else:
-            disparity = calc_disparity(imgL_gray, imgR_gray, DEFAULT_RECONSTRUCTION_CONFIG)
+            disparity = calc_disparity(
+                imgL_gray, imgR_gray, DEFAULT_RECONSTRUCTION_CONFIG
+            )
 
         # Save disparity map for debugging (if enabled in config)
         if save_disparity_map_debug is not None:
@@ -647,14 +655,21 @@ class YOLODetector:
 
         # Import functions unconditionally to avoid "possibly unbound" errors
         try:
-            from .DepthEstimator import estimate_depth_from_bbox, get_focal_length_pixels
+            from .DepthEstimator import (
+                estimate_depth_from_bbox,
+                get_focal_length_pixels,
+            )
         except ImportError:
-            from vision.DepthEstimator import estimate_depth_from_bbox, get_focal_length_pixels
+            from vision.DepthEstimator import (
+                estimate_depth_from_bbox,
+                get_focal_length_pixels,
+            )
 
         for det in detection_result.detections:
             # Bbox-guided depth sampling (NEW - more accurate than center point)
             if use_bbox_sampling:
                 import math
+
                 focal_length_px = get_focal_length_pixels(camera_config, w, h)
 
                 bbox = (det.bbox_x, det.bbox_y, det.bbox_w, det.bbox_h)
@@ -693,7 +708,9 @@ class YOLODetector:
                 # Calculate depth from disparity using camera parameters
                 # Depth = (baseline * focal_length) / disparity
                 depth_m = None
-                if disp_value is not None and disp_value > 1.0:  # Valid disparity threshold
+                if (
+                    disp_value is not None and disp_value > 1.0
+                ):  # Valid disparity threshold
                     import math
 
                     # focal_length = (image_width / 2) / tan(FOV / 2)
@@ -830,9 +847,7 @@ class YOLODetector:
         return bgr
 
     def _calculate_iou(
-        self,
-        bbox1: Tuple[int, int, int, int],
-        bbox2: Tuple[int, int, int, int]
+        self, bbox1: Tuple[int, int, int, int], bbox2: Tuple[int, int, int, int]
     ) -> float:
         """
         Calculate Intersection over Union (IOU) of two bounding boxes.
@@ -869,7 +884,7 @@ class YOLODetector:
         detections_right: List[DetectionObject],
         max_y_diff: int = 10,
         max_size_ratio: float = 0.3,
-        min_iou: float = 0.0
+        min_iou: float = 0.0,
     ) -> List[Tuple[DetectionObject, DetectionObject]]:
         """
         Match detections between left and right stereo images.
@@ -1132,7 +1147,9 @@ Examples:
 
     # Run object detection
     logging.info("Running YOLO detection...")
-    result = detector.detect_objects(image, camera_id="test", filter_classes=args.filter)
+    result = detector.detect_objects(
+        image, camera_id="test", filter_classes=args.filter
+    )
 
     # Print formatted results
     print(f"\n{'='*60}")

@@ -4,49 +4,42 @@ TCP Servers for Unity ↔ Python communication
 This package contains all TCP server implementations that handle
 network communication between Unity and Python.
 
-Servers:
-- StreamingServer: Receives single camera images from Unity (port 5005)
-- ResultsServer: Sends results to Unity (port 5010 for LLM, port 5007 for depth)
-- DetectionServer: Legacy - use ResultsServer with appropriate port
-- StereoDetectionServer: Receives stereo image pairs from Unity (port 5006)
+Active Servers (December 2025 Architecture):
+- ImageServer: Unified image receiver for single/stereo cameras (ports 5005, 5006)
+- CommandServer: Bidirectional commands and results (port 5010)
+- SequenceServer: Multi-command sequence execution (port 5013)
+
+Legacy servers (DetectionServer, StreamingServer, StereoDetectionServer,
+ResultsServer, RAGServer) have been consolidated into the above three servers.
 """
 
-from .StreamingServer import (
-    ImageStorage,
-    StreamingServer,
-    run_streaming_server_background,
+from .ImageServer import (
+    UnifiedImageStorage,
+    ImageServer,
+    run_image_server_background,
 )
-from .ResultsServer import (
-    ResultsBroadcaster,
-    ResultsServer,
-    run_results_server_background,
+from .CommandServer import (
+    CommandBroadcaster,
+    CommandServer,
+    run_command_server_background,
 )
-from .DetectionServer import (
-    DetectionBroadcaster,
-    DetectionServer,
-    run_detection_server_background,
-)
-from .StereoDetectionServer import (
-    StereoImageStorage,
-    StereoDetectionServer,
-    run_stereo_detection_server_background,
+from .SequenceServer import (
+    SequenceQueryHandler,
+    SequenceServer,
+    run_sequence_server_background,
 )
 
 __all__ = [
-    # StreamingServer
-    "ImageStorage",
-    "StreamingServer",
-    "run_streaming_server_background",
-    # ResultsServer
-    "ResultsBroadcaster",
-    "ResultsServer",
-    "run_results_server_background",
-    # DetectionServer
-    "DetectionBroadcaster",
-    "DetectionServer",
-    "run_detection_server_background",
-    # StereoDetectionServer
-    "StereoImageStorage",
-    "StereoDetectionServer",
-    "run_stereo_detection_server_background",
+    # ImageServer (replaces StreamingServer + StereoDetectionServer)
+    "UnifiedImageStorage",
+    "ImageServer",
+    "run_image_server_background",
+    # CommandServer (replaces ResultsServer + DetectionServer)
+    "CommandBroadcaster",
+    "CommandServer",
+    "run_command_server_background",
+    # SequenceServer (integrates RAG functionality)
+    "SequenceQueryHandler",
+    "SequenceServer",
+    "run_sequence_server_background",
 ]

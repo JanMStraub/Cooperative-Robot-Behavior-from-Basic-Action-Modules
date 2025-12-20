@@ -15,7 +15,6 @@ namespace Robotics
     {
         private SimulationManager _simulationManager;
         private RobotManager _robotManager;
-        private RobotActionLogger _actionLogger;
 
         [Header("Robot Identity")]
         public string robotId = "Robot1";
@@ -102,12 +101,6 @@ namespace Robotics
                     {
                         _gripperController.CloseGrippers();
                         Debug.Log($"{_logPrefix} Closing gripper after reaching target");
-
-                        // Log gripper action
-                        _actionLogger?.LogGripperAction(
-                            "close_gripper_on_target",
-                            "Closing gripper after reaching target"
-                        );
                     }
                 }
             }
@@ -150,13 +143,6 @@ namespace Robotics
             _targetTransform = targetTransform;
             _closeGripperAfterReach = options.closeGripperOnReach;
             SetTargetReached(false);
-
-            // Log target assignment
-            _actionLogger?.LogTargetSet(
-                originalObject?.name,
-                targetTransform.position,
-                options.useGraspPlanning
-            );
         }
 
         /// <summary>
@@ -231,11 +217,7 @@ namespace Robotics
             }
 
             // [4] Set target using internal method
-            SetTargetInternal(
-                targetTransform,
-                target,
-                options
-            );
+            SetTargetInternal(targetTransform, target, options);
         }
 
         /// <summary>
@@ -379,45 +361,6 @@ namespace Robotics
             if (endEffectorBase == null)
                 return Vector3.zero;
             return endEffectorBase.position;
-        }
-
-        /// <summary>
-        /// Opens the gripper (e.g., to release an object).
-        /// </summary>
-        public void OpenGripper()
-        {
-            if (_gripperController != null)
-            {
-                _gripperController.OpenGrippers();
-                _actionLogger?.LogGripperAction("open_gripper", "Opening gripper");
-            }
-        }
-
-        /// <summary>
-        /// Closes the gripper (e.g., to grasp an object).
-        /// </summary>
-        public void CloseGripper()
-        {
-            if (_gripperController != null)
-            {
-                _gripperController.CloseGrippers();
-                _actionLogger?.LogGripperAction("close_gripper", "Closing gripper");
-            }
-        }
-
-        /// <summary>
-        /// Gets the current gripper controller reference.
-        /// </summary>
-        public GripperController GetGripperController() => _gripperController;
-
-        /// <summary>
-        /// Checks if gripper is currently moving.
-        /// </summary>
-        public bool IsGripperMoving()
-        {
-            if (_gripperController == null)
-                return false;
-            return _gripperController.IsMoving;
         }
 
         /// <summary>
@@ -590,13 +533,6 @@ namespace Robotics
                     SetTargetReached(true);
                     Debug.Log($"{_logPrefix}  {robotId} IK converged to target (early exit)");
                     OnTargetReached?.Invoke();
-
-                    _actionLogger?.LogTargetReached(
-                        _targetTransform.name,
-                        _targetTransform.position,
-                        _distanceToTarget,
-                        robotProfile.convergenceThreshold
-                    );
                 }
                 return; // Skip expensive IK computation
             }
@@ -629,14 +565,6 @@ namespace Robotics
                 SetTargetReached(true); // This will notify SimulationManager
                 Debug.Log($"{_logPrefix}  {robotId} IK converged to target");
                 OnTargetReached?.Invoke();
-
-                // Log successful convergence
-                _actionLogger?.LogTargetReached(
-                    _targetTransform.name,
-                    _targetTransform.position,
-                    GetDistanceToTarget(),
-                    robotProfile.convergenceThreshold
-                );
 
                 return; // Already converged
             }
@@ -750,12 +678,6 @@ namespace Robotics
             {
                 _robotManager.RegisterRobot(robotId, gameObject);
             }
-
-            // Initialize action logger
-            _actionLogger = new RobotActionLogger(robotId, endEffectorBase);
-
-            // Log initialization
-            _actionLogger.LogInitialization(gameObject);
 
             InitializeRobot();
         }

@@ -5,7 +5,7 @@ Vector Store for RAG System
 In-memory vector storage with pickle-based persistence and cosine similarity search.
 """
 
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 import pickle
 import logging
 import numpy as np

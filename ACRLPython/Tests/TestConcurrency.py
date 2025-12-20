@@ -19,7 +19,7 @@ import time
 from unittest.mock import Mock, patch, MagicMock
 from queue import Queue
 
-from servers.StreamingServer import ImageStorage
+from servers.ImageServer import UnifiedImageStorage
 from servers.CommandServer import CommandBroadcaster
 from operations.Registry import OperationRegistry, get_global_registry
 from operations.Base import BasicOperation, OperationResult, OperationCategory, OperationComplexity
@@ -36,7 +36,7 @@ class TestConcurrentImageOperations:
 
     def test_concurrent_image_writes(self, cleanup_singletons):
         """Test multiple threads writing images simultaneously"""
-        storage = ImageStorage.get_instance()
+        storage = UnifiedImageStorage()
         num_threads = 20
         images_per_thread = 10
 
@@ -47,7 +47,7 @@ class TestConcurrentImageOperations:
                 for i in range(images_per_thread):
                     camera_id = f"cam_t{thread_id}_i{i}"
                     image = np.ones((50, 50, 3), dtype=np.uint8) * thread_id
-                    storage.store_image(camera_id, image, f"prompt_{thread_id}_{i}")
+                    storage.store_single_image(camera_id, image, f"prompt_{thread_id}_{i}")
                     time.sleep(0.001)  # Small delay to increase contention
             except Exception as e:
                 errors.append(e)
@@ -68,12 +68,12 @@ class TestConcurrentImageOperations:
 
     def test_concurrent_read_write_mix(self, cleanup_singletons):
         """Test concurrent reads and writes on same camera"""
-        storage = ImageStorage.get_instance()
+        storage = UnifiedImageStorage()
         camera_id = "shared_camera"
 
         # Pre-populate
         image = np.zeros((100, 100, 3), dtype=np.uint8)
-        storage.store_image(camera_id, image, "initial")
+        storage.store_single_image(camera_id, image, "initial")
 
         read_count = [0]
         write_count = [0]
@@ -82,7 +82,7 @@ class TestConcurrentImageOperations:
         def read_loop():
             try:
                 for _ in range(100):
-                    img = storage.get_camera_image(camera_id)
+                    img = storage.get_single_image(camera_id)
                     if img is not None:
                         read_count[0] += 1
                     time.sleep(0.001)
@@ -93,7 +93,7 @@ class TestConcurrentImageOperations:
             try:
                 for i in range(100):
                     new_img = np.ones((100, 100, 3), dtype=np.uint8) * i
-                    storage.store_image(camera_id, new_img, f"update_{i}")
+                    storage.store_single_image(camera_id, new_img, f"update_{i}")
                     write_count[0] += 1
                     time.sleep(0.001)
             except Exception as e:
@@ -116,12 +116,12 @@ class TestConcurrentImageOperations:
 
     def test_concurrent_cleanup(self, cleanup_singletons):
         """Test cleanup while images are being accessed"""
-        storage = ImageStorage.get_instance()
+        storage = UnifiedImageStorage()
 
         # Store initial images
         for i in range(50):
             image = np.zeros((50, 50, 3), dtype=np.uint8)
-            storage.store_image(f"cam_{i}", image, "")
+            storage.store_single_image(f"cam_{i}", image, "")
 
         errors = []
 
@@ -130,7 +130,7 @@ class TestConcurrentImageOperations:
                 for _ in range(100):
                     cam_ids = storage.get_all_camera_ids()
                     if cam_ids:
-                        storage.get_camera_image(cam_ids[0])
+                        storage.get_single_image(cam_ids[0])
                     time.sleep(0.001)
             except Exception as e:
                 errors.append(e)
@@ -488,14 +488,14 @@ class TestSingletonThreadSafety:
     def test_image_storage_singleton_thread_safe(self):
         """Test ImageStorage singleton is thread-safe"""
         # Reset singleton
-        ImageStorage._instance = None
+        UnifiedImageStorage._instance = None
 
         instances = []
         errors = []
 
         def get_instance():
             try:
-                inst = ImageStorage.get_instance()
+                inst = UnifiedImageStorage()
                 instances.append(inst)
                 time.sleep(0.001)
             except Exception as e:

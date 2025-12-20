@@ -1,6 +1,5 @@
 using NUnit.Framework;
 using System;
-using System.Text;
 using PythonCommunication.Core;
 
 namespace Tests.EditMode

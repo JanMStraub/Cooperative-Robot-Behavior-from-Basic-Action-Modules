@@ -34,8 +34,7 @@ namespace Robotics
             {
                 case GraspApproach.Top:
                     // Approach from above
-                    graspPosition =
-                        objectPosition + Vector3.up * (objectSize.y * 0.5f);
+                    graspPosition = objectPosition + Vector3.up * (objectSize.y * 0.5f);
                     // Gripper points downward (rotate 90 degrees around X axis)
                     graspRotation = Quaternion.Euler(90f, 0f, 0f);
                     break;

@@ -15,7 +15,6 @@ from .Base import (
     OperationComplexity,
     OperationParameter,
     OperationResult,
-    ParameterFlow,
     OperationRelationship,
 )
 
@@ -204,15 +203,17 @@ def move_to_coordinate(
         #  Return success
         logger.info(f"Successfully sent move_to_coordinate command to {robot_id}")
 
-        return OperationResult.success_result({
-            "robot_id": robot_id,
-            "target_position": {"x": actual_x, "y": actual_y, "z": actual_z},
-            "original_target": {"x": x, "y": y, "z": z},
-            "speed": speed,
-            "approach_offset": approach_offset,
-            "status": "command_sent",
-            "timestamp": time.time(),
-        })
+        return OperationResult.success_result(
+            {
+                "robot_id": robot_id,
+                "target_position": {"x": actual_x, "y": actual_y, "z": actual_z},
+                "original_target": {"x": x, "y": y, "z": z},
+                "speed": speed,
+                "approach_offset": approach_offset,
+                "status": "command_sent",
+                "timestamp": time.time(),
+            }
+        )
 
     except Exception as e:
         logger.error(f"Unexpected error in move_to_coordinate: {e}", exc_info=True)
@@ -344,7 +345,11 @@ def create_move_to_coordinate_operation() -> BasicOperation:
             required_reasons={
                 "status_check_robot_001": "Verify robot is ready and not executing another command before moving",
             },
-            commonly_paired_with=["perception_stereo_detect_001", "manipulation_control_gripper_001", "status_check_robot_001"],
+            commonly_paired_with=[
+                "perception_stereo_detect_001",
+                "manipulation_control_gripper_001",
+                "status_check_robot_001",
+            ],
             pairing_reasons={
                 "perception_stereo_detect_001": "Move to detected object coordinates after detection",
                 "manipulation_control_gripper_001": "Position gripper before grasping or after releasing",

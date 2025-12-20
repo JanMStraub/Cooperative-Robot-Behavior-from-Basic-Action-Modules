@@ -9,12 +9,8 @@ stored in ImageStorage and return detection results directly.
 
 import time
 import logging
-import cv2
-import numpy as np
-from typing import List, Optional
 
-from servers.StreamingServer import ImageStorage
-from servers.CommandServer import get_command_broadcaster
+from servers.ImageServer import UnifiedImageStorage
 from .Base import (
     BasicOperation,
     OperationCategory,
@@ -51,16 +47,16 @@ def detect_objects(
     """
     try:
         # Get image from storage
-        image_storage = ImageStorage.get_instance()
-        image = image_storage.get_camera_image(camera_id)
+        image_storage = UnifiedImageStorage()
+        image = image_storage.get_single_image(camera_id)
 
         if image is None:
             return OperationResult.error_result(
                 "NO_IMAGE",
                 f"No image available from camera '{camera_id}'",
                 [
-                    "Ensure Unity is sending images via UnifiedPythonSender",
-                    "Check that StreamingServer is running (port 5005)",
+                    "Ensure Unity is sending images to ImageServer",
+                    "Check that ImageServer is running (port 5005)",
                     f"Verify camera_id '{camera_id}' is correct",
                 ],
             )
@@ -79,14 +75,16 @@ def detect_objects(
 
         logger.info(f"Detected {len(detections)} objects from camera '{camera_id}'")
 
-        return OperationResult.success_result({
-            "camera_id": camera_id,
-            "detections": detections,
-            "count": len(detections),
-            "image_width": result.image_width,
-            "image_height": result.image_height,
-            "timestamp": time.time(),
-        })
+        return OperationResult.success_result(
+            {
+                "camera_id": camera_id,
+                "detections": detections,
+                "count": len(detections),
+                "image_width": result.image_width,
+                "image_height": result.image_height,
+                "timestamp": time.time(),
+            }
+        )
 
     except Exception as e:
         logger.error(f"Error in detect_objects: {e}", exc_info=True)
@@ -102,12 +100,6 @@ def detect_objects(
 
 
 # ============================================================================
-# NOTE: detect_with_depth has been removed and consolidated into
-# detect_object_stereo in VisionOperations.py
-# ============================================================================
-
-
-# ============================================================================
 # BasicOperation definitions for RAG/registry
 # ============================================================================
 
@@ -119,9 +111,7 @@ def create_detect_objects_operation() -> BasicOperation:
         name="detect_objects",
         category=OperationCategory.PERCEPTION,
         complexity=OperationComplexity.BASIC,
-
         description="Detect colored objects in camera image using HSV color segmentation",
-
         long_description="""
             This perception operation detects colored cubes (red, blue) in a camera
             image using HSV color segmentation and contour detection.
@@ -136,12 +126,10 @@ def create_detect_objects_operation() -> BasicOperation:
             This returns 2D pixel coordinates only. For 3D world coordinates,
             use detect_with_depth which uses stereo vision.
         """,
-
         usage_examples=[
             "detect_objects('Robot1', 'main') - Detect objects from main camera",
             "detect_objects('Robot1', 'overhead') - Detect from overhead camera",
         ],
-
         parameters=[
             OperationParameter(
                 name="robot_id",
@@ -157,35 +145,26 @@ def create_detect_objects_operation() -> BasicOperation:
                 default="main",
             ),
         ],
-
         preconditions=[
             "Camera image available in ImageStorage",
             "StreamingServer is running and receiving images",
         ],
-
         postconditions=[
             "Detection results returned with pixel coordinates",
             "Each detection includes color, bounding box, and confidence",
         ],
-
         average_duration_ms=50,
         success_rate=0.95,
-
         failure_modes=[
             "No image available - camera not sending images",
             "No objects detected - empty scene or wrong colors",
             "Poor lighting - affects color detection accuracy",
         ],
-
         required_operations=[],
         commonly_paired_with=["navigation_move_001", "manipulation_grip_001"],
         mutually_exclusive_with=[],
-
         implementation=detect_objects,
     )
-
-
-# NOTE: create_detect_with_depth_operation has been removed - use detect_object_stereo instead
 
 
 # ============================================================================
@@ -193,4 +172,3 @@ def create_detect_objects_operation() -> BasicOperation:
 # ============================================================================
 
 DETECT_OBJECTS_OPERATION = create_detect_objects_operation()
-# DETECT_WITH_DEPTH_OPERATION removed - use DETECT_OBJECT_STEREO_OPERATION from VisionOperations instead

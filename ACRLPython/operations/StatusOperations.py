@@ -27,7 +27,9 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 
-def check_robot_status(robot_id: str, detailed: bool = False, request_id: int = 0) -> OperationResult:
+def check_robot_status(
+    robot_id: str, detailed: bool = False, request_id: int = 0
+) -> OperationResult:
     """
     Query the current status of a robot.
 
@@ -130,12 +132,14 @@ def check_robot_status(robot_id: str, detailed: bool = False, request_id: int = 
         # Return success
         logger.info(f"Successfully sent status check to {robot_id}")
 
-        return OperationResult.success_result({
-            "robot_id": robot_id,
-            "detailed": detailed,
-            "status": "query_sent",
-            "timestamp": time.time(),
-        })
+        return OperationResult.success_result(
+            {
+                "robot_id": robot_id,
+                "detailed": detailed,
+                "status": "query_sent",
+                "timestamp": time.time(),
+            }
+        )
 
     except Exception as e:
         logger.error(f"Unexpected error in check_robot_status: {e}", exc_info=True)

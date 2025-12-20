@@ -323,7 +323,9 @@ class BasicOperation:
         auto-convert to OperationRelationship for consistency.
         """
         if self.relationships is None and (
-            self.required_operations or self.commonly_paired_with or self.mutually_exclusive_with
+            self.required_operations
+            or self.commonly_paired_with
+            or self.mutually_exclusive_with
         ):
             # Auto-convert simple lists to OperationRelationship
             self.relationships = OperationRelationship(
@@ -462,21 +464,27 @@ class BasicOperation:
             if self.relationships.required_operations:
                 doc += "\n                Required Operations (must be available/complete first):\n"
                 for op_id in self.relationships.required_operations:
-                    reason = self.relationships.required_reasons.get(op_id, "Dependency required")
+                    reason = self.relationships.required_reasons.get(
+                        op_id, "Dependency required"
+                    )
                     doc += f"                - {op_id}: {reason}\n"
 
             # Commonly paired operations with reasons
             if self.relationships.commonly_paired_with:
                 doc += "\n                Commonly Paired With (frequently used together):\n"
                 for op_id in self.relationships.commonly_paired_with:
-                    reason = self.relationships.pairing_reasons.get(op_id, "Often used in workflows")
+                    reason = self.relationships.pairing_reasons.get(
+                        op_id, "Often used in workflows"
+                    )
                     doc += f"                - {op_id}: {reason}\n"
 
             # Mutually exclusive operations with reasons
             if self.relationships.mutually_exclusive_with:
                 doc += "\n                Mutually Exclusive With (cannot use simultaneously):\n"
                 for op_id in self.relationships.mutually_exclusive_with:
-                    reason = self.relationships.exclusion_reasons.get(op_id, "Conflicts with this operation")
+                    reason = self.relationships.exclusion_reasons.get(
+                        op_id, "Conflicts with this operation"
+                    )
                     doc += f"                - {op_id}: {reason}\n"
 
             # Parameter flows

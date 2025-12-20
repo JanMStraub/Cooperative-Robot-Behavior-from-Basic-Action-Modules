@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -12,10 +11,6 @@ namespace Vision
     {
         // Singleton instance
         public static CameraManager Instance { get; private set; }
-
-        // Events
-        public event Action<string, Camera> OnCameraRegistered;
-        public event Action<string> OnCameraUnregistered;
 
         private Dictionary<string, Camera> _cameras = new Dictionary<string, Camera>();
 
@@ -85,7 +80,6 @@ namespace Vision
                 Debug.Log($"{_logPrefix} Registered camera: '{cameraId}' ({camera.name})");
             }
 
-            OnCameraRegistered?.Invoke(cameraId, camera);
             return true;
         }
 
@@ -105,112 +99,11 @@ namespace Vision
             if (_cameras.Remove(cameraId))
             {
                 Debug.Log($"{_logPrefix} Unregistered camera: '{cameraId}'");
-                OnCameraUnregistered?.Invoke(cameraId);
                 return true;
             }
 
             Debug.LogWarning($"{_logPrefix} Camera '{cameraId}' not found for unregistration");
             return false;
-        }
-
-        /// <summary>
-        /// Gets a camera by its unique identifier
-        /// </summary>
-        /// <param name="cameraId">Camera identifier</param>
-        /// <returns>Camera component if found, null otherwise</returns>
-        public Camera GetCamera(string cameraId)
-        {
-            if (string.IsNullOrEmpty(cameraId))
-            {
-                Debug.LogWarning($"{_logPrefix} Cannot get camera: cameraId is null or empty");
-                return null;
-            }
-
-            if (_cameras.TryGetValue(cameraId, out Camera camera))
-            {
-                return camera;
-            }
-
-            // Try to find camera by GameObject name as fallback
-            GameObject cameraObj = GameObject.Find(cameraId);
-            if (cameraObj != null)
-            {
-                Camera foundCamera = cameraObj.GetComponent<Camera>();
-                if (foundCamera != null)
-                {
-                    Debug.Log(
-                        $"{_logPrefix} Found unregistered camera by GameObject name: '{cameraId}', auto-registering"
-                    );
-                    RegisterCamera(cameraId, foundCamera);
-                    return foundCamera;
-                }
-            }
-
-            Debug.LogWarning($"{_logPrefix} Camera '{cameraId}' not found");
-            return null;
-        }
-
-        /// <summary>
-        /// Tries to get a camera by ID without logging warnings
-        /// </summary>
-        /// <param name="cameraId">Camera identifier</param>
-        /// <param name="camera">Output camera if found</param>
-        /// <returns>True if camera found, false otherwise</returns>
-        public bool TryGetCamera(string cameraId, out Camera camera)
-        {
-            camera = null;
-
-            if (string.IsNullOrEmpty(cameraId))
-            {
-                return false;
-            }
-
-            return _cameras.TryGetValue(cameraId, out camera);
-        }
-
-        /// <summary>
-        /// Gets all registered cameras
-        /// </summary>
-        /// <returns>Dictionary of camera IDs to Camera components</returns>
-        public Dictionary<string, Camera> GetAllCameras()
-        {
-            return new Dictionary<string, Camera>(_cameras);
-        }
-
-        /// <summary>
-        /// Gets all registered camera IDs
-        /// </summary>
-        /// <returns>Array of camera IDs</returns>
-        public string[] GetAllCameraIds()
-        {
-            string[] ids = new string[_cameras.Count];
-            _cameras.Keys.CopyTo(ids, 0);
-            return ids;
-        }
-
-        /// <summary>
-        /// Checks if a camera is registered
-        /// </summary>
-        /// <param name="cameraId">Camera identifier</param>
-        /// <returns>True if camera is registered</returns>
-        public bool IsCameraRegistered(string cameraId)
-        {
-            return !string.IsNullOrEmpty(cameraId) && _cameras.ContainsKey(cameraId);
-        }
-
-        /// <summary>
-        /// Gets the number of registered cameras
-        /// </summary>
-        public int CameraCount => _cameras.Count;
-
-        /// <summary>
-        /// Clears all camera registrations
-        /// </summary>
-        public void ClearAllCameras()
-        {
-            int count = _cameras.Count;
-            _cameras.Clear();
-            Debug.Log($"{_logPrefix} Cleared {count} camera registration(s)");
         }
 
         private void OnDestroy()

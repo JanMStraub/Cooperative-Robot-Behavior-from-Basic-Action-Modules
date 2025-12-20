@@ -41,7 +41,9 @@ namespace Simulation.CoordinationStrategies
             _workspaceManager = WorkspaceManager.Instance;
             if (_workspaceManager == null)
             {
-                Debug.LogWarning($"{LOG_PREFIX} WorkspaceManager not found. Workspace coordination disabled.");
+                Debug.LogWarning(
+                    $"{LOG_PREFIX} WorkspaceManager not found. Workspace coordination disabled."
+                );
             }
         }
 
@@ -116,7 +118,9 @@ namespace Simulation.CoordinationStrategies
             float targetDistance = Vector3.Distance(target1, target2);
             if (targetDistance < _minSafeSeparation)
             {
-                Debug.LogWarning($"{LOG_PREFIX} Collision detected: {robot1.robotId} and {robot2.robotId} targeting same location (distance: {targetDistance:F3}m)");
+                Debug.LogWarning(
+                    $"{LOG_PREFIX} Collision detected: {robot1.robotId} and {robot2.robotId} targeting same location (distance: {targetDistance:F3}m)"
+                );
                 // Pause one robot temporarily
                 // In production, this should trigger Python CoordinationVerifier
                 return;
@@ -125,7 +129,9 @@ namespace Simulation.CoordinationStrategies
             // Check 2: Path collision (robots' paths will cross)
             if (WillPathsCollide(current1, target1, current2, target2))
             {
-                Debug.LogWarning($"{LOG_PREFIX} Path collision detected between {robot1.robotId} and {robot2.robotId}");
+                Debug.LogWarning(
+                    $"{LOG_PREFIX} Path collision detected between {robot1.robotId} and {robot2.robotId}"
+                );
                 // Serialize movements or adjust paths
                 return;
             }
@@ -141,7 +147,9 @@ namespace Simulation.CoordinationStrategies
                     // Both robots targeting same region
                     if (region1.regionName != "shared_zone")
                     {
-                        Debug.LogWarning($"{LOG_PREFIX} Workspace conflict: Both robots targeting '{region1.regionName}'");
+                        Debug.LogWarning(
+                            $"{LOG_PREFIX} Workspace conflict: Both robots targeting '{region1.regionName}'"
+                        );
                     }
                 }
             }
@@ -154,8 +162,16 @@ namespace Simulation.CoordinationStrategies
         private bool WillPathsCollide(Vector3 start1, Vector3 end1, Vector3 start2, Vector3 end2)
         {
             // Find closest points on two line segments
-            Vector3 closestPoint1, closestPoint2;
-            ClosestPointsOnTwoLines(start1, end1, start2, end2, out closestPoint1, out closestPoint2);
+            Vector3 closestPoint1,
+                closestPoint2;
+            ClosestPointsOnTwoLines(
+                start1,
+                end1,
+                start2,
+                end2,
+                out closestPoint1,
+                out closestPoint2
+            );
 
             float minDistance = Vector3.Distance(closestPoint1, closestPoint2);
             return minDistance < _minSafeSeparation;
@@ -164,8 +180,14 @@ namespace Simulation.CoordinationStrategies
         /// <summary>
         /// Find closest points on two line segments
         /// </summary>
-        private void ClosestPointsOnTwoLines(Vector3 start1, Vector3 end1, Vector3 start2, Vector3 end2,
-                                              out Vector3 closestPoint1, out Vector3 closestPoint2)
+        private void ClosestPointsOnTwoLines(
+            Vector3 start1,
+            Vector3 end1,
+            Vector3 start2,
+            Vector3 end2,
+            out Vector3 closestPoint1,
+            out Vector3 closestPoint2
+        )
         {
             Vector3 dir1 = end1 - start1;
             Vector3 dir2 = end2 - start2;
@@ -178,7 +200,8 @@ namespace Simulation.CoordinationStrategies
             float e = Vector3.Dot(dir2, diff);
 
             float denom = a * c - b * b;
-            float s, t;
+            float s,
+                t;
 
             if (denom != 0f)
             {

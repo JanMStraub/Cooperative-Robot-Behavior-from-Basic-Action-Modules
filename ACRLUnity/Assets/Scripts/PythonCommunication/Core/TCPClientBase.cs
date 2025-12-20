@@ -1,5 +1,6 @@
 using System;
 using System.Net.Sockets;
+using Core;
 using UnityEngine;
 
 namespace PythonCommunication.Core
@@ -11,8 +12,7 @@ namespace PythonCommunication.Core
     /// </summary>
     public abstract class TCPClientBase : MonoBehaviour
     {
-        [Header("Connection Settings")]      
-
+        [Header("Connection Settings")]
         [Tooltip("Auto-connect on Start")]
         [SerializeField]
         protected bool _autoConnect = true;
@@ -29,7 +29,7 @@ namespace PythonCommunication.Core
         protected float _reconnectTimer = 0f;
         protected float _reconnectInterval = 2f;
         protected int _serverPort;
-        protected string _serverHost = "127.0.0.1";
+        protected string _serverHost = CommunicationConstants.SERVER_HOST;
 
         // Helper variable
         private const string _logPrefix = "[TCP_CLIENT_BASE]";
@@ -59,15 +59,6 @@ namespace PythonCommunication.Core
                 }
             }
         }
-        /// <summary>
-        /// Get the server host address
-        /// </summary>
-        public string ServerHost => _serverHost;
-
-        /// <summary>
-        /// Get the server port number
-        /// </summary>
-        public int ServerPort => _serverPort;
 
         /// <summary>
         /// Get formatted connection info (host:port)
@@ -192,16 +183,6 @@ namespace PythonCommunication.Core
             }
         }
 
-        /// <summary>
-        /// Reconnect to server (disconnect then connect)
-        /// </summary>
-        public virtual void Reconnect()
-        {
-            Disconnect();
-            _shouldRun = true;
-            Connect();
-        }
-
         #endregion
 
         #region Lifecycle Hooks (Optional Override)
@@ -235,41 +216,6 @@ namespace PythonCommunication.Core
 
 
         #region Utility Methods
-
-        /// <summary>
-        /// Check if the socket is truly connected (more thorough than IsConnected property).
-        /// Use this before critical operations like sending data.
-        /// </summary>
-        protected bool VerifyConnection()
-        {
-            if (!_isConnected || _client == null)
-                return false;
-
-            try
-            {
-                // Quick poll check to detect dead connections
-                if (
-                    _client.Client != null
-                    && _client.Client.Poll(0, System.Net.Sockets.SelectMode.SelectRead)
-                )
-                {
-                    byte[] buff = new byte[1];
-                    if (_client.Client.Receive(buff, System.Net.Sockets.SocketFlags.Peek) == 0)
-                    {
-                        // Connection is closed
-                        _isConnected = false;
-                        return false;
-                    }
-                }
-
-                return _client.Connected;
-            }
-            catch
-            {
-                _isConnected = false;
-                return false;
-            }
-        }
 
         /// <summary>
         /// Read exactly N bytes from the stream into buffer starting at offset.

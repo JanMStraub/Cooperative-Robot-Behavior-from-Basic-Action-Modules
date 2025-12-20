@@ -2,8 +2,7 @@
 Command Parser for Multi-Command Sequences
 ==========================================
 
-This module parses natural language compound commands into structured operation sequences
-using an LLM for intelligent parsing with operation registry validation.
+This module parses natural language compound commands into structured operation sequences using an LLM for intelligent parsing with operation registry validation.
 
 Example:
     >>> parser = CommandParser()
@@ -66,7 +65,9 @@ class CommandParser:
                 self.rag = RAGSystem()
                 # Always rebuild index on startup to prevent dimension mismatches
                 self.rag.index_operations(rebuild=True)
-                logger.info("RAG system initialized for command parsing (index rebuilt)")
+                logger.info(
+                    "RAG system initialized for command parsing (index rebuilt)"
+                )
             except Exception as e:
                 logger.warning(f"Failed to initialize RAG: {e}. Using registry only.")
 
@@ -166,7 +167,9 @@ class CommandParser:
 
             # Normalize multi-robot "plan" format to "commands" format
             if "plan" in parsed and "commands" not in parsed:
-                logger.info(f"Multi-robot plan detected with reasoning: {parsed.get('reasoning', 'N/A')}")
+                logger.info(
+                    f"Multi-robot plan detected with reasoning: {parsed.get('reasoning', 'N/A')}"
+                )
                 parsed["commands"] = parsed["plan"]
 
             logger.info(f"Parsed {len(parsed.get('commands', []))} commands from LLM")
@@ -180,7 +183,7 @@ class CommandParser:
                 "success": True,
                 "commands": validated_commands,
                 "error": None,
-                "reasoning": parsed.get("reasoning")  # Preserve reasoning if present
+                "reasoning": parsed.get("reasoning"),  # Preserve reasoning if present
             }
 
         except requests.exceptions.Timeout:
@@ -204,100 +207,100 @@ class CommandParser:
         """Build the prompt for LLM command parsing with multi-robot support."""
         return f"""You are a robot coordinator planning tasks for multiple robots.
 
-Available Robots:
-- Robot1 (left workspace, near x=-0.4)
-- Robot2 (right workspace, near x=0.4)
+        Available Robots:
+        - Robot1 (left workspace, near x=-0.4)
+        - Robot2 (right workspace, near x=0.4)
 
-Available Operations:
-{available_ops}
+        Available Operations:
+        {available_ops}
 
-Command to parse: "{command_text}"
-Default robot_id: "{robot_id}"
+        Command to parse: "{command_text}"
+        Default robot_id: "{robot_id}"
 
-=== MULTI-ROBOT COORDINATION ===
+        === MULTI-ROBOT COORDINATION ===
 
-When the task involves multiple robots:
-1. Decide which robot is best positioned for each subtask
-2. Use "parallel_group" to mark operations that can run concurrently
-3. Use synchronization primitives (signal, wait_for_signal) for robot-to-robot coordination
-4. Operations with the SAME parallel_group number execute in parallel
-5. Operations in LATER parallel_groups wait for ALL operations in previous groups to complete
+        When the task involves multiple robots:
+        1. Decide which robot is best positioned for each subtask
+        2. Use "parallel_group" to mark operations that can run concurrently
+        3. Use synchronization primitives (signal, wait_for_signal) for robot-to-robot coordination
+        4. Operations with the SAME parallel_group number execute in parallel
+        5. Operations in LATER parallel_groups wait for ALL operations in previous groups to complete
 
-Example for multi-robot handoff:
-{{
-  "reasoning": "Robot1 detects and picks up cube. Robot2 waits for signal, then both move to handoff position. Robot2 grips, then Robot1 releases.",
-  "plan": [
-    {{"parallel_group": 1, "robot": "Robot1", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "capture_var": "cube"}},
-    {{"parallel_group": 2, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "position": "$cube"}}}},
-    {{"parallel_group": 3, "robot": "Robot1", "operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": false}}}},
-    {{"parallel_group": 3, "robot": "Robot1", "operation": "signal", "params": {{"event_name": "r1_gripped"}}}},
-    {{"parallel_group": 3, "robot": "Robot2", "operation": "wait_for_signal", "params": {{"event_name": "r1_gripped"}}}},
-    {{"parallel_group": 4, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": 0.0, "y": 0.3, "z": 0.15}}}},
-    {{"parallel_group": 4, "robot": "Robot2", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot2", "x": 0.0, "y": 0.3, "z": 0.15}}}},
-    {{"parallel_group": 5, "robot": "Robot2", "operation": "control_gripper", "params": {{"robot_id": "Robot2", "open_gripper": false}}}},
-    {{"parallel_group": 6, "robot": "Robot1", "operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": true}}}}
-  ]
-}}
+        Example for multi-robot handoff:
+        {{
+        "reasoning": "Robot1 detects and picks up cube. Robot2 waits for signal, then both move to handoff position. Robot2 grips, then Robot1 releases.",
+        "plan": [
+            {{"parallel_group": 1, "robot": "Robot1", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "capture_var": "cube"}},
+            {{"parallel_group": 2, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "position": "$cube"}}}},
+            {{"parallel_group": 3, "robot": "Robot1", "operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": false}}}},
+            {{"parallel_group": 3, "robot": "Robot1", "operation": "signal", "params": {{"event_name": "r1_gripped"}}}},
+            {{"parallel_group": 3, "robot": "Robot2", "operation": "wait_for_signal", "params": {{"event_name": "r1_gripped"}}}},
+            {{"parallel_group": 4, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": 0.0, "y": 0.3, "z": 0.15}}}},
+            {{"parallel_group": 4, "robot": "Robot2", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot2", "x": 0.0, "y": 0.3, "z": 0.15}}}},
+            {{"parallel_group": 5, "robot": "Robot2", "operation": "control_gripper", "params": {{"robot_id": "Robot2", "open_gripper": false}}}},
+            {{"parallel_group": 6, "robot": "Robot1", "operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": true}}}}
+        ]
+        }}
 
-=== SYNCHRONIZATION PRIMITIVES ===
+        === SYNCHRONIZATION PRIMITIVES ===
 
-- signal(event_name): Emit named event for other robots to wait on
-  * Example: {{"operation": "signal", "params": {{"event_name": "cube_gripped"}}}}
+        - signal(event_name): Emit named event for other robots to wait on
+        * Example: {{"operation": "signal", "params": {{"event_name": "cube_gripped"}}}}
 
-- wait_for_signal(event_name, timeout_ms): Wait for event (default timeout: 30000ms)
-  * Example: {{"operation": "wait_for_signal", "params": {{"event_name": "cube_gripped"}}}}
+        - wait_for_signal(event_name, timeout_ms): Wait for event (default timeout: 30000ms)
+        * Example: {{"operation": "wait_for_signal", "params": {{"event_name": "cube_gripped"}}}}
 
-- wait(duration_ms): Simple time-based pause
-  * Example: {{"operation": "wait", "params": {{"duration_ms": 500}}}}
+        - wait(duration_ms): Simple time-based pause
+        * Example: {{"operation": "wait", "params": {{"duration_ms": 500}}}}
 
-=== SINGLE-ROBOT RULES ===
+        === SINGLE-ROBOT RULES ===
 
-1. Extract each distinct action as a separate operation
-2. Parse coordinates from text like "(0.3, 0.2, 0.1)" or "x=0.3, y=0.2, z=0.1"
-3. "close gripper" or "grasp" means control_gripper with open_gripper=false
-4. "open gripper" or "release" means control_gripper with open_gripper=true
-5. Include robot_id in every operation's params
-6. Preserve the order of operations as specified in the command
+        1. Extract each distinct action as a separate operation
+        2. Parse coordinates from text like "(0.3, 0.2, 0.1)" or "x=0.3, y=0.2, z=0.1"
+        3. "close gripper" or "grasp" means control_gripper with open_gripper=false
+        4. "open gripper" or "release" means control_gripper with open_gripper=true
+        5. Include robot_id in every operation's params
+        6. Preserve the order of operations as specified in the command
 
-=== VARIABLE PASSING ===
+        === VARIABLE PASSING ===
 
-When detect_object is followed by "move to it/there/that":
-- Add "capture_var": "target" to the detect_object command
-- Use "position": "$target" in the move_to_coordinate params (NOT x, y, z)
+        When detect_object is followed by "move to it/there/that":
+        - Add "capture_var": "target" to the detect_object command
+        - Use "position": "$target" in the move_to_coordinate params (NOT x, y, z)
 
-Example:
-{{
-  "plan": [
-    {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "blue"}}, "capture_var": "target"}},
-    {{"operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "position": "$target"}}}},
-    {{"operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": false}}}}
-  ]
-}}
+        Example:
+        {{
+        "plan": [
+            {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "blue"}}, "capture_var": "target"}},
+            {{"operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "position": "$target"}}}},
+            {{"operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": false}}}}
+        ]
+        }}
 
-=== DETECTION CONSTRAINTS ===
+        === DETECTION CONSTRAINTS ===
 
-- detect_object_stereo "color": ONLY "red", "green", "blue", or null
-- detect_object_stereo "selection": ONLY "leftmost", "closest", "first", or "all"
+        - detect_object_stereo "color": ONLY "red", "green", "blue", or null
+        - detect_object_stereo "selection": ONLY "leftmost", "closest", "first", or "all"
 
-=== OUTPUT FORMAT ===
+        === OUTPUT FORMAT ===
 
-For single-robot tasks:
-{{
-  "commands": [
-    {{"operation": "operation_name", "params": {{"robot_id": "Robot1", "param1": value1}}}}
-  ]
-}}
+        For single-robot tasks:
+        {{
+        "commands": [
+            {{"operation": "operation_name", "params": {{"robot_id": "Robot1", "param1": value1}}}}
+        ]
+        }}
 
-For multi-robot tasks:
-{{
-  "reasoning": "Brief explanation of the multi-robot coordination strategy",
-  "plan": [
-    {{"parallel_group": 1, "robot": "Robot1", "operation": "...", "params": {{...}}}},
-    {{"parallel_group": 1, "robot": "Robot2", "operation": "...", "params": {{...}}}}
-  ]
-}}
+        For multi-robot tasks:
+        {{
+        "reasoning": "Brief explanation of the multi-robot coordination strategy",
+        "plan": [
+            {{"parallel_group": 1, "robot": "Robot1", "operation": "...", "params": {{...}}}},
+            {{"parallel_group": 1, "robot": "Robot2", "operation": "...", "params": {{...}}}}
+        ]
+        }}
 
-Output only valid JSON, no explanation."""
+        Output only valid JSON, no explanation."""
 
     def _get_available_operations_summary(self, command_text: str = "") -> str:
         """
@@ -330,7 +333,9 @@ Output only valid JSON, no explanation."""
                             relevant_ops.add(op.name)
                             params = self._format_parameters(op.parameters)
                             score = result.get("similarity_score", 0)
-                            summary_lines.append(f"- {op.name}({params}): {op.description} [relevance: {score:.2f}]")
+                            summary_lines.append(
+                                f"- {op.name}({params}): {op.description} [relevance: {score:.2f}]"
+                            )
 
                     summary_lines.append("\nOther available operations:")
 
@@ -367,7 +372,7 @@ Output only valid JSON, no explanation."""
         for p in parameters:
             param_str = f"{p.name}: {p.type}"
             # Add valid values if specified
-            if hasattr(p, 'valid_values') and p.valid_values:
+            if hasattr(p, "valid_values") and p.valid_values:
                 valid_vals = ", ".join([f"'{v}'" for v in p.valid_values])
                 param_str += f" (valid: {valid_vals})"
             param_strs.append(param_str)
@@ -492,7 +497,7 @@ Output only valid JSON, no explanation."""
                             "operation": "move_to_coordinate",
                             "params": {
                                 "robot_id": robot_id,
-                                "position": f"${last_detection_var}"
+                                "position": f"${last_detection_var}",
                             },
                         }
                     )

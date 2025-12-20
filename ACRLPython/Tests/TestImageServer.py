@@ -18,7 +18,7 @@ import time
 import threading
 from unittest.mock import Mock, patch
 
-from servers.StreamingServer import ImageStorage
+from servers.ImageServer import UnifiedImageStorage
 
 
 # ============================================================================
@@ -34,9 +34,9 @@ def image_storage():
         ImageStorage instance
     """
     # Reset singleton
-    ImageStorage._instance = None
-    ImageStorage._cameras = {}
-    storage = ImageStorage.get_instance()
+    UnifiedImageStorage._instance = None
+    # Cameras are now managed internally
+    storage = UnifiedImageStorage()
     return storage
 
 
@@ -80,19 +80,19 @@ class TestImageStorageSingleton:
 
     def test_singleton_instance(self, image_storage):
         """Test that ImageStorage is a singleton"""
-        instance1 = ImageStorage.get_instance()
-        instance2 = ImageStorage.get_instance()
+        instance1 = UnifiedImageStorage()
+        instance2 = UnifiedImageStorage()
 
         assert instance1 is instance2
         assert instance1 is image_storage
 
     def test_singleton_thread_safe(self):
         """Test singleton is thread-safe"""
-        ImageStorage._instance = None
+        UnifiedImageStorage._instance = None
         instances = []
 
         def get_instance():
-            instances.append(ImageStorage.get_instance())
+            instances.append(UnifiedImageStorage())
 
         threads = [threading.Thread(target=get_instance) for _ in range(10)]
         for t in threads:
@@ -116,9 +116,9 @@ class TestImageStorageBasics:
         camera_id = "main_camera"
         prompt = "detect objects"
 
-        image_storage.store_image(camera_id, sample_image, prompt)
+        image_storage.store_single_image(camera_id, sample_image, prompt)
 
-        retrieved = image_storage.get_camera_image(camera_id)
+        retrieved = image_storage.get_single_image(camera_id)
 
         assert retrieved is not None
         assert isinstance(retrieved, np.ndarray)
@@ -127,7 +127,7 @@ class TestImageStorageBasics:
 
     def test_retrieve_nonexistent_camera(self, image_storage):
         """Test retrieving from non-existent camera returns None"""
-        retrieved = image_storage.get_camera_image("nonexistent")
+        retrieved = image_storage.get_single_image("nonexistent")
         assert retrieved is None
 
     def test_store_overwrites_previous_image(self, image_storage, sample_image):
@@ -135,24 +135,24 @@ class TestImageStorageBasics:
         camera_id = "main_camera"
 
         # Store first image
-        image_storage.store_image(camera_id, sample_image, "first")
+        image_storage.store_single_image(camera_id, sample_image, "first")
 
         # Store second image
         new_image = np.ones((50, 50, 3), dtype=np.uint8) * 255
-        image_storage.store_image(camera_id, new_image, "second")
+        image_storage.store_single_image(camera_id, new_image, "second")
 
         # Should retrieve the second image
-        retrieved = image_storage.get_camera_image(camera_id)
+        retrieved = image_storage.get_single_image(camera_id)
         assert retrieved.shape == new_image.shape
         np.testing.assert_array_equal(retrieved, new_image)
 
     def test_retrieved_image_is_copy(self, image_storage, sample_image):
         """Test that retrieved image is a copy, not reference"""
         camera_id = "main_camera"
-        image_storage.store_image(camera_id, sample_image)
+        image_storage.store_single_image(camera_id, sample_image)
 
-        retrieved1 = image_storage.get_camera_image(camera_id)
-        retrieved2 = image_storage.get_camera_image(camera_id)
+        retrieved1 = image_storage.get_single_image(camera_id)
+        retrieved2 = image_storage.get_single_image(camera_id)
 
         # Should be separate copies
         assert retrieved1 is not retrieved2
@@ -174,16 +174,16 @@ class TestCameraIDManagement:
 
     def test_get_all_camera_ids_single(self, image_storage, sample_image):
         """Test getting camera IDs with one camera"""
-        image_storage.store_image("cam1", sample_image)
+        image_storage.store_single_image("cam1", sample_image)
 
         camera_ids = image_storage.get_all_camera_ids()
         assert camera_ids == ["cam1"]
 
     def test_get_all_camera_ids_multiple(self, image_storage, sample_image):
         """Test getting camera IDs with multiple cameras"""
-        image_storage.store_image("cam1", sample_image)
-        image_storage.store_image("cam2", sample_image)
-        image_storage.store_image("cam3", sample_image)
+        image_storage.store_single_image("cam1", sample_image)
+        image_storage.store_single_image("cam2", sample_image)
+        image_storage.store_single_image("cam3", sample_image)
 
         camera_ids = image_storage.get_all_camera_ids()
         assert set(camera_ids) == {"cam1", "cam2", "cam3"}
@@ -200,11 +200,11 @@ class TestStereoPairHandling:
         """Test storing left and right stereo images"""
         left_image, right_image = sample_stereo_pair
 
-        image_storage.store_image("left_camera", left_image)
-        image_storage.store_image("right_camera", right_image)
+        image_storage.store_single_image("left_camera", left_image)
+        image_storage.store_single_image("right_camera", right_image)
 
-        left_retrieved = image_storage.get_camera_image("left_camera")
-        right_retrieved = image_storage.get_camera_image("right_camera")
+        left_retrieved = image_storage.get_single_image("left_camera")
+        right_retrieved = image_storage.get_single_image("right_camera")
 
         assert left_retrieved is not None
         assert right_retrieved is not None
@@ -215,16 +215,16 @@ class TestStereoPairHandling:
         """Test that stereo cameras are stored independently"""
         left_image, right_image = sample_stereo_pair
 
-        image_storage.store_image("left_camera", left_image)
+        image_storage.store_single_image("left_camera", left_image)
 
         # Right camera should not exist yet
-        assert image_storage.get_camera_image("right_camera") is None
+        assert image_storage.get_single_image("right_camera") is None
 
-        image_storage.store_image("right_camera", right_image)
+        image_storage.store_single_image("right_camera", right_image)
 
         # Now both should exist
-        assert image_storage.get_camera_image("left_camera") is not None
-        assert image_storage.get_camera_image("right_camera") is not None
+        assert image_storage.get_single_image("left_camera") is not None
+        assert image_storage.get_single_image("right_camera") is not None
 
 
 # ============================================================================
@@ -239,7 +239,7 @@ class TestPromptAndAgeTracking:
         camera_id = "main_camera"
         prompt = "detect red cubes"
 
-        image_storage.store_image(camera_id, sample_image, prompt)
+        image_storage.store_single_image(camera_id, sample_image, prompt)
 
         retrieved_prompt = image_storage.get_camera_prompt(camera_id)
         assert retrieved_prompt == prompt
@@ -248,7 +248,7 @@ class TestPromptAndAgeTracking:
         """Test getting prompt when none was provided"""
         camera_id = "main_camera"
 
-        image_storage.store_image(camera_id, sample_image, "")
+        image_storage.store_single_image(camera_id, sample_image, "")
 
         retrieved_prompt = image_storage.get_camera_prompt(camera_id)
         assert retrieved_prompt == ""
@@ -262,7 +262,7 @@ class TestPromptAndAgeTracking:
         """Test calculating image age"""
         camera_id = "main_camera"
 
-        image_storage.store_image(camera_id, sample_image)
+        image_storage.store_single_image(camera_id, sample_image)
 
         # Wait a small amount of time
         time.sleep(0.1)
@@ -290,7 +290,7 @@ class TestMemoryManagement:
         """Test cleaning up old images"""
         # Store image with old timestamp
         camera_id = "old_camera"
-        image_storage.store_image(camera_id, sample_image)
+        image_storage.store_single_image(camera_id, sample_image)
 
         # Manually set old timestamp
         with image_storage._lock:
@@ -303,26 +303,26 @@ class TestMemoryManagement:
         image_storage.cleanup_old_images(max_age_seconds=300.0)
 
         # Old image should be removed
-        assert image_storage.get_camera_image(camera_id) is None
+        assert image_storage.get_single_image(camera_id) is None
 
     def test_cleanup_keeps_recent_images(self, image_storage, sample_image):
         """Test cleanup keeps recent images"""
         camera_id = "recent_camera"
-        image_storage.store_image(camera_id, sample_image)
+        image_storage.store_single_image(camera_id, sample_image)
 
         # Cleanup with 300 second threshold
         image_storage.cleanup_old_images(max_age_seconds=300.0)
 
         # Recent image should still exist
-        assert image_storage.get_camera_image(camera_id) is not None
+        assert image_storage.get_single_image(camera_id) is not None
 
     def test_cleanup_multiple_cameras(self, image_storage, sample_image):
         """Test cleanup with multiple cameras"""
         # Store recent camera
-        image_storage.store_image("recent", sample_image)
+        image_storage.store_single_image("recent", sample_image)
 
         # Store old camera
-        image_storage.store_image("old", sample_image)
+        image_storage.store_single_image("old", sample_image)
         with image_storage._lock:
             img, _, prompt = image_storage._cameras["old"]
             image_storage._cameras["old"] = (img, time.time() - 400, prompt)
@@ -331,8 +331,8 @@ class TestMemoryManagement:
         image_storage.cleanup_old_images(max_age_seconds=300.0)
 
         # Recent should exist, old should not
-        assert image_storage.get_camera_image("recent") is not None
-        assert image_storage.get_camera_image("old") is None
+        assert image_storage.get_single_image("recent") is not None
+        assert image_storage.get_single_image("old") is None
 
 
 # ============================================================================
@@ -351,7 +351,7 @@ class TestConcurrentAccess:
             for i in range(images_per_thread):
                 camera_id = f"cam_{thread_id}_{i}"
                 image = np.ones((50, 50, 3), dtype=np.uint8) * thread_id
-                image_storage.store_image(camera_id, image)
+                image_storage.store_single_image(camera_id, image)
 
         threads = [threading.Thread(target=store_images, args=(i,)) for i in range(num_threads)]
         for t in threads:
@@ -366,19 +366,19 @@ class TestConcurrentAccess:
     def test_concurrent_read_write(self, image_storage, sample_image):
         """Test concurrent reads and writes"""
         camera_id = "shared_camera"
-        image_storage.store_image(camera_id, sample_image)
+        image_storage.store_single_image(camera_id, sample_image)
 
         results = []
 
         def read_image():
             for _ in range(100):
-                img = image_storage.get_camera_image(camera_id)
+                img = image_storage.get_single_image(camera_id)
                 results.append(img is not None)
 
         def write_image():
             for i in range(100):
                 new_img = np.ones((50, 50, 3), dtype=np.uint8) * i
-                image_storage.store_image(camera_id, new_img)
+                image_storage.store_single_image(camera_id, new_img)
 
         readers = [threading.Thread(target=read_image) for _ in range(3)]
         writers = [threading.Thread(target=write_image) for _ in range(2)]
