@@ -201,6 +201,7 @@ def cleanup_singletons():
 
     Cleans up before yielding to ensure clean state, then again after
     """
+
     # Clean up BEFORE the test runs
     def _cleanup():
         try:
@@ -220,6 +221,113 @@ def cleanup_singletons():
     _cleanup()  # Clean before test
     yield
     _cleanup()  # Clean after test
+
+
+@pytest.fixture
+def mock_command_broadcaster():
+    """
+    Create a mock CommandBroadcaster for operation testing
+
+    Returns:
+        Mock CommandBroadcaster with send_command method
+    """
+    broadcaster = Mock()
+    broadcaster.send_command = Mock(return_value=True)
+    broadcaster.wait_for_result = Mock(return_value={
+        "success": True,
+        "result": {"status": "completed"},
+        "error": None
+    })
+    return broadcaster
+
+
+@pytest.fixture
+def mock_unified_image_storage(sample_red_cube_image):
+    """
+    Create a mock UnifiedImageStorage for detection testing
+
+    Args:
+        sample_red_cube_image: Sample test image fixture
+
+    Returns:
+        Mock UnifiedImageStorage with get_single_image method
+    """
+    storage = Mock()
+    storage.get_single_image = Mock(return_value=sample_red_cube_image)
+    storage.get_stereo_pair = Mock(return_value=(sample_red_cube_image, sample_red_cube_image))
+    storage.get_latest_stereo_image = Mock(return_value=(sample_red_cube_image, sample_red_cube_image))
+    return storage
+
+
+@pytest.fixture
+def mock_get_global_registry():
+    """
+    Create a mock operation registry for operations testing
+
+    Returns:
+        Mock function that returns a mock registry
+    """
+    registry = Mock()
+    # Mock common registry methods
+    registry.get_operation = Mock(return_value=None)
+    registry.get_all_operations = Mock(return_value=[])
+
+    def _get_global_registry():
+        return registry
+
+    return _get_global_registry
+
+
+# ============================================================================
+# Global Auto-Mocking for Operations Testing
+# ============================================================================
+
+
+@pytest.fixture(autouse=False)
+def patch_command_broadcaster(monkeypatch, mock_command_broadcaster):
+    """
+    Patch _get_command_broadcaster functions in operations modules.
+
+    Use this fixture explicitly in tests that need CommandBroadcaster mocking.
+    """
+    modules_with_broadcaster = [
+        'operations.MoveOperations',
+        'operations.StatusOperations',
+        'operations.GripperOperations',
+        'operations.DefaultPositionOperation',
+    ]
+
+    for module_name in modules_with_broadcaster:
+        try:
+            module = __import__(module_name, fromlist=[''])
+            if hasattr(module, '_get_command_broadcaster'):
+                monkeypatch.setattr(module, '_get_command_broadcaster', lambda: mock_command_broadcaster)
+        except (ImportError, AttributeError):
+            pass
+
+    yield mock_command_broadcaster
+
+
+@pytest.fixture(autouse=False)
+def patch_unified_image_storage(monkeypatch, mock_unified_image_storage):
+    """
+    Patch UnifiedImageStorage class for detection operations.
+
+    Use this fixture explicitly in tests that need image storage mocking.
+    """
+    # Create a mock class that returns our mock instance
+    def mock_unified_storage_class():
+        return mock_unified_image_storage
+
+    # Patch in the operations module where it's imported
+    try:
+        import operations.DetectionOperations as det_ops
+        if hasattr(det_ops, 'UnifiedImageStorage'):
+            monkeypatch.setattr(det_ops, 'UnifiedImageStorage', mock_unified_storage_class)
+    except (ImportError, AttributeError):
+        pass
+
+    yield mock_unified_image_storage
 
 
 @pytest.fixture
@@ -345,10 +453,12 @@ def clean_registry():
 
     Cleans before yielding to ensure clean state, then again after
     """
+
     # Clean up BEFORE the test runs
     def _cleanup():
         try:
             import operations.Registry as registry_module
+
             registry_module._global_registry = None
         except:
             pass
@@ -373,12 +483,14 @@ def mock_world_state():
     """
     world_state = Mock()
     world_state.get_robot_position = Mock(return_value=(0.3, 0.0, 0.1))
-    world_state.get_robot_status = Mock(return_value={
-        "is_initialized": True,
-        "is_moving": False,
-        "gripper_state": "open",
-        "position": (0.3, 0.0, 0.1)
-    })
+    world_state.get_robot_status = Mock(
+        return_value={
+            "is_initialized": True,
+            "is_moving": False,
+            "gripper_state": "open",
+            "position": (0.3, 0.0, 0.1),
+        }
+    )
     world_state._robot_states = {}
     world_state._objects = {}
     world_state.get_workspace_owner = Mock(return_value=None)
@@ -415,11 +527,9 @@ def sample_operation_with_conditions():
     op.complexity = OperationComplexity.BASIC
     op.preconditions = [
         "target_within_reach(robot_id, x, y, z)",
-        "robot_is_initialized(robot_id)"
+        "robot_is_initialized(robot_id)",
     ]
-    op.postconditions = [
-        "robot_is_stationary(robot_id)"
-    ]
+    op.postconditions = ["robot_is_stationary(robot_id)"]
     op.parameters = []
     return op
 
@@ -434,6 +544,7 @@ def cleanup_world_state():
     yield
     try:
         from operations.WorldState import WorldState
+
         if WorldState._instance:
             WorldState._instance.reset()
         WorldState._instance = None
@@ -457,8 +568,12 @@ def mock_world_state_with_objects():
         "cube_02": Mock(position=(0.4, 0.3, 0.1), color="blue", grasped_by=None),
     }
 
-    world_state.get_object_position = Mock(side_effect=lambda obj_id:
-        world_state._objects[obj_id].position if obj_id in world_state._objects else None
+    world_state.get_object_position = Mock(
+        side_effect=lambda obj_id: (
+            world_state._objects[obj_id].position
+            if obj_id in world_state._objects
+            else None
+        )
     )
 
     return world_state
@@ -489,13 +604,14 @@ def mock_world_state_multi_robot():
     robot2_state.is_moving = False
     robot2_state.target_position = None
 
-    world_state._robot_states = {
-        "Robot1": robot1_state,
-        "Robot2": robot2_state
-    }
+    world_state._robot_states = {"Robot1": robot1_state, "Robot2": robot2_state}
 
-    world_state.get_robot_position = Mock(side_effect=lambda rid:
-        world_state._robot_states[rid].position if rid in world_state._robot_states else None
+    world_state.get_robot_position = Mock(
+        side_effect=lambda rid: (
+            world_state._robot_states[rid].position
+            if rid in world_state._robot_states
+            else None
+        )
     )
 
     world_state.get_workspace_owner = Mock(return_value=None)
@@ -516,12 +632,7 @@ def sample_navigation_params():
     Returns:
         Dict with navigation parameters
     """
-    return {
-        "robot_id": "Robot1",
-        "x": 0.3,
-        "y": 0.2,
-        "z": 0.1
-    }
+    return {"robot_id": "Robot1", "x": 0.3, "y": 0.2, "z": 0.1}
 
 
 @pytest.fixture
@@ -532,11 +643,7 @@ def sample_manipulation_params():
     Returns:
         Dict with manipulation parameters
     """
-    return {
-        "robot_id": "Robot1",
-        "object_id": "cube_01",
-        "action": "grasp"
-    }
+    return {"robot_id": "Robot1", "object_id": "cube_01", "action": "grasp"}
 
 
 @pytest.fixture
@@ -551,6 +658,7 @@ def disable_yolo_detection():
     Yields control to test, then restores original USE_YOLO setting
     """
     import LLMConfig as cfg
+
     original_use_yolo = cfg.USE_YOLO
     cfg.USE_YOLO = False
     yield
@@ -560,6 +668,7 @@ def disable_yolo_detection():
 # ============================================================================
 # SYNCHRONIZATION OPERATION FIXTURES
 # ============================================================================
+
 
 @pytest.fixture
 def cleanup_event_bus():
@@ -574,6 +683,7 @@ def cleanup_event_bus():
     yield
     try:
         from operations.SyncOperations import EventBus
+
         bus = EventBus()
         bus.reset()
     except Exception:
@@ -590,6 +700,7 @@ def event_bus(cleanup_event_bus):
         EventBus singleton instance with clean state
     """
     from operations.SyncOperations import EventBus
+
     bus = EventBus()
     bus.reset()
     return bus
@@ -603,6 +714,7 @@ def timing_helper():
     Returns:
         Function that verifies timing with configurable tolerance percentage
     """
+
     def verify_timing(actual_ms, expected_ms, tolerance_percent=10):
         """
         Verify actual timing is within tolerance of expected
@@ -658,6 +770,7 @@ def thread_error_collector():
         from multiple threads safely
     """
     import threading
+
     errors = []
     lock = threading.Lock()
 
@@ -701,3 +814,44 @@ def async_executor():
         return thread
 
     return execute_async
+
+
+# ============================================================================
+# Spatial Operations Fixtures
+# ============================================================================
+
+
+@pytest.fixture
+def mock_move(monkeypatch):
+    """
+    Mock move_to_coordinate function for spatial operations testing
+
+    Returns:
+        Mock function that simulates move_to_coordinate
+    """
+    from operations.Base import OperationResult
+
+    def _mock_move(**kwargs):
+        return OperationResult.success_result({
+            "robot_id": kwargs.get("robot_id"),
+            "final_position": (kwargs.get("x"), kwargs.get("y"), kwargs.get("z"))
+        })
+
+    mock = Mock(side_effect=_mock_move)
+    # Auto-patch into SpatialOperations module
+    monkeypatch.setattr("operations.SpatialOperations.move_to_coordinate", mock)
+    return mock
+
+
+@pytest.fixture
+def mock_get_ws(monkeypatch):
+    """
+    Mock get_world_state function for spatial operations testing
+
+    Returns:
+        Mock function that returns a mock world state
+    """
+    mock = Mock()
+    # Auto-patch into SpatialOperations module
+    monkeypatch.setattr("operations.SpatialOperations.get_world_state", mock)
+    return mock

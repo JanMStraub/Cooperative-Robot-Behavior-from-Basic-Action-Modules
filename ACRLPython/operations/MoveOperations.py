@@ -8,7 +8,8 @@ through Unity's RobotController via TCP communication.
 
 import time
 import logging
-from servers.CommandServer import get_command_broadcaster
+# Lazy import to avoid circular dependency with servers module
+# from servers.CommandServer import get_command_broadcaster
 from .Base import (
     BasicOperation,
     OperationCategory,
@@ -21,6 +22,14 @@ from .Base import (
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+# Lazy import function to avoid circular dependency
+def _get_command_broadcaster():
+    """Lazy import of command broadcaster to avoid circular dependency"""
+    from servers.CommandServer import get_command_broadcaster
+    return get_command_broadcaster()
+
 
 # ============================================================================
 # Implementation: Move to Coordinates
@@ -186,7 +195,7 @@ def move_to_coordinate(
             f"Sending move_to_coordinate command to {robot_id}: ({actual_x:.3f}, {actual_y:.3f}, {actual_z:.3f})"
         )
 
-        success = get_command_broadcaster().send_command(command, request_id)
+        success = _get_command_broadcaster().send_command(command, request_id)
 
         if not success:
             return OperationResult.error_result(

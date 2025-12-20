@@ -364,10 +364,10 @@ class TestBoundaryTimeValues:
 
         # Manually set very old timestamp
         with storage._lock:
-            if "old_cam" in storage._single_images:
-                img, _, prompt = storage._single_images["old_cam"]
+            if "old_cam" in storage._cameras:
+                img, _, prompt = storage._cameras["old_cam"]
                 # Set to 1 year ago
-                storage._single_images["old_cam"] = (img, time.time() - 31536000, prompt)
+                storage._cameras["old_cam"] = (img, time.time() - 31536000, prompt)
 
         age = storage.get_single_age("old_cam")
 

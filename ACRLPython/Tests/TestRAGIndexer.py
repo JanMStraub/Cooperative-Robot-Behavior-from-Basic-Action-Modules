@@ -14,7 +14,7 @@ from rag.Indexer import OperationIndexer
 class TestOperationIndexer:
     """Test operation indexer"""
 
-    @patch("rag.Indexer.get_global_registry")
+    @patch("operations.Registry.get_global_registry")
     @patch("rag.Indexer.EmbeddingGenerator")
     def test_build_index(self, mock_embedding_gen, mock_registry):
         """Test building index from operations"""
@@ -46,7 +46,7 @@ class TestOperationIndexer:
         assert len(store) == 1
         assert "op_001" in store.operation_ids
 
-    @patch("rag.Indexer.get_global_registry")
+    @patch("operations.Registry.get_global_registry")
     @patch("rag.Indexer.EmbeddingGenerator")
     def test_build_index_empty_registry(self, mock_embedding_gen, mock_registry):
         """Test building index with empty registry"""
@@ -59,7 +59,7 @@ class TestOperationIndexer:
 
         assert len(store) == 0
 
-    @patch("rag.Indexer.get_global_registry")
+    @patch("operations.Registry.get_global_registry")
     @patch("rag.Indexer.EmbeddingGenerator")
     def test_rebuild_index(self, mock_embedding_gen, mock_registry):
         """Test rebuilding index"""
@@ -72,7 +72,7 @@ class TestOperationIndexer:
 
         assert len(store) == 0
 
-    @patch("rag.Indexer.get_global_registry")
+    @patch("operations.Registry.get_global_registry")
     @patch("rag.Indexer.EmbeddingGenerator")
     def test_get_indexer_stats(self, mock_embedding_gen, mock_registry):
         """Test getting indexer statistics"""

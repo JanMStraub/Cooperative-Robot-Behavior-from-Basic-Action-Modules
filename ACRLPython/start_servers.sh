@@ -39,20 +39,6 @@ cd "$SCRIPT_DIR"
 "$SCRIPT_DIR/acrl/bin/python" -u -m orchestrators.RunRobotController &
 CONTROLLER_PID=$!
 
-sleep 5
-
-echo ""
-echo "============================================================"
-echo "Started RunRobotController (PID: $CONTROLLER_PID)"
-echo "  - ImageServer: ports 5005/5006 (receives images)"
-echo "  - CommandServer: port 5010 (bidirectional commands)"
-echo "  - SequenceServer: port 5013 (sequences + RAG)"
-echo ""
-echo "Server is running. Logs will appear below."
-echo "Press Ctrl+C to stop."
-echo "============================================================"
-echo ""
-
 # Function to kill all processes on exit
 cleanup() {
     echo ""

@@ -15,10 +15,13 @@ Checks performed:
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, field
-import LLMConfig
-from operations.WorldState import get_world_state
-from operations.SpatialPredicates import robots_will_collide, is_in_shared_zone
-from operations.Base import OperationCategory
+try:
+    from .. import LLMConfig
+except ImportError:
+    import LLMConfig
+from .WorldState import get_world_state
+from .SpatialPredicates import robots_will_collide, is_in_shared_zone
+from .Base import OperationCategory
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

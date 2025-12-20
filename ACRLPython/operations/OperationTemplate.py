@@ -20,16 +20,30 @@ RECENT ENHANCEMENTS (December 2025):
 from typing import Dict, Any
 import time
 import logging
-from servers.CommandServer import get_command_broadcaster
-from .Base import (
-    BasicOperation,
-    OperationCategory,
-    OperationComplexity,
-    OperationParameter,
-    OperationResult,
-    ParameterFlow,
-    OperationRelationship,
-)
+
+# Handle both direct execution and package import
+try:
+    from ..servers.CommandServer import get_command_broadcaster
+    from .Base import (
+        BasicOperation,
+        OperationCategory,
+        OperationComplexity,
+        OperationParameter,
+        OperationResult,
+        ParameterFlow,
+        OperationRelationship,
+    )
+except ImportError:
+    from servers.CommandServer import get_command_broadcaster
+    from operations.Base import (
+        BasicOperation,
+        OperationCategory,
+        OperationComplexity,
+        OperationParameter,
+        OperationResult,
+        ParameterFlow,
+        OperationRelationship,
+    )
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

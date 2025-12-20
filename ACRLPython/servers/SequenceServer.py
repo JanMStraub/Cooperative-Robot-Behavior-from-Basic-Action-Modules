@@ -22,9 +22,13 @@ import logging
 import threading
 from typing import Dict, Any, Optional, Union
 
-from core.TCPServerBase import TCPServerBase, ServerConfig
-from orchestrators.CommandParser import CommandParser
-from orchestrators.SequenceExecutor import SequenceExecutor
+# Handle both direct execution and package import
+try:
+    from ..core.TCPServerBase import TCPServerBase, ServerConfig
+    # NOTE: CommandParser and SequenceExecutor imported lazily in initialize() to avoid circular dependency
+except ImportError:
+    from core.TCPServerBase import TCPServerBase, ServerConfig
+    # NOTE: CommandParser and SequenceExecutor imported lazily in initialize() to avoid circular dependency
 
 # Import config
 try:
@@ -85,6 +89,14 @@ class SequenceQueryHandler:
             True if initialization succeeded
         """
         try:
+            # Lazy imports to avoid circular dependency
+            try:
+                from ..orchestrators.CommandParser import CommandParser
+                from ..orchestrators.SequenceExecutor import SequenceExecutor
+            except ImportError:
+                from orchestrators.CommandParser import CommandParser
+                from orchestrators.SequenceExecutor import SequenceExecutor
+
             self._parser = CommandParser(lm_studio_url=lm_studio_url, model=model)
             self._executor = SequenceExecutor(check_completion=check_completion)
             return True

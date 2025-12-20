@@ -203,6 +203,7 @@ namespace Vision
                 // Only capture if not already processing
                 if (!_isProcessing)
                 {
+                    Debug.Log($"{_logPrefix} Capture another image");
                     CaptureAndSendToServer(_cameraPairId);
                 }
                 _timeSinceLastCapture = 0f;
@@ -214,12 +215,13 @@ namespace Vision
         /// </summary>
         private void HandleDepthResult(DepthResult result)
         {
-            if (result == null)
+            if (result == null & _isProcessing)
                 return;
 
             // Check if this result is for our camera pair
             if (result.camera_id == _cameraPairId)
             {
+                Debug.Log($"{_logPrefix} is processing set to false");
                 _isProcessing = false;
             }
         }

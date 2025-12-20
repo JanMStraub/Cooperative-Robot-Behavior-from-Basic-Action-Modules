@@ -8,11 +8,9 @@ Build searchable index from operations registry.
 from typing import Optional, List, Dict, Any
 import logging
 
-from operations.Registry import OperationRegistry, get_global_registry
-from operations.WorkflowPatterns import (
-    WorkflowPatternRegistry,
-    get_global_workflow_registry,
-)
+# Lazy imports to avoid circular dependency
+# from operations.Registry import OperationRegistry, get_global_registry
+# from operations.WorkflowPatterns import WorkflowPatternRegistry, get_global_workflow_registry
 
 from .Embeddings import EmbeddingGenerator
 from .VectorStore import VectorStore
@@ -39,8 +37,8 @@ class OperationIndexer:
 
     def __init__(
         self,
-        registry: Optional[OperationRegistry] = None,
-        workflow_registry: Optional[WorkflowPatternRegistry] = None,
+        registry: Optional[Any] = None,  # Changed to Any to avoid circular import
+        workflow_registry: Optional[Any] = None,  # Changed to Any to avoid circular import
         embedding_generator: Optional[EmbeddingGenerator] = None,
     ):
         """
@@ -51,6 +49,10 @@ class OperationIndexer:
             workflow_registry: Workflow pattern registry (default: global workflow registry)
             embedding_generator: Embedding generator (default: new instance)
         """
+        # Lazy imports
+        from operations.Registry import get_global_registry
+        from operations.WorkflowPatterns import get_global_workflow_registry
+
         self.registry = registry or get_global_registry()
         self.workflow_registry = workflow_registry or get_global_workflow_registry()
         self.embedding_generator = embedding_generator or EmbeddingGenerator()
@@ -437,7 +439,7 @@ class OperationIndexer:
 
 
 def build_index_from_registry(
-    registry: Optional[OperationRegistry] = None,
+    registry: Optional[Any] = None,  # Changed to Any to avoid circular import
     save_path: Optional[str] = None,
 ) -> VectorStore:
     """

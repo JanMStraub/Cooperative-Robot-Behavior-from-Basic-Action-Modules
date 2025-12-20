@@ -15,7 +15,7 @@ import time
 import threading
 from typing import Dict, Optional
 
-from operations.Base import (
+from .Base import (
     BasicOperation,
     OperationParameter,
     OperationCategory,

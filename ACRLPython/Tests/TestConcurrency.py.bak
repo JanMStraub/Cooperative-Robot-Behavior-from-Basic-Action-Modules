@@ -167,12 +167,6 @@ class TestConcurrentCommandBroadcasting:
     def test_concurrent_command_sends(self):
         """Test multiple threads sending commands simultaneously"""
         broadcaster = CommandBroadcaster()
-
-        # Mock server to allow commands to be queued
-        from unittest.mock import Mock
-        mock_server = Mock()
-        broadcaster.set_server(mock_server)
-
         num_threads = 10
         commands_per_thread = 20
 
@@ -204,7 +198,7 @@ class TestConcurrentCommandBroadcasting:
         # No errors should occur
         assert len(errors) == 0
 
-        # Commands should be sent (queued since no real client)
+        # Commands should be sent (queued since no server)
         assert sent_count[0] > 0
 
     def test_concurrent_completion_queue_operations(self):
@@ -350,7 +344,7 @@ class TestConcurrentWorldStateUpdates:
 
     def test_concurrent_robot_state_updates(self, cleanup_world_state):
         """Test updating robot states concurrently"""
-        world_state = WorldState()
+        world_state = WorldState
 
         errors = []
 
@@ -389,7 +383,7 @@ class TestConcurrentWorldStateUpdates:
 
     def test_concurrent_object_registration(self, cleanup_world_state):
         """Test registering objects concurrently"""
-        world_state = WorldState()
+        world_state = WorldState
 
         errors = []
 
@@ -427,7 +421,7 @@ class TestConcurrentWorldStateUpdates:
 
     def test_concurrent_read_write_world_state(self, cleanup_world_state):
         """Test concurrent reads and writes to world state"""
-        world_state = WorldState()
+        world_state = WorldState
 
         # Pre-populate
         for i in range(10):
@@ -586,7 +580,7 @@ class TestRaceConditions:
         # All commands should be tracked
         assert len(results) == 100
 
-    @patch('servers.CommandServer.get_command_broadcaster')
+    @patch('operations.MoveOperations.get_command_broadcaster')
     def test_operation_execution_race_condition(self, mock_broadcaster, cleanup_world_state):
         """Test for race conditions during operation execution"""
         # Mock broadcaster to return success

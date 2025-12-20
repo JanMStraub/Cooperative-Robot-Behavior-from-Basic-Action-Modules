@@ -17,7 +17,7 @@ from operations.Base import OperationResult, BasicOperation, OperationCategory, 
 class TestSequenceExecutorVerification:
     """Test SequenceExecutor with verification enabled"""
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
+    @patch('operations.Registry.get_global_registry')
     @patch('operations.Verification.OperationVerifier')
     def test_verification_enabled_blocks_bad_operation(self, mock_verifier_class, mock_registry, cleanup_world_state):
         """Test verification blocks operation with failed preconditions"""
@@ -65,7 +65,7 @@ class TestSequenceExecutorVerification:
         # Operation should not have been executed
         mock_registry.return_value.execute_operation_by_name.assert_not_called()
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
+    @patch('operations.Registry.get_global_registry')
     def test_verification_disabled_no_checks(self, mock_registry, cleanup_world_state):
         """Test no verification when disabled"""
         # Setup mock operation
@@ -100,7 +100,7 @@ class TestSequenceExecutorVerification:
         assert result["success"] is True
         mock_registry.return_value.execute_operation_by_name.assert_called_once()
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
+    @patch('operations.Registry.get_global_registry')
     @patch('operations.Verification.OperationVerifier')
     def test_precondition_fails_blocks_execution(self, mock_verifier_class, mock_registry, cleanup_world_state):
         """Test precondition failure blocks execution"""
@@ -142,7 +142,7 @@ class TestSequenceExecutorVerification:
         # Operation should not have been executed
         mock_registry.return_value.execute_operation_by_name.assert_not_called()
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
+    @patch('operations.Registry.get_global_registry')
     @patch('operations.Verification.OperationVerifier')
     @patch('orchestrators.SequenceExecutor.CoordinationVerifier')
     def test_coordination_conflict_blocks_execution(self, mock_coord_verifier_class, mock_verifier_class, mock_registry, cleanup_world_state):
@@ -189,12 +189,14 @@ class TestSequenceExecutorVerification:
         )
 
         assert result["success"] is False
-        # Check for coordination error message (matches implementation at line 262)
-        assert "coordination" in result["error"].lower() or "collision" in result["error"].lower()
+        # Check for coordination error message (matches SequenceExecutor line 844)
+        # Expected format: "Multi-robot coordination issue: collision: Path collision with Robot2"
+        error_str = result.get("error", "").lower()
+        assert "multi-robot coordination issue" in error_str or "collision" in error_str
         # Operation should not have been executed
         mock_registry.return_value.execute_operation_by_name.assert_not_called()
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
+    @patch('operations.Registry.get_global_registry')
     @patch('operations.Verification.OperationVerifier')
     def test_postcondition_warning_logged(self, mock_verifier_class, mock_registry, cleanup_world_state):
         """Test postcondition violation logged as warning"""
@@ -243,7 +245,7 @@ class TestSequenceExecutorVerification:
         # Operation should have been executed
         mock_registry.return_value.execute_operation_by_name.assert_called_once()
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
+    @patch('operations.Registry.get_global_registry')
     @patch('operations.Verification.OperationVerifier')
     def test_verification_recovery_suggestions_included(self, mock_verifier_class, mock_registry, cleanup_world_state):
         """Test error includes recovery suggestions"""
@@ -299,8 +301,8 @@ class TestSequenceExecutorVerification:
 class TestSequenceExecutorEndToEnd:
     """Test end-to-end command execution flows"""
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
-    @patch('orchestrators.SequenceExecutor.get_command_broadcaster')
+    @patch('operations.Registry.get_global_registry')
+    @patch('servers.CommandServer.get_command_broadcaster')
     def test_e2e_detect_and_move(self, mock_broadcaster, mock_registry, cleanup_world_state):
         """Test end-to-end detect then move workflow"""
         # Mock detect operation
@@ -356,8 +358,8 @@ class TestSequenceExecutorEndToEnd:
         assert result["success"] is True
         assert len(result.get("results", [])) == 2
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
-    @patch('orchestrators.SequenceExecutor.get_command_broadcaster')
+    @patch('operations.Registry.get_global_registry')
+    @patch('servers.CommandServer.get_command_broadcaster')
     def test_e2e_detect_move_grip(self, mock_broadcaster, mock_registry, cleanup_world_state):
         """Test full pick-up workflow: detect, move, grip"""
         # Setup mock operations
@@ -400,8 +402,8 @@ class TestSequenceExecutorEndToEnd:
         assert result["success"] is True
         assert len(result["results"]) == 3
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
-    @patch('orchestrators.SequenceExecutor.get_command_broadcaster')
+    @patch('operations.Registry.get_global_registry')
+    @patch('servers.CommandServer.get_command_broadcaster')
     def test_e2e_multi_robot_coordination(self, mock_broadcaster, mock_registry, cleanup_world_state):
         """Test multi-robot coordinated movements"""
         move_op = Mock(spec=BasicOperation, name="move_to_coordinate",
@@ -435,7 +437,7 @@ class TestSequenceExecutorEndToEnd:
 class TestSequenceExecutorErrorPropagation:
     """Test error propagation through sequence execution"""
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
+    @patch('operations.Registry.get_global_registry')
     def test_e2e_detection_fails(self, mock_registry, cleanup_world_state):
         """Test sequence stops when detection fails"""
         detect_op = Mock(spec=BasicOperation, name="detect_object_stereo",
@@ -467,8 +469,8 @@ class TestSequenceExecutorErrorPropagation:
         assert result["success"] is False
         assert "NO_OBJECTS" in result.get("error", "")
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
-    @patch('orchestrators.SequenceExecutor.get_command_broadcaster')
+    @patch('operations.Registry.get_global_registry')
+    @patch('servers.CommandServer.get_command_broadcaster')
     def test_e2e_movement_timeout(self, mock_broadcaster, mock_registry, cleanup_world_state):
         """Test timeout handling during movement"""
         move_op = Mock(spec=BasicOperation, name="move_to_coordinate",
@@ -500,7 +502,7 @@ class TestSequenceExecutorErrorPropagation:
         error_msg = result.get("error", "").lower()
         assert "timed out" in error_msg or "timeout" in error_msg
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
+    @patch('operations.Registry.get_global_registry')
     def test_e2e_gripper_fails(self, mock_registry, cleanup_world_state):
         """Test gripper failure handling"""
         gripper_op = Mock(spec=BasicOperation, name="control_gripper",
@@ -523,8 +525,8 @@ class TestSequenceExecutorErrorPropagation:
         assert result["success"] is False
         assert "GRIPPER_JAMMED" in result.get("error", "")
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
-    @patch('orchestrators.SequenceExecutor.get_command_broadcaster')
+    @patch('operations.Registry.get_global_registry')
+    @patch('servers.CommandServer.get_command_broadcaster')
     def test_e2e_coordination_conflict(self, mock_broadcaster, mock_registry, cleanup_world_state):
         """Test coordination conflict during execution"""
         move_op = Mock(spec=BasicOperation, name="move_to_coordinate",
@@ -564,8 +566,8 @@ class TestSequenceExecutorErrorPropagation:
 class TestComplexSequences:
     """Test complex multi-step sequences"""
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
-    @patch('orchestrators.SequenceExecutor.get_command_broadcaster')
+    @patch('operations.Registry.get_global_registry')
+    @patch('servers.CommandServer.get_command_broadcaster')
     def test_handoff_between_robots(self, mock_broadcaster, mock_registry, cleanup_world_state):
         """Test object handoff between two robots"""
         operations = {
@@ -611,8 +613,8 @@ class TestComplexSequences:
         assert result["success"] is True
         assert len(result["results"]) == 7
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
-    @patch('orchestrators.SequenceExecutor.get_command_broadcaster')
+    @patch('operations.Registry.get_global_registry')
+    @patch('servers.CommandServer.get_command_broadcaster')
     def test_parallel_movements(self, mock_broadcaster, mock_registry, cleanup_world_state):
         """Test parallel robot movements"""
         move_op = Mock(spec=BasicOperation, name="move_to_coordinate",
@@ -639,8 +641,8 @@ class TestComplexSequences:
         assert result["success"] is True
         assert len(result["results"]) == 3
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
-    @patch('orchestrators.SequenceExecutor.get_command_broadcaster')
+    @patch('operations.Registry.get_global_registry')
+    @patch('servers.CommandServer.get_command_broadcaster')
     def test_compound_command_sequence(self, mock_broadcaster, mock_registry, cleanup_world_state):
         """Test complex compound sequence with branching logic"""
         operations = {
@@ -695,8 +697,8 @@ class TestComplexSequences:
 class TestVariablePassingIntegration:
     """Test variable passing between operations"""
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
-    @patch('orchestrators.SequenceExecutor.get_command_broadcaster')
+    @patch('operations.Registry.get_global_registry')
+    @patch('servers.CommandServer.get_command_broadcaster')
     def test_variable_capture_and_use(self, mock_broadcaster, mock_registry, cleanup_world_state):
         """Test capturing detection result and using in move"""
         detect_op = Mock(spec=BasicOperation, name="detect_object_stereo",
@@ -738,8 +740,8 @@ class TestVariablePassingIntegration:
 
         assert result["success"] is True
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
-    @patch('orchestrators.SequenceExecutor.get_command_broadcaster')
+    @patch('operations.Registry.get_global_registry')
+    @patch('servers.CommandServer.get_command_broadcaster')
     def test_multiple_variable_substitution(self, mock_broadcaster, mock_registry, cleanup_world_state):
         """Test multiple variables in one command"""
         status_op = Mock(spec=BasicOperation, name="check_robot_status",
@@ -780,8 +782,8 @@ class TestVariablePassingIntegration:
 class TestSequenceExecutorPerformance:
     """Test performance with large sequences"""
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
-    @patch('orchestrators.SequenceExecutor.get_command_broadcaster')
+    @patch('operations.Registry.get_global_registry')
+    @patch('servers.CommandServer.get_command_broadcaster')
     def test_large_sequence_execution(self, mock_broadcaster, mock_registry, cleanup_world_state):
         """Test executing a large sequence (20+ commands)"""
         move_op = Mock(spec=BasicOperation, name="move_to_coordinate",
@@ -812,8 +814,8 @@ class TestSequenceExecutorPerformance:
         assert result["success"] is True
         assert len(result["results"]) == 25
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
-    @patch('orchestrators.SequenceExecutor.get_command_broadcaster')
+    @patch('operations.Registry.get_global_registry')
+    @patch('servers.CommandServer.get_command_broadcaster')
     def test_rapid_consecutive_commands(self, mock_broadcaster, mock_registry, cleanup_world_state):
         """Test rapid execution of consecutive commands"""
         gripper_op = Mock(spec=BasicOperation, name="control_gripper",
@@ -847,7 +849,7 @@ class TestSequenceExecutorPerformance:
 class TestSequenceExecutorEdgeCases:
     """Test edge cases in integration scenarios"""
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
+    @patch('operations.Registry.get_global_registry')
     def test_empty_sequence(self, mock_registry, cleanup_world_state):
         """Test executing empty sequence"""
         executor = SequenceExecutor(enable_verification=False, check_completion=False)
@@ -857,7 +859,7 @@ class TestSequenceExecutorEdgeCases:
         assert result["success"] is True
         assert len(result.get("results", [])) == 0
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
+    @patch('operations.Registry.get_global_registry')
     def test_sequence_with_unknown_operation(self, mock_registry, cleanup_world_state):
         """Test sequence with unknown operation"""
         mock_registry.return_value.get_operation_by_name = Mock(return_value=None)
@@ -872,8 +874,8 @@ class TestSequenceExecutorEdgeCases:
 
         assert result["success"] is False
 
-    @patch('orchestrators.SequenceExecutor.get_global_registry')
-    @patch('orchestrators.SequenceExecutor.get_command_broadcaster')
+    @patch('operations.Registry.get_global_registry')
+    @patch('servers.CommandServer.get_command_broadcaster')
     def test_partial_sequence_failure_recovery(self, mock_broadcaster, mock_registry, cleanup_world_state):
         """Test partial failure and recovery in sequence"""
         move_op = Mock(spec=BasicOperation, name="move_to_coordinate",

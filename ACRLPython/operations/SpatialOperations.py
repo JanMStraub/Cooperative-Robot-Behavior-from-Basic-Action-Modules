@@ -14,9 +14,12 @@ Operations:
 import time
 import logging
 from typing import Tuple, Union, Optional
-import LLMConfig
-from operations.WorldState import get_world_state
-from operations.MoveOperations import move_to_coordinate
+try:
+    from .. import LLMConfig
+except ImportError:
+    import LLMConfig
+from .WorldState import get_world_state
+from .MoveOperations import move_to_coordinate
 from .Base import (
     BasicOperation,
     OperationCategory,
