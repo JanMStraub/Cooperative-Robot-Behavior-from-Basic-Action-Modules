@@ -86,6 +86,7 @@ def detect_object(
     fov: Optional[float] = None,
     camera_position: Optional[list] = None,
     camera_rotation: Optional[list] = None,
+    position: str = "left",  # "left" or "right" to select leftmost/rightmost object
     **kwargs,
 ) -> OperationResult:
     """
@@ -98,6 +99,7 @@ def detect_object(
         fov: Camera field of view in degrees
         camera_position: Camera position [x, y, z] in world space
         camera_rotation: Camera rotation [pitch, yaw, roll] in degrees
+        position: Select "left" (leftmost) or "right" (rightmost) object when multiple detected
 
     Returns:
         OperationResult with 3D coordinates
@@ -206,18 +208,76 @@ def detect_object(
         from vision.ObjectDetector import CubeDetector
         from vision.StereoConfig import CameraConfig
 
-        # Run detection using CubeDetector with stereo mode
-        detector = CubeDetector()
-        camera_config = CameraConfig(baseline=float(baseline), fov=float(fov))
+        # Check if vision streaming is enabled and cached results are available
+        # (cfg is already imported at the top of the file)
+        enable_streaming = getattr(cfg, "ENABLE_VISION_STREAMING", False)
+        use_cached = False
+        detection_result = None
 
-        detection_result = detector.detect_objects_stereo(
-            imgL,
-            imgR,
-            camera_config,
-            camera_id=camera_id,
-            camera_rotation=camera_rotation,
-            camera_position=camera_position,
-        )
+        if enable_streaming:
+            # Try to use cached detections from SharedVisionState
+            try:
+                from operations.SharedVisionState import SharedVisionState
+
+                shared_state = SharedVisionState()
+                cached_objects = shared_state.get_available_objects()
+
+                if cached_objects:
+                    # Convert ClaimedObject to DetectionObject format
+                    from vision.DetectionDataModels import DetectionObject, DetectionResult
+
+                    cached_detections = []
+                    for idx, obj in enumerate(cached_objects):
+                        # Create detection from cached object
+                        det = DetectionObject(
+                            object_id=idx,  # Required first parameter
+                            color=obj.color,
+                            bbox=(0, 0, 0, 0),  # Bbox not needed for cached results
+                            confidence=obj.confidence,
+                            world_position=obj.world_position,
+                            depth_m=obj.depth_m,
+                            track_id=obj.track_id,
+                        )
+                        cached_detections.append(det)
+
+                    detection_result = DetectionResult(
+                        camera_id=camera_id,
+                        image_width=0,
+                        image_height=0,
+                        detections=cached_detections,
+                    )
+                    use_cached = True
+                    logger.info(
+                        f"Using cached detections from SharedVisionState "
+                        f"({len(cached_detections)} objects)"
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to retrieve cached detections, falling back to on-demand: {e}"
+                )
+
+        if not use_cached:
+            # Run detection using CubeDetector with stereo mode (on-demand)
+            logger.info("Running on-demand stereo detection")
+            detector = CubeDetector()
+            camera_config = CameraConfig(baseline=float(baseline), fov=float(fov))
+
+            detection_result = detector.detect_objects_stereo(
+                imgL,
+                imgR,
+                camera_config,
+                camera_id=camera_id,
+                camera_rotation=camera_rotation,
+                camera_position=camera_position,
+            )
+
+        # Ensure detection_result is not None (should always be assigned above)
+        if detection_result is None:
+            return OperationResult.error_result(
+                "DETECTION_ERROR",
+                "Failed to get detection result",
+                ["Internal error: detection_result was not assigned"],
+            )
 
         if not detection_result.detections:
             return OperationResult.error_result(
@@ -242,11 +302,25 @@ def detect_object(
                 ],
             )
 
-        # Get leftmost detection (smallest center_x coordinate)
-        best = min(matching, key=lambda d: d.center_x)
-        logger.info(
-            f"Selected leftmost {color} cube from {len(matching)} detections (center_x={best.center_x})"
-        )
+        # Select object based on position parameter
+        if position == "left":
+            # Get leftmost detection (smallest center_x coordinate)
+            best = min(matching, key=lambda d: d.center_x)
+            logger.info(
+                f"Selected leftmost {color} cube from {len(matching)} detections (center_x={best.center_x})"
+            )
+        elif position == "right":
+            # Get rightmost detection (largest center_x coordinate)
+            best = max(matching, key=lambda d: d.center_x)
+            logger.info(
+                f"Selected rightmost {color} cube from {len(matching)} detections (center_x={best.center_x})"
+            )
+        else:
+            return OperationResult.error_result(
+                "INVALID_POSITION",
+                f"Invalid position parameter: '{position}'",
+                ["Valid options: 'left' or 'right'"],
+            )
 
         if best.world_position is None:
             return OperationResult.error_result(
@@ -536,7 +610,7 @@ def detect_object_stereo(
     min_confidence: float = 0.5,
     max_distance: Optional[float] = None,
     # Selection strategy when multiple objects found
-    selection: str = "leftmost",
+    selection: str = "left",
     # Camera configuration (optional overrides)
     baseline: Optional[float] = None,
     fov: Optional[float] = None,
@@ -560,7 +634,8 @@ def detect_object_stereo(
         min_confidence: Minimum detection confidence threshold
         max_distance: Maximum detection distance in meters (None for no limit)
         selection: Selection strategy when multiple objects found:
-                  - "leftmost": Select leftmost object (smallest x)
+                  - "left": Select leftmost object (smallest center_x)
+                  - "right": Select rightmost object (largest center_x)
                   - "closest": Select closest object (smallest distance)
                   - "first": Select first detection
                   - "all": Return all detections
@@ -690,18 +765,76 @@ def detect_object_stereo(
         from vision.ObjectDetector import CubeDetector
         from vision.StereoConfig import CameraConfig
 
-        # Run detection using CubeDetector with stereo mode
-        detector = CubeDetector()
-        camera_config = CameraConfig(baseline=float(baseline), fov=float(fov))
+        # Check if vision streaming is enabled and cached results are available
+        # (cfg is already imported at the top of the file)
+        enable_streaming = getattr(cfg, "ENABLE_VISION_STREAMING", False)
+        use_cached = False
+        detection_result = None
 
-        detection_result = detector.detect_objects_stereo(
-            imgL,
-            imgR,
-            camera_config,
-            camera_id=camera_id,
-            camera_rotation=camera_rotation,
-            camera_position=camera_position,
-        )
+        if enable_streaming:
+            # Try to use cached detections from SharedVisionState
+            try:
+                from operations.SharedVisionState import SharedVisionState
+
+                shared_state = SharedVisionState()
+                cached_objects = shared_state.get_available_objects()
+
+                if cached_objects:
+                    # Convert ClaimedObject to DetectionObject format
+                    from vision.DetectionDataModels import DetectionObject, DetectionResult
+
+                    cached_detections = []
+                    for idx, obj in enumerate(cached_objects):
+                        # Create detection from cached object
+                        det = DetectionObject(
+                            object_id=idx,  # Required first parameter
+                            color=obj.color,
+                            bbox=(0, 0, 0, 0),  # Bbox not needed for cached results
+                            confidence=obj.confidence,
+                            world_position=obj.world_position,
+                            depth_m=obj.depth_m,
+                            track_id=obj.track_id,
+                        )
+                        cached_detections.append(det)
+
+                    detection_result = DetectionResult(
+                        camera_id=camera_id,
+                        image_width=0,
+                        image_height=0,
+                        detections=cached_detections,
+                    )
+                    use_cached = True
+                    logger.info(
+                        f"Using cached detections from SharedVisionState "
+                        f"({len(cached_detections)} objects)"
+                    )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to retrieve cached detections, falling back to on-demand: {e}"
+                )
+
+        if not use_cached:
+            # Run detection using CubeDetector with stereo mode (on-demand)
+            logger.info("Running on-demand stereo detection")
+            detector = CubeDetector()
+            camera_config = CameraConfig(baseline=float(baseline), fov=float(fov))
+
+            detection_result = detector.detect_objects_stereo(
+                imgL,
+                imgR,
+                camera_config,
+                camera_id=camera_id,
+                camera_rotation=camera_rotation,
+                camera_position=camera_position,
+            )
+
+        # Ensure detection_result is not None (should always be assigned above)
+        if detection_result is None:
+            return OperationResult.error_result(
+                "DETECTION_ERROR",
+                "Failed to get detection result",
+                ["Internal error: detection_result was not assigned"],
+            )
 
         if not detection_result.detections:
             return OperationResult.error_result(
@@ -757,10 +890,15 @@ def detect_object_stereo(
                 )
 
         # Apply selection strategy
-        if selection == "leftmost":
+        if selection == "left":
             best = min(detections, key=lambda d: d.center_x)
             logger.info(
                 f"Selected leftmost detection from {len(detections)} (center_x={best.center_x})"
+            )
+        elif selection == "right":
+            best = max(detections, key=lambda d: d.center_x)
+            logger.info(
+                f"Selected rightmost detection from {len(detections)} (center_x={best.center_x})"
             )
         elif selection == "closest":
 
@@ -800,7 +938,7 @@ def detect_object_stereo(
             return OperationResult.error_result(
                 "INVALID_SELECTION",
                 f"Invalid selection strategy: {selection}",
-                ["Use 'leftmost', 'closest', 'first', or 'all'"],
+                ["Use 'left', 'right', 'closest', 'first', or 'all'"],
             )
 
         # Check if selected detection has world position
@@ -859,7 +997,7 @@ def create_detect_object_stereo_operation() -> BasicOperation:
             - Optional color filtering (red, green, blue, or all)
             - Fresh capture or cached images
             - Confidence and distance filtering
-            - Multiple selection strategies (leftmost, closest, first, all)
+            - Multiple selection strategies (left, closest, first, all)
             - Camera pose metadata from Unity for accurate world coordinates
         """,
         usage_examples=[
@@ -913,8 +1051,8 @@ def create_detect_object_stereo_operation() -> BasicOperation:
                 type="str",
                 description="Selection strategy when multiple objects found",
                 required=False,
-                default="leftmost",
-                valid_values=["leftmost", "closest", "first", "all"],
+                default="left",
+                valid_values=["left", "right", "closest", "first", "all"],
             ),
         ],
         preconditions=[
@@ -946,7 +1084,7 @@ def create_detect_object_stereo_operation() -> BasicOperation:
             pairing_reasons={
                 "motion_move_to_coord_001": "Move robot to detected object's 3D position",
                 "manipulation_control_gripper_001": "Grasp object after positioning at detected coordinates",
-                "spatial_move_relative_001": "Move relative to detected object position (left_of, above, etc.)",
+                "spatial_move_relative_001": "Move relative to detected object position (left_of, right_of, above, etc.)",
             },
             parameter_flows=[
                 ParameterFlow(

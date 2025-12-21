@@ -384,7 +384,7 @@ class VisionProcessor:
                                     pass  # May already be started
 
                             cv2.namedWindow(self.viz_window_name, cv2.WINDOW_NORMAL)
-                            cv2.resizeWindow(self.viz_window_name, 800, 600)
+                            cv2.resizeWindow(self.viz_window_name, 400, 300)
                             self._viz_initialized = True
                             logging.info(
                                 f"Visualization window created: {self.viz_window_name}"
