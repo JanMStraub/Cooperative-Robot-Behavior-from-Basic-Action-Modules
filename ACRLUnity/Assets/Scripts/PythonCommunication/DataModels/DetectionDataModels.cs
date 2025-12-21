@@ -33,13 +33,18 @@ namespace PythonCommunication
     }
 
     // ============================================================================
-    // DEPTH RESULT DATA MODELS (from DepthResultsReceiver)
+    // DEPTH RESULT DATA MODELS (DEPRECATED - December 2025)
     // ============================================================================
+    // NOTE: These classes are no longer used in the unified architecture.
+    // Detection results now come through SequenceServer as OperationResult.
+    // Kept for backward compatibility only - can be removed in future cleanup.
 
     /// <summary>
-    /// Data structure for stereo detection results with 3D depth information
+    /// [DEPRECATED] Data structure for stereo detection results with 3D depth information
+    /// Use OperationResult from SequenceServer instead.
     /// </summary>
     [Serializable]
+    [System.Obsolete("DepthResult is deprecated. Use OperationResult from SequenceServer instead.")]
     public class DepthResult
     {
         public bool success;

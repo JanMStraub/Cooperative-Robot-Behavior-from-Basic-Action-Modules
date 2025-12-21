@@ -75,8 +75,8 @@ DUPLICATE_TIME_THRESHOLD = 0.1  # Time threshold for detecting duplicate sends (
 # ===========================
 
 # LM Studio server configuration
-LMSTUDIO_BASE_URL = "http://127.0.0.1:1234/v1"  # local
-# LMSTUDIO_BASE_URL = "http://192.168.178.53:1234/v1"  # GPU
+# LMSTUDIO_BASE_URL = "http://127.0.0.1:1234/v1"  # local
+LMSTUDIO_BASE_URL = "http://192.168.178.53:1234/v1"  # GPU
 
 # Default LM Studio model (use model name shown in LM Studio)
 DEFAULT_LMSTUDIO_MODEL = "mistralai/ministral-3-14b-reasoning"
@@ -202,7 +202,9 @@ STEREO_CHECK_INTERVAL = 0.5  # Check for new stereo pairs every N seconds
 # Changing these requires restarting the Python backend
 
 # ===== Streaming =====
-ENABLE_VISION_STREAMING = True  # Master switch for continuous vision processing (default: False for backward compat)
+ENABLE_VISION_STREAMING = False  # Master switch for continuous vision processing
+# When True: VisionProcessor runs continuously and DetectObjectOperation uses cached results (no duplicate detection)
+# When False: On-demand detection only - DetectObjectOperation runs full stereo detection when commanded
 VISION_STREAM_FPS = 5.0  # Streaming rate in frames per second (conservative default)
 STEREO_JPEG_QUALITY = (
     75  # JPEG compression quality (reduced from 85 for faster encoding)
@@ -261,7 +263,7 @@ CONFLICT_MIN_DISTANCE_DIFF = (
 
 # ===== Visualization =====
 ENABLE_VISION_VISUALIZATION = (
-    True  # Show live video window with YOLO detections (default: False)
+    False  # Show live video window with YOLO detections (default: False)
 )
 
 # ===== Performance Optimizations =====

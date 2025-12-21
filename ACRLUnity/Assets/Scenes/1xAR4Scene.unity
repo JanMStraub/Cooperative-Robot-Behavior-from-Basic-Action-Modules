@@ -984,7 +984,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp-ACRL::PythonCommunication.SequenceClient
   _autoConnect: 1
   _autoReconnect: 1
-  _prompt: Pick up object at detected position
+  _prompt: Calculate the coordinates of the blue cube on the left and navigate to
+    it
   _defaultRobotId: Robot1
   _cameraId: TableStereoCamera
   _logCommands: 1
@@ -1069,6 +1070,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 2407326571579605720, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _enableStreaming
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 5271878870994714299, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0

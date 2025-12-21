@@ -12,7 +12,6 @@ Ports:
 
 import socket
 import struct
-import threading
 import time
 import logging
 from typing import Optional, Tuple, List, Dict
@@ -153,7 +152,6 @@ class StereoImageServer(TCPServerBase):
 
     def handle_client_connection(self, client: socket.socket, address: tuple):
         """Handle stereo image pair reception."""
-        logger.info(f"Stereo camera client connected from {address}")
         client.settimeout(None)
 
         try:
@@ -251,10 +249,12 @@ class StereoImageServer(TCPServerBase):
                     self._storage.store_stereo_pair(
                         camera_pair_id, imgL, imgR, prompt, metadata
                     )
-                    logger.info(
-                        f"[req={request_id}] Received stereo '{camera_pair_id}' "
-                        f"(L: {img_L_len/1024:.1f}KB, R: {img_R_len/1024:.1f}KB)"
-                    )
+
+                    if not cfg.ENABLE_VISION_STREAMING:
+                        logger.info(
+                            f"[req={request_id}] Received stereo '{camera_pair_id}' "
+                            f"(L: {img_L_len/1024:.1f}KB, R: {img_R_len/1024:.1f}KB)"
+                        )
 
         except Exception as e:
             logger.error(f"Error handling stereo client {address}: {e}")

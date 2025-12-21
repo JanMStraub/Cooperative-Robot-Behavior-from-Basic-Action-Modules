@@ -39,6 +39,12 @@ import logging
 from typing import Optional, Tuple, List, Dict
 import numpy as np
 
+# Import config
+try:
+    import LLMConfig as cfg
+except ImportError:
+    from .. import LLMConfig as cfg
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -126,10 +132,12 @@ class UnifiedImageStorage:
                 time.time(),
                 metadata or {},
             )
-            logger.info(
-                f"Stored stereo pair '{camera_pair_id}' "
-                f"(L: {imgL.shape}, R: {imgR.shape})"
-            )
+
+            if not cfg.ENABLE_VISION_STREAMING:
+                logger.info(
+                    f"Stored stereo pair '{camera_pair_id}' "
+                    f"(L: {imgL.shape}, R: {imgR.shape})"
+                )
 
     def get_stereo_pair(
         self, camera_pair_id: str

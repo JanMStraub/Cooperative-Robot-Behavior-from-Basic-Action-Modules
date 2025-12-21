@@ -53,7 +53,6 @@ namespace Vision
         private float _cameraFOV;
 
         // State
-        private bool _isProcessing = false;
         private int _captureCounter = 0;
 
         // Streaming state
@@ -148,18 +147,6 @@ namespace Vision
 
             _cameraPairId = name;
 
-            // Subscribe to depth results via UnifiedPythonReceiver
-            if (UnifiedPythonReceiver.Instance != null)
-            {
-                UnifiedPythonReceiver.Instance.OnDepthResultReceived += HandleDepthResult;
-            }
-            else
-            {
-                Debug.LogWarning(
-                    $"{_logPrefix} UnifiedPythonReceiver not found - results won't be received"
-                );
-            }
-
             // Log initialization
             float fov = GetCameraFOV();
             float baseline = GetStereoBaseline();
@@ -200,31 +187,11 @@ namespace Vision
 
             if (_timeSinceLastCapture >= _streamingInterval)
             {
-                // Only capture if not already processing
-                if (!_isProcessing)
-                {
-                    Debug.Log($"{_logPrefix} Capture another image");
-                    CaptureAndSendToServer(_cameraPairId);
-                }
+                CaptureAndSendToServer(_cameraPairId);
                 _timeSinceLastCapture = 0f;
             }
         }
 
-        /// <summary>
-        /// Handles depth detection results
-        /// </summary>
-        private void HandleDepthResult(DepthResult result)
-        {
-            if (result == null & _isProcessing)
-                return;
-
-            // Check if this result is for our camera pair
-            if (result.camera_id == _cameraPairId)
-            {
-                Debug.Log($"{_logPrefix} is processing set to false");
-                _isProcessing = false;
-            }
-        }
 
         /// <summary>
         /// Capture stereo images and send directly to Python StereoImageServer via TCP.
@@ -251,15 +218,10 @@ namespace Vision
                     return;
                 }
 
-                _isProcessing = true;
-
                 // Send via TCP to StereoImageServer (port 5006)
                 SendStereoImagesTCP(cameraId, leftImage, rightImage);
 
                 _captureCounter++;
-                Debug.Log(
-                    $"{_logPrefix} Sent stereo images for '{cameraId}' (L: {leftImage.Length} bytes, R: {rightImage.Length} bytes)"
-                );
             }
             catch (Exception ex)
             {
@@ -289,8 +251,6 @@ namespace Vision
                     // Send
                     stream.Write(message, 0, message.Length);
                     stream.Flush();
-
-                    Debug.Log($"{_logPrefix} Sent {message.Length} bytes to StereoImageServer");
                 }
             }
             catch (Exception ex)
@@ -477,12 +437,6 @@ namespace Vision
         /// </summary>
         private void OnDestroy()
         {
-            // Unsubscribe from depth results
-            if (UnifiedPythonReceiver.Instance != null)
-            {
-                UnifiedPythonReceiver.Instance.OnDepthResultReceived -= HandleDepthResult;
-            }
-
             if (_captureCounter > 0)
             {
                 Debug.Log($"{_logPrefix} Destroyed after {_captureCounter} captures");

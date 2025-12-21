@@ -12,7 +12,7 @@ namespace PythonCommunication
     /// <summary>
     /// Unified receiver for all Python result communication.
     /// Routes all results through CommandServer (port 5010).
-    /// Replaces LLMResultsReceiver, DepthResultsReceiver, and DetectionResultsReceiver.
+    /// Handles LLM results and robot commands.
     /// </summary>
     public class UnifiedPythonReceiver : MonoBehaviour
     {
@@ -29,7 +29,6 @@ namespace PythonCommunication
 
         // Events - All existing events preserved
         public event Action<LLMResult> OnLLMResultReceived;
-        public event Action<DepthResult> OnDepthResultReceived;
 
         // Single connection handler for all results (port 5010)
         private ResultsConnection _resultsConnection;
@@ -156,54 +155,6 @@ namespace PythonCommunication
             }
         }
 
-        /// <summary>
-        /// Route depth result from connection to external subscribers
-        /// </summary>
-        internal void RouteDepthResult(DepthResult result)
-        {
-            if (_logResults)
-            {
-                string durationInfo =
-                    result.metadata != null
-                        ? $"{result.metadata.processing_time_seconds:F2}s"
-                        : "?";
-                int detectionCount = result.detections != null ? result.detections.Length : 0;
-
-                Debug.Log(
-                    $"{_logPrefix} Depth Result for {result.camera_id}: {detectionCount} objects in {durationInfo}"
-                );
-
-                // Only log first 3 detections to reduce verbosity
-                if (result.detections != null)
-                {
-                    for (int i = 0; i < Math.Min(3, result.detections.Length); i++)
-                    {
-                        var detection = result.detections[i];
-                        if (detection.world_position != null)
-                        {
-                            Debug.Log(
-                                $"{_logPrefix}  {detection.color} at ({detection.world_position.x:F3},{detection.world_position.y:F3},{detection.world_position.z:F3})m conf={detection.confidence:F2}"
-                            );
-                        }
-                    }
-                    if (result.detections.Length > 3)
-                    {
-                        Debug.Log($"{_logPrefix}  ... and {result.detections.Length - 3} more");
-                    }
-                }
-            }
-
-            try
-            {
-                OnDepthResultReceived?.Invoke(result);
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError(
-                    $"{_logPrefix} Error in OnDepthResultReceived event handler: {ex.Message}"
-                );
-            }
-        }
 
         #endregion
 
@@ -399,7 +350,7 @@ namespace PythonCommunication
 
             /// <summary>
             /// Process received JSON and parse as appropriate result type (Protocol V2)
-            /// Handles LLM results, Depth results, and robot commands through port 5010.
+            /// Handles LLM results and robot commands through port 5010.
             /// </summary>
             private void ProcessResult(uint requestId, string json)
             {
@@ -408,7 +359,6 @@ namespace PythonCommunication
 
                 // Try to determine result type by checking for presence of specific fields
                 // Robot commands have "command_type"
-                // Depth results have "detections" array
                 // LLM results have "response" string
                 if (json.Contains("\"command_type\""))
                 {
@@ -435,22 +385,6 @@ namespace PythonCommunication
                             $"{_logPrefix} PythonCommandHandler not available - command {command.command_type} not processed"
                         );
                     }
-                }
-                else if (json.Contains("\"detections\""))
-                {
-                    // Parse as DepthResult
-                    if (
-                        !JsonParser.TryParseWithLogging<DepthResult>(
-                            json,
-                            out DepthResult depthResult,
-                            _logPrefix
-                        )
-                    )
-                    {
-                        return;
-                    }
-                    depthResult.request_id = requestId;
-                    _parent.RouteDepthResult(depthResult);
                 }
                 else
                 {
