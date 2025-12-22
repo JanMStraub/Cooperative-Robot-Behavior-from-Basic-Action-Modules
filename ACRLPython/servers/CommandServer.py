@@ -15,15 +15,16 @@ import struct
 import json
 import threading
 import time
-import logging
 from typing import Dict, Any, Optional, List
 from queue import Queue, Empty
 
 # Import config
 try:
     import LLMConfig as cfg
+    from core.LoggingSetup import get_logger
 except ImportError:
     from .. import LLMConfig as cfg
+    from ..core.LoggingSetup import get_logger
 
 # Import base classes
 try:
@@ -33,8 +34,7 @@ except ImportError:
     from ..core.TCPServerBase import TCPServerBase, ServerConfig
     from ..core.UnityProtocol import UnityProtocol
 
-logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class CommandBroadcaster:

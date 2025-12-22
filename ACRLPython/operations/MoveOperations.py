@@ -345,9 +345,6 @@ def create_move_to_coordinate_operation() -> BasicOperation:
             "Communication failed - Unity not connected to ResultsServer",
             "Robot ID not found in RobotManager",
         ],
-        required_operations=[],
-        commonly_paired_with=["detect_object", "grip_object", "release_object"],
-        mutually_exclusive_with=["rotate_gripper"],  # Can't rotate while moving
         relationships=OperationRelationship(
             operation_id="motion_move_to_coord_001",
             required_operations=["status_check_robot_001"],

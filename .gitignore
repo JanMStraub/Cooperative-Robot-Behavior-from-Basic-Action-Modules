@@ -183,4 +183,5 @@ summaries/
 CLAUDE.md
 .ml-agents/
 ACRLPython/llm_responses
+ACRLPython/logs/
 documents/
