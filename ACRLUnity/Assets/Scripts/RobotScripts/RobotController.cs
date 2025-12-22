@@ -147,7 +147,7 @@ namespace Robotics
 
         /// <summary>
         /// Updates the target object with grasp options.
-        /// By default, uses grasp planning to compute optimal grasp pose.
+        /// By default, uses two-waypoint grasp planning for collision-free approach.
         /// </summary>
         /// <param name="target">The target GameObject to grasp</param>
         /// <param name="options">Grasp planning and gripper control options (default: grasp planning enabled)</param>
@@ -169,8 +169,6 @@ namespace Robotics
             _targetObject = target;
 
             // [2] Apply grasp planning if enabled
-            Transform targetTransform;
-
             if (options.useGraspPlanning && endEffectorBase != null)
             {
                 // Determine optimal approach direction
@@ -182,8 +180,8 @@ namespace Robotics
                         objectSize: GraspPlanner.GetObjectSize(target)
                     );
 
-                // Calculate grasp pose
-                var (graspPos, graspRot) = GraspPlanner.CalculateGraspPose(
+                // Calculate two-waypoint grasp plan
+                GraspPlan plan = GraspPlanner.CalculateGraspPlan(
                     targetObject: target,
                     gripperPosition: endEffectorBase.position,
                     approachDirection: approach
@@ -192,32 +190,90 @@ namespace Robotics
                 _currentGraspApproach = approach;
 
                 Debug.Log(
-                    $"{_logPrefix} Using grasp planning: approach={approach}, pos={graspPos}, rot={graspRot.eulerAngles}"
+                    $"{_logPrefix} Using two-waypoint grasp planning: approach={approach}"
                 );
                 Debug.Log(
-                    $"{_logPrefix} Original object: {target.name}, targeting grasp pose instead of object center"
+                    $"{_logPrefix} Pre-grasp: {plan.preGraspPosition}, Grasp: {plan.graspPosition}"
                 );
 
-                // Get cached grasp target GameObject
-                GameObject graspTarget = GetOrCreateTempObject(RobotConstants.GRASP_TARGET_SUFFIX);
-                graspTarget.transform.SetPositionAndRotation(graspPos, graspRot);
-                targetTransform = graspTarget.transform;
+                // Execute two-stage grasp sequence
+                StartCoroutine(ExecuteTwoWaypointGrasp(plan, target, options));
             }
             else
             {
                 // No grasp planning - target the object directly
-                targetTransform = target.transform;
-            }
+                Transform targetTransform = target.transform;
 
-            // [3] Open gripper if requested (prepare for grasp)
-            if (options.openGripperOnSet && _gripperController != null)
+                // Open gripper if requested
+                if (options.openGripperOnSet && _gripperController != null)
+                {
+                    _gripperController.OpenGrippers();
+                    Debug.Log($"{_logPrefix} Opening gripper for target {target.name}");
+                }
+
+                SetTargetInternal(targetTransform, target, options);
+            }
+        }
+
+        /// <summary>
+        /// Executes a two-waypoint grasp sequence: pre-grasp → final grasp → close gripper
+        /// </summary>
+        private System.Collections.IEnumerator ExecuteTwoWaypointGrasp(
+            GraspPlan plan,
+            GameObject targetObject,
+            GraspOptions options
+        )
+        {
+            // [1] Open gripper for approach
+            if (_gripperController != null)
             {
-                _gripperController.OpenGrippers();
-                Debug.Log($"{_logPrefix} Opening gripper for target {target.name}");
+                _gripperController.SetGripperPosition(plan.preGraspGripperWidth);
+                Debug.Log($"{_logPrefix} Opening gripper for approach");
             }
 
-            // [4] Set target using internal method
-            SetTargetInternal(targetTransform, target, options);
+            // [2] Move to pre-grasp waypoint
+            GameObject preGraspTarget = GetOrCreateTempObject(RobotConstants.GRASP_TARGET_SUFFIX + "_pre");
+            preGraspTarget.transform.SetPositionAndRotation(plan.preGraspPosition, plan.preGraspRotation);
+
+            SetTargetInternal(preGraspTarget.transform, targetObject, new GraspOptions
+            {
+                useGraspPlanning = false,
+                openGripperOnSet = false,
+                closeGripperOnReach = false
+            });
+
+            Debug.Log($"{_logPrefix} [Stage 1/2] Moving to pre-grasp position: {plan.preGraspPosition}");
+
+            // Wait for pre-grasp to complete
+            yield return new WaitUntil(() => _hasReachedTarget);
+            yield return new WaitForSeconds(0.2f); // Brief stabilization pause
+
+            // [3] Move to final grasp position
+            GameObject graspTarget = GetOrCreateTempObject(RobotConstants.GRASP_TARGET_SUFFIX);
+            graspTarget.transform.SetPositionAndRotation(plan.graspPosition, plan.graspRotation);
+
+            SetTargetInternal(graspTarget.transform, targetObject, new GraspOptions
+            {
+                useGraspPlanning = false,
+                openGripperOnSet = false,
+                closeGripperOnReach = false
+            });
+
+            Debug.Log($"{_logPrefix} [Stage 2/2] Moving to final grasp position: {plan.graspPosition}");
+
+            // Wait for grasp position to complete
+            yield return new WaitUntil(() => _hasReachedTarget);
+
+            // [4] Close gripper if requested
+            if (options.closeGripperOnReach && _gripperController != null)
+            {
+                yield return new WaitForSeconds(0.1f); // Brief pause before closing
+                _gripperController.SetGripperPosition(plan.graspGripperWidth);
+                Debug.Log($"{_logPrefix} Closing gripper to grasp object");
+            }
+
+            // Fire OnTargetReached event for the complete grasp sequence
+            OnTargetReached?.Invoke();
         }
 
         /// <summary>

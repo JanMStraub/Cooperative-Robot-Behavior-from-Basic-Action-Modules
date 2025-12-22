@@ -109,10 +109,17 @@ MAX_RESULT_QUEUE_SIZE = 100  # Max queued results when no clients connected
 
 # Output directories
 DEFAULT_OUTPUT_DIR = str(_CONFIG_DIR / "llm_responses")  # Where to save LLM responses
+LOG_DIR = str(_CONFIG_DIR / "logs")  # Where to save server logs
 
 # Logging format
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
 LOG_LEVEL = "INFO"  # Can be: DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+# File logging configuration
+ENABLE_FILE_LOGGING = True  # Set to True to save logs to file in addition to console
+LOG_FILE_NAME = "server_logs.txt"  # Log file name (will be created in LOG_DIR)
+LOG_FILE_MAX_BYTES = 10 * 1024 * 1024  # 10MB max log file size before rotation
+LOG_FILE_BACKUP_COUNT = 20  # Number of backup log files to keep
 
 
 # ===========================

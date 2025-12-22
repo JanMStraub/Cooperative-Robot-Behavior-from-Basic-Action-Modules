@@ -469,7 +469,6 @@ def create_move_relative_to_object_operation() -> BasicOperation:
             ),
         ],
         preconditions=[
-            "target_within_reach(robot_id, calculated_x, calculated_y, calculated_z)",
             "robot_is_initialized(robot_id)",
             "Object exists if object_id provided",
         ],
@@ -480,7 +479,6 @@ def create_move_relative_to_object_operation() -> BasicOperation:
         average_duration_ms=2000.0,
         success_rate=0.95,
         failure_modes=["Object not found", "Target out of reach", "Invalid relation"],
-        commonly_paired_with=["detect_object", "control_gripper"],
         relationships=OperationRelationship(
             operation_id="spatial_move_relative_001",
             required_operations=["perception_stereo_detect_001"],
@@ -558,7 +556,6 @@ def create_move_between_objects_operation() -> BasicOperation:
             ),
         ],
         preconditions=[
-            "target_within_reach(robot_id, calculated_x, calculated_y, calculated_z)",
             "robot_is_initialized(robot_id)",
             "Both objects exist if object_ids provided",
         ],
@@ -569,7 +566,6 @@ def create_move_between_objects_operation() -> BasicOperation:
         average_duration_ms=2000.0,
         success_rate=0.95,
         failure_modes=["Objects not found", "Target out of reach"],
-        commonly_paired_with=["detect_object", "coordinate_handoff"],
         relationships=OperationRelationship(
             operation_id="spatial_move_between_001",
             required_operations=["perception_stereo_detect_001"],
@@ -634,7 +630,6 @@ def create_move_to_region_operation() -> BasicOperation:
             ),
         ],
         preconditions=[
-            "target_within_reach(robot_id, calculated_x, calculated_y, calculated_z)",
             "robot_is_initialized(robot_id)",
             "Region exists in WORKSPACE_REGIONS",
         ],
@@ -642,10 +637,6 @@ def create_move_to_region_operation() -> BasicOperation:
         average_duration_ms=2000.0,
         success_rate=0.98,
         failure_modes=["Invalid region name", "Target out of reach"],
-        commonly_paired_with=[
-            "allocate_workspace_region",
-            "coordinate_simultaneous_move",
-        ],
         relationships=OperationRelationship(
             operation_id="spatial_move_to_region_001",
             required_operations=["coordination_allocate_workspace_001"],

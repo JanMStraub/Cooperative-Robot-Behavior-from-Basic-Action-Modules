@@ -13,7 +13,6 @@ Ports:
 import socket
 import struct
 import time
-import logging
 from typing import Optional, Tuple, List, Dict
 import numpy as np
 import cv2
@@ -21,8 +20,10 @@ import cv2
 # Import config
 try:
     import LLMConfig as cfg
+    from core.LoggingSetup import get_logger
 except ImportError:
     from .. import LLMConfig as cfg
+    from ..core.LoggingSetup import get_logger
 
 # Import base classes
 try:
@@ -38,8 +39,7 @@ try:
 except ImportError:
     from servers.ImageStorageCore import UnifiedImageStorage
 
-logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SingleImageServer(TCPServerBase):

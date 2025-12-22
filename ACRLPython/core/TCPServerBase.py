@@ -21,14 +21,13 @@ from typing import List, Optional, Dict, Tuple
 from enum import Enum
 from datetime import datetime
 
-# Import config
 # Import config - try both import styles
 try:
     import LLMConfig as cfg
+    from core.LoggingSetup import setup_logging
 except ImportError:
     from .. import LLMConfig as cfg
-
-logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
+    from ..core.LoggingSetup import setup_logging
 
 
 class ConnectionState(Enum):
@@ -99,6 +98,9 @@ class TCPServerBase(ABC):
         )  # Track client handler threads
         self._client_threads_lock = threading.Lock()  # Protect thread list
 
+        # Setup centralized logging
+        self._logger = setup_logging(self.__class__.__module__)
+
     @abstractmethod
     def handle_client_connection(self, client: socket.socket, address: tuple):
         """
@@ -115,7 +117,7 @@ class TCPServerBase(ABC):
     def start(self):
         """Start the TCP server"""
         if self._running:
-            logging.warning(
+            self._logger.warning(
                 f"Server already running on {self._config.host}:{self._config.port}"
             )
             return
@@ -129,7 +131,7 @@ class TCPServerBase(ABC):
             self._server_socket.settimeout(self._config.socket_timeout)
 
             self._running = True
-            logging.info(f"Server started on {self._config.host}:{self._config.port}")
+            self._logger.info(f"Server started on {self._config.host}:{self._config.port}")
 
             # Start accept thread
             self._accept_thread = threading.Thread(
@@ -138,7 +140,7 @@ class TCPServerBase(ABC):
             self._accept_thread.start()
 
         except Exception as e:
-            logging.error(f"Failed to start server: {e}")
+            self._logger.error(f"Failed to start server: {e}")
             self._cleanup()
             raise
 
@@ -147,7 +149,7 @@ class TCPServerBase(ABC):
         if not self._running:
             return
 
-        logging.info("Stopping server...")
+        self._logger.info("Stopping server...")
         self._running = False
 
         # Wait for accept thread to finish
@@ -160,11 +162,11 @@ class TCPServerBase(ABC):
                 try:
                     client.close()
                 except Exception as e:
-                    logging.debug(f"Error closing client: {e}")
+                    self._logger.debug(f"Error closing client: {e}")
             self._clients.clear()
 
         # Wait for client handler threads to finish
-        logging.info("Waiting for client threads to finish...")
+        self._logger.info("Waiting for client threads to finish...")
         with self._client_threads_lock:
             threads_to_join = list(self._client_threads)
 
@@ -172,11 +174,11 @@ class TCPServerBase(ABC):
             if thread.is_alive():
                 thread.join(timeout=2.0)
 
-        logging.info("All client threads stopped")
+        self._logger.info("All client threads stopped")
 
         # Close server socket
         self._cleanup()
-        logging.info("Server stopped")
+        self._logger.info("Server stopped")
 
     def is_running(self) -> bool:
         """Check if server is running"""
@@ -287,7 +289,7 @@ class TCPServerBase(ABC):
                 client.sendall(data)
                 success_count += 1
             except Exception as e:
-                logging.warning(f"Failed to send to client: {e}")
+                self._logger.warning(f"Failed to send to client: {e}")
                 disconnected.append(client)
 
         # Remove disconnected clients
@@ -316,7 +318,7 @@ class TCPServerBase(ABC):
                     )
 
                 if active_threads >= self._config.max_client_threads:
-                    logging.warning(
+                    self._logger.warning(
                         f"Max client threads ({self._config.max_client_threads}) reached. "
                         f"Rejecting connection from {address}"
                     )
@@ -326,7 +328,7 @@ class TCPServerBase(ABC):
                         pass
                     continue
 
-                logging.debug(f"Client connected from {address}")
+                self._logger.debug(f"Client connected from {address}")
 
                 # Add to client list and initialize client info
                 now = datetime.now()
@@ -358,7 +360,7 @@ class TCPServerBase(ABC):
                 continue
             except Exception as e:
                 if self._running:
-                    logging.error(f"Error accepting client: {e}")
+                    self._logger.error(f"Error accepting client: {e}")
 
     def _handle_client_wrapper(self, client: socket.socket, address: tuple):
         """
@@ -368,7 +370,7 @@ class TCPServerBase(ABC):
         try:
             self.handle_client_connection(client, address)
         except Exception as e:
-            logging.error(f"Error handling client {address}: {e}")
+            self._logger.error(f"Error handling client {address}: {e}")
         finally:
             # Remove from client list
             with self._clients_lock:
@@ -380,7 +382,7 @@ class TCPServerBase(ABC):
             except:
                 pass
 
-            logging.debug(f"Client disconnected from {address}")
+            self._logger.debug(f"Client disconnected from {address}")
 
     def _cleanup_completed_threads(self):
         """Remove completed threads from the thread list"""
@@ -404,7 +406,7 @@ class TCPServerBase(ABC):
             try:
                 self._server_socket.close()
             except Exception as e:
-                logging.debug(f"Error closing server socket: {e}")
+                self._logger.debug(f"Error closing server socket: {e}")
             self._server_socket = None
 
 
@@ -422,7 +424,7 @@ if __name__ == "__main__":
                         break
                     client.sendall(b"ECHO: " + data)
             except Exception as e:
-                logging.debug(f"Echo client error: {e}")
+                self._logger.debug(f"Echo client error: {e}")
 
     # Test the echo server
     config = ServerConfig(host="127.0.0.1", port=9999)

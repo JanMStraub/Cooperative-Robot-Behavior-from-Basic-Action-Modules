@@ -18,16 +18,17 @@ Protocol:
 import socket
 import struct
 import json
-import logging
 import threading
 from typing import Dict, Any, Optional, Union
 
 # Handle both direct execution and package import
 try:
     from ..core.TCPServerBase import TCPServerBase, ServerConfig
+    from ..core.LoggingSetup import get_logger
     # NOTE: CommandParser and SequenceExecutor imported lazily in initialize() to avoid circular dependency
 except ImportError:
     from core.TCPServerBase import TCPServerBase, ServerConfig
+    from core.LoggingSetup import get_logger
     # NOTE: CommandParser and SequenceExecutor imported lazily in initialize() to avoid circular dependency
 
 # Import config
@@ -36,8 +37,7 @@ try:
 except ImportError:
     from .. import LLMConfig as cfg
 
-logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SequenceQueryHandler:

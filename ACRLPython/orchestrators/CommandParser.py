@@ -144,7 +144,7 @@ class CommandParser:
                     "messages": [
                         {
                             "role": "system",
-                            "content": "You are a robot command parser. Output only valid JSON.",
+                            "content": "You are a robot command parser. Map natural language variations to valid parameter values (e.g., 'leftmost' → 'left', 'rightmost' → 'right', 'nearest' → 'closest'). Output only valid JSON.",
                         },
                         {"role": "user", "content": prompt},
                     ],
@@ -164,7 +164,7 @@ class CommandParser:
             # Extract content from response
             result = response.json()
             content = result["choices"][0]["message"]["content"]
-            logger.info(f"LLM response: {content[:500]}")
+            logger.info(f"LLM response: {content}")
 
             # Parse JSON from response
             parsed = self._extract_json_from_response(content)
@@ -290,7 +290,10 @@ class CommandParser:
         === DETECTION CONSTRAINTS ===
 
         - detect_object_stereo "color": ONLY "red", "green", "blue", or null
-        - detect_object_stereo "selection": ONLY "leftmost", "closest", "first", or "all"
+        - detect_object_stereo "selection": ONLY "left", "right", "closest", "first", or "all"
+          * Use "left" for leftmost object, "right" for rightmost object
+          * "closest" selects nearest object, "first" takes first detection
+          * "all" returns all detections matching criteria
 
         === OUTPUT FORMAT ===
 

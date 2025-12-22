@@ -235,12 +235,6 @@ def create_control_gripper_operation() -> BasicOperation:
             "GripperController component not found on robot",
             "Gripper mechanism jammed or obstructed",
         ],
-        required_operations=[],
-        commonly_paired_with=[
-            "motion_move_to_coord_001",  # Move to position before gripper action
-            "manipulation_control_gripper_001",  # Sequential open/close operations
-        ],
-        mutually_exclusive_with=[],
         relationships=OperationRelationship(
             operation_id="manipulation_control_gripper_001",
             required_operations=["motion_move_to_coord_001"],

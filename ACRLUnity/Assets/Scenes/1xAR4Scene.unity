@@ -984,9 +984,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp-ACRL::PythonCommunication.SequenceClient
   _autoConnect: 1
   _autoReconnect: 1
-  _prompt: Calculate the coordinates of the blue cube on the left and navigate to
-    it
-  _defaultRobotId: Robot1
+  _prompt: Grab the right blue cube and move to position (0,0.3,0) and open the gripper
+  _defaultRobotId: Robot2
   _cameraId: TableStereoCamera
   _logCommands: 1
   _autoExecuteResult: 1
@@ -1114,9 +1113,41 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5581601495840328535, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_JointFriction
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 5581601495840328535, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LinearDamping
+      value: 0.05
+      objectReference: {fileID: 0}
+    - target: {fileID: 5581601495840328535, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_XDrive.target
+      value: -0.015
+      objectReference: {fileID: 0}
+    - target: {fileID: 5581601495840328535, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_AngularDamping
+      value: 0.05
+      objectReference: {fileID: 0}
     - target: {fileID: 6897178052544332906, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
       value: Environment
+      objectReference: {fileID: 0}
+    - target: {fileID: 7775894089036924584, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_JointFriction
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 7775894089036924584, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LinearDamping
+      value: 0.05
+      objectReference: {fileID: 0}
+    - target: {fileID: 7775894089036924584, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_XDrive.target
+      value: -0.015
+      objectReference: {fileID: 0}
+    - target: {fileID: 7775894089036924584, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_AngularDamping
+      value: 0.05
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
