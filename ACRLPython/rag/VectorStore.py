@@ -8,6 +8,7 @@ In-memory vector storage with pickle-based persistence and cosine similarity sea
 from typing import List, Dict, Any, Optional
 import pickle
 import logging
+import threading
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from .ConfidenceScorer import apply_confidence_boosting, get_category_min_score
@@ -38,6 +39,7 @@ class VectorStore:
         self.operation_ids: List[str] = []
         self.metadata: List[Dict[str, Any]] = []
         self.embedding_dimension: Optional[int] = None
+        self._lock = threading.RLock()  # Thread safety for concurrent access
 
     def add_operation(
         self, operation_id: str, embedding: np.ndarray, metadata: Dict[str, Any]
@@ -59,25 +61,26 @@ class VectorStore:
             ...     {"name": "move_to_coordinate", "category": "navigation"}
             ... )
         """
-        # Set embedding dimension on first add
-        if self.embedding_dimension is None:
-            self.embedding_dimension = len(embedding)
-        elif len(embedding) != self.embedding_dimension:
-            raise ValueError(
-                f"Embedding dimension mismatch: expected {self.embedding_dimension}, got {len(embedding)}"
-            )
+        with self._lock:
+            # Set embedding dimension on first add
+            if self.embedding_dimension is None:
+                self.embedding_dimension = len(embedding)
+            elif len(embedding) != self.embedding_dimension:
+                raise ValueError(
+                    f"Embedding dimension mismatch: expected {self.embedding_dimension}, got {len(embedding)}"
+                )
 
-        # Add to lists
-        self.operation_ids.append(operation_id)
-        self.metadata.append(metadata)
+            # Add to lists
+            self.operation_ids.append(operation_id)
+            self.metadata.append(metadata)
 
-        # Add to vectors array
-        if len(self.vectors) == 0:
-            self.vectors = embedding.reshape(1, -1)
-        else:
-            self.vectors = np.vstack([self.vectors, embedding.reshape(1, -1)])
+            # Add to vectors array
+            if len(self.vectors) == 0:
+                self.vectors = embedding.reshape(1, -1)
+            else:
+                self.vectors = np.vstack([self.vectors, embedding.reshape(1, -1)])
 
-        logger.debug(f"Added operation '{operation_id}' to vector store")
+            logger.debug(f"Added operation '{operation_id}' to vector store")
 
     def search(
         self,
@@ -112,67 +115,68 @@ class VectorStore:
             >>> results[0]['operation_id']
             'op_001'
         """
-        if len(self.vectors) == 0:
-            logger.warning("Vector store is empty")
-            return []
+        with self._lock:
+            if len(self.vectors) == 0:
+                logger.warning("Vector store is empty")
+                return []
 
-        if len(query_embedding) != self.embedding_dimension:
-            raise ValueError(
-                f"Query embedding dimension mismatch: expected {self.embedding_dimension}, got {len(query_embedding)}"
-            )
+            if len(query_embedding) != self.embedding_dimension:
+                raise ValueError(
+                    f"Query embedding dimension mismatch: expected {self.embedding_dimension}, got {len(query_embedding)}"
+                )
 
-        # Compute cosine similarity
-        query = query_embedding.reshape(1, -1)
-        similarities = cosine_similarity(query, self.vectors)[0]
+            # Compute cosine similarity
+            query = query_embedding.reshape(1, -1)
+            similarities = cosine_similarity(query, self.vectors)[0]
 
-        # Create results with metadata
-        results = []
-        for idx, score in enumerate(similarities):
-            # Apply filters
-            if (
-                category_filter
-                and self.metadata[idx].get("category") != category_filter
-            ):
-                continue
-            if (
-                complexity_filter
-                and self.metadata[idx].get("complexity") != complexity_filter
-            ):
-                continue
+            # Create results with metadata
+            results = []
+            for idx, score in enumerate(similarities):
+                # Apply filters
+                if (
+                    category_filter
+                    and self.metadata[idx].get("category") != category_filter
+                ):
+                    continue
+                if (
+                    complexity_filter
+                    and self.metadata[idx].get("complexity") != complexity_filter
+                ):
+                    continue
 
-            # Apply min score threshold (use category-specific if available)
-            if min_score is not None:
-                min_threshold = min_score
-            elif category_filter:
-                min_threshold = get_category_min_score(category_filter)
-            else:
-                min_threshold = config.RAG_MIN_SIMILARITY_SCORE
+                # Apply min score threshold (use category-specific if available)
+                if min_score is not None:
+                    min_threshold = min_score
+                elif category_filter:
+                    min_threshold = get_category_min_score(category_filter)
+                else:
+                    min_threshold = config.RAG_MIN_SIMILARITY_SCORE
 
-            if score < min_threshold:
-                continue
+                if score < min_threshold:
+                    continue
 
-            results.append(
-                {
-                    "operation_id": self.operation_ids[idx],
-                    "score": float(score),
-                    "metadata": self.metadata[idx],
-                }
-            )
+                results.append(
+                    {
+                        "operation_id": self.operation_ids[idx],
+                        "score": float(score),
+                        "metadata": self.metadata[idx],
+                    }
+                )
 
-        # Sort by score descending
-        results.sort(key=lambda x: x["score"], reverse=True)
+            # Sort by score descending
+            results.sort(key=lambda x: x["score"], reverse=True)
 
-        # Apply confidence scoring if enabled
-        if enable_confidence and config.RAG_ENABLE_CONFIDENCE_SCORING and results:
-            results = apply_confidence_boosting(
-                results,
-                query_text=query_text,
-                category_filter=category_filter,
-                complexity_filter=complexity_filter,
-            )
+            # Apply confidence scoring if enabled
+            if enable_confidence and config.RAG_ENABLE_CONFIDENCE_SCORING and results:
+                results = apply_confidence_boosting(
+                    results,
+                    query_text=query_text,
+                    category_filter=category_filter,
+                    complexity_filter=complexity_filter,
+                )
 
-        # Return top-k
-        return results[:top_k]
+            # Return top-k
+            return results[:top_k]
 
     def get_operation(self, operation_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -184,15 +188,16 @@ class VectorStore:
         Returns:
             Dict with operation_id, embedding, metadata or None if not found
         """
-        try:
-            idx = self.operation_ids.index(operation_id)
-            return {
-                "operation_id": operation_id,
-                "embedding": self.vectors[idx],
-                "metadata": self.metadata[idx],
-            }
-        except ValueError:
-            return None
+        with self._lock:
+            try:
+                idx = self.operation_ids.index(operation_id)
+                return {
+                    "operation_id": operation_id,
+                    "embedding": self.vectors[idx],
+                    "metadata": self.metadata[idx],
+                }
+            except ValueError:
+                return None
 
     def save(self, file_path: Optional[str] = None):
         """
@@ -209,12 +214,13 @@ class VectorStore:
         """
         path = file_path or config.RAG_VECTOR_STORE_PATH
 
-        data = {
-            "vectors": self.vectors,
-            "operation_ids": self.operation_ids,
-            "metadata": self.metadata,
-            "embedding_dimension": self.embedding_dimension,
-        }
+        with self._lock:
+            data = {
+                "vectors": self.vectors,
+                "operation_ids": self.operation_ids,
+                "metadata": self.metadata,
+                "embedding_dimension": self.embedding_dimension,
+            }
 
         try:
             with open(path, "wb") as f:
@@ -245,10 +251,11 @@ class VectorStore:
                 data = pickle.load(f)
 
             store = cls()
-            store.vectors = data["vectors"]
-            store.operation_ids = data["operation_ids"]
-            store.metadata = data["metadata"]
-            store.embedding_dimension = data["embedding_dimension"]
+            with store._lock:
+                store.vectors = data["vectors"]
+                store.operation_ids = data["operation_ids"]
+                store.metadata = data["metadata"]
+                store.embedding_dimension = data["embedding_dimension"]
 
             return store
 
@@ -266,35 +273,38 @@ class VectorStore:
         Returns:
             Dict with num_operations, embedding_dimension, categories, etc.
         """
-        categories = {}
-        complexities = {}
+        with self._lock:
+            categories = {}
+            complexities = {}
 
-        for meta in self.metadata:
-            cat = meta.get("category", "unknown")
-            categories[cat] = categories.get(cat, 0) + 1
+            for meta in self.metadata:
+                cat = meta.get("category", "unknown")
+                categories[cat] = categories.get(cat, 0) + 1
 
-            comp = meta.get("complexity", "unknown")
-            complexities[comp] = complexities.get(comp, 0) + 1
+                comp = meta.get("complexity", "unknown")
+                complexities[comp] = complexities.get(comp, 0) + 1
 
-        return {
-            "num_operations": len(self.operation_ids),
-            "embedding_dimension": self.embedding_dimension,
-            "categories": categories,
-            "complexities": complexities,
-            "operation_ids": self.operation_ids,
-        }
+            return {
+                "num_operations": len(self.operation_ids),
+                "embedding_dimension": self.embedding_dimension,
+                "categories": categories,
+                "complexities": complexities,
+                "operation_ids": self.operation_ids,
+            }
 
     def clear(self):
         """Clear all data from the vector store"""
-        self.vectors = np.array([])
-        self.operation_ids = []
-        self.metadata = []
-        self.embedding_dimension = None
-        logger.info("Cleared vector store")
+        with self._lock:
+            self.vectors = np.array([])
+            self.operation_ids = []
+            self.metadata = []
+            self.embedding_dimension = None
+            logger.info("Cleared vector store")
 
     def __len__(self) -> int:
         """Return number of operations in store"""
-        return len(self.operation_ids)
+        with self._lock:
+            return len(self.operation_ids)
 
     def __repr__(self) -> str:
         return f"VectorStore(operations={len(self)}, dim={self.embedding_dimension})"

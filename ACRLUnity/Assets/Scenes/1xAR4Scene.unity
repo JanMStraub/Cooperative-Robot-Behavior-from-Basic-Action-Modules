@@ -1069,9 +1069,21 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 182468285294666188, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 608026700499321620, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 2407326571579605720, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: _enableStreaming
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2906306481840707133, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5271878870994714299, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.x
@@ -1132,6 +1144,10 @@ PrefabInstance:
     - target: {fileID: 6897178052544332906, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
       value: Environment
+      objectReference: {fileID: 0}
+    - target: {fileID: 7332227619515935780, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7775894089036924584, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_JointFriction

@@ -230,6 +230,46 @@ class TCPServerBase(ABC):
         with self._clients_lock:
             return self._client_info.get(client)
 
+    def _recv_exactly(self, sock: socket.socket, num_bytes: int) -> Optional[bytes]:
+        """
+        Receive exactly num_bytes from the socket.
+
+        Args:
+            sock: Socket to receive from
+            num_bytes: Exact number of bytes to receive
+
+        Returns:
+            Bytes received, or None if connection closed or error occurred
+        """
+        self._update_client_state(sock, ConnectionState.RECEIVING)
+        data = b""
+        while len(data) < num_bytes:
+            try:
+                chunk = sock.recv(num_bytes - len(data))
+                if not chunk:
+                    return None
+                data += chunk
+                self._record_bytes_received(sock, len(chunk))
+            except Exception:
+                return None
+        return data
+
+    def _read_int(self, sock: socket.socket) -> Optional[int]:
+        """
+        Read a 4-byte little-endian unsigned integer from the socket.
+
+        Args:
+            sock: Socket to read from
+
+        Returns:
+            Integer value, or None if read failed
+        """
+        import struct
+        data = self._recv_exactly(sock, 4)
+        if data:
+            return struct.unpack('<I', data)[0]  # Little-endian unsigned int
+        return None
+
     def _is_connection_error_fatal(self, error: Exception) -> Tuple[bool, str]:
         """
         Determine if a connection error is fatal (client disconnected).
@@ -324,8 +364,8 @@ class TCPServerBase(ABC):
                     )
                     try:
                         client.close()
-                    except:
-                        pass
+                    except (OSError, ConnectionError) as e:
+                        self._logger.debug(f"Error closing rejected client socket: {e}")
                     continue
 
                 self._logger.debug(f"Client connected from {address}")
@@ -379,8 +419,8 @@ class TCPServerBase(ABC):
             # Close client socket
             try:
                 client.close()
-            except:
-                pass
+            except (OSError, ConnectionError) as e:
+                self._logger.debug(f"Error closing client socket: {e}")
 
             self._logger.debug(f"Client disconnected from {address}")
 

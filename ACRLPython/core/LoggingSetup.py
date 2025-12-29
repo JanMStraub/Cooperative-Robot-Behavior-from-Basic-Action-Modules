@@ -11,7 +11,12 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
-import LLMConfig as cfg
+
+# Import config - try both import styles
+try:
+    import LLMConfig as cfg
+except ImportError:
+    from .. import LLMConfig as cfg
 
 # Global flag to track if logging has been configured
 _logging_configured = False

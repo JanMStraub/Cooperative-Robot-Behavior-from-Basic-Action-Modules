@@ -51,6 +51,10 @@ class TestConfigConstants:
         assert cfg.DEFAULT_TEMPERATURE >= 0.0
         assert cfg.DEFAULT_TEMPERATURE <= 2.0
         assert len(cfg.VISION_MODELS) > 0
+        # LMSTUDIO_BASE_URL should use environment variable or default to localhost
+        assert cfg.LMSTUDIO_BASE_URL is not None
+        assert isinstance(cfg.LMSTUDIO_BASE_URL, str)
+        assert cfg.LMSTUDIO_BASE_URL.startswith("http")
 
     def test_queue_config(self):
         """Test queue configuration"""
