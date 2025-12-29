@@ -7,13 +7,6 @@
       "dependencies": {},
       "hash": "46e771daa4b2b00db9bd7356ab3c8874c9d83cb4"
     },
-    "com.madsbangh.easybuttons": {
-      "version": "https://github.com/madsbangh/EasyButtons.git#upm",
-      "depth": 0,
-      "source": "git",
-      "dependencies": {},
-      "hash": "73d2383899210da808a1b27329cdaa8000de557b"
-    },
     "com.unity.ai.navigation": {
       "version": "2.0.9",
       "depth": 0,
@@ -84,14 +77,6 @@
       "dependencies": {},
       "url": "https://packages.unity.com"
     },
-    "com.unity.multiplayer.center": {
-      "version": "1.0.1",
-      "depth": 0,
-      "source": "builtin",
-      "dependencies": {
-        "com.unity.modules.uielements": "1.0.0"
-      }
-    },
     "com.unity.nuget.mono-cecil": {
       "version": "1.11.6",
       "depth": 3,
@@ -130,13 +115,6 @@
       "dependencies": {
         "com.unity.render-pipelines.core": "17.0.3"
       }
-    },
-    "com.unity.robotics.ros-tcp-connector": {
-      "version": "https://github.com/Unity-Technologies/ROS-TCP-Connector.git?path=/com.unity.robotics.ros-tcp-connector",
-      "depth": 0,
-      "source": "git",
-      "dependencies": {},
-      "hash": "c27f00c6cf750d2d0564349b3039d19aa3925e7c"
     },
     "com.unity.searcher": {
       "version": "4.9.4",

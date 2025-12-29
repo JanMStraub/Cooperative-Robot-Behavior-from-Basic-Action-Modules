@@ -116,27 +116,7 @@ class SingleImageServer(TCPServerBase):
         except Exception as e:
             logger.error(f"Error handling client {address}: {e}")
 
-    def _recv_exactly(self, sock: socket.socket, num_bytes: int) -> Optional[bytes]:
-        """Receive exactly num_bytes."""
-        self._update_client_state(sock, ConnectionState.RECEIVING)
-        data = b""
-        while len(data) < num_bytes:
-            try:
-                chunk = sock.recv(num_bytes - len(data))
-                if not chunk:
-                    return None
-                data += chunk
-                self._record_bytes_received(sock, len(chunk))
-            except Exception:
-                return None
-        return data
-
-    def _read_int(self, sock: socket.socket) -> Optional[int]:
-        """Read a 4-byte integer."""
-        data = self._recv_exactly(sock, 4)
-        if data:
-            return struct.unpack(UnityProtocol.INT_FORMAT, data)[0]
-        return None
+    # Note: _recv_exactly() and _read_int() methods now inherited from TCPServerBase
 
 
 class StereoImageServer(TCPServerBase):
@@ -259,27 +239,7 @@ class StereoImageServer(TCPServerBase):
         except Exception as e:
             logger.error(f"Error handling stereo client {address}: {e}")
 
-    def _recv_exactly(self, sock: socket.socket, num_bytes: int) -> Optional[bytes]:
-        """Receive exactly num_bytes."""
-        self._update_client_state(sock, ConnectionState.RECEIVING)
-        data = b""
-        while len(data) < num_bytes:
-            try:
-                chunk = sock.recv(num_bytes - len(data))
-                if not chunk:
-                    return None
-                data += chunk
-                self._record_bytes_received(sock, len(chunk))
-            except Exception:
-                return None
-        return data
-
-    def _read_int(self, sock: socket.socket) -> Optional[int]:
-        """Read a 4-byte integer."""
-        data = self._recv_exactly(sock, 4)
-        if data:
-            return struct.unpack(UnityProtocol.INT_FORMAT, data)[0]
-        return None
+    # Note: _recv_exactly() and _read_int() methods now inherited from TCPServerBase
 
 
 class ImageServer:

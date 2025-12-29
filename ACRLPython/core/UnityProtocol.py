@@ -63,7 +63,13 @@ try:
 except ImportError:
     from .. import LLMConfig as cfg
 
-logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
+# Configure logging
+try:
+    from core.LoggingSetup import setup_logging
+    setup_logging(__name__)
+except ImportError:
+    from .LoggingSetup import setup_logging
+    setup_logging(__name__)
 
 
 class MessageType(IntEnum):

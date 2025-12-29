@@ -9,6 +9,7 @@ import pytest
 import numpy as np
 import os
 import tempfile
+import threading
 from rag.VectorStore import VectorStore
 
 
@@ -225,6 +226,53 @@ class TestVectorStore:
         assert "VectorStore" in repr_str
         assert "operations=1" in repr_str
         assert "dim=2" in repr_str
+
+    def test_thread_safety(self):
+        """Test thread safety with concurrent adds and searches"""
+        store = VectorStore()
+        errors = []
+
+        def add_operations(start_idx, count):
+            """Worker function to add operations"""
+            try:
+                for i in range(count):
+                    op_id = f"op_{start_idx + i:03d}"
+                    embedding = np.random.rand(10)
+                    metadata = {"name": op_id, "category": "test"}
+                    store.add_operation(op_id, embedding, metadata)
+            except Exception as e:
+                errors.append(e)
+
+        def search_operations(count):
+            """Worker function to search operations"""
+            try:
+                for _ in range(count):
+                    query = np.random.rand(10)
+                    store.search(query, top_k=5)
+            except Exception as e:
+                errors.append(e)
+
+        # Create threads for concurrent add and search
+        threads = []
+        for i in range(5):
+            t = threading.Thread(target=add_operations, args=(i * 20, 20))
+            threads.append(t)
+        for i in range(3):
+            t = threading.Thread(target=search_operations, args=(10,))
+            threads.append(t)
+
+        # Start all threads
+        for t in threads:
+            t.start()
+
+        # Wait for all threads to complete
+        for t in threads:
+            t.join()
+
+        # Check no errors occurred
+        assert len(errors) == 0, f"Thread safety errors: {errors}"
+        # Verify all operations were added
+        assert len(store) == 100  # 5 threads * 20 operations each
 
 
 if __name__ == "__main__":

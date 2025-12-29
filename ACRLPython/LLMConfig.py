@@ -6,6 +6,7 @@ This module contains all configuration constants and defaults for the
 StreamingServer, ResultsServer, and image analysis systems.
 """
 
+import os
 from pathlib import Path
 
 # Get the directory containing this config file
@@ -75,8 +76,10 @@ DUPLICATE_TIME_THRESHOLD = 0.1  # Time threshold for detecting duplicate sends (
 # ===========================
 
 # LM Studio server configuration
-# LMSTUDIO_BASE_URL = "http://127.0.0.1:1234/v1"  # local
-LMSTUDIO_BASE_URL = "http://192.168.178.53:1234/v1"  # GPU
+# Can be overridden with LMSTUDIO_BASE_URL environment variable
+LMSTUDIO_BASE_URL = os.environ.get(
+    "LMSTUDIO_BASE_URL", "http://192.168.178.53:1234/v1"
+)  # Default: http://127.0.0.1:1234/v1, GPU: http://192.168.178.53:1234/v1
 
 # Default LM Studio model (use model name shown in LM Studio)
 DEFAULT_LMSTUDIO_MODEL = "mistralai/ministral-3-14b-reasoning"
@@ -245,9 +248,7 @@ TRACKING_MAX_AGE = 5  # Max frames a track survives without detection
 TRACKING_MIN_IOU = 0.3  # Minimum IOU for track-detection association
 
 # ===== YOLO Model =====
-YOLO_MODEL_PATH = str(
-    _CONFIG_DIR / "yolo" / "models" / "robot_detector.onnx"
-)  # Path to ONNX detection model for vision streaming
+# YOLO_MODEL_PATH is defined in Object Detection Configuration section (line 146-148)
 YOLO_TASK = "detect"  # YOLO task type: "detect" (bounding boxes) or "segment" (segmentation masks)
 YOLO_SEGMENTATION_MODEL = str(
     _CONFIG_DIR / "yolo" / "models" / "robot_detector_seg.onnx"

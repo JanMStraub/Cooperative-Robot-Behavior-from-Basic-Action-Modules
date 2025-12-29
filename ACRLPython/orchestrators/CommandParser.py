@@ -35,7 +35,8 @@ except ImportError:
     import LLMConfig as cfg
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+from core.LoggingSetup import setup_logging
+setup_logging(__name__)
 logger = logging.getLogger(__name__)
 
 
