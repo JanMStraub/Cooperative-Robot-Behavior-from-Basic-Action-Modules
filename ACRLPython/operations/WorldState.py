@@ -115,6 +115,22 @@ class ObjectState:
     timestamp: float = field(default_factory=time.time)
 
 
+@dataclass
+class WorkspaceAllocation:
+    """
+    Workspace region allocation with timeout tracking.
+
+    Attributes:
+        robot_id: Robot that owns this workspace region
+        region: Workspace region name
+        allocated_at: Time when allocation occurred
+    """
+
+    robot_id: str
+    region: str
+    allocated_at: float = field(default_factory=time.time)
+
+
 # ============================================================================
 # World State Manager (Singleton)
 # ============================================================================
@@ -171,10 +187,11 @@ class WorldState:
             # Object tracking
             self._objects: Dict[str, ObjectState] = {}
 
-            # Workspace allocation
-            self._workspace_allocations: Dict[str, Optional[str]] = {
+            # Workspace allocation with timeout tracking
+            self._workspace_allocations: Dict[str, Optional[WorkspaceAllocation]] = {
                 region: None for region in LLMConfig.WORKSPACE_REGIONS.keys()
             }
+            self._workspace_timeout = 60.0  # Default 60s timeout for workspace allocations
 
             # In-flight command tracking
             self._pending_commands: Dict[int, Dict[str, Any]] = {}
@@ -260,6 +277,38 @@ class WorldState:
 
         # Extract position from status (if available)
         # Note: Actual position extraction depends on Unity response format
+        return status.get("position")
+
+    def get_robot_position_fresh(
+        self, robot_id: str, max_age: float = 1.0
+    ) -> Optional[Tuple[float, float, float]]:
+        """
+        Get robot end effector position with freshness guarantee.
+        Forces refresh if cached data is older than max_age.
+
+        Args:
+            robot_id: Robot identifier
+            max_age: Maximum age in seconds for cached position (default 1s for collision checks)
+
+        Returns:
+            Position tuple (x, y, z) or None if unavailable
+        """
+        with self._lock:
+            # Check if we have a recent robot state with position
+            if robot_id in self._robot_states:
+                robot_state = self._robot_states[robot_id]
+                age = time.time() - robot_state.timestamp
+                if robot_state.position is not None and age < max_age:
+                    logger.debug(f"Using fresh position for {robot_id} (age: {age:.3f}s)")
+                    return robot_state.position
+
+        # Force refresh if cached data is stale
+        logger.debug(f"Forcing position refresh for {robot_id} (max_age: {max_age}s)")
+        status = self.get_robot_status(robot_id, force_refresh=True)
+        if status is None:
+            return None
+
+        # Extract position from status (if available)
         return status.get("position")
 
     def get_robot_target(self, robot_id: str) -> Optional[Tuple[float, float, float]]:
@@ -488,7 +537,7 @@ class WorldState:
 
     def allocate_workspace(self, region: str, robot_id: str) -> bool:
         """
-        Allocate a workspace region to a robot.
+        Allocate a workspace region to a robot with timeout tracking.
 
         Args:
             region: Region name (e.g., "left_workspace")
@@ -502,12 +551,17 @@ class WorldState:
                 logger.warning(f"Unknown workspace region: {region}")
                 return False
 
-            current_owner = self._workspace_allocations[region]
-            if current_owner is not None and current_owner != robot_id:
-                logger.warning(f"Region {region} already allocated to {current_owner}")
+            # Cleanup stale allocations first
+            self._cleanup_stale_allocations()
+
+            current_allocation = self._workspace_allocations[region]
+            if current_allocation is not None and current_allocation.robot_id != robot_id:
+                logger.warning(f"Region {region} already allocated to {current_allocation.robot_id}")
                 return False
 
-            self._workspace_allocations[region] = robot_id
+            self._workspace_allocations[region] = WorkspaceAllocation(
+                robot_id=robot_id, region=region
+            )
             logger.info(f"Allocated {region} to {robot_id}")
             return True
 
@@ -527,8 +581,12 @@ class WorldState:
                 logger.warning(f"Unknown workspace region: {region}")
                 return False
 
-            current_owner = self._workspace_allocations[region]
-            if current_owner != robot_id:
+            current_allocation = self._workspace_allocations[region]
+            if current_allocation is None:
+                logger.warning(f"Region {region} is not allocated")
+                return False
+
+            if current_allocation.robot_id != robot_id:
                 logger.warning(f"Region {region} not allocated to {robot_id}")
                 return False
 
@@ -547,7 +605,40 @@ class WorldState:
             Robot ID or None if not allocated
         """
         with self._lock:
-            return self._workspace_allocations.get(region)
+            allocation = self._workspace_allocations.get(region)
+            return allocation.robot_id if allocation else None
+
+    def _cleanup_stale_allocations(self):
+        """
+        Cleanup stale workspace allocations that have exceeded timeout.
+        Called automatically by allocate_workspace.
+        """
+        now = time.time()
+        stale_regions = []
+
+        for region, allocation in self._workspace_allocations.items():
+            if allocation is not None:
+                age = now - allocation.allocated_at
+                if age > self._workspace_timeout:
+                    stale_regions.append(region)
+                    logger.warning(
+                        f"Auto-releasing stale allocation: {region} from {allocation.robot_id} (age: {age:.1f}s)"
+                    )
+
+        # Release stale allocations
+        for region in stale_regions:
+            self._workspace_allocations[region] = None
+
+    def set_workspace_timeout(self, timeout: float):
+        """
+        Set workspace allocation timeout.
+
+        Args:
+            timeout: Timeout in seconds (default 60s)
+        """
+        with self._lock:
+            self._workspace_timeout = max(1.0, timeout)
+            logger.info(f"Set workspace timeout to {self._workspace_timeout}s")
 
     # ========================================================================
     # Command Tracking
@@ -642,6 +733,7 @@ class WorldState:
             self._workspace_allocations = {
                 region: None for region in LLMConfig.WORKSPACE_REGIONS.keys()
             }
+            self._workspace_timeout = 60.0  # Reset to default
             self._pending_commands.clear()
             logger.info("Reset world state")
 

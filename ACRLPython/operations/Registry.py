@@ -15,6 +15,7 @@ from .Base import BasicOperation, OperationCategory, OperationComplexity
 from .MoveOperations import MOVE_TO_COORDINATE_OPERATION
 from .StatusOperations import CHECK_ROBOT_STATUS_OPERATION
 from .GripperOperations import CONTROL_GRIPPER_OPERATION
+from .GraspOperations import GRASP_OBJECT_OPERATION
 from .DefaultPositionOperation import RETURN_TO_START_POSITION_OPERATION
 from .DetectionOperations import DETECT_OBJECTS_OPERATION
 from .VisionOperations import ANALYZE_SCENE_OPERATION, DETECT_OBJECT_STEREO_OPERATION
@@ -57,6 +58,8 @@ class OperationRegistry:
             DETECT_OBJECTS_OPERATION,
             DETECT_OBJECT_STEREO_OPERATION,
             ANALYZE_SCENE_OPERATION,
+            # Advanced manipulation operations
+            GRASP_OBJECT_OPERATION,
             # Spatial reasoning operations
             MOVE_RELATIVE_TO_OBJECT_OPERATION,
             MOVE_BETWEEN_OBJECTS_OPERATION,

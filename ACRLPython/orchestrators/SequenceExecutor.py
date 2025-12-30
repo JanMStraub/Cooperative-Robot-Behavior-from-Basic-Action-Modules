@@ -164,9 +164,13 @@ class SequenceExecutor:
         move_to_coordinate with position=$target
     """
 
+    # Class-level atomic counter for request IDs (shared across all instances)
+    _request_id_counter = 0
+    _request_id_lock = threading.Lock()
+
     def __init__(
         self,
-        default_timeout: float = 60.0,
+        default_timeout: float = 90.0,  # Increased from 60s for complex movements
         check_completion: bool = True,
         enable_verification: bool = True,
     ):
@@ -174,7 +178,7 @@ class SequenceExecutor:
         Initialize the SequenceExecutor.
 
         Args:
-            default_timeout: Default timeout in seconds for each operation (60s for movements)
+            default_timeout: Default timeout in seconds for each operation (90s for complex movements)
             check_completion: Whether to check for operation completion via StatusServer
             enable_verification: Whether to enable formal verification (preconditions/postconditions)
         """
@@ -206,6 +210,23 @@ class SequenceExecutor:
         """Lazy import of command broadcaster to avoid circular dependency"""
         from servers.CommandServer import get_command_broadcaster
         return get_command_broadcaster()
+
+    @classmethod
+    def _generate_request_id(cls) -> int:
+        """
+        Generate a unique request ID using atomic counter + timestamp hybrid.
+        Prevents collisions in multi-threaded scenarios.
+
+        Returns:
+            Unique request ID (32-bit unsigned integer)
+        """
+        with cls._request_id_lock:
+            cls._request_id_counter += 1
+            # Hybrid approach: timestamp in upper bits, counter in lower bits
+            timestamp_part = (int(time.time() * 1000) & 0xFFFF) << 16
+            counter_part = cls._request_id_counter & 0xFFFF
+            request_id = (timestamp_part | counter_part) % (2**32)
+            return request_id
 
     def execute_sequence(
         self,
@@ -550,8 +571,8 @@ class SequenceExecutor:
         Returns:
             Operation result
         """
-        # Generate request_id for this operation (for completion tracking)
-        request_id = int(time.time() * 1000) % (2**32)
+        # Generate unique request_id using atomic counter + timestamp hybrid
+        request_id = self._generate_request_id()
 
         # If completion checking is enabled, create queue before sending command
         if self.check_completion:
@@ -656,10 +677,13 @@ class SequenceExecutor:
         self, operation: str, request_id: int, timeout: float
     ) -> bool:
         """
-        Wait for an operation to complete.
+        Wait for an operation to complete with adaptive polling.
 
         Waits for a completion signal from Unity via StatusServer.
         Unity sends a "command_completion" message when the operation finishes.
+
+        Implements adaptive polling: starts at 50ms, gradually increases to 500ms
+        to reduce CPU usage for long-running operations.
 
         Args:
             operation: Operation name
@@ -670,7 +694,12 @@ class SequenceExecutor:
             True if completed, False if timed out
         """
         start_time = time.time()
-        poll_interval = 0.1  # Poll every 100ms
+
+        # Adaptive polling parameters
+        min_poll_interval = 0.05  # Start at 50ms
+        max_poll_interval = 0.5   # Max 500ms
+        poll_increase_rate = 1.1  # Increase by 10% each iteration
+        current_poll_interval = min_poll_interval
 
         # Queue was already created in _execute_single_command
 
@@ -681,7 +710,7 @@ class SequenceExecutor:
             try:
                 # Wait for completion signal from Unity
                 response = self._get_command_broadcaster().get_completion(
-                    request_id, timeout=poll_interval
+                    request_id, timeout=current_poll_interval
                 )
 
                 if response:
@@ -690,8 +719,9 @@ class SequenceExecutor:
                     if response_type == "command_completion":
                         success = response.get("success", False)
                         completed_cmd = response.get("command_type", "")
+                        elapsed = time.time() - start_time
                         logger.debug(
-                            f"Received completion for {completed_cmd}: {success}"
+                            f"Received completion for {completed_cmd}: {success} (elapsed: {elapsed:.2f}s)"
                         )
                         return success
 
@@ -703,7 +733,11 @@ class SequenceExecutor:
             except Exception as e:
                 logger.debug(f"Completion wait error: {e}")
 
-            time.sleep(poll_interval)
+            # Adaptive polling: gradually increase poll interval
+            time.sleep(current_poll_interval)
+            current_poll_interval = min(
+                current_poll_interval * poll_increase_rate, max_poll_interval
+            )
 
         logger.warning(f"Operation {operation} timed out after {timeout}s")
         return False
@@ -946,10 +980,24 @@ class SequenceExecutor:
             # Try to get value from captured variables
             source_var_name = f"{flow.source_operation}_{flow.source_output_key}"
             if source_var_name in self._variables:
-                enhanced_params[target_param] = self._variables[source_var_name]
-                logger.info(
-                    f"Auto-injected {target_param}={self._variables[source_var_name]} from ${source_var_name}"
-                )
+                var_value = self._variables[source_var_name]
+
+                # Special handling for object_id parameter with detection result
+                if target_param == "object_id" and isinstance(var_value, dict):
+                    # Extract object identifier from detection result
+                    # Detection results have 'color' field (e.g., "blue_cube")
+                    if "color" in var_value:
+                        enhanced_params[target_param] = var_value["color"]
+                        logger.info(
+                            f"Auto-injected {target_param}='{var_value['color']}' (extracted from detection result ${source_var_name})"
+                        )
+                    else:
+                        logger.warning(f"Detection result missing 'color' field, cannot auto-inject {target_param}")
+                else:
+                    enhanced_params[target_param] = var_value
+                    logger.info(
+                        f"Auto-injected {target_param}={var_value} from ${source_var_name}"
+                    )
             else:
                 logger.debug(
                     f"No captured value for {source_var_name}, cannot auto-inject {target_param}"
@@ -1005,6 +1053,16 @@ class SequenceExecutor:
                             resolved["x"] = var_value.get("x", 0.0)
                             resolved["y"] = var_value.get("y", 0.0)
                             resolved["z"] = var_value.get("z", 0.0)
+                        # Special handling for object_id parameter with detection result
+                        elif key == "object_id" and isinstance(var_value, dict):
+                            # Extract object identifier from detection result
+                            # Detection results have 'color' field (e.g., "blue_cube")
+                            if "color" in var_value:
+                                resolved[key] = var_value["color"]
+                                logger.info(f"Extracted object_id='{var_value['color']}' from detection result")
+                            else:
+                                logger.warning(f"Detection result missing 'color' field, cannot extract object_id")
+                                resolved[key] = value
                         else:
                             resolved[key] = var_value
                     else:

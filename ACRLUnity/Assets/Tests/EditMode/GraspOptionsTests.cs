@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using Robotics;
+using Robotics.Grasp;
 
 namespace Tests.EditMode
 {

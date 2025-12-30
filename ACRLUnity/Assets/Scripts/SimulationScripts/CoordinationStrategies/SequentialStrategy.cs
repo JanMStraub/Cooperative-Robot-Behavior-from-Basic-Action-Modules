@@ -13,21 +13,34 @@ namespace Simulation.CoordinationStrategies
     {
         private int _activeRobotIndex;
         private RobotController[] _robotControllers;
+        private float _robotActivationTime;
+        private float _robotTimeout;
 
         // Helper variables
         private const string _logPrefix = "[SEQUENTIAL_STRATEGY]";
+        private const float DEFAULT_ROBOT_TIMEOUT = 30f; // Default timeout in seconds
 
         /// <summary>
         /// Constructor for SequentialStrategy
         /// </summary>
-        public SequentialStrategy()
+        public SequentialStrategy() : this(DEFAULT_ROBOT_TIMEOUT)
+        {
+        }
+
+        /// <summary>
+        /// Constructor for SequentialStrategy with custom timeout
+        /// </summary>
+        /// <param name="robotTimeout">Timeout in seconds before switching to next robot</param>
+        public SequentialStrategy(float robotTimeout)
         {
             _activeRobotIndex = 0;
+            _robotTimeout = robotTimeout;
+            _robotActivationTime = Time.time;
         }
 
         /// <summary>
         /// Updates the sequential coordination logic.
-        /// Switches to the next robot when the current robot reaches its target.
+        /// Switches to the next robot when the current robot reaches its target or timeout occurs.
         /// </summary>
         public void Update(
             RobotController[] robotControllers,
@@ -47,14 +60,28 @@ namespace Simulation.CoordinationStrategies
             if (currentRobot == null)
                 return;
 
-            string currentRobotId = currentRobot.gameObject.name;
+            string currentRobotId = currentRobot.robotId;
 
-            // Check if current robot has reached its target
-            if (robotTargetReached.GetValueOrDefault(currentRobotId, true))
+            // Check timeout
+            float timeSinceActivation = Time.time - _robotActivationTime;
+            bool hasTimedOut = timeSinceActivation > _robotTimeout;
+
+            // Check if current robot has reached its target (missing entries default to false)
+            bool hasReachedTarget = robotTargetReached.GetValueOrDefault(currentRobotId, false);
+
+            if (hasReachedTarget || hasTimedOut)
             {
+                if (hasTimedOut)
+                {
+                    Debug.LogWarning(
+                        $"{_logPrefix} Robot {currentRobotId} timed out after {timeSinceActivation:F1}s (timeout: {_robotTimeout}s). Switching to next robot."
+                    );
+                }
+
                 // Switch to next robot
                 int previousIndex = _activeRobotIndex;
                 _activeRobotIndex = (_activeRobotIndex + 1) % robotControllers.Length;
+                _robotActivationTime = Time.time; // Reset activation time for new robot
 
                 Debug.Log(
                     $"{_logPrefix} Robot switch: {currentRobotId} (index {previousIndex}) -> {GetActiveRobotId()} (index {_activeRobotIndex})"
@@ -71,7 +98,7 @@ namespace Simulation.CoordinationStrategies
                 return false;
 
             var activeRobot = _robotControllers[_activeRobotIndex];
-            return activeRobot != null && activeRobot.gameObject.name == robotId;
+            return activeRobot != null && activeRobot.robotId == robotId;
         }
 
         /// <summary>
@@ -83,7 +110,7 @@ namespace Simulation.CoordinationStrategies
                 return "None";
 
             var activeRobot = _robotControllers[_activeRobotIndex];
-            return activeRobot != null ? activeRobot.gameObject.name : "None";
+            return activeRobot != null ? activeRobot.robotId : "None";
         }
 
         /// <summary>
@@ -92,6 +119,7 @@ namespace Simulation.CoordinationStrategies
         public void Reset()
         {
             _activeRobotIndex = 0;
+            _robotActivationTime = Time.time;
             Debug.Log($"{_logPrefix} Reset to robot 0");
         }
     }

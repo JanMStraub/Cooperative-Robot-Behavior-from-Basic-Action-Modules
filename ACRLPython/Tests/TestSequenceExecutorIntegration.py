@@ -18,7 +18,7 @@ class TestSequenceExecutorVerification:
     """Test SequenceExecutor with verification enabled"""
 
     @patch('operations.Registry.get_global_registry')
-    @patch('operations.Verification.OperationVerifier')
+    @patch('orchestrators.SequenceExecutor.OperationVerifier')
     def test_verification_enabled_blocks_bad_operation(self, mock_verifier_class, mock_registry, cleanup_world_state):
         """Test verification blocks operation with failed preconditions"""
         # Setup mock operation
@@ -101,7 +101,7 @@ class TestSequenceExecutorVerification:
         mock_registry.return_value.execute_operation_by_name.assert_called_once()
 
     @patch('operations.Registry.get_global_registry')
-    @patch('operations.Verification.OperationVerifier')
+    @patch('orchestrators.SequenceExecutor.OperationVerifier')
     def test_precondition_fails_blocks_execution(self, mock_verifier_class, mock_registry, cleanup_world_state):
         """Test precondition failure blocks execution"""
         mock_op = Mock(spec=BasicOperation)

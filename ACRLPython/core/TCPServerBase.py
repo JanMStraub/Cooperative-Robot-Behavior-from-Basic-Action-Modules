@@ -305,6 +305,28 @@ class TCPServerBase(ABC):
         # Unknown error - treat as potentially fatal
         return True, f"Unknown error: {type(error).__name__}"
 
+    def send_to_client(self, client: socket.socket, data: bytes) -> bool:
+        """
+        Send data to a specific client.
+
+        Args:
+            client: Client socket
+            data: Bytes to send
+
+        Returns:
+            True if sent successfully, False otherwise
+        """
+        try:
+            client.sendall(data)
+            self._record_bytes_sent(client, len(data))
+            return True
+        except Exception as e:
+            self._logger.warning(f"Failed to send to client: {e}")
+            self._record_client_error(client)
+            with self._clients_lock:
+                self._remove_client(client)
+            return False
+
     def broadcast_to_all_clients(self, data: bytes) -> int:
         """
         Send data to all connected clients.
@@ -327,6 +349,7 @@ class TCPServerBase(ABC):
         for client in clients_snapshot:
             try:
                 client.sendall(data)
+                self._record_bytes_sent(client, len(data))
                 success_count += 1
             except Exception as e:
                 self._logger.warning(f"Failed to send to client: {e}")
