@@ -52,6 +52,12 @@ namespace Simulation.CoordinationStrategies
             List<Vector3> obstacles
         )
         {
+            // Check if start equals target - no waypoints needed
+            if (Vector3.Distance(current, target) < 0.001f)
+            {
+                return null;
+            }
+
             if (obstacles == null || obstacles.Count == 0)
             {
                 return new List<Vector3> { target };
@@ -90,20 +96,49 @@ namespace Simulation.CoordinationStrategies
 
         /// <summary>
         /// Check if replanning is required for a robot's movement.
+        /// Assumes robot starts at origin (0,0,0) if current position not available.
         /// </summary>
         public bool RequiresReplanning(string robotId, Vector3 target, RobotController[] otherRobots)
         {
             if (otherRobots == null || otherRobots.Length == 0)
                 return false;
 
-            // Check if target is too close to any other robot's current or target position
+            // Assume current position is origin if not specified
+            Vector3 currentPosition = Vector3.zero;
+
+            // Try to find the robot in the array to get its actual position
+            foreach (var robot in otherRobots)
+            {
+                if (robot != null && robot.robotId == robotId)
+                {
+                    currentPosition = robot.GetCurrentEndEffectorPosition();
+                    break;
+                }
+            }
+
+            // Check if path is blocked by any other robot
             foreach (var otherRobot in otherRobots)
             {
-                if (otherRobot.robotId == robotId)
+                if (otherRobot == null || otherRobot.robotId == robotId)
                     continue;
 
-                // Check distance to other robot's current position
+                // Check if other robot's position blocks the path
+                // Fall back to GameObject position if end effector position is at origin
                 Vector3 otherPos = otherRobot.GetCurrentEndEffectorPosition();
+                if (otherPos == Vector3.zero)
+                {
+                    otherPos = otherRobot.transform.position;
+                }
+
+                float distanceToPath = DistanceToSegment(otherPos, currentPosition, target);
+
+                if (distanceToPath < _minSafeSeparation)
+                {
+                    Debug.Log($"{LOG_PREFIX} {robotId} path blocked by {otherRobot.robotId} (distance: {distanceToPath:F3}m)");
+                    return true;
+                }
+
+                // Check distance to target position
                 if (Vector3.Distance(target, otherPos) < _minSafeSeparation)
                 {
                     Debug.Log($"{LOG_PREFIX} {robotId} target conflicts with {otherRobot.robotId} position");
@@ -128,17 +163,21 @@ namespace Simulation.CoordinationStrategies
 
         /// <summary>
         /// Try vertical offset strategy: lift up, move over, descend.
+        /// Uses max of verticalOffset and minSafeSeparation to ensure clearance.
         /// </summary>
         private List<Vector3> TryVerticalOffset(Vector3 current, Vector3 target, List<Vector3> obstacles)
         {
             var path = new List<Vector3>();
 
+            // Use larger of verticalOffset and minSafeSeparation to ensure safe clearance
+            float safeVerticalOffset = Mathf.Max(_verticalOffset, _minSafeSeparation * 1.1f);
+
             // Waypoint 1: Lift up
-            Vector3 liftPoint = current + Vector3.up * _verticalOffset;
+            Vector3 liftPoint = current + Vector3.up * safeVerticalOffset;
             path.Add(liftPoint);
 
             // Waypoint 2: Move over (at elevated height)
-            Vector3 overPoint = target + Vector3.up * _verticalOffset;
+            Vector3 overPoint = target + Vector3.up * safeVerticalOffset;
             path.Add(overPoint);
 
             // Waypoint 3: Descend to target

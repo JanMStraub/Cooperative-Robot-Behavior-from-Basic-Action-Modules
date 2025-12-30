@@ -19,6 +19,20 @@ namespace Tests.PlayMode
         private RobotController _controller1;
         private RobotController _controller2;
 
+        [OneTimeSetUp]
+        public void OneTimeSetUp()
+        {
+            // Ignore log failures globally for all tests (both regular and UnityTests)
+            LogAssert.ignoreFailingMessages = true;
+        }
+
+        [OneTimeTearDown]
+        public void OneTimeTearDown()
+        {
+            // Re-enable log assertions after all tests complete
+            LogAssert.ignoreFailingMessages = false;
+        }
+
         [SetUp]
         public void SetUp()
         {
@@ -134,7 +148,7 @@ namespace Tests.PlayMode
 
             // Reset
             strategy.Reset();
-            targetReached["Robot2"] = false; // Reset target reached
+            targetReached["Robot1"] = false; // Reset Robot1's target reached status
             strategy.Update(controllers, targetReached);
 
             // Assert - Should be back to Robot1

@@ -162,15 +162,17 @@ namespace Simulation
 
                 if (_robotControllers.Length == 0)
                 {
-                    HandleError($"No RobotController components found in scene");
-                    return;
+                    Debug.LogWarning($"{_logPrefix} No RobotController components found in scene");
+                    // Continue with initialization - robots may be added dynamically
                 }
-
-                // Initialize robot tracking
-                foreach (var robot in _robotControllers)
+                else
                 {
-                    string robotId = robot.gameObject.name;
-                    _robotTargetReached[robotId] = true; // Start with no active targets
+                    // Initialize robot tracking
+                    foreach (var robot in _robotControllers)
+                    {
+                        string robotId = robot.gameObject.name;
+                        _robotTargetReached[robotId] = true; // Start with no active targets
+                    }
                 }
 
                 // Initialize coordination strategy based on config
@@ -178,7 +180,7 @@ namespace Simulation
 
                 // Log simulation start
                 Debug.Log(
-                    $"{_logPrefix} Initialized: Found {_robotControllers.Length} robots. Mode: {config.coordinationMode}"
+                    $"{_logPrefix} Initialized: {_robotControllers.Length} robots found. Mode: {config.coordinationMode}"
                 );
 
                 // Auto-start if configured

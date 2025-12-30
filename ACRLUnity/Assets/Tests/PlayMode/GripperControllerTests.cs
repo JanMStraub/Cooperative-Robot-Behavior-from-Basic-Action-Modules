@@ -24,6 +24,10 @@ namespace Tests.PlayMode
         {
             // Create gripper controller GameObject
             _gripperObject = new GameObject("TestGripperController");
+
+            // Expect error from GripperController.Awake before references are assigned
+            LogAssert.Expect(LogType.Error, "[GRIPPER_CONTROLLER] Gripper references not assigned!");
+
             _gripperController = _gripperObject.AddComponent<GripperController>();
 
             // Create left gripper ArticulationBody

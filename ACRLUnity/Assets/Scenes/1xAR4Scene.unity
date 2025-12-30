@@ -996,8 +996,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp-ACRL::PythonCommunication.SequenceClient
   _autoConnect: 1
   _autoReconnect: 1
-  _prompt: Grab the right blue cube and move to position (0,0.3,0) and open the gripper
-  _defaultRobotId: Robot2
+  _prompt: Grab the left blue cube and move to position (0,0.3,0) and open the gripper
+  _defaultRobotId: Robot1
   _cameraId: TableStereoCamera
   _logCommands: 1
   _autoExecuteResult: 1

@@ -153,20 +153,8 @@ namespace Tests.PlayMode
 
             Assert.IsNotNull(waypoints);
 
-            // If using lateral strategy, waypoints should have Z offset (perpendicular to X movement)
-            if (waypoints.Count > 0)
-            {
-                bool hasLateralOffset = false;
-                foreach (var wp in waypoints)
-                {
-                    if (Mathf.Abs(wp.z) > EPSILON)
-                    {
-                        hasLateralOffset = true;
-                        break;
-                    }
-                }
-                // Note: May still use vertical if it works, so this is informational
-            }
+            // Note: Planner may use vertical or lateral strategy depending on obstacle configuration
+            // Both are valid solutions, so we just verify a path was found
         }
 
         #endregion

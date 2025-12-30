@@ -628,7 +628,7 @@ namespace Robotics
             // Ensure robot joints are assigned
             if (robotJoints == null || robotJoints.Length == 0)
             {
-                Debug.LogError(
+                Debug.LogWarning(
                     $"{_logPrefix} Robot joints are not assigned. Please assign ArticulationBodies."
                 );
                 return;

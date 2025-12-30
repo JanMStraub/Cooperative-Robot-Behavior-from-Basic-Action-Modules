@@ -302,5 +302,229 @@ namespace Tests.PlayMode
             Assert.AreNotEqual(firstRetrievedTarget, secondRetrievedTarget,
                 "Targets should be different");
         }
+
+        #region Grasp Planning Tests (December 2025)
+
+        [UnityTest]
+        public IEnumerator SetTarget_WithTopApproach_UsesTopGraspDirection()
+        {
+            // Arrange
+            var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            targetObject.transform.position = new Vector3(0.5f, 0.3f, 0.5f);
+
+            var topApproachOptions = new GraspOptions
+            {
+                useGraspPlanning = true,
+                approach = Robotics.Grasp.GraspApproach.Top,
+                openGripperOnSet = false,
+                closeGripperOnReach = false
+            };
+
+            // Act
+            _robotController.SetTarget(targetObject, topApproachOptions);
+            yield return null;
+
+            // Assert
+            Assert.IsTrue(_robotController.HasTarget, "Should have target with top approach");
+
+            // Cleanup
+            Object.Destroy(targetObject);
+        }
+
+        [UnityTest]
+        public IEnumerator SetTarget_WithFrontApproach_UsesFrontGraspDirection()
+        {
+            // Arrange
+            var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            targetObject.transform.position = new Vector3(0.5f, 0.3f, 0.5f);
+
+            var frontApproachOptions = new GraspOptions
+            {
+                useGraspPlanning = true,
+                approach = Robotics.Grasp.GraspApproach.Front,
+                openGripperOnSet = false,
+                closeGripperOnReach = false
+            };
+
+            // Act
+            _robotController.SetTarget(targetObject, frontApproachOptions);
+            yield return null;
+
+            // Assert
+            Assert.IsTrue(_robotController.HasTarget, "Should have target with front approach");
+
+            // Cleanup
+            Object.Destroy(targetObject);
+        }
+
+        [UnityTest]
+        public IEnumerator SetTarget_WithSideApproach_UsesSideGraspDirection()
+        {
+            // Arrange
+            var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            targetObject.transform.position = new Vector3(0.5f, 0.3f, 0.5f);
+
+            var sideApproachOptions = new GraspOptions
+            {
+                useGraspPlanning = true,
+                approach = Robotics.Grasp.GraspApproach.Side,
+                openGripperOnSet = false,
+                closeGripperOnReach = false
+            };
+
+            // Act
+            _robotController.SetTarget(targetObject, sideApproachOptions);
+            yield return null;
+
+            // Assert
+            Assert.IsTrue(_robotController.HasTarget, "Should have target with side approach");
+
+            // Cleanup
+            Object.Destroy(targetObject);
+        }
+
+        [UnityTest]
+        public IEnumerator SetTarget_WithGraspPlanning_EnablesWaypointSequence()
+        {
+            // Arrange
+            var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            targetObject.transform.position = new Vector3(0.5f, 0.3f, 0.5f);
+
+            var graspOptions = new GraspOptions
+            {
+                useGraspPlanning = true,
+                approach = Robotics.Grasp.GraspApproach.Top,
+                openGripperOnSet = false,
+                closeGripperOnReach = false
+            };
+
+            // Act
+            _robotController.SetTarget(targetObject, graspOptions);
+            yield return null;
+
+            // Assert - target should be set (waypoint planning happens internally)
+            Assert.IsTrue(_robotController.HasTarget,
+                "Target should be set with grasp planning enabled");
+
+            // Cleanup
+            Object.Destroy(targetObject);
+        }
+
+        [UnityTest]
+        public IEnumerator SetTarget_WithNullApproach_UsesDefaultBehavior()
+        {
+            // Arrange
+            var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            targetObject.transform.position = new Vector3(0.5f, 0.3f, 0.5f);
+
+            var nullApproachOptions = new GraspOptions
+            {
+                useGraspPlanning = true,
+                approach = null, // No specific approach
+                openGripperOnSet = false,
+                closeGripperOnReach = false
+            };
+
+            // Act
+            _robotController.SetTarget(targetObject, nullApproachOptions);
+            yield return null;
+
+            // Assert - should still work with default behavior
+            Assert.IsTrue(_robotController.HasTarget,
+                "Target should be set even with null approach");
+
+            // Cleanup
+            Object.Destroy(targetObject);
+        }
+
+        [UnityTest]
+        public IEnumerator GripperAutoDiscovery_FindsGripperController()
+        {
+            // Arrange - Add a GripperController as a child
+            var gripperObject = new GameObject("Gripper");
+            gripperObject.transform.SetParent(_testRobotObject.transform);
+            var gripperController = gripperObject.AddComponent<GripperController>();
+
+            // Expect error from GripperController.Awake due to missing ArticulationBody references
+            LogAssert.Expect(LogType.Error, "[GRIPPER_CONTROLLER] Gripper references not assigned!");
+
+            // Act - Create a new RobotController to trigger Start() and auto-discovery
+            var newRobotObject = new GameObject("NewTestRobot");
+            var newRobotController = newRobotObject.AddComponent<RobotController>();
+            newRobotController.robotId = "NewTestRobot";
+            newRobotController.endEffectorBase = _endEffectorObject.transform;
+            newRobotController.robotJoints = _robotController.robotJoints;
+
+            // Move gripper to new robot
+            gripperObject.transform.SetParent(newRobotObject.transform);
+
+            yield return null; // Wait for Start() to execute
+
+            // Assert - GripperController should be found
+            // Note: We can't directly access the private field, but we can verify
+            // that no warning is logged about missing gripper
+
+            // Cleanup
+            Object.Destroy(newRobotObject);
+            Object.Destroy(gripperObject);
+        }
+
+        [UnityTest]
+        public IEnumerator SetTarget_DifferentApproaches_AllSucceed()
+        {
+            // Test that all approach types can be set without errors
+            var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            targetObject.transform.position = new Vector3(0.5f, 0.3f, 0.5f);
+
+            var approaches = new Robotics.Grasp.GraspApproach?[]
+            {
+                Robotics.Grasp.GraspApproach.Top,
+                Robotics.Grasp.GraspApproach.Front,
+                Robotics.Grasp.GraspApproach.Side,
+                null
+            };
+
+            foreach (var approach in approaches)
+            {
+                var options = new GraspOptions
+                {
+                    useGraspPlanning = true,
+                    approach = approach,
+                    openGripperOnSet = false,
+                    closeGripperOnReach = false
+                };
+
+                _robotController.SetTarget(targetObject, options);
+                yield return null;
+
+                Assert.IsTrue(_robotController.HasTarget,
+                    $"Target should be set with approach: {approach?.ToString() ?? "null"}");
+            }
+
+            // Cleanup
+            Object.Destroy(targetObject);
+        }
+
+        [UnityTest]
+        public IEnumerator SetTarget_WithCoordinates_UsesObjectFinder()
+        {
+            // Arrange - Set target using coordinates (should trigger ObjectFinder)
+            Vector3 targetPosition = new Vector3(0.5f, 0.3f, 0.5f);
+
+            // Act
+            _robotController.SetTarget(targetPosition, GraspOptions.MoveOnly);
+            yield return null;
+
+            // Assert
+            Assert.IsTrue(_robotController.HasTarget,
+                "Target should be set from coordinates");
+
+            var currentTarget = _robotController.GetCurrentTarget();
+            Assert.IsNotNull(currentTarget, "Current target should not be null");
+            Assert.AreEqual(targetPosition, currentTarget.Value,
+                "Target position should match input coordinates");
+        }
+
+        #endregion
     }
 }
