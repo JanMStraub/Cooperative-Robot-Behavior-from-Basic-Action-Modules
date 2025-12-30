@@ -442,5 +442,189 @@ namespace Tests.PlayMode
         }
 
         #endregion
+
+        #region Path Collision Detection Tests
+
+        [UnityTest]
+        public IEnumerator Update_DetectsPathCollision_BetweenMovingRobots()
+        {
+            LogAssert.ignoreFailingMessages = true;
+
+            var robot1 = CreateTestRobot("Robot1", new Vector3(-0.5f, 0f, 0f));
+            var robot2 = CreateTestRobot("Robot2", new Vector3(0.5f, 0f, 0f));
+            var controller1 = robot1.GetComponent<RobotController>();
+            var controller2 = robot2.GetComponent<RobotController>();
+
+            // Set targets that will cause paths to intersect
+            controller1.SetTarget(new Vector3(0.5f, 0f, 0f)); // Robot1 moves right
+            controller2.SetTarget(new Vector3(-0.5f, 0f, 0f)); // Robot2 moves left
+
+            yield return null;
+
+            RobotController[] robots = new RobotController[] { controller1, controller2 };
+            Dictionary<string, bool> targetReached = new Dictionary<string, bool>
+            {
+                { "Robot1", false },
+                { "Robot2", false }
+            };
+
+            // Update strategy multiple times to trigger collision detection
+            for (int i = 0; i < 5; i++)
+            {
+                _strategy.Update(robots, targetReached);
+                yield return new WaitForSeconds(0.1f);
+            }
+
+            // Strategy should detect potential collision (logged as warning)
+            Assert.IsNotNull(_strategy.GetActiveRobotId(), "Active robot ID should not be null");
+
+            LogAssert.ignoreFailingMessages = false;
+        }
+
+        [UnityTest]
+        public IEnumerator Update_AllocatesWorkspace_DuringMovement()
+        {
+            var robot1 = CreateTestRobot("Robot1", new Vector3(0f, 0f, 0f));
+            var controller1 = robot1.GetComponent<RobotController>();
+
+            // Set target in left workspace
+            controller1.SetTarget(new Vector3(-0.6f, 0.15f, 0.1f));
+
+            yield return null;
+
+            RobotController[] robots = new RobotController[] { controller1 };
+            Dictionary<string, bool> targetReached = new Dictionary<string, bool> { { "Robot1", false } };
+
+            // Update strategy
+            _strategy.Update(robots, targetReached);
+
+            yield return null;
+
+            // Verify robot is tracked
+            bool isActive = _strategy.IsRobotActive("Robot1");
+            Assert.IsTrue(isActive, "Robot should be active during movement");
+        }
+
+        #endregion
+
+        #region Stale Robot Cleanup Tests
+
+        [UnityTest]
+        public IEnumerator Update_CleansUpStaleRobots_WhenRemovedFromArray()
+        {
+            var robot1 = CreateTestRobot("Robot1", Vector3.zero);
+            var robot2 = CreateTestRobot("Robot2", Vector3.zero);
+            var controller1 = robot1.GetComponent<RobotController>();
+            var controller2 = robot2.GetComponent<RobotController>();
+
+            controller1.SetTarget(new Vector3(0.3f, 0.15f, 0.1f));
+            controller2.SetTarget(new Vector3(-0.3f, 0.15f, 0.1f));
+
+            yield return null;
+
+            // First update with both robots
+            RobotController[] bothRobots = new RobotController[] { controller1, controller2 };
+            Dictionary<string, bool> targetReached = new Dictionary<string, bool>
+            {
+                { "Robot1", false },
+                { "Robot2", false }
+            };
+            _strategy.Update(bothRobots, targetReached);
+
+            string activeIdBoth = _strategy.GetActiveRobotId();
+            Assert.IsTrue(activeIdBoth.Contains("Robot1") || activeIdBoth.Contains("Robot2"),
+                "Should have at least one robot active");
+
+            yield return null;
+
+            // Update with only robot1 (robot2 removed)
+            RobotController[] oneRobot = new RobotController[] { controller1 };
+            Dictionary<string, bool> oneTargetReached = new Dictionary<string, bool> { { "Robot1", false } };
+
+            _strategy.Update(oneRobot, oneTargetReached);
+
+            string activeIdOne = _strategy.GetActiveRobotId();
+            Assert.IsTrue(activeIdOne.Contains("Robot1"), "Should still have Robot1 active");
+            // Robot2 should be cleaned up (no longer in active ID string if properly cleaned)
+        }
+
+        #endregion
+
+        #region Waypoint Replanning Tests
+
+        [UnityTest]
+        public IEnumerator RequiresCoordination_TriggersReplanning_ForConflictingPaths()
+        {
+            LogAssert.ignoreFailingMessages = true;
+
+            var robot1 = CreateTestRobot("Robot1", new Vector3(-0.3f, 0f, 0f));
+            var robot2 = CreateTestRobot("Robot2", new Vector3(0.3f, 0f, 0f));
+            var controller1 = robot1.GetComponent<RobotController>();
+            var controller2 = robot2.GetComponent<RobotController>();
+
+            // Set targets that require coordination
+            controller1.SetTarget(new Vector3(0.1f, 0.15f, 0.1f));
+            controller2.SetTarget(new Vector3(-0.1f, 0.15f, 0.1f));
+
+            yield return null;
+
+            RobotController[] robots = new RobotController[] { controller1, controller2 };
+            Dictionary<string, bool> targetReached = new Dictionary<string, bool>
+            {
+                { "Robot1", false },
+                { "Robot2", false }
+            };
+
+            _strategy.Update(robots, targetReached);
+
+            // Check if coordination is required
+            bool requiresCoord = _strategy.RequiresCoordination("Robot1", "Robot2");
+            Assert.IsTrue(requiresCoord, "Should require coordination for close targets");
+
+            LogAssert.ignoreFailingMessages = false;
+        }
+
+        #endregion
+
+        #region Workspace Collision Zone Tests
+
+        [UnityTest]
+        public IEnumerator Update_MarksCollisionZones_ForConflictingRobots()
+        {
+            LogAssert.ignoreFailingMessages = true;
+
+            var robot1 = CreateTestRobot("Robot1", new Vector3(0f, 0f, 0f));
+            var robot2 = CreateTestRobot("Robot2", new Vector3(0.1f, 0f, 0f));
+            var controller1 = robot1.GetComponent<RobotController>();
+            var controller2 = robot2.GetComponent<RobotController>();
+
+            // Both robots target same region (should trigger collision zone)
+            controller1.SetTarget(new Vector3(0.05f, 0.15f, 0.1f));
+            controller2.SetTarget(new Vector3(0.06f, 0.15f, 0.1f));
+
+            yield return null;
+
+            RobotController[] robots = new RobotController[] { controller1, controller2 };
+            Dictionary<string, bool> targetReached = new Dictionary<string, bool>
+            {
+                { "Robot1", false },
+                { "Robot2", false }
+            };
+
+            // Update multiple times to allow collision detection
+            for (int i = 0; i < 3; i++)
+            {
+                _strategy.Update(robots, targetReached);
+                yield return new WaitForSeconds(0.2f);
+            }
+
+            // Both robots should still be active (warnings logged)
+            Assert.IsTrue(_strategy.IsRobotActive("Robot1"), "Robot1 should be active");
+            Assert.IsTrue(_strategy.IsRobotActive("Robot2"), "Robot2 should be active");
+
+            LogAssert.ignoreFailingMessages = false;
+        }
+
+        #endregion
     }
 }

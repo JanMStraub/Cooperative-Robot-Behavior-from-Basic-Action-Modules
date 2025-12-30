@@ -17,6 +17,10 @@ namespace Robotics.Grasp
         private readonly Transform _ikReferenceFrame;
         private readonly Transform _endEffector;
 
+        // Cache for original joint states during validation
+        private float[] _cachedJointStates;
+        private float[] _cachedDriveTargets;
+
         /// <summary>
         /// Initialize IK filter with robot configuration.
         /// </summary>
@@ -33,11 +37,25 @@ namespace Robotics.Grasp
             float dampingFactor = 0.1f
         )
         {
+            // Validate parameters
+            if (config == null)
+                throw new System.ArgumentNullException(nameof(config));
+            if (joints == null)
+                throw new System.ArgumentNullException(nameof(joints));
+            if (ikReferenceFrame == null)
+                throw new System.ArgumentNullException(nameof(ikReferenceFrame));
+            if (endEffector == null)
+                throw new System.ArgumentNullException(nameof(endEffector));
+
             _config = config;
             _joints = joints;
             _ikReferenceFrame = ikReferenceFrame;
             _endEffector = endEffector;
             _ikSolver = new IKSolver(joints.Length, dampingFactor);
+
+            // Pre-allocate cache for joint states
+            _cachedJointStates = new float[joints.Length];
+            _cachedDriveTargets = new float[joints.Length];
         }
 
         /// <summary>
@@ -105,37 +123,48 @@ namespace Robotics.Grasp
         /// <returns>Candidate with IK validation flags and score</returns>
         private GraspCandidate ValidateWithIK(GraspCandidate candidate)
         {
-            // Try to solve IK for pre-grasp position
-            var preGraspResult = AttemptIK(candidate.preGraspPosition, candidate.preGraspRotation);
+            // Cache original joint states before any IK attempts
+            CacheJointStates();
 
-            // If pre-grasp fails, candidate is invalid
-            if (!preGraspResult.success)
+            try
             {
-                candidate.ikValidated = false;
-                candidate.ikScore = 0f;
+                // Try to solve IK for pre-grasp position
+                var preGraspResult = AttemptIK(candidate.preGraspPosition, candidate.preGraspRotation);
+
+                // If pre-grasp fails, candidate is invalid
+                if (!preGraspResult.success)
+                {
+                    candidate.ikValidated = false;
+                    candidate.ikScore = 0f;
+                    return candidate;
+                }
+
+                // Try to solve IK for final grasp position
+                var graspResult = AttemptIK(candidate.graspPosition, candidate.graspRotation);
+
+                // If grasp position fails, candidate is invalid
+                if (!graspResult.success)
+                {
+                    candidate.ikValidated = false;
+                    candidate.ikScore = 0f;
+                    return candidate;
+                }
+
+                // Both positions reachable - compute quality score
+                candidate.ikValidated = true;
+                candidate.ikScore = ComputeIKQualityScore(preGraspResult, graspResult);
+
                 return candidate;
             }
-
-            // Try to solve IK for final grasp position
-            var graspResult = AttemptIK(candidate.graspPosition, candidate.graspRotation);
-
-            // If grasp position fails, candidate is invalid
-            if (!graspResult.success)
+            finally
             {
-                candidate.ikValidated = false;
-                candidate.ikScore = 0f;
-                return candidate;
+                // Always restore joint states, even if validation throws exception
+                RestoreJointStates();
             }
-
-            // Both positions reachable - compute quality score
-            candidate.ikValidated = true;
-            candidate.ikScore = ComputeIKQualityScore(preGraspResult, graspResult);
-
-            return candidate;
         }
 
         /// <summary>
-        /// Attempt to solve IK for a target pose.
+        /// Attempt to solve IK for a target pose using proper forward kinematics.
         /// </summary>
         /// <param name="targetPosition">Target position (world space)</param>
         /// <param name="targetRotation">Target rotation (world space)</param>
@@ -146,22 +175,13 @@ namespace Robotics.Grasp
             Vector3 targetLocal = _ikReferenceFrame.InverseTransformPoint(targetPosition);
             Quaternion targetRotLocal = Quaternion.Inverse(_ikReferenceFrame.rotation) * targetRotation;
 
-            // Get current state
-            Vector3 currentLocal = _ikReferenceFrame.InverseTransformPoint(_endEffector.position);
-            Quaternion currentRotLocal = Quaternion.Inverse(_ikReferenceFrame.rotation) * _endEffector.rotation;
-
-            IKState currentState = new IKState(currentLocal, currentRotLocal);
             IKState targetState = new IKState(targetLocal, targetRotLocal);
 
-            // Build joint info array
+            // Build joint info array (this contains static joint structure)
             JointInfo[] jointInfos = BuildJointInfoArray();
 
-            // Iterative IK solving
-            int iterations = 0;
-            float finalError = float.MaxValue;
-            float[] tempJointAngles = new float[_joints.Length];
-
             // Initialize with current joint angles
+            float[] tempJointAngles = new float[_joints.Length];
             for (int i = 0; i < _joints.Length; i++)
             {
                 // Check if joint has degrees of freedom before accessing
@@ -175,9 +195,24 @@ namespace Robotics.Grasp
                 }
             }
 
+            // Iterative IK solving with proper FK
+            int iterations = 0;
+            float finalError = float.MaxValue;
+
             while (iterations < _config.maxIKValidationIterations)
             {
-                // Compute joint deltas
+                // Compute current end-effector state using forward kinematics
+                IKState currentState = ComputeForwardKinematics(tempJointAngles, jointInfos);
+
+                // Check convergence
+                finalError = Vector3.Distance(currentState.Position, targetState.Position);
+                if (finalError < _config.ikValidationThreshold)
+                {
+                    // Converged successfully
+                    break;
+                }
+
+                // Compute joint deltas using IK solver
                 Vector<double> deltas = _ikSolver.ComputeJointDeltas(
                     currentState,
                     targetState,
@@ -185,34 +220,21 @@ namespace Robotics.Grasp
                     _config.ikValidationThreshold
                 );
 
-                // Check convergence
+                // If deltas is null, solver thinks we're converged (but we checked above)
                 if (deltas == null)
                 {
-                    // Converged
-                    finalError = Vector3.Distance(currentState.Position, targetState.Position);
                     break;
                 }
 
-                // Apply deltas (simulated - not actually moving robot)
+                // Apply deltas to joint angles
                 for (int i = 0; i < _joints.Length; i++)
                 {
                     tempJointAngles[i] += (float)deltas[i];
+
+                    // Clamp to reasonable joint limits to prevent unrealistic solutions
+                    tempJointAngles[i] = Mathf.Clamp(tempJointAngles[i], -Mathf.PI, Mathf.PI);
                 }
 
-                // Update current state (forward kinematics simulation would go here)
-                // For now, approximate by moving toward target
-                Vector3 direction = targetState.Position - currentState.Position;
-                float stepSize = Mathf.Min((float)deltas.L2Norm() * 0.1f, direction.magnitude);
-                currentState.Position += direction.normalized * stepSize;
-
-                // Update rotation similarly
-                currentState.Rotation = Quaternion.Slerp(
-                    currentState.Rotation,
-                    targetState.Rotation,
-                    0.3f
-                );
-
-                finalError = Vector3.Distance(currentState.Position, targetState.Position);
                 iterations++;
             }
 
@@ -226,6 +248,60 @@ namespace Robotics.Grasp
                 finalError = finalError,
                 jointAngles = tempJointAngles
             };
+        }
+
+        /// <summary>
+        /// Compute forward kinematics using Unity's ArticulationBody physics system.
+        /// Temporarily applies joint angles and reads actual end-effector transform.
+        /// Does NOT restore state - caller is responsible for state management.
+        /// </summary>
+        /// <param name="jointAngles">Current joint angles (radians)</param>
+        /// <param name="jointInfos">Joint information array (unused - kept for API compatibility)</param>
+        /// <returns>End-effector state in IK frame</returns>
+        private IKState ComputeForwardKinematics(float[] jointAngles, JointInfo[] jointInfos)
+        {
+            // Save current state before applying test angles
+            float[] tempCache = new float[_joints.Length];
+            for (int i = 0; i < _joints.Length; i++)
+            {
+                if (_joints[i] != null && _joints[i].jointPosition.dofCount > 0)
+                    tempCache[i] = _joints[i].jointPosition[0];
+                else
+                    tempCache[i] = 0f;
+            }
+
+            // Apply test joint angles to ArticulationBody components
+            for (int i = 0; i < Mathf.Min(jointAngles.Length, _joints.Length); i++)
+            {
+                if (_joints[i] == null || _joints[i].jointPosition.dofCount == 0)
+                    continue;
+
+                _joints[i].jointPosition = new ArticulationReducedSpace(jointAngles[i]);
+            }
+
+            // Force Unity to update transform hierarchy immediately
+            Physics.SyncTransforms();
+
+            // Read actual end-effector position from Unity's transform hierarchy
+            Vector3 worldPosition = _endEffector.position;
+            Quaternion worldRotation = _endEffector.rotation;
+
+            // Restore previous state immediately to prevent accumulation
+            for (int i = 0; i < tempCache.Length; i++)
+            {
+                if (_joints[i] == null || _joints[i].jointPosition.dofCount == 0)
+                    continue;
+
+                _joints[i].jointPosition = new ArticulationReducedSpace(tempCache[i]);
+            }
+
+            Physics.SyncTransforms();
+
+            // Transform to IK local frame (matching RobotController pattern)
+            Vector3 localPosition = _ikReferenceFrame.InverseTransformPoint(worldPosition);
+            Quaternion localRotation = Quaternion.Inverse(_ikReferenceFrame.rotation) * worldRotation;
+
+            return new IKState(localPosition, localRotation);
         }
 
         /// <summary>
@@ -251,6 +327,72 @@ namespace Robotics.Grasp
             }
 
             return jointInfos;
+        }
+
+        /// <summary>
+        /// Cache current joint angles and drive targets before validation.
+        /// </summary>
+        private void CacheJointStates()
+        {
+            for (int i = 0; i < _joints.Length; i++)
+            {
+                if (_joints[i] != null && _joints[i].jointPosition.dofCount > 0)
+                {
+                    _cachedJointStates[i] = _joints[i].jointPosition[0];
+                    _cachedDriveTargets[i] = _joints[i].xDrive.target;
+                }
+                else
+                {
+                    _cachedJointStates[i] = 0f;
+                    _cachedDriveTargets[i] = 0f;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Temporarily apply joint angles to ArticulationBody for FK evaluation.
+        /// Used by tests via reflection. Sets both position and drive target to prevent physics interference.
+        /// </summary>
+        /// <param name="jointAngles">Joint angles in radians</param>
+        private void ApplyJointAnglesTemporarily(float[] jointAngles)
+        {
+            for (int i = 0; i < Mathf.Min(jointAngles.Length, _joints.Length); i++)
+            {
+                if (_joints[i] == null || _joints[i].jointPosition.dofCount == 0)
+                    continue;
+
+                _joints[i].jointPosition = new ArticulationReducedSpace(jointAngles[i]);
+
+                // Also set drive target to prevent physics from fighting the position
+                var drive = _joints[i].xDrive;
+                drive.target = jointAngles[i] * Mathf.Rad2Deg;
+                _joints[i].xDrive = drive;
+            }
+
+            // Force Unity to update transform hierarchy immediately
+            Physics.SyncTransforms();
+        }
+
+        /// <summary>
+        /// Restore original joint states and drive targets after validation.
+        /// Called in finally block to ensure robot state is restored even if validation throws.
+        /// </summary>
+        private void RestoreJointStates()
+        {
+            for (int i = 0; i < _cachedJointStates.Length; i++)
+            {
+                if (_joints[i] == null || _joints[i].jointPosition.dofCount == 0)
+                    continue;
+
+                _joints[i].jointPosition = new ArticulationReducedSpace(_cachedJointStates[i]);
+
+                // Restore drive target as well
+                var drive = _joints[i].xDrive;
+                drive.target = _cachedDriveTargets[i];
+                _joints[i].xDrive = drive;
+            }
+
+            Physics.SyncTransforms();
         }
 
         /// <summary>

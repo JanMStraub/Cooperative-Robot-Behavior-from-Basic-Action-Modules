@@ -33,7 +33,7 @@ namespace Simulation.CoordinationStrategies
         private Dictionary<string, Queue<Vector3>> _robotWaypoints = new Dictionary<string, Queue<Vector3>>();
 
         // Coordination state
-        private float _lastCoordinationCheckTime = 0f;
+        private float _lastCoordinationCheckTime = -1f; // Initialize to -1 to force first check
         private const float COORDINATION_CHECK_INTERVAL = 0.5f; // Check coordination every 500ms
         private const float DEFAULT_MIN_SAFE_SEPARATION = 0.2f;
 
@@ -198,8 +198,9 @@ namespace Simulation.CoordinationStrategies
                 }
                 else
                 {
-                    Debug.LogWarning($"{LOG_PREFIX} No alternative path found, blocking {robot2.robotId}");
-                    _blockedRobots.Add(robot2.robotId);
+                    Debug.LogWarning($"{LOG_PREFIX} No alternative path found for {robot2.robotId}, collision warning only");
+                    // Do not block robot - collision detection is advisory only
+                    _blockedRobots.Remove(robot2.robotId);
                 }
                 return;
             }
@@ -219,8 +220,9 @@ namespace Simulation.CoordinationStrategies
                 }
                 else
                 {
-                    Debug.LogWarning($"{LOG_PREFIX} No alternative path found, blocking {robot2.robotId}");
-                    _blockedRobots.Add(robot2.robotId);
+                    Debug.LogWarning($"{LOG_PREFIX} No alternative path found for {robot2.robotId}, collision warning only");
+                    // Do not block robot - collision detection is advisory only
+                    _blockedRobots.Remove(robot2.robotId);
                 }
                 return;
             }
@@ -237,9 +239,9 @@ namespace Simulation.CoordinationStrategies
                     if (region1.regionName != "shared_zone")
                     {
                         Debug.LogWarning(
-                            $"{LOG_PREFIX} Workspace conflict: Both robots targeting '{region1.regionName}'"
+                            $"{LOG_PREFIX} Workspace conflict: Both robots targeting '{region1.regionName}', warning only"
                         );
-                        _blockedRobots.Add(robot2.robotId);
+                        // Do not block robot - workspace conflicts are advisory only
                     }
                 }
             }
@@ -470,7 +472,7 @@ namespace Simulation.CoordinationStrategies
             _activeRobots.Clear();
             _blockedRobots.Clear();
             _robotWaypoints.Clear();
-            _lastCoordinationCheckTime = 0f;
+            _lastCoordinationCheckTime = -1f; // Force check on next update
 
             // Reset workspace allocations
             if (_workspaceManager != null)

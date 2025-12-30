@@ -83,7 +83,7 @@ namespace Robotics
         public float smoothTime = 0.3f;
 
         [Range(0f, 1f)]
-        public float targetPosition = 1f;
+        public float targetPosition = 0f;
 
         [Header("Gripper Geometry")]
         [Tooltip("Gripper geometry for grasp planning validation")]
@@ -100,8 +100,26 @@ namespace Robotics
         private const string _logPrefix = "[GRIPPER_CONTROLLER]";
         private bool _isMoving;
         private float _completionThreshold = 0.01f; // Threshold for considering gripper at target
+        private bool _initialized = false; // Track if _currentTarget has been initialized
 
-        public float CurrentPosition => leftGripper?.jointPosition[0] ?? 0f;
+        public float CurrentPosition
+        {
+            get
+            {
+                if (leftGripper == null)
+                    return 0f;
+
+                // Try to read joint position directly (works if manually set or if physics is running)
+                var jointPos = leftGripper.jointPosition;
+                if (jointPos.dofCount > 0)
+                {
+                    return jointPos[0];
+                }
+
+                // Fallback: return drive target if joint position unavailable
+                return leftGripper.xDrive.target;
+            }
+        }
 
         /// <summary>
         /// Event fired when gripper reaches its target position
@@ -221,7 +239,37 @@ namespace Robotics
         }
 
         /// <summary>
+        /// Unity Start callback - initializes the current target to match the initial target position.
+        /// Also sets up drives if grippers were assigned after Awake (e.g., in tests).
+        /// </summary>
+        private void Start()
+        {
+            // Set up drives if grippers are now assigned (handles case where they're assigned after Awake)
+            if (leftGripper != null && rightGripper != null)
+            {
+                SetupDrive(leftGripper);
+                SetupDrive(rightGripper);
+
+                // Check if joint position was manually set (for tests) - if so, use that as initial target
+                var jointPos = leftGripper.jointPosition;
+                if (jointPos.dofCount > 0)
+                {
+                    _currentTarget = jointPos[0];
+                    _initialized = true;
+                    return;
+                }
+
+                // Otherwise initialize _currentTarget to match the initial targetPosition
+                float lower = leftGripper.xDrive.lowerLimit;
+                float upper = leftGripper.xDrive.upperLimit;
+                _currentTarget = Mathf.Lerp(lower, upper, targetPosition);
+                _initialized = true;
+            }
+        }
+
+        /// <summary>
         /// Unity Update callback - smoothly interpolates gripper position towards target position using SmoothDamp.
+        /// Only runs when actively moving to avoid interfering with manual positioning (e.g., in tests).
         /// </summary>
         private void Update()
         {
@@ -229,10 +277,31 @@ namespace Robotics
             if (leftGripper == null || rightGripper == null)
                 return;
 
+            // Only update if we're actively moving toward a target (prevents interference with manual positioning)
+            if (!_isMoving)
+                return;
+
             // Map normalized position [0,1] to actual joint limits
             float lower = leftGripper.xDrive.lowerLimit;
             float upper = leftGripper.xDrive.upperLimit;
             float mappedTarget = Mathf.Lerp(lower, upper, targetPosition);
+
+            // Initialize _currentTarget on first movement command
+            if (!_initialized)
+            {
+                // Try to initialize from current joint position if available
+                var jointPos = leftGripper.jointPosition;
+                if (jointPos.dofCount > 0)
+                {
+                    _currentTarget = jointPos[0];
+                }
+                else
+                {
+                    // Joint position not yet initialized, use mapped target
+                    _currentTarget = mappedTarget;
+                }
+                _initialized = true;
+            }
 
             // Smooth interpolation using SmoothDamp for natural acceleration/deceleration
             _currentTarget = Mathf.SmoothDamp(
@@ -245,7 +314,7 @@ namespace Robotics
             ApplyTargetToGrippers(_currentTarget);
 
             // Check for completion
-            if (_isMoving && Mathf.Abs(_currentTarget - mappedTarget) < _completionThreshold)
+            if (Mathf.Abs(_currentTarget - mappedTarget) < _completionThreshold)
             {
                 _isMoving = false;
                 OnGripperActionComplete?.Invoke();

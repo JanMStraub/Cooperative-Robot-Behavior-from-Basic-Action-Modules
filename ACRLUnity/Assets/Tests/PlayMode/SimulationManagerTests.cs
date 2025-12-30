@@ -3,6 +3,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.TestTools;
 using Simulation;
+using Configuration;
 
 namespace Tests.PlayMode
 {
@@ -187,6 +188,210 @@ namespace Tests.PlayMode
         {
             // Config should be created if null
             Assert.IsNotNull(_manager.config);
+        }
+
+        #endregion
+
+        #region NotifyTargetReached Tests
+
+        [UnityTest]
+        public IEnumerator NotifyTargetReached_UpdatesCoordinationState()
+        {
+            yield return null;
+
+            // Test that NotifyTargetReached can be called without crashing
+            // Actual coordination behavior depends on robots being present
+            Assert.DoesNotThrow(() =>
+            {
+                _manager.NotifyTargetReached("TestRobot", true);
+            }, "NotifyTargetReached should not throw even without robots");
+        }
+
+        [UnityTest]
+        public IEnumerator NotifyTargetReached_WithFalse_UpdatesState()
+        {
+            yield return null;
+
+            // Notify that target was NOT reached
+            Assert.DoesNotThrow(() =>
+            {
+                _manager.NotifyTargetReached("TestRobot", false);
+            }, "NotifyTargetReached(false) should not throw");
+        }
+
+        [UnityTest]
+        public IEnumerator NotifyTargetReached_WithMultipleRobots_TracksEach()
+        {
+            yield return null;
+
+            // Notify for multiple robots
+            Assert.DoesNotThrow(() =>
+            {
+                _manager.NotifyTargetReached("Robot1", true);
+                _manager.NotifyTargetReached("Robot2", false);
+                _manager.NotifyTargetReached("Robot3", true);
+            }, "Should handle multiple robot notifications");
+        }
+
+        #endregion
+
+        #region Coordination Mode Fallback Tests
+
+        [UnityTest]
+        public IEnumerator CoordinationMode_MasterSlave_FallsBackToIndependent()
+        {
+            LogAssert.ignoreFailingMessages = true;
+
+            yield return null;
+
+            // Set coordination mode to MasterSlave (not implemented)
+            if (_manager.config != null)
+            {
+                _manager.config.coordinationMode = RobotCoordinationMode.MasterSlave;
+            }
+
+            // Start simulation to trigger mode initialization
+            _manager.StartSimulation();
+            yield return null;
+
+            // Verify simulation doesn't crash (falls back to Independent)
+            // Expected log message about fallback
+            Assert.That(_manager.CurrentState,
+                Is.Not.EqualTo(SimulationState.Error),
+                "Should not be in Error state with MasterSlave fallback");
+
+            LogAssert.ignoreFailingMessages = false;
+        }
+
+        [UnityTest]
+        public IEnumerator CoordinationMode_Distributed_FallsBackToIndependent()
+        {
+            LogAssert.ignoreFailingMessages = true;
+
+            yield return null;
+
+            // Set coordination mode to Distributed (not implemented)
+            if (_manager.config != null)
+            {
+                _manager.config.coordinationMode = RobotCoordinationMode.Distributed;
+            }
+
+            // Start simulation to trigger mode initialization
+            _manager.StartSimulation();
+            yield return null;
+
+            // Verify simulation doesn't crash (falls back to Independent)
+            Assert.That(_manager.CurrentState,
+                Is.Not.EqualTo(SimulationState.Error),
+                "Should not be in Error state with Distributed fallback");
+
+            LogAssert.ignoreFailingMessages = false;
+        }
+
+        [UnityTest]
+        public IEnumerator CoordinationMode_Independent_InitializesCorrectly()
+        {
+            LogAssert.ignoreFailingMessages = true;
+
+            yield return null;
+
+            // Set coordination mode to Independent
+            if (_manager.config != null)
+            {
+                _manager.config.coordinationMode = RobotCoordinationMode.Independent;
+            }
+
+            // Start simulation
+            _manager.StartSimulation();
+            yield return null;
+
+            // Verify state is valid
+            Assert.That(_manager.CurrentState,
+                Is.Not.EqualTo(SimulationState.Error),
+                "Independent mode should initialize correctly");
+
+            LogAssert.ignoreFailingMessages = false;
+        }
+
+        [UnityTest]
+        public IEnumerator CoordinationMode_Sequential_InitializesCorrectly()
+        {
+            LogAssert.ignoreFailingMessages = true;
+
+            yield return null;
+
+            // Set coordination mode to Sequential
+            if (_manager.config != null)
+            {
+                _manager.config.coordinationMode = RobotCoordinationMode.Sequential;
+            }
+
+            // Start simulation
+            _manager.StartSimulation();
+            yield return null;
+
+            // Verify state is valid
+            Assert.That(_manager.CurrentState,
+                Is.Not.EqualTo(SimulationState.Error),
+                "Sequential mode should initialize correctly");
+
+            LogAssert.ignoreFailingMessages = false;
+        }
+
+        [UnityTest]
+        public IEnumerator CoordinationMode_Collaborative_InitializesCorrectly()
+        {
+            LogAssert.ignoreFailingMessages = true;
+
+            yield return null;
+
+            // Set coordination mode to Collaborative
+            if (_manager.config != null)
+            {
+                _manager.config.coordinationMode = RobotCoordinationMode.Collaborative;
+            }
+
+            // Start simulation
+            _manager.StartSimulation();
+            yield return null;
+
+            // Verify state is valid (Collaborative may have Python verification pending)
+            Assert.That(_manager.CurrentState,
+                Is.Not.EqualTo(SimulationState.Error),
+                "Collaborative mode should initialize correctly");
+
+            LogAssert.ignoreFailingMessages = false;
+        }
+
+        #endregion
+
+        #region IsRobotActive Tests
+
+        [UnityTest]
+        public IEnumerator IsRobotActive_WithNoRobots_ReturnsFalse()
+        {
+            yield return null;
+
+            bool isActive = _manager.IsRobotActive("NonExistentRobot");
+            Assert.IsFalse(isActive, "Should return false for non-existent robot");
+        }
+
+        [UnityTest]
+        public IEnumerator IsRobotActive_WithEmptyRobotId_ReturnsFalse()
+        {
+            yield return null;
+
+            bool isActive = _manager.IsRobotActive("");
+            Assert.IsFalse(isActive, "Should return false for empty robot ID");
+        }
+
+        [UnityTest]
+        public IEnumerator IsRobotActive_WithNullRobotId_ReturnsFalse()
+        {
+            yield return null;
+
+            bool isActive = _manager.IsRobotActive(null);
+            Assert.IsFalse(isActive, "Should return false for null robot ID");
         }
 
         #endregion
