@@ -16,6 +16,7 @@ using UnityEditor;
 
 namespace Robotics
 {
+    using Grasp;
 #if UNITY_EDITOR
     [CustomEditor(typeof(GripperController))]
     public class GripperControllerEditor : Editor
@@ -83,6 +84,15 @@ namespace Robotics
 
         [Range(0f, 1f)]
         public float targetPosition = 1f;
+
+        [Header("Gripper Geometry")]
+        [Tooltip("Gripper geometry for grasp planning validation")]
+        public GripperGeometry gripperGeometry = GripperGeometry.Default();
+
+        /// <summary>
+        /// Get gripper geometry for grasp planning.
+        /// </summary>
+        public GripperGeometry Geometry => gripperGeometry;
 
         // Helper variables
         private float _currentVelocity;

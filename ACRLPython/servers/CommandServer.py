@@ -63,6 +63,13 @@ class CommandBroadcaster:
         self._queue_lock = threading.Lock()
         self._max_queue_size = cfg.MAX_RESULT_QUEUE_SIZE
 
+        # Thread-safe command tracking
+        self._active_commands: Dict[int, Dict[str, Any]] = {}
+        self._active_commands_lock = threading.RLock()
+
+        # Robot-specific client tracking for targeted commands
+        self._robot_clients: Dict[str, Any] = {}  # robot_id -> client socket
+
     def set_server(self, server: "CommandServer"):
         """Set the server instance for broadcasting."""
         self._server = server
@@ -170,6 +177,159 @@ class CommandBroadcaster:
             results = self._result_queue.copy()
             self._result_queue.clear()
             return results
+
+    def track_command(
+        self, request_id: int, command: Dict[str, Any], robot_id: Optional[str] = None
+    ):
+        """
+        Track an active command with thread safety.
+
+        Args:
+            request_id: Request ID for this command
+            command: Command dictionary
+            robot_id: Optional robot ID this command targets
+        """
+        with self._active_commands_lock:
+            self._active_commands[request_id] = {
+                "command": command,
+                "robot_id": robot_id,
+                "timestamp": time.time(),
+                "status": "active",
+            }
+            logger.debug(f"Tracking command {request_id} for robot {robot_id}")
+
+    def complete_command(
+        self, request_id: int, success: bool, result: Optional[Dict[str, Any]] = None
+    ):
+        """
+        Mark a command as completed with thread safety.
+
+        Args:
+            request_id: Request ID of the completed command
+            success: Whether the command succeeded
+            result: Optional result data
+        """
+        with self._active_commands_lock:
+            if request_id in self._active_commands:
+                self._active_commands[request_id]["status"] = (
+                    "completed" if success else "failed"
+                )
+                self._active_commands[request_id]["result"] = result
+                self._active_commands[request_id]["completion_time"] = time.time()
+                logger.debug(f"Completed command {request_id}: {success}")
+
+    def get_active_commands(self) -> Dict[int, Dict[str, Any]]:
+        """
+        Get all active commands (thread-safe).
+
+        Returns:
+            Dictionary of active commands by request ID
+        """
+        with self._active_commands_lock:
+            return self._active_commands.copy()
+
+    def register_robot_client(self, robot_id: str, client):
+        """
+        Register a robot's client socket for targeted commands.
+
+        Args:
+            robot_id: Robot identifier
+            client: Client socket
+        """
+        with self._active_commands_lock:
+            self._robot_clients[robot_id] = client
+            logger.info(f"Registered client for robot {robot_id}")
+
+    def unregister_robot_client(self, robot_id: str):
+        """
+        Unregister a robot's client socket.
+
+        Args:
+            robot_id: Robot identifier
+        """
+        with self._active_commands_lock:
+            self._robot_clients.pop(robot_id, None)
+            logger.info(f"Unregistered client for robot {robot_id}")
+
+    def send_command_and_wait(
+        self, command: Dict[str, Any], timeout: float = 5.0
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Send a command and wait for its completion.
+
+        Args:
+            command: Command dictionary
+            timeout: Timeout in seconds
+
+        Returns:
+            Completion result or None if timed out
+        """
+        # Generate request ID
+        request_id = command.get("request_id", 0)
+        if request_id == 0:
+            import time
+            request_id = int(time.time() * 1000) % (2**32)
+
+        # Create completion queue
+        self.create_completion_queue(request_id)
+
+        try:
+            # Send command
+            if not self.send_command(command, request_id):
+                return None
+
+            # Wait for completion
+            return self.get_completion(request_id, timeout)
+
+        finally:
+            # Clean up queue
+            self.remove_completion_queue(request_id)
+
+    def send_command_to_robot(
+        self, robot_id: str, command: Dict[str, Any], request_id: int = 0
+    ) -> bool:
+        """
+        Send a command to a specific robot (targeted delivery).
+
+        Args:
+            robot_id: Target robot identifier
+            command: Command dictionary
+            request_id: Request ID for correlation
+
+        Returns:
+            True if sent successfully
+        """
+        with self._active_commands_lock:
+            client = self._robot_clients.get(robot_id)
+
+        if client is None:
+            logger.warning(f"No client registered for robot {robot_id}, broadcasting")
+            return self.send_command(command, request_id)
+
+        if self._server is None:
+            logger.warning("CommandBroadcaster not initialized")
+            return False
+
+        try:
+            # Add request_id to command
+            command["request_id"] = request_id
+
+            # Encode message
+            message = UnityProtocol.encode_result_message(command, request_id)
+
+            # Send to specific client
+            sent = self._server.send_to_client(client, message)
+
+            if sent:
+                logger.debug(f"Command sent to robot {robot_id}")
+            else:
+                logger.warning(f"Failed to send command to robot {robot_id}")
+
+            return sent
+
+        except Exception as e:
+            logger.error(f"Error sending command to robot {robot_id}: {e}")
+            return False
 
 
 # Backward compatibility aliases

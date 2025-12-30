@@ -25,19 +25,34 @@ namespace Simulation.CoordinationStrategies
         private WorkspaceManager _workspaceManager;
         private Dictionary<string, Vector3> _plannedTargets = new Dictionary<string, Vector3>();
         private HashSet<string> _activeRobots = new HashSet<string>();
-        private float _minSafeSeparation = 0.2f;
+        private HashSet<string> _blockedRobots = new HashSet<string>();
+        private float _minSafeSeparation;
+
+        // Path replanning for collision avoidance
+        private ICollisionAvoidancePlanner _collisionPlanner;
+        private Dictionary<string, Queue<Vector3>> _robotWaypoints = new Dictionary<string, Queue<Vector3>>();
 
         // Coordination state
         private float _lastCoordinationCheckTime = 0f;
         private const float COORDINATION_CHECK_INTERVAL = 0.5f; // Check coordination every 500ms
+        private const float DEFAULT_MIN_SAFE_SEPARATION = 0.2f;
 
         private const string LOG_PREFIX = "[COLLABORATIVE_STRATEGY]";
 
         /// <summary>
         /// Constructor - initialize workspace manager reference
         /// </summary>
-        public CollaborativeStrategy()
+        public CollaborativeStrategy() : this(DEFAULT_MIN_SAFE_SEPARATION)
         {
+        }
+
+        /// <summary>
+        /// Constructor with configurable minimum safe separation
+        /// </summary>
+        /// <param name="minSafeSeparation">Minimum safe separation distance in meters</param>
+        public CollaborativeStrategy(float minSafeSeparation)
+        {
+            _minSafeSeparation = Mathf.Max(0.05f, minSafeSeparation);
             _workspaceManager = WorkspaceManager.Instance;
             if (_workspaceManager == null)
             {
@@ -45,6 +60,15 @@ namespace Simulation.CoordinationStrategies
                     $"{LOG_PREFIX} WorkspaceManager not found. Workspace coordination disabled."
                 );
             }
+
+            // Initialize collision avoidance planner
+            _collisionPlanner = new WaypointCollisionAvoidancePlanner(
+                verticalOffset: 0.15f,
+                lateralOffset: 0.1f,
+                minSafeSeparation: _minSafeSeparation,
+                maxWaypoints: 5
+            );
+            Debug.Log($"{LOG_PREFIX} Path replanning enabled with waypoint collision avoidance");
         }
 
         /// <summary>
@@ -59,13 +83,27 @@ namespace Simulation.CoordinationStrategies
             if (robotControllers == null || robotControllers.Length == 0)
                 return;
 
+            // Cleanup stale entries - remove robots that are no longer in the controllers array
+            CleanupStaleEntries(robotControllers);
+
             // Update planned targets
             foreach (var controller in robotControllers)
             {
                 if (controller.HasTarget)
                 {
-                    _plannedTargets[controller.robotId] = controller.GetCurrentTarget().Value;
-                    _activeRobots.Add(controller.robotId);
+                    var currentTarget = controller.GetCurrentTarget();
+                    if (currentTarget.HasValue)
+                    {
+                        _plannedTargets[controller.robotId] = currentTarget.Value;
+                        _activeRobots.Add(controller.robotId);
+                    }
+                }
+                else
+                {
+                    // Robot has no target, remove from active tracking
+                    _activeRobots.Remove(controller.robotId);
+                    _plannedTargets.Remove(controller.robotId);
+                    _blockedRobots.Remove(controller.robotId);
                 }
             }
 
@@ -78,6 +116,27 @@ namespace Simulation.CoordinationStrategies
 
             // Update workspace allocations based on current robot positions
             UpdateWorkspaceAllocations(robotControllers);
+        }
+
+        /// <summary>
+        /// Cleanup stale entries for robots that are no longer in the scene
+        /// </summary>
+        private void CleanupStaleEntries(RobotController[] robotControllers)
+        {
+            HashSet<string> currentRobotIds = new HashSet<string>();
+            foreach (var controller in robotControllers)
+            {
+                currentRobotIds.Add(controller.robotId);
+            }
+
+            // Remove entries for robots that no longer exist
+            var staleRobots = _activeRobots.Where(id => !currentRobotIds.Contains(id)).ToList();
+            foreach (var robotId in staleRobots)
+            {
+                _activeRobots.Remove(robotId);
+                _plannedTargets.Remove(robotId);
+                _blockedRobots.Remove(robotId);
+            }
         }
 
         /// <summary>
@@ -105,12 +164,21 @@ namespace Simulation.CoordinationStrategies
         }
 
         /// <summary>
-        /// Check for conflicts between two robots
+        /// Check for conflicts between two robots and attempt path replanning if needed.
         /// </summary>
         private void CheckRobotPairConflict(RobotController robot1, RobotController robot2)
         {
-            Vector3 target1 = robot1.GetCurrentTarget().Value;
-            Vector3 target2 = robot2.GetCurrentTarget().Value;
+            // Add null checks for GetCurrentTarget()
+            var target1Nullable = robot1.GetCurrentTarget();
+            var target2Nullable = robot2.GetCurrentTarget();
+
+            if (!target1Nullable.HasValue || !target2Nullable.HasValue)
+            {
+                return;
+            }
+
+            Vector3 target1 = target1Nullable.Value;
+            Vector3 target2 = target2Nullable.Value;
             Vector3 current1 = robot1.GetCurrentEndEffectorPosition();
             Vector3 current2 = robot2.GetCurrentEndEffectorPosition();
 
@@ -121,8 +189,18 @@ namespace Simulation.CoordinationStrategies
                 Debug.LogWarning(
                     $"{LOG_PREFIX} Collision detected: {robot1.robotId} and {robot2.robotId} targeting same location (distance: {targetDistance:F3}m)"
                 );
-                // Pause one robot temporarily
-                // In production, this should trigger Python CoordinationVerifier
+
+                // Attempt to replan robot2's path
+                if (AttemptReplanning(robot2, current2, target2, new List<Vector3> { current1, target1 }))
+                {
+                    Debug.Log($"{LOG_PREFIX} Replanned path for {robot2.robotId} to avoid {robot1.robotId}");
+                    _blockedRobots.Remove(robot2.robotId);
+                }
+                else
+                {
+                    Debug.LogWarning($"{LOG_PREFIX} No alternative path found, blocking {robot2.robotId}");
+                    _blockedRobots.Add(robot2.robotId);
+                }
                 return;
             }
 
@@ -132,7 +210,18 @@ namespace Simulation.CoordinationStrategies
                 Debug.LogWarning(
                     $"{LOG_PREFIX} Path collision detected between {robot1.robotId} and {robot2.robotId}"
                 );
-                // Serialize movements or adjust paths
+
+                // Attempt to replan robot2's path
+                if (AttemptReplanning(robot2, current2, target2, new List<Vector3> { current1, target1 }))
+                {
+                    Debug.Log($"{LOG_PREFIX} Replanned path for {robot2.robotId} to avoid {robot1.robotId}");
+                    _blockedRobots.Remove(robot2.robotId);
+                }
+                else
+                {
+                    Debug.LogWarning($"{LOG_PREFIX} No alternative path found, blocking {robot2.robotId}");
+                    _blockedRobots.Add(robot2.robotId);
+                }
                 return;
             }
 
@@ -150,9 +239,37 @@ namespace Simulation.CoordinationStrategies
                         Debug.LogWarning(
                             $"{LOG_PREFIX} Workspace conflict: Both robots targeting '{region1.regionName}'"
                         );
+                        _blockedRobots.Add(robot2.robotId);
                     }
                 }
             }
+
+            // If no conflicts detected, unblock both robots
+            _blockedRobots.Remove(robot1.robotId);
+            _blockedRobots.Remove(robot2.robotId);
+        }
+
+        /// <summary>
+        /// Attempt to replan a robot's path to avoid obstacles.
+        /// </summary>
+        private bool AttemptReplanning(RobotController robot, Vector3 current, Vector3 target, List<Vector3> obstacles)
+        {
+            if (_collisionPlanner == null)
+                return false;
+
+            // Generate alternative path
+            var waypoints = _collisionPlanner.PlanAlternativePath(robot.robotId, current, target, obstacles);
+
+            if (waypoints == null || waypoints.Count == 0)
+            {
+                return false;
+            }
+
+            // Store waypoints for this robot
+            _robotWaypoints[robot.robotId] = new Queue<Vector3>(waypoints);
+            Debug.Log($"{LOG_PREFIX} Generated {waypoints.Count} waypoints for {robot.robotId}");
+
+            return true;
         }
 
         /// <summary>
@@ -243,14 +360,24 @@ namespace Simulation.CoordinationStrategies
         /// In collaborative mode, robots coordinate based on workspace allocation and collision checks.
         /// A robot is active if:
         /// - It has a target
+        /// - It's not blocked by collision detection
         /// - Its target doesn't conflict with other robots
         /// - Its workspace region is allocated or available
         /// </summary>
         public bool IsRobotActive(string robotId)
         {
+            // Check if robot is blocked due to collision/conflict
+            if (_blockedRobots.Contains(robotId))
+            {
+                return false;
+            }
+
             // If no workspace manager, all robots are active (fallback to independent mode)
             if (_workspaceManager == null)
+            {
+                Debug.LogWarning($"{LOG_PREFIX} Silent fallback to independent mode - WorkspaceManager not available");
                 return true;
+            }
 
             // Check if robot is actively moving
             if (!_activeRobots.Contains(robotId))
@@ -287,12 +414,62 @@ namespace Simulation.CoordinationStrategies
         }
 
         /// <summary>
+        /// Get the next waypoint for a robot following a replanned path.
+        /// </summary>
+        /// <param name="robotId">Robot identifier</param>
+        /// <returns>Next waypoint or null if no waypoints queued</returns>
+        public Vector3? GetNextWaypoint(string robotId)
+        {
+            if (!_robotWaypoints.ContainsKey(robotId))
+                return null;
+
+            var waypointQueue = _robotWaypoints[robotId];
+            if (waypointQueue.Count == 0)
+            {
+                // All waypoints reached, remove queue
+                _robotWaypoints.Remove(robotId);
+                return null;
+            }
+
+            return waypointQueue.Peek();
+        }
+
+        /// <summary>
+        /// Mark a waypoint as reached and advance to the next waypoint.
+        /// </summary>
+        /// <param name="robotId">Robot identifier</param>
+        public void WaypointReached(string robotId)
+        {
+            if (!_robotWaypoints.ContainsKey(robotId))
+                return;
+
+            var waypointQueue = _robotWaypoints[robotId];
+            if (waypointQueue.Count > 0)
+            {
+                Vector3 reached = waypointQueue.Dequeue();
+                Debug.Log($"{LOG_PREFIX} {robotId} reached waypoint {reached}, {waypointQueue.Count} remaining");
+            }
+        }
+
+        /// <summary>
+        /// Check if a robot has pending waypoints in its path.
+        /// </summary>
+        /// <param name="robotId">Robot identifier</param>
+        /// <returns>True if robot has waypoints to follow</returns>
+        public bool HasWaypoints(string robotId)
+        {
+            return _robotWaypoints.ContainsKey(robotId) && _robotWaypoints[robotId].Count > 0;
+        }
+
+        /// <summary>
         /// Resets the collaborative strategy state.
         /// </summary>
         public void Reset()
         {
             _plannedTargets.Clear();
             _activeRobots.Clear();
+            _blockedRobots.Clear();
+            _robotWaypoints.Clear();
             _lastCoordinationCheckTime = 0f;
 
             // Reset workspace allocations

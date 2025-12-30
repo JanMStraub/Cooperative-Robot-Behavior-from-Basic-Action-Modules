@@ -1,5 +1,6 @@
 using Configuration;
 using Core;
+using Robotics.Grasp;
 using Simulation;
 using UnityEngine;
 using Utilities;
@@ -18,6 +19,14 @@ namespace Robotics
 
         [Header("Robot Identity")]
         public string robotId = "Robot1";
+
+        // IsRobotActive caching (performance optimization)
+        private bool _cachedIsRobotActive = true;
+        private float _lastActiveCheckTime = 0f;
+        private const float ACTIVE_CHECK_CACHE_INTERVAL = 0.1f; // 100ms cache interval
+
+        // Coordination state change event
+        public event System.Action<bool> OnCoordinationStateChanged;
 
         [Header("IK Parameters")]
         [SerializeField]
@@ -66,6 +75,13 @@ namespace Robotics
         // Grasp behavior configuration
         public bool _closeGripperAfterReach = false;
         private GraspApproach _currentGraspApproach;
+
+        [Header("Advanced Grasp Planning")]
+        [SerializeField]
+        private GraspConfig _graspConfig; // Configuration for MoveIt2-inspired pipeline
+
+        // Advanced grasp planning pipeline (initialized on demand)
+        private Robotics.Grasp.GraspPlanningPipeline _graspPipeline;
 
         // Helper variables
         private const string _logPrefix = "[ROBOT_CONTROLLER]";
@@ -168,36 +184,36 @@ namespace Robotics
             // [1] Store the original target object reference
             _targetObject = target;
 
-            // [2] Apply grasp planning if enabled
-            if (options.useGraspPlanning && endEffectorBase != null)
+            // [2] Check if advanced planning is requested
+            if (options.useAdvancedPlanning && _graspPipeline != null)
             {
-                // Determine optimal approach direction
-                GraspApproach approach =
-                    options.approach
-                    ?? GraspPlanner.DetermineOptimalApproach(
-                        objectPosition: target.transform.position,
-                        gripperPosition: endEffectorBase.position,
-                        objectSize: GraspPlanner.GetObjectSize(target)
-                    );
+                // Use MoveIt2-inspired advanced planning pipeline
+                ExecuteAdvancedGraspPlanning(target, options);
+            }
+            // [3] Apply standard grasp planning if enabled
+            else if (options.useGraspPlanning && endEffectorBase != null)
+            {
+                // Use pipeline in simple mode if available (avoids deprecated GraspPlanner)
+                if (_graspPipeline != null)
+                {
+                    ExecuteSimpleGraspPlanning(target, options);
+                }
+                else
+                {
+                    // Fallback: No pipeline available, skip grasp planning
+                    Debug.LogWarning($"{_logPrefix} Grasp planning requested but no pipeline available. Configure GraspConfig to enable.");
 
-                // Calculate two-waypoint grasp plan
-                GraspPlan plan = GraspPlanner.CalculateGraspPlan(
-                    targetObject: target,
-                    gripperPosition: endEffectorBase.position,
-                    approachDirection: approach
-                );
+                    // Direct targeting without grasp planning
+                    Transform targetTransform = target.transform;
 
-                _currentGraspApproach = approach;
+                    if (options.openGripperOnSet && _gripperController != null)
+                    {
+                        _gripperController.OpenGrippers();
+                        Debug.Log($"{_logPrefix} Opening gripper for target {target.name}");
+                    }
 
-                Debug.Log(
-                    $"{_logPrefix} Using two-waypoint grasp planning: approach={approach}"
-                );
-                Debug.Log(
-                    $"{_logPrefix} Pre-grasp: {plan.preGraspPosition}, Grasp: {plan.graspPosition}"
-                );
-
-                // Execute two-stage grasp sequence
-                StartCoroutine(ExecuteTwoWaypointGrasp(plan, target, options));
+                    SetTargetInternal(targetTransform, target, options);
+                }
             }
             else
             {
@@ -216,10 +232,57 @@ namespace Robotics
         }
 
         /// <summary>
+        /// Execute simple grasp planning using the pipeline in simple mode.
+        /// Uses single candidate generation without full IK/collision filtering.
+        /// </summary>
+        /// <param name="target">Object to grasp</param>
+        /// <param name="options">Grasp options</param>
+        private void ExecuteSimpleGraspPlanning(GameObject target, GraspOptions options)
+        {
+            Debug.Log($"{_logPrefix} Executing simple grasp planning for {target.name}");
+
+            // Plan grasp using pipeline in simple mode
+            var candidateNullable = _graspPipeline.PlanGrasp(
+                target,
+                endEffectorBase.position,
+                new GraspOptions
+                {
+                    useGraspPlanning = false, // Tells pipeline to use simple mode
+                    approach = options.approach,
+                    graspConfig = options.graspConfig
+                }
+            );
+
+            if (!candidateNullable.HasValue)
+            {
+                Debug.LogWarning($"{_logPrefix} Simple grasp planning failed - using direct targeting");
+
+                // Fallback to direct targeting
+                if (options.openGripperOnSet && _gripperController != null)
+                {
+                    _gripperController.OpenGrippers();
+                }
+                SetTargetInternal(target.transform, target, options);
+                return;
+            }
+
+            var candidate = candidateNullable.Value;
+            _currentGraspApproach = candidate.approachType;
+
+            Debug.Log(
+                $"{_logPrefix} Simple grasp plan: approach={candidate.approachType}, " +
+                $"pre-grasp={candidate.preGraspPosition}, grasp={candidate.graspPosition}"
+            );
+
+            // Execute two-waypoint grasp sequence (pre-grasp → grasp)
+            StartCoroutine(ExecuteTwoWaypointGrasp(candidate, target, options));
+        }
+
+        /// <summary>
         /// Executes a two-waypoint grasp sequence: pre-grasp → final grasp → close gripper
         /// </summary>
         private System.Collections.IEnumerator ExecuteTwoWaypointGrasp(
-            GraspPlan plan,
+            Grasp.GraspCandidate candidate,
             GameObject targetObject,
             GraspOptions options
         )
@@ -227,13 +290,13 @@ namespace Robotics
             // [1] Open gripper for approach
             if (_gripperController != null)
             {
-                _gripperController.SetGripperPosition(plan.preGraspGripperWidth);
+                _gripperController.SetGripperPosition(candidate.preGraspGripperWidth);
                 Debug.Log($"{_logPrefix} Opening gripper for approach");
             }
 
             // [2] Move to pre-grasp waypoint
             GameObject preGraspTarget = GetOrCreateTempObject(RobotConstants.GRASP_TARGET_SUFFIX + "_pre");
-            preGraspTarget.transform.SetPositionAndRotation(plan.preGraspPosition, plan.preGraspRotation);
+            preGraspTarget.transform.SetPositionAndRotation(candidate.preGraspPosition, candidate.preGraspRotation);
 
             SetTargetInternal(preGraspTarget.transform, targetObject, new GraspOptions
             {
@@ -242,7 +305,7 @@ namespace Robotics
                 closeGripperOnReach = false
             });
 
-            Debug.Log($"{_logPrefix} [Stage 1/2] Moving to pre-grasp position: {plan.preGraspPosition}");
+            Debug.Log($"{_logPrefix} [Stage 1/2] Moving to pre-grasp position: {candidate.preGraspPosition}");
 
             // Wait for pre-grasp to complete
             yield return new WaitUntil(() => _hasReachedTarget);
@@ -250,7 +313,7 @@ namespace Robotics
 
             // [3] Move to final grasp position
             GameObject graspTarget = GetOrCreateTempObject(RobotConstants.GRASP_TARGET_SUFFIX);
-            graspTarget.transform.SetPositionAndRotation(plan.graspPosition, plan.graspRotation);
+            graspTarget.transform.SetPositionAndRotation(candidate.graspPosition, candidate.graspRotation);
 
             SetTargetInternal(graspTarget.transform, targetObject, new GraspOptions
             {
@@ -259,7 +322,7 @@ namespace Robotics
                 closeGripperOnReach = false
             });
 
-            Debug.Log($"{_logPrefix} [Stage 2/2] Moving to final grasp position: {plan.graspPosition}");
+            Debug.Log($"{_logPrefix} [Stage 2/2] Moving to final grasp position: {candidate.graspPosition}");
 
             // Wait for grasp position to complete
             yield return new WaitUntil(() => _hasReachedTarget);
@@ -268,8 +331,145 @@ namespace Robotics
             if (options.closeGripperOnReach && _gripperController != null)
             {
                 yield return new WaitForSeconds(0.1f); // Brief pause before closing
-                _gripperController.SetGripperPosition(plan.graspGripperWidth);
+                _gripperController.SetGripperPosition(candidate.graspGripperWidth);
                 Debug.Log($"{_logPrefix} Closing gripper to grasp object");
+            }
+
+            // Fire OnTargetReached event for the complete grasp sequence
+            OnTargetReached?.Invoke();
+        }
+
+        /// <summary>
+        /// Execute advanced grasp planning using MoveIt2-inspired pipeline.
+        /// Generates multiple candidates, filters by IK and collisions, scores, and selects best.
+        /// </summary>
+        /// <param name="target">Object to grasp</param>
+        /// <param name="options">Grasp options with advanced planning parameters</param>
+        private void ExecuteAdvancedGraspPlanning(GameObject target, GraspOptions options)
+        {
+            Debug.Log($"{_logPrefix} Executing advanced grasp planning for {target.name}");
+
+            // Plan grasp using full pipeline
+            var candidateNullable = _graspPipeline.PlanGrasp(
+                target,
+                endEffectorBase.position,
+                options
+            );
+
+            if (!candidateNullable.HasValue)
+            {
+                Debug.LogError($"{_logPrefix} Advanced grasp planning failed - no valid candidates found");
+                return;
+            }
+
+            var candidate = candidateNullable.Value;
+
+            Debug.Log(
+                $"{_logPrefix} Best candidate: approach={candidate.approachType}, " +
+                $"score={candidate.totalScore:F2}, " +
+                $"ikValid={candidate.ikValidated}, collisionFree={candidate.collisionValidated}"
+            );
+
+            // Execute three-waypoint grasp sequence
+            StartCoroutine(ExecuteThreeWaypointGrasp(candidate, target, options));
+        }
+
+        /// <summary>
+        /// Execute three-waypoint grasp sequence: pre-grasp → grasp → retreat.
+        /// </summary>
+        /// <param name="candidate">Selected grasp candidate</param>
+        /// <param name="targetObject">Object to grasp</param>
+        /// <param name="options">Grasp options</param>
+        private System.Collections.IEnumerator ExecuteThreeWaypointGrasp(
+            Grasp.GraspCandidate candidate,
+            GameObject targetObject,
+            GraspOptions options
+        )
+        {
+            // [1] Open gripper for approach
+            if (_gripperController != null)
+            {
+                _gripperController.SetGripperPosition(candidate.preGraspGripperWidth);
+                Debug.Log($"{_logPrefix} Opening gripper for approach");
+            }
+
+            // [2] Move to pre-grasp waypoint
+            GameObject preGraspTarget = GetOrCreateTempObject(RobotConstants.GRASP_TARGET_SUFFIX + "_pre");
+            preGraspTarget.transform.SetPositionAndRotation(
+                candidate.preGraspPosition,
+                candidate.preGraspRotation
+            );
+
+            SetTargetInternal(preGraspTarget.transform, targetObject, new GraspOptions
+            {
+                useGraspPlanning = false,
+                openGripperOnSet = false,
+                closeGripperOnReach = false
+            });
+
+            Debug.Log(
+                $"{_logPrefix} [Stage 1/3] Moving to pre-grasp position: {candidate.preGraspPosition}"
+            );
+
+            // Wait for pre-grasp to complete
+            yield return new WaitUntil(() => _hasReachedTarget);
+            yield return new WaitForSeconds(0.2f); // Brief stabilization pause
+
+            // [3] Move to final grasp position
+            GameObject graspTarget = GetOrCreateTempObject(RobotConstants.GRASP_TARGET_SUFFIX);
+            graspTarget.transform.SetPositionAndRotation(
+                candidate.graspPosition,
+                candidate.graspRotation
+            );
+
+            SetTargetInternal(graspTarget.transform, targetObject, new GraspOptions
+            {
+                useGraspPlanning = false,
+                openGripperOnSet = false,
+                closeGripperOnReach = false
+            });
+
+            Debug.Log(
+                $"{_logPrefix} [Stage 2/3] Moving to final grasp position: {candidate.graspPosition}"
+            );
+
+            // Wait for grasp position to complete
+            yield return new WaitUntil(() => _hasReachedTarget);
+
+            // [4] Close gripper if requested
+            if (options.closeGripperOnReach && _gripperController != null)
+            {
+                yield return new WaitForSeconds(0.1f); // Brief pause before closing
+                _gripperController.SetGripperPosition(candidate.graspGripperWidth);
+                Debug.Log($"{_logPrefix} Closing gripper to grasp object");
+
+                // Wait for gripper to close
+                yield return new WaitForSeconds(0.3f);
+            }
+
+            // [5] Retreat with object (if enabled in config)
+            GraspConfig config = options.graspConfig ?? _graspConfig;
+            if (config != null && config.enableRetreat)
+            {
+                GameObject retreatTarget = GetOrCreateTempObject(RobotConstants.GRASP_TARGET_SUFFIX + "_retreat");
+                retreatTarget.transform.SetPositionAndRotation(
+                    candidate.retreatPosition,
+                    candidate.retreatRotation
+                );
+
+                SetTargetInternal(retreatTarget.transform, targetObject, new GraspOptions
+                {
+                    useGraspPlanning = false,
+                    openGripperOnSet = false,
+                    closeGripperOnReach = false
+                });
+
+                Debug.Log(
+                    $"{_logPrefix} [Stage 3/3] Retreating to safe position: {candidate.retreatPosition}"
+                );
+
+                // Wait for retreat to complete
+                yield return new WaitUntil(() => _hasReachedTarget);
             }
 
             // Fire OnTargetReached event for the complete grasp sequence
@@ -736,6 +936,31 @@ namespace Robotics
             }
 
             InitializeRobot();
+
+            // Initialize advanced grasp planning pipeline if config is set
+            InitializeGraspPipeline();
+        }
+
+        /// <summary>
+        /// Initialize the advanced grasp planning pipeline if configuration is available.
+        /// </summary>
+        private void InitializeGraspPipeline()
+        {
+            if (_graspConfig != null && robotJoints != null && IKReferenceFrame != null && endEffectorBase != null)
+            {
+                _graspPipeline = new Robotics.Grasp.GraspPlanningPipeline(
+                    _graspConfig,
+                    robotJoints,
+                    IKReferenceFrame,
+                    endEffectorBase,
+                    _dampingFactorLambda
+                );
+                Debug.Log($"{_logPrefix} Advanced grasp planning pipeline initialized for {robotId}");
+            }
+            else if (_graspConfig != null)
+            {
+                Debug.LogWarning($"{_logPrefix} Cannot initialize grasp pipeline - missing robot components");
+            }
         }
 
         private void FixedUpdate()
@@ -745,11 +970,36 @@ namespace Robotics
                 return;
 
             // Check if this robot is allowed to move (respects coordination mode)
-            if (_simulationManager != null && !_simulationManager.IsRobotActive(robotId))
+            // Use cached value to reduce per-frame overhead (called 60+ times/sec)
+            if (_simulationManager != null && !GetCachedIsRobotActive())
                 return;
 
             if (!_hasReachedTarget)
                 PerformInverseKinematicsStep();
+        }
+
+        /// <summary>
+        /// Get cached IsRobotActive state with configurable cache interval.
+        /// Reduces per-frame overhead by caching the result for 100ms.
+        /// </summary>
+        private bool GetCachedIsRobotActive()
+        {
+            float currentTime = Time.time;
+            if (currentTime - _lastActiveCheckTime >= ACTIVE_CHECK_CACHE_INTERVAL)
+            {
+                bool newActiveState = _simulationManager.IsRobotActive(robotId);
+
+                // Fire event if state changed
+                if (newActiveState != _cachedIsRobotActive)
+                {
+                    OnCoordinationStateChanged?.Invoke(newActiveState);
+                }
+
+                _cachedIsRobotActive = newActiveState;
+                _lastActiveCheckTime = currentTime;
+            }
+
+            return _cachedIsRobotActive;
         }
 
         /// <summary>

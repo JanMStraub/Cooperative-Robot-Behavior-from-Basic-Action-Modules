@@ -144,7 +144,7 @@ namespace Tests.PlayMode
         {
             yield return null;
 
-            // State goes to Error without robots
+            // Reset simulation completes successfully even without robots
             // Test verifies the method doesn't throw
             _manager.ResetSimulation();
             var state = _manager.CurrentState;

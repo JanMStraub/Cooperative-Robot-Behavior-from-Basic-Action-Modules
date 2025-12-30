@@ -134,6 +134,17 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 2906306481840707133, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
   m_PrefabInstance: {fileID: 9060350412813614532}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &228628200 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 2735374455911375713, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 228628198}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cedd687a87f7f47049833e3eeeeb3324, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &269074923 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 6077284443812479320, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
@@ -422,7 +433,7 @@ Transform:
   m_GameObject: {fileID: 627489884}
   serializedVersion: 2
   m_LocalRotation: {x: 0.7071068, y: -0, z: -0, w: 0.7071068}
-  m_LocalPosition: {x: -3.3229399, y: 4, z: 3.1038098}
+  m_LocalPosition: {x: 0, y: 1, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -504,10 +515,10 @@ Camera:
     width: 1
     height: 1
   near clip plane: 0.3
-  far clip plane: 10
+  far clip plane: 2
   field of view: 90
-  orthographic: 0
-  orthographic size: 5
+  orthographic: 1
+  orthographic size: 0.5
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
@@ -549,7 +560,7 @@ Transform:
   m_GameObject: {fileID: 662395067}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -0.27706, y: 0, z: -0.00381}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -968,6 +979,7 @@ MonoBehaviour:
   _verboseLogging: 0
   _applySpeedMultiplier: 1
   _enablePythonVerification: 1
+  _coordinationConfig: {fileID: 11400000, guid: 39e329affb765483096203bdbd1b6df1, type: 2}
   _successfulCommands: 0
   _failedCommands: 0
 --- !u!114 &1595579026
@@ -1019,7 +1031,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp-ACRL::PythonCommunication.WorldStatePublisher
   _enablePublishing: 1
-  _updateRate: 2
+  _updateRate: 10
   _publishRobots: 1
   _publishObjects: 1
   _verboseLogging: 0
@@ -1031,6 +1043,17 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 608026700499321620, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
   m_PrefabInstance: {fileID: 9060350412813614532}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &1726942548 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6155458069873169085, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1726942546}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cedd687a87f7f47049833e3eeeeb3324, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &1775652738 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 2746204199733885086, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
@@ -1077,6 +1100,14 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 978755434903592783, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _graspConfig
+      value: 
+      objectReference: {fileID: 11400000, guid: a83c177827c05458e94f36395b5ad440, type: 2}
+    - target: {fileID: 978755434903592783, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _gripperController
+      value: 
+      objectReference: {fileID: 1726942548}
     - target: {fileID: 2407326571579605720, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: _enableStreaming
       value: 0
@@ -1141,6 +1172,14 @@ PrefabInstance:
       propertyPath: m_AngularDamping
       value: 0.05
       objectReference: {fileID: 0}
+    - target: {fileID: 6517560048216686290, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _graspConfig
+      value: 
+      objectReference: {fileID: 11400000, guid: a83c177827c05458e94f36395b5ad440, type: 2}
+    - target: {fileID: 6517560048216686290, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _gripperController
+      value: 
+      objectReference: {fileID: 228628200}
     - target: {fileID: 6897178052544332906, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
       value: Environment

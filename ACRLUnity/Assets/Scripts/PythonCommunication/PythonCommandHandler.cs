@@ -3,6 +3,7 @@ using System.Collections;
 using System.Linq;
 using Core;
 using Robotics;
+using Robotics.Grasp;
 using UnityEngine;
 using Vision;
 
@@ -32,6 +33,15 @@ namespace PythonCommunication
         public float approach_offset;
         public bool detailed; // For status queries
         public bool open_gripper; // For gripper control
+
+        // Grasp planning parameters
+        public string object_id; // Object to grasp
+        public bool use_advanced_planning; // Use full grasp planning pipeline
+        public string preferred_approach; // "auto", "top", "front", "side"
+        public float pre_grasp_distance; // Custom pre-grasp distance (0 = use config)
+        public bool enable_retreat; // Whether to retreat after grasping
+        public float retreat_distance; // Custom retreat distance (0 = use config)
+        public TargetPosition custom_approach_vector; // Custom approach direction
     }
 
     [System.Serializable]
@@ -87,8 +97,15 @@ namespace PythonCommunication
         [SerializeField]
         private bool _enablePythonVerification = true;
 
+        [Tooltip("Coordination configuration for verification and collision avoidance")]
+        [SerializeField]
+        private Configuration.CoordinationConfig _coordinationConfig;
+
         [Tooltip("Workspace Manager for coordination (Phase 4)")]
         private Simulation.WorkspaceManager _workspaceManager;
+
+        // Coordination verifier (initialized based on config)
+        private ICoordinationVerifier _coordinationVerifier;
 
         [Header("Runtime Info")]
         [Tooltip("Number of commands processed successfully")]
@@ -154,7 +171,54 @@ namespace PythonCommunication
                 );
             }
 
+            // Initialize coordination verifier based on configuration
+            InitializeCoordinationVerifier();
+
             Debug.Log($"{_logPrefix} Initialized and listening for Python commands");
+        }
+
+        /// <summary>
+        /// Initialize coordination verifier based on configuration mode.
+        /// </summary>
+        private void InitializeCoordinationVerifier()
+        {
+            if (_coordinationConfig == null)
+            {
+                Debug.LogWarning($"{_logPrefix} CoordinationConfig not assigned, using Unity-only verification");
+                _coordinationVerifier = new UnityCoordinationVerifier(0.2f);
+                return;
+            }
+
+            float minSafeSeparation = _coordinationConfig.minSafeSeparation;
+
+            switch (_coordinationConfig.verificationMode)
+            {
+                case Configuration.VerificationMode.UnityOnly:
+                    _coordinationVerifier = new UnityCoordinationVerifier(minSafeSeparation);
+                    Debug.Log($"{_logPrefix} Coordination verification mode: Unity-only (fast)");
+                    break;
+
+                case Configuration.VerificationMode.PythonVerified:
+                    _coordinationVerifier = new PythonCoordinationVerifier(
+                        _coordinationConfig.pythonVerificationTimeout,
+                        _coordinationConfig.fallbackToUnityOnTimeout,
+                        minSafeSeparation
+                    );
+                    Debug.Log($"{_logPrefix} Coordination verification mode: Python-verified");
+                    break;
+
+                case Configuration.VerificationMode.Hybrid:
+                    // Hybrid mode: Use Unity for initial check, Python for conflicts
+                    // For now, use Unity-only as hybrid implementation requires more complex logic
+                    _coordinationVerifier = new UnityCoordinationVerifier(minSafeSeparation);
+                    Debug.Log($"{_logPrefix} Coordination verification mode: Hybrid (using Unity for now)");
+                    break;
+
+                default:
+                    _coordinationVerifier = new UnityCoordinationVerifier(minSafeSeparation);
+                    Debug.LogWarning($"{_logPrefix} Unknown verification mode, defaulting to Unity-only");
+                    break;
+            }
         }
 
         #endregion
@@ -222,6 +286,10 @@ namespace PythonCommunication
 
                 case "return_to_start_position":
                     ExecuteReturnToStartPosition(command);
+                    break;
+
+                case "grasp_object":
+                    ExecuteGraspObject(command);
                     break;
 
                 // Camera-targeted commands
@@ -532,6 +600,149 @@ namespace PythonCommunication
                 );
                 _failedCommands++;
             }
+        }
+
+        /// <summary>
+        /// Execute grasp_object command using advanced grasp planning pipeline.
+        /// </summary>
+        /// <param name="command">Robot command with grasp parameters</param>
+        private void ExecuteGraspObject(RobotCommand command)
+        {
+            try
+            {
+                // Validate robot and get instance
+                if (
+                    !ValidateAndGetRobot(
+                        command.robot_id,
+                        "grasp_object",
+                        out RobotInstance robotInstance,
+                        out RobotController controller
+                    )
+                )
+                {
+                    return;
+                }
+
+                // Validate parameters
+                if (command.parameters == null)
+                {
+                    Debug.LogError($"{_logPrefix} grasp_object: Missing parameters");
+                    _failedCommands++;
+                    return;
+                }
+
+                // Validate object_id
+                string objectId = command.parameters.object_id;
+                if (string.IsNullOrEmpty(objectId))
+                {
+                    Debug.LogError($"{_logPrefix} grasp_object: Missing object_id");
+                    _failedCommands++;
+                    return;
+                }
+
+                // Find target object in scene (with flexible matching)
+                GameObject targetObject = FindObjectFlexible(objectId);
+                if (targetObject == null)
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} grasp_object: Object '{objectId}' not found in scene. "
+                            + "Tried exact match, case-insensitive, and snake_case->camelCase conversion."
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                // Build GraspOptions from command parameters
+                GraspOptions options = new GraspOptions
+                {
+                    useGraspPlanning = true,
+                    openGripperOnSet = true,
+                    closeGripperOnReach = true,
+                    useAdvancedPlanning = command.parameters.use_advanced_planning,
+                    approach = ParseApproachType(command.parameters.preferred_approach),
+                    overridePreGraspDistance = command.parameters.pre_grasp_distance,
+                    customApproachVector = ParseApproachVector(command.parameters.custom_approach_vector),
+                    graspConfig = null // Use default config from RobotController
+                };
+
+                // Subscribe to target reached event for completion notification
+                string commandKey = $"grasp_{command.robot_id}_{command.request_id}";
+                _activeCommands[commandKey] = command.request_id;
+
+                System.Action onComplete = null;
+                onComplete = () =>
+                {
+                    controller.OnTargetReached -= onComplete;
+                    if (_activeCommands.ContainsKey(commandKey))
+                    {
+                        _activeCommands.Remove(commandKey);
+                        SendCommandCompletion(
+                            command.robot_id,
+                            "grasp_object",
+                            true,
+                            command.request_id
+                        );
+                    }
+                };
+                controller.OnTargetReached += onComplete;
+
+                // Execute grasp
+                controller.SetTarget(targetObject, options);
+
+                if (_verboseLogging)
+                {
+                    string planningMode = options.useAdvancedPlanning ? "Advanced" : "Standard";
+                    Debug.Log(
+                        $"{_logPrefix} {planningMode} grasp planning: {command.robot_id} -> {objectId}"
+                    );
+                }
+
+                _successfulCommands++;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"{_logPrefix} Error executing grasp_object: {ex.Message}\n{ex.StackTrace}"
+                );
+                _failedCommands++;
+            }
+        }
+
+        /// <summary>
+        /// Parse approach type string to GraspApproach enum.
+        /// </summary>
+        /// <param name="approachStr">Approach string ("auto", "top", "front", "side")</param>
+        /// <returns>GraspApproach enum value, or null for auto</returns>
+        private GraspApproach? ParseApproachType(string approachStr)
+        {
+            if (string.IsNullOrEmpty(approachStr) || approachStr.ToLower() == "auto")
+                return null;
+
+            switch (approachStr.ToLower())
+            {
+                case "top":
+                    return GraspApproach.Top;
+                case "front":
+                    return GraspApproach.Front;
+                case "side":
+                    return GraspApproach.Side;
+                default:
+                    Debug.LogWarning($"{_logPrefix} Unknown approach type '{approachStr}', using auto");
+                    return null;
+            }
+        }
+
+        /// <summary>
+        /// Parse approach vector from TargetPosition.
+        /// </summary>
+        /// <param name="vector">Target position representing direction vector</param>
+        /// <returns>Vector3 or null if not provided</returns>
+        private Vector3? ParseApproachVector(TargetPosition vector)
+        {
+            if (vector == null)
+                return null;
+
+            return new Vector3(vector.x, vector.y, vector.z);
         }
 
         /// <summary>
@@ -973,86 +1184,48 @@ namespace PythonCommunication
         /// <returns>True if movement is safe, false if blocked</returns>
         private bool VerifyMovementSafety(string robotId, Vector3 targetPosition)
         {
-            if (_workspaceManager == null)
+            // Early exit if verification is disabled
+            if (!_enablePythonVerification || _coordinationVerifier == null)
             {
-                // No workspace manager, allow movement (fallback to independent mode)
                 return true;
             }
 
-            // Check 1: Workspace region availability
-            var targetRegion = _workspaceManager.GetRegionAtPosition(targetPosition);
-            if (targetRegion != null)
+            // Get current robot position
+            Vector3 currentPosition = Vector3.zero;
+            if (_robotManager != null && _robotManager.RobotInstances.TryGetValue(robotId, out var robotInstance))
             {
-                if (!_workspaceManager.IsRegionAvailable(targetRegion.regionName, robotId))
+                if (robotInstance.controller != null)
                 {
-                    if (_verboseLogging)
-                    {
-                        Debug.LogWarning(
-                            $"{_logPrefix} [Phase 4] Workspace conflict: Region '{targetRegion.regionName}' "
-                                + $"is allocated to {targetRegion.allocatedRobotId}"
-                        );
-                    }
-                    return false;
-                }
-
-                // Check if region is currently a collision zone
-                if (_workspaceManager.IsCollisionZone(targetRegion.regionName))
-                {
-                    if (_verboseLogging)
-                    {
-                        Debug.LogWarning(
-                            $"{_logPrefix} [Phase 4] Collision zone: Region '{targetRegion.regionName}' "
-                                + "is currently in use by another robot"
-                        );
-                    }
-                    return false;
+                    currentPosition = robotInstance.controller.GetCurrentEndEffectorPosition();
                 }
             }
 
-            // Check 2: Minimum separation from other robots
-            var allRobots = _robotManager.RobotInstances;
-            foreach (var kvp in allRobots)
+            // Use coordination verifier
+            var result = _coordinationVerifier.VerifyMovement(robotId, targetPosition, currentPosition);
+
+            // Log warnings if any
+            if (_verboseLogging && result.warnings != null && result.warnings.Count > 0)
             {
-                if (kvp.Key == robotId)
-                    continue; // Skip self
-
-                var otherController = kvp.Value.controller;
-                if (otherController == null)
-                    continue;
-
-                Vector3 otherPosition = otherController.GetCurrentEndEffectorPosition();
-                if (!_workspaceManager.IsSafeSeparation(targetPosition, otherPosition))
+                foreach (var warning in result.warnings)
                 {
-                    if (_verboseLogging)
-                    {
-                        float distance = Vector3.Distance(targetPosition, otherPosition);
-                        Debug.LogWarning(
-                            $"{_logPrefix} [Phase 4] Collision risk: Target position too close to {kvp.Key} "
-                                + $"(distance: {distance:F3}m)"
-                        );
-                    }
-                    return false;
-                }
-
-                // Also check if other robot is moving towards a conflicting target
-                if (otherController.HasTarget)
-                {
-                    Vector3 otherTarget = otherController.GetCurrentTarget().Value;
-                    if (!_workspaceManager.IsSafeSeparation(targetPosition, otherTarget))
-                    {
-                        if (_verboseLogging)
-                        {
-                            Debug.LogWarning(
-                                $"{_logPrefix} [Phase 4] Path conflict: {kvp.Key} is moving to nearby position"
-                            );
-                        }
-                        return false;
-                    }
+                    Debug.LogWarning($"{_logPrefix} [Verification] {warning}");
                 }
             }
 
-            // All checks passed
-            return true;
+            // Log result
+            if (_verboseLogging)
+            {
+                if (result.isSafe)
+                {
+                    Debug.Log($"{_logPrefix} [Verification] Movement safe for {robotId} using {_coordinationVerifier.VerifierName}: {result.reason}");
+                }
+                else
+                {
+                    Debug.LogWarning($"{_logPrefix} [Verification] Movement blocked for {robotId} using {_coordinationVerifier.VerifierName}: {result.reason}");
+                }
+            }
+
+            return result.isSafe;
         }
 
         /// <summary>
@@ -1064,6 +1237,114 @@ namespace PythonCommunication
             Debug.Log(
                 $"{_logPrefix} [Phase 4] Python verification {(enabled ? "enabled" : "disabled")}"
             );
+        }
+
+        #endregion
+
+        #region Helper Methods
+
+        /// <summary>
+        /// Find GameObject with flexible name matching.
+        /// Tries multiple strategies to handle naming mismatches between Python and Unity.
+        /// </summary>
+        /// <param name="objectId">Object identifier (e.g., "blue_cube", "blueCube", "Cube_01")</param>
+        /// <returns>GameObject if found, null otherwise</returns>
+        private GameObject FindObjectFlexible(string objectId)
+        {
+            if (string.IsNullOrEmpty(objectId))
+                return null;
+
+            // Strategy 1: Exact match
+            GameObject obj = GameObject.Find(objectId);
+            if (obj != null)
+            {
+                if (_verboseLogging)
+                    Debug.Log($"{_logPrefix} Found object '{objectId}' via exact match");
+                return obj;
+            }
+
+            // Strategy 2: Case-insensitive search through all GameObjects
+            GameObject[] allObjects = FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+            foreach (var candidate in allObjects)
+            {
+                if (candidate.name.Equals(objectId, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    if (_verboseLogging)
+                        Debug.Log(
+                            $"{_logPrefix} Found object '{candidate.name}' via case-insensitive match for '{objectId}'"
+                        );
+                    return candidate;
+                }
+            }
+
+            // Strategy 3: Convert snake_case to camelCase and search
+            // "blue_cube" -> "blueCube"
+            string camelCase = SnakeToCamelCase(objectId);
+            if (camelCase != objectId)
+            {
+                obj = GameObject.Find(camelCase);
+                if (obj != null)
+                {
+                    if (_verboseLogging)
+                        Debug.Log(
+                            $"{_logPrefix} Found object '{camelCase}' via snake_case->camelCase conversion from '{objectId}'"
+                        );
+                    return obj;
+                }
+
+                // Try case-insensitive camelCase search
+                foreach (var candidate in allObjects)
+                {
+                    if (candidate.name.Equals(camelCase, System.StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (_verboseLogging)
+                            Debug.Log(
+                                $"{_logPrefix} Found object '{candidate.name}' via camelCase case-insensitive match for '{objectId}'"
+                            );
+                        return candidate;
+                    }
+                }
+            }
+
+            // Strategy 4: Partial match (contains)
+            foreach (var candidate in allObjects)
+            {
+                if (
+                    candidate.name.IndexOf(objectId, System.StringComparison.OrdinalIgnoreCase) >= 0
+                )
+                {
+                    if (_verboseLogging)
+                        Debug.Log(
+                            $"{_logPrefix} Found object '{candidate.name}' via partial match for '{objectId}'"
+                        );
+                    return candidate;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Convert snake_case to camelCase.
+        /// Example: "blue_cube" -> "blueCube"
+        /// </summary>
+        private string SnakeToCamelCase(string snakeCase)
+        {
+            if (string.IsNullOrEmpty(snakeCase) || !snakeCase.Contains("_"))
+                return snakeCase;
+
+            string[] parts = snakeCase.Split('_');
+            string result = parts[0].ToLower();
+
+            for (int i = 1; i < parts.Length; i++)
+            {
+                if (parts[i].Length > 0)
+                {
+                    result += char.ToUpper(parts[i][0]) + parts[i].Substring(1).ToLower();
+                }
+            }
+
+            return result;
         }
 
         #endregion

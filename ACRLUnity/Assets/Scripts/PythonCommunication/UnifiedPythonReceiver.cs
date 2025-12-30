@@ -357,6 +357,9 @@ namespace PythonCommunication
                 if (string.IsNullOrEmpty(json))
                     return;
 
+                // DEBUG: Log received JSON to diagnose routing issue
+                Debug.Log($"{_logPrefix} [req={requestId}] Processing JSON: {json}");
+
                 // Try to determine result type by checking for presence of specific fields
                 // Robot commands have "command_type"
                 // LLM results have "response" string

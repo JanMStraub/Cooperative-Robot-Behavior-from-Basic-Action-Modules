@@ -98,7 +98,9 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator RobotManager_RegisterRobot_AddsToInstances()
         {
-            yield return null;
+            yield return null; // Allow Start() to complete
+
+            int countBeforeRegistration = _manager.AllRobotIds.Count;
 
             var robotObject = new GameObject("TestRobot");
             robotObject.AddComponent<RobotController>();
@@ -107,7 +109,7 @@ namespace Tests.PlayMode
             _manager.RegisterRobot("TestRobot", robotObject, null, null);
 
             Assert.IsTrue(_manager.RobotInstances.ContainsKey("TestRobot"));
-            Assert.AreEqual(1, _manager.AllRobotIds.Count);
+            Assert.AreEqual(countBeforeRegistration + 1, _manager.AllRobotIds.Count);
 
             UnityEngine.Object.DestroyImmediate(robotObject);
         }
@@ -117,6 +119,8 @@ namespace Tests.PlayMode
         {
             yield return null;
 
+            int countBefore = _manager.AllRobotIds.Count;
+
             var robotObject = new GameObject("CustomRobot");
             robotObject.AddComponent<RobotController>();
 
@@ -124,7 +128,7 @@ namespace Tests.PlayMode
             _manager.RegisterRobot(null, robotObject, null, null);
 
             // Should have auto-generated an ID based on GameObject name
-            Assert.AreEqual(1, _manager.AllRobotIds.Count);
+            Assert.AreEqual(countBefore + 1, _manager.AllRobotIds.Count);
             Assert.IsTrue(_manager.RobotInstances.ContainsKey("CustomRobot"));
 
             UnityEngine.Object.DestroyImmediate(robotObject);
