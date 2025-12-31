@@ -11,6 +11,7 @@ namespace Robotics.Grasp
     public class GraspCollisionFilter
     {
         private readonly GraspConfig _config;
+        private readonly string[] _ignoredObjectNames = { "BottomPanel", "Workdesk", "Table", "Floor", "Ground", "Plane" };
 
         /// <summary>
         /// Initialize collision filter with configuration.
@@ -42,10 +43,12 @@ namespace Robotics.Grasp
                     candidate.collisionValidated = true;
                     candidates[i] = candidate;
                 }
+                UnityEngine.Debug.Log($"[GRASP_COLLISION_FILTER] Collision checking disabled, accepting all {candidates.Count} candidates");
                 return candidates;
             }
 
             var validCandidates = new List<GraspCandidate>();
+            int rejectedCount = 0;
 
             foreach (var candidate in candidates)
             {
@@ -57,7 +60,13 @@ namespace Robotics.Grasp
                     validated.collisionValidated = true;
                     validCandidates.Add(validated);
                 }
+                else
+                {
+                    rejectedCount++;
+                }
             }
+
+            UnityEngine.Debug.Log($"[GRASP_COLLISION_FILTER] Validated {validCandidates.Count}/{candidates.Count} candidates (rejected {rejectedCount} due to collisions)");
 
             return validCandidates;
         }
@@ -102,7 +111,15 @@ namespace Robotics.Grasp
                         continue; // Hitting target is acceptable
                     }
 
+                    // Check if hit object is an ignored workspace object (table, floor, etc.)
+                    if (ShouldIgnoreObject(hit.collider.gameObject))
+                    {
+                        UnityEngine.Debug.Log($"[GRASP_COLLISION_FILTER] Ignoring workspace collision with '{hit.collider.gameObject.name}'");
+                        continue; // Ignore workspace surfaces
+                    }
+
                     // Hit an obstacle - path blocked
+                    UnityEngine.Debug.Log($"[GRASP_COLLISION_FILTER] Collision detected at waypoint {i}: hit '{hit.collider.gameObject.name}' (layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)}) at distance {hit.distance:F3}m");
                     return false;
                 }
             }
@@ -152,11 +169,50 @@ namespace Robotics.Grasp
                     }
                 }
 
+                // Check if hit object is an ignored workspace object
+                if (ShouldIgnoreObject(hit.collider.gameObject))
+                {
+                    UnityEngine.Debug.Log($"[GRASP_COLLISION_FILTER] Ignoring workspace collision in retreat with '{hit.collider.gameObject.name}'");
+                    return true; // Ignore workspace surfaces in retreat
+                }
+
                 // Obstacle in retreat path
+                UnityEngine.Debug.Log($"[GRASP_COLLISION_FILTER] Retreat collision detected: hit '{hit.collider.gameObject.name}' (layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)}) at distance {hit.distance:F3}m");
                 return false;
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Check if an object should be ignored during collision checking.
+        /// Ignores workspace surfaces (tables, floors, etc.) that objects rest on.
+        /// </summary>
+        /// <param name="obj">Object to check</param>
+        /// <returns>True if object should be ignored</returns>
+        private bool ShouldIgnoreObject(GameObject obj)
+        {
+            string objName = obj.name;
+
+            // Check exact name matches
+            foreach (string ignoredName in _ignoredObjectNames)
+            {
+                if (objName.Equals(ignoredName, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            // Check if name contains ignored keywords
+            foreach (string ignoredName in _ignoredObjectNames)
+            {
+                if (objName.IndexOf(ignoredName, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>

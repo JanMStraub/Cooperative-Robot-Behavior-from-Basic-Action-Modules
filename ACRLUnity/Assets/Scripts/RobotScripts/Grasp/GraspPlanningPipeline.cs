@@ -17,7 +17,7 @@ namespace Robotics.Grasp
         private readonly GraspCollisionFilter _collisionFilter;
         private readonly GraspScorer _scorer;
 
-        private const string _logPrefix = "[GRASP_PIPELINE]";
+        private const string _logPrefix = "[GRASP_PLANNING_PIPELINE]";
 
         /// <summary>
         /// Initialize pipeline with robot configuration.

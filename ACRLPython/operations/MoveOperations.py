@@ -44,6 +44,7 @@ def move_to_coordinate(
     z: float,
     speed: float = 1.0,
     approach_offset: float = 0.0,
+    use_advanced_planning: bool = True,
     request_id: int = 0,
 ) -> OperationResult:
     """
@@ -64,6 +65,7 @@ def move_to_coordinate(
         z: Z coordinate in meters (height above robot base), range: [-0.5, 0.6]
         speed: Speed multiplier (0.1=slow, 1.0=normal, 2.0=fast), range: [0.1, 2.0]
         approach_offset: Stop distance before target in meters, range: [0.0, 0.1]
+        use_advanced_planning: Use full grasp planning pipeline (generates 15 candidates), default: True
 
     Returns:
         Dict with the following structure:
@@ -186,6 +188,7 @@ def move_to_coordinate(
                 "speed_multiplier": speed,
                 "original_target": {"x": x, "y": y, "z": z},
                 "approach_offset": approach_offset,
+                "use_advanced_planning": use_advanced_planning,
             },
             "timestamp": time.time(),
             "request_id": request_id,

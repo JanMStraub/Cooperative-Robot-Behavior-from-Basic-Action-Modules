@@ -83,7 +83,7 @@ namespace Robotics
         public float smoothTime = 0.3f;
 
         [Range(0f, 1f)]
-        public float targetPosition = 0f;
+        public float targetPosition = 1f;
 
         [Header("Gripper Geometry")]
         [Tooltip("Gripper geometry for grasp planning validation")]
@@ -173,6 +173,9 @@ namespace Robotics
         public void SetGripperPosition(float normalizedPosition)
         {
             targetPosition = Mathf.Clamp01(normalizedPosition);
+            // Reset velocity for immediate response to new command
+            _currentVelocity = 0f;
+            _isMoving = true;
         }
 
         /// <summary>
@@ -181,6 +184,8 @@ namespace Robotics
         public void OpenGrippers()
         {
             targetPosition = 1.0f;
+            // Reset velocity for immediate response to new command
+            _currentVelocity = 0f;
             _isMoving = true;
         }
 
@@ -190,6 +195,8 @@ namespace Robotics
         public void CloseGrippers()
         {
             targetPosition = 0.0f;
+            // Reset velocity for immediate response to new command
+            _currentVelocity = 0f;
             _isMoving = true;
         }
 
@@ -198,9 +205,10 @@ namespace Robotics
         /// </summary>
         public void ResetGrippers()
         {
-            targetPosition = 0f;
-            ResetGripper(leftGripper);
-            ResetGripper(rightGripper);
+            targetPosition = 1f;
+            ResetGripper(leftGripper, targetPosition);
+            ResetGripper(rightGripper, targetPosition);
+            _isMoving = false; // Reset is immediate, no need for smooth movement
         }
 
         /// <summary>
@@ -215,10 +223,16 @@ namespace Robotics
         /// Resets a single gripper to its default state.
         /// </summary>
         /// <param name="gripper">The gripper ArticulationBody to reset</param>
-        private void ResetGripper(ArticulationBody gripper)
+        /// <param name="normalizedPosition">The normalized position to reset to (0 = closed, 1 = open)</param>
+        private void ResetGripper(ArticulationBody gripper, float normalizedPosition)
         {
-            ApplyDriveTarget(gripper, 0f);
-            gripper.jointPosition = new ArticulationReducedSpace(0f);
+            float lower = gripper.xDrive.lowerLimit;
+            float upper = gripper.xDrive.upperLimit;
+            // Invert mapping because AR4 gripper has lower=-0.015 (open) and upper=0.0 (closed)
+            float targetValue = Mathf.Lerp(lower, upper, 1f - normalizedPosition);
+
+            ApplyDriveTarget(gripper, targetValue);
+            gripper.jointPosition = new ArticulationReducedSpace(targetValue);
             gripper.jointVelocity = new ArticulationReducedSpace(0f);
             gripper.jointForce = new ArticulationReducedSpace(0f);
         }
@@ -250,26 +264,39 @@ namespace Robotics
                 SetupDrive(leftGripper);
                 SetupDrive(rightGripper);
 
+                // Map normalized position [0,1] to actual joint limits
+                float lower = leftGripper.xDrive.lowerLimit;
+                float upper = leftGripper.xDrive.upperLimit;
+                // Invert mapping because AR4 gripper has lower=-0.015 (open) and upper=0.0 (closed)
+                float mappedTarget = Mathf.Lerp(lower, upper, 1f - targetPosition);
+
                 // Check if joint position was manually set (for tests) - if so, use that as initial target
                 var jointPos = leftGripper.jointPosition;
-                if (jointPos.dofCount > 0)
+                if (jointPos.dofCount > 0 && jointPos[0] != 0f)
                 {
                     _currentTarget = jointPos[0];
                     _initialized = true;
+                    // If joint position differs from targetPosition, trigger movement
+                    if (Mathf.Abs(_currentTarget - mappedTarget) > _completionThreshold)
+                    {
+                        _isMoving = true;
+                    }
                     return;
                 }
 
-                // Otherwise initialize _currentTarget to match the initial targetPosition
-                float lower = leftGripper.xDrive.lowerLimit;
-                float upper = leftGripper.xDrive.upperLimit;
-                _currentTarget = Mathf.Lerp(lower, upper, targetPosition);
+                // Otherwise initialize _currentTarget and grippers to the initial targetPosition
+                _currentTarget = mappedTarget;
+                ApplyTargetToGrippers(_currentTarget);
                 _initialized = true;
+
+                // Log the gripper range for debugging
+                Debug.Log($"{_logPrefix} Initialized with range [{lower:F3}, {upper:F3}], target position: {targetPosition} -> {mappedTarget:F3}");
             }
         }
 
         /// <summary>
         /// Unity Update callback - smoothly interpolates gripper position towards target position using SmoothDamp.
-        /// Only runs when actively moving to avoid interfering with manual positioning (e.g., in tests).
+        /// Continuously applies the target to ensure the gripper reaches its goal even under load.
         /// </summary>
         private void Update()
         {
@@ -277,16 +304,13 @@ namespace Robotics
             if (leftGripper == null || rightGripper == null)
                 return;
 
-            // Only update if we're actively moving toward a target (prevents interference with manual positioning)
-            if (!_isMoving)
-                return;
-
             // Map normalized position [0,1] to actual joint limits
             float lower = leftGripper.xDrive.lowerLimit;
             float upper = leftGripper.xDrive.upperLimit;
-            float mappedTarget = Mathf.Lerp(lower, upper, targetPosition);
+            // Invert mapping because AR4 gripper has lower=-0.015 (open) and upper=0.0 (closed)
+            float mappedTarget = Mathf.Lerp(lower, upper, 1f - targetPosition);
 
-            // Initialize _currentTarget on first movement command
+            // Initialize _currentTarget on first update
             if (!_initialized)
             {
                 // Try to initialize from current joint position if available
@@ -304,6 +328,7 @@ namespace Robotics
             }
 
             // Smooth interpolation using SmoothDamp for natural acceleration/deceleration
+            float previousTarget = _currentTarget;
             _currentTarget = Mathf.SmoothDamp(
                 _currentTarget,
                 mappedTarget,
@@ -311,12 +336,23 @@ namespace Robotics
                 smoothTime
             );
 
+            // Always apply the target to ensure continuous force application
             ApplyTargetToGrippers(_currentTarget);
 
-            // Check for completion
-            if (Mathf.Abs(_currentTarget - mappedTarget) < _completionThreshold)
+            // Get actual joint position to determine if we've reached the target
+            float actualPosition = CurrentPosition;
+
+            // Check for completion based on actual position vs mapped target
+            bool wasMoving = _isMoving;
+            bool reachedTarget = Mathf.Abs(actualPosition - mappedTarget) < _completionThreshold;
+
+            // Update moving state: we're moving if the interpolated target hasn't converged
+            // OR if the actual position is far from the target
+            _isMoving = Mathf.Abs(_currentTarget - mappedTarget) >= _completionThreshold || !reachedTarget;
+
+            // Fire completion event when we transition from moving to not moving
+            if (wasMoving && !_isMoving)
             {
-                _isMoving = false;
                 OnGripperActionComplete?.Invoke();
             }
         }
