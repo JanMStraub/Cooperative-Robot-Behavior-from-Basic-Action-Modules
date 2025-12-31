@@ -46,7 +46,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   enableIKValidation: 1
-  maxIKValidationIterations: 10
-  ikValidationThreshold: 0.05
+  maxIKValidationIterations: 50
+  ikValidationThreshold: 0.1
   maxReachDistance: 0.6
   maxPipelineTimeMs: 200
