@@ -72,6 +72,7 @@ namespace Robotics.Grasp
             }
             else
             {
+                UnityEngine.Debug.Log("Advanced grasp planning");
                 // Advanced mode - generate multiple candidates
                 candidates = _generator.GenerateCandidates(targetObject, gripperPosition);
             }

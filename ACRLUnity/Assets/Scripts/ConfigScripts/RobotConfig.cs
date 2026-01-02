@@ -6,9 +6,9 @@ namespace Configuration
     public class JointConfiguration
     {
         [Header("Joint Parameters")]
-        public float stiffness = 800f;
-        public float damping = 250f;
-        public float forceLimit = 1000f;
+        public float stiffness = 8000f;
+        public float damping = 2000f;
+        public float forceLimit = 5000f;
         public float upperLimit = 170f;
         public float lowerLimit = -170f;
 
@@ -36,9 +36,6 @@ namespace Configuration
         [Range(0.1f, 5f)]
         public float adjustmentSpeed = 1.0f;
 
-        [Range(0.001f, 0.5f)]
-        public float convergenceThreshold = 0.1f;
-
         [Range(0.01f, 0.5f)]
         public float maxJointStepRad = 0.1f;
 
@@ -46,13 +43,22 @@ namespace Configuration
         {
             joints = new JointConfiguration[6]
             {
-                new JointConfiguration(800, 250, 1000, 170, -170), // Base
-                new JointConfiguration(700, 200, 1500, 90, -90), // Shoulder
-                new JointConfiguration(600, 150, 1000, 65, -70), // Elbow
-                new JointConfiguration(300, 100, 800, 135, -135), // Wrist 1
-                new JointConfiguration(200, 80, 500, 100, -100), // Wrist 2
-                new JointConfiguration(100, 50, 300, 180, -180), // Wrist 3
+                new JointConfiguration(8000, 2000, 5000, 170, -170), // Base
+                new JointConfiguration(6000, 1500, 6000, 150, 22), // Shoulder
+                new JointConfiguration(5000, 1200, 5000, 52, -89), // Elbow
+                new JointConfiguration(3000, 1000, 4000, 180, -180), // Wrist 1
+                new JointConfiguration(2000, 800, 3000, 105, -105), // Wrist 2
+                new JointConfiguration(1000, 600, 2000, 180, -180), // Wrist 3
             };
         }
     }
 }
+
+/*
+                new JointConfiguration(10000, 2000, 5000, 170, -170), // Base
+                new JointConfiguration(8000, 1500, 6000, 90, -90), // Shoulder
+                new JointConfiguration(7000, 1200, 5000, 65, -70), // Elbow
+                new JointConfiguration(5000, 1000, 4000, 135, -135), // Wrist 1
+                new JointConfiguration(4000, 800, 3000, 100, -100), // Wrist 2
+                new JointConfiguration(3000, 600, 2000, 180, -180), // Wrist 3
+*/

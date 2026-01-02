@@ -134,11 +134,6 @@ namespace Robotics
             {
                 // Auto-discover robots
                 DiscoverRobots();
-
-                // Log initialization
-                Debug.Log($"{_logPrefix} Initialized with {_robotInstances.Count} robots");
-
-                LogConfigurationSummary();
             }
             catch (Exception ex)
             {
@@ -164,7 +159,6 @@ namespace Robotics
                 if (!_robotInstances.ContainsKey(robotId))
                 {
                     RegisterRobot(robotId, controller.gameObject);
-                    Debug.Log($"{_logPrefix} Auto-discovered robot: {robotId} with no target.");
                 }
             }
         }
@@ -412,25 +406,6 @@ namespace Robotics
             return _robotInstances.TryGetValue(robotId, out RobotInstance robot)
                 ? robot.profile
                 : null;
-        }
-
-        /// <summary>
-        /// Logs a summary of all robot configurations to the file logger and console.
-        /// </summary>
-        private void LogConfigurationSummary()
-        {
-            string summary = $"RobotManager Configuration Summary:\n";
-            summary += $"- Total Robots: {_robotInstances.Count}\n";
-            summary += $"- Global Speed Multiplier: {globalSpeedMultiplier}\n";
-            summary += $"- Default Profile: {robotProfile.profileName}\n";
-
-            foreach (var robot in _robotInstances.Values)
-            {
-                summary +=
-                    $"- {robot.robotId}: Profile '{robot.profile.profileName}', Active: {robot.isActive}\n";
-            }
-
-            Debug.Log($"{_logPrefix} Configuration summary:\n{summary}");
         }
 
         /// <summary>

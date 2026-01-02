@@ -77,13 +77,13 @@ namespace Robotics
         public ArticulationBody rightGripper;
 
         [Header("Control Parameters")]
-        public float maxForce = 100f;
+        public float maxForce = 1000f;
 
         [Tooltip("Smooth interpolation time in seconds")]
         public float smoothTime = 0.3f;
 
         [Range(0f, 1f)]
-        public float targetPosition = 1f;
+        public float targetPosition = 0f;
 
         [Header("Gripper Geometry")]
         [Tooltip("Gripper geometry for grasp planning validation")]
@@ -96,7 +96,7 @@ namespace Robotics
 
         // Helper variables
         private float _currentVelocity;
-        private float _currentTarget;
+        private float _currentTarget = 0f;
         private const string _logPrefix = "[GRIPPER_CONTROLLER]";
         private bool _isMoving;
         private float _completionThreshold = 0.01f; // Threshold for considering gripper at target
@@ -139,8 +139,8 @@ namespace Robotics
         {
             var drive = gripper.xDrive;
             drive.forceLimit = maxForce;
-            drive.stiffness = 1000f;
-            drive.damping = 100f;
+            drive.stiffness = 2000f;
+            drive.damping = 400f;
             gripper.xDrive = drive;
         }
 
@@ -179,9 +179,9 @@ namespace Robotics
         }
 
         /// <summary>
-        /// Opens both grippers to their upper limit.
+        /// Closes both grippers to their upper limit.
         /// </summary>
-        public void OpenGrippers()
+        public void CloseGrippers()
         {
             targetPosition = 1.0f;
             // Reset velocity for immediate response to new command
@@ -190,9 +190,9 @@ namespace Robotics
         }
 
         /// <summary>
-        /// Closes both grippers to their lower limit.
+        /// Opens both grippers to their lower limit.
         /// </summary>
-        public void CloseGrippers()
+        public void OpenGrippers()
         {
             targetPosition = 0.0f;
             // Reset velocity for immediate response to new command
@@ -205,7 +205,7 @@ namespace Robotics
         /// </summary>
         public void ResetGrippers()
         {
-            targetPosition = 1f;
+            targetPosition = 0f;
             ResetGripper(leftGripper, targetPosition);
             ResetGripper(rightGripper, targetPosition);
             _isMoving = false; // Reset is immediate, no need for smooth movement
@@ -267,8 +267,8 @@ namespace Robotics
                 // Map normalized position [0,1] to actual joint limits
                 float lower = leftGripper.xDrive.lowerLimit;
                 float upper = leftGripper.xDrive.upperLimit;
-                // Invert mapping because AR4 gripper has lower=-0.015 (open) and upper=0.0 (closed)
-                float mappedTarget = Mathf.Lerp(lower, upper, 1f - targetPosition);
+
+                float mappedTarget = Mathf.Lerp(lower, upper, targetPosition);
 
                 // Check if joint position was manually set (for tests) - if so, use that as initial target
                 var jointPos = leftGripper.jointPosition;

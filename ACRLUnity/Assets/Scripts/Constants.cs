@@ -22,22 +22,24 @@ namespace Core
         /// <summary>
         /// Default convergence threshold for IK target reached detection (meters)
         /// </summary>
-        public const float DEFAULT_CONVERGENCE_THRESHOLD = 0.1f;
+        public const float DEFAULT_CONVERGENCE_THRESHOLD = 0.01f;
 
         /// <summary>
         /// Default maximum joint step size per iteration (radians)
+        /// Increased from 0.2 to 1.0 rad (~57 deg) for faster convergence
         /// </summary>
-        public const float DEFAULT_MAX_JOINT_STEP_RAD = 0.1f;
+        public const float DEFAULT_MAX_JOINT_STEP_RAD = 1.0f;
 
         /// <summary>
         /// Minimum step speed when very close to target
+        /// Increased from 0.1 to 0.5 to prevent excessive slowdown near convergence
         /// </summary>
-        public const float MIN_STEP_SPEED_NEAR_TARGET = 0.1f;
+        public const float MIN_STEP_SPEED_NEAR_TARGET = 0.5f;
 
         /// <summary>
         /// Maximum step speed for IK adjustments
         /// </summary>
-        public const float MAX_STEP_SPEED = 0.5f;
+        public const float MAX_STEP_SPEED = 1.0f;
 
         /// <summary>
         /// Movement detection threshold (meters)

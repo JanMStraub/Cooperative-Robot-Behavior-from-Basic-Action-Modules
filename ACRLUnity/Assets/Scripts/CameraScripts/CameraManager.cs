@@ -24,7 +24,6 @@ namespace Vision
             {
                 Instance = this;
                 DontDestroyOnLoad(gameObject);
-                Debug.Log($"{_logPrefix} Initializing Camera Manager");
             }
             else
             {

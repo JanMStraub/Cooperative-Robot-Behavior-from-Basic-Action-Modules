@@ -30,7 +30,7 @@ MonoBehaviour:
   retreatDistanceFactor: 2
   retreatDirection: {x: 0, y: 1, z: 0}
   gripperGeometry:
-    maxWidth: 0.08
+    maxWidth: 0.028
     fingerPadWidth: 0.015
     fingerPadDepth: 0.02
     gripperCenterOffset: {x: 0, y: 0, z: 0.05}
@@ -46,7 +46,9 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   enableIKValidation: 1
-  maxIKValidationIterations: 50
-  ikValidationThreshold: 0.1
+  maxIKValidationIterations: 100
+  ikValidationThreshold: 0.05
+  ikRotationTolerance: 20
+  maxJointStepPerIteration: 0.2
   maxReachDistance: 0.6
   maxPipelineTimeMs: 200

@@ -114,16 +114,24 @@ namespace Configuration
         public bool enableIKValidation = true;
 
         [Tooltip("Maximum IK iterations for validation")]
-        [Range(5, 50)]
+        [Range(5, 500)]
         public int maxIKValidationIterations = 10;
 
         [Tooltip("Distance threshold for IK convergence (meters)")]
         [Range(0.001f, 0.1f)]
         public float ikValidationThreshold = 0.01f;
 
+        [Tooltip("Rotation tolerance for IK convergence (degrees)")]
+        [Range(5f, 45f)]
+        public float ikRotationTolerance = 20.0f;
+
+        [Tooltip("Maximum joint step per IK iteration (radians)")]
+        [Range(0.05f, 0.5f)]
+        public float maxJointStepPerIteration = 0.2f;
+
         [Tooltip("Maximum reach distance for quick rejection (meters)")]
         [Range(0.3f, 1.0f)]
-        public float maxReachDistance = 0.6f;
+        public float maxReachDistance = 0.75f;
 
         [Header("Performance")]
         [Tooltip("Maximum time budget for full pipeline (milliseconds)")]
@@ -158,6 +166,8 @@ namespace Configuration
             enableIKValidation = true;
             maxIKValidationIterations = 10;
             ikValidationThreshold = 0.01f;
+            ikRotationTolerance = 20.0f;
+            maxJointStepPerIteration = 0.2f;
             maxReachDistance = 0.6f;
 
             maxPipelineTimeMs = 200;

@@ -46,10 +46,16 @@ namespace Robotics.Grasp
             float distanceX = Mathf.Abs(delta.x);
             float distanceZ = Mathf.Abs(delta.z);
 
+            // DEBUG: Log approach selection criteria
+            Debug.Log($"[GRASP_APPROACH] Object: {objectPosition}, Gripper: {gripperPosition}");
+            Debug.Log($"[GRASP_APPROACH] Delta: {delta}, ObjectSize: {objectSize}");
+            Debug.Log($"[GRASP_APPROACH] distanceX: {distanceX:F3}, distanceZ: {distanceZ:F3}, delta.y: {delta.y:F3}, threshold: {objectSize.y * 0.5f:F3}");
+
             // If gripper is significantly above object, prefer Top approach
             // This is the most reliable grasp for small objects
             if (delta.y > objectSize.y * 0.5f)
             {
+                Debug.Log($"[GRASP_APPROACH] Selected: TOP (gripper above object)");
                 return GraspApproach.Top;
             }
 
@@ -58,11 +64,13 @@ namespace Robotics.Grasp
             if (distanceX > distanceZ)
             {
                 // Gripper is more displaced in X - approach from side (along X axis)
+                Debug.Log($"[GRASP_APPROACH] Selected: SIDE (distanceX > distanceZ)");
                 return GraspApproach.Side;
             }
             else
             {
                 // Gripper is more displaced in Z - approach from front (along Z axis)
+                Debug.Log($"[GRASP_APPROACH] Selected: FRONT (distanceZ >= distanceX)");
                 return GraspApproach.Front;
             }
         }
