@@ -17,6 +17,18 @@ namespace Robotics
         private Vector<double> _errorVector;
         private Vector<double> _jointDelta;
 
+        // Iteration tracking
+        private int _iterationCount;
+        public int IterationCount => _iterationCount;
+
+        /// <summary>
+        /// Reset iteration counter (call when starting new target)
+        /// </summary>
+        public void ResetIterationCount()
+        {
+            _iterationCount = 0;
+        }
+
         /// <summary>
         /// Creates a new IK solver for a robot with specified joint count
         /// </summary>
@@ -50,6 +62,9 @@ namespace Robotics
             float orientationWeight = 1.0f
         )
         {
+            // Increment iteration counter
+            _iterationCount++;
+
             // Calculate position and orientation errors
             Vector3 positionError = targetState.Position - currentState.Position;
             Vector3 orientationError = CalculateOrientationError(
@@ -57,15 +72,16 @@ namespace Robotics
                 targetState.Rotation
             );
 
+            if (positionError.magnitude < convergenceThreshold && orientationError.magnitude < 0.1f)
+            {
+                return null; // Converged
+            }
+
             // Apply orientation weight to emphasize/de-emphasize orientation precision
             orientationError *= orientationWeight;
 
             // Build 6D error vector
             BuildErrorVector(positionError, orientationError);
-
-            // Check convergence
-            if (_errorVector.L2Norm() < convergenceThreshold)
-                return null; // Converged
 
             // Compute Jacobian and solve for joint deltas
             CalculateJacobian(currentState, joints);
@@ -82,11 +98,13 @@ namespace Robotics
             Quaternion quaternionError = target * Quaternion.Inverse(current);
             quaternionError.ToAngleAxis(out float angleDegree, out Vector3 axis);
 
-            // Handle NaN case
-            if (float.IsNaN(axis.x) || float.IsNaN(axis.y) || float.IsNaN(axis.z))
-            {
+            // Safety check for singularities
+            if (float.IsNaN(axis.x) || float.IsInfinity(axis.x))
                 return Vector3.zero;
-            }
+
+            // Ensure shortest path: if angle > 180, map to negative range (e.g. 350 -> -10)
+            if (angleDegree > 180f)
+                angleDegree -= 360f;
 
             // Convert to radians and return axis-angle vector
             return axis.normalized * (angleDegree * Mathf.Deg2Rad);
@@ -118,11 +136,11 @@ namespace Robotics
                 JointInfo joint = joints[i];
 
                 // Vector from joint to end effector (in IK frame)
-                Vector3 vectorJointToEndEffector = currentState.Position - joint.LocalPosition;
+                Vector3 vectorJointToEndEffector = currentState.Position - joint.WorldPosition;
 
                 // Jacobian column (linear and angular components)
-                Vector3 linearComponent = Vector3.Cross(joint.LocalAxis, vectorJointToEndEffector);
-                Vector3 angularComponent = joint.LocalAxis;
+                Vector3 linearComponent = Vector3.Cross(joint.WorldAxis, vectorJointToEndEffector);
+                Vector3 angularComponent = joint.WorldAxis;
 
                 _jacobianMatrix[0, i] = linearComponent.x;
                 _jacobianMatrix[1, i] = linearComponent.y;
@@ -176,13 +194,13 @@ namespace Robotics
     /// </summary>
     public struct JointInfo
     {
-        public Vector3 LocalPosition;
-        public Vector3 LocalAxis;
+        public Vector3 WorldPosition;
+        public Vector3 WorldAxis;
 
-        public JointInfo(Vector3 localPosition, Vector3 localAxis)
+        public JointInfo(Vector3 worldPosition, Vector3 worldAxis)
         {
-            LocalPosition = localPosition;
-            LocalAxis = localAxis;
+            WorldPosition = worldPosition;
+            WorldAxis = worldAxis;
         }
     }
 }

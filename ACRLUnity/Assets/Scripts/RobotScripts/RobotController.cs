@@ -32,10 +32,7 @@ namespace Robotics
         [SerializeField]
         private float _dampingFactorLambda = RobotConstants.DEFAULT_DAMPING_FACTOR;
 
-        [SerializeField]
         private float _minStepSpeedNearTarget = RobotConstants.MIN_STEP_SPEED_NEAR_TARGET;
-
-        [SerializeField]
         private float _maxStepSpeed = RobotConstants.MAX_STEP_SPEED;
 
         // IK Solver (extracted for testability)
@@ -43,6 +40,7 @@ namespace Robotics
 
         private float _distanceToTarget;
         private bool _hasReachedTarget = true;
+        private bool _isGraspingTarget = false; // Flag to use tighter threshold for final grasp
         private Transform _targetTransform;
 
         // Current state (updated before IK calculation)
@@ -57,6 +55,7 @@ namespace Robotics
 
         // Original target object (for tracking what we're actually grasping)
         private GameObject _targetObject;
+        public GameObject debugTarget;
 
         // Cached temporary GameObjects (memory leak fix)
         private GameObject _cachedGraspTarget;
@@ -79,6 +78,10 @@ namespace Robotics
         [Header("Advanced Grasp Planning")]
         [SerializeField]
         private GraspConfig _graspConfig; // Configuration for MoveIt2-inspired pipeline
+
+        [Header("Debug Visualization")]
+        [SerializeField]
+        private bool enableDebugVisualization = true;
 
         // Advanced grasp planning pipeline (initialized on demand)
         private Robotics.Grasp.GraspPlanningPipeline _graspPipeline;
@@ -159,6 +162,9 @@ namespace Robotics
             _targetTransform = targetTransform;
             _closeGripperAfterReach = options.closeGripperOnReach;
             SetTargetReached(false);
+
+            // Reset IK iteration counter for new target
+            _ikSolver?.ResetIterationCount();
         }
 
         /// <summary>
@@ -201,7 +207,9 @@ namespace Robotics
                 else
                 {
                     // Fallback: No pipeline available, skip grasp planning
-                    Debug.LogWarning($"{_logPrefix} Grasp planning requested but no pipeline available. Configure GraspConfig to enable.");
+                    Debug.LogWarning(
+                        $"{_logPrefix} Grasp planning requested but no pipeline available. Configure GraspConfig to enable."
+                    );
 
                     // Direct targeting without grasp planning
                     Transform targetTransform = target.transform;
@@ -212,6 +220,7 @@ namespace Robotics
                         Debug.Log($"{_logPrefix} Opening gripper for target {target.name}");
                     }
 
+                    _isGraspingTarget = false; // Use normal threshold for fallback
                     SetTargetInternal(targetTransform, target, options);
                 }
             }
@@ -227,6 +236,7 @@ namespace Robotics
                     Debug.Log($"{_logPrefix} Opening gripper for target {target.name}");
                 }
 
+                _isGraspingTarget = false; // Use normal threshold without grasp planning
                 SetTargetInternal(targetTransform, target, options);
             }
         }
@@ -240,6 +250,9 @@ namespace Robotics
         private void ExecuteSimpleGraspPlanning(GameObject target, GraspOptions options)
         {
             Debug.Log($"{_logPrefix} Executing simple grasp planning for {target.name}");
+            Debug.Log($"{_logPrefix} Current gripper position: {endEffectorBase.position}");
+            Debug.Log($"{_logPrefix} Target position: {target.transform.position}");
+            Debug.Log($"{_logPrefix} Approach override: {(options.approach.HasValue ? options.approach.Value.ToString() : "AUTO")}");
 
             // Plan grasp using pipeline in simple mode
             var candidateNullable = _graspPipeline.PlanGrasp(
@@ -249,19 +262,22 @@ namespace Robotics
                 {
                     useGraspPlanning = false, // Tells pipeline to use simple mode
                     approach = options.approach,
-                    graspConfig = options.graspConfig
+                    graspConfig = options.graspConfig,
                 }
             );
 
             if (!candidateNullable.HasValue)
             {
-                Debug.LogWarning($"{_logPrefix} Simple grasp planning failed - using direct targeting");
+                Debug.LogWarning(
+                    $"{_logPrefix} Simple grasp planning failed - using direct targeting"
+                );
 
                 // Fallback to direct targeting
                 if (options.openGripperOnSet && _gripperController != null)
                 {
                     _gripperController.OpenGrippers();
                 }
+                _isGraspingTarget = false; // Use normal threshold for fallback
                 SetTargetInternal(target.transform, target, options);
                 return;
             }
@@ -270,8 +286,8 @@ namespace Robotics
             _currentGraspApproach = candidate.approachType;
 
             Debug.Log(
-                $"{_logPrefix} Simple grasp plan: approach={candidate.approachType}, " +
-                $"pre-grasp={candidate.preGraspPosition}, grasp={candidate.graspPosition}"
+                $"{_logPrefix} Simple grasp plan: approach={candidate.approachType}, "
+                    + $"pre-grasp={candidate.preGraspPosition}, grasp={candidate.graspPosition}"
             );
 
             // Execute two-waypoint grasp sequence (pre-grasp → grasp)
@@ -295,17 +311,29 @@ namespace Robotics
             }
 
             // [2] Move to pre-grasp waypoint
-            GameObject preGraspTarget = GetOrCreateTempObject(RobotConstants.GRASP_TARGET_SUFFIX + "_pre");
-            preGraspTarget.transform.SetPositionAndRotation(candidate.preGraspPosition, candidate.preGraspRotation);
+            GameObject preGraspTarget = GetOrCreateTempObject(
+                RobotConstants.GRASP_TARGET_SUFFIX + "_pre"
+            );
+            preGraspTarget.transform.SetPositionAndRotation(
+                candidate.preGraspPosition,
+                candidate.preGraspRotation
+            );
 
-            SetTargetInternal(preGraspTarget.transform, targetObject, new GraspOptions
-            {
-                useGraspPlanning = false,
-                openGripperOnSet = false,
-                closeGripperOnReach = false
-            });
+            _isGraspingTarget = false; // Use normal threshold for pre-grasp
+            SetTargetInternal(
+                preGraspTarget.transform,
+                targetObject,
+                new GraspOptions
+                {
+                    useGraspPlanning = false,
+                    openGripperOnSet = false,
+                    closeGripperOnReach = false,
+                }
+            );
 
-            Debug.Log($"{_logPrefix} [Stage 1/2] Moving to pre-grasp position: {candidate.preGraspPosition}");
+            Debug.Log(
+                $"{_logPrefix} [Stage 1/2] Moving to pre-grasp position: {candidate.preGraspPosition}"
+            );
 
             // Wait for pre-grasp to complete
             yield return new WaitUntil(() => _hasReachedTarget);
@@ -313,16 +341,26 @@ namespace Robotics
 
             // [3] Move to final grasp position
             GameObject graspTarget = GetOrCreateTempObject(RobotConstants.GRASP_TARGET_SUFFIX);
-            graspTarget.transform.SetPositionAndRotation(candidate.graspPosition, candidate.graspRotation);
+            graspTarget.transform.SetPositionAndRotation(
+                candidate.graspPosition,
+                candidate.graspRotation
+            );
 
-            SetTargetInternal(graspTarget.transform, targetObject, new GraspOptions
-            {
-                useGraspPlanning = false,
-                openGripperOnSet = false,
-                closeGripperOnReach = false
-            });
+            _isGraspingTarget = true; // Use tighter threshold for final grasp (5x more precise)
+            SetTargetInternal(
+                graspTarget.transform,
+                targetObject,
+                new GraspOptions
+                {
+                    useGraspPlanning = false,
+                    openGripperOnSet = false,
+                    closeGripperOnReach = false,
+                }
+            );
 
-            Debug.Log($"{_logPrefix} [Stage 2/2] Moving to final grasp position: {candidate.graspPosition}");
+            Debug.Log(
+                $"{_logPrefix} [Stage 2/2] Moving to final grasp position: {candidate.graspPosition}"
+            );
 
             // Wait for grasp position to complete
             yield return new WaitUntil(() => _hasReachedTarget);
@@ -358,16 +396,18 @@ namespace Robotics
 
             if (!candidateNullable.HasValue)
             {
-                Debug.LogError($"{_logPrefix} Advanced grasp planning failed - no valid candidates found");
+                Debug.LogError(
+                    $"{_logPrefix} Advanced grasp planning failed - no valid candidates found"
+                );
                 return;
             }
 
             var candidate = candidateNullable.Value;
 
             Debug.Log(
-                $"{_logPrefix} Best candidate: approach={candidate.approachType}, " +
-                $"score={candidate.totalScore:F2}, " +
-                $"ikValid={candidate.ikValidated}, collisionFree={candidate.collisionValidated}"
+                $"{_logPrefix} Best candidate: approach={candidate.approachType}, "
+                    + $"score={candidate.totalScore:F2}, "
+                    + $"ikValid={candidate.ikValidated}, collisionFree={candidate.collisionValidated}"
             );
 
             // Execute three-waypoint grasp sequence
@@ -394,18 +434,25 @@ namespace Robotics
             }
 
             // [2] Move to pre-grasp waypoint
-            GameObject preGraspTarget = GetOrCreateTempObject(RobotConstants.GRASP_TARGET_SUFFIX + "_pre");
+            GameObject preGraspTarget = GetOrCreateTempObject(
+                RobotConstants.GRASP_TARGET_SUFFIX + "_pre"
+            );
             preGraspTarget.transform.SetPositionAndRotation(
                 candidate.preGraspPosition,
                 candidate.preGraspRotation
             );
 
-            SetTargetInternal(preGraspTarget.transform, targetObject, new GraspOptions
-            {
-                useGraspPlanning = false,
-                openGripperOnSet = false,
-                closeGripperOnReach = false
-            });
+            _isGraspingTarget = false; // Use normal threshold for pre-grasp
+            SetTargetInternal(
+                preGraspTarget.transform,
+                targetObject,
+                new GraspOptions
+                {
+                    useGraspPlanning = false,
+                    openGripperOnSet = false,
+                    closeGripperOnReach = false,
+                }
+            );
 
             Debug.Log(
                 $"{_logPrefix} [Stage 1/3] Moving to pre-grasp position: {candidate.preGraspPosition}"
@@ -422,12 +469,17 @@ namespace Robotics
                 candidate.graspRotation
             );
 
-            SetTargetInternal(graspTarget.transform, targetObject, new GraspOptions
-            {
-                useGraspPlanning = false,
-                openGripperOnSet = false,
-                closeGripperOnReach = false
-            });
+            _isGraspingTarget = true; // Use tighter threshold for final grasp (5x more precise)
+            SetTargetInternal(
+                graspTarget.transform,
+                targetObject,
+                new GraspOptions
+                {
+                    useGraspPlanning = false,
+                    openGripperOnSet = false,
+                    closeGripperOnReach = false,
+                }
+            );
 
             Debug.Log(
                 $"{_logPrefix} [Stage 2/3] Moving to final grasp position: {candidate.graspPosition}"
@@ -451,18 +503,25 @@ namespace Robotics
             GraspConfig config = options.graspConfig ?? _graspConfig;
             if (config != null && config.enableRetreat)
             {
-                GameObject retreatTarget = GetOrCreateTempObject(RobotConstants.GRASP_TARGET_SUFFIX + "_retreat");
+                GameObject retreatTarget = GetOrCreateTempObject(
+                    RobotConstants.GRASP_TARGET_SUFFIX + "_retreat"
+                );
                 retreatTarget.transform.SetPositionAndRotation(
                     candidate.retreatPosition,
                     candidate.retreatRotation
                 );
 
-                SetTargetInternal(retreatTarget.transform, targetObject, new GraspOptions
-                {
-                    useGraspPlanning = false,
-                    openGripperOnSet = false,
-                    closeGripperOnReach = false
-                });
+                _isGraspingTarget = false; // Use normal threshold for retreat
+                SetTargetInternal(
+                    retreatTarget.transform,
+                    targetObject,
+                    new GraspOptions
+                    {
+                        useGraspPlanning = false,
+                        openGripperOnSet = false,
+                        closeGripperOnReach = false,
+                    }
+                );
 
                 Debug.Log(
                     $"{_logPrefix} [Stage 3/3] Retreating to safe position: {candidate.retreatPosition}"
@@ -524,6 +583,7 @@ namespace Robotics
             if (coordOptions.openGripperOnSet && _gripperController != null)
                 _gripperController.OpenGrippers();
 
+            _isGraspingTarget = false; // Use normal threshold for coordinate targets
             SetTargetInternal(
                 tempTarget.transform,
                 null, // No real object for coordinate targets
@@ -558,6 +618,7 @@ namespace Robotics
             if (poseOptions.openGripperOnSet && _gripperController != null)
                 _gripperController.OpenGrippers();
 
+            _isGraspingTarget = false; // Use normal threshold for pose targets
             SetTargetInternal(
                 tempTarget.transform,
                 null, // No real object for pose targets
@@ -636,6 +697,12 @@ namespace Robotics
 
             int jointCount = robotJoints.Length;
 
+            // Ensure jointDriveTargets array matches joint count
+            if (jointDriveTargets == null || jointDriveTargets.Length != jointCount)
+            {
+                jointDriveTargets = new float[jointCount];
+            }
+
             // Configure joint drives using RobotManager profiles
             for (int i = 0; i < jointCount; i++)
             {
@@ -658,10 +725,15 @@ namespace Robotics
                 }
 
                 robotJoints[i].xDrive = drive;
+
+                // Initialize jointDriveTargets array with current values
+                jointDriveTargets[i] = drive.target;
             }
 
             // Initialize IK solver
             _ikSolver = new IKSolver(jointCount, _dampingFactorLambda);
+
+            _gripperController.ResetGrippers();
         }
 
         /// <summary>
@@ -699,8 +771,9 @@ namespace Robotics
         /// </summary>
         public void ResetJointTargets()
         {
-            foreach (var joint in robotJoints)
+            for (int i = 0; i < robotJoints.Length; i++)
             {
+                var joint = robotJoints[i];
                 var drive = joint.xDrive;
                 drive.target = 0;
                 joint.xDrive = drive;
@@ -708,6 +781,12 @@ namespace Robotics
                 joint.jointPosition = new ArticulationReducedSpace(0f);
                 joint.jointForce = new ArticulationReducedSpace(0f);
                 joint.jointVelocity = new ArticulationReducedSpace(0f);
+
+                // Synchronize jointDriveTargets array
+                if (i < jointDriveTargets.Length)
+                {
+                    jointDriveTargets[i] = 0;
+                }
             }
         }
 
@@ -776,18 +855,24 @@ namespace Robotics
             {
                 // Create a temporary profile with default values from RobotConstants
                 robotProfile = ScriptableObject.CreateInstance<RobotConfig>();
-                robotProfile.convergenceThreshold = RobotConstants.DEFAULT_CONVERGENCE_THRESHOLD;
                 robotProfile.maxJointStepRad = RobotConstants.DEFAULT_MAX_JOINT_STEP_RAD;
                 robotProfile.adjustmentSpeed = 1.0f;
             }
 
+            // Use tighter threshold for final grasp position (5x more precise)
+            float effectiveThreshold = _isGraspingTarget
+                ? RobotConstants.DEFAULT_CONVERGENCE_THRESHOLD * 0.2f // 5x tighter for grasps (e.g., 0.1m → 0.02m)
+                : RobotConstants.DEFAULT_CONVERGENCE_THRESHOLD;
+
             // Early convergence check - skip expensive IK computation if already at target
-            if (_distanceToTarget < robotProfile.convergenceThreshold)
+            if (_distanceToTarget < effectiveThreshold)
             {
                 if (!_hasReachedTarget) // Only log/notify once
                 {
                     SetTargetReached(true);
-                    Debug.Log($"{_logPrefix}  {robotId} IK converged to target (early exit)");
+                    Debug.Log(
+                        $"{_logPrefix}  {robotId} IK converged (early exit) - iterations={_ikSolver.IterationCount}, threshold={effectiveThreshold:F3}m, distance={_distanceToTarget:F3}m"
+                    );
                     OnTargetReached?.Invoke();
                 }
                 return; // Skip expensive IK computation
@@ -811,7 +896,7 @@ namespace Robotics
                 currentState,
                 targetState,
                 joints,
-                robotProfile.convergenceThreshold,
+                effectiveThreshold,
                 orientationWeight
             );
 
@@ -819,7 +904,9 @@ namespace Robotics
             if (jointDeltas == null)
             {
                 SetTargetReached(true); // This will notify SimulationManager
-                Debug.Log($"{_logPrefix}  {robotId} IK converged to target");
+                Debug.Log(
+                    $"{_logPrefix}  {robotId} IK converged - iterations={_ikSolver.IterationCount}, threshold={effectiveThreshold:F3}m, distance={_distanceToTarget:F3}m"
+                );
                 OnTargetReached?.Invoke();
 
                 return; // Already converged
@@ -835,20 +922,36 @@ namespace Robotics
                 );
             }
 
-            // Adaptive step scaling
-            float normalizedDistance = Mathf.Clamp01(
-                _targetVector.magnitude / endEffectorBase.lossyScale.x
-            );
-            float adaptiveGain = Mathf.Lerp(
-                _minStepSpeedNearTarget,
-                _maxStepSpeed,
-                normalizedDistance
-            ); // Slower as it nears target
+            // Adaptive step scaling with initial ramp-up and final slow-down
+            float distanceToTarget = _distanceToTarget;
+            float adaptiveGain;
+
+            // Ramp-up period: gradually increase speed during first 5 iterations to prevent jerking
+            const int rampUpIterations = 50;
+            float rampUpMultiplier = 1.0f;
+            if (_ikSolver.IterationCount < rampUpIterations)
+            {
+                // Smooth ramp from 0.2 to 1.0 over first 5 iterations
+                float rampProgress = (_ikSolver.IterationCount + 1) / (float)rampUpIterations;
+                rampUpMultiplier = Mathf.Lerp(0.2f, 1.0f, rampProgress);
+            }
+
+            if (distanceToTarget > 0.02f)
+            {
+                // Full speed when far from target (modulated by ramp-up)
+                adaptiveGain = _maxStepSpeed * rampUpMultiplier;
+            }
+            else
+            {
+                // Smoothly reduce speed only in final 2cm
+                float t = distanceToTarget / 0.02f; // 0.0 at target, 1.0 at 2cm away
+                adaptiveGain = Mathf.Lerp(_minStepSpeedNearTarget, _maxStepSpeed, t) * rampUpMultiplier;
+            }
 
             // Apply approach-specific motion scaling for better grasp execution
             float approachMultiplier = GetApproachSpeedMultiplier(
                 _currentGraspApproach,
-                normalizedDistance
+                distanceToTarget / 0.5f // Normalize to 0.5m range for approach multiplier
             );
 
             float stepScale =
@@ -856,6 +959,14 @@ namespace Robotics
                 * globalSpeedMultiplier
                 * adaptiveGain
                 * approachMultiplier;
+
+            // Debug log every 50 iterations to diagnose slow convergence
+            if (_ikSolver.IterationCount % 50 == 0)
+            {
+                Debug.Log($"{_logPrefix} IK iter={_ikSolver.IterationCount}: dist={_distanceToTarget:F4}m, " +
+                         $"adaptiveGain={adaptiveGain:F3}, approachMult={approachMultiplier:F3}, " +
+                         $"stepScale={stepScale:F3}");
+            }
 
             // Batch joint updates for better performance
             ArticulationDrive[] driveUpdates = new ArticulationDrive[jointCount];
@@ -897,6 +1008,12 @@ namespace Robotics
                     if (!Mathf.Approximately(driveUpdates[i].target, robotJoints[i].xDrive.target))
                     {
                         robotJoints[i].xDrive = driveUpdates[i];
+
+                        // Synchronize jointDriveTargets array for debugging/visualization
+                        if (i < jointDriveTargets.Length)
+                        {
+                            jointDriveTargets[i] = driveUpdates[i].target;
+                        }
                     }
                 }
             }
@@ -939,6 +1056,12 @@ namespace Robotics
 
             // Initialize advanced grasp planning pipeline if config is set
             InitializeGraspPipeline();
+
+            // Use advanced planning for debug target if available
+            if (debugTarget != null)
+            {
+                SetTarget(debugTarget, GraspOptions.Advanced);
+            }
         }
 
         /// <summary>
@@ -946,7 +1069,12 @@ namespace Robotics
         /// </summary>
         private void InitializeGraspPipeline()
         {
-            if (_graspConfig != null && robotJoints != null && IKReferenceFrame != null && endEffectorBase != null)
+            if (
+                _graspConfig != null
+                && robotJoints != null
+                && IKReferenceFrame != null
+                && endEffectorBase != null
+            )
             {
                 _graspPipeline = new Robotics.Grasp.GraspPlanningPipeline(
                     _graspConfig,
@@ -955,11 +1083,15 @@ namespace Robotics
                     endEffectorBase,
                     _dampingFactorLambda
                 );
-                Debug.Log($"{_logPrefix} Advanced grasp planning pipeline initialized for {robotId}");
+                Debug.Log(
+                    $"{_logPrefix} Advanced grasp planning pipeline initialized for {robotId}"
+                );
             }
             else if (_graspConfig != null)
             {
-                Debug.LogWarning($"{_logPrefix} Cannot initialize grasp pipeline - missing robot components");
+                Debug.LogWarning(
+                    $"{_logPrefix} Cannot initialize grasp pipeline - missing robot components"
+                );
             }
         }
 
@@ -976,6 +1108,45 @@ namespace Robotics
 
             if (!_hasReachedTarget)
                 PerformInverseKinematicsStep();
+
+            DrawDebugVisualization();
+        }
+
+        /// <summary>
+        /// Draw runtime debug visualization (visible in Game view during play mode).
+        /// Shows line from end effector to target and convergence threshold.
+        /// </summary>
+        private void DrawDebugVisualization()
+        {
+            if (!enableDebugVisualization || _targetObject == null || endEffectorBase == null)
+                return;
+
+            // Draw line from end effector to target (blue)
+            Debug.DrawLine(endEffectorBase.position, _targetObject.transform.position, Color.blue);
+        }
+
+        private void OnDrawGizmos()
+        {
+            if (!enableDebugVisualization || _targetObject == null)
+                return;
+
+            // Draw line from end effector to target
+            if (endEffectorBase != null)
+            {
+                Gizmos.color = Color.green;
+                Gizmos.DrawLine(endEffectorBase.position, _targetObject.transform.position);
+
+                // Draw sphere at target
+                Gizmos.color = Color.pink;
+                Gizmos.DrawWireSphere(_targetObject.transform.position, 0.02f);
+
+                // Draw convergence threshold radius
+                Gizmos.color = Color.red;
+                Gizmos.DrawWireSphere(
+                    _targetObject.transform.position,
+                    RobotConstants.DEFAULT_CONVERGENCE_THRESHOLD
+                );
+            }
         }
 
         /// <summary>

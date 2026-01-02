@@ -89,8 +89,8 @@ namespace Tests.EditMode
             for (int i = 0; i < jointCount; i++)
             {
                 joints[i] = new JointInfo(
-                    localPosition: new Vector3(i * 0.1f, 0f, 0f),
-                    localAxis: Vector3.up
+                    worldPosition: new Vector3(i * 0.1f, 0f, 0f),
+                    worldAxis: Vector3.up
                 );
             }
 
@@ -163,15 +163,15 @@ namespace Tests.EditMode
         public void JointInfo_Stores_Position_And_Axis()
         {
             // Arrange
-            var localPosition = new Vector3(0.5f, 0.2f, 0.1f);
-            var localAxis = Vector3.forward;
+            var worldPosition = new Vector3(0.5f, 0.2f, 0.1f);
+            var worldAxis = Vector3.forward;
 
             // Act
-            var joint = new JointInfo(localPosition, localAxis);
+            var joint = new JointInfo(worldPosition, worldAxis);
 
             // Assert
-            Assert.AreEqual(localPosition, joint.LocalPosition);
-            Assert.AreEqual(localAxis, joint.LocalAxis);
+            Assert.AreEqual(worldPosition, joint.WorldPosition);
+            Assert.AreEqual(worldAxis, joint.WorldAxis);
         }
 
         [Test]

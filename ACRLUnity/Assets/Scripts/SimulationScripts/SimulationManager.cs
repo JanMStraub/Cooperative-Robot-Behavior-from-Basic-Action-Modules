@@ -136,10 +136,6 @@ namespace Simulation
                 Time.timeScale = config.timeScale;
 
                 ChangeState(SimulationState.Initializing);
-
-                Debug.Log(
-                    $"{_logPrefix} Initialized: {config.coordinationMode} mode, {config.targetFrameRate}fps"
-                );
             }
             catch (Exception ex)
             {
@@ -231,10 +227,6 @@ namespace Simulation
                 _ => new IndependentStrategy(),
             };
 
-            Debug.Log(
-                $"{_logPrefix} Initialized coordination strategy: {_coordinationStrategy.GetType().Name}"
-            );
-
             // Phase 4: Log workspace manager status
             if (config.coordinationMode == RobotCoordinationMode.Collaborative)
             {
@@ -320,8 +312,6 @@ namespace Simulation
             }
 
             ChangeState(SimulationState.Running);
-
-            Debug.Log($"{_logPrefix} Started by user request");
         }
 
         /// <summary>

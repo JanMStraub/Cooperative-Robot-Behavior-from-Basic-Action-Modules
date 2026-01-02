@@ -321,9 +321,6 @@ namespace Robotics
         /// </summary>
         private void OnDrawGizmos()
         {
-            Gizmos.color = Color.green;
-            Gizmos.DrawWireSphere(transform.position, 0.1f);
-
             // Show collision counts as text in scene view
 #if UNITY_EDITOR
             if (_totalCollisions > 0)
