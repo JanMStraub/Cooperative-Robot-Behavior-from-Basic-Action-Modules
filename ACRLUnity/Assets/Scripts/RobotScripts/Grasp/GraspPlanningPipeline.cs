@@ -72,9 +72,20 @@ namespace Robotics.Grasp
             }
             else
             {
-                UnityEngine.Debug.Log("Advanced grasp planning");
+                UnityEngine.Debug.Log("Advanced grasp planning with adaptive candidate count");
+
+                // Adaptive candidate count based on time budget
+                int adaptiveCandidateCount = ComputeAdaptiveCandidateCount(targetObject, gripperPosition);
+
+                // Temporarily adjust config for this planning cycle
+                int originalCount = _config.candidatesPerApproach;
+                _config.candidatesPerApproach = adaptiveCandidateCount;
+
                 // Advanced mode - generate multiple candidates
                 candidates = _generator.GenerateCandidates(targetObject, gripperPosition);
+
+                // Restore original config
+                _config.candidatesPerApproach = originalCount;
             }
 
             UnityEngine.Debug.Log($"{_logPrefix} Generated {candidates.Count} candidates");
@@ -278,6 +289,42 @@ namespace Robotics.Grasp
                 return new List<GraspCandidate> { bestCandidate.Value };
 
             return _scorer.GetTopN(result.rankedCandidates, count);
+        }
+
+        /// <summary>
+        /// Compute adaptive candidate count based on time budget and task complexity.
+        /// Generates more candidates when we have time and the grasp is challenging.
+        /// </summary>
+        /// <param name="targetObject">Object to grasp</param>
+        /// <param name="gripperPosition">Current gripper position</param>
+        /// <returns>Adaptive candidate count per approach</returns>
+        private int ComputeAdaptiveCandidateCount(GameObject targetObject, Vector3 gripperPosition)
+        {
+            int baseCandidates = _config.candidatesPerApproach;
+
+            // Factor 1: Time budget utilization (assume 50% budget available at start)
+            float timeBudgetFactor = 1.5f; // Can generate more candidates if we have time
+
+            // Factor 2: Object complexity (smaller objects = more candidates for precision)
+            Vector3 objectSize = GraspUtilities.GetObjectSize(targetObject);
+            float avgSize = (objectSize.x + objectSize.y + objectSize.z) / 3f;
+            float complexityFactor = avgSize < 0.05f ? 1.5f : 1.0f; // Small objects need more attempts
+
+            // Factor 3: Distance to object (farther = more candidates for IK diversity)
+            float distance = Vector3.Distance(targetObject.transform.position, gripperPosition);
+            float distanceFactor = distance > 0.5f ? 1.3f : 1.0f;
+
+            // Compute adaptive count (clamp to reasonable range)
+            int adaptiveCount = Mathf.RoundToInt(baseCandidates * timeBudgetFactor * complexityFactor * distanceFactor);
+            adaptiveCount = Mathf.Clamp(adaptiveCount, baseCandidates, baseCandidates * 3);
+
+            UnityEngine.Debug.Log(
+                $"{_logPrefix} Adaptive candidate count: {adaptiveCount} " +
+                $"(base={baseCandidates}, time={timeBudgetFactor:F1}x, " +
+                $"complexity={complexityFactor:F1}x, distance={distanceFactor:F1}x)"
+            );
+
+            return adaptiveCount;
         }
     }
 

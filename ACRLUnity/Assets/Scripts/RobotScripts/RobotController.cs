@@ -75,6 +75,19 @@ namespace Robotics
         public bool _closeGripperAfterReach = false;
         private GraspApproach _currentGraspApproach;
 
+        [Header("Target Tracking")]
+        [SerializeField]
+        [Tooltip("Enable continuous tracking of moving targets")]
+        private bool _enableMovingTargetTracking = true;
+
+        [SerializeField]
+        [Tooltip("Update target position if it moves more than this threshold (meters)")]
+        private float _targetMovementThreshold = 0.01f; // 1cm movement triggers update
+
+        // Track original target position to detect movement
+        private Vector3 _lastTrackedTargetPosition;
+        private bool _isTrackingMovingTarget = false;
+
         [Header("Advanced Grasp Planning")]
         [SerializeField]
         private GraspConfig _graspConfig; // Configuration for MoveIt2-inspired pipeline
@@ -162,6 +175,17 @@ namespace Robotics
             _targetTransform = targetTransform;
             _closeGripperAfterReach = options.closeGripperOnReach;
             SetTargetReached(false);
+
+            // Initialize moving target tracking
+            if (originalObject != null)
+            {
+                _isTrackingMovingTarget = true;
+                _lastTrackedTargetPosition = originalObject.transform.position;
+            }
+            else
+            {
+                _isTrackingMovingTarget = false;
+            }
 
             // Reset IK iteration counter for new target
             _ikSolver?.ResetIterationCount();
@@ -368,7 +392,7 @@ namespace Robotics
             // [4] Close gripper if requested
             if (options.closeGripperOnReach && _gripperController != null)
             {
-                yield return new WaitForSeconds(0.1f); // Brief pause before closing
+                yield return new WaitForSeconds(0.3f); // Brief pause before closing
                 _gripperController.SetGripperPosition(candidate.graspGripperWidth);
                 Debug.Log($"{_logPrefix} Closing gripper to grasp object");
             }
@@ -495,8 +519,8 @@ namespace Robotics
                 _gripperController.SetGripperPosition(candidate.graspGripperWidth);
                 Debug.Log($"{_logPrefix} Closing gripper to grasp object");
 
-                // Wait for gripper to close
-                yield return new WaitForSeconds(0.3f);
+                yield return new WaitWhile(() => _gripperController.IsMoving); // Wait until gripper stops moving
+                yield return new WaitForSeconds(0.2f); // Additional stabilization
             }
 
             // [5] Retreat with object (if enabled in config)
@@ -671,6 +695,34 @@ namespace Robotics
         public GameObject GetTargetObject() => _targetObject;
 
         /// <summary>
+        /// Enable or disable moving target tracking.
+        /// When enabled, the robot will continuously update its target position to follow moving objects.
+        /// </summary>
+        /// <param name="enable">True to enable tracking, false to disable</param>
+        public void SetMovingTargetTracking(bool enable)
+        {
+            _enableMovingTargetTracking = enable;
+            Debug.Log($"{_logPrefix} Moving target tracking {(enable ? "enabled" : "disabled")}");
+        }
+
+        /// <summary>
+        /// Set the movement threshold for target tracking.
+        /// Target position will update if the object moves more than this distance.
+        /// </summary>
+        /// <param name="threshold">Movement threshold in meters (default: 0.01m)</param>
+        public void SetTargetMovementThreshold(float threshold)
+        {
+            _targetMovementThreshold = Mathf.Max(0.001f, threshold); // Minimum 1mm
+            Debug.Log($"{_logPrefix} Target movement threshold set to {_targetMovementThreshold:F4}m");
+        }
+
+        /// <summary>
+        /// Check if target tracking is currently enabled.
+        /// </summary>
+        /// <returns>True if tracking is enabled</returns>
+        public bool IsTargetTrackingEnabled() => _enableMovingTargetTracking;
+
+        /// <summary>
         /// Phase 4: Get current end effector position
         /// </summary>
         public Vector3 GetCurrentEndEffectorPosition()
@@ -738,6 +790,7 @@ namespace Robotics
 
         /// <summary>
         /// Updates cached world and local positions/rotations of the end effector and target.
+        /// Detects and handles moving targets if tracking is enabled.
         /// </summary>
         private void UpdateEndEffectorState()
         {
@@ -746,6 +799,46 @@ namespace Robotics
             {
                 _distanceToTarget = 0f;
                 return;
+            }
+
+            // Check if target has moved (only for actual object targets, not temp waypoints)
+            // Stop tracking if robot has reached target and gripper is set to close (indicating grasp completion)
+            bool hasGrippedTarget = _hasReachedTarget && _closeGripperAfterReach;
+            if (_enableMovingTargetTracking && _isTrackingMovingTarget && _targetObject != null && !hasGrippedTarget)
+            {
+                Vector3 currentTargetPosition = _targetObject.transform.position;
+                float movementDistance = Vector3.Distance(currentTargetPosition, _lastTrackedTargetPosition);
+
+                if (movementDistance > _targetMovementThreshold)
+                {
+                    Debug.Log(
+                        $"{_logPrefix} Target '{_targetObject.name}' moved {movementDistance:F4}m - updating target position"
+                    );
+
+                    // Update the tracked target transform to follow the object
+                    if (_targetTransform != null && _targetTransform != _targetObject.transform)
+                    {
+                        // If using a temporary target (from grasp planning), update its position
+                        _targetTransform.position = currentTargetPosition;
+                        _targetTransform.rotation = _targetObject.transform.rotation;
+                    }
+
+                    // Update last tracked position
+                    _lastTrackedTargetPosition = currentTargetPosition;
+
+                    // Reset convergence state since target moved
+                    if (_hasReachedTarget)
+                    {
+                        SetTargetReached(false);
+                        Debug.Log($"{_logPrefix} Target moved - resetting convergence state");
+                    }
+                }
+            }
+            else if (hasGrippedTarget && _isTrackingMovingTarget)
+            {
+                // Stop tracking once robot has gripped the target
+                Debug.Log($"{_logPrefix} Target gripped - stopping moving target tracking");
+                _isTrackingMovingTarget = false;
             }
 
             // World-state
@@ -797,6 +890,9 @@ namespace Robotics
         {
             var frame = IKReferenceFrame != null ? IKReferenceFrame : endEffectorBase.root;
             JointInfo[] joints = new JointInfo[robotJoints.Length];
+
+            // Log joint axes on first iteration for debugging
+            bool shouldLogAxes = _ikSolver.IterationCount == 1;
 
             for (int i = 0; i < robotJoints.Length; i++)
             {
@@ -871,7 +967,8 @@ namespace Robotics
                 {
                     SetTargetReached(true);
                     Debug.Log(
-                        $"{_logPrefix}  {robotId} IK converged (early exit) - iterations={_ikSolver.IterationCount}, threshold={effectiveThreshold:F3}m, distance={_distanceToTarget:F3}m"
+                        $"{_logPrefix}  {robotId} IK converged (early exit) - iterations={_ikSolver.IterationCount}, threshold={effectiveThreshold:F3}m, distance={_distanceToTarget:F3}m, " +
+                        $"endEffector={_endEffectorWorldPosition}, target={_targetTransform.position}"
                     );
                     OnTargetReached?.Invoke();
                 }
@@ -905,7 +1002,8 @@ namespace Robotics
             {
                 SetTargetReached(true); // This will notify SimulationManager
                 Debug.Log(
-                    $"{_logPrefix}  {robotId} IK converged - iterations={_ikSolver.IterationCount}, threshold={effectiveThreshold:F3}m, distance={_distanceToTarget:F3}m"
+                    $"{_logPrefix}  {robotId} IK converged - iterations={_ikSolver.IterationCount}, threshold={effectiveThreshold:F3}m, distance={_distanceToTarget:F3}m, " +
+                    $"endEffector={_endEffectorWorldPosition}, target={_targetTransform.position}"
                 );
                 OnTargetReached?.Invoke();
 
@@ -960,17 +1058,11 @@ namespace Robotics
                 * adaptiveGain
                 * approachMultiplier;
 
-            // Debug log every 50 iterations to diagnose slow convergence
-            if (_ikSolver.IterationCount % 50 == 0)
-            {
-                Debug.Log($"{_logPrefix} IK iter={_ikSolver.IterationCount}: dist={_distanceToTarget:F4}m, " +
-                         $"adaptiveGain={adaptiveGain:F3}, approachMult={approachMultiplier:F3}, " +
-                         $"stepScale={stepScale:F3}");
-            }
-
             // Batch joint updates for better performance
             ArticulationDrive[] driveUpdates = new ArticulationDrive[jointCount];
             bool hasUpdates = false;
+            int jointsAtLimit = 0;
+            float maxDelta = 0f;
 
             // Collect all drive updates first
             for (int i = 0; i < jointCount; i++)
@@ -980,6 +1072,7 @@ namespace Robotics
                 // The change in angle from IK (deltaTheta) is in radians
                 // Convert to degrees and apply step scale
                 float deltaAngleDegree = (float)jointDeltas[i] * Mathf.Rad2Deg * stepScale;
+                maxDelta = Mathf.Max(maxDelta, Mathf.Abs(deltaAngleDegree));
 
                 // Apply the scaled change and clamp to joint limits
                 float newTarget = Mathf.Clamp(
@@ -987,6 +1080,11 @@ namespace Robotics
                     drive.lowerLimit,
                     drive.upperLimit
                 );
+
+                // Check if we're hitting a joint limit
+                bool atLimit = Mathf.Approximately(newTarget, drive.lowerLimit) ||
+                              Mathf.Approximately(newTarget, drive.upperLimit);
+                if (atLimit) jointsAtLimit++;
 
                 if (!Mathf.Approximately(newTarget, drive.target))
                 {
@@ -998,6 +1096,44 @@ namespace Robotics
                 {
                     driveUpdates[i] = drive; // Keep existing drive
                 }
+            }
+
+            // Diagnostic logging every 50 iterations if not converging
+            if (_ikSolver.IterationCount % 50 == 0)
+            {
+                Debug.Log(
+                    $"{_logPrefix} IK iteration {_ikSolver.IterationCount}: " +
+                    $"distance={_distanceToTarget:F4}m, threshold={effectiveThreshold:F4}m, " +
+                    $"maxDelta={maxDelta:F3}°, jointsAtLimit={jointsAtLimit}/{jointCount}, " +
+                    $"hasUpdates={hasUpdates}"
+                );
+            }
+
+            // Detect IK deadlock: stuck at same distance with joints at limits OR no updates being applied
+            const int DEADLOCK_CHECK_ITERATIONS = 200;
+            const float DEADLOCK_DISTANCE_THRESHOLD = 0.20f; // 200mm - accept if stuck within 20cm of target
+
+            // Three deadlock conditions:
+            // 1. One or more joints at limits preventing further progress
+            // 2. No joint updates being applied (IK wants to move but limits prevent it)
+            // 3. Stuck oscillating (distance not decreasing)
+            bool jointLimitDeadlock = jointsAtLimit >= 1 && _distanceToTarget < DEADLOCK_DISTANCE_THRESHOLD;
+            bool noProgressDeadlock = !hasUpdates; // IK computes deltas but can't apply them
+
+            if (_ikSolver.IterationCount > DEADLOCK_CHECK_ITERATIONS &&
+                _distanceToTarget > effectiveThreshold &&
+                (jointLimitDeadlock || noProgressDeadlock))
+            {
+                string reason = jointLimitDeadlock ? "Joint limits" : "No updates applied";
+                Debug.LogWarning(
+                    $"{_logPrefix} IK DEADLOCK DETECTED after {_ikSolver.IterationCount} iterations: " +
+                    $"Target unreachable. Distance={_distanceToTarget:F4}m, " +
+                    $"jointsAtLimit={jointsAtLimit}/{jointCount}, hasUpdates={hasUpdates}, maxDelta={maxDelta:F3}°. " +
+                    $"Reason: {reason}. Accepting best effort solution."
+                );
+                SetTargetReached(true);
+                OnTargetReached?.Invoke();
+                return;
             }
 
             // Apply all updates in one pass (reduces Unity overhead)

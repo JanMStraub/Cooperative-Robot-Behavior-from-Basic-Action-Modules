@@ -21,8 +21,9 @@ namespace Core
 
         /// <summary>
         /// Default convergence threshold for IK target reached detection (meters)
+        /// Increased from 0.001m to 0.01m to prevent oscillation near target
         /// </summary>
-        public const float DEFAULT_CONVERGENCE_THRESHOLD = 0.01f;
+        public const float DEFAULT_CONVERGENCE_THRESHOLD = 0.001f;
 
         /// <summary>
         /// Default maximum joint step size per iteration (radians)

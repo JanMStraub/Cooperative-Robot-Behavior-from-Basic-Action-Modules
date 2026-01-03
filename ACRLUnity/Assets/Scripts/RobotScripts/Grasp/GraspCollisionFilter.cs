@@ -111,15 +111,17 @@ namespace Robotics.Grasp
                         continue; // Hitting target is acceptable
                     }
 
+                    /*
                     // Check if hit object is an ignored workspace object (table, floor, etc.)
                     if (ShouldIgnoreObject(hit.collider.gameObject))
                     {
                         UnityEngine.Debug.Log($"[GRASP_COLLISION_FILTER] Ignoring workspace collision with '{hit.collider.gameObject.name}'");
                         continue; // Ignore workspace surfaces
                     }
+                    */
 
                     // Hit an obstacle - path blocked
-                    UnityEngine.Debug.Log($"[GRASP_COLLISION_FILTER] Collision detected at waypoint {i}: hit '{hit.collider.gameObject.name}' (layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)}) at distance {hit.distance:F3}m");
+
                     return false;
                 }
             }
@@ -168,13 +170,15 @@ namespace Robotics.Grasp
                         return true;
                     }
                 }
-
+                
+                /*
                 // Check if hit object is an ignored workspace object
                 if (ShouldIgnoreObject(hit.collider.gameObject))
                 {
                     UnityEngine.Debug.Log($"[GRASP_COLLISION_FILTER] Ignoring workspace collision in retreat with '{hit.collider.gameObject.name}'");
                     return true; // Ignore workspace surfaces in retreat
                 }
+                */
 
                 // Obstacle in retreat path
                 UnityEngine.Debug.Log($"[GRASP_COLLISION_FILTER] Retreat collision detected: hit '{hit.collider.gameObject.name}' (layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)}) at distance {hit.distance:F3}m");

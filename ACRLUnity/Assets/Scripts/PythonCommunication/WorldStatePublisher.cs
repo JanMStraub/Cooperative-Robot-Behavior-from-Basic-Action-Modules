@@ -289,7 +289,7 @@ namespace PythonCommunication
                     robotInstance.robotGameObject.GetComponentInChildren<GripperController>();
                 if (gripperController != null)
                 {
-                    if (gripperController.GetTargetPosition() > 0.9f)
+                    if (gripperController.targetPosition > 0.9f)
                     {
                         gripperState = "open";
                     }

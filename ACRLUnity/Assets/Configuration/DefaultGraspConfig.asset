@@ -33,12 +33,15 @@ MonoBehaviour:
     maxWidth: 0.028
     fingerPadWidth: 0.015
     fingerPadDepth: 0.02
+    fingerLength: 0.04
+    fingerWidth: 0.01
     gripperCenterOffset: {x: 0, y: 0, z: 0.05}
   targetGraspDepth: 0.5
   ikScoreWeight: 1
   approachScoreWeight: 0.8
   depthScoreWeight: 0.6
   stabilityScoreWeight: 1.2
+  antipodalScoreWeight: 1
   enableCollisionChecking: 1
   collisionCheckWaypoints: 5
   collisionCheckRadius: 0.03
@@ -46,9 +49,9 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   enableIKValidation: 1
-  maxIKValidationIterations: 100
-  ikValidationThreshold: 0.05
+  maxIKValidationIterations: 250
+  ikValidationThreshold: 0.001
   ikRotationTolerance: 20
   maxJointStepPerIteration: 0.2
   maxReachDistance: 0.6
-  maxPipelineTimeMs: 200
+  maxPipelineTimeMs: 350

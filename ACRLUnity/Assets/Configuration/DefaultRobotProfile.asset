@@ -20,47 +20,30 @@ MonoBehaviour:
     forceLimit: 5000
     upperLimit: 170
     lowerLimit: -170
-    maxVelocity: 180
-    acceleration: 360
   - stiffness: 8000
     damping: 1500
     forceLimit: 6000
     upperLimit: 90
     lowerLimit: -42.5
-    maxVelocity: 180
-    acceleration: 360
   - stiffness: 7000
     damping: 1200
     forceLimit: 5000
     upperLimit: 125
     lowerLimit: -90
-    maxVelocity: 180
-    acceleration: 360
   - stiffness: 5000
     damping: 1000
     forceLimit: 4000
     upperLimit: 105
     lowerLimit: -105
-    maxVelocity: 180
-    acceleration: 360
   - stiffness: 4000
     damping: 800
     forceLimit: 3000
     upperLimit: 100
     lowerLimit: -100
-    maxVelocity: 180
-    acceleration: 360
   - stiffness: 3000
     damping: 600
     forceLimit: 2000
     upperLimit: 180
     lowerLimit: -180
-    maxVelocity: 180
-    acceleration: 360
   adjustmentSpeed: 1
-  convergenceThreshold: 0.1
-  maxJointStepRad: 1.0
-  maxReachDistance: 0.75
-  minReachDistance: 0.1
-  maxIKIterations: 100
-  ikTimeout: 5
+  maxJointStepRad: 0.5
