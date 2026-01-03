@@ -255,8 +255,8 @@ ArticulationBody:
   m_XDrive:
     lowerLimit: -0.015
     upperLimit: 0
-    stiffness: 1000
-    damping: 100
+    stiffness: 4000
+    damping: 2000
     forceLimit: 100
     target: -0.014999999
     targetVelocity: 0
@@ -910,8 +910,8 @@ ArticulationBody:
   m_XDrive:
     lowerLimit: -0.015
     upperLimit: 0
-    stiffness: 1000
-    damping: 100
+    stiffness: 4000
+    damping: 2000
     forceLimit: 100
     target: 0
     targetVelocity: 0
@@ -1508,8 +1508,17 @@ MonoBehaviour:
   leftGripper: {fileID: 1990253158364777635}
   rightGripper: {fileID: 1174470342800896596}
   maxForce: 100
+  stiffness: 4000
+  damping: 2000
   smoothTime: 0.3
   targetPosition: 1
+  gripperGeometry:
+    maxWidth: 0.08
+    fingerPadWidth: 0.015
+    fingerPadDepth: 0.02
+    fingerLength: 0.04
+    fingerWidth: 0.01
+    gripperCenterOffset: {x: 0, y: 0, z: 0.05}
 --- !u!1 &647262058709829988
 GameObject:
   m_ObjectHideFlags: 0
@@ -3398,8 +3407,17 @@ MonoBehaviour:
   leftGripper: {fileID: 7775894089036924584}
   rightGripper: {fileID: 5581601495840328535}
   maxForce: 100
+  stiffness: 4000
+  damping: 2000
   smoothTime: 0.3
   targetPosition: 1
+  gripperGeometry:
+    maxWidth: 0.08
+    fingerPadWidth: 0.015
+    fingerPadDepth: 0.02
+    fingerLength: 0.04
+    fingerWidth: 0.01
+    gripperCenterOffset: {x: 0, y: 0, z: 0.05}
 --- !u!1 &3238837518068886331
 GameObject:
   m_ObjectHideFlags: 0
@@ -3470,8 +3488,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   robotId: Robot1
   _dampingFactorLambda: 0.1
-  _minStepSpeedNearTarget: 0.1
-  _maxStepSpeed: 0.5
+  debugTarget: {fileID: 0}
   robotJoints:
   - {fileID: 3085470677580503433}
   - {fileID: 7298401113829605097}
@@ -3490,6 +3507,10 @@ MonoBehaviour:
   - 0
   _gripperController: {fileID: 0}
   _closeGripperAfterReach: 0
+  _enableMovingTargetTracking: 1
+  _targetMovementThreshold: 0.01
+  _graspConfig: {fileID: 0}
+  enableDebugVisualization: 1
 --- !u!1 &3369921039827679538
 GameObject:
   m_ObjectHideFlags: 0
@@ -5483,8 +5504,8 @@ ArticulationBody:
   m_XDrive:
     lowerLimit: -0.015
     upperLimit: 0
-    stiffness: 1000
-    damping: 100
+    stiffness: 4000
+    damping: 2000
     forceLimit: 100
     target: 0
     targetVelocity: 0
@@ -6117,8 +6138,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   robotId: Robot2
   _dampingFactorLambda: 0.1
-  _minStepSpeedNearTarget: 0.1
-  _maxStepSpeed: 0.5
+  debugTarget: {fileID: 0}
   robotJoints:
   - {fileID: 6634781638319257775}
   - {fileID: 909828273695427282}
@@ -6137,6 +6157,10 @@ MonoBehaviour:
   - 0
   _gripperController: {fileID: 0}
   _closeGripperAfterReach: 0
+  _enableMovingTargetTracking: 1
+  _targetMovementThreshold: 0.01
+  _graspConfig: {fileID: 0}
+  enableDebugVisualization: 1
 --- !u!1 &6086147611823037396
 GameObject:
   m_ObjectHideFlags: 0
@@ -9123,8 +9147,8 @@ ArticulationBody:
   m_XDrive:
     lowerLimit: -0.015
     upperLimit: 0
-    stiffness: 1000
-    damping: 100
+    stiffness: 4000
+    damping: 2000
     forceLimit: 100
     target: -0.014999999
     targetVelocity: 0

@@ -1184,12 +1184,20 @@ PrefabInstance:
       value: 7
       objectReference: {fileID: 0}
     - target: {fileID: 4982495115171254795, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
+      propertyPath: m_Mass
+      value: 0.01
+      objectReference: {fileID: 0}
+    - target: {fileID: 4982495115171254795, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
       propertyPath: m_Enabled
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 4982495115171254795, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
       propertyPath: m_UseGravity
       value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4982495115171254795, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
+      propertyPath: m_JointFriction
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 4982495115171254795, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
       propertyPath: m_LinearDamping
@@ -1200,12 +1208,20 @@ PrefabInstance:
       value: 0.05
       objectReference: {fileID: 0}
     - target: {fileID: 4982495115171254795, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
+      propertyPath: m_XDrive.damping
+      value: 1000
+      objectReference: {fileID: 0}
+    - target: {fileID: 4982495115171254795, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
       propertyPath: m_XDrive.driveType
       value: 2
       objectReference: {fileID: 0}
     - target: {fileID: 4982495115171254795, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
+      propertyPath: m_XDrive.stiffness
+      value: 3000
+      objectReference: {fileID: 0}
+    - target: {fileID: 4982495115171254795, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
       propertyPath: m_XDrive.forceLimit
-      value: 10
+      value: 100
       objectReference: {fileID: 0}
     - target: {fileID: 4982495115171254795, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
       propertyPath: m_CollisionDetectionMode
@@ -1349,11 +1365,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7409242131979378376, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
       propertyPath: damping
-      value: 2000
+      value: 1000
       objectReference: {fileID: 0}
     - target: {fileID: 7409242131979378376, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
       propertyPath: maxForce
-      value: 1000
+      value: 100
       objectReference: {fileID: 0}
     - target: {fileID: 7409242131979378376, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
       propertyPath: m_Enabled
@@ -1361,7 +1377,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7409242131979378376, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
       propertyPath: stiffness
-      value: 10000
+      value: 3000
       objectReference: {fileID: 0}
     - target: {fileID: 7409242131979378376, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
       propertyPath: targetPosition
@@ -1424,6 +1440,10 @@ PrefabInstance:
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 8146800775272521711, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
+      propertyPath: m_JointFriction
+      value: 10
+      objectReference: {fileID: 0}
+    - target: {fileID: 8146800775272521711, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
       propertyPath: m_LinearDamping
       value: 0.05
       objectReference: {fileID: 0}
@@ -1432,12 +1452,20 @@ PrefabInstance:
       value: 0.05
       objectReference: {fileID: 0}
     - target: {fileID: 8146800775272521711, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
+      propertyPath: m_XDrive.damping
+      value: 1000
+      objectReference: {fileID: 0}
+    - target: {fileID: 8146800775272521711, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
       propertyPath: m_XDrive.driveType
       value: 2
       objectReference: {fileID: 0}
     - target: {fileID: 8146800775272521711, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
+      propertyPath: m_XDrive.stiffness
+      value: 3000
+      objectReference: {fileID: 0}
+    - target: {fileID: 8146800775272521711, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
       propertyPath: m_XDrive.forceLimit
-      value: 10
+      value: 100
       objectReference: {fileID: 0}
     - target: {fileID: 8146800775272521711, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
       propertyPath: m_CollisionDetectionMode
@@ -1503,7 +1531,8 @@ PrefabInstance:
       propertyPath: m_Convex
       value: 1
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 9077691574197648432, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects:
     - targetCorrespondingSourceObject: {fileID: 7819215844824495476, guid: 9399f7f1b04da4205881f7708878ca8b, type: 3}
@@ -2598,7 +2627,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6579240078625439066, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_UseGravity
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6579240078625439066, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Constraints
@@ -2610,11 +2639,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6579240078625439066, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LinearDamping
-      value: 0.05
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 6579240078625439066, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_AngularDamping
-      value: 0.05
+      value: 10
       objectReference: {fileID: 0}
     - target: {fileID: 6579240078625439066, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_CollisionDetection

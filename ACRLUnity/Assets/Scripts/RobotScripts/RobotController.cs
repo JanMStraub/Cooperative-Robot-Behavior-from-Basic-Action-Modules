@@ -961,7 +961,7 @@ namespace Robotics
                 : RobotConstants.DEFAULT_CONVERGENCE_THRESHOLD;
 
             // Early convergence check - skip expensive IK computation if already at target
-            if (_distanceToTarget < effectiveThreshold)
+            if (_distanceToTarget <= effectiveThreshold)
             {
                 if (!_hasReachedTarget) // Only log/notify once
                 {

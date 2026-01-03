@@ -76,18 +76,21 @@ namespace Robotics
     public class GripperController : MonoBehaviour
     {
         [Header("Gripper References")]
+        [Tooltip("Primary gripper joint (gripper_jaw1_joint in URDF)")]
         public ArticulationBody leftGripper;
+
+        [Tooltip("Mimic gripper joint (gripper_jaw2_joint in URDF) - automatically follows leftGripper")]
         public ArticulationBody rightGripper;
 
         [Header("Control Parameters")]
         [Tooltip("Maximum force the gripper can apply.")]
-        public float maxForce = 5000f;
+        public float maxForce = 100f;
 
         [Tooltip("Stiffness of the grip. Higher = more rigid.")]
-        public float stiffness = 50000f;
+        public float stiffness = 2000f;
 
         [Tooltip("Damping of the grip. Higher = less oscillation.")]
-        public float damping = 5000f;
+        public float damping = 500f;
 
         [Tooltip("Smooth interpolation time in seconds.")]
         public float smoothTime = 0.3f;
@@ -117,7 +120,7 @@ namespace Robotics
 
         // Constants
         private const float MOVE_THRESHOLD = 0.001f; // Minimum delta to process movement
-        private const float COMPLETION_THRESHOLD = 0.005f; // Distance to target to consider "Complete"
+        private const float COMPLETION_THRESHOLD = 0.2f; // Distance to target to consider "Complete"
         private const string LOG_PREFIX = "[GRIPPER]";
 
         #region Unity Lifecycle
@@ -161,8 +164,8 @@ namespace Robotics
             maxForce = Mathf.Max(0, maxForce);
             smoothTime = Mathf.Max(0, smoothTime);
 
-            // If checking in editor mode, update drive params immediately
-            if (Application.isPlaying && leftGripper != null)
+            // Update drive params both in Edit and Play mode
+            if (leftGripper != null && rightGripper != null)
             {
                 SetupDrive(leftGripper);
                 SetupDrive(rightGripper);
@@ -204,7 +207,7 @@ namespace Robotics
                         ? leftGripper.jointPosition[0]
                         : _currentDriveTarget;
 
-                if (Mathf.Abs(actualPosition - physicalGoal) < COMPLETION_THRESHOLD)
+                if (Mathf.Abs(actualPosition - physicalGoal) <= COMPLETION_THRESHOLD)
                 {
                     FinalizeMovement(physicalGoal);
                 }
@@ -286,12 +289,23 @@ namespace Robotics
             return _invertMapping ? (1f - t) : t;
         }
 
+        /// <summary>
+        /// Configures ArticulationBody drive parameters for gripper control.
+        /// Note: URDF dynamics tags (damping/friction) provide baseline values that Unity imports.
+        /// This method applies runtime overrides for fine-tuning gripper behavior.
+        /// </summary>
         private void SetupDrive(ArticulationBody gripper)
         {
-            var drive = gripper.xDrive;
-            drive.forceLimit = maxForce;
+            // Get current drive configuration
+            ArticulationDrive drive = gripper.xDrive;
+
+            // Configure for position control with custom PD gains
+            drive.driveType = ArticulationDriveType.Target;
             drive.stiffness = stiffness;
             drive.damping = damping;
+            drive.forceLimit = maxForce;
+
+            // Apply the modified drive back to the articulation body
             gripper.xDrive = drive;
         }
 
