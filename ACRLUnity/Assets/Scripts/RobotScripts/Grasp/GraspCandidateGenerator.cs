@@ -77,10 +77,10 @@ namespace Robotics.Grasp
 
             for (int i = 0; i < _config.candidatesPerApproach; i++)
             {
-                // Sample variation parameters
+                // Sample variation parameters (now object-size-aware)
                 float distanceVariation = SampleDistanceVariation(basePreGraspDistance);
                 float angleVariation = SampleAngleVariation();
-                float depthVariation = SampleDepthVariation();
+                float depthVariation = SampleDepthVariation(objectSize);
 
                 // Generate candidate with variations
                 var candidate = GenerateSingleCandidate(
@@ -100,6 +100,7 @@ namespace Robotics.Grasp
 
         /// <summary>
         /// Generate a single grasp candidate with specified variations.
+        /// Enhanced with approach direction perturbations and antipodal grasp consideration.
         /// </summary>
         /// <param name="approach">Approach type</param>
         /// <param name="objectPosition">Object center position</param>
@@ -121,30 +122,46 @@ namespace Robotics.Grasp
             Quaternion graspRotation;
             Vector3 approachDirection;
 
+            // Sample small perturbations for approach direction diversity
+            float lateralPerturbation = (float)(_random.NextDouble() * 10.0 - 5.0); // ±5 degrees
+
             switch (approach)
             {
                 case GraspApproach.Top:
+                    // Top approach: gripper approaches from above (approach direction is upward from object)
+                    approachDirection = Vector3.up; // Direction gripper comes from
+                    // Apply lateral perturbation to approach direction
+                    Vector3 perturbedTopDir = Quaternion.Euler(lateralPerturbation, lateralPerturbation, 0f) * approachDirection;
+                    // Grasp position is on top of object
                     graspPosition = objectPosition + Vector3.up * (objectSize.y * 0.5f + depthOffset);
-                    graspRotation = Quaternion.Euler(90f + angleOffset, 0f, 0f);
-                    approachDirection = Vector3.up;
+                    // Gripper pointing down: The URDF gripper has a 90° Z-rotation baked in
+                    // So we need: 180° X-rotation (point down) + 90° Z-rotation (compensate for gripper orientation)
+                    graspRotation = Quaternion.Euler(180f + angleOffset, 0f, 90f + lateralPerturbation);
+                    approachDirection = perturbedTopDir.normalized;
                     break;
 
                 case GraspApproach.Side:
                     float sideSign = Mathf.Sign(Random.Range(-1f, 1f));
                     float sideOffset = objectSize.x * 0.5f + depthOffset;
-                    graspPosition = objectPosition + Vector3.right * sideSign * sideOffset;
-                    float sideAngle = sideSign > 0 ? -90f : 90f;
-                    graspRotation = Quaternion.Euler(angleOffset, sideAngle, 0f);
                     approachDirection = Vector3.right * sideSign;
+                    // Apply lateral perturbation
+                    Vector3 perturbedSideDir = Quaternion.Euler(lateralPerturbation, 0f, lateralPerturbation) * approachDirection;
+                    graspPosition = objectPosition + perturbedSideDir.normalized * sideOffset;
+                    float sideAngle = sideSign > 0 ? -90f : 90f;
+                    graspRotation = Quaternion.Euler(angleOffset + lateralPerturbation, sideAngle, 0f);
+                    approachDirection = perturbedSideDir.normalized;
                     break;
 
                 case GraspApproach.Front:
                     float frontSign = Mathf.Sign(Random.Range(-1f, 1f));
                     float frontOffset = objectSize.z * 0.5f + depthOffset;
-                    graspPosition = objectPosition + Vector3.forward * frontSign * frontOffset;
-                    float frontAngle = frontSign > 0 ? 180f : 0f;
-                    graspRotation = Quaternion.Euler(angleOffset, frontAngle, 0f);
                     approachDirection = Vector3.forward * frontSign;
+                    // Apply lateral perturbation
+                    Vector3 perturbedFrontDir = Quaternion.Euler(lateralPerturbation, lateralPerturbation, 0f) * approachDirection;
+                    graspPosition = objectPosition + perturbedFrontDir.normalized * frontOffset;
+                    float frontAngle = frontSign > 0 ? 180f : 0f;
+                    graspRotation = Quaternion.Euler(angleOffset + lateralPerturbation, frontAngle, 0f);
+                    approachDirection = perturbedFrontDir.normalized;
                     break;
 
                 default:
@@ -182,7 +199,48 @@ namespace Robotics.Grasp
             candidate.contactPointEstimate = graspPosition;
             candidate.approachDirection = approachDirection;
 
+            // Compute antipodal grasp quality
+            candidate.antipodalScore = ComputeAntipodalScore(graspPosition, objectPosition, objectSize, approachDirection);
+
             return candidate;
+        }
+
+        /// <summary>
+        /// Compute antipodal grasp quality score.
+        /// Measures how well gripper fingers will oppose each other across object center.
+        /// </summary>
+        /// <param name="graspPosition">Grasp position</param>
+        /// <param name="objectCenter">Object center position</param>
+        /// <param name="objectSize">Object dimensions</param>
+        /// <param name="approachDirection">Approach direction (gripper closing axis)</param>
+        /// <returns>Antipodal score (0-1, higher = better force closure)</returns>
+        private float ComputeAntipodalScore(Vector3 graspPosition, Vector3 objectCenter, Vector3 objectSize, Vector3 approachDirection)
+        {
+            // Calculate expected finger positions (assuming gripper opens along approach direction)
+            float gripperWidth = _config.gripperGeometry.maxWidth;
+            Vector3 perpendicular = Vector3.Cross(approachDirection, Vector3.up);
+            if (perpendicular.magnitude < 0.1f)
+                perpendicular = Vector3.Cross(approachDirection, Vector3.right);
+            perpendicular = perpendicular.normalized;
+
+            // Finger positions
+            Vector3 finger1Pos = graspPosition + perpendicular * (gripperWidth * 0.5f);
+            Vector3 finger2Pos = graspPosition - perpendicular * (gripperWidth * 0.5f);
+
+            // Check if object center lies between fingers (good antipodal grasp)
+            Vector3 toCenter = objectCenter - graspPosition;
+            float centerProjection = Vector3.Dot(toCenter, perpendicular);
+
+            // Ideal: center is on the grasp line (projection near zero)
+            float centerAlignment = 1.0f - Mathf.Clamp01(Mathf.Abs(centerProjection) / (objectSize.magnitude * 0.5f));
+
+            // Check if fingers are symmetric relative to object center
+            float dist1 = Vector3.Distance(finger1Pos, objectCenter);
+            float dist2 = Vector3.Distance(finger2Pos, objectCenter);
+            float symmetry = 1.0f - Mathf.Abs(dist1 - dist2) / (dist1 + dist2 + 0.001f);
+
+            // Combine factors
+            return (centerAlignment * 0.6f + symmetry * 0.4f);
         }
 
         /// <summary>
@@ -208,14 +266,19 @@ namespace Robotics.Grasp
         }
 
         /// <summary>
-        /// Sample depth variation for grasp penetration.
+        /// Sample depth variation for grasp penetration (now object-size-aware).
         /// </summary>
+        /// <param name="objectSize">Size of target object</param>
         /// <returns>Depth offset in meters</returns>
-        private float SampleDepthVariation()
+        private float SampleDepthVariation(Vector3 objectSize)
         {
-            // Sample around target depth ±2cm
-            float baseDepth = _config.targetGraspDepth * 0.05f; // 5cm reference
-            return baseDepth + (float)(_random.NextDouble() * 0.04 - 0.02);
+            // Calculate object-size-aware base depth
+            float avgSize = (objectSize.x + objectSize.y + objectSize.z) / 3f;
+            float baseDepth = _config.targetGraspDepth * avgSize;
+
+            // Variation scales with object size (±20% of average size)
+            float variation = avgSize * 0.2f;
+            return baseDepth + (float)(_random.NextDouble() * variation * 2f - variation);
         }
 
         /// <summary>

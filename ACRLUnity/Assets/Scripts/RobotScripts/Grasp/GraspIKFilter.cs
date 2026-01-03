@@ -155,15 +155,6 @@ namespace Robotics.Grasp
                 );
             }
 
-            // Debug: Log frame information
-            UnityEngine.Debug.Log(
-                $"[GRASP_IK_FILTER] Frame info:\n"
-                    + $"  Robot Base: {_robotBase.name} at {_robotBase.position}\n"
-                    + $"  IK Reference: {_ikReferenceFrame.name} at {_ikReferenceFrame.position}\n"
-                    + $"  Base rotation: {_robotBase.rotation.eulerAngles}\n"
-                    + $"  IK rotation: {_ikReferenceFrame.rotation.eulerAngles}"
-            );
-
             // Validate FK by comparing computed position with actual end-effector position
             ValidateForwardKinematics(originalAngles);
         }
@@ -181,11 +172,6 @@ namespace Robotics.Grasp
                     actualAngles[i] = _joints[i].jointPosition[0];
             }
 
-            UnityEngine.Debug.Log(
-                $"[GRASP_IK_FILTER] Actual joint angles after restore: "
-                    + $"[{string.Join(", ", System.Array.ConvertAll(actualAngles, a => $"{a:F2}"))}]"
-            );
-
             // Compute FK using our cached method
             JointInfo[] jointInfos;
             IKState computedState = ComputeForwardKinematicsInIKFrame(testAngles, out jointInfos);
@@ -197,24 +183,11 @@ namespace Robotics.Grasp
             // Compare
             float error = Vector3.Distance(computedState.Position, actualIKPos);
 
-            UnityEngine.Debug.Log(
-                $"[GRASP_IK_FILTER] FK Validation - Error: {error:F4}m\n"
-                    + $"  Computed: {computedState.Position}\n"
-                    + $"  Actual:   {actualIKPos}\n"
-                    + $"  Test Angles:   [{string.Join(", ", System.Array.ConvertAll(testAngles, a => $"{a:F2}"))}]"
-            );
-
             // Log individual joint offset errors during caching
             for (int i = 0; i < _joints.Length; i++)
             {
                 Transform parent = (i == 0) ? _robotBase : _joints[i - 1].transform;
                 Vector3 actualOffset = parent.InverseTransformPoint(_joints[i].transform.position);
-
-                UnityEngine.Debug.Log(
-                    $"[GRASP_IK_FILTER] Joint {i} offset - "
-                        + $"Cached: {_localJointPositions[i]}, Actual: {actualOffset}, "
-                        + $"Diff: {Vector3.Distance(_localJointPositions[i], actualOffset):F4}m"
-                );
             }
 
             // Log joint positions for debugging
@@ -458,15 +431,6 @@ namespace Robotics.Grasp
 
             // Log result for debugging
             bool success = error < _config.ikValidationThreshold;
-            if (!success)
-            {
-                UnityEngine.Debug.LogWarning(
-                    $"[GRASP_IK_FILTER] IK failed for {targetPosition} - "
-                        + $"Error: {error:F4}m, Threshold: {_config.ikValidationThreshold:F4}m, "
-                        + $"Iterations: {iterations}/{_config.maxIKValidationIterations}, "
-                        + $"Stalled: {stallCount > 10}"
-                );
-            }
 
             return new IKResult
             {
@@ -549,7 +513,7 @@ namespace Robotics.Grasp
 
         /// <summary>
         /// Compute IK quality score from validation results.
-        /// Favors low error over iteration count.
+        /// Favors low error over iteration count, and adds manipulability and joint limit proximity.
         /// </summary>
         /// <param name="preGraspResult">Pre-grasp IK result</param>
         /// <param name="graspResult">Grasp IK result</param>
@@ -565,8 +529,112 @@ namespace Robotics.Grasp
             float avgError = (preGraspResult.finalError + graspResult.finalError) / 2f;
             float errorScore = 1.0f - (avgError * 10f); // Penalize error heavily
 
-            // Weighted combination (favor low error)
-            return Mathf.Max(0f, iterationScore * 0.3f + errorScore * 0.7f);
+            // Factor 3: Manipulability (ability to move from this configuration)
+            float manipulability = ComputeManipulability(graspResult.jointAngles);
+
+            // Factor 4: Joint limit proximity (penalize configurations near joint limits)
+            float jointLimitScore = ComputeJointLimitScore(graspResult.jointAngles);
+
+            // Weighted combination (favor low error and good manipulability)
+            return Mathf.Max(0f,
+                iterationScore * 0.2f +
+                errorScore * 0.5f +
+                manipulability * 0.2f +
+                jointLimitScore * 0.1f);
+        }
+
+        /// <summary>
+        /// Compute manipulability index from joint angles.
+        /// Measures how easily the robot can move in different directions from this configuration.
+        /// Uses simplified Yoshikawa manipulability (determinant of Jacobian).
+        /// </summary>
+        /// <param name="jointAngles">Joint configuration</param>
+        /// <returns>Manipulability score (0-1, higher is better)</returns>
+        private float ComputeManipulability(float[] jointAngles)
+        {
+            // Compute forward kinematics to get joint info
+            JointInfo[] jointInfos;
+            IKState currentState = ComputeForwardKinematicsInIKFrame(jointAngles, out jointInfos);
+
+            // Build Jacobian matrix (simplified - position only)
+            int numJoints = _joints.Length;
+            float[,] jacobian = new float[3, numJoints]; // 3 DOF (position only)
+
+            Vector3 endEffectorPos = currentState.Position;
+
+            for (int i = 0; i < numJoints; i++)
+            {
+                Vector3 jointPos = jointInfos[i].WorldPosition;
+                Vector3 jointAxis = jointInfos[i].WorldAxis;
+
+                // Compute contribution to end-effector velocity
+                Vector3 r = endEffectorPos - jointPos;
+                Vector3 contribution = Vector3.Cross(jointAxis, r);
+
+                jacobian[0, i] = contribution.x;
+                jacobian[1, i] = contribution.y;
+                jacobian[2, i] = contribution.z;
+            }
+
+            // Compute manipulability measure (simplified: sum of squared singular values approximation)
+            // For a proper implementation, we'd compute SVD, but this is computationally expensive
+            // Instead, use Frobenius norm as proxy
+            float manipulabilityMeasure = 0f;
+            for (int i = 0; i < 3; i++)
+            {
+                for (int j = 0; j < numJoints; j++)
+                {
+                    manipulabilityMeasure += jacobian[i, j] * jacobian[i, j];
+                }
+            }
+
+            // Normalize (typical values range from 0 to ~0.5 for this robot)
+            manipulabilityMeasure = Mathf.Sqrt(manipulabilityMeasure) / (numJoints * 0.3f);
+            return Mathf.Clamp01(manipulabilityMeasure);
+        }
+
+        /// <summary>
+        /// Compute joint limit proximity score.
+        /// Penalizes configurations where joints are near their limits.
+        /// </summary>
+        /// <param name="jointAngles">Joint configuration</param>
+        /// <returns>Joint limit score (0-1, higher = farther from limits)</returns>
+        private float ComputeJointLimitScore(float[] jointAngles)
+        {
+            float totalScore = 0f;
+            int validJointCount = 0;
+
+            for (int i = 0; i < jointAngles.Length; i++)
+            {
+                float lower = _jointLowerLimits[i];
+                float upper = _jointUpperLimits[i];
+
+                // Skip joints with effectively unlimited range
+                if (upper - lower > 100f)
+                    continue;
+
+                // Compute normalized position within range (0 = at lower, 1 = at upper)
+                float range = upper - lower;
+                float normalizedPos = (jointAngles[i] - lower) / range;
+
+                // Distance to nearest limit (0.5 = centered, 0 or 1 = at limit)
+                float distToLimit = Mathf.Abs(normalizedPos - 0.5f);
+
+                // Score: 1.0 at center, 0.0 at limits
+                float jointScore = 1.0f - (distToLimit * 2f);
+
+                // Penalty increases near limits (within 10% of range)
+                if (distToLimit > 0.4f) // Within 10% of limit
+                {
+                    float limitProximity = (distToLimit - 0.4f) / 0.1f;
+                    jointScore *= (1.0f - limitProximity * 0.5f);
+                }
+
+                totalScore += jointScore;
+                validJointCount++;
+            }
+
+            return validJointCount > 0 ? (totalScore / validJointCount) : 1.0f;
         }
 
         /// <summary>

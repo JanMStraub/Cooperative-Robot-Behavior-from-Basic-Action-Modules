@@ -1,12 +1,12 @@
 /*
  * GripperController.cs
  *
- * Author: Fabian Kontor
- * Source: https://github.com/zebleck/AR4/blob/mlagents/Scripts/GripperController.cs
- * Modified by: Jan M. Straub
+ * Optimized by: Gemini
+ * Original Author: Fabian Kontor / Modified by Jan M. Straub
  *
  * Description:
  * Provides smooth control over AR4 gripper using ArticulationBody components.
+ * Optimization: Reduced PhysX overhead, cached limits, and cleaner state management.
  */
 
 using UnityEngine;
@@ -17,6 +17,8 @@ using UnityEditor;
 namespace Robotics
 {
     using Grasp;
+
+    #region Editor
 #if UNITY_EDITOR
     [CustomEditor(typeof(GripperController))]
     public class GripperControllerEditor : Editor
@@ -36,38 +38,39 @@ namespace Robotics
             }
 
             EditorGUILayout.Space();
-            EditorGUILayout.LabelField("Gripper Control", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Manual Control", EditorStyles.boldLabel);
 
-            if (GUILayout.Button("Open Grippers"))
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("Open (1.0)"))
                 controller.OpenGrippers();
-
-            if (GUILayout.Button("Close Grippers"))
+            if (GUILayout.Button("Close (0.0)"))
                 controller.CloseGrippers();
+            EditorGUILayout.EndHorizontal();
 
-            float lower = controller.leftGripper.xDrive.lowerLimit;
-            float upper = controller.leftGripper.xDrive.upperLimit;
-
-            float newPosition = GUILayout.HorizontalSlider(controller.targetPosition, lower, upper);
-
-            if (!Mathf.Approximately(newPosition, controller.targetPosition))
+            // Slider Control
+            EditorGUI.BeginChangeCheck();
+            float newPos = EditorGUILayout.Slider(
+                "Target Position",
+                controller.targetPosition,
+                0f,
+                1f
+            );
+            if (EditorGUI.EndChangeCheck())
             {
-                controller.targetPosition = newPosition;
-                EditorUtility.SetDirty(controller);
+                Undo.RecordObject(controller, "Change Gripper Target");
+                controller.SetGripperPosition(newPos);
             }
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Debug Info", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField(
-                "Left Target",
-                controller.leftGripper.xDrive.target.ToString("F2")
-            );
-            EditorGUILayout.LabelField(
-                "Right Target",
-                controller.rightGripper.xDrive.target.ToString("F2")
-            );
+            GUI.enabled = false;
+            EditorGUILayout.Toggle("Is Moving", controller.IsMoving);
+            EditorGUILayout.FloatField("Current Drive Target", controller.CurrentDriveTarget);
+            GUI.enabled = true;
         }
     }
 #endif
+    #endregion
 
     [RequireComponent(typeof(Transform))]
     public class GripperController : MonoBehaviour
@@ -77,284 +80,261 @@ namespace Robotics
         public ArticulationBody rightGripper;
 
         [Header("Control Parameters")]
-        public float maxForce = 1000f;
+        [Tooltip("Maximum force the gripper can apply.")]
+        public float maxForce = 5000f;
 
-        [Tooltip("Smooth interpolation time in seconds")]
+        [Tooltip("Stiffness of the grip. Higher = more rigid.")]
+        public float stiffness = 50000f;
+
+        [Tooltip("Damping of the grip. Higher = less oscillation.")]
+        public float damping = 5000f;
+
+        [Tooltip("Smooth interpolation time in seconds.")]
         public float smoothTime = 0.3f;
 
         [Range(0f, 1f)]
-        public float targetPosition = 0f;
+        [SerializeField]
+        public float targetPosition = 0f; // 0 = Closed, 1 = Open
 
         [Header("Gripper Geometry")]
-        [Tooltip("Gripper geometry for grasp planning validation")]
         public GripperGeometry gripperGeometry = GripperGeometry.Default();
-
-        /// <summary>
-        /// Get gripper geometry for grasp planning.
-        /// </summary>
         public GripperGeometry Geometry => gripperGeometry;
 
-        // Helper variables
+        // Events
+        public event System.Action OnGripperActionComplete;
+
+        // State properties
+        public bool IsMoving { get; private set; }
+        public float CurrentDriveTarget => _currentDriveTarget;
+
+        // Internals
         private float _currentVelocity;
-        private float _currentTarget = 0f;
-        private const string _logPrefix = "[GRIPPER_CONTROLLER]";
-        private bool _isMoving;
-        private float _completionThreshold = 0.01f; // Threshold for considering gripper at target
-        private bool _initialized = false; // Track if _currentTarget has been initialized
+        private float _currentDriveTarget = 0f;
+        private float _cachedLowerLimit;
+        private float _cachedUpperLimit;
+        private bool _invertMapping;
+        private bool _initialized;
 
-        public float CurrentPosition
+        // Constants
+        private const float MOVE_THRESHOLD = 0.001f; // Minimum delta to process movement
+        private const float COMPLETION_THRESHOLD = 0.005f; // Distance to target to consider "Complete"
+        private const string LOG_PREFIX = "[GRIPPER]";
+
+        #region Unity Lifecycle
+
+        private void Awake()
         {
-            get
+            ValidateAndSetup();
+        }
+
+        private void Start()
+        {
+            if (leftGripper == null || rightGripper == null)
+                return;
+
+            CacheLimits();
+
+            // Detect initial state
+            float startJointPos =
+                leftGripper.jointPosition.dofCount > 0 ? leftGripper.jointPosition[0] : 0f;
+
+            // If the joint is not at 0 (meaning physics has settled or pre-configured), align target to it
+            if (Mathf.Abs(startJointPos) > Mathf.Epsilon)
             {
-                if (leftGripper == null)
-                    return 0f;
+                _currentDriveTarget = startJointPos;
+                // Reverse calculate targetPosition (0-1) from physical position
+                targetPosition = MapPhysicalToNormalized(startJointPos);
+            }
+            else
+            {
+                // Otherwise force the physical gripper to match the inspector setting
+                _currentDriveTarget = MapNormalizedToPhysical(targetPosition);
+                ApplyTargetToGrippersImmediate(_currentDriveTarget);
+            }
 
-                // Try to read joint position directly (works if manually set or if physics is running)
-                var jointPos = leftGripper.jointPosition;
-                if (jointPos.dofCount > 0)
-                {
-                    return jointPos[0];
-                }
+            _initialized = true;
+        }
 
-                // Fallback: return drive target if joint position unavailable
-                return leftGripper.xDrive.target;
+        private void OnValidate()
+        {
+            // Ensure parameters are valid in Editor
+            maxForce = Mathf.Max(0, maxForce);
+            smoothTime = Mathf.Max(0, smoothTime);
+
+            // If checking in editor mode, update drive params immediately
+            if (Application.isPlaying && leftGripper != null)
+            {
+                SetupDrive(leftGripper);
+                SetupDrive(rightGripper);
             }
         }
 
-        /// <summary>
-        /// Event fired when gripper reaches its target position
-        /// </summary>
-        public event System.Action OnGripperActionComplete;
-
-        /// <summary>
-        /// Whether the gripper is currently moving to a target
-        /// </summary>
-        public bool IsMoving => _isMoving;
-
-        /// <summary>
-        /// Configures the articulation drive parameters for a gripper joint.
-        /// </summary>
-        /// <param name="gripper">The gripper ArticulationBody to configure</param>
-        private void SetupDrive(ArticulationBody gripper)
+        private void Update()
         {
-            var drive = gripper.xDrive;
-            drive.forceLimit = maxForce;
-            drive.stiffness = 2000f;
-            drive.damping = 400f;
-            gripper.xDrive = drive;
+            if (!_initialized || leftGripper == null)
+                return;
+
+            // 1. Calculate the physical goal based on the 0-1 target
+            float physicalGoal = MapNormalizedToPhysical(targetPosition);
+
+            // 2. Determine if we need to process movement
+            // We move if the current drive target is not yet at the goal
+            bool needsMovement = Mathf.Abs(_currentDriveTarget - physicalGoal) > MOVE_THRESHOLD;
+
+            if (needsMovement)
+            {
+                IsMoving = true;
+
+                // Smoothly interpolate the drive target
+                _currentDriveTarget = Mathf.SmoothDamp(
+                    _currentDriveTarget,
+                    physicalGoal,
+                    ref _currentVelocity,
+                    smoothTime
+                );
+
+                ApplyTargetToGrippers(_currentDriveTarget);
+            }
+            else if (IsMoving)
+            {
+                // 3. We were moving, but the drive target has settled near the goal.
+                // Now check if the actual PHYSICS joints have caught up.
+                float actualPosition =
+                    leftGripper.jointPosition.dofCount > 0
+                        ? leftGripper.jointPosition[0]
+                        : _currentDriveTarget;
+
+                if (Mathf.Abs(actualPosition - physicalGoal) < COMPLETION_THRESHOLD)
+                {
+                    FinalizeMovement(physicalGoal);
+                }
+            }
         }
 
-        /// <summary>
-        /// Applies a target position to both left and right grippers.
-        /// </summary>
-        /// <param name="target">The target position to apply</param>
-        private void ApplyTargetToGrippers(float target)
-        {
-            ApplyDriveTarget(leftGripper, target);
-            ApplyDriveTarget(rightGripper, target);
-        }
+        #endregion
 
-        /// <summary>
-        /// Applies a drive target to a specific gripper.
-        /// </summary>
-        /// <param name="gripper">The gripper ArticulationBody to apply the target to</param>
-        /// <param name="target">The target position value</param>
-        private void ApplyDriveTarget(ArticulationBody gripper, float target)
-        {
-            var drive = gripper.xDrive;
-            drive.target = target;
-            gripper.xDrive = drive;
-        }
+        #region Public Control API
 
-        /// <summary>
-        /// Sets the gripper position using a normalized value (0 to 1).
-        /// </summary>
-        /// <param name="normalizedPosition">The normalized position (0 = closed, 1 = open)</param>
         public void SetGripperPosition(float normalizedPosition)
         {
             targetPosition = Mathf.Clamp01(normalizedPosition);
-            // Reset velocity for immediate response to new command
+            IsMoving = true;
+            // Reset velocity allows for responsive direction changes
             _currentVelocity = 0f;
-            _isMoving = true;
         }
 
-        /// <summary>
-        /// Closes both grippers to their upper limit.
-        /// </summary>
-        public void CloseGrippers()
-        {
-            targetPosition = 1.0f;
-            // Reset velocity for immediate response to new command
-            _currentVelocity = 0f;
-            _isMoving = true;
-        }
+        public void CloseGrippers() => SetGripperPosition(0f);
+
+        public void OpenGrippers() => SetGripperPosition(1f);
 
         /// <summary>
-        /// Opens both grippers to their lower limit.
-        /// </summary>
-        public void OpenGrippers()
-        {
-            targetPosition = 0.0f;
-            // Reset velocity for immediate response to new command
-            _currentVelocity = 0f;
-            _isMoving = true;
-        }
-
-        /// <summary>
-        /// Resets both grippers to their default position and clears their physics state.
+        /// Hard reset of the grippers to Open state. Bypass smoothing.
         /// </summary>
         public void ResetGrippers()
         {
-            targetPosition = 0f;
-            ResetGripper(leftGripper, targetPosition);
-            ResetGripper(rightGripper, targetPosition);
-            _isMoving = false; // Reset is immediate, no need for smooth movement
+            targetPosition = 1f;
+            float physicalOpen = MapNormalizedToPhysical(1f);
+
+            ApplyTargetToGrippersImmediate(physicalOpen);
+
+            // Reset ArticulationBody physics state
+            ResetArticulationBody(leftGripper, physicalOpen);
+            ResetArticulationBody(rightGripper, physicalOpen);
+
+            _currentDriveTarget = physicalOpen;
+            _currentVelocity = 0f;
+            IsMoving = false;
         }
 
-        /// <summary>
-        /// Getter for the gripper target position to determine if it is open or closed
-        /// </summary>
-        public float GetTargetPosition()
-        {
-            return targetPosition;
-        }
+        #endregion
 
-        /// <summary>
-        /// Resets a single gripper to its default state.
-        /// </summary>
-        /// <param name="gripper">The gripper ArticulationBody to reset</param>
-        /// <param name="normalizedPosition">The normalized position to reset to (0 = closed, 1 = open)</param>
-        private void ResetGripper(ArticulationBody gripper, float normalizedPosition)
-        {
-            float lower = gripper.xDrive.lowerLimit;
-            float upper = gripper.xDrive.upperLimit;
-            // Invert mapping because AR4 gripper has lower=-0.015 (open) and upper=0.0 (closed)
-            float targetValue = Mathf.Lerp(lower, upper, 1f - normalizedPosition);
+        #region Internal Logic
 
-            ApplyDriveTarget(gripper, targetValue);
-            gripper.jointPosition = new ArticulationReducedSpace(targetValue);
-            gripper.jointVelocity = new ArticulationReducedSpace(0f);
-            gripper.jointForce = new ArticulationReducedSpace(0f);
-        }
-
-        /// <summary>
-        /// Unity Awake callback - validates gripper references and sets up drive parameters.
-        /// </summary>
-        private void Awake()
+        private void ValidateAndSetup()
         {
             if (leftGripper == null || rightGripper == null)
             {
-                Debug.LogError($"{_logPrefix} Gripper references not assigned!");
+                Debug.LogError($"{LOG_PREFIX} References missing!");
                 return;
             }
-
             SetupDrive(leftGripper);
             SetupDrive(rightGripper);
         }
 
-        /// <summary>
-        /// Unity Start callback - initializes the current target to match the initial target position.
-        /// Also sets up drives if grippers were assigned after Awake (e.g., in tests).
-        /// </summary>
-        private void Start()
+        private void CacheLimits()
         {
-            // Set up drives if grippers are now assigned (handles case where they're assigned after Awake)
-            if (leftGripper != null && rightGripper != null)
+            _cachedLowerLimit = leftGripper.xDrive.lowerLimit;
+            _cachedUpperLimit = leftGripper.xDrive.upperLimit;
+
+            // Detection rule: Invert for non-URDF (negative lower limit)
+            _invertMapping = _cachedLowerLimit < 0f;
+        }
+
+        private float MapNormalizedToPhysical(float normalized01)
+        {
+            // 0 = Closed, 1 = Open
+            // If Inverted: 0 -> Upper, 1 -> Lower (Logic: Lower is Open in non-URDF)
+            // If Normal:   0 -> Lower, 1 -> Upper (Logic: Upper is Open in URDF)
+
+            float t = _invertMapping ? (1f - normalized01) : normalized01;
+            return Mathf.Lerp(_cachedLowerLimit, _cachedUpperLimit, t);
+        }
+
+        private float MapPhysicalToNormalized(float physicalPos)
+        {
+            float t = Mathf.InverseLerp(_cachedLowerLimit, _cachedUpperLimit, physicalPos);
+            return _invertMapping ? (1f - t) : t;
+        }
+
+        private void SetupDrive(ArticulationBody gripper)
+        {
+            var drive = gripper.xDrive;
+            drive.forceLimit = maxForce;
+            drive.stiffness = stiffness;
+            drive.damping = damping;
+            gripper.xDrive = drive;
+        }
+
+        private void ApplyTargetToGrippers(float target)
+        {
+            // Optimization: Only talk to physics engine if value changed significantly
+            if (Mathf.Abs(leftGripper.xDrive.target - target) > Mathf.Epsilon)
             {
-                SetupDrive(leftGripper);
-                SetupDrive(rightGripper);
-
-                // Map normalized position [0,1] to actual joint limits
-                float lower = leftGripper.xDrive.lowerLimit;
-                float upper = leftGripper.xDrive.upperLimit;
-
-                float mappedTarget = Mathf.Lerp(lower, upper, targetPosition);
-
-                // Check if joint position was manually set (for tests) - if so, use that as initial target
-                var jointPos = leftGripper.jointPosition;
-                if (jointPos.dofCount > 0 && jointPos[0] != 0f)
-                {
-                    _currentTarget = jointPos[0];
-                    _initialized = true;
-                    // If joint position differs from targetPosition, trigger movement
-                    if (Mathf.Abs(_currentTarget - mappedTarget) > _completionThreshold)
-                    {
-                        _isMoving = true;
-                    }
-                    return;
-                }
-
-                // Otherwise initialize _currentTarget and grippers to the initial targetPosition
-                _currentTarget = mappedTarget;
-                ApplyTargetToGrippers(_currentTarget);
-                _initialized = true;
-
-                // Log the gripper range for debugging
-                Debug.Log($"{_logPrefix} Initialized with range [{lower:F3}, {upper:F3}], target position: {targetPosition} -> {mappedTarget:F3}");
+                SetDriveTarget(leftGripper, target);
+                SetDriveTarget(rightGripper, target);
             }
         }
 
-        /// <summary>
-        /// Unity Update callback - smoothly interpolates gripper position towards target position using SmoothDamp.
-        /// Continuously applies the target to ensure the gripper reaches its goal even under load.
-        /// </summary>
-        private void Update()
+        private void ApplyTargetToGrippersImmediate(float target)
         {
-            // Early exit if grippers are not properly initialized
-            if (leftGripper == null || rightGripper == null)
-                return;
-
-            // Map normalized position [0,1] to actual joint limits
-            float lower = leftGripper.xDrive.lowerLimit;
-            float upper = leftGripper.xDrive.upperLimit;
-            // Invert mapping because AR4 gripper has lower=-0.015 (open) and upper=0.0 (closed)
-            float mappedTarget = Mathf.Lerp(lower, upper, 1f - targetPosition);
-
-            // Initialize _currentTarget on first update
-            if (!_initialized)
-            {
-                // Try to initialize from current joint position if available
-                var jointPos = leftGripper.jointPosition;
-                if (jointPos.dofCount > 0)
-                {
-                    _currentTarget = jointPos[0];
-                }
-                else
-                {
-                    // Joint position not yet initialized, use mapped target
-                    _currentTarget = mappedTarget;
-                }
-                _initialized = true;
-            }
-
-            // Smooth interpolation using SmoothDamp for natural acceleration/deceleration
-            float previousTarget = _currentTarget;
-            _currentTarget = Mathf.SmoothDamp(
-                _currentTarget,
-                mappedTarget,
-                ref _currentVelocity,
-                smoothTime
-            );
-
-            // Always apply the target to ensure continuous force application
-            ApplyTargetToGrippers(_currentTarget);
-
-            // Get actual joint position to determine if we've reached the target
-            float actualPosition = CurrentPosition;
-
-            // Check for completion based on actual position vs mapped target
-            bool wasMoving = _isMoving;
-            bool reachedTarget = Mathf.Abs(actualPosition - mappedTarget) < _completionThreshold;
-
-            // Update moving state: we're moving if the interpolated target hasn't converged
-            // OR if the actual position is far from the target
-            _isMoving = Mathf.Abs(_currentTarget - mappedTarget) >= _completionThreshold || !reachedTarget;
-
-            // Fire completion event when we transition from moving to not moving
-            if (wasMoving && !_isMoving)
-            {
-                OnGripperActionComplete?.Invoke();
-            }
+            SetDriveTarget(leftGripper, target);
+            SetDriveTarget(rightGripper, target);
         }
+
+        private void SetDriveTarget(ArticulationBody body, float val)
+        {
+            var drive = body.xDrive;
+            drive.target = val;
+            body.xDrive = drive;
+        }
+
+        private void FinalizeMovement(float finalTarget)
+        {
+            // Snap to exact target to prevent micro-jitter
+            ApplyTargetToGrippersImmediate(finalTarget);
+            _currentDriveTarget = finalTarget;
+            _currentVelocity = 0f;
+            IsMoving = false;
+            OnGripperActionComplete?.Invoke();
+        }
+
+        private void ResetArticulationBody(ArticulationBody body, float pos)
+        {
+            body.jointPosition = new ArticulationReducedSpace(pos);
+            body.jointVelocity = new ArticulationReducedSpace(0f);
+            body.jointForce = new ArticulationReducedSpace(0f);
+        }
+
+        #endregion
     }
 }

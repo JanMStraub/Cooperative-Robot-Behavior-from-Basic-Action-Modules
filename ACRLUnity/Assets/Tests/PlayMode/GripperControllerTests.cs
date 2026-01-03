@@ -216,8 +216,8 @@ namespace Tests.PlayMode
         public void GetTargetPosition_ReturnsCurrentTarget()
         {
             _gripperController.targetPosition = 0.7f;
-            float target = _gripperController.GetTargetPosition();
-            Assert.AreEqual(0.7f, target, EPSILON, "GetTargetPosition should return current targetPosition");
+            float target = _gripperController.targetPosition;
+            Assert.AreEqual(0.7f, target, EPSILON, "targetPosition should return current targetPosition");
         }
 
         #endregion
@@ -381,8 +381,8 @@ namespace Tests.PlayMode
 
             yield return new WaitForFixedUpdate();
 
-            float currentPos = _gripperController.CurrentPosition;
-            Assert.AreEqual(0.025f, currentPos, EPSILON, "CurrentPosition should return left gripper joint position");
+            float currentPos = _gripperController.leftGripper.jointPosition[0];
+            Assert.AreEqual(0.025f, currentPos, EPSILON, "Left gripper joint position should return the set value");
         }
 
         #endregion

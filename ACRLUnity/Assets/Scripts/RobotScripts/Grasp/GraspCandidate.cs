@@ -33,6 +33,7 @@ namespace Robotics.Grasp
         public float approachScore;
         public float depthScore;
         public float stabilityScore;
+        public float antipodalScore;      // Antipodal grasp quality (force closure)
 
         // Validation state
         public bool ikValidated;
@@ -77,6 +78,7 @@ namespace Robotics.Grasp
                 approachScore = 0f,
                 depthScore = 0f,
                 stabilityScore = 0f,
+                antipodalScore = 0f,
                 ikValidated = false,
                 collisionValidated = false
             };
@@ -98,6 +100,12 @@ namespace Robotics.Grasp
 
         [Tooltip("Depth of gripper finger pads (meters)")]
         public float fingerPadDepth;
+
+        [Tooltip("Length of gripper finger (meters)")]
+        public float fingerLength;
+
+        [Tooltip("Width of gripper finger (meters)")]
+        public float fingerWidth;
 
         [Tooltip("Offset from wrist center to gripper center (meters)")]
         public Vector3 gripperCenterOffset;
@@ -128,6 +136,8 @@ namespace Robotics.Grasp
                 maxWidth = 0.08f,  // 8cm max opening
                 fingerPadWidth = 0.015f,  // 1.5cm finger pad
                 fingerPadDepth = 0.02f,  // 2cm depth
+                fingerLength = 0.04f,  // 4cm finger length
+                fingerWidth = 0.01f,  // 1cm finger width
                 gripperCenterOffset = new Vector3(0f, 0f, 0.05f)  // 5cm forward offset
             };
         }

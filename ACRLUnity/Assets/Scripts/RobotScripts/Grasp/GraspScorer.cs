@@ -65,13 +65,15 @@ namespace Robotics.Grasp
             candidate.approachScore = ComputeApproachScore(ref candidate);
             candidate.depthScore = ComputeDepthScore(ref candidate, objectSize);
             candidate.stabilityScore = ComputeStabilityScore(ref candidate, objectSize);
+            // antipodalScore is already computed during candidate generation
 
-            // Weighted combination
+            // Weighted combination (including antipodal score)
             candidate.totalScore =
                 candidate.ikScore * _config.ikScoreWeight +
                 candidate.approachScore * _config.approachScoreWeight +
                 candidate.depthScore * _config.depthScoreWeight +
-                candidate.stabilityScore * _config.stabilityScoreWeight;
+                candidate.stabilityScore * _config.stabilityScoreWeight +
+                candidate.antipodalScore * _config.antipodalScoreWeight;
         }
 
         /// <summary>
@@ -117,20 +119,21 @@ namespace Robotics.Grasp
 
         /// <summary>
         /// Compute grasp depth score.
-        /// Penalizes deviations from target depth.
+        /// Penalizes deviations from target depth (now object-size-aware).
         /// </summary>
         /// <param name="candidate">Candidate to evaluate</param>
         /// <param name="objectSize">Size of target object</param>
         /// <returns>Normalized score (0-1)</returns>
         private float ComputeDepthScore(ref GraspCandidate candidate, Vector3 objectSize)
         {
-            // Compare to target depth
-            float targetDepth = _config.targetGraspDepth * 0.05f; // Reference depth
+            // Calculate object-size-aware target depth
+            float avgObjectSize = (objectSize.x + objectSize.y + objectSize.z) / 3f;
+            float targetDepth = _config.targetGraspDepth * avgObjectSize;
             float actualDepth = candidate.graspDepth;
 
-            // Gaussian-like falloff around target
+            // Gaussian-like falloff around target (sigma scales with object size)
             float deviation = Mathf.Abs(actualDepth - targetDepth);
-            float sigma = 0.02f; // 2cm standard deviation
+            float sigma = avgObjectSize * 0.15f; // 15% of object size as tolerance
 
             return Mathf.Exp(-deviation * deviation / (2f * sigma * sigma));
         }
@@ -138,6 +141,7 @@ namespace Robotics.Grasp
         /// <summary>
         /// Compute stability score based on grasp geometry.
         /// Higher for grasps aligned with object center and gravity.
+        /// Enhanced with center-of-mass alignment, contact area, and edge avoidance.
         /// </summary>
         /// <param name="candidate">Candidate to evaluate</param>
         /// <param name="objectSize">Size of target object</param>
@@ -161,7 +165,86 @@ namespace Robotics.Grasp
             float distanceRatio = Mathf.Abs(candidate.approachDistance - idealDistance) / idealDistance;
             score *= Mathf.Clamp01(1f - distanceRatio); // Penalize distance deviation
 
+            // Factor 4: Center-of-mass alignment (grasp near object center)
+            Vector3 graspOffset = candidate.graspPosition - candidate.contactPointEstimate;
+            float centerDeviation = graspOffset.magnitude / objectSize.magnitude;
+            float centerScore = Mathf.Exp(-centerDeviation * 2f); // Exponential falloff
+            score *= 0.7f + 0.3f * centerScore; // Weight center alignment
+
+            // Factor 5: Contact area estimation (wider approach = more contact)
+            float contactAreaScore = EstimateContactArea(candidate, objectSize);
+            score *= 0.8f + 0.2f * contactAreaScore;
+
+            // Factor 6: Edge avoidance (penalize grasps near object edges)
+            float edgeScore = ComputeEdgeAvoidanceScore(candidate, objectSize);
+            score *= edgeScore;
+
             return Mathf.Clamp01(score);
+        }
+
+        /// <summary>
+        /// Estimate contact area between gripper and object.
+        /// Larger contact areas provide more stable grasps.
+        /// </summary>
+        /// <param name="candidate">Candidate to evaluate</param>
+        /// <param name="objectSize">Size of target object</param>
+        /// <returns>Normalized contact area score (0-1)</returns>
+        private float EstimateContactArea(GraspCandidate candidate, Vector3 objectSize)
+        {
+            // Determine which object dimension is perpendicular to approach
+            Vector3 absApproach = new Vector3(
+                Mathf.Abs(candidate.approachDirection.x),
+                Mathf.Abs(candidate.approachDirection.y),
+                Mathf.Abs(candidate.approachDirection.z)
+            );
+
+            // Calculate projected contact area
+            float contactArea;
+            if (absApproach.x > 0.9f) // Side approach
+                contactArea = objectSize.y * objectSize.z;
+            else if (absApproach.y > 0.9f) // Top/bottom approach
+                contactArea = objectSize.x * objectSize.z;
+            else // Front/back approach
+                contactArea = objectSize.x * objectSize.y;
+
+            // Compare to gripper contact area
+            float gripperArea = _config.gripperGeometry.fingerLength * _config.gripperGeometry.fingerWidth;
+            float areaRatio = Mathf.Min(contactArea, gripperArea) / Mathf.Max(contactArea, gripperArea);
+
+            return areaRatio;
+        }
+
+        /// <summary>
+        /// Compute edge avoidance score.
+        /// Penalizes grasps near object edges for better stability.
+        /// </summary>
+        /// <param name="candidate">Candidate to evaluate</param>
+        /// <param name="objectSize">Size of target object</param>
+        /// <returns>Edge avoidance score (0-1, higher = farther from edges)</returns>
+        private float ComputeEdgeAvoidanceScore(GraspCandidate candidate, Vector3 objectSize)
+        {
+            // Calculate distance to nearest edge in each dimension
+            Vector3 relativePos = candidate.graspPosition - candidate.contactPointEstimate;
+
+            // Normalize to object half-extents
+            Vector3 normalizedPos = new Vector3(
+                Mathf.Abs(relativePos.x) / (objectSize.x * 0.5f),
+                Mathf.Abs(relativePos.y) / (objectSize.y * 0.5f),
+                Mathf.Abs(relativePos.z) / (objectSize.z * 0.5f)
+            );
+
+            // Find minimum distance to edge (lower = closer to edge)
+            float minDistToEdge = Mathf.Min(normalizedPos.x, Mathf.Min(normalizedPos.y, normalizedPos.z));
+
+            // Penalize if too close to edge (within 20% of half-extent)
+            if (minDistToEdge > 0.8f)
+            {
+                // Near edge - apply penalty
+                float edgePenalty = (minDistToEdge - 0.8f) / 0.2f;
+                return 1.0f - edgePenalty * 0.3f; // Max 30% penalty
+            }
+
+            return 1.0f; // Not near edge
         }
 
         /// <summary>

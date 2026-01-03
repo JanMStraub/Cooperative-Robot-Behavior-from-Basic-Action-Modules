@@ -88,11 +88,15 @@ namespace Configuration
 
         [Tooltip("Weight for grasp depth score")]
         [Range(0f, 2f)]
-        public float depthScoreWeight = 0.6f;
+        public float depthScoreWeight = 1.0f;
 
         [Tooltip("Weight for stability score")]
         [Range(0f, 2f)]
         public float stabilityScoreWeight = 1.2f;
+
+        [Tooltip("Weight for antipodal grasp quality score")]
+        [Range(0f, 2f)]
+        public float antipodalScoreWeight = 1.0f;
 
         [Header("Collision Checking")]
         [Tooltip("Enable collision checking along approach path")]
@@ -115,7 +119,7 @@ namespace Configuration
 
         [Tooltip("Maximum IK iterations for validation")]
         [Range(5, 500)]
-        public int maxIKValidationIterations = 10;
+        public int maxIKValidationIterations = 20;
 
         [Tooltip("Distance threshold for IK convergence (meters)")]
         [Range(0.001f, 0.1f)]
@@ -155,8 +159,9 @@ namespace Configuration
 
             ikScoreWeight = 1.0f;
             approachScoreWeight = 0.8f;
-            depthScoreWeight = 0.6f;
+            depthScoreWeight = 1.0f;
             stabilityScoreWeight = 1.2f;
+            antipodalScoreWeight = 1.0f;
 
             enableCollisionChecking = true;
             collisionCheckWaypoints = 5;
@@ -164,7 +169,7 @@ namespace Configuration
             collisionLayerMask = -1;
 
             enableIKValidation = true;
-            maxIKValidationIterations = 10;
+            maxIKValidationIterations = 20;
             ikValidationThreshold = 0.01f;
             ikRotationTolerance = 20.0f;
             maxJointStepPerIteration = 0.2f;
