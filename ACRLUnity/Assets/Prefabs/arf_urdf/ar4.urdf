@@ -280,6 +280,7 @@
     <child link="gripper_jaw1_link"/>
     <axis xyz="-1 0 0"/>
     <limit effort="5000" lower="0" upper="0.014" velocity="1.0"/>
+    <dynamics damping="5000" friction="0.1"/>
   </joint>
   <joint name="gripper_jaw2_joint" type="prismatic">
     <origin rpy="0.0 -3.141592653589793 0.0" xyz="0.0 -0.036 0"/>
@@ -287,6 +288,7 @@
     <child link="gripper_jaw2_link"/>
     <axis xyz="-1 0 0"/>
     <limit effort="5000" lower="0" upper="0.014" velocity="1.0"/>
+    <dynamics damping="5000" friction="0.1"/>
     <mimic joint="gripper_jaw1_joint" multiplier="1" offset="0"/>
   </joint>
 </robot>

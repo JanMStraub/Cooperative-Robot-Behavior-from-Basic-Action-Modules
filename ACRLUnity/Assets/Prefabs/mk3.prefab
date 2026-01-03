@@ -1149,12 +1149,12 @@ ArticulationBody:
   m_XDrive:
     lowerLimit: 0
     upperLimit: 0.014
-    stiffness: 0
-    damping: 0
-    forceLimit: -1
+    stiffness: 4000
+    damping: 2000
+    forceLimit: 100
     target: 0
     targetVelocity: 0
-    driveType: 0
+    driveType: 2
   m_YDrive:
     lowerLimit: 0
     upperLimit: 0
@@ -2299,12 +2299,16 @@ MonoBehaviour:
   leftGripper: {fileID: 8146800775272521711}
   rightGripper: {fileID: 4982495115171254795}
   maxForce: 100
+  stiffness: 4000
+  damping: 2000
   smoothTime: 0.3
   targetPosition: 1
   gripperGeometry:
     maxWidth: 0.08
     fingerPadWidth: 0.015
     fingerPadDepth: 0.02
+    fingerLength: 0.04
+    fingerWidth: 0.01
     gripperCenterOffset: {x: 0, y: 0, z: 0.05}
 --- !u!1 &4949785685762751332
 GameObject:
@@ -2553,8 +2557,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.RobotController
   robotId: Robot1
   _dampingFactorLambda: 0.1
-  _minStepSpeedNearTarget: 0.1
-  _maxStepSpeed: 0.5
+  debugTarget: {fileID: 0}
   robotJoints:
   - {fileID: 2129013924218306092}
   - {fileID: 5983752902086433717}
@@ -2573,7 +2576,10 @@ MonoBehaviour:
   - 0
   _gripperController: {fileID: 0}
   _closeGripperAfterReach: 0
+  _enableMovingTargetTracking: 1
+  _targetMovementThreshold: 0.01
   _graspConfig: {fileID: 11400000, guid: a83c177827c05458e94f36395b5ad440, type: 2}
+  enableDebugVisualization: 1
 --- !u!1 &5573607929847458531
 GameObject:
   m_ObjectHideFlags: 0
@@ -3164,12 +3170,12 @@ ArticulationBody:
   m_XDrive:
     lowerLimit: 0
     upperLimit: 0.014
-    stiffness: 0
-    damping: 0
-    forceLimit: 1000
+    stiffness: 4000
+    damping: 2000
+    forceLimit: 100
     target: 0
     targetVelocity: 0
-    driveType: 0
+    driveType: 2
   m_YDrive:
     lowerLimit: 0
     upperLimit: 0

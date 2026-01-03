@@ -53,13 +53,15 @@ namespace Robotics
         /// <param name="joints">Array of joint information</param>
         /// <param name="convergenceThreshold">Distance threshold for convergence</param>
         /// <param name="orientationWeight">Weight for orientation error (0.0-2.0, default 1.0)</param>
+        /// <param name="orientationConvergenceThreshold">Orientation convergence threshold in radians (default 0.3)</param>
         /// <returns>Joint deltas in radians, or null if converged</returns>
         public Vector<double> ComputeJointDeltas(
             IKState currentState,
             IKState targetState,
             JointInfo[] joints,
             float convergenceThreshold,
-            float orientationWeight = 1.0f
+            float orientationWeight = 1.0f,
+            float orientationConvergenceThreshold = 0.3f
         )
         {
             // Increment iteration counter
@@ -72,7 +74,7 @@ namespace Robotics
                 targetState.Rotation
             );
 
-            if (positionError.magnitude < convergenceThreshold && orientationError.magnitude < 0.1f)
+            if (positionError.magnitude < convergenceThreshold && orientationError.magnitude < orientationConvergenceThreshold)
             {
                 return null; // Converged
             }
