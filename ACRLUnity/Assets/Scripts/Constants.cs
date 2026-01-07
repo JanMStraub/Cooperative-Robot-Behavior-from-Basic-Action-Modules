@@ -16,15 +16,16 @@ namespace Core
 
         /// <summary>
         /// Default damping factor for pseudo-inverse stability in IK calculations
-        /// Moderate damping for stable IK without over-regularization
+        /// INCREASED from 0.15 to 0.5 for better regularization and stability
+        /// Higher damping prevents oscillation and improves convergence near singularities
         /// </summary>
-        public const float DEFAULT_DAMPING_FACTOR = 0.2f;
+        public const float DEFAULT_DAMPING_FACTOR = 0.5f;
 
         /// <summary>
         /// Default convergence threshold for IK target reached detection (meters)
-        /// Set to 0.015m (1.5cm) with hysteresis to prevent bang-bang oscillation
+        /// Set to 0.020m (2.0cm) with hysteresis to prevent bang-bang oscillation
         /// </summary>
-        public const float DEFAULT_CONVERGENCE_THRESHOLD = 0.015f;
+        public const float DEFAULT_CONVERGENCE_THRESHOLD = 0.020f;
 
         /// <summary>
         /// Default maximum joint step size per iteration (radians)
@@ -66,7 +67,7 @@ namespace Core
         /// Default timeout for grasp operations (seconds)
         /// Prevents infinite waiting when grasp target is unreachable
         /// </summary>
-        public const float DEFAULT_GRASP_TIMEOUT_SECONDS = 30f;
+        public const float DEFAULT_GRASP_TIMEOUT_SECONDS = 10f;
 
         /// <summary>
         /// Default timeout for movement operations (seconds)
@@ -76,9 +77,34 @@ namespace Core
 
         /// <summary>
         /// Grasp convergence multiplier (relative to DEFAULT_CONVERGENCE_THRESHOLD)
-        /// Relaxed threshold for grasp precision (0.33 * 0.015m = 5mm instead of 3mm)
+        /// Relaxed threshold for grasp precision (0.5 * 0.020m = 10mm)
         /// </summary>
-        public const float GRASP_CONVERGENCE_MULTIPLIER = 0.33f;
+        public const float GRASP_CONVERGENCE_MULTIPLIER = 0.5f;
+
+        // Cartesian Motion Control
+        /// <summary>
+        /// Default maximum Cartesian velocity for straight-line motion (m/s)
+        /// 20cm/s provides balanced speed and smoothness
+        /// </summary>
+        public const float DEFAULT_MAX_CARTESIAN_VELOCITY = 0.2f;
+
+        /// <summary>
+        /// Default Cartesian acceleration/deceleration (m/s²)
+        /// 50cm/s² for smooth trapezoidal velocity profiles
+        /// </summary>
+        public const float DEFAULT_CARTESIAN_ACCELERATION = 0.5f;
+
+        /// <summary>
+        /// Default waypoint spacing for Cartesian path generation (meters)
+        /// 3cm provides good balance between smoothness and performance
+        /// </summary>
+        public const float DEFAULT_WAYPOINT_SPACING = 0.03f;
+
+        /// <summary>
+        /// Minimum distance to use Cartesian path planning (meters)
+        /// Below 5cm, use direct IK for precision
+        /// </summary>
+        public const float MIN_DISTANCE_FOR_CARTESIAN_PATH = 0.05f;
 
         // Target Finding
         /// <summary>

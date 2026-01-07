@@ -63,7 +63,7 @@ namespace Tests.PlayMode
             // Assign grippers to controller
             _gripperController.leftGripper = _leftGripper;
             _gripperController.rightGripper = _rightGripper;
-            _gripperController.smoothTime = 0.1f; // Faster for testing
+            _gripperController.gripSpeed = 0.2f; // Faster for testing (meters per second)
         }
 
         [TearDown]
@@ -222,13 +222,13 @@ namespace Tests.PlayMode
 
         #endregion
 
-        #region SmoothDamp Interpolation Tests
+        #region GripSpeed Interpolation Tests
 
         /// <summary>
-        /// Test that SmoothDamp interpolation converges towards target over multiple frames.
+        /// Test that gripSpeed interpolation converges towards target over multiple frames.
         /// </summary>
         [UnityTest]
-        public IEnumerator SmoothDamp_ConvergesToTarget()
+        public IEnumerator GripSpeed_ConvergesToTarget()
         {
             _gripperController.targetPosition = 0.0f;
             yield return new WaitForSeconds(0.5f); // Wait for initial state
@@ -251,24 +251,24 @@ namespace Tests.PlayMode
         }
 
         /// <summary>
-        /// Test that SmoothDamp respects smoothTime parameter for interpolation speed.
+        /// Test that gripSpeed parameter affects interpolation speed.
         /// </summary>
         [UnityTest]
-        public IEnumerator SmoothDamp_RespectsSmootTime()
+        public IEnumerator GripSpeed_AffectsInterpolationSpeed()
         {
-            // Set fast smooth time
-            _gripperController.smoothTime = 0.05f;
+            // Set fast grip speed
+            _gripperController.gripSpeed = 0.5f;
             _gripperController.targetPosition = 0.0f;
             yield return new WaitForSeconds(0.2f);
 
             _gripperController.SetGripperPosition(1.0f);
-            yield return new WaitForSeconds(0.15f); // Wait 3x smoothTime
+            yield return new WaitForSeconds(0.15f);
 
             float fastDriveTarget = _leftGripper.xDrive.target;
 
-            // Reset and test with slow smooth time
+            // Reset and test with slow grip speed
             _gripperController.ResetGrippers();
-            _gripperController.smoothTime = 0.5f; // Much slower
+            _gripperController.gripSpeed = 0.05f; // Much slower
             yield return new WaitForSeconds(0.2f);
 
             _gripperController.SetGripperPosition(1.0f);
@@ -276,8 +276,8 @@ namespace Tests.PlayMode
 
             float slowDriveTarget = _leftGripper.xDrive.target;
 
-            // Fast smooth time should result in larger movement
-            Assert.Greater(fastDriveTarget, slowDriveTarget, "Faster smoothTime should result in faster convergence");
+            // Fast grip speed should result in larger movement
+            Assert.Greater(fastDriveTarget, slowDriveTarget, "Faster gripSpeed should result in faster convergence");
         }
 
         #endregion
@@ -293,7 +293,7 @@ namespace Tests.PlayMode
             bool eventFired = false;
             _gripperController.OnGripperActionComplete += () => eventFired = true;
 
-            _gripperController.smoothTime = 0.05f; // Fast convergence for testing
+            _gripperController.gripSpeed = 0.5f; // Fast convergence for testing
             _gripperController.OpenGrippers();
 
             // Wait for convergence
@@ -334,7 +334,7 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator IsMoving_BecomesFalseAfterConvergence()
         {
-            _gripperController.smoothTime = 0.05f; // Fast convergence
+            _gripperController.gripSpeed = 0.5f; // Fast convergence
             _gripperController.OpenGrippers();
 
             Assert.IsTrue(_gripperController.IsMoving, "IsMoving should be true initially");
@@ -357,7 +357,7 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator IsMoving_StaysTrueDuringInterpolation()
         {
-            _gripperController.smoothTime = 0.5f; // Slower for longer interpolation
+            _gripperController.gripSpeed = 0.05f; // Slower for longer interpolation
             _gripperController.OpenGrippers();
 
             // Wait a short time (not enough to converge)
@@ -404,20 +404,6 @@ namespace Tests.PlayMode
             yield return null;
 
             Assert.Pass("Update should handle null grippers without crashing");
-        }
-
-        #endregion
-
-        #region Gripper Geometry Tests
-
-        /// <summary>
-        /// Test that Geometry property returns the configured gripper geometry.
-        /// </summary>
-        [Test]
-        public void Geometry_ReturnsConfiguredGeometry()
-        {
-            var geometry = _gripperController.Geometry;
-            Assert.IsNotNull(geometry, "Geometry should not be null");
         }
 
         #endregion

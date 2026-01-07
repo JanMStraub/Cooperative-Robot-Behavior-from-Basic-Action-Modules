@@ -15,35 +15,35 @@ MonoBehaviour:
   profileName: AR4_Default
   description: Standard AR4 robotic arm configuration
   joints:
-  - stiffness: 1000
-    damping: 100
+  - stiffness: 5000
+    damping: 500
     forceLimit: 500
     upperLimit: 170
     lowerLimit: -170
-  - stiffness: 800
-    damping: 80
+  - stiffness: 4000
+    damping: 400
     forceLimit: 500
     upperLimit: 90
     lowerLimit: -42.5
-  - stiffness: 600
-    damping: 60
+  - stiffness: 3000
+    damping: 300
     forceLimit: 500
     upperLimit: 125
     lowerLimit: -90
-  - stiffness: 500
-    damping: 50
+  - stiffness: 2500
+    damping: 250
     forceLimit: 500
     upperLimit: 105
     lowerLimit: -105
-  - stiffness: 400
-    damping: 40
+  - stiffness: 2000
+    damping: 200
     forceLimit: 500
     upperLimit: 100
     lowerLimit: -100
-  - stiffness: 300
-    damping: 30
+  - stiffness: 1500
+    damping: 150
     forceLimit: 500
     upperLimit: 180
     lowerLimit: -180
-  adjustmentSpeed: 1.0
+  adjustmentSpeed: 1
   maxJointStepRad: 0.2
