@@ -53,6 +53,76 @@ namespace Tests.EditMode
             Assert.AreEqual(0.01f, RobotConstants.MOVEMENT_THRESHOLD);
         }
 
+        [Test]
+        public void RobotConstants_OrientationThreshold_IsReasonable()
+        {
+            // Orientation threshold should be positive and less than 90 degrees
+            Assert.Greater(RobotConstants.DEFAULT_ORIENTATION_THRESHOLD_DEGREES, 0f);
+            Assert.Less(RobotConstants.DEFAULT_ORIENTATION_THRESHOLD_DEGREES, 90f);
+            // Should be 10 degrees
+            Assert.AreEqual(10f, RobotConstants.DEFAULT_ORIENTATION_THRESHOLD_DEGREES);
+        }
+
+        [Test]
+        public void RobotConstants_OrientationRampStartDistance_IsReasonable()
+        {
+            // Should be between 10cm and 1m
+            Assert.Greater(RobotConstants.ORIENTATION_RAMP_START_DISTANCE, 0.1f);
+            Assert.Less(RobotConstants.ORIENTATION_RAMP_START_DISTANCE, 1f);
+            // Should be 30cm
+            Assert.AreEqual(0.30f, RobotConstants.ORIENTATION_RAMP_START_DISTANCE);
+        }
+
+        [Test]
+        public void RobotConstants_GraspTimeout_IsReasonable()
+        {
+            // Grasp timeout should be positive and less than 1 minute
+            Assert.Greater(RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS, 0f);
+            Assert.Less(RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS, 60f);
+            // Should be 10 seconds
+            Assert.AreEqual(10f, RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS);
+        }
+
+        [Test]
+        public void RobotConstants_MovementTimeout_IsReasonable()
+        {
+            // Movement timeout should be positive and less than 1 minute
+            Assert.Greater(RobotConstants.DEFAULT_MOVEMENT_TIMEOUT_SECONDS, 0f);
+            Assert.Less(RobotConstants.DEFAULT_MOVEMENT_TIMEOUT_SECONDS, 60f);
+            // Should be 15 seconds
+            Assert.AreEqual(15f, RobotConstants.DEFAULT_MOVEMENT_TIMEOUT_SECONDS);
+        }
+
+        [Test]
+        public void RobotConstants_MovementTimeout_IsLongerThanGraspTimeout()
+        {
+            // Movement timeout should be longer than grasp timeout
+            Assert.Greater(RobotConstants.DEFAULT_MOVEMENT_TIMEOUT_SECONDS,
+                          RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS);
+        }
+
+        [Test]
+        public void RobotConstants_GraspConvergenceMultiplier_IsReasonable()
+        {
+            // Multiplier should be positive and less than 1
+            Assert.Greater(RobotConstants.GRASP_CONVERGENCE_MULTIPLIER, 0f);
+            Assert.Less(RobotConstants.GRASP_CONVERGENCE_MULTIPLIER, 1f);
+            // Should be 0.33 (which gives ~5mm threshold)
+            Assert.AreEqual(0.33f, RobotConstants.GRASP_CONVERGENCE_MULTIPLIER);
+        }
+
+        [Test]
+        public void RobotConstants_GraspConvergenceMultiplier_GivesReasonableThreshold()
+        {
+            // The resulting grasp threshold should be between 3mm and 10mm
+            float graspThreshold = RobotConstants.DEFAULT_CONVERGENCE_THRESHOLD *
+                                   RobotConstants.GRASP_CONVERGENCE_MULTIPLIER;
+            Assert.Greater(graspThreshold, 0.003f); // > 3mm
+            Assert.Less(graspThreshold, 0.010f); // < 10mm
+            // Should be approximately 5mm (0.015 * 0.33 = 0.00495)
+            Assert.AreEqual(0.00495f, graspThreshold, 0.0001f);
+        }
+
         #endregion
 
         #region SceneConstants Tests

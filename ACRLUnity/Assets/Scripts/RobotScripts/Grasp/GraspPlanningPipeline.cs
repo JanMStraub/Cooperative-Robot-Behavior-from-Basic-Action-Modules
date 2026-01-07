@@ -37,7 +37,15 @@ namespace Robotics.Grasp
         {
             _config = config;
             _generator = new GraspCandidateGenerator(config);
-            _ikFilter = new GraspIKFilter(config, joints, ikReferenceFrame, endEffector, dampingFactor);
+            _ikFilter = new GraspIKFilter(
+                config,
+                joints,
+                ikReferenceFrame,
+                endEffector,
+                dampingFactor,
+                Core.GraspPlanningConstants.ENABLE_GRASP_IK_DEBUG_LOGGING,
+                enableInitializationValidation: true
+            );
             _collisionFilter = new GraspCollisionFilter(config);
             _scorer = new GraspScorer(config);
         }
@@ -89,6 +97,7 @@ namespace Robotics.Grasp
             }
 
             UnityEngine.Debug.Log($"{_logPrefix} Generated {candidates.Count} candidates");
+            LogApproachDistribution("Generated", candidates);
 
             if (candidates.Count == 0)
             {
@@ -99,6 +108,7 @@ namespace Robotics.Grasp
             // Stage 2: IK filtering
             var ikValidCandidates = _ikFilter.FilterCandidates(candidates, gripperPosition);
             UnityEngine.Debug.Log($"{_logPrefix} {ikValidCandidates.Count} candidates passed IK filter");
+            LogApproachDistribution("IK-filtered", ikValidCandidates);
 
             if (ikValidCandidates.Count == 0)
             {
@@ -109,6 +119,7 @@ namespace Robotics.Grasp
             // Stage 3: Collision filtering
             var collisionFreeCandidates = _collisionFilter.FilterCandidates(ikValidCandidates, targetObject);
             UnityEngine.Debug.Log($"{_logPrefix} {collisionFreeCandidates.Count} candidates passed collision filter");
+            LogApproachDistribution("Collision-free", collisionFreeCandidates);
 
             if (collisionFreeCandidates.Count == 0)
             {
@@ -129,8 +140,10 @@ namespace Robotics.Grasp
 
             UnityEngine.Debug.Log(
                 $"{_logPrefix} Pipeline completed in {elapsedMs:F1}ms. " +
-                $"Best candidate score: {rankedCandidates[0].totalScore:F2}"
+                $"Best candidate score: {rankedCandidates[0].totalScore:F2}, " +
+                $"Approach: {rankedCandidates[0].approachType}"
             );
+            LogTopCandidatesScores(rankedCandidates);
 
             // Check time budget
             if (elapsedMs > _config.maxPipelineTimeMs)
@@ -325,6 +338,60 @@ namespace Robotics.Grasp
             );
 
             return adaptiveCount;
+        }
+
+        /// <summary>
+        /// Log approach type distribution for debugging.
+        /// </summary>
+        /// <param name="stage">Pipeline stage name</param>
+        /// <param name="candidates">Candidates to analyze</param>
+        private void LogApproachDistribution(string stage, List<GraspCandidate> candidates)
+        {
+            int topCount = 0;
+            int sideCount = 0;
+            int frontCount = 0;
+
+            foreach (var candidate in candidates)
+            {
+                switch (candidate.approachType)
+                {
+                    case GraspApproach.Top:
+                        topCount++;
+                        break;
+                    case GraspApproach.Side:
+                        sideCount++;
+                        break;
+                    case GraspApproach.Front:
+                        frontCount++;
+                        break;
+                }
+            }
+
+            UnityEngine.Debug.Log(
+                $"{_logPrefix} [{stage}] Approach distribution: " +
+                $"Top={topCount}, Side={sideCount}, Front={frontCount}"
+            );
+        }
+
+        /// <summary>
+        /// Log top 3 candidate scores for debugging.
+        /// </summary>
+        /// <param name="rankedCandidates">Sorted candidates</param>
+        private void LogTopCandidatesScores(List<GraspCandidate> rankedCandidates)
+        {
+            int showCount = Mathf.Min(3, rankedCandidates.Count);
+            UnityEngine.Debug.Log($"{_logPrefix} Top {showCount} candidates:");
+
+            for (int i = 0; i < showCount; i++)
+            {
+                var c = rankedCandidates[i];
+                UnityEngine.Debug.Log(
+                    $"{_logPrefix}   #{i + 1}: {c.approachType} - Total={c.totalScore:F2} " +
+                    $"(IK={c.ikScore:F2}, Approach={c.approachScore:F2}, " +
+                    $"Depth={c.depthScore:F2}, Stability={c.stabilityScore:F2}, " +
+                    $"Antipodal={c.antipodalScore:F2})"
+                );
+            }
         }
     }
 

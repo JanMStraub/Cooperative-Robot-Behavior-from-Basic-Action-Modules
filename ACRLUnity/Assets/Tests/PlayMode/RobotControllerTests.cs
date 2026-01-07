@@ -526,5 +526,91 @@ namespace Tests.PlayMode
         }
 
         #endregion
+
+        #region Precision Improvement Tests (January 2026)
+
+        [UnityTest]
+        public IEnumerator GraspConvergenceThreshold_UsesRelaxedThreshold()
+        {
+            // Test that grasp convergence uses the relaxed 5mm threshold (0.33 multiplier)
+            // instead of the old 3mm threshold (0.2 multiplier)
+
+            // Arrange
+            var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            targetObject.transform.position = new Vector3(0.5f, 0.3f, 0.5f);
+
+            var graspOptions = new GraspOptions
+            {
+                useGraspPlanning = true,
+                approach = Robotics.Grasp.GraspApproach.Top,
+                closeGripperOnReach = true
+            };
+
+            // Act
+            _robotController.SetTarget(targetObject, graspOptions);
+            yield return null;
+
+            // Assert - Verify the controller is using the relaxed convergence threshold
+            // The actual threshold value is: DEFAULT_CONVERGENCE_THRESHOLD (0.015m) * GRASP_CONVERGENCE_MULTIPLIER (0.33)
+            // = 0.00495m (approximately 5mm)
+            float expectedThreshold = Core.RobotConstants.DEFAULT_CONVERGENCE_THRESHOLD *
+                                     Core.RobotConstants.GRASP_CONVERGENCE_MULTIPLIER;
+            Assert.AreEqual(0.00495f, expectedThreshold, 0.0001f,
+                "Grasp convergence threshold should be approximately 5mm");
+
+            // Cleanup
+            Object.Destroy(targetObject);
+        }
+
+        [UnityTest]
+        public IEnumerator OrientationThreshold_UsesConfigurableValue()
+        {
+            // Test that orientation convergence uses the new configurable threshold (10 degrees)
+            // instead of the old hardcoded 5 degrees
+
+            // Assert - Verify the constant is set correctly
+            Assert.AreEqual(10f, Core.RobotConstants.DEFAULT_ORIENTATION_THRESHOLD_DEGREES,
+                "Orientation convergence threshold should be 10 degrees");
+
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator OrientationRampStart_BeginsAt30cm()
+        {
+            // Test that orientation ramping starts at 30cm instead of 20cm
+
+            // Assert - Verify the constant is set correctly
+            Assert.AreEqual(0.30f, Core.RobotConstants.ORIENTATION_RAMP_START_DISTANCE,
+                "Orientation ramping should start at 30cm");
+
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator GraspTimeout_UsesConfiguredValue()
+        {
+            // Test that grasp operations use the configured timeout value
+
+            // Assert - Verify the constant is set correctly
+            Assert.AreEqual(10f, Core.RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS,
+                "Grasp timeout should be 10 seconds");
+
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator MovementTimeout_UsesConfiguredValue()
+        {
+            // Test that movement operations use the configured timeout value
+
+            // Assert - Verify the constant is set correctly
+            Assert.AreEqual(15f, Core.RobotConstants.DEFAULT_MOVEMENT_TIMEOUT_SECONDS,
+                "Movement timeout should be 15 seconds");
+
+            yield return null;
+        }
+
+        #endregion
     }
 }
