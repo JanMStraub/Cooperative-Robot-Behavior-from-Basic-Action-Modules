@@ -1,6 +1,6 @@
-using UnityEngine;
 using Robotics;
 using Robotics.Grasp;
+using UnityEngine;
 
 namespace Configuration
 {
@@ -35,14 +35,14 @@ namespace Configuration
         [Header("Candidate Generation")]
         [Tooltip("Number of candidate poses to generate per approach type")]
         [Range(1, 20)]
-        public int candidatesPerApproach = 5;
+        public int candidatesPerApproach = 8;
 
         [Tooltip("Enabled approach directions with preference weights")]
         public GraspApproachSettings[] enabledApproaches = new GraspApproachSettings[]
         {
             new GraspApproachSettings(GraspApproach.Top, true, 1.2f),
             new GraspApproachSettings(GraspApproach.Front, true, 1.0f),
-            new GraspApproachSettings(GraspApproach.Side, true, 0.8f)
+            new GraspApproachSettings(GraspApproach.Side, true, 0.8f),
         };
 
         [Header("Approach Distances")]
@@ -119,11 +119,11 @@ namespace Configuration
 
         [Tooltip("Maximum IK iterations for validation")]
         [Range(5, 500)]
-        public int maxIKValidationIterations = 20;
+        public int maxIKValidationIterations = 50;
 
         [Tooltip("Distance threshold for IK convergence (meters)")]
         [Range(0.001f, 0.1f)]
-        public float ikValidationThreshold = 0.01f;
+        public float ikValidationThreshold = 0.005f;
 
         [Tooltip("Rotation tolerance for IK convergence (degrees)")]
         [Range(5f, 45f)]
@@ -137,6 +137,11 @@ namespace Configuration
         [Range(0.3f, 1.0f)]
         public float maxReachDistance = 0.75f;
 
+        [Header("Candidate Variation Ranges")]
+        public float angleVariationRange = 30f;
+        public float distanceVariationRange = 0.6f;
+        public float depthVariationRange = 0.4f;
+
         [Header("Performance")]
         [Tooltip("Maximum time budget for full pipeline (milliseconds)")]
         [Range(50, 1000)]
@@ -147,7 +152,7 @@ namespace Configuration
         /// </summary>
         public void InitializeDefaultConfig()
         {
-            candidatesPerApproach = 5;
+            candidatesPerApproach = 8;
             preGraspDistanceFactor = 1.5f;
             minPreGraspDistance = 0.05f;
             maxPreGraspDistance = 0.15f;
@@ -169,11 +174,14 @@ namespace Configuration
             collisionLayerMask = -1;
 
             enableIKValidation = true;
-            maxIKValidationIterations = 20;
-            ikValidationThreshold = 0.01f;
+            maxIKValidationIterations = 50;
+            ikValidationThreshold = 0.005f;
             ikRotationTolerance = 20.0f;
             maxJointStepPerIteration = 0.2f;
             maxReachDistance = 0.6f;
+            angleVariationRange = 15f;
+            distanceVariationRange = 0.3f;
+            depthVariationRange = 0.2f;
 
             maxPipelineTimeMs = 200;
 
@@ -181,7 +189,7 @@ namespace Configuration
             {
                 new GraspApproachSettings(GraspApproach.Top, true, 1.2f),
                 new GraspApproachSettings(GraspApproach.Front, true, 1.0f),
-                new GraspApproachSettings(GraspApproach.Side, true, 0.8f)
+                new GraspApproachSettings(GraspApproach.Side, true, 0.8f),
             };
         }
 

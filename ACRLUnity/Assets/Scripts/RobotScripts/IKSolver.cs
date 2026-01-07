@@ -30,6 +30,14 @@ namespace Robotics
         }
 
         /// <summary>
+        /// Set iteration count (for transferring state between solvers)
+        /// </summary>
+        public void SetIterationCount(int count)
+        {
+            _iterationCount = count;
+        }
+
+        /// <summary>
         /// Creates a new IK solver for a robot with specified joint count
         /// </summary>
         /// <param name="jointCount">Number of robot joints</param>
@@ -54,6 +62,7 @@ namespace Robotics
         /// <param name="convergenceThreshold">Distance threshold for convergence</param>
         /// <param name="orientationWeight">Weight for orientation error (0.0-2.0, default 1.0)</param>
         /// <param name="orientationConvergenceThreshold">Orientation convergence threshold in radians (default 0.3)</param>
+        /// <param name="overrideDamping">Optional damping override for dynamic damping control</param>
         /// <returns>Joint deltas in radians, or null if converged</returns>
         public Vector<double> ComputeJointDeltas(
             IKState currentState,
@@ -61,7 +70,8 @@ namespace Robotics
             JointInfo[] joints,
             float convergenceThreshold,
             float orientationWeight = 1.0f,
-            float orientationConvergenceThreshold = 0.3f
+            float orientationConvergenceThreshold = 0.3f,
+            float? overrideDamping = null
         )
         {
             // Increment iteration counter
@@ -87,7 +97,7 @@ namespace Robotics
 
             // Compute Jacobian and solve for joint deltas
             CalculateJacobian(currentState, joints);
-            ComputePseudoInverse();
+            ComputePseudoInverse(overrideDamping);
 
             return _jointDelta;
         }
@@ -157,16 +167,19 @@ namespace Robotics
         /// Compute the damped least squares pseudo-inverse of the Jacobian
         /// and update joint deltas
         /// </summary>
-        private void ComputePseudoInverse()
+        /// <param name="overrideDamping">Optional damping override (null uses default)</param>
+        private void ComputePseudoInverse(float? overrideDamping = null)
         {
             // Jacobian: 6xN
             var jacobianTranspose = _jacobianMatrix.Transpose(); // Nx6
             var jacobianJacobianTranspose = _jacobianMatrix * jacobianTranspose; // 6x6
             var identity = DenseMatrix.Build.DenseIdentity(jacobianJacobianTranspose.RowCount);
 
+            // Use override damping if provided, otherwise use default
+            float damping = overrideDamping ?? _dampingFactor;
+
             // Damped least squares regularization
-            var regularized =
-                jacobianJacobianTranspose + _dampingFactor * _dampingFactor * identity;
+            var regularized = jacobianJacobianTranspose + damping * damping * identity;
 
             // Solve for intermediate vector: y = (J*J^T + λ²I)^-1 * error
             var y = regularized.Solve(_errorVector); // 6x1

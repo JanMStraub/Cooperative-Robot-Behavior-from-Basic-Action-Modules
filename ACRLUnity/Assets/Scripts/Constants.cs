@@ -16,37 +16,69 @@ namespace Core
 
         /// <summary>
         /// Default damping factor for pseudo-inverse stability in IK calculations
+        /// Moderate damping for stable IK without over-regularization
         /// </summary>
-        public const float DEFAULT_DAMPING_FACTOR = 0.1f;
+        public const float DEFAULT_DAMPING_FACTOR = 0.2f;
 
         /// <summary>
         /// Default convergence threshold for IK target reached detection (meters)
-        /// Increased from 0.001m to 0.01m to prevent oscillation near target
+        /// Set to 0.015m (1.5cm) with hysteresis to prevent bang-bang oscillation
         /// </summary>
-        public const float DEFAULT_CONVERGENCE_THRESHOLD = 0.001f;
+        public const float DEFAULT_CONVERGENCE_THRESHOLD = 0.015f;
 
         /// <summary>
         /// Default maximum joint step size per iteration (radians)
-        /// Increased from 0.2 to 1.0 rad (~57 deg) for faster convergence
+        /// Small steps for smooth, controlled motion
         /// </summary>
-        public const float DEFAULT_MAX_JOINT_STEP_RAD = 1.0f;
+        public const float DEFAULT_MAX_JOINT_STEP_RAD = 0.2f;
 
         /// <summary>
         /// Minimum step speed when very close to target
-        /// Increased from 0.1 to 0.5 to prevent excessive slowdown near convergence
+        /// Slow final approach for precision
         /// </summary>
-        public const float MIN_STEP_SPEED_NEAR_TARGET = 0.5f;
+        public const float MIN_STEP_SPEED_NEAR_TARGET = 0.3f;
 
         /// <summary>
         /// Maximum step speed for IK adjustments
+        /// Moderate speed for responsive but stable motion
         /// </summary>
-        public const float MAX_STEP_SPEED = 1.0f;
+        public const float MAX_STEP_SPEED = 0.8f;
 
         /// <summary>
         /// Movement detection threshold (meters)
         /// Robot is considered moving if distance to target exceeds this value (1cm)
         /// </summary>
         public const float MOVEMENT_THRESHOLD = 0.01f;
+
+        /// <summary>
+        /// Default orientation convergence threshold (degrees)
+        /// Target orientation is considered reached if angle error is below this value
+        /// </summary>
+        public const float DEFAULT_ORIENTATION_THRESHOLD_DEGREES = 10f;
+
+        /// <summary>
+        /// Distance at which orientation ramping starts (meters)
+        /// Robot begins tracking target orientation when closer than this distance
+        /// </summary>
+        public const float ORIENTATION_RAMP_START_DISTANCE = 0.30f;
+
+        /// <summary>
+        /// Default timeout for grasp operations (seconds)
+        /// Prevents infinite waiting when grasp target is unreachable
+        /// </summary>
+        public const float DEFAULT_GRASP_TIMEOUT_SECONDS = 30f;
+
+        /// <summary>
+        /// Default timeout for movement operations (seconds)
+        /// Prevents infinite waiting when movement target is unreachable
+        /// </summary>
+        public const float DEFAULT_MOVEMENT_TIMEOUT_SECONDS = 15f;
+
+        /// <summary>
+        /// Grasp convergence multiplier (relative to DEFAULT_CONVERGENCE_THRESHOLD)
+        /// Relaxed threshold for grasp precision (0.33 * 0.015m = 5mm instead of 3mm)
+        /// </summary>
+        public const float GRASP_CONVERGENCE_MULTIPLIER = 0.33f;
 
         // Target Finding
         /// <summary>
@@ -146,7 +178,6 @@ namespace Core
     /// </summary>
     public static class CommunicationConstants
     {
-
         /// <summary>
         /// Hostname for server (default: 127.0.0.1)
         /// </summary>
@@ -217,5 +248,16 @@ namespace Core
         /// Default gripper smooth time for SmoothDamp (seconds)
         /// </summary>
         public const float DEFAULT_SMOOTH_TIME = 0.5f;
+    }
+
+    /// <summary>
+    /// Constants for grasp planning and IK validation
+    /// </summary>
+    public static class GraspPlanningConstants
+    {
+        /// <summary>
+        /// Enable debug logging for grasp IK filter (disable in production for performance)
+        /// </summary>
+        public const bool ENABLE_GRASP_IK_DEBUG_LOGGING = false;
     }
 }
