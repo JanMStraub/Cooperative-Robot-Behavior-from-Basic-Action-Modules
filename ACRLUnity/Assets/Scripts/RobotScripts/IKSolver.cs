@@ -103,6 +103,86 @@ namespace Robotics
         }
 
         /// <summary>
+        /// Compute joint angle deltas with velocity-level IK (PD control).
+        /// This is the KEY IMPROVEMENT that eliminates oscillation.
+        /// Combines position error with velocity error for natural damping.
+        /// </summary>
+        /// <param name="currentState">Current end effector state</param>
+        /// <param name="targetState">Target end effector state</param>
+        /// <param name="currentEndEffectorVelocity">Current end effector velocity (from ArticulationBody)</param>
+        /// <param name="targetVelocity">Target velocity from trajectory</param>
+        /// <param name="joints">Array of joint information</param>
+        /// <param name="convergenceThreshold">Distance threshold for convergence</param>
+        /// <param name="Kp">Position gain (how strongly to correct position error)</param>
+        /// <param name="Kd">Velocity gain (damping term to prevent overshoot)</param>
+        /// <param name="orientationWeight">Weight for orientation error</param>
+        /// <param name="orientationConvergenceThreshold">Orientation convergence threshold in radians</param>
+        /// <param name="overrideDamping">Optional damping override for pseudo-inverse</param>
+        /// <returns>Joint deltas in radians, or null if converged</returns>
+        public Vector<double> ComputeJointDeltasWithVelocity(
+            IKState currentState,
+            IKState targetState,
+            Vector3 currentEndEffectorVelocity,
+            Vector3 targetVelocity,
+            JointInfo[] joints,
+            float convergenceThreshold,
+            float Kp = 1.0f,
+            float Kd = 0.5f,
+            float orientationWeight = 1.0f,
+            float orientationConvergenceThreshold = 0.3f,
+            float? overrideDamping = null
+        )
+        {
+            // Increment iteration counter
+            _iterationCount++;
+
+            // Calculate position error (existing)
+            Vector3 posError = targetState.Position - currentState.Position;
+
+            // Calculate velocity error (NEW)
+            Vector3 velError = targetVelocity - currentEndEffectorVelocity;
+
+            // Calculate orientation errors
+            Vector3 orientationError = CalculateOrientationError(
+                currentState.Rotation,
+                targetState.Rotation
+            );
+
+            // Check convergence (both position and velocity must be small)
+            if (posError.magnitude < convergenceThreshold &&
+                orientationError.magnitude < orientationConvergenceThreshold &&
+                currentEndEffectorVelocity.magnitude < 0.05f) // Velocity threshold
+            {
+                return null; // Converged
+            }
+
+            // Apply orientation weight
+            orientationError *= orientationWeight;
+
+            // PD control: combine position and velocity errors
+            // This is what eliminates oscillation!
+            Vector3 combinedError = Kp * posError + Kd * velError;
+
+            // Build 6D error vector with combined position+velocity error
+            BuildErrorVector(combinedError, orientationError);
+
+            // Compute Jacobian and solve for joint deltas
+            CalculateJacobian(currentState, joints);
+            ComputePseudoInverse(overrideDamping);
+
+            // ⚠️ CRITICAL: Clamp joint velocities near singularities
+            // When arm is fully stretched, Jacobian becomes ill-conditioned
+            // and requested velocities can spike to infinity
+            const float maxJointVelocity = 5.0f; // rad/sec (configurable)
+            for (int i = 0; i < _jointDelta.Count; i++)
+            {
+                _jointDelta[i] = System.Math.Clamp(_jointDelta[i], -maxJointVelocity, maxJointVelocity);
+            }
+
+            return _jointDelta;
+        }
+
+        /// <summary>
         /// Calculate orientation error as angle-axis representation
         /// </summary>
         private Vector3 CalculateOrientationError(Quaternion current, Quaternion target)

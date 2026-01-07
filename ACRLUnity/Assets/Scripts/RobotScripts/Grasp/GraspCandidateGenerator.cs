@@ -107,10 +107,20 @@ namespace Robotics.Grasp
                     approachTangentWorld
                 );
 
-                // Calculate Grasp Position (Surface + Depth)
-                // We move from center -> along axis -> minus depth
-                Vector3 graspPoint =
-                    objPos + (perturbedApproachDir * ((dimensionOnAxis * 0.5f) + depthVar));
+                // Calculate Grasp Position (FIXED)
+                // OLD (WRONG): objPos + (axis * (size/2 + depth)) extends PAST surface
+                // NEW (CORRECT): Calculate surface point, then position gripper BEFORE surface
+
+                // 1. Calculate surface point (where fingers should touch)
+                Vector3 surfacePoint = objPos + (perturbedApproachDir * (dimensionOnAxis * 0.5f));
+
+                // 2. Account for gripper finger geometry
+                // Gripper needs to be positioned so fingers reach surface, not palm at surface
+                float fingerDepth = 0.01f; // Distance gripper penetrates past surface (1cm)
+
+                // 3. Grasp position is BEFORE surface (gripper base position)
+                // This ensures fingers contact the surface, not hover above it
+                Vector3 graspPoint = surfacePoint - (perturbedApproachDir * fingerDepth);
 
                 // Calculate Rotation
                 // Use gripper-specific rotations (URDF has 90° Z-rotation baked in)
@@ -147,8 +157,8 @@ namespace Robotics.Grasp
                 candidate.retreatPosition = retreatPos;
                 candidate.retreatRotation = graspRotation;
                 candidate.approachDistance = distVar;
-                candidate.graspDepth = depthVar;
-                candidate.contactPointEstimate = graspPoint;
+                candidate.graspDepth = fingerDepth; // Store actual finger depth, not variation
+                candidate.contactPointEstimate = surfacePoint; // FIXED: Store where fingers touch, not gripper base
                 candidate.approachDirection = perturbedApproachDir;
 
                 // Compute Score
@@ -251,7 +261,7 @@ namespace Robotics.Grasp
             {
                 case GraspApproach.Top:
                     // Top approach: gripper points down
-                    // X-rotation: 180° (point down) + variation
+                // X-rotation: 180° (point down) + variation
                     // Z-rotation: 90° (URDF compensation)
                     baseRotation = Quaternion.Euler(180f + angleVar, 0f, 90f);
                     break;

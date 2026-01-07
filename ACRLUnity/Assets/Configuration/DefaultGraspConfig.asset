@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cd6a4ba96a3924bdb85914cb4e9cbf8a, type: 3}
   m_Name: DefaultGraspConfig
   m_EditorClassIdentifier: Configuration::GraspConfig
-  candidatesPerApproach: 20
+  candidatesPerApproach: 10
   enabledApproaches:
   - approachType: 0
     enabled: 1
@@ -49,12 +49,12 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   enableIKValidation: 1
-  maxIKValidationIterations: 500
-  ikValidationThreshold: 0.001
-  ikRotationTolerance: 20
+  maxIKValidationIterations: 100
+  ikValidationThreshold: 0.01
+  ikRotationTolerance: 30
   maxJointStepPerIteration: 0.2
   maxReachDistance: 0.6
-  angleVariationRange: 30
-  distanceVariationRange: 0.6
-  depthVariationRange: 0.4
-  maxPipelineTimeMs: 1000
+  angleVariationRange: 20
+  distanceVariationRange: 0.5
+  depthVariationRange: 0.3
+  maxPipelineTimeMs: 200
