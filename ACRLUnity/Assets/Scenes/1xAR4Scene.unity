@@ -119,9 +119,29 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!171741748 &11848871 stripped
+ArticulationBody:
+  m_CorrespondingSourceObject: {fileID: 3230827270228291946, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
+--- !u!4 &51571095 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 4004495261394536712, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &157111859 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 6010296060648620106, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
+--- !u!171741748 &239095382 stripped
+ArticulationBody:
+  m_CorrespondingSourceObject: {fileID: 4025504087195576168, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
+--- !u!171741748 &254547203 stripped
+ArticulationBody:
+  m_CorrespondingSourceObject: {fileID: 9190433156514923117, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
   m_PrefabInstance: {fileID: 9060350412813614532}
   m_PrefabAsset: {fileID: 0}
 --- !u!1 &353572704
@@ -522,6 +542,16 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 3369921039827679538, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
   m_PrefabInstance: {fileID: 9060350412813614532}
   m_PrefabAsset: {fileID: 0}
+--- !u!4 &984694799 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 1856330339786558508, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
+--- !u!171741748 &1026504457 stripped
+ArticulationBody:
+  m_CorrespondingSourceObject: {fileID: 1463433544710974212, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1032633142
 GameObject:
   m_ObjectHideFlags: 0
@@ -801,6 +831,11 @@ MonoBehaviour:
     m_Bits: 64
   _minObjectSize: 0.01
   _skipRobotParts: 1
+--- !u!171741748 &1285539278 stripped
+ArticulationBody:
+  m_CorrespondingSourceObject: {fileID: 8922996026802367033, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &1397393699 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 4699154504404944203, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
@@ -809,6 +844,11 @@ GameObject:
 --- !u!1 &1403449827 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 7321787983054000499, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
+--- !u!171741748 &1410147713 stripped
+ArticulationBody:
+  m_CorrespondingSourceObject: {fileID: 4237859500205483745, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
   m_PrefabInstance: {fileID: 9060350412813614532}
   m_PrefabAsset: {fileID: 0}
 --- !u!1 &1560633764 stripped
@@ -925,11 +965,66 @@ MonoBehaviour:
   _trackedObjects: []
   _updatesSent: 0
   _lastUpdateTime: 0
+--- !u!1 &1630953509 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 1523614578368514234, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1630953513
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1630953509}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f47776cb44fdd48e7a00157b6b6dcbaa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.SimpleRobotController
+  robotId: Robot2
+  robotJoints:
+  - {fileID: 254547203}
+  - {fileID: 1026504457}
+  - {fileID: 11848871}
+  - {fileID: 239095382}
+  - {fileID: 1285539278}
+  - {fileID: 1410147713}
+  endEffectorBase: {fileID: 984694799}
+  IKReferenceFrame: {fileID: 51571095}
+  _dampingFactorLambda: 2
+  _convergenceThreshold: 0.02
+  _orientationThresholdDegrees: 10
+  _maxJointStepRad: 0.05
+  _minStepSpeedNearTarget: 0.1
+  _maxStepSpeed: 0.4
+  _positionGain: 10
+  _velocityGain: 2
+  _leashDistance: 0.05
+  _gripperController: {fileID: 1868939030}
+  _openGripperOnStart: 1
+  _closeGripperOnReach: 1
+  _gripperCloseDelay: 0.5
+  _attachObjectOnGrasp: 1
+  _gripperRotationOffset: {x: 0, y: 90, z: 0}
+  enableDebugVisualization: 1
+  debugTarget: {fileID: 1397393699}
 --- !u!1 &1775652738 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 2746204199733885086, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
   m_PrefabInstance: {fileID: 9060350412813614532}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &1868939030 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1116772510549147897, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cedd687a87f7f47049833e3eeeeb3324, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.GripperController
 --- !u!1001 &9060350412813614532
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -982,6 +1077,10 @@ PrefabInstance:
       propertyPath: stiffness
       value: 5000
       objectReference: {fileID: 0}
+    - target: {fileID: 1116772510549147897, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: targetPosition
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 1174470342800896596, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_XDrive.target
       value: 0
@@ -1024,6 +1123,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1405918702155088797, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_ProvidesContacts
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1440759134938604137, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Enabled
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 1440759134938604137, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
@@ -1340,7 +1443,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5323394489080371934, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0.1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5338838174622455644, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Immovable
@@ -1737,6 +1840,9 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 2290850100550138070, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       insertIndex: -1
       addedObject: {fileID: 0}
+    - targetCorrespondingSourceObject: {fileID: 1523614578368514234, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1630953513}
   m_SourcePrefab: {fileID: 100100000, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

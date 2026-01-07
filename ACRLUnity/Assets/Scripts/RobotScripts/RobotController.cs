@@ -2,12 +2,12 @@ using System.Collections;
 using System.Linq;
 using Configuration;
 using Core;
+using MathNet.Numerics.LinearAlgebra;
 using Robotics.Grasp;
 using RobotScripts;
 using Simulation;
 using UnityEngine;
 using Utilities;
-using MathNet.Numerics.LinearAlgebra;
 
 namespace Robotics
 {
@@ -154,8 +154,8 @@ namespace Robotics
 
             // NEW: Initialize trajectory controller with PD gains
             _trajectoryController = new TrajectoryController(
-                positionGains: new Vector3(10f, 10f, 10f),  // K_p
-                velocityGains: new Vector3(2f, 2f, 2f)      // K_d (damping)
+                positionGains: new Vector3(10f, 10f, 10f), // K_p
+                velocityGains: new Vector3(2f, 2f, 2f) // K_d (damping)
             );
 
             // NEW: Tune ArticulationBody drives for critical damping
@@ -172,7 +172,9 @@ namespace Robotics
             if (robotJoints == null || robotJoints.Length == 0)
                 return;
 
-            Debug.Log($"{_logPrefix} [{robotId}] Tuning ArticulationBody drives for critical damping...");
+            Debug.Log(
+                $"{_logPrefix} [{robotId}] Tuning ArticulationBody drives for critical damping..."
+            );
 
             for (int i = 0; i < robotJoints.Length; i++)
             {
@@ -204,12 +206,16 @@ namespace Robotics
 
                 joint.xDrive = drive;
 
-                Debug.Log($"{_logPrefix} Joint[{i}] tuned: stiffness {oldStiffness:F0}→{targetStiffness:F0}, " +
-                         $"damping {oldDamping:F0}→{criticalDamping:F0}, " +
-                         $"mass={mass:F2}kg, inertia={inertia:F4}");
+                Debug.Log(
+                    $"{_logPrefix} Joint[{i}] tuned: stiffness {oldStiffness:F0}→{targetStiffness:F0}, "
+                        + $"damping {oldDamping:F0}→{criticalDamping:F0}, "
+                        + $"mass={mass:F2}kg, inertia={inertia:F4}"
+                );
             }
 
-            Debug.Log($"{_logPrefix} [{robotId}] ✅ ArticulationBody tuning complete (critically damped)");
+            Debug.Log(
+                $"{_logPrefix} [{robotId}] ✅ ArticulationBody tuning complete (critically damped)"
+            );
         }
 
         private void InitializeGraspPipeline()
@@ -578,10 +584,11 @@ namespace Robotics
                     targetVelocity,
                     _cachedJointInfos,
                     posThreshold,
-                    Kp: 1.0f,  // Position gain
-                    Kd: 0.5f,  // Velocity gain (damping)
+                    Kp: 1.0f, // Position gain
+                    Kd: 0.5f, // Velocity gain (damping)
                     orientationWeight: finalWeight,
-                    orientationConvergenceThreshold: RobotConstants.DEFAULT_ORIENTATION_THRESHOLD_DEGREES * Mathf.Deg2Rad,
+                    orientationConvergenceThreshold: RobotConstants.DEFAULT_ORIENTATION_THRESHOLD_DEGREES
+                        * Mathf.Deg2Rad,
                     overrideDamping: dynamicLambda
                 );
             }
@@ -909,12 +916,21 @@ namespace Robotics
             float approachStartTime = Time.time;
             bool earlyContact = false;
 
-            while (!_hasReachedTarget && Time.time - approachStartTime < RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS)
+            while (
+                !_hasReachedTarget
+                && Time.time - approachStartTime < RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS
+            )
             {
                 // Check for early contact
-                if (_contactSensor != null && targetObject != null && _contactSensor.HasContact(targetObject))
+                if (
+                    _contactSensor != null
+                    && targetObject != null
+                    && _contactSensor.HasContact(targetObject)
+                )
                 {
-                    Debug.Log($"{_logPrefix} [{robotId}] Early contact detected during approach - stopping");
+                    Debug.Log(
+                        $"{_logPrefix} [{robotId}] Early contact detected during approach - stopping"
+                    );
                     earlyContact = true;
                     SetTargetReached(true); // Force convergence
                     break;
@@ -924,7 +940,9 @@ namespace Robotics
 
             if (!_hasReachedTarget && !earlyContact)
             {
-                Debug.LogWarning($"{_logPrefix} [{robotId}] Approach failed - no target reach or contact");
+                Debug.LogWarning(
+                    $"{_logPrefix} [{robotId}] Approach failed - no target reach or contact"
+                );
                 yield break;
             }
 
@@ -945,7 +963,9 @@ namespace Robotics
                 bool graspSuccess = VerifyGraspSuccess(targetObject);
                 if (!graspSuccess)
                 {
-                    Debug.LogWarning($"{_logPrefix} [{robotId}] ⚠️ Grasp verification FAILED - may not be holding object");
+                    Debug.LogWarning(
+                        $"{_logPrefix} [{robotId}] ⚠️ Grasp verification FAILED - may not be holding object"
+                    );
                     // Continue with retreat anyway (don't block execution)
                 }
                 else
@@ -1070,8 +1090,10 @@ namespace Robotics
             bool forceOk = graspForce > 5f; // Minimum force threshold (5N)
             bool closureOk = gripperClosure < 0.1f && gripperClosure > 0.01f; // Not empty, not crushed
 
-            Debug.Log($"{_logPrefix} [{robotId}] Grasp verification: contact={hasContact}, " +
-                     $"force={graspForce:F1}N, closure={gripperClosure:F3}m");
+            Debug.Log(
+                $"{_logPrefix} [{robotId}] Grasp verification: contact={hasContact}, "
+                    + $"force={graspForce:F1}N, closure={gripperClosure:F3}m"
+            );
 
             return hasContact && forceOk && closureOk;
         }
