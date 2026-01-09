@@ -2,6 +2,7 @@ using System.Collections;
 using Core;
 using MathNet.Numerics.LinearAlgebra;
 using UnityEngine;
+using Utilities;
 
 namespace Robotics
 {
@@ -12,12 +13,15 @@ namespace Robotics
     {
         /// <summary>Gripper pointing straight down (for picking from above)</summary>
         TopDown,
+
         /// <summary>Gripper pointing horizontally toward robot base</summary>
         Front,
+
         /// <summary>Gripper approaching from the side</summary>
         Side,
+
         /// <summary>Keep current gripper orientation</summary>
-        Current
+        Current,
     }
 
     /// <summary>
@@ -25,8 +29,11 @@ namespace Robotics
     /// Uses the existing IKSolver for inverse kinematics computation.
     /// Suitable for single-arm scenarios without advanced grasp planning.
     /// </summary>
+    [DefaultExecutionOrder(-10)] // Ensure this initializes before other scripts
     public class SimpleRobotController : MonoBehaviour
     {
+        #region --- Configuration ---
+
         [Header("Robot Configuration")]
         [SerializeField]
         public string robotId = "Robot1";
@@ -48,7 +55,8 @@ namespace Robotics
         private float _convergenceThreshold = 0.02f; // 2cm - adjust in Inspector if needed
 
         [SerializeField]
-        private float _orientationThresholdDegrees = RobotConstants.DEFAULT_ORIENTATION_THRESHOLD_DEGREES;
+        private float _orientationThresholdDegrees =
+            RobotConstants.DEFAULT_ORIENTATION_THRESHOLD_DEGREES;
 
         [SerializeField]
         private float _maxJointStepRad = 0.02f; // Reduced from 0.05 to prevent overshoot
@@ -75,9 +83,6 @@ namespace Robotics
         private GripperController _gripperController;
 
         [SerializeField]
-        private bool _openGripperOnStart = true; // Open gripper when starting movement
-
-        [SerializeField]
         private bool _closeGripperOnReach = true; // Close gripper when target reached
 
         [SerializeField]
@@ -86,20 +91,27 @@ namespace Robotics
         [SerializeField]
         private bool _attachObjectOnGrasp = true; // Attach object to gripper when grasped
 
-        // The object being grasped
-        private GameObject _graspedObject;
-        private Transform _graspedObjectOriginalParent;
-        private bool _isHoldingObject = false;
-
         [Header("Gripper Orientation")]
-        [SerializeField, Tooltip("Rotation offset to align gripper forward axis (adjust if gripper points wrong direction)")]
+        [
+            SerializeField,
+            Tooltip(
+                "Rotation offset to align gripper forward axis (adjust if gripper points wrong direction)"
+            )
+        ]
         private Vector3 _gripperRotationOffset = Vector3.zero;
 
         [Header("Debug")]
         [SerializeField]
         private bool enableDebugVisualization = true;
 
-        // Internal state
+        [SerializeField]
+        public GameObject debugTarget;
+
+        #endregion
+
+        #region --- Internal State ---
+
+        // IK State
         private Vector3 _targetPosition;
         private Quaternion _targetRotation = Quaternion.identity;
         private Transform _ikFrame;
@@ -116,17 +128,26 @@ namespace Robotics
         private Vector3 _targetLocalPosition;
         private Quaternion _targetLocalRotation;
 
-        // Events
+        // Grasp State (tracked by object for attachment after reaching target)
+        private GameObject _targetObject;
+
+        // Constants
+        private const string _logPrefix = "[SIMPLE_ROBOT_CONTROLLER]";
+        private const float SqrEpsilon = 1e-6f;
+
+        #endregion
+
+        #region --- Properties & Events ---
+
         public event System.Action OnTargetReached;
 
-        // Properties
         public bool HasReachedTarget => _hasReachedTarget;
         public float DistanceToTarget => _distanceToTarget;
         public bool HasTarget => _hasTarget;
 
-        public GameObject debugTarget;
+        #endregion
 
-        private const string _logPrefix = "[SIMPLE_ROBOT_CONTROLLER]";
+        #region --- Unity Lifecycle ---
 
         /// <summary>
         /// Unity Start callback - initializes the robot controller.
@@ -146,17 +167,29 @@ namespace Robotics
             // Wait one frame for GripperController.Start() to complete
             yield return null;
 
-            // Now open the gripper
-            if (_gripperController != null)
-            {
-                _gripperController.OpenGrippers();
-                Debug.Log($"{_logPrefix} [{robotId}] Gripper opened (targetPosition = 1)");
-            }
+            // Now open the gripper (this will auto-detach any held object)
+            OpenGripper();
 
             // Then set the target (use GameObject to enable attachment)
             if (debugTarget != null)
                 SetTarget(debugTarget);
         }
+
+        /// <summary>
+        /// Unity FixedUpdate callback - performs IK step at physics rate.
+        /// </summary>
+        private void FixedUpdate()
+        {
+            if (!_hasTarget || _hasReachedTarget)
+                return;
+
+            PerformInverseKinematicsStep();
+            DrawDebugVisualization();
+        }
+
+        #endregion
+
+        #region --- Initialization ---
 
         /// <summary>
         /// Initialize the robot controller, IK solver, and joint caches.
@@ -194,11 +227,36 @@ namespace Robotics
                 if (_gripperController != null)
                     Debug.Log($"{_logPrefix} [{robotId}] Auto-found GripperController");
                 else
-                    Debug.LogWarning($"{_logPrefix} [{robotId}] GripperController NOT found! Assign manually in Inspector.");
+                    Debug.LogWarning(
+                        $"{_logPrefix} [{robotId}] GripperController NOT found! Assign manually in Inspector."
+                    );
+            }
+
+            // Ensure gripper has attachment point set
+            if (_gripperController != null && _gripperController.attachmentPoint == null)
+            {
+                _gripperController.attachmentPoint = endEffectorBase;
+                Debug.Log(
+                    $"{_logPrefix} [{robotId}] Set GripperController attachment point to endEffectorBase"
+                );
             }
 
             // Tune joint drives for critical damping
             TuneJointDrivesForCriticalDamping();
+
+            // CRITICAL: Set initial joint drive targets to current positions to prevent slumping
+            for (int i = 0; i < robotJoints.Length; i++)
+            {
+                var joint = robotJoints[i];
+                if (joint != null)
+                {
+                    // Get current joint position and set it as the drive target
+                    float currentPosition = joint.jointPosition[0];
+                    var drive = joint.xDrive;
+                    drive.target = currentPosition * Mathf.Rad2Deg; // Convert radians to degrees
+                    joint.xDrive = drive;
+                }
+            }
 
             // Initialize target to current position
             _targetPosition = endEffectorBase.position;
@@ -208,7 +266,7 @@ namespace Robotics
         }
 
         /// <summary>
-        /// Tune ArticulationBody drives for critical damping to prevent oscillation.
+        /// Tune ArticulationBody drives using RobotConfig profile (if available) or critical damping.
         /// Uses formula: damping = 2 * sqrt(stiffness * inertia)
         /// </summary>
         private void TuneJointDrivesForCriticalDamping()
@@ -216,39 +274,62 @@ namespace Robotics
             if (robotJoints == null || robotJoints.Length == 0)
                 return;
 
+            // Try to get robot config from RobotManager
+            RobotManager robotManager = RobotManager.Instance;
+            RobotInstance robotInstance = null;
+            bool hasConfig = false;
+
+            if (robotManager != null && !string.IsNullOrEmpty(robotId))
+            {
+                hasConfig = robotManager.RobotInstances.TryGetValue(robotId, out robotInstance);
+            }
+
             for (int i = 0; i < robotJoints.Length; i++)
             {
                 var joint = robotJoints[i];
-
-                // Use Unity's actual inertia tensor for better damping calculation
-                float inertia = joint.inertiaTensor.x;
-                if (inertia < 0.001f)
-                    inertia = joint.mass * 0.1f; // Fallback estimate
-
-                float targetStiffness = 2000f;
-                float criticalDamping = 2f * Mathf.Sqrt(targetStiffness * inertia);
-
                 var drive = joint.xDrive;
-                drive.stiffness = targetStiffness;
-                drive.damping = criticalDamping;
+
+                // Try to use config from RobotManager (like RobotController does)
+                if (hasConfig && robotInstance.profile?.joints != null && i < robotInstance.profile.joints.Length)
+                {
+                    var jointConfig = robotInstance.profile.joints[i];
+                    drive.stiffness = jointConfig.stiffness;
+                    drive.damping = jointConfig.damping;
+                    drive.forceLimit = jointConfig.forceLimit;
+                    drive.upperLimit = jointConfig.upperLimit;
+                    drive.lowerLimit = jointConfig.lowerLimit;
+                }
+                else
+                {
+                    // Fallback: Use critical damping calculation
+                    float inertia = joint.inertiaTensor.x;
+                    if (inertia < 0.001f)
+                        inertia = joint.mass * 0.1f; // Fallback estimate
+
+                    float targetStiffness = 2000f;
+                    float criticalDamping = 2f * Mathf.Sqrt(targetStiffness * inertia);
+
+                    drive.stiffness = targetStiffness;
+                    drive.damping = criticalDamping;
+                }
+
                 joint.matchAnchors = true;
                 joint.xDrive = drive;
             }
 
-            Debug.Log($"{_logPrefix} [{robotId}] Joint drives tuned for critical damping");
+            if (hasConfig)
+            {
+                Debug.Log($"{_logPrefix} [{robotId}] Applied RobotConfig profile: {robotInstance.profile.profileName}");
+            }
+            else
+            {
+                Debug.Log($"{_logPrefix} [{robotId}] Using default critical damping (no RobotConfig found)");
+            }
         }
 
-        /// <summary>
-        /// Unity FixedUpdate callback - performs IK step at physics rate.
-        /// </summary>
-        private void FixedUpdate()
-        {
-            if (!_hasTarget || _hasReachedTarget)
-                return;
+        #endregion
 
-            PerformInverseKinematicsStep();
-            DrawDebugVisualization();
-        }
+        #region --- IK Computation ---
 
         /// <summary>
         /// Update the cached joint info for Jacobian computation.
@@ -318,19 +399,14 @@ namespace Robotics
             float angleError = Quaternion.Angle(_endEffectorLocalRotation, _targetLocalRotation);
             Vector3 currentVelocity = GetEndEffectorVelocity();
 
-            // Debug output every 60 frames
-            if (Time.frameCount % 60 == 0)
-            {
-                Debug.Log($"{_logPrefix} [{robotId}] Dist: {_distanceToTarget:F3}m (threshold: {effectiveThreshold:F3}), " +
-                         $"Angle: {angleError:F1}°, Vel: {currentVelocity.magnitude:F3}m/s");
-            }
-
             // Converge when position is close enough (5cm) - ignore orientation completely
             if (_sqrDistanceToTarget <= sqrPosThreshold)
             {
                 if (!_hasReachedTarget)
                 {
-                    Debug.Log($"{_logPrefix} [{robotId}] ✅ TARGET REACHED! Dist: {_distanceToTarget:F4}m");
+                    Debug.Log(
+                        $"{_logPrefix} [{robotId}] ✅ TARGET REACHED! Dist: {_distanceToTarget:F4}m"
+                    );
                     SetTargetReached(true);
                 }
                 return;
@@ -348,8 +424,11 @@ namespace Robotics
             if (_distanceToTarget > _leashDistance)
             {
                 // Target is far - use a "carrot" a short distance ahead
-                Vector3 directionToTarget = (_targetLocalPosition - _endEffectorLocalPosition).normalized;
-                constrainedTargetPos = _endEffectorLocalPosition + directionToTarget * _leashDistance;
+                Vector3 directionToTarget = (
+                    _targetLocalPosition - _endEffectorLocalPosition
+                ).normalized;
+                constrainedTargetPos =
+                    _endEffectorLocalPosition + directionToTarget * _leashDistance;
                 constrainedTargetRot = _endEffectorLocalRotation; // Keep current orientation
             }
             else
@@ -360,7 +439,10 @@ namespace Robotics
             }
 
             // Compute IK using IKSolver
-            IKState currentState = new IKState(_endEffectorLocalPosition, _endEffectorLocalRotation);
+            IKState currentState = new IKState(
+                _endEffectorLocalPosition,
+                _endEffectorLocalRotation
+            );
             IKState targetState = new IKState(constrainedTargetPos, constrainedTargetRot);
 
             // Use velocity-level IK with PD control for natural damping
@@ -429,7 +511,11 @@ namespace Robotics
             float adaptiveGain = _maxStepSpeed;
             if (_distanceToTarget < 0.1f)
             {
-                adaptiveGain = Mathf.Lerp(_minStepSpeedNearTarget, _maxStepSpeed, _distanceToTarget / 0.1f);
+                adaptiveGain = Mathf.Lerp(
+                    _minStepSpeedNearTarget,
+                    _maxStepSpeed,
+                    _distanceToTarget / 0.1f
+                );
             }
 
             for (int i = 0; i < robotJoints.Length; i++)
@@ -441,7 +527,11 @@ namespace Robotics
                     delta = 0.0;
 
                 // Clamp joint step
-                double clampedDeltaRad = System.Math.Clamp(delta, -_maxJointStepRad, _maxJointStepRad);
+                double clampedDeltaRad = System.Math.Clamp(
+                    delta,
+                    -_maxJointStepRad,
+                    _maxJointStepRad
+                );
                 double finalDeltaRad = clampedDeltaRad * adaptiveGain;
                 float deltaAngleDegree = (float)(finalDeltaRad * Mathf.Rad2Deg);
 
@@ -461,6 +551,10 @@ namespace Robotics
             }
         }
 
+        #endregion
+
+        #region --- Public API ---
+
         /// <summary>
         /// Set a new target position for the robot to move to.
         /// Uses top-down approach orientation (gripper pointing down).
@@ -478,6 +572,36 @@ namespace Robotics
         /// <param name="approach">How the gripper should approach the target</param>
         public void SetTarget(Vector3 position, GripperApproach approach)
         {
+            // Try to find a real object near this position
+            if (ObjectFinder.Instance != null)
+            {
+                GameObject nearbyObject = ObjectFinder.Instance.FindClosestObject(
+                    position,
+                    RobotConstants.OBJECT_FINDING_RADIUS
+                );
+
+                if (nearbyObject != null)
+                {
+                    float distanceSqr = Vector3.SqrMagnitude(
+                        position - nearbyObject.transform.position
+                    );
+                    if (
+                        distanceSqr
+                        < RobotConstants.OBJECT_DISTANCE_THRESHOLD
+                            * RobotConstants.OBJECT_DISTANCE_THRESHOLD
+                    )
+                    {
+                        // Close enough - use the real object instead
+                        Debug.Log(
+                            $"{_logPrefix} [{robotId}] Found nearby object '{nearbyObject.name}' at distance {Mathf.Sqrt(distanceSqr):F3}m, snapping to it"
+                        );
+                        SetTarget(nearbyObject);
+                        return;
+                    }
+                }
+            }
+
+            // No object found nearby - use the position directly
             _targetPosition = position;
             _targetRotation = CalculateApproachRotation(position, approach);
 
@@ -485,28 +609,19 @@ namespace Robotics
             SetTargetReached(false);
             _ikSolver?.ResetIterationCount();
 
-            // Open gripper at the start of movement (ready to grasp)
-            if (_openGripperOnStart)
-            {
-                if (_gripperController != null)
-                {
-                    _gripperController.OpenGrippers();
-                    Debug.Log($"{_logPrefix} [{robotId}] Opening gripper for approach");
-                }
-                else
-                {
-                    Debug.LogWarning($"{_logPrefix} [{robotId}] Cannot open gripper - GripperController is NULL! Assign it in Inspector.");
-                }
-            }
-
-            Debug.Log($"{_logPrefix} [{robotId}] New target: {position}, approach: {approach}, rot: {_targetRotation.eulerAngles}");
+            Debug.Log(
+                $"{_logPrefix} [{robotId}] New target: {position}, approach: {approach}, rot: {_targetRotation.eulerAngles}"
+            );
         }
 
         /// <summary>
         /// Calculate gripper rotation for the specified approach direction.
         /// Properly handles targets at any position around the robot.
         /// </summary>
-        private Quaternion CalculateApproachRotation(Vector3 targetPosition, GripperApproach approach)
+        private Quaternion CalculateApproachRotation(
+            Vector3 targetPosition,
+            GripperApproach approach
+        )
         {
             Vector3 robotBase = _ikFrame != null ? _ikFrame.position : transform.position;
 
@@ -569,7 +684,9 @@ namespace Robotics
             SetTargetReached(false);
             _ikSolver?.ResetIterationCount();
 
-            Debug.Log($"{_logPrefix} [{robotId}] New target: {position}, rot: {rotation.eulerAngles}");
+            Debug.Log(
+                $"{_logPrefix} [{robotId}] New target: {position}, rot: {rotation.eulerAngles}"
+            );
         }
 
         /// <summary>
@@ -582,7 +699,7 @@ namespace Robotics
                 return;
 
             // Store the object for attachment after grasping
-            _graspedObject = target;
+            _targetObject = target;
 
             SetTarget(target.transform.position, target.transform.rotation);
         }
@@ -598,6 +715,10 @@ namespace Robotics
 
             SetTarget(target.position, target.rotation);
         }
+
+        #endregion
+
+        #region --- Gripper Control ---
 
         /// <summary>
         /// Update target reached state and fire events.
@@ -632,88 +753,44 @@ namespace Robotics
         /// </summary>
         private IEnumerator CloseGripperAfterDelay()
         {
-            Debug.Log($"{_logPrefix} [{robotId}] Waiting {_gripperCloseDelay}s before closing gripper...");
+            Debug.Log(
+                $"{_logPrefix} [{robotId}] Waiting {_gripperCloseDelay}s before closing gripper..."
+            );
             yield return new WaitForSeconds(_gripperCloseDelay);
+
+            // Set the target object so it will be attached automatically when gripper closes
+            if (_attachObjectOnGrasp && _targetObject != null)
+            {
+                _gripperController.SetTargetObject(_targetObject);
+                _targetObject = null; // Clear our reference
+            }
 
             _gripperController.CloseGrippers();
             Debug.Log($"{_logPrefix} [{robotId}] Closing gripper");
 
-            // Wait for gripper to finish closing
+            // Wait for gripper to finish closing (attachment happens automatically)
             yield return new WaitWhile(() => _gripperController.IsMoving);
             yield return new WaitForSeconds(0.2f); // Extra settle time
-
-            // Attach object to gripper
-            if (_attachObjectOnGrasp && _graspedObject != null)
-            {
-                AttachObject(_graspedObject);
-            }
 
             Debug.Log($"{_logPrefix} [{robotId}] Grasp complete");
             OnTargetReached?.Invoke();
         }
 
         /// <summary>
-        /// Attach an object to the gripper (makes it a child of the end effector).
-        /// </summary>
-        private void AttachObject(GameObject obj)
-        {
-            if (obj == null || endEffectorBase == null)
-                return;
-
-            // Store original parent for later release
-            _graspedObjectOriginalParent = obj.transform.parent;
-
-            // Disable physics on the object so it moves with the gripper
-            Rigidbody rb = obj.GetComponent<Rigidbody>();
-            if (rb != null)
-            {
-                rb.isKinematic = true;
-                rb.linearVelocity = Vector3.zero;
-                rb.angularVelocity = Vector3.zero;
-            }
-
-            // Parent to end effector
-            obj.transform.SetParent(endEffectorBase, worldPositionStays: true);
-            _isHoldingObject = true;
-
-            Debug.Log($"{_logPrefix} [{robotId}] Object '{obj.name}' attached to gripper");
-        }
-
-        /// <summary>
-        /// Release the currently held object.
+        /// Release the currently held object by opening the gripper.
         /// </summary>
         public void ReleaseObject()
         {
-            if (_graspedObject == null || !_isHoldingObject)
-                return;
-
-            // Restore original parent
-            _graspedObject.transform.SetParent(_graspedObjectOriginalParent, worldPositionStays: true);
-
-            // Re-enable physics
-            Rigidbody rb = _graspedObject.GetComponent<Rigidbody>();
-            if (rb != null)
-            {
-                rb.isKinematic = false;
-            }
-
-            Debug.Log($"{_logPrefix} [{robotId}] Object '{_graspedObject.name}' released");
-
-            _graspedObject = null;
-            _graspedObjectOriginalParent = null;
-            _isHoldingObject = false;
-
-            // Open gripper
-            _gripperController?.OpenGrippers();
+            _gripperController?.ReleaseObject();
         }
 
         /// <summary>
         /// Check if the robot is currently holding an object.
         /// </summary>
-        public bool IsHoldingObject => _isHoldingObject;
+        public bool IsHoldingObject => _gripperController?.IsHoldingObject ?? false;
 
         /// <summary>
-        /// Manually open the gripper.
+        /// Manually open the gripper. Automatically detaches any held object.
         /// </summary>
         public void OpenGripper()
         {
@@ -727,6 +804,10 @@ namespace Robotics
         {
             _gripperController?.CloseGrippers();
         }
+
+        #endregion
+
+        #region --- Helpers ---
 
         /// <summary>
         /// Clear the current target and stop movement.
@@ -822,5 +903,7 @@ namespace Robotics
                 Gizmos.DrawLine(endEffectorBase.position, _targetPosition);
             }
         }
+
+        #endregion
     }
 }

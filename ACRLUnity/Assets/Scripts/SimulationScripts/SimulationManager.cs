@@ -150,25 +150,38 @@ namespace Simulation
         {
             try
             {
-                // Find all robot controllers
-                _robotControllers = FindObjectsByType<RobotController>(
+                // Find all robot controllers (both types)
+                var regularControllers = FindObjectsByType<RobotController>(
                     FindObjectsInactive.Exclude,
                     FindObjectsSortMode.None
                 );
 
-                if (_robotControllers.Length == 0)
+                var simpleControllers = FindObjectsByType<SimpleRobotController>(
+                    FindObjectsInactive.Exclude,
+                    FindObjectsSortMode.None
+                );
+
+                // Combine both arrays
+                _robotControllers = regularControllers;
+                int totalRobots = regularControllers.Length + simpleControllers.Length;
+
+                // Initialize robot tracking
+                foreach (var robot in regularControllers)
                 {
-                    Debug.LogWarning($"{_logPrefix} No RobotController components found in scene");
-                    // Continue with initialization - robots may be added dynamically
+                    string robotId = robot.gameObject.name;
+                    _robotTargetReached[robotId] = true; // Start with no active targets
                 }
-                else
+
+                foreach (var robot in simpleControllers)
                 {
-                    // Initialize robot tracking
-                    foreach (var robot in _robotControllers)
-                    {
-                        string robotId = robot.gameObject.name;
-                        _robotTargetReached[robotId] = true; // Start with no active targets
-                    }
+                    string robotId = robot.gameObject.name;
+                    _robotTargetReached[robotId] = true; // Start with no active targets
+                }
+
+                if (totalRobots == 0)
+                {
+                    Debug.LogWarning($"{_logPrefix} No robot controllers found in scene");
+                    // Continue with initialization - robots may be added dynamically
                 }
 
                 // Initialize coordination strategy based on config
@@ -176,7 +189,7 @@ namespace Simulation
 
                 // Log simulation start
                 Debug.Log(
-                    $"{_logPrefix} Initialized: {_robotControllers.Length} robots found. Mode: {config.coordinationMode}"
+                    $"{_logPrefix} Initialized: {totalRobots} robots found. Mode: {config.coordinationMode}"
                 );
 
                 // Auto-start if configured

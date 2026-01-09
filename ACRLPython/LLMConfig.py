@@ -147,7 +147,7 @@ USE_YOLO = (
     True  # Set to True to use YOLO detection, False for HSV color-based detection
 )
 YOLO_MODEL_PATH = str(
-    _CONFIG_DIR / "yolo" / "models" / "robot_detector.onnx"
+    _CONFIG_DIR / "yolo" / "models" / "field_detector.onnx"
 )  # Path to trained YOLO model for cubes
 YOLO_CONFIDENCE_THRESHOLD = 0.5  # YOLO detection confidence threshold (0.0-1.0)
 YOLO_IOU_THRESHOLD = 0.45  # YOLO IoU threshold for NMS (Non-Maximum Suppression)
@@ -196,10 +196,10 @@ DEFAULT_STEREO_FOV = 60.0  # degrees, field of view of cameras
 # Rotation: [pitch, yaw, roll] in degrees (Unity convention)
 DEFAULT_STEREO_CAMERA_POSITION = [
     -0.025,
-    0.1,
+    0.4,  # Updated from 0.1 to match new Unity camera height
     -0.65,
 ]  # Example: camera above and behind origin
-DEFAULT_STEREO_CAMERA_ROTATION = [0.0, 0.0, 0.0]  # Example: looking down at 30 degrees
+DEFAULT_STEREO_CAMERA_ROTATION = [20.0, 0.0, 0.0]  # Pitch: 20 degrees (tilted down)
 
 # Stereo processing
 STEREO_CHECK_INTERVAL = 0.5  # Check for new stereo pairs every N seconds
@@ -234,7 +234,7 @@ DEPTH_SAMPLE_INNER_PERCENT = (
 
 # ===== Stereo Validation =====
 ENABLE_STEREO_VALIDATION = (
-    True  # Validate detections in both L/R images (default: False for backward compat)
+    False  # Validate detections in both L/R images (default: False for backward compat)
 )
 STEREO_MAX_Y_DIFF = 10  # Max Y coordinate difference for stereo matching (pixels)
 STEREO_MAX_SIZE_RATIO = (
@@ -251,7 +251,7 @@ TRACKING_MIN_IOU = 0.3  # Minimum IOU for track-detection association
 # YOLO_MODEL_PATH is defined in Object Detection Configuration section (line 146-148)
 YOLO_TASK = "detect"  # YOLO task type: "detect" (bounding boxes) or "segment" (segmentation masks)
 YOLO_SEGMENTATION_MODEL = str(
-    _CONFIG_DIR / "yolo" / "models" / "robot_detector_seg.onnx"
+    _CONFIG_DIR / "yolo" / "models" / "field_detector_seg.onnx"
 )
 YOLO_INPUT_SIZE = None  # Downscale images before YOLO inference for speed (None = use original, e.g., (640, 480))
 

@@ -19,7 +19,7 @@ import socket
 import struct
 import json
 import threading
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional, Union, TYPE_CHECKING
 
 # Handle both direct execution and package import
 try:
@@ -30,6 +30,15 @@ except ImportError:
     from core.TCPServerBase import TCPServerBase, ServerConfig
     from core.LoggingSetup import get_logger
     # NOTE: CommandParser and SequenceExecutor imported lazily in initialize() to avoid circular dependency
+
+# Import types for type checking only (avoids circular dependency at runtime)
+if TYPE_CHECKING:
+    try:
+        from ..orchestrators.CommandParser import CommandParser
+        from ..orchestrators.SequenceExecutor import SequenceExecutor
+    except ImportError:
+        from orchestrators.CommandParser import CommandParser
+        from orchestrators.SequenceExecutor import SequenceExecutor
 
 # Import config
 try:
@@ -98,7 +107,8 @@ class SequenceQueryHandler:
                 from orchestrators.SequenceExecutor import SequenceExecutor
 
             self._parser = CommandParser(lm_studio_url=lm_studio_url, model=model)
-            self._executor = SequenceExecutor(check_completion=check_completion)
+            self._executor = SequenceExecutor(check_completion=check_completion,
+                                              default_timeout=180.0)
             return True
         except Exception as e:
             logger.error(f"Failed to initialize SequenceQueryHandler: {e}")

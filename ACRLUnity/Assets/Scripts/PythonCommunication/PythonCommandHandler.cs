@@ -311,11 +311,12 @@ namespace PythonCommunication
         /// <summary>
         /// Validate and retrieve robot instance with controller.
         /// Handles error logging and failed command counting.
+        /// Supports both RobotController and SimpleRobotController.
         /// </summary>
         /// <param name="robotId">Robot identifier</param>
         /// <param name="commandName">Command name for error messages</param>
         /// <param name="robotInstance">Output: robot instance if found</param>
-        /// <param name="controller">Output: robot controller if found</param>
+        /// <param name="controller">Output: robot controller if found (null if using SimpleRobotController)</param>
         /// <returns>True if validation passed, false if failed</returns>
         private bool ValidateAndGetRobot(
             string robotId,
@@ -346,12 +347,12 @@ namespace PythonCommunication
                 return false;
             }
 
-            // Get robot controller
+            // Get robot controller (either RobotController or SimpleRobotController)
             controller = robotInstance.controller;
-            if (controller == null)
+            if (controller == null && robotInstance.simpleController == null)
             {
                 Debug.LogError(
-                    $"{_logPrefix} {commandName}: Robot '{robotId}' has no RobotController component"
+                    $"{_logPrefix} {commandName}: Robot '{robotId}' has no RobotController or SimpleRobotController component"
                 );
                 _failedCommands++;
                 return false;
@@ -374,6 +375,7 @@ namespace PythonCommunication
         /// <summary>
         /// Execute move_to_coordinate command
         /// Phase 4: Now includes Python CoordinationVerifier integration
+        /// Supports both RobotController and SimpleRobotController
         /// </summary>
         private void ExecuteMoveToCoordinate(RobotCommand command)
         {
@@ -384,7 +386,7 @@ namespace PythonCommunication
                     !ValidateAndGetRobot(
                         command.robot_id,
                         "move_to_coordinate",
-                        out _,
+                        out RobotInstance robotInstance,
                         out RobotController controller
                     )
                 )
@@ -451,7 +453,12 @@ namespace PythonCommunication
                 System.Action onComplete = null;
                 onComplete = () =>
                 {
-                    controller.OnTargetReached -= onComplete;
+                    // Unsubscribe from the appropriate event
+                    if (controller != null)
+                        controller.OnTargetReached -= onComplete;
+                    else if (robotInstance.simpleController != null)
+                        robotInstance.simpleController.OnTargetReached -= onComplete;
+
                     if (_activeCommands.ContainsKey(commandKey))
                     {
                         _activeCommands.Remove(commandKey);
@@ -473,7 +480,16 @@ namespace PythonCommunication
                         }
                     }
                 };
-                controller.OnTargetReached += onComplete;
+
+                // Subscribe to the appropriate controller's event
+                if (controller != null)
+                {
+                    controller.OnTargetReached += onComplete;
+                }
+                else if (robotInstance.simpleController != null)
+                {
+                    robotInstance.simpleController.OnTargetReached += onComplete;
+                }
 
                 // Phase 4: Allocate workspace region before movement starts
                 if (_workspaceManager != null)
@@ -486,8 +502,15 @@ namespace PythonCommunication
                     }
                 }
 
-                // Execute movement
-                controller.SetTarget(targetPosition);
+                // Execute movement on the appropriate controller
+                if (controller != null)
+                {
+                    controller.SetTarget(targetPosition);
+                }
+                else if (robotInstance.simpleController != null)
+                {
+                    robotInstance.simpleController.SetTarget(targetPosition);
+                }
 
                 if (_verboseLogging)
                 {
@@ -747,6 +770,7 @@ namespace PythonCommunication
 
         /// <summary>
         /// Execute return_to_start_position command - move robot joints back to initial positions
+        /// Supports both RobotController and SimpleRobotController
         /// </summary>
         private void ExecuteReturnToStartPosition(RobotCommand command)
         {
@@ -786,16 +810,33 @@ namespace PythonCommunication
                     );
                 }
 
-                // Start coroutine to smoothly interpolate joint targets
-                StartCoroutine(
-                    ReturnToStartPositionCoroutine(
-                        controller,
-                        robotInstance.startJointTargets,
-                        command.robot_id,
-                        command.request_id,
-                        2.0f
-                    )
-                );
+                // Start coroutine based on controller type
+                if (controller != null)
+                {
+                    // RobotController
+                    StartCoroutine(
+                        ReturnToStartPositionCoroutine(
+                            controller,
+                            robotInstance.startJointTargets,
+                            command.robot_id,
+                            command.request_id,
+                            2.0f
+                        )
+                    );
+                }
+                else if (robotInstance.simpleController != null)
+                {
+                    // SimpleRobotController
+                    StartCoroutine(
+                        ReturnToStartPositionSimpleCoroutine(
+                            robotInstance.simpleController,
+                            robotInstance.startJointTargets,
+                            command.robot_id,
+                            command.request_id,
+                            2.0f
+                        )
+                    );
+                }
 
                 _successfulCommands++;
             }
@@ -882,6 +923,84 @@ namespace PythonCommunication
             // Without this, FixedUpdate() continues to call PerformInverseKinematicsStep()
             // which pulls the robot back to the old target position
             controller.SetTargetReached(true);
+
+            if (_verboseLogging)
+            {
+                Debug.Log($"{_logPrefix} Return to start position completed for {robotId}");
+            }
+
+            // Send completion notification
+            SendCommandCompletion(robotId, "return_to_start_position", true, requestId);
+        }
+
+        /// <summary>
+        /// Coroutine to smoothly interpolate joint targets to start position for SimpleRobotController
+        /// </summary>
+        private IEnumerator ReturnToStartPositionSimpleCoroutine(
+            SimpleRobotController controller,
+            float[] targetJoints,
+            string robotId,
+            uint requestId,
+            float duration
+        )
+        {
+            if (controller == null || controller.robotJoints == null)
+            {
+                SendCommandCompletion(robotId, "return_to_start_position", false, requestId);
+                yield break;
+            }
+
+            // Store initial joint positions from the actual drive targets
+            float[] startJoints = new float[controller.robotJoints.Length];
+            for (int i = 0; i < controller.robotJoints.Length && i < startJoints.Length; i++)
+            {
+                startJoints[i] = controller.robotJoints[i].xDrive.target;
+            }
+
+            float elapsed = 0f;
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.fixedDeltaTime;
+                float t = Mathf.Clamp01(elapsed / duration);
+
+                // Smooth interpolation using ease-in-out
+                float smoothT = t * t * (3f - 2f * t);
+
+                // Interpolate each joint
+                for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
+                {
+                    // Target joints are in radians, drive targets are in degrees
+                    float startDeg = startJoints[i];
+                    float targetDeg = targetJoints[i] * Mathf.Rad2Deg;
+                    float currentTarget = Mathf.Lerp(startDeg, targetDeg, smoothT);
+
+                    var joint = controller.robotJoints[i];
+                    if (joint != null)
+                    {
+                        var drive = joint.xDrive;
+                        drive.target = currentTarget;
+                        joint.xDrive = drive;
+                    }
+                }
+
+                yield return new WaitForFixedUpdate();
+            }
+
+            // Ensure final positions are exact
+            for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
+            {
+                var joint = controller.robotJoints[i];
+                if (joint != null)
+                {
+                    var drive = joint.xDrive;
+                    drive.target = targetJoints[i] * Mathf.Rad2Deg;
+                    joint.xDrive = drive;
+                }
+            }
+
+            // Clear the target and mark as reached
+            controller.ClearTarget();
 
             if (_verboseLogging)
             {
@@ -996,23 +1115,64 @@ namespace PythonCommunication
 
         /// <summary>
         /// Gather robot status data and return as JSON
+        /// Supports both RobotController and SimpleRobotController
         /// </summary>
         private string GatherRobotStatus(string robotId, RobotController controller, bool detailed)
         {
-            Vector3 currentPosition =
-                controller.endEffectorBase != null
-                    ? controller.endEffectorBase.position
-                    : Vector3.zero;
+            // Find the robot instance to check for SimpleRobotController
+            RobotInstance robotInstance = null;
+            _robotManager.RobotInstances.TryGetValue(robotId, out robotInstance);
 
-            Quaternion currentRotation =
-                controller.endEffectorBase != null
-                    ? controller.endEffectorBase.rotation
-                    : Quaternion.identity;
+            Vector3 currentPosition = Vector3.zero;
+            Quaternion currentRotation = Quaternion.identity;
+            Vector3 targetPosition = Vector3.zero;
+            float distanceToTarget = 0f;
+            bool isMoving = false;
+            float[] jointAngles = new float[0];
 
-            float[] jointAngles = GatherJointAngles(controller, detailed);
-            Vector3 targetPosition = controller.GetCurrentTarget() ?? Vector3.zero;
-            float distanceToTarget = controller.GetDistanceToTarget();
-            bool isMoving = distanceToTarget > RobotConstants.MOVEMENT_THRESHOLD;
+            if (controller != null)
+            {
+                // Use RobotController
+                currentPosition =
+                    controller.endEffectorBase != null
+                        ? controller.endEffectorBase.position
+                        : Vector3.zero;
+
+                currentRotation =
+                    controller.endEffectorBase != null
+                        ? controller.endEffectorBase.rotation
+                        : Quaternion.identity;
+
+                jointAngles = GatherJointAngles(controller, detailed);
+                targetPosition = controller.GetCurrentTarget() ?? Vector3.zero;
+                distanceToTarget = controller.GetDistanceToTarget();
+                isMoving = distanceToTarget > RobotConstants.MOVEMENT_THRESHOLD;
+            }
+            else if (robotInstance != null && robotInstance.simpleController != null)
+            {
+                // Use SimpleRobotController
+                var simpleController = robotInstance.simpleController;
+
+                currentPosition = simpleController.GetCurrentEndEffectorPosition();
+                currentRotation = simpleController.GetCurrentEndEffectorRotation();
+
+                if (detailed && simpleController.robotJoints != null)
+                {
+                    jointAngles = new float[simpleController.robotJoints.Length];
+                    for (int i = 0; i < simpleController.robotJoints.Length; i++)
+                    {
+                        var joint = simpleController.robotJoints[i];
+                        if (joint != null && joint.jointType == ArticulationJointType.RevoluteJoint)
+                        {
+                            jointAngles[i] = joint.jointPosition[0];
+                        }
+                    }
+                }
+
+                targetPosition = simpleController.GetCurrentTarget() ?? Vector3.zero;
+                distanceToTarget = simpleController.DistanceToTarget;
+                isMoving = !simpleController.HasReachedTarget && simpleController.HasTarget;
+            }
 
             var statusResponse = new
             {
@@ -1178,6 +1338,7 @@ namespace PythonCommunication
         /// <summary>
         /// Verify movement safety using workspace manager and coordination checks
         /// Phase 4: Integration with Python CoordinationVerifier
+        /// Supports both RobotController and SimpleRobotController
         /// </summary>
         /// <param name="robotId">Robot requesting movement</param>
         /// <param name="targetPosition">Target position</param>
@@ -1197,6 +1358,10 @@ namespace PythonCommunication
                 if (robotInstance.controller != null)
                 {
                     currentPosition = robotInstance.controller.GetCurrentEndEffectorPosition();
+                }
+                else if (robotInstance.simpleController != null)
+                {
+                    currentPosition = robotInstance.simpleController.GetCurrentEndEffectorPosition();
                 }
             }
 

@@ -13,6 +13,7 @@ namespace Robotics
         public GameObject robotGameObject;
         public GameObject targetGameObject;
         public RobotController controller;
+        public SimpleRobotController simpleController; // NEW: Support for SimpleRobotController
         public RobotConfig profile;
         public bool isActive;
         public float lastTargetChangeTime;
@@ -142,10 +143,11 @@ namespace Robotics
         }
 
         /// <summary>
-        /// Automatically discovers all RobotController components in the scene and registers them.
+        /// Automatically discovers all RobotController and SimpleRobotController components in the scene and registers them.
         /// </summary>
         private void DiscoverRobots()
         {
+            // Find RobotController components
             RobotController[] controllers = FindObjectsByType<RobotController>(
                 FindObjectsInactive.Exclude,
                 FindObjectsSortMode.None
@@ -159,6 +161,26 @@ namespace Robotics
                 if (!_robotInstances.ContainsKey(robotId))
                 {
                     RegisterRobot(robotId, controller.gameObject);
+                }
+            }
+
+            // Also find SimpleRobotController components
+            SimpleRobotController[] simpleControllers = FindObjectsByType<SimpleRobotController>(
+                FindObjectsInactive.Exclude,
+                FindObjectsSortMode.None
+            );
+
+            foreach (var simpleController in simpleControllers)
+            {
+                // Use the robotId from SimpleRobotController if set, otherwise generate one
+                string robotId = !string.IsNullOrEmpty(simpleController.robotId)
+                    ? simpleController.robotId
+                    : GenerateUniqueRobotId(simpleController.gameObject.name);
+
+                // Only register if not already registered (in case both controllers exist)
+                if (!_robotInstances.ContainsKey(robotId))
+                {
+                    RegisterRobot(robotId, simpleController.gameObject);
                 }
             }
         }
@@ -269,13 +291,32 @@ namespace Robotics
                     );
                 }
 
+                // Check for both controller types
                 var controller = robotObject.GetComponent<RobotController>();
-                if (controller == null)
+                var simpleController = robotObject.GetComponent<SimpleRobotController>();
+
+                if (controller == null && simpleController == null)
                 {
                     Debug.LogError(
-                        $"{_logPrefix} Robot {robotId} missing RobotController component"
+                        $"{_logPrefix} Robot {robotId} missing RobotController or SimpleRobotController component"
                     );
                     return;
+                }
+
+                // Gather joint targets for return_to_start_position
+                float[] jointTargets = null;
+                if (controller != null && controller.jointDriveTargets != null)
+                {
+                    jointTargets = (float[])controller.jointDriveTargets.Clone();
+                }
+                else if (simpleController != null && simpleController.robotJoints != null)
+                {
+                    // For SimpleRobotController, get current joint positions
+                    jointTargets = new float[simpleController.robotJoints.Length];
+                    for (int i = 0; i < simpleController.robotJoints.Length; i++)
+                    {
+                        jointTargets[i] = simpleController.robotJoints[i].jointPosition[0];
+                    }
                 }
 
                 var instance = new RobotInstance
@@ -284,11 +325,12 @@ namespace Robotics
                     robotGameObject = robotObject,
                     targetGameObject = targetObject,
                     controller = controller,
+                    simpleController = simpleController,
                     profile = profile ?? robotProfile,
                     isActive = true,
                     lastTargetChangeTime = Time.time,
                     lastTargetPosition = targetObject?.transform.position ?? Vector3.zero,
-                    startJointTargets = (float[])controller.jointDriveTargets.Clone(),
+                    startJointTargets = jointTargets,
                 };
 
                 _robotInstances[robotId] = instance;
@@ -297,9 +339,16 @@ namespace Robotics
                 ApplyProfileToRobot(robotId);
 
                 // Set target on the controller if available
-                if (targetObject != null && controller != null)
+                if (targetObject != null)
                 {
-                    controller.SetTarget(targetObject);
+                    if (controller != null)
+                    {
+                        controller.SetTarget(targetObject);
+                    }
+                    else if (simpleController != null)
+                    {
+                        simpleController.SetTarget(targetObject);
+                    }
                     Debug.Log(
                         $"{_logPrefix} Assigned target '{targetObject.name}' to robot '{robotId}'"
                     );

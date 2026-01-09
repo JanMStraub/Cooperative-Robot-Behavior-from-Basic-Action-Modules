@@ -204,6 +204,7 @@ namespace Utilities
         private bool IsRobotPart(GameObject obj)
         {
             return obj.GetComponent<RobotController>() != null
+                || obj.GetComponent<SimpleRobotController>() != null
                 || obj.GetComponent<ArticulationBody>() != null
                 || obj.GetComponent<GripperController>() != null;
         }

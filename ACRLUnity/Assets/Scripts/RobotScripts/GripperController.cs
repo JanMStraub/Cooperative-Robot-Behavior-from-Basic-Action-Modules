@@ -53,6 +53,10 @@ namespace Robotics
         public ArticulationBody leftGripper;
         public ArticulationBody rightGripper;
 
+        [Header("Attachment Point")]
+        [Tooltip("Transform to attach grasped objects to (usually end effector base)")]
+        public Transform attachmentPoint;
+
         [Header("Motion Parameters")]
         [Tooltip("Speed of gripper opening/closing in meters per second.")]
         public float gripSpeed = 0.05f; // Slower speed helps collision detection
@@ -82,7 +86,24 @@ namespace Robotics
         private bool _wasMoving;
         public bool IsMoving { get; private set; }
 
+        // Object Attachment State
+        private GameObject _graspedObject;
+        private Transform _graspedObjectOriginalParent;
+        private bool _isHoldingObject = false;
+        private GameObject _targetObjectToGrasp; // Object to attach when gripper finishes closing
+        private bool _shouldAttachOnClose = false;
+
         public event System.Action OnGripperActionComplete;
+
+        /// <summary>
+        /// Check if the gripper is currently holding an object.
+        /// </summary>
+        public bool IsHoldingObject => _isHoldingObject;
+
+        /// <summary>
+        /// Get the currently grasped object (if any).
+        /// </summary>
+        public GameObject GraspedObject => _graspedObject;
 
         private void Start()
         {
@@ -142,7 +163,17 @@ namespace Robotics
             else
             {
                 if (_wasMoving)
+                {
+                    // Check if we should attach an object after closing
+                    if (_shouldAttachOnClose && _targetObjectToGrasp != null && targetPosition < 0.1f)
+                    {
+                        AttachObject(_targetObjectToGrasp);
+                        _targetObjectToGrasp = null;
+                        _shouldAttachOnClose = false;
+                    }
+
                     OnGripperActionComplete?.Invoke();
+                }
                 IsMoving = false;
             }
 
@@ -154,9 +185,57 @@ namespace Robotics
             targetPosition = Mathf.Clamp01(normalizedPosition);
         }
 
+        /// <summary>
+        /// Close the grippers. If a target object was set, it will be attached when closing completes.
+        /// </summary>
         public void CloseGrippers() => SetGripperPosition(0f);
 
-        public void OpenGrippers() => SetGripperPosition(1f);
+        /// <summary>
+        /// Open the grippers. Automatically detaches any held object first.
+        /// </summary>
+        public void OpenGrippers()
+        {
+            // Detach object first if holding one
+            if (_isHoldingObject)
+            {
+                // Store reference before detaching (DetachObject sets _graspedObject to null)
+                GameObject objectToMonitor = _graspedObject;
+                DetachObject();
+                // Start monitoring the object to see if something else moves it
+                StartCoroutine(MonitorObjectPosition(objectToMonitor));
+            }
+
+            SetGripperPosition(1f);
+        }
+
+        /// <summary>
+        /// Debug coroutine to monitor if an object's position changes unexpectedly after release.
+        /// </summary>
+        private System.Collections.IEnumerator MonitorObjectPosition(GameObject obj)
+        {
+            if (obj == null)
+                yield break;
+
+            Vector3 releasePosition = obj.transform.position;
+            Debug.Log($"[GripperController] Monitoring object '{obj.name}' released at {releasePosition}");
+
+            for (int i = 0; i < 10; i++)
+            {
+                yield return null; // Wait one frame
+                Vector3 currentPos = obj.transform.position;
+                float distance = Vector3.Distance(releasePosition, currentPos);
+
+                if (distance > 0.01f) // More than 1cm movement
+                {
+                    Debug.LogWarning(
+                        $"[GripperController] Frame {i}: Object moved {distance:F3}m! " +
+                        $"From {releasePosition} to {currentPos}"
+                    );
+                }
+            }
+
+            Debug.Log($"[GripperController] Monitoring complete. Final position: {obj.transform.position}");
+        }
 
         public void ResetGrippers()
         {
@@ -211,5 +290,126 @@ namespace Robotics
             body.jointVelocity = new ArticulationReducedSpace(0f);
             body.jointForce = new ArticulationReducedSpace(0f);
         }
+
+        #region Object Attachment
+
+        /// <summary>
+        /// Set the target object to grasp. This object will be automatically attached when CloseGrippers() completes.
+        /// </summary>
+        /// <param name="obj">GameObject to grasp</param>
+        public void SetTargetObject(GameObject obj)
+        {
+            _targetObjectToGrasp = obj;
+            _shouldAttachOnClose = true;
+        }
+
+        /// <summary>
+        /// Clear the target object, preventing automatic attachment on gripper close.
+        /// </summary>
+        public void ClearTargetObject()
+        {
+            _targetObjectToGrasp = null;
+            _shouldAttachOnClose = false;
+        }
+
+        /// <summary>
+        /// Attach an object to the gripper (makes it a child of the attachment point).
+        /// Disables physics on the object so it moves with the gripper.
+        /// This is called automatically when the gripper closes if a target object was set.
+        /// </summary>
+        /// <param name="obj">GameObject to attach</param>
+        public void AttachObject(GameObject obj)
+        {
+            if (obj == null)
+            {
+                Debug.LogWarning("[GripperController] Cannot attach null object");
+                return;
+            }
+
+            if (attachmentPoint == null)
+            {
+                Debug.LogError(
+                    "[GripperController] No attachment point assigned! Cannot attach object."
+                );
+                return;
+            }
+
+            // Store original parent for later release
+            _graspedObjectOriginalParent = obj.transform.parent;
+
+            // Disable physics on the object so it moves with the gripper
+            Rigidbody rb = obj.GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                // Set velocities BEFORE making kinematic (can't set velocity on kinematic bodies)
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+                rb.isKinematic = true;
+            }
+
+            // Parent to attachment point
+            obj.transform.SetParent(attachmentPoint, worldPositionStays: true);
+            _graspedObject = obj;
+            _isHoldingObject = true;
+
+            Debug.Log($"[GripperController] Object '{obj.name}' attached to gripper");
+        }
+
+        /// <summary>
+        /// Detach the currently held object from the gripper.
+        /// Places object in world space at its current position and re-enables physics.
+        /// </summary>
+        public void DetachObject()
+        {
+            if (!_isHoldingObject || _graspedObject == null)
+            {
+                return;
+            }
+
+            // Store current world position and rotation before changing anything
+            Vector3 worldPosition = _graspedObject.transform.position;
+            Quaternion worldRotation = _graspedObject.transform.rotation;
+
+            Debug.Log($"[GripperController] Detaching object '{_graspedObject.name}' at world position {worldPosition}");
+
+            // Get Rigidbody before making changes
+            Rigidbody rb = _graspedObject.GetComponent<Rigidbody>();
+
+            // CRITICAL: Unparent while still kinematic to avoid physics snap-back
+            _graspedObject.transform.SetParent(null, worldPositionStays: true);
+
+            // Re-apply position explicitly (in case SetParent didn't preserve it perfectly)
+            _graspedObject.transform.position = worldPosition;
+            _graspedObject.transform.rotation = worldRotation;
+
+            // If there's a Rigidbody, handle physics carefully
+            if (rb != null)
+            {
+                // While still kinematic, explicitly set the Rigidbody's position
+                // This ensures the physics engine knows where the object is
+                rb.position = worldPosition;
+                rb.rotation = worldRotation;
+
+                // Make it non-kinematic FIRST (required before setting velocities)
+                rb.isKinematic = false;
+
+                // NOW zero out velocities (only works on non-kinematic bodies)
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
+
+                Debug.Log($"[GripperController] Re-enabled physics at position {rb.position}, velocities zeroed");
+            }
+
+            _graspedObject = null;
+            _graspedObjectOriginalParent = null;
+            _isHoldingObject = false;
+        }
+
+        /// <summary>
+        /// Release the currently held object (alias for DetachObject).
+        /// </summary>
+        public void ReleaseObject() => DetachObject();
+
+        #endregion
     }
 }
