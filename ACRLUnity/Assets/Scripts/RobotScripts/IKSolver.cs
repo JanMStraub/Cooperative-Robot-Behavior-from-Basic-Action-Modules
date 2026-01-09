@@ -84,7 +84,10 @@ namespace Robotics
                 targetState.Rotation
             );
 
-            if (positionError.magnitude < convergenceThreshold && orientationError.magnitude < orientationConvergenceThreshold)
+            if (
+                positionError.magnitude < convergenceThreshold
+                && orientationError.magnitude < orientationConvergenceThreshold
+            )
             {
                 return null; // Converged
             }
@@ -149,9 +152,11 @@ namespace Robotics
             );
 
             // Check convergence (both position and velocity must be small)
-            if (posError.magnitude < convergenceThreshold &&
-                orientationError.magnitude < orientationConvergenceThreshold &&
-                currentEndEffectorVelocity.magnitude < 0.05f) // Velocity threshold
+            if (
+                posError.magnitude < convergenceThreshold
+                && orientationError.magnitude < orientationConvergenceThreshold
+                && currentEndEffectorVelocity.magnitude < 0.05f
+            ) // Velocity threshold
             {
                 return null; // Converged
             }
@@ -176,7 +181,11 @@ namespace Robotics
             const float maxJointVelocity = 5.0f; // rad/sec (configurable)
             for (int i = 0; i < _jointDelta.Count; i++)
             {
-                _jointDelta[i] = System.Math.Clamp(_jointDelta[i], -maxJointVelocity, maxJointVelocity);
+                _jointDelta[i] = System.Math.Clamp(
+                    _jointDelta[i],
+                    -maxJointVelocity,
+                    maxJointVelocity
+                );
             }
 
             return _jointDelta;

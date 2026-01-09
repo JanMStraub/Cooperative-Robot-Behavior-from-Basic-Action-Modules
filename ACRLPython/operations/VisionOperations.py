@@ -302,18 +302,39 @@ def detect_object(
                 ],
             )
 
-        # Select object based on position parameter
+        # Select object based on position parameter (use world coordinates, not pixel coordinates)
         if position == "left":
-            # Get leftmost detection (smallest center_x coordinate)
-            best = min(matching, key=lambda d: d.center_x)
+            # Get leftmost detection by world X coordinate (negative = left in world space)
+            # Filter out detections without world position first
+            valid_matching = [d for d in matching if d.world_position is not None]
+            if not valid_matching:
+                return OperationResult.error_result(
+                    "NO_DEPTH",
+                    "No detections have valid world positions",
+                    ["Check stereo calibration", "Objects may be too close/far"],
+                )
+            best = min(valid_matching, key=lambda d: d.world_position[0])
+            # Debug: show all candidates
+            for idx, d in enumerate(sorted(valid_matching, key=lambda d: d.world_position[0])):
+                logger.info(f"  Candidate {idx+1}: world_x={d.world_position[0]:.3f}, pixel_x={d.center_x}, conf={d.confidence:.2f}")
             logger.info(
-                f"Selected leftmost {color} cube from {len(matching)} detections (center_x={best.center_x})"
+                f"✓ Selected LEFTMOST {color} cube from {len(matching)} detections (world_x={best.world_position[0]:.3f}, pixel_x={best.center_x})"
             )
         elif position == "right":
-            # Get rightmost detection (largest center_x coordinate)
-            best = max(matching, key=lambda d: d.center_x)
+            # Get rightmost detection by world X coordinate (positive = right in world space)
+            valid_matching = [d for d in matching if d.world_position is not None]
+            if not valid_matching:
+                return OperationResult.error_result(
+                    "NO_DEPTH",
+                    "No detections have valid world positions",
+                    ["Check stereo calibration", "Objects may be too close/far"],
+                )
+            best = max(valid_matching, key=lambda d: d.world_position[0])
+            # Debug: show all candidates
+            for idx, d in enumerate(sorted(valid_matching, key=lambda d: d.world_position[0], reverse=True)):
+                logger.info(f"  Candidate {idx+1}: world_x={d.world_position[0]:.3f}, pixel_x={d.center_x}, conf={d.confidence:.2f}")
             logger.info(
-                f"Selected rightmost {color} cube from {len(matching)} detections (center_x={best.center_x})"
+                f"✓ Selected RIGHTMOST {color} cube from {len(matching)} detections (world_x={best.world_position[0]:.3f}, pixel_x={best.center_x})"
             )
         else:
             return OperationResult.error_result(
@@ -843,10 +864,17 @@ def detect_object_stereo(
                 ["Ensure objects are visible", "Check lighting conditions"],
             )
 
+        # Debug: show all detections before color filtering
+        logger.info(f"DEBUG: Total detections before filtering: {len(detection_result.detections)}")
+        for idx, d in enumerate(detection_result.detections):
+            world_pos_str = f"({d.world_position[0]:.3f}, {d.world_position[1]:.3f}, {d.world_position[2]:.3f})" if d.world_position else "None"
+            logger.info(f"  Detection {idx+1}: color={d.color}, world_pos={world_pos_str}, conf={d.confidence:.2f}")
+
         # Filter by color if specified (flexible matching for both CubeDetector and YOLODetector)
         detections = detection_result.detections
         if color is not None:
             detections = [d for d in detections if color_matches(d.color, color)]
+            logger.info(f"DEBUG: After color filter ('{color}'): {len(detections)} detections")
             if not detections:
                 detected_colors = [d.color for d in detection_result.detections]
                 return OperationResult.error_result(
@@ -891,14 +919,35 @@ def detect_object_stereo(
 
         # Apply selection strategy
         if selection == "left":
-            best = min(detections, key=lambda d: d.center_x)
+            # Use world X coordinate (negative = left in world space)
+            # Filter out detections without world position first
+            valid_detections = [d for d in detections if d.world_position is not None]
+            if not valid_detections:
+                return OperationResult.error_result(
+                    "NO_DEPTH",
+                    "No detections have valid world positions",
+                    ["Check stereo calibration", "Objects may be too close/far"],
+                )
+            best = min(valid_detections, key=lambda d: d.world_position[0])
+            # Debug: show all candidates sorted by world_x
+            logger.info(f"DEBUG: All {len(valid_detections)} candidates for 'left' selection:")
+            for idx, d in enumerate(sorted(valid_detections, key=lambda d: d.world_position[0])):
+                logger.info(f"  Candidate {idx+1}: world_pos=({d.world_position[0]:.3f}, {d.world_position[1]:.3f}, {d.world_position[2]:.3f}), pixel_x={d.center_x}, color={d.color}, conf={d.confidence:.2f}")
             logger.info(
-                f"Selected leftmost detection from {len(detections)} (center_x={best.center_x})"
+                f"Selected leftmost detection from {len(detections)} (world_x={best.world_position[0]:.3f}, pixel_x={best.center_x})"
             )
         elif selection == "right":
-            best = max(detections, key=lambda d: d.center_x)
+            # Use world X coordinate (positive = right in world space)
+            valid_detections = [d for d in detections if d.world_position is not None]
+            if not valid_detections:
+                return OperationResult.error_result(
+                    "NO_DEPTH",
+                    "No detections have valid world positions",
+                    ["Check stereo calibration", "Objects may be too close/far"],
+                )
+            best = max(valid_detections, key=lambda d: d.world_position[0])
             logger.info(
-                f"Selected rightmost detection from {len(detections)} (center_x={best.center_x})"
+                f"Selected rightmost detection from {len(detections)} (world_x={best.world_position[0]:.3f}, pixel_x={best.center_x})"
             )
         elif selection == "closest":
 

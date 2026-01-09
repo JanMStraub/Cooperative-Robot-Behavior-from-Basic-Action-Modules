@@ -648,11 +648,11 @@ class SequenceExecutor:
             if not self.check_completion:
                 return {"success": True, "result": op_result.result, "error": None}
 
-            # Skip completion waiting for perception operations (they complete immediately)
+            # Skip completion waiting for operations that execute in Python only
             op_def = self.registry.get_operation_by_name(operation)
-            if op_def and op_def.category == OperationCategory.PERCEPTION:
+            if op_def and op_def.category in (OperationCategory.PERCEPTION, OperationCategory.SYNC):
                 logger.debug(
-                    f"Skipping completion wait for perception operation: {operation}"
+                    f"Skipping completion wait for {op_def.category.value} operation: {operation}"
                 )
                 return {"success": True, "result": op_result.result, "error": None}
 
