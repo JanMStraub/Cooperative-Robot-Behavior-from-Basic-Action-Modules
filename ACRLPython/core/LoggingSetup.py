@@ -12,11 +12,25 @@ from pathlib import Path
 from typing import Optional
 from datetime import datetime
 
-# Import config - try both import styles
+# Import config
 try:
-    import LLMConfig as cfg
+    from config.Servers import (
+        LOG_LEVEL,
+        LOG_FORMAT,
+        LOG_DIR,
+        ENABLE_FILE_LOGGING,
+        LOG_FILE_MAX_BYTES,
+        LOG_FILE_BACKUP_COUNT,
+    )
 except ImportError:
-    from .. import LLMConfig as cfg
+    from ..config.Servers import (
+        LOG_LEVEL,
+        LOG_FORMAT,
+        LOG_DIR,
+        ENABLE_FILE_LOGGING,
+        LOG_FILE_MAX_BYTES,
+        LOG_FILE_BACKUP_COUNT,
+    )
 
 # Global flag to track if logging has been configured
 _logging_configured = False
@@ -49,23 +63,23 @@ def setup_logging(module_name: Optional[str] = None) -> logging.Logger:
     if not _logging_configured:
         # Get root logger
         root_logger = logging.getLogger()
-        root_logger.setLevel(getattr(logging, cfg.LOG_LEVEL))
+        root_logger.setLevel(getattr(logging, LOG_LEVEL))
 
         # Clear any existing handlers to avoid duplicates
         root_logger.handlers.clear()
 
         # Create console handler
         console_handler = logging.StreamHandler()
-        console_handler.setLevel(getattr(logging, cfg.LOG_LEVEL))
-        console_formatter = logging.Formatter(cfg.LOG_FORMAT)
+        console_handler.setLevel(getattr(logging, LOG_LEVEL))
+        console_formatter = logging.Formatter(LOG_FORMAT)
         console_handler.setFormatter(console_formatter)
         root_logger.addHandler(console_handler)
 
         # Create file handler if enabled
-        if cfg.ENABLE_FILE_LOGGING:
+        if ENABLE_FILE_LOGGING:
             try:
                 # Create log directory if it doesn't exist
-                log_dir = Path(cfg.LOG_DIR)
+                log_dir = Path(LOG_DIR)
                 log_dir.mkdir(parents=True, exist_ok=True)
 
                 # Generate filename with timestamp
@@ -76,18 +90,18 @@ def setup_logging(module_name: Optional[str] = None) -> logging.Logger:
                 # Create rotating file handler
                 file_handler = RotatingFileHandler(
                     filename=str(log_file_path),
-                    maxBytes=cfg.LOG_FILE_MAX_BYTES,
-                    backupCount=cfg.LOG_FILE_BACKUP_COUNT,
+                    maxBytes=LOG_FILE_MAX_BYTES,
+                    backupCount=LOG_FILE_BACKUP_COUNT,
                     encoding='utf-8'
                 )
-                file_handler.setLevel(getattr(logging, cfg.LOG_LEVEL))
-                file_formatter = logging.Formatter(cfg.LOG_FORMAT)
+                file_handler.setLevel(getattr(logging, LOG_LEVEL))
+                file_formatter = logging.Formatter(LOG_FORMAT)
                 file_handler.setFormatter(file_formatter)
                 root_logger.addHandler(file_handler)
 
                 # Log to console that file logging is enabled
                 root_logger.info(f"File logging enabled: {log_file_path}")
-                root_logger.info(f"Log rotation: {cfg.LOG_FILE_MAX_BYTES / (1024*1024):.1f}MB max, {cfg.LOG_FILE_BACKUP_COUNT} backups")
+                root_logger.info(f"Log rotation: {LOG_FILE_MAX_BYTES / (1024*1024):.1f}MB max, {LOG_FILE_BACKUP_COUNT} backups")
 
             except Exception as e:
                 # If file logging fails, continue with console only

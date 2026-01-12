@@ -13,7 +13,14 @@ from vision.ObjectDetector import (
     DetectionResult,
     CubeDetector,
 )
-from .. import LLMConfig as cfg
+from config.Vision import (
+    MIN_CUBE_AREA_PX,
+    MAX_CUBE_AREA_PX,
+    MIN_ASPECT_RATIO,
+    MAX_ASPECT_RATIO,
+    MIN_CONFIDENCE,
+    DEBUG_IMAGES_DIR,
+)
 
 
 class TestDetectionObject:
@@ -156,11 +163,11 @@ class TestCubeDetectorInitialization:
         assert detector.blue_upper is not None
 
         # Check thresholds
-        assert detector.min_area == cfg.MIN_CUBE_AREA_PX
-        assert detector.max_area == cfg.MAX_CUBE_AREA_PX
-        assert detector.min_aspect == cfg.MIN_ASPECT_RATIO
-        assert detector.max_aspect == cfg.MAX_ASPECT_RATIO
-        assert detector.min_confidence == cfg.MIN_CONFIDENCE
+        assert detector.min_area == MIN_CUBE_AREA_PX
+        assert detector.max_area == MAX_CUBE_AREA_PX
+        assert detector.min_aspect == MIN_ASPECT_RATIO
+        assert detector.max_aspect == MAX_ASPECT_RATIO
+        assert detector.min_confidence == MIN_CONFIDENCE
 
 
 class TestCubeDetectorDetection:
@@ -291,20 +298,16 @@ class TestCubeDetectorDetection:
             # Confidence should be between 0 and 1
             assert 0 <= det.confidence <= 1.0
             # For a well-defined square, confidence should be reasonably high
-            assert det.confidence >= cfg.MIN_CONFIDENCE
+            assert det.confidence >= MIN_CONFIDENCE
 
 
 class TestCubeDetectorDebug:
     """Test debug functionality"""
 
-    @patch("LLMConfig.ENABLE_DEBUG_IMAGES", True)
+    @patch("config.Vision.ENABLE_DEBUG_IMAGES", True)
     @patch("cv2.imwrite")
     def test_save_debug_image(self, mock_imwrite, sample_red_cube_image, tmp_path):
         """Test that debug images are saved when enabled"""
-        # Temporarily set debug dir to temp path
-        original_debug_dir = cfg.DEBUG_IMAGES_DIR
-        cfg.DEBUG_IMAGES_DIR = str(tmp_path)
-
         detector = CubeDetector()
         detector.enable_debug = True
         detector.debug_dir = tmp_path
@@ -317,9 +320,6 @@ class TestCubeDetectorDebug:
                 sample_red_cube_image, result.detections, "test_camera"
             )
             assert mock_imwrite.called
-
-        # Restore original config
-        cfg.DEBUG_IMAGES_DIR = original_debug_dir
 
 
 class TestCubeDetectorStereo:

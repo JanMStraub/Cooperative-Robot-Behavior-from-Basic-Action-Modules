@@ -22,11 +22,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# Lazy import function to avoid circular dependency
-def _get_command_broadcaster():
-    """Lazy import of command broadcaster to avoid circular dependency"""
-    from servers.CommandServer import get_command_broadcaster
-    return get_command_broadcaster()
+# Import from centralized lazy import system (prevents circular dependencies)
+try:
+    from ..core.Imports import get_command_broadcaster as _get_command_broadcaster
+except ImportError:
+    from core.Imports import get_command_broadcaster as _get_command_broadcaster
 
 
 # ============================================================================

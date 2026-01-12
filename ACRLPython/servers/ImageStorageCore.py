@@ -41,9 +41,9 @@ import numpy as np
 
 # Import config
 try:
-    import LLMConfig as cfg
+    from config.Vision import ENABLE_VISION_STREAMING
 except ImportError:
-    from .. import LLMConfig as cfg
+    from ..config.Vision import ENABLE_VISION_STREAMING
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -133,7 +133,7 @@ class UnifiedImageStorage:
                 metadata or {},
             )
 
-            if not cfg.ENABLE_VISION_STREAMING:
+            if not ENABLE_VISION_STREAMING:
                 logger.info(
                     f"Stored stereo pair '{camera_pair_id}' "
                     f"(L: {imgL.shape}, R: {imgR.shape})"

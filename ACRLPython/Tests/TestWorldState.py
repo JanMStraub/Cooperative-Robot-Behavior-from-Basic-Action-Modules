@@ -95,8 +95,8 @@ class TestRobotStatus:
         assert status2 is not None
         assert mock_check_status.call_count == 1  # No additional call
 
+    @patch('operations.WorldState.ROBOT_STATUS_CACHE_TTL', 0.1)
     @patch('operations.WorldState.check_robot_status')
-    @patch('LLMConfig.ROBOT_STATUS_CACHE_TTL', 0.1)
     def test_get_robot_status_expired(self, mock_check_status, cleanup_world_state):
         """Test robot status re-queries after TTL expiration"""
         world_state = get_world_state()

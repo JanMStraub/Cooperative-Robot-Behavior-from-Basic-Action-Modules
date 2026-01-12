@@ -20,10 +20,20 @@ from queue import Queue, Empty
 
 # Import config
 try:
-    import LLMConfig as cfg
+    from config.Servers import (
+        DEFAULT_HOST,
+        LLM_RESULTS_PORT,
+        MAX_RESULT_QUEUE_SIZE,
+        MAX_STRING_LENGTH,
+    )
     from core.LoggingSetup import get_logger
 except ImportError:
-    from .. import LLMConfig as cfg
+    from ..config.Servers import (
+        DEFAULT_HOST,
+        LLM_RESULTS_PORT,
+        MAX_RESULT_QUEUE_SIZE,
+        MAX_STRING_LENGTH,
+    )
     from ..core.LoggingSetup import get_logger
 
 # Import base classes
@@ -61,7 +71,7 @@ class CommandBroadcaster:
         self._result_queue: List[Dict] = []
         self._completion_queues: Dict[int, Queue] = {}
         self._queue_lock = threading.Lock()
-        self._max_queue_size = cfg.MAX_RESULT_QUEUE_SIZE
+        self._max_queue_size = MAX_RESULT_QUEUE_SIZE
 
         # Thread-safe command tracking
         self._active_commands: Dict[int, Dict[str, Any]] = {}
@@ -268,6 +278,7 @@ class CommandBroadcaster:
         request_id = command.get("request_id", 0)
         if request_id == 0:
             import time
+
             request_id = int(time.time() * 1000) % (2**32)
 
         # Create completion queue
@@ -346,7 +357,7 @@ class CommandServer(TCPServerBase):
 
     def __init__(self, config: Optional[ServerConfig] = None):
         if config is None:
-            config = ServerConfig(host=cfg.DEFAULT_HOST, port=cfg.LLM_RESULTS_PORT)
+            config = ServerConfig(host=DEFAULT_HOST, port=LLM_RESULTS_PORT)
         super().__init__(config)
 
         # Initialize broadcaster
@@ -424,9 +435,10 @@ class CommandServer(TCPServerBase):
         len_bytes = self._recv_exact(client, 4)
         if not len_bytes:
             return None
-        json_len = struct.unpack("<I", len_bytes)[0]  # Little-endian to match Unity
+        # Little-endian to match Unity
+        json_len = struct.unpack("<I", len_bytes)[0]
 
-        if json_len > cfg.MAX_STRING_LENGTH * 10:
+        if json_len > MAX_STRING_LENGTH * 10:
             logger.error(f"Completion too large: {json_len}")
             return None
 
@@ -568,7 +580,7 @@ def get_command_broadcaster() -> CommandBroadcaster:
 
 
 def run_command_server_background(
-    port: int = cfg.LLM_RESULTS_PORT, host: str = cfg.DEFAULT_HOST
+    port: int = LLM_RESULTS_PORT, host: str = DEFAULT_HOST
 ) -> CommandServer:
     """
     Start the CommandServer in the background.
@@ -591,8 +603,8 @@ if __name__ == "__main__":
     import signal
 
     parser = argparse.ArgumentParser(description="Command Server")
-    parser.add_argument("--host", default=cfg.DEFAULT_HOST)
-    parser.add_argument("--port", type=int, default=cfg.LLM_RESULTS_PORT)
+    parser.add_argument("--host", default=DEFAULT_HOST)
+    parser.add_argument("--port", type=int, default=LLM_RESULTS_PORT)
     args = parser.parse_args()
 
     config = ServerConfig(host=args.host, port=args.port)

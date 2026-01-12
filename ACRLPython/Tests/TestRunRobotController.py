@@ -16,7 +16,14 @@ import threading
 from unittest.mock import Mock, MagicMock, patch, call
 
 from orchestrators.RunRobotController import RobotController
-import LLMConfig as cfg
+from config.Servers import (
+    DEFAULT_HOST,
+    STREAMING_SERVER_PORT,
+    STEREO_DETECTION_PORT,
+    LLM_RESULTS_PORT,
+    SEQUENCE_SERVER_PORT,
+    DEFAULT_LMSTUDIO_MODEL,
+)
 
 
 # ============================================================================
@@ -75,15 +82,15 @@ class TestRobotControllerInitialization:
         assert controller.is_running() is False
 
     def test_controller_default_config(self):
-        """Test controller uses default config from LLMConfig"""
+        """Test controller uses default config from config.Servers"""
         controller = RobotController()
 
-        assert controller._host == cfg.DEFAULT_HOST
-        assert controller._single_port == cfg.STREAMING_SERVER_PORT
-        assert controller._stereo_port == cfg.STEREO_DETECTION_PORT
-        assert controller._command_port == cfg.LLM_RESULTS_PORT
-        assert controller._sequence_port == cfg.SEQUENCE_SERVER_PORT
-        assert controller._model == cfg.DEFAULT_LMSTUDIO_MODEL
+        assert controller._host == DEFAULT_HOST
+        assert controller._single_port == STREAMING_SERVER_PORT
+        assert controller._stereo_port == STEREO_DETECTION_PORT
+        assert controller._command_port == LLM_RESULTS_PORT
+        assert controller._sequence_port == SEQUENCE_SERVER_PORT
+        assert controller._model == DEFAULT_LMSTUDIO_MODEL
 
 
 # ============================================================================
@@ -93,12 +100,12 @@ class TestRobotControllerInitialization:
 class TestRobotControllerStartup:
     """Test RobotController startup sequence"""
 
-    @patch('orchestrators.RunRobotController.ImageServer')
+    @patch('orchestrators.RunRobotController.run_image_server_background')
     @patch('orchestrators.RunRobotController.run_command_server_background')
     @patch('orchestrators.RunRobotController.run_sequence_server_background')
     def test_startup_sequence(self, mock_seq_server, mock_cmd_server, mock_img_server, robot_controller):
         """Test servers start in correct order"""
-        # Setup mocks
+        # Setup mocks - functions return server instances
         mock_img_instance = MagicMock()
         mock_img_server.return_value = mock_img_instance
 
@@ -111,13 +118,12 @@ class TestRobotControllerStartup:
         # Start controller
         robot_controller.start()
 
-        # Verify servers were created
+        # Verify server background functions were called
         mock_img_server.assert_called_once_with(
             single_port=15005,
             stereo_port=15006,
             host="127.0.0.1"
         )
-        mock_img_instance.start.assert_called_once()
 
         mock_cmd_server.assert_called_once_with(
             port=15010,
@@ -129,7 +135,7 @@ class TestRobotControllerStartup:
         # Controller should be running
         assert robot_controller.is_running() is True
 
-    @patch('orchestrators.RunRobotController.ImageServer')
+    @patch('orchestrators.RunRobotController.run_image_server_background')
     @patch('orchestrators.RunRobotController.run_command_server_background')
     @patch('orchestrators.RunRobotController.run_sequence_server_background')
     def test_startup_initializes_all_servers(self, mock_seq_server, mock_cmd_server, mock_img_server, robot_controller):
@@ -146,7 +152,7 @@ class TestRobotControllerStartup:
         assert robot_controller._command_server is not None
         assert robot_controller._sequence_server is not None
 
-    @patch('orchestrators.RunRobotController.ImageServer')
+    @patch('orchestrators.RunRobotController.run_image_server_background')
     @patch('orchestrators.RunRobotController.run_command_server_background')
     @patch('orchestrators.RunRobotController.run_sequence_server_background')
     def test_startup_already_running_warning(self, mock_seq_server, mock_cmd_server, mock_img_server, robot_controller):
@@ -180,7 +186,7 @@ class TestRobotControllerStartup:
 class TestRobotControllerShutdown:
     """Test RobotController shutdown"""
 
-    @patch('orchestrators.RunRobotController.ImageServer')
+    @patch('orchestrators.RunRobotController.run_image_server_background')
     @patch('orchestrators.RunRobotController.run_command_server_background')
     @patch('orchestrators.RunRobotController.run_sequence_server_background')
     def test_shutdown_graceful(self, mock_seq_server, mock_cmd_server, mock_img_server, robot_controller):
@@ -207,7 +213,7 @@ class TestRobotControllerShutdown:
         # Controller should not be running
         assert robot_controller.is_running() is False
 
-    @patch('orchestrators.RunRobotController.ImageServer')
+    @patch('orchestrators.RunRobotController.run_image_server_background')
     @patch('orchestrators.RunRobotController.run_command_server_background')
     @patch('orchestrators.RunRobotController.run_sequence_server_background')
     def test_shutdown_when_not_running(self, mock_seq_server, mock_cmd_server, mock_img_server, robot_controller):
@@ -231,7 +237,7 @@ class TestRobotControllerShutdown:
 class TestRobotControllerErrorRecovery:
     """Test error recovery scenarios"""
 
-    @patch('orchestrators.RunRobotController.ImageServer')
+    @patch('orchestrators.RunRobotController.run_image_server_background')
     @patch('orchestrators.RunRobotController.run_command_server_background')
     @patch('orchestrators.RunRobotController.run_sequence_server_background')
     def test_startup_error_recovery(self, mock_seq_server, mock_cmd_server, mock_img_server):
@@ -253,7 +259,7 @@ class TestRobotControllerErrorRecovery:
         # Controller should not be marked as running
         assert controller.is_running() is False
 
-    @patch('orchestrators.RunRobotController.ImageServer')
+    @patch('orchestrators.RunRobotController.run_image_server_background')
     @patch('orchestrators.RunRobotController.run_command_server_background')
     @patch('orchestrators.RunRobotController.run_sequence_server_background')
     def test_shutdown_with_server_error(self, mock_seq_server, mock_cmd_server, mock_img_server):
@@ -296,7 +302,7 @@ class TestRobotControllerErrorRecovery:
 class TestRobotControllerLifecycle:
     """Test RobotController lifecycle management"""
 
-    @patch('orchestrators.RunRobotController.ImageServer')
+    @patch('orchestrators.RunRobotController.run_image_server_background')
     @patch('orchestrators.RunRobotController.run_command_server_background')
     @patch('orchestrators.RunRobotController.run_sequence_server_background')
     def test_multiple_start_stop_cycles(self, mock_seq_server, mock_cmd_server, mock_img_server):

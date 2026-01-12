@@ -1,5 +1,5 @@
 import numpy as np
-import LLMConfig as cfg
+from config.Vision import YOLO_MODEL_PATH
 from vision.YOLODetector import YOLODetector
 
 # Create a blue cube image (same as test fixture)
@@ -7,7 +7,7 @@ image = np.zeros((480, 640, 3), dtype=np.uint8)
 image[200:280, 270:370] = [255, 0, 0]  # BGR for blue
 
 # Create YOLO detector with low confidence to see what it detects
-detector = YOLODetector(model_path=cfg.YOLO_MODEL_PATH)
+detector = YOLODetector(model_path=YOLO_MODEL_PATH)
 detector.conf_threshold = 0.01  # Very low threshold to see all detections
 
 # Run prediction

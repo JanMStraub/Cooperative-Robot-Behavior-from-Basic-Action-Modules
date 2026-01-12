@@ -8,6 +8,7 @@ through Unity's GripperController via TCP communication.
 
 import time
 import logging
+from typing import Any, Dict, Optional
 # Lazy import to avoid circular dependency with servers module
 from .Base import (
     BasicOperation,
@@ -24,11 +25,11 @@ setup_logging(__name__)
 logger = logging.getLogger(__name__)
 
 
-# Lazy import function to avoid circular dependency
-def _get_command_broadcaster():
-    """Lazy import of command broadcaster to avoid circular dependency"""
-    from servers.CommandServer import get_command_broadcaster
-    return get_command_broadcaster()
+# Import from centralized lazy import system (prevents circular dependencies)
+try:
+    from ..core.Imports import get_command_broadcaster as _get_command_broadcaster
+except ImportError:
+    from core.Imports import get_command_broadcaster as _get_command_broadcaster
 
 
 # ============================================================================
@@ -37,7 +38,7 @@ def _get_command_broadcaster():
 
 
 def control_gripper(
-    robot_id: str, open_gripper: bool, request_id: int = 0
+    robot_id: str, open_gripper: bool, request_id: int = 0, object_id: Optional[str] = None
 ) -> OperationResult:
     """
     Open or close the robot gripper.
@@ -48,6 +49,8 @@ def control_gripper(
     Args:
         robot_id: ID of the robot to control (e.g., "Robot1", "AR4_Robot")
         open_gripper: Boolean value - True to open gripper, False to close it
+        request_id: Optional request ID for tracking
+        object_id: Optional object ID to attach when closing (enables handoff)
 
     Returns:
         Dict with the following structure:
@@ -82,6 +85,9 @@ def control_gripper(
         >>> result = control_gripper("Robot1", False)
         >>> if result["success"]:
         ...     print(f"Operation completed: {result['result']}")
+
+        >>> # Close gripper and attach specific object (for handoff)
+        >>> result = control_gripper("Robot1", False, object_id="RedCube")
     """
     try:
         # Validate robot_id
@@ -106,12 +112,17 @@ def control_gripper(
             )
 
         # Construct command for Unity
+        params: Dict[str, Any] = {
+            "open_gripper": open_gripper,
+        }
+        # Add object_id if specified (for handoff scenarios)
+        if object_id:
+            params["object_id"] = object_id
+
         command = {
             "command_type": "control_gripper",
             "robot_id": robot_id,
-            "parameters": {
-                "open_gripper": open_gripper,
-            },
+            "parameters": params,
             "timestamp": time.time(),
             "request_id": request_id,
         }
@@ -196,6 +207,7 @@ def create_control_gripper_operation() -> BasicOperation:
             "After navigating to a drop-off location: control_gripper(robot_id='Robot1', open_gripper=True) # Open gripper to release object",
             "Open gripper before approaching object to prepare for grasping",
             "Close gripper after positioning at target coordinates to secure object",
+            "Handoff: control_gripper(robot_id='Robot2', open_gripper=False, object_id='RedCube') # Close gripper and attach object held by another robot",
         ],
         parameters=[
             OperationParameter(
@@ -209,6 +221,12 @@ def create_control_gripper_operation() -> BasicOperation:
                 type="bool",
                 description="True to open gripper completely, False to close gripper completely",
                 required=True,
+            ),
+            OperationParameter(
+                name="object_id",
+                type="str",
+                description="Optional object ID to attach when closing (for handoff scenarios)",
+                required=False,
             ),
         ],
         preconditions=[

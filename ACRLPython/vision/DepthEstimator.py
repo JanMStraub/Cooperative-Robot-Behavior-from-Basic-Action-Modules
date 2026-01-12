@@ -41,11 +41,11 @@ except ImportError:
         SGBM_FAR,
     )
 
-# Import config - try both import styles
+# Import config
 try:
-    import LLMConfig as cfg
+    from config.Vision import SAVE_DEBUG_DISPARITY_MAPS, DEBUG_DISPARITY_DIR
 except ImportError:
-    from .. import LLMConfig as cfg
+    from ..config.Vision import SAVE_DEBUG_DISPARITY_MAPS, DEBUG_DISPARITY_DIR
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
@@ -261,18 +261,12 @@ def save_disparity_map_debug(disparity: np.ndarray, output_path: Optional[Path] 
         disparity: Disparity map to save
         output_path: Optional custom output path
     """
-    if not getattr(cfg, "SAVE_DEBUG_DISPARITY_MAPS", False):
+    if not SAVE_DEBUG_DISPARITY_MAPS:
         return
 
     try:
         if output_path is None:
-            output_dir = Path(
-                getattr(
-                    cfg,
-                    "DEBUG_DISPARITY_DIR",
-                    "ACRLPython/debug_detections",
-                )
-            )
+            output_dir = Path(DEBUG_DISPARITY_DIR)
             output_dir.mkdir(parents=True, exist_ok=True)
             output_path = output_dir / "disparity_map.jpg"
 

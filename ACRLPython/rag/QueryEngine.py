@@ -12,11 +12,10 @@ from .Embeddings import EmbeddingGenerator
 from .VectorStore import VectorStore
 
 # Import config
-# Import config - try both import styles
 try:
-    import LLMConfig as config
+    from config.Rag import RAG_DEFAULT_TOP_K
 except ImportError:
-    from .. import LLMConfig as config
+    from ..config.Rag import RAG_DEFAULT_TOP_K
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -46,7 +45,7 @@ class QueryEngine:
             registry: Operation registry for full operation details
         """
         # Lazy import to avoid circular dependency
-        from operations.Registry import get_global_registry
+        from core.Imports import get_global_registry
 
         self.vector_store = vector_store
         self.embedding_generator = embedding_generator or EmbeddingGenerator()
@@ -90,7 +89,7 @@ class QueryEngine:
         query_embedding = self.embedding_generator.generate_embedding(query)
 
         # Search vector store
-        k = top_k if top_k is not None else config.RAG_DEFAULT_TOP_K
+        k = top_k if top_k is not None else RAG_DEFAULT_TOP_K
         results = self.vector_store.search(
             query_embedding=query_embedding,
             top_k=k,

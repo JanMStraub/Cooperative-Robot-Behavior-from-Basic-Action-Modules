@@ -878,14 +878,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp-ACRL::PythonCommunication.SequenceClient
   _autoConnect: 1
   _autoReconnect: 1
-  _prompt: "  PARALLEL GROUP 1:\n  - Robot1: Grab blue cube on the left\n\n  PARALLEL
-    GROUP 2:\n  - Robot1: Move to coordinate x=0.0, y=0.3, z=0.0\n  - Robot1: Signal
-    'object_ready_for_handoff'\n  - Robot2: Wait for signal 'object_ready_for_handoff'\n\n 
-    PARALLEL GROUP 3:\n  - Robot2: Move to coordinate x=0.0, y=0.25, z=0.0\n  - Robot2:
-    Open gripper\n  - Robot2: Wait 2000 milliseconds\n  - Robot2: Close gripper\n 
-    - Robot2: Signal 'handoff_complete'\n\n  PARALLEL GROUP 4:\n  - Robot1: Wait
-    for signal 'handoff_complete'\n  - Robot1: Open gripper\n  - Robot1: Move to
-    start position at x=-0.3, y=0.15, z=0.0"
+  _prompt: "PARALLEL GROUP 1:\n                - Robot1: Grab red cube\n\n               
+    PARALLEL GROUP 2:\n                - Robot1: Move to coordinate x=-0.1, y=0.5,
+    z=0.0\n                - Robot1: Signal 'object_ready_for_handoff'\n               
+    - Robot2: Wait for signal 'object_ready_for_handoff'\n\n                PARALLEL
+    GROUP 3:\n                - Robot2: Grab red cube\n                - Robot2:
+    Signal 'handoff_complete'\n                - Robot1: Wait for signal 'handoff_complete'\n\n               
+    PARALLEL GROUP 4:\n                - Robot1: Open gripper\n                -
+    Robot1: Move to start position\n                - Robot2: Move to start position"
   _defaultRobotId: Robot1
   _cameraId: TableStereoCamera
   _logCommands: 1
@@ -968,6 +968,14 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.y
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5075431559166153548, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 0.03
+      objectReference: {fileID: 0}
+    - target: {fileID: 5075431559166153548, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0.02
+      objectReference: {fileID: 0}
     - target: {fileID: 5271878870994714299, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -1035,6 +1043,10 @@ PrefabInstance:
     - target: {fileID: 7888947935727383794, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: debugTarget
       value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 7888947935727383794, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _convergenceThreshold
+      value: 0.03
       objectReference: {fileID: 0}
     - target: {fileID: 9086981115628272307, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.y

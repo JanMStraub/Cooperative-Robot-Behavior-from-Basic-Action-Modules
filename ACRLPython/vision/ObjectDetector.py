@@ -23,11 +23,45 @@ from pathlib import Path
 import numpy as np
 import cv2
 
-# Import config - try both import styles
+# Import config
 try:
-    import LLMConfig as cfg
+    from config.Vision import (
+        USE_YOLO,
+        YOLO_MODEL_PATH,
+        RED_HSV_LOWER_1,
+        RED_HSV_UPPER_1,
+        RED_HSV_LOWER_2,
+        RED_HSV_UPPER_2,
+        BLUE_HSV_LOWER,
+        BLUE_HSV_UPPER,
+        MIN_CUBE_AREA_PX,
+        MAX_CUBE_AREA_PX,
+        MIN_ASPECT_RATIO,
+        MAX_ASPECT_RATIO,
+        MIN_CONFIDENCE,
+        ENABLE_DEBUG_IMAGES,
+        DEBUG_IMAGES_DIR,
+    )
+    from config.Servers import LOG_FORMAT
 except ImportError:
-    from .. import LLMConfig as cfg
+    from ..config.Vision import (
+        USE_YOLO,
+        YOLO_MODEL_PATH,
+        RED_HSV_LOWER_1,
+        RED_HSV_UPPER_1,
+        RED_HSV_LOWER_2,
+        RED_HSV_UPPER_2,
+        BLUE_HSV_LOWER,
+        BLUE_HSV_UPPER,
+        MIN_CUBE_AREA_PX,
+        MAX_CUBE_AREA_PX,
+        MIN_ASPECT_RATIO,
+        MAX_ASPECT_RATIO,
+        MIN_CONFIDENCE,
+        ENABLE_DEBUG_IMAGES,
+        DEBUG_IMAGES_DIR,
+    )
+    from ..config.Servers import LOG_FORMAT
 
 # Import shared detection data models
 try:
@@ -37,7 +71,7 @@ except ImportError:
 
 # Import YOLO detector if enabled
 YOLO_AVAILABLE = False
-if getattr(cfg, "USE_YOLO", False):
+if USE_YOLO:
     try:
         from .YOLODetector import YOLODetector
 
@@ -117,16 +151,20 @@ class CubeDetector:
         If USE_YOLO is enabled in config, uses YOLODetector.
         Otherwise, uses HSV color-based detection.
         """
-        # Check if YOLO should be used
-        self.use_yolo = YOLO_AVAILABLE and getattr(cfg, "USE_YOLO", False)
+        # Check if YOLO should be used (read dynamically for testability)
+        try:
+            import config.Vision as vision_cfg
+            use_yolo_config = vision_cfg.USE_YOLO
+        except (ImportError, AttributeError):
+            use_yolo_config = USE_YOLO
+        self.use_yolo = YOLO_AVAILABLE and use_yolo_config
 
         if self.use_yolo and YOLO_AVAILABLE:
             # Initialize YOLO detector (only if import succeeded)
-            model_path = getattr(cfg, "YOLO_MODEL_PATH", None)
             try:
-                self.yolo_detector = YOLODetector(model_path=model_path)  # type: ignore[name-defined]
+                self.yolo_detector = YOLODetector(model_path=YOLO_MODEL_PATH)  # type: ignore[name-defined]
                 logging.info(
-                    f"CubeDetector initialized with YOLO (model: {model_path})"
+                    f"CubeDetector initialized with YOLO (model: {YOLO_MODEL_PATH})"
                 )
             except Exception as e:
                 logging.error(f"Failed to initialize YOLO detector: {e}")
@@ -135,26 +173,26 @@ class CubeDetector:
 
         # Always initialize HSV detector (for fallback or direct use)
         # Red color ranges (HSV wraps around, so we need two ranges)
-        self.red_lower_1 = np.array(cfg.RED_HSV_LOWER_1, dtype=np.uint8)
-        self.red_upper_1 = np.array(cfg.RED_HSV_UPPER_1, dtype=np.uint8)
-        self.red_lower_2 = np.array(cfg.RED_HSV_LOWER_2, dtype=np.uint8)
-        self.red_upper_2 = np.array(cfg.RED_HSV_UPPER_2, dtype=np.uint8)
+        self.red_lower_1 = np.array(RED_HSV_LOWER_1, dtype=np.uint8)
+        self.red_upper_1 = np.array(RED_HSV_UPPER_1, dtype=np.uint8)
+        self.red_lower_2 = np.array(RED_HSV_LOWER_2, dtype=np.uint8)
+        self.red_upper_2 = np.array(RED_HSV_UPPER_2, dtype=np.uint8)
 
         # Blue color range
-        self.blue_lower = np.array(cfg.BLUE_HSV_LOWER, dtype=np.uint8)
-        self.blue_upper = np.array(cfg.BLUE_HSV_UPPER, dtype=np.uint8)
+        self.blue_lower = np.array(BLUE_HSV_LOWER, dtype=np.uint8)
+        self.blue_upper = np.array(BLUE_HSV_UPPER, dtype=np.uint8)
 
         # Detection thresholds
-        self.min_area = cfg.MIN_CUBE_AREA_PX
-        self.max_area = cfg.MAX_CUBE_AREA_PX
-        self.min_aspect = cfg.MIN_ASPECT_RATIO
-        self.max_aspect = cfg.MAX_ASPECT_RATIO
-        self.min_confidence = cfg.MIN_CONFIDENCE
+        self.min_area = MIN_CUBE_AREA_PX
+        self.max_area = MAX_CUBE_AREA_PX
+        self.min_aspect = MIN_ASPECT_RATIO
+        self.max_aspect = MAX_ASPECT_RATIO
+        self.min_confidence = MIN_CONFIDENCE
 
         # Debug settings
-        self.enable_debug = cfg.ENABLE_DEBUG_IMAGES
+        self.enable_debug = ENABLE_DEBUG_IMAGES
         if self.enable_debug:
-            self.debug_dir = Path(cfg.DEBUG_IMAGES_DIR)
+            self.debug_dir = Path(DEBUG_IMAGES_DIR)
             self.debug_dir.mkdir(parents=True, exist_ok=True)
 
         if not self.use_yolo:
@@ -528,7 +566,7 @@ def main():
     """
     import sys
 
-    logging.basicConfig(level=logging.INFO, format=cfg.LOG_FORMAT)
+    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
     if len(sys.argv) < 2:
         print("Usage: python ObjectDetector.py <image_path>")

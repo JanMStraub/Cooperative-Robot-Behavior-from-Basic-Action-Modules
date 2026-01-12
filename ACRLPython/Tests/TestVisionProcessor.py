@@ -10,12 +10,21 @@ import os
 import unittest
 import time
 import threading
+from unittest.mock import patch, MagicMock
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from vision.VisionProcessor import VisionProcessor
 from vision.DetectionDataModels import DetectionObject, DetectionResult
+
+
+def create_mock_storage():
+    """Create a mock UnifiedImageStorage for testing"""
+    mock_storage = MagicMock()
+    # Return None for stereo images (no images available)
+    mock_storage.get_latest_stereo_image.return_value = None
+    return mock_storage
 
 
 class MockDetector:
@@ -76,8 +85,11 @@ class TestVisionProcessor(unittest.TestCase):
         self.assertTrue(processor.enable_tracking)
         self.assertIsNotNone(processor.tracker)
 
-    def test_start_stop(self):
+    @patch('vision.VisionProcessor._get_storage')
+    def test_start_stop(self, mock_get_storage):
         """Test starting and stopping processor"""
+        mock_get_storage.return_value = create_mock_storage()
+
         detector = MockDetector()
         processor = VisionProcessor(detector, fps=5.0)
 

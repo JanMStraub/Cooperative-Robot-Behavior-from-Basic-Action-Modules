@@ -17,23 +17,56 @@ Usage:
 import argparse
 import signal
 import time
+import logging
 
 # Import config
 try:
-    import LLMConfig as cfg
+    from config.Servers import (
+        DEFAULT_HOST,
+        STREAMING_SERVER_PORT,
+        STEREO_DETECTION_PORT,
+        LLM_RESULTS_PORT,
+        SEQUENCE_SERVER_PORT,
+        DEFAULT_LMSTUDIO_MODEL,
+        LMSTUDIO_BASE_URL,
+    )
+    from config.Vision import (
+        ENABLE_VISION_STREAMING,
+        YOLO_MODEL_PATH,
+        ENABLE_VISION_VISUALIZATION,
+        VISION_STREAM_FPS,
+        ENABLE_OBJECT_TRACKING,
+        SHARED_VISION_STATE_ENABLED,
+    )
     from core.LoggingSetup import setup_logging
 except ImportError:
-    from .. import LLMConfig as cfg
+    from ..config.Servers import (
+        DEFAULT_HOST,
+        STREAMING_SERVER_PORT,
+        STEREO_DETECTION_PORT,
+        LLM_RESULTS_PORT,
+        SEQUENCE_SERVER_PORT,
+        DEFAULT_LMSTUDIO_MODEL,
+        LMSTUDIO_BASE_URL,
+    )
+    from ..config.Vision import (
+        ENABLE_VISION_STREAMING,
+        YOLO_MODEL_PATH,
+        ENABLE_VISION_VISUALIZATION,
+        VISION_STREAM_FPS,
+        ENABLE_OBJECT_TRACKING,
+        SHARED_VISION_STATE_ENABLED,
+    )
     from ..core.LoggingSetup import setup_logging
 
 # Import servers - handle both direct execution and package import
 try:
-    from ..servers.ImageServer import ImageServer
+    from ..servers.ImageServer import run_image_server_background
     from ..servers.CommandServer import run_command_server_background, get_command_broadcaster
     from ..servers.SequenceServer import run_sequence_server_background
 except ImportError:
     # Running as python -m orchestrators.RunRobotController
-    from servers.ImageServer import ImageServer
+    from servers.ImageServer import run_image_server_background
     from servers.CommandServer import run_command_server_background, get_command_broadcaster
     from servers.SequenceServer import run_sequence_server_background
 
@@ -50,12 +83,12 @@ class RobotController:
 
     def __init__(
         self,
-        host: str = cfg.DEFAULT_HOST,
-        single_port: int = cfg.STREAMING_SERVER_PORT,
-        stereo_port: int = cfg.STEREO_DETECTION_PORT,
-        command_port: int = cfg.LLM_RESULTS_PORT,
-        sequence_port: int = cfg.SEQUENCE_SERVER_PORT,
-        model: str = cfg.DEFAULT_LMSTUDIO_MODEL,
+        host: str = DEFAULT_HOST,
+        single_port: int = STREAMING_SERVER_PORT,
+        stereo_port: int = STEREO_DETECTION_PORT,
+        command_port: int = LLM_RESULTS_PORT,
+        sequence_port: int = SEQUENCE_SERVER_PORT,
+        model: str = DEFAULT_LMSTUDIO_MODEL,
         check_completion: bool = True,
     ):
         """
@@ -95,12 +128,12 @@ class RobotController:
         logger.info("=" * 60)
 
         # Start ImageServer (ports 5005, 5006)
-        self._image_server = ImageServer(
+        logger.info(f"Starting ImageServer (single: {self._single_port}, stereo: {self._stereo_port})")
+        self._image_server = run_image_server_background(
             single_port=self._single_port,
             stereo_port=self._stereo_port,
             host=self._host,
         )
-        self._image_server.start()
 
         # Start CommandServer (port 5010) - bidirectional for commands and completions
         logger.info(f"Starting CommandServer (port: {self._command_port})")
@@ -111,7 +144,7 @@ class RobotController:
         # Initialize and start SequenceServer (port 5013)
         logger.info(f"Starting SequenceServer (port: {self._sequence_port})")
         self._sequence_server = run_sequence_server_background(
-            lm_studio_url=cfg.LMSTUDIO_BASE_URL,
+            lm_studio_url=LMSTUDIO_BASE_URL,
             model=self._model,
             check_completion=self._check_completion,
         )
@@ -123,7 +156,7 @@ class RobotController:
         self._running = True
 
         # Initialize vision streaming if enabled
-        if cfg.ENABLE_VISION_STREAMING:
+        if ENABLE_VISION_STREAMING:
             try:
                 import os
                 import platform
@@ -131,23 +164,23 @@ class RobotController:
                 from vision.VisionProcessor import VisionProcessor
 
                 # Check if YOLO model exists
-                if not os.path.exists(cfg.YOLO_MODEL_PATH):
+                if not os.path.exists(YOLO_MODEL_PATH):
                     logger.warning(
-                        f"YOLO model not found at {cfg.YOLO_MODEL_PATH}. "
+                        f"YOLO model not found at {YOLO_MODEL_PATH}. "
                         "Vision streaming disabled. Please ensure the model file exists."
                     )
                 else:
                     logger.info(
-                        f"Initializing VisionProcessor with YOLO model: {cfg.YOLO_MODEL_PATH}"
+                        f"Initializing VisionProcessor with YOLO model: {YOLO_MODEL_PATH}"
                     )
 
                     # Initialize YOLO detector
-                    detector = YOLODetector(model_path=cfg.YOLO_MODEL_PATH)
+                    detector = YOLODetector(model_path=YOLO_MODEL_PATH)
 
                     # Determine if we should use main thread (macOS with visualization)
                     use_main_thread = (
                         platform.system() == "Darwin"
-                        and cfg.ENABLE_VISION_VISUALIZATION
+                        and ENABLE_VISION_VISUALIZATION
                     )
 
                     if use_main_thread:
@@ -159,10 +192,10 @@ class RobotController:
                     # Create vision processor with config
                     self._vision_processor = VisionProcessor(
                         detector=detector,
-                        fps=cfg.VISION_STREAM_FPS,
-                        enable_tracking=cfg.ENABLE_OBJECT_TRACKING,
-                        enable_shared_state=cfg.SHARED_VISION_STATE_ENABLED,
-                        enable_visualization=cfg.ENABLE_VISION_VISUALIZATION,
+                        fps=VISION_STREAM_FPS,
+                        enable_tracking=ENABLE_OBJECT_TRACKING,
+                        enable_shared_state=SHARED_VISION_STATE_ENABLED,
+                        enable_visualization=ENABLE_VISION_VISUALIZATION,
                         use_main_thread=use_main_thread,
                     )
 
@@ -191,11 +224,11 @@ class RobotController:
         logger.info(f"  Command Server:         {self._host}:{self._command_port}")
         logger.info(f"  Sequence Server:        {self._host}:{self._sequence_port}")
         logger.info(f"  LLM Model:              {self._model}")
-        if cfg.ENABLE_VISION_STREAMING and self._vision_processor:
+        if ENABLE_VISION_STREAMING and self._vision_processor:
             logger.info(
-                f"  Vision Streaming:       Enabled ({cfg.VISION_STREAM_FPS} FPS)"
+                f"  Vision Streaming:       Enabled ({VISION_STREAM_FPS} FPS)"
             )
-            if cfg.ENABLE_VISION_VISUALIZATION:
+            if ENABLE_VISION_VISUALIZATION:
                 logger.info(f"  Visualization:          Enabled (press 'q' to close)")
         logger.info("=" * 60)
 
@@ -277,10 +310,10 @@ def main():
     parser = argparse.ArgumentParser(
         description="Unified Robot Controller - Start all Python servers"
     )
-    parser.add_argument("--host", default=cfg.DEFAULT_HOST, help="Host to bind to")
+    parser.add_argument("--host", default=DEFAULT_HOST, help="Host to bind to")
     parser.add_argument(
         "--model",
-        default=cfg.DEFAULT_LMSTUDIO_MODEL,
+        default=DEFAULT_LMSTUDIO_MODEL,
         help="LLM model for command parsing",
     )
     parser.add_argument(

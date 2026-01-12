@@ -10,9 +10,14 @@ stored in ImageStorage and return detection results directly.
 import time
 import logging
 
+# Import from centralized lazy import system (prevents circular dependencies)
+try:
+    from ..core.Imports import get_unified_image_storage
+except ImportError:
+    from core.Imports import get_unified_image_storage
+
 # Handle both direct execution and package import
 try:
-    from ..servers.ImageStorageCore import UnifiedImageStorage
     from .Base import (
         BasicOperation,
         OperationCategory,
@@ -21,7 +26,6 @@ try:
         OperationResult,
     )
 except ImportError:
-    from servers.ImageStorageCore import UnifiedImageStorage
     from operations.Base import (
         BasicOperation,
         OperationCategory,
@@ -58,7 +62,7 @@ def detect_objects(
     """
     try:
         # Get image from storage
-        image_storage = UnifiedImageStorage()
+        image_storage = get_unified_image_storage()
         image = image_storage.get_single_image(camera_id)
 
         if image is None:

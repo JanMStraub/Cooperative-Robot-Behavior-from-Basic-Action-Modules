@@ -253,52 +253,57 @@ namespace EditorScripts
 
             EditorGUILayout.Space(5);
 
-            // Compound Actions
-            EditorGUILayout.LabelField("Compound Actions", EditorStyles.miniBoldLabel);
-            EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("Move & Close Grip", _buttonStyle))
-            {
-                client.Prompt = "move to x=0, y=0.3, z=0 and close the gripper";
-            }
-            if (GUILayout.Button("Move & Open Grip", _buttonStyle))
-            {
-                client.Prompt = "move to x=0, y=0.3, z=0 and open the gripper";
-            }
-            EditorGUILayout.EndHorizontal();
-
-            EditorGUILayout.Space(5);
-
             // Pick & Place
             EditorGUILayout.LabelField("Pick & Place Sequences", EditorStyles.miniBoldLabel);
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("Pick Sequence", _buttonStyle))
             {
                 client.Prompt =
-                    "move to (0.3, 0.15, 0.05), then close the gripper, then move to (0.3, 0.15, 0.2)";
+                    "Grab the blue cube on the left";
             }
             if (GUILayout.Button("Place Sequence", _buttonStyle))
             {
                 client.Prompt =
-                    "move to (0.1, 0.3, 0.2), then move to (0.1, 0.3, 0.05), then open the gripper, then move to (0.1, 0.3, 0.2)";
+                    "Move to field a and place the object there";
             }
             EditorGUILayout.EndHorizontal();
 
             EditorGUILayout.Space(5);
 
-            // Perception
-            EditorGUILayout.LabelField("Perception Commands", EditorStyles.miniBoldLabel);
+            // Cooperation
+            EditorGUILayout.LabelField("Cooperation Commands", EditorStyles.miniBoldLabel);
             EditorGUILayout.BeginHorizontal();
-            if (GUILayout.Button("Find Blue Cube", _buttonStyle))
+            if (GUILayout.Button("Transfer cube", _buttonStyle))
             {
-                client.Prompt = "Calculate the coordinates of the blue cube on the left";
+                client.Prompt =
+                @"PARALLEL GROUP 1:
+                - Robot1: Grab red cube
+
+                PARALLEL GROUP 2:
+                - Robot1: Move to coordinate x=-0.1, y=0.5, z=0.0
+                - Robot1: Signal 'object_ready_for_handoff'
+                - Robot2: Wait for signal 'object_ready_for_handoff'
+
+                PARALLEL GROUP 3:
+                - Robot2: Grab red cube
+                - Robot2: Signal 'handoff_complete'
+                - Robot1: Wait for signal 'handoff_complete'
+
+                PARALLEL GROUP 4:
+                - Robot1: Open gripper
+                - Robot1: Wait 500 milliseconds
+
+                PARALLEL GROUP 5:
+                - Robot1: Move to start position
+                - Robot2: Move to start position";
             }
-            if (GUILayout.Button("Pick at Object", _buttonStyle))
+            if (GUILayout.Button("None", _buttonStyle))
             {
-                client.Prompt = "Pick up object at detected position";
+                client.Prompt = "";
             }
-            if (GUILayout.Button("Place Object", _buttonStyle))
+            if (GUILayout.Button("None", _buttonStyle))
             {
-                client.Prompt = "Place object at x=0.2, y=0.0, z=0.1";
+                client.Prompt = "";
             }
             EditorGUILayout.EndHorizontal();
 

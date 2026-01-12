@@ -19,9 +19,9 @@ import threading
 from typing import Dict, Optional, Tuple, Any
 from dataclasses import dataclass, field
 try:
-    from .. import LLMConfig
+    from config.Robot import WORKSPACE_REGIONS, ROBOT_STATUS_CACHE_TTL
 except ImportError:
-    import LLMConfig
+    from ..config.Robot import WORKSPACE_REGIONS, ROBOT_STATUS_CACHE_TTL
 from .StatusOperations import check_robot_status
 
 # Configure logging
@@ -189,7 +189,7 @@ class WorldState:
 
             # Workspace allocation with timeout tracking
             self._workspace_allocations: Dict[str, Optional[WorkspaceAllocation]] = {
-                region: None for region in LLMConfig.WORKSPACE_REGIONS.keys()
+                region: None for region in WORKSPACE_REGIONS.keys()
             }
             self._workspace_timeout = 60.0  # Default 60s timeout for workspace allocations
 
@@ -242,7 +242,7 @@ class WorldState:
                     self._robot_cache[robot_id] = CachedValue(
                         value=status,
                         timestamp=time.time(),
-                        ttl=LLMConfig.ROBOT_STATUS_CACHE_TTL,
+                        ttl=ROBOT_STATUS_CACHE_TTL,
                     )
                     return status
                 else:
@@ -731,7 +731,7 @@ class WorldState:
             self._robot_states.clear()
             self._objects.clear()
             self._workspace_allocations = {
-                region: None for region in LLMConfig.WORKSPACE_REGIONS.keys()
+                region: None for region in WORKSPACE_REGIONS.keys()
             }
             self._workspace_timeout = 60.0  # Reset to default
             self._pending_commands.clear()

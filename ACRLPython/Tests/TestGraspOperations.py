@@ -55,11 +55,11 @@ class TestGraspObjectOperation:
         # Verify command was sent correctly
         mock_broadcaster.send_command_and_wait.assert_called_once()
         call_args = mock_broadcaster.send_command_and_wait.call_args[0][0]
-        assert call_args["command"] == "grasp_object"
+        assert call_args["command_type"] == "grasp_object"
         assert call_args["robot_id"] == "Robot1"
-        assert call_args["object_id"] == "Cube_01"
-        assert call_args["use_advanced_planning"] is True
-        assert call_args["preferred_approach"] == "top"
+        assert call_args["parameters"]["object_id"] == "Cube_01"
+        assert call_args["parameters"]["use_advanced_planning"] is True
+        assert call_args["parameters"]["preferred_approach"] == "top"
         assert call_args["request_id"] == 42
 
     def test_grasp_object_with_custom_approach_vector(self, mock_broadcaster):
@@ -77,10 +77,10 @@ class TestGraspObjectOperation:
 
         assert result["success"] is True
         call_args = mock_broadcaster.send_command_and_wait.call_args[0][0]
-        assert "custom_approach_vector" in call_args
-        assert call_args["custom_approach_vector"]["x"] == 0.0
-        assert call_args["custom_approach_vector"]["y"] == 1.0
-        assert call_args["custom_approach_vector"]["z"] == 0.5
+        assert "custom_approach_vector" in call_args["parameters"]
+        assert call_args["parameters"]["custom_approach_vector"]["x"] == 0.0
+        assert call_args["parameters"]["custom_approach_vector"]["y"] == 1.0
+        assert call_args["parameters"]["custom_approach_vector"]["z"] == 0.5
 
     def test_grasp_object_with_retreat_disabled(self, mock_broadcaster):
         """Test grasp without retreat motion."""
@@ -97,7 +97,7 @@ class TestGraspObjectOperation:
 
         assert result["success"] is True
         call_args = mock_broadcaster.send_command_and_wait.call_args[0][0]
-        assert call_args["enable_retreat"] is False
+        assert call_args["parameters"]["enable_retreat"] is False
 
     def test_grasp_object_with_custom_distances(self, mock_broadcaster):
         """Test grasp with custom pre-grasp and retreat distances."""
@@ -115,8 +115,8 @@ class TestGraspObjectOperation:
 
         assert result["success"] is True
         call_args = mock_broadcaster.send_command_and_wait.call_args[0][0]
-        assert call_args["pre_grasp_distance"] == 0.12
-        assert call_args["retreat_distance"] == 0.15
+        assert call_args["parameters"]["pre_grasp_distance"] == 0.12
+        assert call_args["parameters"]["retreat_distance"] == 0.15
 
     def test_grasp_object_invalid_robot_id(self, mock_broadcaster):
         """Test error handling for invalid robot_id."""
@@ -403,11 +403,11 @@ class TestGraspObjectIntegration:
             # Verify all parameters in command
             call_args = broadcaster.send_command_and_wait.call_args[0][0]
             assert call_args["robot_id"] == "Robot1"
-            assert call_args["object_id"] == "Cube_01"
-            assert call_args["use_advanced_planning"] is True
-            assert call_args["preferred_approach"] == "side"
-            assert call_args["pre_grasp_distance"] == 0.10
-            assert call_args["enable_retreat"] is True
-            assert call_args["retreat_distance"] == 0.12
+            assert call_args["parameters"]["object_id"] == "Cube_01"
+            assert call_args["parameters"]["use_advanced_planning"] is True
+            assert call_args["parameters"]["preferred_approach"] == "side"
+            assert call_args["parameters"]["pre_grasp_distance"] == 0.10
+            assert call_args["parameters"]["enable_retreat"] is True
+            assert call_args["parameters"]["retreat_distance"] == 0.12
             assert call_args["request_id"] == 99
-            assert call_args["custom_approach_vector"]["x"] == 1.0
+            assert call_args["parameters"]["custom_approach_vector"]["x"] == 1.0

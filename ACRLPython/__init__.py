@@ -13,7 +13,7 @@ Subpackages:
 - rag: Semantic search for operation matching
 
 Configuration:
-- LLMConfig.py: Centralized configuration for all modules
+- config/: Modular configuration (Servers.py, Vision.py, Rag.py, Robot.py)
 
 Architecture (December 2025):
 - Unified backend via RunRobotController
@@ -26,7 +26,7 @@ __version__ = "2.0.0"
 __author__ = "Jan M. Straub"
 
 # Core exports
-from . import LLMConfig as config
+from . import config
 from .core import TCPServerBase, ServerConfig, UnityProtocol
 
 # Server exports (December 2025 - Unified Architecture)

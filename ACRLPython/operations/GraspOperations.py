@@ -24,11 +24,11 @@ setup_logging(__name__)
 logger = logging.getLogger(__name__)
 
 
-# Lazy import function to avoid circular dependency
-def _get_command_broadcaster():
-    """Lazy import of command broadcaster to avoid circular dependency"""
-    from servers.CommandServer import get_command_broadcaster
-    return get_command_broadcaster()
+# Import from centralized lazy import system (prevents circular dependencies)
+try:
+    from ..core.Imports import get_command_broadcaster as _get_command_broadcaster
+except ImportError:
+    from core.Imports import get_command_broadcaster as _get_command_broadcaster
 
 
 # ============================================================================
@@ -205,23 +205,27 @@ def grasp_object(
                 ],
             )
 
-        # Send command and wait for response
+        # Send command (don't wait - SequenceExecutor handles completion waiting)
         logger.info(f"Sending grasp_object command: {robot_id} -> {object_id}")
-        response = broadcaster.send_command_and_wait(command, timeout=30.0)
+        success = broadcaster.send_command(command, request_id)
 
-        if response and response.get("success"):
-            logger.info(f"Grasp operation succeeded: {response}")
-            return OperationResult.success_result(response.get("data", {}))
+        if success:
+            # Return success immediately - SequenceExecutor will wait for Unity completion
+            logger.debug(f"Grasp command sent successfully, request_id={request_id}")
+            return OperationResult.success_result({
+                "command_sent": True,
+                "robot_id": robot_id,
+                "object_id": object_id,
+                "request_id": request_id,
+            })
         else:
-            error_msg = response.get("error", "Unknown error") if response else "No response from Unity"
-            logger.error(f"Grasp operation failed: {error_msg}")
+            logger.error(f"Failed to send grasp command")
             return OperationResult.error_result(
-                "EXECUTION_FAILED",
-                f"Failed to execute grasp: {error_msg}",
+                "COMMUNICATION_ERROR",
+                "Failed to send grasp command to Unity",
                 [
-                    "Check Unity console for detailed error messages",
-                    "Verify object is reachable and graspable",
-                    "Try different approach direction or disable advanced planning",
+                    "Check Unity is connected to CommandServer",
+                    "Verify network connectivity",
                 ],
             )
 

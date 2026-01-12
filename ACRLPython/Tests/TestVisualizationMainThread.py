@@ -92,7 +92,7 @@ def test_visualization_main_thread():
 
     # Inject test images into UnifiedImageStorage
     try:
-        from servers.ImageServer import UnifiedImageStorage
+        from servers.ImageStorageCore import UnifiedImageStorage
 
         storage = UnifiedImageStorage()
         imgL, imgR = create_test_images()

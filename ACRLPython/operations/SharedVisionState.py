@@ -51,9 +51,17 @@ except ImportError:
 
 # Import config
 try:
-    import LLMConfig as cfg
+    from config.Vision import (
+        CONFLICT_RESOLUTION_STRATEGY,
+        CONFLICT_MIN_DISTANCE_DIFF,
+        OBJECT_CLAIM_TIMEOUT,
+    )
 except ImportError:
-    from .. import LLMConfig as cfg
+    from ..config.Vision import (
+        CONFLICT_RESOLUTION_STRATEGY,
+        CONFLICT_MIN_DISTANCE_DIFF,
+        OBJECT_CLAIM_TIMEOUT,
+    )
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
@@ -128,9 +136,7 @@ class SharedVisionState:
         self.detections: Dict[str, ClaimedObject] = {}
         self.lock = threading.Lock()
         self.claim_timeout = claim_timeout
-        self.conflict_strategy = getattr(
-            cfg, "CONFLICT_RESOLUTION_STRATEGY", "closest_robot"
-        )
+        self.conflict_strategy = CONFLICT_RESOLUTION_STRATEGY
 
         logging.info(
             f"SharedVisionState initialized: timeout={claim_timeout}s, "
@@ -353,7 +359,7 @@ class SharedVisionState:
                 dist1 = self._calculate_distance(robot1_pos, obj.world_position)
                 dist2 = self._calculate_distance(robot2_pos, obj.world_position)
 
-                min_diff = getattr(cfg, "CONFLICT_MIN_DISTANCE_DIFF", 0.05)
+                min_diff = CONFLICT_MIN_DISTANCE_DIFF
 
                 if abs(dist1 - dist2) > min_diff:
                     # Clear winner: assign to closer robot
@@ -457,8 +463,7 @@ def get_shared_vision_state() -> SharedVisionState:
     """
     global _shared_vision_state
     if _shared_vision_state is None:
-        timeout = getattr(cfg, "OBJECT_CLAIM_TIMEOUT", 10.0)
-        _shared_vision_state = SharedVisionState(claim_timeout=timeout)
+        _shared_vision_state = SharedVisionState(claim_timeout=OBJECT_CLAIM_TIMEOUT)
     return _shared_vision_state
 
 

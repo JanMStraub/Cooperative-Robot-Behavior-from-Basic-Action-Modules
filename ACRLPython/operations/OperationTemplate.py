@@ -21,9 +21,14 @@ from typing import Dict, Any
 import time
 import logging
 
+# Import from centralized lazy import system (prevents circular dependencies)
+try:
+    from ..core.Imports import get_command_broadcaster
+except ImportError:
+    from core.Imports import get_command_broadcaster
+
 # Handle both direct execution and package import
 try:
-    from ..servers.CommandServer import get_command_broadcaster
     from .Base import (
         BasicOperation,
         OperationCategory,
@@ -34,7 +39,6 @@ try:
         OperationRelationship,
     )
 except ImportError:
-    from servers.CommandServer import get_command_broadcaster
     from operations.Base import (
         BasicOperation,
         OperationCategory,

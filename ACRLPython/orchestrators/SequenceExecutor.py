@@ -26,14 +26,14 @@ try:
     from ..operations.Base import OperationCategory
     from ..operations.Verification import OperationVerifier
     from ..operations.CoordinationVerifier import CoordinationVerifier
-    from ..operations.WorldState import get_world_state
+    from ..core.Imports import get_world_state
     # from ..servers.CommandServer import get_command_broadcaster
 except ImportError:
     # from operations.Registry import get_global_registry
     from operations.Base import OperationCategory
     from operations.Verification import OperationVerifier
     from operations.CoordinationVerifier import CoordinationVerifier
-    from operations.WorldState import get_world_state
+    from core.Imports import get_world_state
     # from servers.CommandServer import get_command_broadcaster
 
 # Configure logging with safe handler for background threads
@@ -182,8 +182,8 @@ class SequenceExecutor:
             check_completion: Whether to check for operation completion via StatusServer
             enable_verification: Whether to enable formal verification (preconditions/postconditions)
         """
-        # Lazy import to avoid circular dependency
-        from operations.Registry import get_global_registry
+        # Import from centralized lazy import system (prevents circular dependencies)
+        from core.Imports import get_global_registry
 
         self.registry = get_global_registry()
         self.default_timeout = default_timeout
@@ -207,8 +207,8 @@ class SequenceExecutor:
             self.world_state = None
 
     def _get_command_broadcaster(self):
-        """Lazy import of command broadcaster to avoid circular dependency"""
-        from servers.CommandServer import get_command_broadcaster
+        """Get command broadcaster using centralized lazy import system"""
+        from core.Imports import get_command_broadcaster
         return get_command_broadcaster()
 
     @classmethod
@@ -484,12 +484,17 @@ class SequenceExecutor:
                 thread.start()
 
             # Wait for all threads in this group to complete
-            for thread in threads:
+            # Track which threads actually completed vs timed out
+            thread_completed = {}
+            for i, thread in enumerate(threads):
                 thread.join(timeout=timeout + 5.0)  # Add 5s buffer
+                thread_completed[i] = not thread.is_alive()
+                if thread.is_alive():
+                    logger.warning(f"[Group {group_num}] Thread {i} still running after join timeout")
 
             # Process results from this group
             group_success = True
-            for idx, cmd in group_commands:
+            for thread_idx, (idx, cmd) in enumerate(group_commands):
                 if idx in thread_results:
                     result_entry, cmd_result, capture_var = thread_results[idx]
                     results[idx] = result_entry

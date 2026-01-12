@@ -42,7 +42,8 @@ namespace Robotics
         private const float MIN_FORCE_THRESHOLD = 0.1f; // Minimum force to register
 
         // Contact duration tracking (helps distinguish stable grasp from collision)
-        private Dictionary<GameObject, float> _contactStartTime = new Dictionary<GameObject, float>();
+        private Dictionary<GameObject, float> _contactStartTime =
+            new Dictionary<GameObject, float>();
         private const float MIN_CONTACT_DURATION = 0.1f; // Must maintain contact for 100ms
 
         void Start()
@@ -50,20 +51,26 @@ namespace Robotics
             // Validate configuration
             if (leftFinger == null || rightFinger == null)
             {
-                Debug.LogWarning("[GripperContactSensor] Left or right finger not assigned! Contact detection disabled.");
+                Debug.LogWarning(
+                    "[GripperContactSensor] Left or right finger not assigned! Contact detection disabled."
+                );
             }
 
             // Ensure colliders are set to trigger if needed
             var colliders = GetComponentsInChildren<Collider>();
             if (colliders.Length == 0)
             {
-                Debug.LogWarning("[GripperContactSensor] No colliders found! Contact detection may not work.");
+                Debug.LogWarning(
+                    "[GripperContactSensor] No colliders found! Contact detection may not work."
+                );
             }
 
             if (debugLogging)
             {
-                Debug.Log("[GripperContactSensor] Initialized with " +
-                         $"{colliders.Length} colliders, force window size={FORCE_WINDOW_SIZE}");
+                Debug.Log(
+                    "[GripperContactSensor] Initialized with "
+                        + $"{colliders.Length} colliders, force window size={FORCE_WINDOW_SIZE}"
+                );
             }
         }
 
@@ -152,10 +159,10 @@ namespace Robotics
 
             // Get joint forces from ArticulationBody
             // jointForce[0] is the force along the joint's primary axis
-            float leftForce = leftFinger.jointForce.dofCount > 0 ?
-                Mathf.Abs(leftFinger.jointForce[0]) : 0f;
-            float rightForce = rightFinger.jointForce.dofCount > 0 ?
-                Mathf.Abs(rightFinger.jointForce[0]) : 0f;
+            float leftForce =
+                leftFinger.jointForce.dofCount > 0 ? Mathf.Abs(leftFinger.jointForce[0]) : 0f;
+            float rightForce =
+                rightFinger.jointForce.dofCount > 0 ? Mathf.Abs(rightFinger.jointForce[0]) : 0f;
 
             // Average force from both fingers
             float totalForce = (leftForce + rightForce) / 2f;
@@ -257,8 +264,10 @@ namespace Robotics
 
                     if (debugLogging)
                     {
-                        Debug.Log($"[GripperContactSensor] Contact START: {obj.name} " +
-                                 $"(finger: {(isLeftFinger ? "LEFT" : "RIGHT")})");
+                        Debug.Log(
+                            $"[GripperContactSensor] Contact START: {obj.name} "
+                                + $"(finger: {(isLeftFinger ? "LEFT" : "RIGHT")})"
+                        );
                     }
                 }
             }
@@ -276,8 +285,9 @@ namespace Robotics
 
                 // Remove from timing if no longer in contact with either finger
                 GameObject obj = collider.gameObject;
-                bool stillInContact = _leftContacts.Any(c => c?.gameObject == obj) ||
-                                     _rightContacts.Any(c => c?.gameObject == obj);
+                bool stillInContact =
+                    _leftContacts.Any(c => c?.gameObject == obj)
+                    || _rightContacts.Any(c => c?.gameObject == obj);
 
                 if (!stillInContact && _contactStartTime.ContainsKey(obj))
                 {

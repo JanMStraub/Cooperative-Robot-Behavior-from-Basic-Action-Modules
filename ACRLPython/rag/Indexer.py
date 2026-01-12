@@ -16,11 +16,10 @@ from .Embeddings import EmbeddingGenerator
 from .VectorStore import VectorStore
 
 # Import config
-# Import config - try both import styles
 try:
-    import LLMConfig as config
+    from config.Rag import RAG_AUTO_SAVE_INDEX
 except ImportError:
-    from .. import LLMConfig as config
+    from ..config.Rag import RAG_AUTO_SAVE_INDEX
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -50,7 +49,7 @@ class OperationIndexer:
             embedding_generator: Embedding generator (default: new instance)
         """
         # Lazy imports
-        from operations.Registry import get_global_registry
+        from core.Imports import get_global_registry
         from operations.WorkflowPatterns import get_global_workflow_registry
 
         self.registry = registry or get_global_registry()
@@ -390,7 +389,7 @@ class OperationIndexer:
         )
 
         # Save to disk
-        if save and config.RAG_AUTO_SAVE_INDEX:
+        if save and RAG_AUTO_SAVE_INDEX:
             store.save()
 
         return store
