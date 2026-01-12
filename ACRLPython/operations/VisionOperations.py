@@ -9,7 +9,7 @@ Provides operations that use camera images for perception:
 
 import logging
 import time
-from typing import Optional
+from typing import Optional, cast
 
 from .Base import (
     BasicOperation,
@@ -21,17 +21,36 @@ from .Base import (
     OperationRelationship,
 )
 
-# Lazy imports to avoid circular dependency
-# Vision modules are imported inside functions where they're needed
+# Import from centralized lazy import system (prevents circular dependencies)
+try:
+    from ..core.Imports import get_unified_image_storage, get_command_broadcaster
+except ImportError:
+    from core.Imports import get_unified_image_storage, get_command_broadcaster
+
+# Lazy imports for vision modules (imported inside functions where needed)
 # from vision.ObjectDetector import CubeDetector
 # from vision.AnalyzeImage import LMStudioVisionProcessor
 # from vision.StereoConfig import CameraConfig
 
 # Import config
 try:
-    import LLMConfig as cfg
+    from config.Vision import (
+        DEFAULT_STEREO_BASELINE,
+        DEFAULT_STEREO_FOV,
+        DEFAULT_STEREO_CAMERA_POSITION,
+        DEFAULT_STEREO_CAMERA_ROTATION,
+        ENABLE_VISION_STREAMING,
+    )
+    from config.Servers import DEFAULT_LMSTUDIO_MODEL
 except ImportError:
-    from .. import LLMConfig as cfg
+    from ..config.Vision import (
+        DEFAULT_STEREO_BASELINE,
+        DEFAULT_STEREO_FOV,
+        DEFAULT_STEREO_CAMERA_POSITION,
+        DEFAULT_STEREO_CAMERA_ROTATION,
+        ENABLE_VISION_STREAMING,
+    )
+    from ..config.Servers import DEFAULT_LMSTUDIO_MODEL
 
 logger = logging.getLogger(__name__)
 
@@ -105,20 +124,17 @@ def detect_object(
         OperationResult with 3D coordinates
     """
     if baseline is None:
-        baseline = cfg.DEFAULT_STEREO_BASELINE
+        baseline = DEFAULT_STEREO_BASELINE
     if fov is None:
-        fov = cfg.DEFAULT_STEREO_FOV
+        fov = DEFAULT_STEREO_FOV
     if camera_position is None:
-        camera_position = cfg.DEFAULT_STEREO_CAMERA_POSITION
+        camera_position = DEFAULT_STEREO_CAMERA_POSITION
     if camera_rotation is None:
-        camera_rotation = cfg.DEFAULT_STEREO_CAMERA_ROTATION
+        camera_rotation = DEFAULT_STEREO_CAMERA_ROTATION
 
     try:
-        # Get image storage and command broadcaster
-        from servers.ImageStorageCore import UnifiedImageStorage
-        from servers.CommandServer import get_command_broadcaster
-
-        storage = UnifiedImageStorage()
+        # Get image storage and command broadcaster using centralized imports
+        storage = get_unified_image_storage()
         broadcaster = get_command_broadcaster()
 
         # Request stereo image capture from Unity
@@ -210,7 +226,7 @@ def detect_object(
 
         # Check if vision streaming is enabled and cached results are available
         # (cfg is already imported at the top of the file)
-        enable_streaming = getattr(cfg, "ENABLE_VISION_STREAMING", False)
+        enable_streaming = ENABLE_VISION_STREAMING
         use_cached = False
         detection_result = None
 
@@ -313,12 +329,12 @@ def detect_object(
                     "No detections have valid world positions",
                     ["Check stereo calibration", "Objects may be too close/far"],
                 )
-            best = min(valid_matching, key=lambda d: d.world_position[0])
+            best = min(valid_matching, key=lambda d: cast(tuple, d.world_position)[0])
             # Debug: show all candidates
-            for idx, d in enumerate(sorted(valid_matching, key=lambda d: d.world_position[0])):
-                logger.info(f"  Candidate {idx+1}: world_x={d.world_position[0]:.3f}, pixel_x={d.center_x}, conf={d.confidence:.2f}")
+            for idx, d in enumerate(sorted(valid_matching, key=lambda d: cast(tuple, d.world_position)[0])):
+                logger.info(f"  Candidate {idx+1}: world_x={cast(tuple, d.world_position)[0]:.3f}, pixel_x={d.center_x}, conf={d.confidence:.2f}")
             logger.info(
-                f"✓ Selected LEFTMOST {color} cube from {len(matching)} detections (world_x={best.world_position[0]:.3f}, pixel_x={best.center_x})"
+                f"✓ Selected LEFTMOST {color} cube from {len(matching)} detections (world_x={cast(tuple, best.world_position)[0]:.3f}, pixel_x={best.center_x})"
             )
         elif position == "right":
             # Get rightmost detection by world X coordinate (positive = right in world space)
@@ -329,12 +345,12 @@ def detect_object(
                     "No detections have valid world positions",
                     ["Check stereo calibration", "Objects may be too close/far"],
                 )
-            best = max(valid_matching, key=lambda d: d.world_position[0])
+            best = max(valid_matching, key=lambda d: cast(tuple, d.world_position)[0])
             # Debug: show all candidates
-            for idx, d in enumerate(sorted(valid_matching, key=lambda d: d.world_position[0], reverse=True)):
-                logger.info(f"  Candidate {idx+1}: world_x={d.world_position[0]:.3f}, pixel_x={d.center_x}, conf={d.confidence:.2f}")
+            for idx, d in enumerate(sorted(valid_matching, key=lambda d: cast(tuple, d.world_position)[0], reverse=True)):
+                logger.info(f"  Candidate {idx+1}: world_x={cast(tuple, d.world_position)[0]:.3f}, pixel_x={d.center_x}, conf={d.confidence:.2f}")
             logger.info(
-                f"✓ Selected RIGHTMOST {color} cube from {len(matching)} detections (world_x={best.world_position[0]:.3f}, pixel_x={best.center_x})"
+                f"✓ Selected RIGHTMOST {color} cube from {len(matching)} detections (world_x={cast(tuple, best.world_position)[0]:.3f}, pixel_x={best.center_x})"
             )
         else:
             return OperationResult.error_result(
@@ -416,28 +432,28 @@ def create_detect_object_operation() -> BasicOperation:
                 type="float",
                 description="Stereo camera baseline in meters",
                 required=False,
-                default=cfg.DEFAULT_STEREO_BASELINE,
+                default=DEFAULT_STEREO_BASELINE,
             ),
             OperationParameter(
                 name="fov",
                 type="float",
                 description="Camera field of view in degrees",
                 required=False,
-                default=cfg.DEFAULT_STEREO_FOV,
+                default=DEFAULT_STEREO_FOV,
             ),
             OperationParameter(
                 name="camera_position",
                 type="list",
                 description="Camera position [x, y, z] in world space",
                 required=False,
-                default=cfg.DEFAULT_STEREO_CAMERA_POSITION,
+                default=DEFAULT_STEREO_CAMERA_POSITION,
             ),
             OperationParameter(
                 name="camera_rotation",
                 type="list",
                 description="Camera rotation [pitch, yaw, roll] in degrees",
                 required=False,
-                default=cfg.DEFAULT_STEREO_CAMERA_ROTATION,
+                default=DEFAULT_STEREO_CAMERA_ROTATION,
             ),
         ],
         preconditions=[
@@ -485,13 +501,11 @@ def analyze_scene(
         OperationResult with analysis text
     """
     if model is None:
-        model = cfg.DEFAULT_LMSTUDIO_MODEL
+        model = DEFAULT_LMSTUDIO_MODEL
 
     try:
-        # Get image storage
-        from servers.ImageStorageCore import UnifiedImageStorage
-
-        storage = UnifiedImageStorage()
+        # Get image storage using centralized imports
+        storage = get_unified_image_storage()
 
         # Try to get single camera image
         image = storage.get_single_image(camera_id)
@@ -583,7 +597,7 @@ def create_analyze_scene_operation() -> BasicOperation:
                 type="str",
                 description="LLM model to use",
                 required=False,
-                default=cfg.DEFAULT_LMSTUDIO_MODEL,
+                default=DEFAULT_LMSTUDIO_MODEL,
             ),
         ],
         preconditions=[
@@ -672,20 +686,17 @@ def detect_object_stereo(
     """
     # Set defaults from config
     if baseline is None:
-        baseline = cfg.DEFAULT_STEREO_BASELINE
+        baseline = DEFAULT_STEREO_BASELINE
     if fov is None:
-        fov = cfg.DEFAULT_STEREO_FOV
+        fov = DEFAULT_STEREO_FOV
     if camera_position is None:
-        camera_position = cfg.DEFAULT_STEREO_CAMERA_POSITION
+        camera_position = DEFAULT_STEREO_CAMERA_POSITION
     if camera_rotation is None:
-        camera_rotation = cfg.DEFAULT_STEREO_CAMERA_ROTATION
+        camera_rotation = DEFAULT_STEREO_CAMERA_ROTATION
 
     try:
-        # Get image storage and command broadcaster
-        from servers.ImageStorageCore import UnifiedImageStorage
-        from servers.CommandServer import get_command_broadcaster
-
-        storage = UnifiedImageStorage()
+        # Get image storage and command broadcaster using centralized imports
+        storage = get_unified_image_storage()
         broadcaster = get_command_broadcaster()
 
         # Get stereo images
@@ -788,7 +799,7 @@ def detect_object_stereo(
 
         # Check if vision streaming is enabled and cached results are available
         # (cfg is already imported at the top of the file)
-        enable_streaming = getattr(cfg, "ENABLE_VISION_STREAMING", False)
+        enable_streaming = ENABLE_VISION_STREAMING
         use_cached = False
         detection_result = None
 
@@ -928,13 +939,14 @@ def detect_object_stereo(
                     "No detections have valid world positions",
                     ["Check stereo calibration", "Objects may be too close/far"],
                 )
-            best = min(valid_detections, key=lambda d: d.world_position[0])
+            best = min(valid_detections, key=lambda d: cast(tuple, d.world_position)[0])
             # Debug: show all candidates sorted by world_x
             logger.info(f"DEBUG: All {len(valid_detections)} candidates for 'left' selection:")
-            for idx, d in enumerate(sorted(valid_detections, key=lambda d: d.world_position[0])):
-                logger.info(f"  Candidate {idx+1}: world_pos=({d.world_position[0]:.3f}, {d.world_position[1]:.3f}, {d.world_position[2]:.3f}), pixel_x={d.center_x}, color={d.color}, conf={d.confidence:.2f}")
+            for idx, d in enumerate(sorted(valid_detections, key=lambda d: cast(tuple, d.world_position)[0])):
+                wp = cast(tuple, d.world_position)
+                logger.info(f"  Candidate {idx+1}: world_pos=({wp[0]:.3f}, {wp[1]:.3f}, {wp[2]:.3f}), pixel_x={d.center_x}, color={d.color}, conf={d.confidence:.2f}")
             logger.info(
-                f"Selected leftmost detection from {len(detections)} (world_x={best.world_position[0]:.3f}, pixel_x={best.center_x})"
+                f"Selected leftmost detection from {len(detections)} (world_x={cast(tuple, best.world_position)[0]:.3f}, pixel_x={best.center_x})"
             )
         elif selection == "right":
             # Use world X coordinate (positive = right in world space)
@@ -945,9 +957,9 @@ def detect_object_stereo(
                     "No detections have valid world positions",
                     ["Check stereo calibration", "Objects may be too close/far"],
                 )
-            best = max(valid_detections, key=lambda d: d.world_position[0])
+            best = max(valid_detections, key=lambda d: cast(tuple, d.world_position)[0])
             logger.info(
-                f"Selected rightmost detection from {len(detections)} (world_x={best.world_position[0]:.3f}, pixel_x={best.center_x})"
+                f"Selected rightmost detection from {len(detections)} (world_x={cast(tuple, best.world_position)[0]:.3f}, pixel_x={best.center_x})"
             )
         elif selection == "closest":
 

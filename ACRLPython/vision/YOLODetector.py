@@ -65,9 +65,37 @@ except ImportError:
 
 # Import config
 try:
-    import LLMConfig as cfg
+    from config.Vision import (
+        YOLO_CONFIDENCE_THRESHOLD,
+        YOLO_IOU_THRESHOLD,
+        MIN_CUBE_AREA_PX,
+        MAX_CUBE_AREA_PX,
+        ENABLE_DEBUG_IMAGES,
+        DEBUG_IMAGES_DIR,
+        ENABLE_STEREO_VALIDATION,
+        STEREO_MAX_Y_DIFF,
+        STEREO_MAX_SIZE_RATIO,
+        STEREO_MIN_IOU,
+        ENABLE_ADAPTIVE_SGBM,
+        DEPTH_SAMPLING_STRATEGY,
+        DEPTH_SAMPLE_INNER_PERCENT,
+    )
 except ImportError:
-    from .. import LLMConfig as cfg
+    from ..config.Vision import (
+        YOLO_CONFIDENCE_THRESHOLD,
+        YOLO_IOU_THRESHOLD,
+        MIN_CUBE_AREA_PX,
+        MAX_CUBE_AREA_PX,
+        ENABLE_DEBUG_IMAGES,
+        DEBUG_IMAGES_DIR,
+        ENABLE_STEREO_VALIDATION,
+        STEREO_MAX_Y_DIFF,
+        STEREO_MAX_SIZE_RATIO,
+        STEREO_MIN_IOU,
+        ENABLE_ADAPTIVE_SGBM,
+        DEPTH_SAMPLING_STRATEGY,
+        DEPTH_SAMPLE_INNER_PERCENT,
+    )
 
 # Import detection data models from shared module
 try:
@@ -259,15 +287,15 @@ class YOLODetector:
             )
 
         # Detection thresholds
-        self.conf_threshold = getattr(cfg, "YOLO_CONFIDENCE_THRESHOLD", 0.5)
-        self.iou_threshold = getattr(cfg, "YOLO_IOU_THRESHOLD", 0.45)
-        self.min_area = getattr(cfg, "MIN_CUBE_AREA_PX", 100)
-        self.max_area = getattr(cfg, "MAX_CUBE_AREA_PX", 100000)
+        self.conf_threshold = YOLO_CONFIDENCE_THRESHOLD
+        self.iou_threshold = YOLO_IOU_THRESHOLD
+        self.min_area = MIN_CUBE_AREA_PX
+        self.max_area = MAX_CUBE_AREA_PX
 
         # Debug settings
-        self.enable_debug = getattr(cfg, "ENABLE_DEBUG_IMAGES", False)
+        self.enable_debug = ENABLE_DEBUG_IMAGES
         if self.enable_debug:
-            self.debug_dir = Path(getattr(cfg, "DEBUG_IMAGES_DIR", "./debug"))
+            self.debug_dir = Path(DEBUG_IMAGES_DIR)
             self.debug_dir.mkdir(parents=True, exist_ok=True)
 
         # Log initialization summary
@@ -527,14 +555,8 @@ class YOLODetector:
                 logging.error("No camera config available")
                 return DetectionResult(camera_id, 0, 0, [])
 
-        # Import config for stereo validation check
-        try:
-            import LLMConfig as cfg
-        except ImportError:
-            from .. import LLMConfig as cfg
-
         # Stereo validation: Detect in both images and match (optional)
-        enable_stereo_validation = getattr(cfg, "ENABLE_STEREO_VALIDATION", False)
+        enable_stereo_validation = ENABLE_STEREO_VALIDATION
 
         if enable_stereo_validation:
             logging.debug("Stereo validation enabled - detecting in both L/R images")
@@ -550,9 +572,9 @@ class YOLODetector:
             )
 
             # Match detections between left and right
-            max_y_diff = getattr(cfg, "STEREO_MAX_Y_DIFF", 10)
-            max_size_ratio = getattr(cfg, "STEREO_MAX_SIZE_RATIO", 0.3)
-            min_iou = getattr(cfg, "STEREO_MIN_IOU", 0.0)
+            max_y_diff = STEREO_MAX_Y_DIFF
+            max_size_ratio = STEREO_MAX_SIZE_RATIO
+            min_iou = STEREO_MIN_IOU
 
             matched_pairs = self._match_stereo_detections(
                 detection_result_left.detections,
@@ -603,12 +625,6 @@ class YOLODetector:
         # Compute disparity map using default reconstruction config (or adaptive preset)
         from .StereoConfig import DEFAULT_RECONSTRUCTION_CONFIG
 
-        # Import config
-        try:
-            import LLMConfig as cfg
-        except ImportError:
-            from .. import LLMConfig as cfg
-
         # Runtime check for stereo functions (sanity check)
         if (
             calc_disparity is None
@@ -621,7 +637,7 @@ class YOLODetector:
 
         # Calculate stereo disparity map (shared across all detections for efficiency)
         # Use adaptive SGBM if enabled, otherwise use default config
-        if getattr(cfg, "ENABLE_ADAPTIVE_SGBM", False):
+        if ENABLE_ADAPTIVE_SGBM:
             # Import SGBM preset functions
             try:
                 from .DepthEstimator import (
@@ -651,7 +667,7 @@ class YOLODetector:
         h, w = imgL.shape[:2]
 
         # Import bbox-guided depth function if enabled
-        use_bbox_sampling = getattr(cfg, "DEPTH_SAMPLING_STRATEGY", None) is not None
+        use_bbox_sampling = DEPTH_SAMPLING_STRATEGY is not None
 
         # Import functions unconditionally to avoid "possibly unbound" errors
         try:
@@ -673,8 +689,8 @@ class YOLODetector:
                 focal_length_px = get_focal_length_pixels(camera_config, w, h)
 
                 bbox = (det.bbox_x, det.bbox_y, det.bbox_w, det.bbox_h)
-                strategy = getattr(cfg, "DEPTH_SAMPLING_STRATEGY", "median_inner_50pct")
-                inner_pct = getattr(cfg, "DEPTH_SAMPLE_INNER_PERCENT", 50)
+                strategy = DEPTH_SAMPLING_STRATEGY if DEPTH_SAMPLING_STRATEGY else "median_inner_50pct"
+                inner_pct = DEPTH_SAMPLE_INNER_PERCENT
 
                 bbox_result = estimate_depth_from_bbox(
                     disparity,

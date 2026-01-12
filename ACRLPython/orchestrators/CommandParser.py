@@ -26,16 +26,14 @@ import requests
 # Handle both direct execution and package import
 try:
     from ..rag import RAGSystem
-    # Lazy import to avoid circular dependency
-    # from ..operations.Registry import get_global_registry
-    from .. import LLMConfig as cfg
+    from ..config.Servers import LMSTUDIO_BASE_URL, DEFAULT_LMSTUDIO_MODEL
 except ImportError:
     from rag import RAGSystem
-    # from operations.Registry import get_global_registry
-    import LLMConfig as cfg
+    from config.Servers import LMSTUDIO_BASE_URL, DEFAULT_LMSTUDIO_MODEL
 
 # Configure logging
 from core.LoggingSetup import setup_logging
+
 setup_logging(__name__)
 logger = logging.getLogger(__name__)
 
@@ -62,11 +60,11 @@ class CommandParser:
             model: Model name for parsing (default from config)
             use_rag: Whether to use RAG for semantic operation context
         """
-        # Lazy import to avoid circular dependency
-        from operations.Registry import get_global_registry
+        # Import from centralized lazy import system (prevents circular dependencies)
+        from core.Imports import get_global_registry
 
-        self.lm_studio_url = lm_studio_url or cfg.LMSTUDIO_BASE_URL
-        self.model = model or cfg.DEFAULT_LMSTUDIO_MODEL
+        self.lm_studio_url = lm_studio_url or LMSTUDIO_BASE_URL
+        self.model = model or DEFAULT_LMSTUDIO_MODEL
         self.registry = get_global_registry()
 
         # Initialize RAG system for semantic operation search
@@ -150,7 +148,7 @@ class CommandParser:
                         {"role": "user", "content": prompt},
                     ],
                     "temperature": 0.1,  # Low temperature for deterministic parsing
-                    "max_tokens": 1000,
+                    "max_tokens": 3000,  # Increased for multi-robot coordination (was 1000)
                 },
                 timeout=90,
             )
@@ -239,10 +237,10 @@ class CommandParser:
 
         Example for multi-robot handoff:
         {{
-        "reasoning": "Robot1 detects and picks up cube. Robot2 waits for signal, then both move to handoff position. Robot2 grips, then Robot1 releases.",
+        "reasoning": "Robot1 detects red cube, moves to it, and grips. Robot2 waits for signal, then both move to handoff position. Robot2 grips, then Robot1 releases.",
         "plan": [
-            {{"parallel_group": 1, "robot": "Robot1", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "capture_var": "cube"}},
-            {{"parallel_group": 2, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "position": "$cube"}}}},
+            {{"parallel_group": 1, "robot": "Robot1", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "capture_var": "target"}},
+            {{"parallel_group": 2, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "position": "$target"}}}},
             {{"parallel_group": 3, "robot": "Robot1", "operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": false}}}},
             {{"parallel_group": 3, "robot": "Robot1", "operation": "signal", "params": {{"event_name": "r1_gripped"}}}},
             {{"parallel_group": 3, "robot": "Robot2", "operation": "wait_for_signal", "params": {{"event_name": "r1_gripped"}}}},
@@ -275,16 +273,38 @@ class CommandParser:
 
         === VARIABLE PASSING ===
 
-        When detect_object is followed by "move to it/there/that":
-        - Add "capture_var": "target" to the detect_object command
-        - Use "position": "$target" in the move_to_coordinate params (NOT x, y, z)
+        CRITICAL: Variables must be DEFINED before they are USED!
+        - Use "capture_var": "target" on detect_object_stereo to store the result
+        - Use "$target" in LATER operations to reference the stored result
+        - NEVER use a $variable before it has been captured by a previous operation
 
-        Example:
+        Example for move to detected object:
         {{
-        "plan": [
+        "commands": [
             {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "blue"}}, "capture_var": "target"}},
             {{"operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "position": "$target"}}}},
             {{"operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": false}}}}
+        ]
+        }}
+
+        === GRASP OBJECT OPERATION ===
+
+        For "grab/grasp the [color] cube" commands, use grasp_object with a LITERAL object_id:
+        - Object names in Unity follow the pattern: "red_cube", "blue_cube", "green_cube"
+        - Use the literal object name directly, NOT a $variable
+
+        Example for grabbing a red cube:
+        {{
+        "commands": [
+            {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "red_cube"}}}}
+        ]
+        }}
+
+        If you need detection first (e.g., to verify the object exists), detect THEN grasp:
+        {{
+        "commands": [
+            {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "capture_var": "target"}},
+            {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "red_cube"}}}}
         ]
         }}
 
@@ -397,25 +417,34 @@ class CommandParser:
         # Try direct JSON parse
         try:
             return json.loads(content)
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as e:
+            logger.debug(f"Direct JSON parse failed: {e}")
 
         # Try to find JSON in markdown code block
         json_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", content, re.DOTALL)
         if json_match:
+            json_str = json_match.group(1).strip()
             try:
-                return json.loads(json_match.group(1))
-            except json.JSONDecodeError:
-                pass
+                return json.loads(json_str)
+            except json.JSONDecodeError as e:
+                logger.warning(
+                    f"Markdown JSON parse failed: {e}. Content length: {len(json_str)}, preview: {json_str[:200]}"
+                )
 
         # Try to find JSON object in text
         json_match = re.search(r"\{.*\}", content, re.DOTALL)
         if json_match:
+            json_str = json_match.group(0)
             try:
-                return json.loads(json_match.group(0))
-            except json.JSONDecodeError:
-                pass
+                return json.loads(json_str)
+            except json.JSONDecodeError as e:
+                logger.warning(
+                    f"Regex JSON parse failed: {e}. Content length: {len(json_str)}"
+                )
 
+        logger.error(
+            f"All JSON extraction methods failed. Response length: {len(content)}, preview: {content[:500]}"
+        )
         return None
 
     def _validate_commands(

@@ -21,12 +21,22 @@ from typing import List, Optional, Dict, Tuple
 from enum import Enum
 from datetime import datetime
 
-# Import config - try both import styles
+# Import config
 try:
-    import LLMConfig as cfg
+    from config.Servers import (
+        DEFAULT_HOST,
+        MAX_CONNECTIONS_BACKLOG,
+        MAX_CLIENT_THREADS,
+        SOCKET_ACCEPT_TIMEOUT,
+    )
     from core.LoggingSetup import setup_logging
 except ImportError:
-    from .. import LLMConfig as cfg
+    from ..config.Servers import (
+        DEFAULT_HOST,
+        MAX_CONNECTIONS_BACKLOG,
+        MAX_CLIENT_THREADS,
+        SOCKET_ACCEPT_TIMEOUT,
+    )
     from ..core.LoggingSetup import setup_logging
 
 
@@ -59,15 +69,11 @@ class ClientInfo:
 class ServerConfig:
     """Configuration for TCP servers"""
 
-    host: str = cfg.DEFAULT_HOST
+    host: str = DEFAULT_HOST
     port: int = 5000
-    max_connections: int = cfg.MAX_CONNECTIONS_BACKLOG  # Max backlog for listen()
-    max_client_threads: int = (
-        cfg.MAX_CLIENT_THREADS
-    )  # Max concurrent client handler threads
-    socket_timeout: float = (
-        cfg.SOCKET_ACCEPT_TIMEOUT
-    )  # Timeout for accept() to allow periodic shutdown checks
+    max_connections: int = MAX_CONNECTIONS_BACKLOG  # Max backlog for listen()
+    max_client_threads: int = MAX_CLIENT_THREADS  # Max concurrent client handler threads
+    socket_timeout: float = SOCKET_ACCEPT_TIMEOUT  # Timeout for accept() to allow periodic shutdown checks
 
 
 class TCPServerBase(ABC):

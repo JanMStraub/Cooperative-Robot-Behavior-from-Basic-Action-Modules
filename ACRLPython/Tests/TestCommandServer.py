@@ -282,11 +282,11 @@ class TestCommandServerCommands:
 
     def test_receive_completion_too_large(self, command_server, mock_client_socket):
         """Test receiving completion message that's too large."""
-        import LLMConfig as cfg
+        from config.Servers import MAX_STRING_LENGTH
 
         header = struct.pack("<B", MessageType.RESULT) + struct.pack("<I", 1)
         # JSON length exceeds maximum
-        json_len = struct.pack("<I", cfg.MAX_STRING_LENGTH * 20)
+        json_len = struct.pack("<I", MAX_STRING_LENGTH * 20)
 
         mock_client_socket.recv = Mock(side_effect=[
             header,

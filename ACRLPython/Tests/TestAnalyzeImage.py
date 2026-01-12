@@ -16,7 +16,7 @@ from vision.AnalyzeImage import (
     get_images_from_server,
     save_response,
 )
-from .. import LLMConfig as cfg
+from config.Servers import DEFAULT_LMSTUDIO_MODEL, LMSTUDIO_BASE_URL
 
 
 class TestLMStudioVisionProcessorInitialization:
@@ -31,8 +31,8 @@ class TestLMStudioVisionProcessorInitialization:
 
         processor = LMStudioVisionProcessor()
 
-        assert processor._model == cfg.DEFAULT_LMSTUDIO_MODEL
-        assert processor._base_url == cfg.LMSTUDIO_BASE_URL
+        assert processor._model == DEFAULT_LMSTUDIO_MODEL
+        assert processor._base_url == LMSTUDIO_BASE_URL
         mock_client.models.list.assert_called_once()
 
     @patch("vision.AnalyzeImage.OpenAI")
@@ -134,7 +134,7 @@ class TestLMStudioVisionProcessorSendImages:
 
         assert result["success"] is True
         assert result["response"] == "I see a gradient image with red and blue colors."
-        assert result["metadata"]["model"] == cfg.DEFAULT_LMSTUDIO_MODEL
+        assert result["metadata"]["model"] == DEFAULT_LMSTUDIO_MODEL
         assert result["metadata"]["image_count"] == 1
         assert result["metadata"]["camera_ids"] == ["camera1"]
         assert result["metadata"]["prompt"] == "What do you see?"
@@ -256,15 +256,15 @@ class TestLMStudioVisionProcessorSendImages:
 class TestGetImagesFromServer:
     """Test get_images_from_server function"""
 
-    @patch("vision.AnalyzeImage.UnifiedImageStorage")
-    def test_get_images_all_cameras(self, mock_storage_class, sample_image):
+    @patch("vision.AnalyzeImage.get_unified_image_storage")
+    def test_get_images_all_cameras(self, mock_get_storage, sample_image):
         """Test getting images from all cameras"""
         mock_storage = MagicMock()
         mock_storage.get_all_camera_ids.return_value = ["camera1", "camera2"]
         mock_storage.get_single_image.return_value = sample_image
         mock_storage.get_single_prompt.return_value = "test prompt"
         mock_storage.get_single_age.return_value = 1.0
-        mock_storage_class.return_value = mock_storage
+        mock_get_storage.return_value = mock_storage
 
         images, camera_ids, prompts = get_images_from_server()
 
@@ -273,36 +273,36 @@ class TestGetImagesFromServer:
         assert len(prompts) == 2
         assert camera_ids == ["camera1", "camera2"]
 
-    @patch("vision.AnalyzeImage.UnifiedImageStorage")
-    def test_get_images_specific_cameras(self, mock_storage_class, sample_image):
+    @patch("vision.AnalyzeImage.get_unified_image_storage")
+    def test_get_images_specific_cameras(self, mock_get_storage, sample_image):
         """Test getting images from specific cameras"""
         mock_storage = MagicMock()
         mock_storage.get_single_image.return_value = sample_image
         mock_storage.get_single_prompt.return_value = "prompt"
         mock_storage.get_single_age.return_value = 1.0
-        mock_storage_class.return_value = mock_storage
+        mock_get_storage.return_value = mock_storage
 
         images, camera_ids, prompts = get_images_from_server(["camera1"])
 
         assert len(images) == 1
         assert camera_ids == ["camera1"]
 
-    @patch("vision.AnalyzeImage.UnifiedImageStorage")
-    def test_get_images_no_cameras_raises(self, mock_storage_class):
+    @patch("vision.AnalyzeImage.get_unified_image_storage")
+    def test_get_images_no_cameras_raises(self, mock_get_storage):
         """Test that no cameras raises ValueError"""
         mock_storage = MagicMock()
         mock_storage.get_all_camera_ids.return_value = []
-        mock_storage_class.return_value = mock_storage
+        mock_get_storage.return_value = mock_storage
 
         with pytest.raises(ValueError, match="No cameras available"):
             get_images_from_server()
 
-    @patch("vision.AnalyzeImage.UnifiedImageStorage")
-    def test_get_images_missing_camera(self, mock_storage_class):
+    @patch("vision.AnalyzeImage.get_unified_image_storage")
+    def test_get_images_missing_camera(self, mock_get_storage):
         """Test handling of missing camera images"""
         mock_storage = MagicMock()
         mock_storage.get_single_image.return_value = None
-        mock_storage_class.return_value = mock_storage
+        mock_get_storage.return_value = mock_storage
 
         with pytest.raises(ValueError, match="No images available"):
             get_images_from_server(["nonexistent"])

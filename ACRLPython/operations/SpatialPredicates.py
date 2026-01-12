@@ -13,9 +13,23 @@ import math
 import logging
 from typing import Tuple, Dict, Callable, Any, Optional
 try:
-    from .. import LLMConfig
+    from config.Robot import (
+        ROBOT_BASE_POSITIONS,
+        ROBOT_WORKSPACE_ASSIGNMENTS,
+        WORKSPACE_REGIONS,
+        MAX_ROBOT_REACH,
+        MIN_ROBOT_SEPARATION,
+        COLLISION_SAFETY_MARGIN,
+    )
 except ImportError:
-    import LLMConfig
+    from ..config.Robot import (
+        ROBOT_BASE_POSITIONS,
+        ROBOT_WORKSPACE_ASSIGNMENTS,
+        WORKSPACE_REGIONS,
+        MAX_ROBOT_REACH,
+        MIN_ROBOT_SEPARATION,
+        COLLISION_SAFETY_MARGIN,
+    )
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -80,7 +94,7 @@ def target_within_reach(
     """
     try:
         # Get robot base position
-        base_pos = LLMConfig.ROBOT_BASE_POSITIONS.get(robot_id)
+        base_pos = ROBOT_BASE_POSITIONS.get(robot_id)
         if base_pos is None:
             return False, f"Unknown robot '{robot_id}' - not in ROBOT_BASE_POSITIONS"
 
@@ -91,7 +105,7 @@ def target_within_reach(
         distance = math.sqrt(dx * dx + dy * dy + dz * dz)
 
         # Check against maximum reach
-        max_reach = LLMConfig.MAX_ROBOT_REACH
+        max_reach = MAX_ROBOT_REACH
         if distance > max_reach:
             return (
                 False,
@@ -122,12 +136,12 @@ def is_in_robot_workspace(
     """
     try:
         # Get robot's assigned workspace
-        workspace_name = LLMConfig.ROBOT_WORKSPACE_ASSIGNMENTS.get(robot_id)
+        workspace_name = ROBOT_WORKSPACE_ASSIGNMENTS.get(robot_id)
         if workspace_name is None:
             return False, f"Robot '{robot_id}' has no assigned workspace"
 
         # Get workspace bounds
-        workspace = LLMConfig.WORKSPACE_REGIONS.get(workspace_name)
+        workspace = WORKSPACE_REGIONS.get(workspace_name)
         if workspace is None:
             return (
                 False,
@@ -172,7 +186,7 @@ def is_in_shared_zone(x: float, y: float, z: float) -> Tuple[bool, str]:
         (is_valid, reason_if_invalid)
     """
     try:
-        shared_zone = LLMConfig.WORKSPACE_REGIONS.get("shared_zone")
+        shared_zone = WORKSPACE_REGIONS.get("shared_zone")
         if shared_zone is None:
             return False, "Shared zone not defined in WORKSPACE_REGIONS"
 
@@ -207,7 +221,7 @@ def robot_is_initialized(robot_id: str, world_state=None) -> Tuple[bool, str]:
     """
     try:
         # Check if robot exists in configuration
-        if robot_id not in LLMConfig.ROBOT_BASE_POSITIONS:
+        if robot_id not in ROBOT_BASE_POSITIONS:
             return False, f"Robot '{robot_id}' not found in system configuration"
 
         # If world_state is provided, query actual status
@@ -424,7 +438,7 @@ def robots_will_collide(
         dz = target1[2] - target2[2]
         target_distance = math.sqrt(dx * dx + dy * dy + dz * dz)
 
-        min_separation = LLMConfig.MIN_ROBOT_SEPARATION
+        min_separation = MIN_ROBOT_SEPARATION
         if target_distance < min_separation:
             return True, (
                 f"Target positions too close: {target_distance:.3f}m "
@@ -444,7 +458,7 @@ def robots_will_collide(
                     pos1, target1, pos2, target2
                 )
 
-                safety_margin = LLMConfig.COLLISION_SAFETY_MARGIN
+                safety_margin = COLLISION_SAFETY_MARGIN
                 if min_path_distance < safety_margin:
                     return True, (
                         f"Paths will intersect: minimum distance {min_path_distance:.3f}m "
@@ -550,7 +564,7 @@ def _get_workspace_containing_point(x: float, y: float, z: float) -> Optional[st
     Returns:
         Workspace region name or None if not in any region
     """
-    for region_name, bounds in LLMConfig.WORKSPACE_REGIONS.items():
+    for region_name, bounds in WORKSPACE_REGIONS.items():
         if (
             bounds["x_min"] <= x <= bounds["x_max"]
             and bounds["y_min"] <= y <= bounds["y_max"]

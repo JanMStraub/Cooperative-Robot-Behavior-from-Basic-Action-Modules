@@ -232,7 +232,7 @@ class TestYOLOIntegration:
     @pytest.mark.skipif(not YOLO_AVAILABLE, reason="YOLO not available")
     @patch("vision.ObjectDetector.YOLO_AVAILABLE", True)
     @patch("vision.ObjectDetector.YOLODetector")
-    @patch("vision.ObjectDetector.cfg.USE_YOLO", True)
+    @patch("vision.ObjectDetector.USE_YOLO", True)
     def test_cube_detector_uses_yolo_when_enabled(self, mock_yolo_detector_class):
         """Test that CubeDetector uses YOLO when enabled in config"""
         from vision.ObjectDetector import CubeDetector

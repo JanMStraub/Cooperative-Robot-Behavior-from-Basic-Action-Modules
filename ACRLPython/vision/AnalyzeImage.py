@@ -48,29 +48,55 @@ except ImportError:
     )
     sys.exit(1)
 
-# Import config - try both import styles
+# Import config
 try:
-    import LLMConfig as cfg
+    from config.Servers import (
+        LOG_LEVEL,
+        LOG_FORMAT,
+        VISION_MODELS,
+        DEFAULT_LMSTUDIO_MODEL,
+        LMSTUDIO_BASE_URL,
+        DEFAULT_TEMPERATURE,
+        DEFAULT_OUTPUT_DIR,
+    )
+    from config.Vision import (
+        IMAGE_CHECK_INTERVAL,
+        MIN_IMAGE_AGE,
+        MAX_IMAGE_AGE,
+    )
 except ImportError:
-    from .. import LLMConfig as cfg
+    from ..config.Servers import (
+        LOG_LEVEL,
+        LOG_FORMAT,
+        VISION_MODELS,
+        DEFAULT_LMSTUDIO_MODEL,
+        LMSTUDIO_BASE_URL,
+        DEFAULT_TEMPERATURE,
+        DEFAULT_OUTPUT_DIR,
+    )
+    from ..config.Vision import (
+        IMAGE_CHECK_INTERVAL,
+        MIN_IMAGE_AGE,
+        MAX_IMAGE_AGE,
+    )
 
-# Import UnifiedImageStorage from core (not server to avoid circular dependency)
+# Import from centralized lazy import system (prevents circular dependencies)
 try:
-    from servers.ImageStorageCore import UnifiedImageStorage
+    from ..core.Imports import get_unified_image_storage
 except ImportError:
-    from ..servers.ImageStorageCore import UnifiedImageStorage
+    from core.Imports import get_unified_image_storage
 
 # Configure logging
-logging.basicConfig(level=getattr(logging, cfg.LOG_LEVEL), format=cfg.LOG_FORMAT)
+logging.basicConfig(level=getattr(logging, LOG_LEVEL), format=LOG_FORMAT)
 
 
 class LMStudioVisionProcessor:
     """Handles sending screenshots to LM Studio for vision-based LLM processing"""
 
     # Popular LM Studio vision models (from config)
-    VISION_MODELS = cfg.VISION_MODELS
+    VISION_MODELS_LIST = VISION_MODELS
 
-    DEFAULT_MODEL = cfg.DEFAULT_LMSTUDIO_MODEL
+    DEFAULT_MODEL = DEFAULT_LMSTUDIO_MODEL
 
     def __init__(self, model: str = DEFAULT_MODEL, base_url: Optional[str] = None):
         """
@@ -81,7 +107,7 @@ class LMStudioVisionProcessor:
             base_url: LM Studio server base URL (default: http://127.0.0.1:1234/v1)
         """
         self._model = model
-        self._base_url = base_url if base_url else cfg.LMSTUDIO_BASE_URL
+        self._base_url = base_url if base_url else LMSTUDIO_BASE_URL
         self._client = OpenAI(base_url=self._base_url, api_key="not-needed")
 
         # Test connection
@@ -134,7 +160,7 @@ class LMStudioVisionProcessor:
 
         # Use config default if not specified
         if temperature is None:
-            temperature = cfg.DEFAULT_TEMPERATURE
+            temperature = DEFAULT_TEMPERATURE
 
         logging.info(f"Processing {len(images)} image(s) with LM Studio...")
 
@@ -227,7 +253,7 @@ def get_images_from_server(
     Returns:
         Tuple of (images list, camera_ids list, prompts list)
     """
-    storage = UnifiedImageStorage()
+    storage = get_unified_image_storage()
 
     # Get all available cameras if not specified
     if camera_ids is None:
@@ -340,13 +366,13 @@ Note: StreamingServer.py must be running for this script to work.
     )
     lmstudio_group.add_argument(
         "--base-url",
-        help=f"LM Studio server base URL (default: {cfg.LMSTUDIO_BASE_URL})",
+        help=f"LM Studio server base URL (default: {LMSTUDIO_BASE_URL})",
     )
     lmstudio_group.add_argument(
         "--temperature",
         type=float,
-        default=cfg.DEFAULT_TEMPERATURE,
-        help=f"Sampling temperature 0.0-2.0 (default: {cfg.DEFAULT_TEMPERATURE})",
+        default=DEFAULT_TEMPERATURE,
+        help=f"Sampling temperature 0.0-2.0 (default: {DEFAULT_TEMPERATURE})",
     )
 
     # Server options
@@ -355,28 +381,28 @@ Note: StreamingServer.py must be running for this script to work.
         "--interval",
         "-i",
         type=float,
-        default=cfg.IMAGE_CHECK_INTERVAL,
-        help=f"Check interval in seconds (default: {cfg.IMAGE_CHECK_INTERVAL})",
+        default=IMAGE_CHECK_INTERVAL,
+        help=f"Check interval in seconds (default: {IMAGE_CHECK_INTERVAL})",
     )
     server_group.add_argument(
         "--min-age",
         type=float,
-        default=cfg.MIN_IMAGE_AGE,
-        help=f"Minimum image age in seconds before processing (default: {cfg.MIN_IMAGE_AGE})",
+        default=MIN_IMAGE_AGE,
+        help=f"Minimum image age in seconds before processing (default: {MIN_IMAGE_AGE})",
     )
     server_group.add_argument(
         "--max-age",
         type=float,
-        default=cfg.MAX_IMAGE_AGE,
-        help=f"Maximum image age in seconds to consider fresh (default: {cfg.MAX_IMAGE_AGE})",
+        default=MAX_IMAGE_AGE,
+        help=f"Maximum image age in seconds to consider fresh (default: {MAX_IMAGE_AGE})",
     )
 
     # Output options
     output_group = parser.add_argument_group("output options")
     output_group.add_argument(
         "--output-dir",
-        default=cfg.DEFAULT_OUTPUT_DIR,
-        help=f"Directory for saving responses (default: {cfg.DEFAULT_OUTPUT_DIR})",
+        default=DEFAULT_OUTPUT_DIR,
+        help=f"Directory for saving responses (default: {DEFAULT_OUTPUT_DIR})",
     )
     output_group.add_argument(
         "--no-save", action="store_true", help="Don't save responses to files"
@@ -387,7 +413,7 @@ Note: StreamingServer.py must be running for this script to work.
     try:
         # List cameras mode
         if args.list_cameras:
-            storage = UnifiedImageStorage()
+            storage = get_unified_image_storage()
             camera_ids = storage.get_all_camera_ids()
             if camera_ids:
                 logging.info("Available cameras:")
@@ -429,7 +455,7 @@ Note: StreamingServer.py must be running for this script to work.
         # Main processing loop
         while True:
             try:
-                storage = UnifiedImageStorage()
+                storage = get_unified_image_storage()
 
                 # Get camera IDs to check
                 if monitor_cameras:

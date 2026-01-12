@@ -134,20 +134,21 @@ namespace Robotics
                 gripSpeed * Time.deltaTime
             );
 
-            // 2. THE FIX: Clamp the target so it doesn't go too far past the REAL position
+            // 2. Clamp the target so it doesn't go too far past the REAL position when CLOSING
             // This prevents the "Tunneling" effect where the target goes deep inside the cube
-            float minAllowed = currentRealPosition - maxTargetLead;
-            float maxAllowed = currentRealPosition + maxTargetLead;
+            // NOTE: Only apply this when closing (moving toward smaller values), not when opening
+            bool isClosing = goalPhysicalPosition < currentRealPosition;
 
-            // Apply clamp based on direction
-            if (_invertMapping) // If 0 is Upper and 1 is Lower
+            if (isClosing)
             {
-                // Logic varies by URDF, simple clamp usually suffices
-                _currentPhysicalTarget = Mathf.Clamp(nextTargetStep, minAllowed, maxAllowed);
+                // When closing, don't let the target get too far ahead of the physical position
+                float minAllowed = currentRealPosition - maxTargetLead;
+                _currentPhysicalTarget = Mathf.Max(nextTargetStep, minAllowed);
             }
             else
             {
-                _currentPhysicalTarget = Mathf.Clamp(nextTargetStep, minAllowed, maxAllowed);
+                // When opening, allow the target to move freely - no clamping needed
+                _currentPhysicalTarget = nextTargetStep;
             }
 
             // Check if we are essentially at the goal (or stalled)
@@ -316,6 +317,7 @@ namespace Robotics
         /// Attach an object to the gripper (makes it a child of the attachment point).
         /// Disables physics on the object so it moves with the gripper.
         /// This is called automatically when the gripper closes if a target object was set.
+        /// Handles handoff: if object is held by another gripper, detaches from that gripper first.
         /// </summary>
         /// <param name="obj">GameObject to attach</param>
         public void AttachObject(GameObject obj)
@@ -334,8 +336,20 @@ namespace Robotics
                 return;
             }
 
-            // Store original parent for later release
-            _graspedObjectOriginalParent = obj.transform.parent;
+            // Check if object is currently held by another gripper (handoff scenario)
+            GripperController otherGripper = FindGripperHoldingObject(obj);
+            if (otherGripper != null && otherGripper != this)
+            {
+                Debug.Log($"[GripperController] Handoff detected: transferring '{obj.name}' from another gripper");
+                // Force detach from other gripper without re-enabling physics
+                otherGripper.ForceReleaseForHandoff();
+            }
+
+            // Store original parent for later release (only if not a handoff)
+            if (otherGripper == null)
+            {
+                _graspedObjectOriginalParent = obj.transform.parent;
+            }
 
             // Disable physics on the object so it moves with the gripper
             Rigidbody rb = obj.GetComponent<Rigidbody>();
@@ -353,6 +367,43 @@ namespace Robotics
             _isHoldingObject = true;
 
             Debug.Log($"[GripperController] Object '{obj.name}' attached to gripper");
+        }
+
+        /// <summary>
+        /// Find the GripperController that is currently holding the specified object.
+        /// </summary>
+        /// <param name="obj">Object to check</param>
+        /// <returns>GripperController holding the object, or null if not held</returns>
+        private static GripperController FindGripperHoldingObject(GameObject obj)
+        {
+            GripperController[] allGrippers = FindObjectsByType<GripperController>(FindObjectsSortMode.None);
+            foreach (var gripper in allGrippers)
+            {
+                if (gripper._isHoldingObject && gripper._graspedObject == obj)
+                {
+                    return gripper;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Release the object without re-enabling physics (used during handoff).
+        /// The receiving gripper will handle the object's physics state.
+        /// </summary>
+        private void ForceReleaseForHandoff()
+        {
+            if (!_isHoldingObject || _graspedObject == null)
+            {
+                return;
+            }
+
+            Debug.Log($"[GripperController] Force releasing '{_graspedObject.name}' for handoff");
+
+            // Just clear our references - don't unparent or re-enable physics
+            // The receiving gripper will handle parenting
+            _graspedObject = null;
+            _isHoldingObject = false;
         }
 
         /// <summary>

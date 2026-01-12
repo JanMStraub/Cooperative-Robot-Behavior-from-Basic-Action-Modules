@@ -30,17 +30,17 @@ import logging
 
 
 def _get_registry():
-    """Get registry instance"""
-    # Lazy import to avoid circular dependency
-    from operations.Registry import get_global_registry
+    """Get registry instance using centralized imports"""
+    # Import from centralized lazy import system (prevents circular dependencies)
+    from core.Imports import get_global_registry
 
     return get_global_registry()
 
-# Import config - try both import styles
+# Import config
 try:
-    import LLMConfig as config
+    from config.Rag import RAG_VECTOR_STORE_PATH
 except ImportError:
-    from .. import LLMConfig as config
+    from ..config.Rag import RAG_VECTOR_STORE_PATH
 
 from .Embeddings import EmbeddingGenerator
 from .VectorStore import VectorStore
@@ -104,7 +104,7 @@ class RAGSystem:
 
     def _try_load_index(self):
         """Try to load existing index from disk"""
-        if os.path.exists(config.RAG_VECTOR_STORE_PATH):
+        if os.path.exists(RAG_VECTOR_STORE_PATH):
             try:
                 self.vector_store = VectorStore.load()
                 self.query_engine = QueryEngine(
@@ -283,7 +283,6 @@ __all__ = [
     "VectorStore",
     "OperationIndexer",
     "QueryEngine",
-    "config",
     "compute_confidence_score",
     "get_confidence_level",
     "apply_confidence_boosting",

@@ -519,6 +519,15 @@ namespace Robotics
             if (options.Equals(default(GraspOptions)))
                 options = GraspOptions.Default;
 
+            // Check if object is held by another gripper (handoff scenario)
+            GripperController holdingGripper = FindGripperHoldingObject(target);
+            if (holdingGripper != null && holdingGripper != _gripperController)
+            {
+                Debug.Log($"{_logPrefix} {robotId} detected handoff scenario - object '{target.name}' held by another gripper");
+                _activeGraspCoroutine = StartCoroutine(ExecuteHandoffGrasp(target, holdingGripper, options));
+                return;
+            }
+
             // Check Advanced/Simple Planning
             if (_graspPipeline != null)
             {
@@ -698,6 +707,8 @@ namespace Robotics
             if (options.closeGripperOnReach && _gripperController != null)
             {
                 yield return new WaitForSeconds(0.3f);
+                // Set target object for attachment before closing gripper
+                _gripperController.SetTargetObject(targetObject);
                 _gripperController.SetGripperPosition(candidate.graspGripperWidth);
             }
 
@@ -751,6 +762,8 @@ namespace Robotics
             if (options.closeGripperOnReach && _gripperController != null)
             {
                 yield return new WaitForSeconds(0.1f);
+                // Set target object for attachment before closing gripper
+                _gripperController.SetTargetObject(targetObject);
                 _gripperController.SetGripperPosition(candidate.graspGripperWidth);
                 yield return new WaitWhile(() => _gripperController.IsMoving);
                 yield return new WaitForSeconds(1.1f);
@@ -777,6 +790,87 @@ namespace Robotics
 
             _activeGraspCoroutine = null;
             OnTargetReached?.Invoke();
+        }
+
+        /// <summary>
+        /// Execute a handoff grasp - used when the target object is already held by another gripper.
+        /// Moves directly to the object's current position and closes the gripper to receive it.
+        /// </summary>
+        private IEnumerator ExecuteHandoffGrasp(
+            GameObject targetObject,
+            GripperController sourceGripper,
+            GraspOptions options
+        )
+        {
+            Debug.Log($"{_logPrefix} {robotId} executing handoff grasp for '{targetObject.name}'");
+
+            // Open gripper first if needed
+            if (options.openGripperOnSet && _gripperController != null)
+            {
+                _gripperController.OpenGrippers();
+                yield return new WaitWhile(() => _gripperController.IsMoving);
+            }
+
+            // Move directly to the object's current world position (where the other gripper is holding it)
+            // Use a slight offset to approach from the side
+            Vector3 objectPosition = targetObject.transform.position;
+
+            // Create a temporary target at the object's position
+            GameObject handoffTarget = GetCachedTempObject(ref _cachedTempTargetGrasp, "_handoff");
+            handoffTarget.transform.position = objectPosition;
+            handoffTarget.transform.rotation = endEffectorBase.rotation; // Keep current orientation
+
+            _isGraspingTarget = true;
+            SetTargetInternal(
+                handoffTarget.transform,
+                targetObject,
+                new GraspOptions { closeGripperOnReach = false }
+            );
+
+            // Wait for robot to reach the handoff position
+            yield return StartCoroutine(WaitForTargetWithTimeout(RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS));
+            if (!_hasReachedTarget)
+            {
+                Debug.LogWarning($"{_logPrefix} {robotId} failed to reach handoff position");
+                _activeGraspCoroutine = null;
+                yield break;
+            }
+
+            // Small delay to settle
+            yield return new WaitForSeconds(0.2f);
+
+            // Close gripper and attach the object (this will trigger handoff transfer in GripperController)
+            if (options.closeGripperOnReach && _gripperController != null)
+            {
+                _gripperController.SetTargetObject(targetObject);
+                _gripperController.CloseGrippers();
+                yield return new WaitWhile(() => _gripperController.IsMoving);
+
+                // Wait for grip to stabilize
+                yield return new WaitForSeconds(0.5f);
+            }
+
+            Debug.Log($"{_logPrefix} {robotId} handoff grasp complete for '{targetObject.name}'");
+            _activeGraspCoroutine = null;
+            OnTargetReached?.Invoke();
+        }
+
+        /// <summary>
+        /// Find the GripperController that is currently holding the specified object.
+        /// </summary>
+        /// <param name="obj">Object to check</param>
+        /// <returns>GripperController holding the object, or null if not held by any gripper</returns>
+        private static GripperController FindGripperHoldingObject(GameObject obj)
+        {
+            GripperController[] allGrippers = FindObjectsByType<GripperController>(FindObjectsSortMode.None);
+            foreach (var gripper in allGrippers)
+            {
+                if (gripper.IsHoldingObject && gripper.GraspedObject == obj)
+                {
+                    return gripper;
+                }
+            }
+            return null;
         }
 
         // --- Utilities ---

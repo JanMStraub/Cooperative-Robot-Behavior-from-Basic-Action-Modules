@@ -78,7 +78,7 @@ class TestDetectionOperations:
 
     def test_detect_objects_success(self, mock_image_storage, mock_detector):
         """Test detecting objects successfully."""
-        with patch('operations.DetectionOperations.UnifiedImageStorage', return_value=mock_image_storage):
+        with patch('operations.DetectionOperations.get_unified_image_storage', return_value=mock_image_storage):
             with patch('vision.ObjectDetector.CubeDetector', return_value=mock_detector):
                 result = detect_objects("Robot1", camera_id="main")
 
@@ -90,7 +90,7 @@ class TestDetectionOperations:
 
     def test_detect_with_default_camera_id(self, mock_image_storage, mock_detector):
         """Test detection with default camera ID."""
-        with patch('operations.DetectionOperations.UnifiedImageStorage', return_value=mock_image_storage):
+        with patch('operations.DetectionOperations.get_unified_image_storage', return_value=mock_image_storage):
             with patch('vision.ObjectDetector.CubeDetector', return_value=mock_detector):
                 result = detect_objects("Robot1")
 
@@ -114,7 +114,7 @@ class TestDetectionOperations:
 
         mock_detector.detect_objects = Mock(return_value=mock_result)
 
-        with patch('operations.DetectionOperations.UnifiedImageStorage', return_value=mock_image_storage):
+        with patch('operations.DetectionOperations.get_unified_image_storage', return_value=mock_image_storage):
             with patch('vision.ObjectDetector.CubeDetector', return_value=mock_detector):
                 result = detect_objects("Robot1")
 
@@ -132,7 +132,7 @@ class TestDetectionOperations:
 
         mock_detector.detect_objects = Mock(return_value=mock_result)
 
-        with patch('operations.DetectionOperations.UnifiedImageStorage', return_value=mock_image_storage):
+        with patch('operations.DetectionOperations.get_unified_image_storage', return_value=mock_image_storage):
             with patch('vision.ObjectDetector.CubeDetector', return_value=mock_detector):
                 result = detect_objects("Robot1")
 
@@ -155,19 +155,19 @@ class TestDetectionErrors:
         mock_storage.get_single_image = Mock(return_value=None)
         mock_storage.get_instance = Mock(return_value=mock_storage)
 
-        with patch('operations.DetectionOperations.UnifiedImageStorage', return_value=mock_storage):
+        with patch('operations.DetectionOperations.get_unified_image_storage', return_value=mock_storage):
             result = detect_objects("Robot1", camera_id="missing_camera")
 
             assert result.success is False
             assert result.error is not None
             assert result.error["code"] == "NO_IMAGE"
 
-    def test_detect_detector_error(self):
+    def test_detect_detector_error(self, mock_image_storage):
         """Test detection when detector raises exception."""
         mock_detector = Mock()
         mock_detector.detect_objects = Mock(side_effect=Exception("Detector error"))
 
-        with patch('operations.DetectionOperations.UnifiedImageStorage', return_value=mock_image_storage):
+        with patch('operations.DetectionOperations.get_unified_image_storage', return_value=mock_image_storage):
             with patch('vision.ObjectDetector.CubeDetector', return_value=mock_detector):
                 result = detect_objects("Robot1")
 
@@ -185,7 +185,7 @@ class TestDetectionResultFormatting:
 
     def test_detection_result_format(self, mock_image_storage, mock_detector):
         """Test that detection results have correct format."""
-        with patch('operations.DetectionOperations.UnifiedImageStorage', return_value=mock_image_storage):
+        with patch('operations.DetectionOperations.get_unified_image_storage', return_value=mock_image_storage):
             with patch('vision.ObjectDetector.CubeDetector', return_value=mock_detector):
                 result = detect_objects("Robot1", camera_id="test_cam")
 
@@ -200,7 +200,7 @@ class TestDetectionResultFormatting:
 
     def test_detection_dict_structure(self, mock_image_storage, mock_detector):
         """Test that each detection has correct dictionary structure."""
-        with patch('operations.DetectionOperations.UnifiedImageStorage', return_value=mock_image_storage):
+        with patch('operations.DetectionOperations.get_unified_image_storage', return_value=mock_image_storage):
             with patch('vision.ObjectDetector.CubeDetector', return_value=mock_detector):
                 result = detect_objects("Robot1")
 
@@ -223,7 +223,7 @@ class TestDetectionConfidence:
     def test_detect_with_confidence_threshold(self, mock_image_storage, mock_detector):
         """Test detection respects confidence filtering (handled by detector)."""
         # Detector already filters by confidence internally
-        with patch('operations.DetectionOperations.UnifiedImageStorage', return_value=mock_image_storage):
+        with patch('operations.DetectionOperations.get_unified_image_storage', return_value=mock_image_storage):
             with patch('vision.ObjectDetector.CubeDetector', return_value=mock_detector):
                 result = detect_objects("Robot1")
 
@@ -259,7 +259,7 @@ class TestDetectionOperationDefinition:
 
     def test_operation_execution_through_definition(self, mock_image_storage, mock_detector):
         """Test executing operation through BasicOperation.execute()."""
-        with patch('operations.DetectionOperations.UnifiedImageStorage', return_value=mock_image_storage):
+        with patch('operations.DetectionOperations.get_unified_image_storage', return_value=mock_image_storage):
             with patch('vision.ObjectDetector.CubeDetector', return_value=mock_detector):
                 result = DETECT_OBJECTS_OPERATION.execute(robot_id="Robot1", camera_id="main")
 

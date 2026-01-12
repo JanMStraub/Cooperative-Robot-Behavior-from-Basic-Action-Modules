@@ -25,10 +25,12 @@ from typing import Dict, Any, Optional, Union, TYPE_CHECKING
 try:
     from ..core.TCPServerBase import TCPServerBase, ServerConfig
     from ..core.LoggingSetup import get_logger
+
     # NOTE: CommandParser and SequenceExecutor imported lazily in initialize() to avoid circular dependency
 except ImportError:
     from core.TCPServerBase import TCPServerBase, ServerConfig
     from core.LoggingSetup import get_logger
+
     # NOTE: CommandParser and SequenceExecutor imported lazily in initialize() to avoid circular dependency
 
 # Import types for type checking only (avoids circular dependency at runtime)
@@ -42,9 +44,19 @@ if TYPE_CHECKING:
 
 # Import config
 try:
-    import LLMConfig as cfg
+    from config.Servers import (
+        DEFAULT_HOST,
+        SEQUENCE_SERVER_PORT,
+        MAX_STRING_LENGTH,
+        DEFAULT_LMSTUDIO_MODEL,
+    )
 except ImportError:
-    from .. import LLMConfig as cfg
+    from ..config.Servers import (
+        DEFAULT_HOST,
+        SEQUENCE_SERVER_PORT,
+        MAX_STRING_LENGTH,
+        DEFAULT_LMSTUDIO_MODEL,
+    )
 
 logger = get_logger(__name__)
 
@@ -98,17 +110,17 @@ class SequenceQueryHandler:
             True if initialization succeeded
         """
         try:
-            # Lazy imports to avoid circular dependency
+            # Import from centralized lazy import system (prevents circular dependencies)
             try:
-                from ..orchestrators.CommandParser import CommandParser
-                from ..orchestrators.SequenceExecutor import SequenceExecutor
+                from ..core.Imports import get_command_parser, get_sequence_executor
             except ImportError:
-                from orchestrators.CommandParser import CommandParser
-                from orchestrators.SequenceExecutor import SequenceExecutor
+                from core.Imports import get_command_parser, get_sequence_executor
 
-            self._parser = CommandParser(lm_studio_url=lm_studio_url, model=model)
-            self._executor = SequenceExecutor(check_completion=check_completion,
-                                              default_timeout=180.0)
+            self._parser = get_command_parser(lm_studio_url=lm_studio_url, model=model)
+            self._executor = get_sequence_executor(
+                check_completion=check_completion, default_timeout=180.0
+            )
+
             return True
         except Exception as e:
             logger.error(f"Failed to initialize SequenceQueryHandler: {e}")
@@ -213,7 +225,7 @@ class SequenceServer(TCPServerBase):
             config: Server configuration (uses default if None)
         """
         if config is None:
-            config = ServerConfig(host=cfg.DEFAULT_HOST, port=cfg.SEQUENCE_SERVER_PORT)
+            config = ServerConfig(host=DEFAULT_HOST, port=SEQUENCE_SERVER_PORT)
         super().__init__(config)
 
     def handle_client_connection(self, client: socket.socket, address: tuple):
@@ -245,7 +257,7 @@ class SequenceServer(TCPServerBase):
                     break
                 cmd_len = struct.unpack("!I", cmd_len_bytes)[0]
 
-                if cmd_len > cfg.MAX_STRING_LENGTH * 10:  # Allow longer commands
+                if cmd_len > MAX_STRING_LENGTH * 10:  # Allow longer commands
                     logger.error(f"Command too long: {cmd_len}")
                     self._send_error(client, request_id, "Command too long")
                     continue
@@ -289,7 +301,7 @@ class SequenceServer(TCPServerBase):
                 auto_execute = auto_execute_bytes[0] == 1
 
                 logger.info(
-                    f"Received sequence query (id={request_id}): {command_text[:100]} (camera={camera_id}, auto_execute={auto_execute})"
+                    f"Received sequence query (id={request_id}): {command_text[:100]}... (camera={camera_id}, auto_execute={auto_execute})"
                 )
 
                 # Execute the sequence
@@ -405,12 +417,12 @@ def run_sequence_server_background(
             server_config = config
         else:
             server_config = ServerConfig(
-                host=config.get("host", cfg.DEFAULT_HOST),
-                port=config.get("port", cfg.SEQUENCE_SERVER_PORT),
+                host=config.get("host", DEFAULT_HOST),
+                port=config.get("port", SEQUENCE_SERVER_PORT),
             )
     else:
         server_config = ServerConfig(
-            host=cfg.DEFAULT_HOST, port=cfg.SEQUENCE_SERVER_PORT
+            host=DEFAULT_HOST, port=SEQUENCE_SERVER_PORT
         )
 
     # Create and start server
@@ -428,13 +440,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Run SequenceServer for multi-command execution"
     )
-    parser.add_argument("--host", default=cfg.DEFAULT_HOST, help="Server host")
+    parser.add_argument("--host", default=DEFAULT_HOST, help="Server host")
     parser.add_argument(
-        "--port", type=int, default=cfg.SEQUENCE_SERVER_PORT, help="Server port"
+        "--port", type=int, default=SEQUENCE_SERVER_PORT, help="Server port"
     )
     parser.add_argument(
         "--model",
-        default=cfg.DEFAULT_LMSTUDIO_MODEL,
+        default=DEFAULT_LMSTUDIO_MODEL,
         help="LM Studio model for parsing",
     )
     args = parser.parse_args()

@@ -51,21 +51,36 @@ except ImportError:
     from vision.ObjectTracker import ObjectTracker
     from vision.DetectionDataModels import DetectionObject, DetectionResult
 
-# Import server components
+# Import from centralized lazy import system (prevents circular dependencies)
 try:
-    from ..servers.ImageServer import UnifiedImageStorage
+    from ..core.Imports import get_unified_image_storage
 except ImportError:
-    try:
-        from servers.ImageServer import UnifiedImageStorage
-    except ImportError:
-        # Fallback if imports fail
-        UnifiedImageStorage = None
+    from core.Imports import get_unified_image_storage
+
+# Helper to get storage instance
+def _get_storage():
+    """Get UnifiedImageStorage instance using centralized imports"""
+    return get_unified_image_storage()
 
 # Import config
 try:
-    import LLMConfig as cfg
+    from config.Vision import (
+        TRACKING_MAX_AGE,
+        TRACKING_MIN_IOU,
+        DEFAULT_STEREO_BASELINE,
+        DEFAULT_STEREO_FOV,
+        DEFAULT_STEREO_CAMERA_POSITION,
+        DEFAULT_STEREO_CAMERA_ROTATION,
+    )
 except ImportError:
-    from .. import LLMConfig as cfg
+    from ..config.Vision import (
+        TRACKING_MAX_AGE,
+        TRACKING_MIN_IOU,
+        DEFAULT_STEREO_BASELINE,
+        DEFAULT_STEREO_FOV,
+        DEFAULT_STEREO_CAMERA_POSITION,
+        DEFAULT_STEREO_CAMERA_ROTATION,
+    )
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
@@ -136,9 +151,7 @@ class VisionProcessor:
 
         # Initialize tracker if enabled
         if self.enable_tracking:
-            max_age = getattr(cfg, "TRACKING_MAX_AGE", 5)
-            min_iou = getattr(cfg, "TRACKING_MIN_IOU", 0.3)
-            self.tracker = ObjectTracker(max_age=max_age, min_iou=min_iou)
+            self.tracker = ObjectTracker(max_age=TRACKING_MAX_AGE, min_iou=TRACKING_MIN_IOU)
             logging.info("Object tracking enabled for VisionProcessor")
 
         # Initialize shared state if enabled
@@ -266,9 +279,13 @@ class VisionProcessor:
         5. Invoke callback if set
         6. Sleep to maintain target FPS
         """
-        if UnifiedImageStorage is None:
+        try:
+            storage = _get_storage()
+            if storage is None:
+                raise RuntimeError("UnifiedImageStorage returned None")
+        except Exception as e:
             logging.error(
-                "UnifiedImageStorage not available - cannot run VisionProcessor"
+                f"UnifiedImageStorage not available - cannot run VisionProcessor: {e}"
             )
             self.running = False
             return
@@ -283,7 +300,7 @@ class VisionProcessor:
 
             try:
                 # Get latest stereo images from UnifiedImageStorage
-                storage = UnifiedImageStorage()
+                storage = _get_storage()
                 stereo_data = storage.get_latest_stereo_image()
 
                 if stereo_data is None:
@@ -317,15 +334,15 @@ class VisionProcessor:
                 if metadata:
                     from vision.StereoConfig import CameraConfig
 
-                    baseline = metadata.get("baseline", cfg.DEFAULT_STEREO_BASELINE)
-                    fov = metadata.get("fov", cfg.DEFAULT_STEREO_FOV)
+                    baseline = metadata.get("baseline", DEFAULT_STEREO_BASELINE)
+                    fov = metadata.get("fov", DEFAULT_STEREO_FOV)
                     camera_config = CameraConfig(fov=fov, baseline=baseline)
 
                     camera_position = metadata.get(
-                        "camera_position", cfg.DEFAULT_STEREO_CAMERA_POSITION
+                        "camera_position", DEFAULT_STEREO_CAMERA_POSITION
                     )
                     camera_rotation = metadata.get(
-                        "camera_rotation", cfg.DEFAULT_STEREO_CAMERA_ROTATION
+                        "camera_rotation", DEFAULT_STEREO_CAMERA_ROTATION
                     )
 
                 # Process with YOLO + depth

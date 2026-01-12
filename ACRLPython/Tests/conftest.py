@@ -657,12 +657,12 @@ def disable_yolo_detection():
 
     Yields control to test, then restores original USE_YOLO setting
     """
-    import LLMConfig as cfg
+    import config.Vision as vision_cfg
 
-    original_use_yolo = cfg.USE_YOLO
-    cfg.USE_YOLO = False
+    original_use_yolo = vision_cfg.USE_YOLO
+    vision_cfg.USE_YOLO = False
     yield
-    cfg.USE_YOLO = original_use_yolo
+    vision_cfg.USE_YOLO = original_use_yolo
 
 
 # ============================================================================

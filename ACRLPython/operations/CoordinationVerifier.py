@@ -16,9 +16,19 @@ import logging
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, field
 try:
-    from .. import LLMConfig
+    from config.Robot import (
+        ROBOT_BASE_POSITIONS,
+        ROBOT_WORKSPACE_ASSIGNMENTS,
+        WORKSPACE_REGIONS,
+        MIN_ROBOT_SEPARATION,
+    )
 except ImportError:
-    import LLMConfig
+    from ..config.Robot import (
+        ROBOT_BASE_POSITIONS,
+        ROBOT_WORKSPACE_ASSIGNMENTS,
+        WORKSPACE_REGIONS,
+        MIN_ROBOT_SEPARATION,
+    )
 from .WorldState import get_world_state
 from .SpatialPredicates import robots_will_collide, is_in_shared_zone
 from .Base import OperationCategory
@@ -169,7 +179,7 @@ class CoordinationVerifier:
 
         # Get all other robots in system
         other_robots = [
-            rid for rid in LLMConfig.ROBOT_BASE_POSITIONS.keys() if rid != robot_id
+            rid for rid in ROBOT_BASE_POSITIONS.keys() if rid != robot_id
         ]
 
         # Check 1: Path collision with other robots
@@ -271,7 +281,7 @@ class CoordinationVerifier:
                 dz = target_pos[2] - other_robot_state.position[2]
                 distance = (dx * dx + dy * dy + dz * dz) ** 0.5
 
-                min_sep = LLMConfig.MIN_ROBOT_SEPARATION
+                min_sep = MIN_ROBOT_SEPARATION
                 if distance < min_sep:
                     return CoordinationIssue(
                         issue_type="collision",
@@ -438,7 +448,7 @@ class CoordinationVerifier:
             return None
 
         # Check if any other robot is trying to move to this robot's current workspace
-        robot_current_workspace = LLMConfig.ROBOT_WORKSPACE_ASSIGNMENTS.get(robot_id)
+        robot_current_workspace = ROBOT_WORKSPACE_ASSIGNMENTS.get(robot_id)
         if robot_current_workspace is None:
             return None
 
@@ -485,7 +495,7 @@ class CoordinationVerifier:
             Workspace region name or None
         """
         x, y, z = position
-        for region_name, bounds in LLMConfig.WORKSPACE_REGIONS.items():
+        for region_name, bounds in WORKSPACE_REGIONS.items():
             if (
                 bounds["x_min"] <= x <= bounds["x_max"]
                 and bounds["y_min"] <= y <= bounds["y_max"]

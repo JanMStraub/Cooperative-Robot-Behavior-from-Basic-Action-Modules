@@ -14,11 +14,13 @@ Operations:
 import time
 import logging
 from typing import Tuple, Union, Optional
+
+# Import from centralized lazy import system (prevents circular dependencies)
 try:
-    from .. import LLMConfig
+    from ..core.Imports import get_world_state, get_robot_config
 except ImportError:
-    import LLMConfig
-from .WorldState import get_world_state
+    from core.Imports import get_world_state, get_robot_config
+
 from .MoveOperations import move_to_coordinate
 from .Base import (
     BasicOperation,
@@ -327,8 +329,9 @@ def move_to_region(
     """
     try:
         # Validate region name
-        if region_name not in LLMConfig.WORKSPACE_REGIONS:
-            valid_regions = list(LLMConfig.WORKSPACE_REGIONS.keys())
+        robot_config = get_robot_config()
+        if region_name not in robot_config.WORKSPACE_REGIONS:
+            valid_regions = list(robot_config.WORKSPACE_REGIONS.keys())
             return OperationResult.error_result(
                 "INVALID_REGION",
                 f"Unknown region '{region_name}'. Valid regions: {', '.join(valid_regions)}",
@@ -345,7 +348,7 @@ def move_to_region(
             )
 
         # Get region bounds
-        region = LLMConfig.WORKSPACE_REGIONS[region_name]
+        region = robot_config.WORKSPACE_REGIONS[region_name]
 
         # Calculate target position based on position_in_region
         x_min, x_max = region["x_min"], region["x_max"]
@@ -353,7 +356,7 @@ def move_to_region(
         z_min, z_max = region["z_min"], region["z_max"]
 
         # Get robot base position for near/far calculation
-        robot_base = LLMConfig.ROBOT_BASE_POSITIONS.get(robot_id)
+        robot_base = robot_config.ROBOT_BASE_POSITIONS.get(robot_id)
         if robot_base is None:
             return OperationResult.error_result(
                 "UNKNOWN_ROBOT",

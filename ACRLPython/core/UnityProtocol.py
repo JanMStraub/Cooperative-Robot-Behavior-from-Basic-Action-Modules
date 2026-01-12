@@ -59,9 +59,15 @@ import logging
 
 # Import config
 try:
-    import LLMConfig as cfg
+    from config.Servers import (
+        MAX_STRING_LENGTH as _MAX_STRING_LENGTH,
+        MAX_IMAGE_SIZE as _MAX_IMAGE_SIZE,
+    )
 except ImportError:
-    from .. import LLMConfig as cfg
+    from ..config.Servers import (
+        MAX_STRING_LENGTH as _MAX_STRING_LENGTH,
+        MAX_IMAGE_SIZE as _MAX_IMAGE_SIZE,
+    )
 
 # Configure logging
 try:
@@ -91,8 +97,8 @@ class UnityProtocol:
     VERSION = 2
 
     # Limits (from config)
-    MAX_STRING_LENGTH = cfg.MAX_STRING_LENGTH
-    MAX_IMAGE_SIZE = cfg.MAX_IMAGE_SIZE
+    MAX_STRING_LENGTH = _MAX_STRING_LENGTH
+    MAX_IMAGE_SIZE = _MAX_IMAGE_SIZE
 
     # Struct formats
     INT_FORMAT = "I"  # Unsigned 32-bit integer, little-endian

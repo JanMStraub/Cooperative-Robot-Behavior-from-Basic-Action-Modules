@@ -24,7 +24,7 @@ from operations.SpatialPredicates import (
     list_predicates,
     PREDICATE_REGISTRY,
 )
-import LLMConfig as cfg
+from config.Robot import ROBOT_BASE_POSITIONS, MAX_ROBOT_REACH, MIN_ROBOT_SEPARATION
 
 
 class TestTargetWithinReach:
@@ -50,8 +50,8 @@ class TestTargetWithinReach:
     def test_target_within_reach_at_boundary(self):
         """Test target exactly at MAX_ROBOT_REACH"""
         # Calculate position exactly at MAX_ROBOT_REACH distance
-        robot_base = cfg.ROBOT_BASE_POSITIONS["Robot1"]  # (-0.3, 0.0, 0.0)
-        max_reach = cfg.MAX_ROBOT_REACH  # 0.8
+        robot_base = ROBOT_BASE_POSITIONS["Robot1"]  # (-0.3, 0.0, 0.0)
+        max_reach = MAX_ROBOT_REACH  # 0.8
 
         # Target at exactly 0.8m away
         target_x = robot_base[0] + max_reach
@@ -294,7 +294,7 @@ class TestMultiRobotCollision:
 
         assert will_collide is True
         assert "too close" in reason
-        assert str(cfg.MIN_ROBOT_SEPARATION) in reason
+        assert str(MIN_ROBOT_SEPARATION) in reason
 
     def test_robots_will_collide_safe_parallel(self, mock_world_state_multi_robot):
         """Test no collision case"""

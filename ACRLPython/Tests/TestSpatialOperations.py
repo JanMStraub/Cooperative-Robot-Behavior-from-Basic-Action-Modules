@@ -14,7 +14,7 @@ from operations.SpatialOperations import (
     move_to_region,
 )
 from operations.Base import OperationResult
-import LLMConfig as cfg
+# Config imports not needed - using fixtures
 
 
 class TestMoveRelativeToObject:

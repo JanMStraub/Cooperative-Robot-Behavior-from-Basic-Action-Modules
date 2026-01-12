@@ -52,7 +52,7 @@ namespace Robotics
         private float _dampingFactorLambda = RobotConstants.DEFAULT_DAMPING_FACTOR;
 
         [SerializeField]
-        private float _convergenceThreshold = 0.02f; // 2cm - adjust in Inspector if needed
+        private float _convergenceThreshold = 0.03f; // 3cm - adjust in Inspector if needed
 
         [SerializeField]
         private float _orientationThresholdDegrees =
@@ -86,7 +86,7 @@ namespace Robotics
         private bool _closeGripperOnReach = true; // Close gripper when target reached
 
         [SerializeField]
-        private float _gripperCloseDelay = 0.5f; // Delay before closing gripper (seconds)
+        private float _gripperCloseDelay = 0.2f; // Delay before closing gripper (seconds)
 
         [SerializeField]
         private bool _attachObjectOnGrasp = true; // Attach object to gripper when grasped
@@ -396,19 +396,28 @@ namespace Robotics
             // Check convergence - use the Inspector threshold value
             float effectiveThreshold = _convergenceThreshold; // Use Inspector value (default 3cm)
             float sqrPosThreshold = effectiveThreshold * effectiveThreshold;
-            float angleError = Quaternion.Angle(_endEffectorLocalRotation, _targetLocalRotation);
             Vector3 currentVelocity = GetEndEffectorVelocity();
 
-            // Converge when position is close enough (5cm) - ignore orientation completely
-            if (_sqrDistanceToTarget <= sqrPosThreshold)
+            // Converge when position is close enough AND velocity is low (robot has settled)
+            // Using a more relaxed velocity threshold than IKSolver to avoid getting stuck
+            bool positionConverged = _sqrDistanceToTarget <= sqrPosThreshold;
+            bool velocitySettled = currentVelocity.magnitude < 0.1f; // 10cm/s - relaxed from IKSolver's 5cm/s
+
+            if (positionConverged && velocitySettled)
             {
                 if (!_hasReachedTarget)
                 {
-                    Debug.Log(
-                        $"{_logPrefix} [{robotId}] ✅ TARGET REACHED! Dist: {_distanceToTarget:F4}m"
-                    );
+                    Debug.Log($"{_logPrefix} [{robotId}] Target reached! Distance: {_distanceToTarget:F4}m, Velocity: {currentVelocity.magnitude:F4}m/s");
                     SetTargetReached(true);
                 }
+                return;
+            }
+
+            // If position is converged but velocity is high, keep running IK to let robot settle
+            // This prevents premature convergence while robot is still moving
+            if (positionConverged && !velocitySettled)
+            {
+                // Don't call IKSolver, just let physics settle the robot
                 return;
             }
 
@@ -446,13 +455,16 @@ namespace Robotics
             IKState targetState = new IKState(constrainedTargetPos, constrainedTargetRot);
 
             // Use velocity-level IK with PD control for natural damping
+            // Pass a very small convergence threshold to IKSolver so it never returns null prematurely
+            // The controller handles convergence checking, not the IKSolver
+            const float ikInternalThreshold = 0.001f; // 1mm - effectively disables IKSolver's convergence
             Vector<double> jointDeltas = _ikSolver.ComputeJointDeltasWithVelocity(
                 currentState,
                 targetState,
                 currentVelocity,
                 Vector3.zero, // Target velocity (stationary target)
                 _cachedJointInfos,
-                _convergenceThreshold,
+                ikInternalThreshold,
                 Kp: _positionGain,
                 Kd: _velocityGain,
                 orientationWeight: orientationWeight,
@@ -733,7 +745,6 @@ namespace Robotics
                 {
                     // Clear the target to stop all movement
                     _hasTarget = false;
-                    Debug.Log($"{_logPrefix} [{robotId}] Movement stopped");
 
                     // Close gripper after delay
                     if (_closeGripperOnReach && _gripperController != null)
@@ -753,9 +764,6 @@ namespace Robotics
         /// </summary>
         private IEnumerator CloseGripperAfterDelay()
         {
-            Debug.Log(
-                $"{_logPrefix} [{robotId}] Waiting {_gripperCloseDelay}s before closing gripper..."
-            );
             yield return new WaitForSeconds(_gripperCloseDelay);
 
             // Set the target object so it will be attached automatically when gripper closes
@@ -766,13 +774,11 @@ namespace Robotics
             }
 
             _gripperController.CloseGrippers();
-            Debug.Log($"{_logPrefix} [{robotId}] Closing gripper");
 
             // Wait for gripper to finish closing (attachment happens automatically)
             yield return new WaitWhile(() => _gripperController.IsMoving);
             yield return new WaitForSeconds(0.2f); // Extra settle time
 
-            Debug.Log($"{_logPrefix} [{robotId}] Grasp complete");
             OnTargetReached?.Invoke();
         }
 

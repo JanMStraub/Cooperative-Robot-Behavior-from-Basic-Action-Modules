@@ -1,185 +1,187 @@
 #!/usr/bin/env python3
 """
-Unit tests for config.py
+Unit tests for config modules
 
-Tests configuration constants and helper functions
+Tests configuration constants from the modular config system:
+- config/Servers.py - Network, ports, LLM settings, logging
+- config/Vision.py - Image processing, detection, stereo
+- config/Rag.py - RAG system settings
+- config/Robot.py - Multi-robot coordination
 """
 
-from .. import LLMConfig as cfg
+from config.Servers import (
+    DEFAULT_HOST,
+    STREAMING_SERVER_PORT,
+    STEREO_DETECTION_PORT,
+    DEPTH_RESULTS_PORT,
+    LLM_RESULTS_PORT,
+    RAG_SERVER_PORT,
+    STATUS_SERVER_PORT,
+    SEQUENCE_SERVER_PORT,
+    RESULTS_SERVER_PORT,
+    DETECTION_SERVER_PORT,
+    MAX_CONNECTIONS_BACKLOG,
+    MAX_CLIENT_THREADS,
+    SOCKET_ACCEPT_TIMEOUT,
+    SOCKET_RECEIVE_TIMEOUT,
+    MAX_STRING_LENGTH,
+    MAX_IMAGE_SIZE,
+    DEFAULT_LMSTUDIO_MODEL,
+    DEFAULT_TEMPERATURE,
+    VISION_MODELS,
+    LMSTUDIO_BASE_URL,
+    MAX_RESULT_QUEUE_SIZE,
+    LOG_FORMAT,
+    LOG_LEVEL,
+    DEFAULT_OUTPUT_DIR,
+    SERVER_INIT_WAIT_TIME,
+)
+
+from config.Vision import (
+    MIN_IMAGE_AGE,
+    MAX_IMAGE_AGE,
+    IMAGE_CHECK_INTERVAL,
+    DUPLICATE_TIME_THRESHOLD,
+    RED_HSV_LOWER_1,
+    RED_HSV_UPPER_1,
+    BLUE_HSV_LOWER,
+    BLUE_HSV_UPPER,
+    MIN_CUBE_AREA_PX,
+    MAX_CUBE_AREA_PX,
+    MIN_ASPECT_RATIO,
+    MAX_ASPECT_RATIO,
+    MIN_CONFIDENCE,
+    DETECTION_CHECK_INTERVAL,
+    DEFAULT_STEREO_BASELINE,
+    DEFAULT_STEREO_FOV,
+    STEREO_CHECK_INTERVAL,
+)
+
 
 class TestConfigConstants:
     """Test configuration constants have expected values"""
 
     def test_network_config(self):
         """Test network configuration constants"""
-        assert cfg.DEFAULT_HOST == "127.0.0.1"
+        assert DEFAULT_HOST == "127.0.0.1"
         # Legacy ports (kept for backward compatibility)
-        assert cfg.STREAMING_SERVER_PORT == 5005
-        assert cfg.STEREO_DETECTION_PORT == 5006
-        assert cfg.DEPTH_RESULTS_PORT == 5007
+        assert STREAMING_SERVER_PORT == 5005
+        assert STEREO_DETECTION_PORT == 5006
+        assert DEPTH_RESULTS_PORT == 5007
         # Active ports
-        assert cfg.LLM_RESULTS_PORT == 5010
-        assert cfg.RAG_SERVER_PORT == 5011
-        assert cfg.STATUS_SERVER_PORT == 5012
-        assert cfg.SEQUENCE_SERVER_PORT == 5013
+        assert LLM_RESULTS_PORT == 5010
+        assert RAG_SERVER_PORT == 5011
+        assert STATUS_SERVER_PORT == 5012
+        assert SEQUENCE_SERVER_PORT == 5013
         # Aliases
-        assert cfg.RESULTS_SERVER_PORT == cfg.LLM_RESULTS_PORT
-        assert cfg.DETECTION_SERVER_PORT == cfg.DEPTH_RESULTS_PORT
-        assert cfg.MAX_CONNECTIONS_BACKLOG > 0
-        assert cfg.MAX_CLIENT_THREADS > 0
-        assert cfg.SOCKET_ACCEPT_TIMEOUT > 0
-        assert cfg.SOCKET_RECEIVE_TIMEOUT > 0
+        assert RESULTS_SERVER_PORT == LLM_RESULTS_PORT
+        assert DETECTION_SERVER_PORT == DEPTH_RESULTS_PORT
+        assert MAX_CONNECTIONS_BACKLOG > 0
+        assert MAX_CLIENT_THREADS > 0
+        assert SOCKET_ACCEPT_TIMEOUT > 0
+        assert SOCKET_RECEIVE_TIMEOUT > 0
 
     def test_protocol_limits(self):
         """Test protocol limit constants"""
-        assert cfg.MAX_STRING_LENGTH == 256
-        assert cfg.MAX_IMAGE_SIZE == 10 * 1024 * 1024  # 10MB
-        assert cfg.MAX_STRING_LENGTH > 0
-        assert cfg.MAX_IMAGE_SIZE > 0
+        assert MAX_STRING_LENGTH == 256
+        assert MAX_IMAGE_SIZE == 10 * 1024 * 1024  # 10MB
+        assert MAX_STRING_LENGTH > 0
+        assert MAX_IMAGE_SIZE > 0
 
     def test_image_processing_config(self):
         """Test image processing configuration"""
-        assert cfg.MIN_IMAGE_AGE >= 0
-        assert cfg.MAX_IMAGE_AGE > cfg.MIN_IMAGE_AGE
-        assert cfg.IMAGE_CHECK_INTERVAL > 0
-        assert cfg.SERVER_INIT_WAIT_TIME > 0
-        assert cfg.DUPLICATE_TIME_THRESHOLD >= 0
+        assert MIN_IMAGE_AGE >= 0
+        assert MAX_IMAGE_AGE > MIN_IMAGE_AGE
+        assert IMAGE_CHECK_INTERVAL > 0
+        assert SERVER_INIT_WAIT_TIME > 0
+        assert DUPLICATE_TIME_THRESHOLD >= 0
 
     def test_llm_config(self):
         """Test LLM configuration constants"""
-        assert cfg.DEFAULT_LMSTUDIO_MODEL in cfg.VISION_MODELS
-        assert cfg.DEFAULT_TEMPERATURE >= 0.0
-        assert cfg.DEFAULT_TEMPERATURE <= 2.0
-        assert len(cfg.VISION_MODELS) > 0
+        assert DEFAULT_LMSTUDIO_MODEL in VISION_MODELS
+        assert DEFAULT_TEMPERATURE >= 0.0
+        assert DEFAULT_TEMPERATURE <= 2.0
+        assert len(VISION_MODELS) > 0
         # LMSTUDIO_BASE_URL should use environment variable or default to localhost
-        assert cfg.LMSTUDIO_BASE_URL is not None
-        assert isinstance(cfg.LMSTUDIO_BASE_URL, str)
-        assert cfg.LMSTUDIO_BASE_URL.startswith("http")
+        assert LMSTUDIO_BASE_URL is not None
+        assert isinstance(LMSTUDIO_BASE_URL, str)
+        assert LMSTUDIO_BASE_URL.startswith("http")
 
     def test_queue_config(self):
         """Test queue configuration"""
-        assert cfg.MAX_RESULT_QUEUE_SIZE > 0
+        assert MAX_RESULT_QUEUE_SIZE > 0
 
     def test_logging_config(self):
         """Test logging configuration"""
-        assert cfg.LOG_FORMAT is not None
-        assert cfg.LOG_LEVEL in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
-        assert cfg.DEFAULT_OUTPUT_DIR is not None
+        assert LOG_FORMAT is not None
+        assert LOG_LEVEL in ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+        assert DEFAULT_OUTPUT_DIR is not None
 
     def test_detection_config(self):
         """Test object detection configuration"""
         # Color ranges
-        assert len(cfg.RED_HSV_LOWER_1) == 3
-        assert len(cfg.RED_HSV_UPPER_1) == 3
-        assert len(cfg.BLUE_HSV_LOWER) == 3
-        assert len(cfg.BLUE_HSV_UPPER) == 3
+        assert len(RED_HSV_LOWER_1) == 3
+        assert len(RED_HSV_UPPER_1) == 3
+        assert len(BLUE_HSV_LOWER) == 3
+        assert len(BLUE_HSV_UPPER) == 3
 
         # Detection filters
-        assert cfg.MIN_CUBE_AREA_PX > 0
-        assert cfg.MAX_CUBE_AREA_PX > cfg.MIN_CUBE_AREA_PX
-        assert 0 < cfg.MIN_ASPECT_RATIO < cfg.MAX_ASPECT_RATIO
-        assert 0 <= cfg.MIN_CONFIDENCE <= 1.0
+        assert MIN_CUBE_AREA_PX > 0
+        assert MAX_CUBE_AREA_PX > MIN_CUBE_AREA_PX
+        assert 0 < MIN_ASPECT_RATIO < MAX_ASPECT_RATIO
+        assert 0 <= MIN_CONFIDENCE <= 1.0
 
         # Processing intervals
-        assert cfg.DETECTION_CHECK_INTERVAL > 0
+        assert DETECTION_CHECK_INTERVAL > 0
 
     def test_stereo_config(self):
         """Test stereo reconstruction configuration"""
-        assert cfg.DEFAULT_STEREO_BASELINE > 0
-        assert cfg.DEFAULT_STEREO_FOV > 0
-        assert cfg.DEFAULT_STEREO_FOV < 180  # FOV should be reasonable
-        assert cfg.STEREO_CHECK_INTERVAL > 0
+        assert DEFAULT_STEREO_BASELINE > 0
+        assert DEFAULT_STEREO_FOV > 0
+        assert DEFAULT_STEREO_FOV < 180  # FOV should be reasonable
+        assert STEREO_CHECK_INTERVAL > 0
 
 
-class TestConfigHelpers:
-    """Test configuration helper functions"""
+class TestConfigModuleStructure:
+    """Test that config modules are properly structured"""
 
-    def test_get_server_config_defaults(self):
-        """Test get_server_config with default parameters"""
-        config = cfg.get_server_config()
+    def test_servers_module_imports(self):
+        """Test that Servers module exports expected constants"""
+        from config import Servers
 
-        assert config.host == cfg.DEFAULT_HOST
-        assert config.port == cfg.STREAMING_SERVER_PORT
-        assert config.max_connections == cfg.MAX_CONNECTIONS_BACKLOG
-        assert config.max_client_threads == cfg.MAX_CLIENT_THREADS
-        assert config.socket_timeout == cfg.SOCKET_ACCEPT_TIMEOUT
+        # Network constants
+        assert hasattr(Servers, 'DEFAULT_HOST')
+        assert hasattr(Servers, 'STREAMING_SERVER_PORT')
+        assert hasattr(Servers, 'SEQUENCE_SERVER_PORT')
 
-    def test_get_server_config_custom(self):
-        """Test get_server_config with custom parameters"""
-        custom_config = cfg.get_server_config(
-            port=8888,
-            host="192.168.1.1",
-            max_connections=10,
-            max_threads=20,
-            timeout=5.0,
-        )
+        # LLM constants
+        assert hasattr(Servers, 'LMSTUDIO_BASE_URL')
+        assert hasattr(Servers, 'DEFAULT_LMSTUDIO_MODEL')
 
-        assert custom_config.host == "192.168.1.1"
-        assert custom_config.port == 8888
-        assert custom_config.max_connections == 10
-        assert custom_config.max_client_threads == 20
-        assert custom_config.socket_timeout == 5.0
+    def test_vision_module_imports(self):
+        """Test that Vision module exports expected constants"""
+        from config import Vision
 
-    def test_get_streaming_config(self):
-        """Test get_streaming_config returns correct port"""
-        config = cfg.get_streaming_config()
+        # Detection constants
+        assert hasattr(Vision, 'USE_YOLO')
+        assert hasattr(Vision, 'MIN_CUBE_AREA_PX')
+        assert hasattr(Vision, 'ENABLE_DEBUG_IMAGES')
 
-        assert config.host == cfg.DEFAULT_HOST
-        assert config.port == cfg.STREAMING_SERVER_PORT
-        assert hasattr(config, "max_connections")
-        assert hasattr(config, "max_client_threads")
-        assert hasattr(config, "socket_timeout")
+        # Stereo constants
+        assert hasattr(Vision, 'DEFAULT_STEREO_BASELINE')
 
-    def test_get_results_config(self):
-        """Test get_results_config returns correct port"""
-        config = cfg.get_results_config()
+    def test_rag_module_imports(self):
+        """Test that Rag module exports expected constants"""
+        from config import Rag
 
-        assert config.host == cfg.DEFAULT_HOST
-        assert config.port == cfg.RESULTS_SERVER_PORT
-        assert hasattr(config, "max_connections")
-        assert hasattr(config, "max_client_threads")
-        assert hasattr(config, "socket_timeout")
+        assert hasattr(Rag, 'RAG_LM_STUDIO_URL')
+        assert hasattr(Rag, 'RAG_EMBEDDING_DIMENSION')
+        assert hasattr(Rag, 'RAG_DEFAULT_TOP_K')
 
-    def test_get_rag_config(self):
-        """Test get_rag_config returns correct port"""
-        config = cfg.get_rag_config()
+    def test_robot_module_imports(self):
+        """Test that Robot module exports expected constants"""
+        from config import Robot
 
-        assert config.host == cfg.DEFAULT_HOST
-        assert config.port == cfg.RAG_SERVER_PORT
-        assert hasattr(config, "max_connections")
-        assert hasattr(config, "max_client_threads")
-        assert hasattr(config, "socket_timeout")
-
-    def test_get_status_config(self):
-        """Test get_status_config returns correct port"""
-        config = cfg.get_status_config()
-
-        assert config.host == cfg.DEFAULT_HOST
-        assert config.port == cfg.STATUS_SERVER_PORT
-        assert hasattr(config, "max_connections")
-        assert hasattr(config, "max_client_threads")
-        assert hasattr(config, "socket_timeout")
-
-    def test_get_sequence_config(self):
-        """Test get_sequence_config returns correct port"""
-        config = cfg.get_sequence_config()
-
-        assert config.host == cfg.DEFAULT_HOST
-        assert config.port == cfg.SEQUENCE_SERVER_PORT
-        assert hasattr(config, "max_connections")
-        assert hasattr(config, "max_client_threads")
-        assert hasattr(config, "socket_timeout")
-
-    def test_config_consistency(self):
-        """Test that related config values are consistent"""
-        # Streaming and results should use same host by default
-        streaming = cfg.get_streaming_config()
-        results = cfg.get_results_config()
-        assert streaming.host == results.host
-
-        # Ports should be different
-        assert streaming.port != results.port
-
-        # Timeouts should be positive
-        assert streaming.socket_timeout > 0
-        assert results.socket_timeout > 0
+        assert hasattr(Robot, 'WORKSPACE_REGIONS')
+        assert hasattr(Robot, 'ROBOT_BASE_POSITIONS')
+        assert hasattr(Robot, 'MIN_ROBOT_SEPARATION')

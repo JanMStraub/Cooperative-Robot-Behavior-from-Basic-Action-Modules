@@ -605,6 +605,20 @@ namespace PythonCommunication
                 }
                 else
                 {
+                    // If object_id is specified, set up target for attachment (enables handoff)
+                    if (!string.IsNullOrEmpty(command.parameters.object_id))
+                    {
+                        GameObject targetObj = GameObject.Find(command.parameters.object_id);
+                        if (targetObj != null)
+                        {
+                            gripperController.SetTargetObject(targetObj);
+                            Debug.Log($"{_logPrefix} control_gripper: Set target object '{command.parameters.object_id}' for attachment");
+                        }
+                        else
+                        {
+                            Debug.LogWarning($"{_logPrefix} control_gripper: Target object '{command.parameters.object_id}' not found");
+                        }
+                    }
                     gripperController.CloseGrippers();
                 }
 
@@ -627,6 +641,7 @@ namespace PythonCommunication
 
         /// <summary>
         /// Execute grasp_object command using advanced grasp planning pipeline.
+        /// Supports both RobotController (with GraspOptions) and SimpleRobotController (basic grasp).
         /// </summary>
         /// <param name="command">Robot command with grasp parameters</param>
         private void ExecuteGraspObject(RobotCommand command)
@@ -675,49 +690,93 @@ namespace PythonCommunication
                     return;
                 }
 
-                // Build GraspOptions from command parameters
-                GraspOptions options = new GraspOptions
-                {
-                    useGraspPlanning = true,
-                    openGripperOnSet = true,
-                    closeGripperOnReach = true,
-                    useAdvancedPlanning = command.parameters.use_advanced_planning,
-                    approach = ParseApproachType(command.parameters.preferred_approach),
-                    overridePreGraspDistance = command.parameters.pre_grasp_distance,
-                    customApproachVector = ParseApproachVector(command.parameters.custom_approach_vector),
-                    graspConfig = null // Use default config from RobotController
-                };
-
                 // Subscribe to target reached event for completion notification
                 string commandKey = $"grasp_{command.robot_id}_{command.request_id}";
                 _activeCommands[commandKey] = command.request_id;
 
-                System.Action onComplete = null;
-                onComplete = () =>
+                // Check which controller type is available
+                if (controller != null)
                 {
-                    controller.OnTargetReached -= onComplete;
-                    if (_activeCommands.ContainsKey(commandKey))
+                    // Use RobotController with full GraspOptions support
+                    GraspOptions options = new GraspOptions
                     {
-                        _activeCommands.Remove(commandKey);
-                        SendCommandCompletion(
-                            command.robot_id,
-                            "grasp_object",
-                            true,
-                            command.request_id
+                        useGraspPlanning = true,
+                        openGripperOnSet = true,
+                        closeGripperOnReach = true,
+                        useAdvancedPlanning = command.parameters.use_advanced_planning,
+                        approach = ParseApproachType(command.parameters.preferred_approach),
+                        overridePreGraspDistance = command.parameters.pre_grasp_distance,
+                        customApproachVector = ParseApproachVector(command.parameters.custom_approach_vector),
+                        graspConfig = null // Use default config from RobotController
+                    };
+
+                    System.Action onComplete = null;
+                    onComplete = () =>
+                    {
+                        controller.OnTargetReached -= onComplete;
+                        if (_activeCommands.ContainsKey(commandKey))
+                        {
+                            _activeCommands.Remove(commandKey);
+                            SendCommandCompletion(
+                                command.robot_id,
+                                "grasp_object",
+                                true,
+                                command.request_id
+                            );
+                        }
+                    };
+                    controller.OnTargetReached += onComplete;
+
+                    // Execute grasp with full options
+                    controller.SetTarget(targetObject, options);
+
+                    if (_verboseLogging)
+                    {
+                        string planningMode = options.useAdvancedPlanning ? "Advanced" : "Standard";
+                        Debug.Log(
+                            $"{_logPrefix} {planningMode} grasp planning: {command.robot_id} -> {objectId}"
                         );
                     }
-                };
-                controller.OnTargetReached += onComplete;
-
-                // Execute grasp
-                controller.SetTarget(targetObject, options);
-
-                if (_verboseLogging)
+                }
+                else if (robotInstance.simpleController != null)
                 {
-                    string planningMode = options.useAdvancedPlanning ? "Advanced" : "Standard";
-                    Debug.Log(
-                        $"{_logPrefix} {planningMode} grasp planning: {command.robot_id} -> {objectId}"
+                    // Use SimpleRobotController with basic grasp (no GraspOptions)
+                    SimpleRobotController simpleController = robotInstance.simpleController;
+
+                    System.Action onComplete = null;
+                    onComplete = () =>
+                    {
+                        simpleController.OnTargetReached -= onComplete;
+                        if (_activeCommands.ContainsKey(commandKey))
+                        {
+                            _activeCommands.Remove(commandKey);
+                            SendCommandCompletion(
+                                command.robot_id,
+                                "grasp_object",
+                                true,
+                                command.request_id
+                            );
+                        }
+                    };
+                    simpleController.OnTargetReached += onComplete;
+
+                    // Execute basic grasp (SimpleRobotController handles gripper automatically)
+                    simpleController.SetTarget(targetObject);
+
+                    if (_verboseLogging)
+                    {
+                        Debug.Log(
+                            $"{_logPrefix} Simple grasp: {command.robot_id} -> {objectId}"
+                        );
+                    }
+                }
+                else
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} grasp_object: No valid controller found for robot '{command.robot_id}'"
                     );
+                    _failedCommands++;
+                    return;
                 }
 
                 _successfulCommands++;

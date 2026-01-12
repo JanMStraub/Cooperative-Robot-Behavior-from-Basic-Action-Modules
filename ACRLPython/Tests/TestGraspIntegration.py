@@ -100,9 +100,9 @@ class TestGraspEndToEnd:
 
         # Verify command parameters
         call_args = mock_unity_connection.send_command_and_wait.call_args[0][0]
-        assert call_args["custom_approach_vector"]["y"] == 1.0
-        assert call_args["pre_grasp_distance"] == 0.12
-        assert call_args["retreat_distance"] == 0.15
+        assert call_args["parameters"]["custom_approach_vector"]["y"] == 1.0
+        assert call_args["parameters"]["pre_grasp_distance"] == 0.12
+        assert call_args["parameters"]["retreat_distance"] == 0.15
 
     @pytest.mark.slow
     def test_grasp_planning_failure_scenarios(self, mock_unity_connection):

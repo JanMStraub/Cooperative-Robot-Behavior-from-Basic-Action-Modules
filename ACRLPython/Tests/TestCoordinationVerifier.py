@@ -15,7 +15,7 @@ from operations.CoordinationVerifier import (
     quick_check_multi_robot_safety,
 )
 from operations.Base import OperationCategory
-import LLMConfig as cfg
+# Config imports not needed - using fixtures
 
 
 class TestCoordinationIssue:

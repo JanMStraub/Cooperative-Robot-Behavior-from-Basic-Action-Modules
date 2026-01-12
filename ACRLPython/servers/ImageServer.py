@@ -13,16 +13,30 @@ Ports:
 import socket
 import struct
 import time
-from typing import Optional, Tuple, List, Dict
+from typing import Optional
 import numpy as np
 import cv2
 
 # Import config
 try:
-    import LLMConfig as cfg
+    from config.Servers import (
+        DEFAULT_HOST,
+        STREAMING_SERVER_PORT,
+        STEREO_DETECTION_PORT,
+        MAX_STRING_LENGTH,
+        MAX_IMAGE_SIZE,
+    )
+    from config.Vision import ENABLE_VISION_STREAMING
     from core.LoggingSetup import get_logger
 except ImportError:
-    from .. import LLMConfig as cfg
+    from ..config.Servers import (
+        DEFAULT_HOST,
+        STREAMING_SERVER_PORT,
+        STEREO_DETECTION_PORT,
+        MAX_STRING_LENGTH,
+        MAX_IMAGE_SIZE,
+    )
+    from ..config.Vision import ENABLE_VISION_STREAMING
     from ..core.LoggingSetup import get_logger
 
 # Import base classes
@@ -49,7 +63,7 @@ class SingleImageServer(TCPServerBase):
 
     def __init__(self, config: Optional[ServerConfig] = None):
         if config is None:
-            config = ServerConfig(host=cfg.DEFAULT_HOST, port=cfg.STREAMING_SERVER_PORT)
+            config = ServerConfig(host=DEFAULT_HOST, port=STREAMING_SERVER_PORT)
         super().__init__(config)
         self._storage = UnifiedImageStorage()
 
@@ -76,7 +90,7 @@ class SingleImageServer(TCPServerBase):
 
                 # Read camera_id
                 id_len = self._read_int(client)
-                if id_len is None or id_len > cfg.MAX_STRING_LENGTH:
+                if id_len is None or id_len > MAX_STRING_LENGTH:
                     break
                 camera_id_bytes = self._recv_exactly(client, id_len)
                 if camera_id_bytes is None:
@@ -85,7 +99,7 @@ class SingleImageServer(TCPServerBase):
 
                 # Read prompt
                 prompt_len = self._read_int(client)
-                if prompt_len is None or prompt_len > cfg.MAX_STRING_LENGTH:
+                if prompt_len is None or prompt_len > MAX_STRING_LENGTH:
                     break
                 if prompt_len > 0:
                     prompt_bytes = self._recv_exactly(client, prompt_len)
@@ -97,7 +111,7 @@ class SingleImageServer(TCPServerBase):
 
                 # Read image
                 img_len = self._read_int(client)
-                if img_len is None or img_len > cfg.MAX_IMAGE_SIZE:
+                if img_len is None or img_len > MAX_IMAGE_SIZE:
                     break
                 img_data = self._recv_exactly(client, img_len)
                 if not img_data:
@@ -116,8 +130,6 @@ class SingleImageServer(TCPServerBase):
         except Exception as e:
             logger.error(f"Error handling client {address}: {e}")
 
-    # Note: _recv_exactly() and _read_int() methods now inherited from TCPServerBase
-
 
 class StereoImageServer(TCPServerBase):
     """
@@ -126,7 +138,7 @@ class StereoImageServer(TCPServerBase):
 
     def __init__(self, config: Optional[ServerConfig] = None):
         if config is None:
-            config = ServerConfig(host=cfg.DEFAULT_HOST, port=cfg.STEREO_DETECTION_PORT)
+            config = ServerConfig(host=DEFAULT_HOST, port=STEREO_DETECTION_PORT)
         super().__init__(config)
         self._storage = UnifiedImageStorage()
 
@@ -152,7 +164,7 @@ class StereoImageServer(TCPServerBase):
 
                 # Read camera_pair_id
                 pair_id_len = self._read_int(client)
-                if pair_id_len is None or pair_id_len > cfg.MAX_STRING_LENGTH:
+                if pair_id_len is None or pair_id_len > MAX_STRING_LENGTH:
                     break
                 pair_id_bytes = self._recv_exactly(client, pair_id_len)
                 if pair_id_bytes is None:
@@ -173,7 +185,7 @@ class StereoImageServer(TCPServerBase):
 
                 # Read prompt
                 prompt_len = self._read_int(client)
-                if prompt_len is None or prompt_len > cfg.MAX_STRING_LENGTH:
+                if prompt_len is None or prompt_len > MAX_STRING_LENGTH:
                     break
                 if prompt_len > 0:
                     prompt_bytes = self._recv_exactly(client, prompt_len)
@@ -185,7 +197,7 @@ class StereoImageServer(TCPServerBase):
 
                 # Read left image
                 img_L_len = self._read_int(client)
-                if img_L_len is None or img_L_len > cfg.MAX_IMAGE_SIZE:
+                if img_L_len is None or img_L_len > MAX_IMAGE_SIZE:
                     break
                 img_L_data = self._recv_exactly(client, img_L_len)
                 if not img_L_data:
@@ -193,7 +205,7 @@ class StereoImageServer(TCPServerBase):
 
                 # Read right image
                 img_R_len = self._read_int(client)
-                if img_R_len is None or img_R_len > cfg.MAX_IMAGE_SIZE:
+                if img_R_len is None or img_R_len > MAX_IMAGE_SIZE:
                     break
                 img_R_data = self._recv_exactly(client, img_R_len)
                 if not img_R_data:
@@ -206,7 +218,7 @@ class StereoImageServer(TCPServerBase):
                     if (
                         meta_len is not None
                         and meta_len > 0
-                        and meta_len < cfg.MAX_STRING_LENGTH * 10
+                        and meta_len < MAX_STRING_LENGTH * 10
                     ):
                         meta_data = self._recv_exactly(client, meta_len)
                         if meta_data:
@@ -230,7 +242,7 @@ class StereoImageServer(TCPServerBase):
                         camera_pair_id, imgL, imgR, prompt, metadata
                     )
 
-                    if not cfg.ENABLE_VISION_STREAMING:
+                    if not ENABLE_VISION_STREAMING:
                         logger.info(
                             f"[req={request_id}] Received stereo '{camera_pair_id}' "
                             f"(L: {img_L_len/1024:.1f}KB, R: {img_R_len/1024:.1f}KB)"
@@ -238,8 +250,6 @@ class StereoImageServer(TCPServerBase):
 
         except Exception as e:
             logger.error(f"Error handling stereo client {address}: {e}")
-
-    # Note: _recv_exactly() and _read_int() methods now inherited from TCPServerBase
 
 
 class ImageServer:
@@ -257,9 +267,9 @@ class ImageServer:
 
     def __init__(
         self,
-        single_port: int = cfg.STREAMING_SERVER_PORT,
-        stereo_port: int = cfg.STEREO_DETECTION_PORT,
-        host: str = cfg.DEFAULT_HOST,
+        single_port: int = STREAMING_SERVER_PORT,
+        stereo_port: int = STEREO_DETECTION_PORT,
+        host: str = DEFAULT_HOST,
     ):
         """
         Initialize the unified image server.
@@ -278,10 +288,6 @@ class ImageServer:
 
     def start(self):
         """Start both image servers."""
-        logger.info(
-            f"Starting ImageServer (single: {self._single_config.port}, "
-            f"stereo: {self._stereo_config.port})"
-        )
         self._single_server.start()
         self._stereo_server.start()
 
@@ -301,9 +307,9 @@ class ImageServer:
 
 
 def run_image_server_background(
-    single_port: int = cfg.STREAMING_SERVER_PORT,
-    stereo_port: int = cfg.STEREO_DETECTION_PORT,
-    host: str = cfg.DEFAULT_HOST,
+    single_port: int = STREAMING_SERVER_PORT,
+    stereo_port: int = STEREO_DETECTION_PORT,
+    host: str = DEFAULT_HOST,
 ) -> ImageServer:
     """
     Start the ImageServer in background threads.
@@ -326,9 +332,9 @@ if __name__ == "__main__":
     import signal
 
     parser = argparse.ArgumentParser(description="Unified Image Server")
-    parser.add_argument("--host", default=cfg.DEFAULT_HOST)
-    parser.add_argument("--single-port", type=int, default=cfg.STREAMING_SERVER_PORT)
-    parser.add_argument("--stereo-port", type=int, default=cfg.STEREO_DETECTION_PORT)
+    parser.add_argument("--host", default=DEFAULT_HOST)
+    parser.add_argument("--single-port", type=int, default=STREAMING_SERVER_PORT)
+    parser.add_argument("--stereo-port", type=int, default=STEREO_DETECTION_PORT)
     args = parser.parse_args()
 
     server = ImageServer(args.single_port, args.stereo_port, args.host)
