@@ -84,6 +84,7 @@ namespace Robotics
         private float _cachedUpperLimit;
         private bool _invertMapping;
         private bool _wasMoving;
+        private bool _isInitialized = false;
         public bool IsMoving { get; private set; }
 
         // Object Attachment State
@@ -105,6 +106,14 @@ namespace Robotics
         /// </summary>
         public GameObject GraspedObject => _graspedObject;
 
+        private void Awake()
+        {
+            if (leftGripper == null || rightGripper == null)
+            {
+                Debug.LogError("[GRIPPER_CONTROLLER] Gripper references not assigned!");
+            }
+        }
+
         private void Start()
         {
             if (leftGripper == null || rightGripper == null)
@@ -114,14 +123,30 @@ namespace Robotics
             SetupDrive(leftGripper);
             SetupDrive(rightGripper);
 
-            float currentPos = leftGripper.jointPosition[0];
-            _currentPhysicalTarget = currentPos;
-            targetPosition = MapPhysicalToNormalized(currentPos);
+            // Safety check: ensure joint position data is available
+            if (leftGripper.jointPosition.dofCount > 0)
+            {
+                float currentPos = leftGripper.jointPosition[0];
+                _currentPhysicalTarget = currentPos;
+                targetPosition = MapPhysicalToNormalized(currentPos);
+            }
+            else
+            {
+                // Initialize with default open position if joint data not available yet
+                _currentPhysicalTarget = _cachedUpperLimit;
+                targetPosition = 1f; // Fully open
+            }
+
+            _isInitialized = true;
         }
 
         private void Update()
         {
-            if (leftGripper == null)
+            if (!_isInitialized || leftGripper == null)
+                return;
+
+            // Safety check: ensure joint position data is available
+            if (leftGripper.jointPosition.dofCount == 0)
                 return;
 
             float goalPhysicalPosition = MapNormalizedToPhysical(targetPosition);
@@ -183,7 +208,16 @@ namespace Robotics
 
         public void SetGripperPosition(float normalizedPosition)
         {
-            targetPosition = Mathf.Clamp01(normalizedPosition);
+            float newTarget = Mathf.Clamp01(normalizedPosition);
+
+            // If target changed significantly, mark as moving
+            if (Mathf.Abs(newTarget - targetPosition) > 0.0001f)
+            {
+                _wasMoving = false;
+                IsMoving = true;
+            }
+
+            targetPosition = newTarget;
         }
 
         /// <summary>
@@ -240,6 +274,9 @@ namespace Robotics
 
         public void ResetGrippers()
         {
+            if (leftGripper == null || rightGripper == null)
+                return;
+
             targetPosition = 1f;
             float openPos = MapNormalizedToPhysical(1f);
             _currentPhysicalTarget = openPos;

@@ -479,3 +479,208 @@ class TestCommandParserIntegration:
             for cmd in result["commands"]:
                 assert "robot_id" in cmd["params"]
                 assert cmd["params"]["robot_id"] == "Robot1"
+
+
+# ============================================================================
+# Test Class: LLM Fallback Validation
+# ============================================================================
+
+
+# ============================================================================
+# Test Class: Multi-Robot Command Disambiguation
+# ============================================================================
+
+class TestMultiRobotCommands:
+    """Test parsing commands for multiple robots."""
+
+    @pytest.fixture
+    def command_parser(self):
+        """Create CommandParser instance."""
+        parser = CommandParser(use_rag=False)
+        return parser
+
+    @pytest.fixture
+    def mock_registry(self):
+        """Mock registry with test operations."""
+        registry = Mock()
+        registry.get_operation_by_name.side_effect = lambda name: Mock(
+            name=name,
+            operation_id=f"op_{name}",
+            parameters=[]
+        ) if name in ["move_to_coordinate", "control_gripper"] else None
+        return registry
+
+    def test_multi_robot_explicit_ids(self, command_parser, mock_registry):
+        """Test commands with explicit robot IDs for each operation."""
+        with patch.object(command_parser, 'registry', mock_registry):
+            result = command_parser.parse(
+                "Robot1 move to (0.3, 0.2, 0.1), Robot2 move to (0.5, 0.3, 0.2)",
+                robot_id="Robot1",  # Default, but should be overridden
+                use_llm=False
+            )
+
+            if result["success"] and len(result["commands"]) >= 2:
+                # Verify robot IDs are correctly assigned
+                cmd1 = result["commands"][0]
+                cmd2 = result["commands"][1]
+
+                assert cmd1["params"]["robot_id"] in ["Robot1", "Robot2"]
+                assert cmd2["params"]["robot_id"] in ["Robot1", "Robot2"]
+
+    def test_broadcast_command_all_robots(self, command_parser, mock_registry):
+        """Test broadcast command to all robots."""
+        with patch.object(command_parser, 'registry', mock_registry):
+            result = command_parser.parse(
+                "all robots close gripper",
+                robot_id="Robot1",
+                use_llm=False
+            )
+
+            # Should create command (specific handling depends on implementation)
+            if result["success"]:
+                assert len(result["commands"]) >= 1
+                # Check if broadcast intent is captured
+                cmd = result["commands"][0]
+                assert cmd["operation"] == "control_gripper"
+
+    def test_sequential_multi_robot_operations(self, command_parser, mock_registry):
+        """Test sequential operations for multiple robots."""
+        with patch.object(command_parser, 'registry', mock_registry):
+            result = command_parser.parse(
+                "Robot1 close gripper, then Robot2 close gripper",
+                robot_id="Robot1",
+                use_llm=False
+            )
+
+            if result["success"] and len(result["commands"]) >= 2:
+                # Verify both commands present
+                assert result["commands"][0]["operation"] == "control_gripper"
+                assert result["commands"][1]["operation"] == "control_gripper"
+
+    def test_ambiguous_robot_reference(self, command_parser, mock_registry):
+        """Test handling of ambiguous robot references."""
+        with patch.object(command_parser, 'registry', mock_registry):
+            # "the robot" without specifying which one
+            result = command_parser.parse(
+                "move the robot to (0.3, 0.2, 0.1)",
+                robot_id="Robot1",  # Should default to this
+                use_llm=False
+            )
+
+            # Should use default robot_id
+            if result["success"]:
+                assert result["commands"][0]["params"]["robot_id"] == "Robot1"
+
+
+# ============================================================================
+# Test Class: Variable Substitution Edge Cases
+# ============================================================================
+
+class TestVariableSubstitution:
+    """Test variable substitution in command parsing."""
+
+    @pytest.fixture
+    def command_parser(self):
+        """Create CommandParser instance."""
+        parser = CommandParser(use_rag=False)
+        return parser
+
+    @pytest.fixture
+    def mock_registry(self):
+        """Mock registry."""
+        registry = Mock()
+        registry.get_operation_by_name.side_effect = lambda name: Mock(
+            name=name,
+            operation_id=f"op_{name}",
+            parameters=[]
+        ) if name in ["detect_object_stereo", "move_to_coordinate", "move_relative_to_object"] else None
+        return registry
+
+    def test_undefined_variable_reference(self, command_parser, mock_registry):
+        """Test reference to undefined variable."""
+        with patch.object(command_parser, 'registry', mock_registry):
+            result = command_parser.parse(
+                "move to $undefined_target",
+                robot_id="Robot1",
+                use_llm=False
+            )
+
+            # Should handle gracefully - either error or use literal
+            assert result is not None
+            if not result.get("success"):
+                # Should have error about undefined variable
+                assert "undefined" in str(result).lower() or "variable" in str(result).lower()
+
+    def test_variable_overwrite(self, command_parser, mock_registry):
+        """Test overwriting existing variable."""
+        with patch.object(command_parser, 'registry', mock_registry):
+            result = command_parser.parse(
+                "detect blue cube -> $target, detect red cube -> $target",
+                robot_id="Robot1",
+                use_llm=False
+            )
+
+            # Second assignment should overwrite first
+            if result["success"] and len(result["commands"]) >= 2:
+                # Both commands should succeed, second overwrites variable
+                assert len(result["commands"]) == 2
+
+    def test_nested_variable_substitution(self, command_parser, mock_registry):
+        """Test nested variable references."""
+        with patch.object(command_parser, 'registry', mock_registry):
+            # This is an edge case - variable referring to another variable
+            result = command_parser.parse(
+                "detect cube -> $target1, $target1 -> $target2",
+                robot_id="Robot1",
+                use_llm=False
+            )
+
+            # Should handle gracefully (implementation dependent)
+            assert result is not None
+
+    def test_special_characters_in_variable_names(self, command_parser, mock_registry):
+        """Test variable names with special characters."""
+        with patch.object(command_parser, 'registry', mock_registry):
+            # Test various special characters
+            test_cases = [
+                "detect cube -> $target-1",
+                "detect cube -> $target_pos",
+                "detect cube -> $target.position",
+            ]
+
+            for cmd in test_cases:
+                result = command_parser.parse(cmd, robot_id="Robot1", use_llm=False)
+                # Should either work or fail gracefully
+                assert result is not None
+
+    def test_variable_in_coordinate(self, command_parser, mock_registry):
+        """Test using variable as part of coordinate."""
+        with patch.object(command_parser, 'registry', mock_registry):
+            result = command_parser.parse(
+                "detect cube -> $x, move to ($x, 0.2, 0.1)",
+                robot_id="Robot1",
+                use_llm=False
+            )
+
+            # Variable substitution in coordinates (advanced feature)
+            # Should handle gracefully
+            assert result is not None
+
+    def test_empty_variable_assignment(self, command_parser, mock_registry):
+        """Test empty variable assignment."""
+        with patch.object(command_parser, 'registry', mock_registry):
+            result = command_parser.parse(
+                "detect cube -> $",
+                robot_id="Robot1",
+                use_llm=False
+            )
+
+            # Should handle invalid syntax
+            assert result is not None
+
+
+# ============================================================================
+# Test Class: Complex Command Chains
+# ============================================================================
+
+

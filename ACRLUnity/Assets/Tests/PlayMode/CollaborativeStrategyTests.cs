@@ -78,8 +78,8 @@ namespace Tests.PlayMode
             // Expect the warning message for missing gripper (this is expected in tests)
             LogAssert.Expect(LogType.Warning, $"[ROBOT_CONTROLLER] No GripperController found in children of {name}");
 
-            // Expect the error message for missing joints (this is expected in tests)
-            LogAssert.Expect(LogType.Error, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+            // Expect the warning message for missing joints (this is expected in tests)
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
 
             _testObjects.Add(robotObj);
             _testObjects.Add(endEffector);
@@ -370,7 +370,8 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator Scenario_TwoRobots_IndependentWorkspaces_NoConflict()
         {
-            LogAssert.ignoreFailingMessages = true; // Ignore warning logs from coordination checks
+            // Note: Removed ignoreFailingMessages anti-pattern
+            // Expected warnings from robot setup are now properly handled with LogAssert.Expect
 
             var robot1 = CreateTestRobot("Robot1", new Vector3(-0.5f, 0f, 0.2f));
             var robot2 = CreateTestRobot("Robot2", new Vector3(0.5f, 0f, 0.2f));
@@ -400,14 +401,13 @@ namespace Tests.PlayMode
             // Both robots should be active (no conflicts)
             Assert.IsTrue(_strategy.IsRobotActive("Robot1"));
             Assert.IsTrue(_strategy.IsRobotActive("Robot2"));
-
-            LogAssert.ignoreFailingMessages = false;
         }
 
         [UnityTest]
         public IEnumerator Scenario_TwoRobots_SharedZone_Coordination()
         {
-            LogAssert.ignoreFailingMessages = true; // Ignore warning logs from collision detection
+            // Note: Removed ignoreFailingMessages anti-pattern
+            // Collision warnings are expected behavior for this test
 
             var robot1 = CreateTestRobot("Robot1", new Vector3(-0.5f, 0f, 0.2f));
             var robot2 = CreateTestRobot("Robot2", new Vector3(0.5f, 0f, 0.2f));
@@ -434,11 +434,10 @@ namespace Tests.PlayMode
                 yield return new WaitForSeconds(0.6f); // Wait for coordination check interval
             }
 
-            // Coordination should detect conflict (logged as warning)
-            // Both robots are still tracked as active (warning only, not blocked at strategy level)
-            Assert.IsNotNull(_strategy.GetActiveRobotId());
-
-            LogAssert.ignoreFailingMessages = false;
+            // Coordination should detect conflict and block Robot2
+            // Robot1 should be active, Robot2 should be blocked
+            Assert.IsTrue(_strategy.IsRobotActive("Robot1"), "Robot1 should be active");
+            Assert.IsFalse(_strategy.IsRobotActive("Robot2"), "Robot2 should be blocked due to collision");
         }
 
         #endregion
@@ -448,7 +447,8 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator Update_DetectsPathCollision_BetweenMovingRobots()
         {
-            LogAssert.ignoreFailingMessages = true;
+            // Note: Removed ignoreFailingMessages anti-pattern
+            // Path collision warnings are expected and indicate correct behavior
 
             var robot1 = CreateTestRobot("Robot1", new Vector3(-0.5f, 0f, 0f));
             var robot2 = CreateTestRobot("Robot2", new Vector3(0.5f, 0f, 0f));
@@ -477,8 +477,6 @@ namespace Tests.PlayMode
 
             // Strategy should detect potential collision (logged as warning)
             Assert.IsNotNull(_strategy.GetActiveRobotId(), "Active robot ID should not be null");
-
-            LogAssert.ignoreFailingMessages = false;
         }
 
         [UnityTest]
@@ -555,7 +553,8 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator RequiresCoordination_TriggersReplanning_ForConflictingPaths()
         {
-            LogAssert.ignoreFailingMessages = true;
+            // Note: Removed ignoreFailingMessages anti-pattern
+            // Coordination requirement is the expected behavior being tested
 
             var robot1 = CreateTestRobot("Robot1", new Vector3(-0.3f, 0f, 0f));
             var robot2 = CreateTestRobot("Robot2", new Vector3(0.3f, 0f, 0f));
@@ -580,8 +579,6 @@ namespace Tests.PlayMode
             // Check if coordination is required
             bool requiresCoord = _strategy.RequiresCoordination("Robot1", "Robot2");
             Assert.IsTrue(requiresCoord, "Should require coordination for close targets");
-
-            LogAssert.ignoreFailingMessages = false;
         }
 
         #endregion
@@ -591,7 +588,8 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator Update_MarksCollisionZones_ForConflictingRobots()
         {
-            LogAssert.ignoreFailingMessages = true;
+            // Note: Removed ignoreFailingMessages anti-pattern
+            // Collision zone marking is the expected behavior being tested
 
             var robot1 = CreateTestRobot("Robot1", new Vector3(0f, 0f, 0f));
             var robot2 = CreateTestRobot("Robot2", new Vector3(0.1f, 0f, 0f));
@@ -618,11 +616,9 @@ namespace Tests.PlayMode
                 yield return new WaitForSeconds(0.2f);
             }
 
-            // Both robots should still be active (warnings logged)
+            // Robot1 should be active, Robot2 should be blocked due to collision
             Assert.IsTrue(_strategy.IsRobotActive("Robot1"), "Robot1 should be active");
-            Assert.IsTrue(_strategy.IsRobotActive("Robot2"), "Robot2 should be active");
-
-            LogAssert.ignoreFailingMessages = false;
+            Assert.IsFalse(_strategy.IsRobotActive("Robot2"), "Robot2 should be blocked due to collision");
         }
 
         #endregion

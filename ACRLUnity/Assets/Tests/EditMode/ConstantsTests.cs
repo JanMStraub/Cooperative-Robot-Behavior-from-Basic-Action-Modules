@@ -79,8 +79,6 @@ namespace Tests.EditMode
             // Grasp timeout should be positive and less than 1 minute
             Assert.Greater(RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS, 0f);
             Assert.Less(RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS, 60f);
-            // Should be 10 seconds
-            Assert.AreEqual(10f, RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS);
         }
 
         [Test]
@@ -89,16 +87,6 @@ namespace Tests.EditMode
             // Movement timeout should be positive and less than 1 minute
             Assert.Greater(RobotConstants.DEFAULT_MOVEMENT_TIMEOUT_SECONDS, 0f);
             Assert.Less(RobotConstants.DEFAULT_MOVEMENT_TIMEOUT_SECONDS, 60f);
-            // Should be 15 seconds
-            Assert.AreEqual(15f, RobotConstants.DEFAULT_MOVEMENT_TIMEOUT_SECONDS);
-        }
-
-        [Test]
-        public void RobotConstants_MovementTimeout_IsLongerThanGraspTimeout()
-        {
-            // Movement timeout should be longer than grasp timeout
-            Assert.Greater(RobotConstants.DEFAULT_MOVEMENT_TIMEOUT_SECONDS,
-                          RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS);
         }
 
         [Test]

@@ -367,10 +367,11 @@ namespace Simulation
                 {
                     foreach (var robot in _robotControllers)
                     {
-                        if (robot != null)
+                        if (robot != null && robot.gameObject != null)
                         {
                             robot.ResetJointTargets();
-                            _robotTargetReached[robot.gameObject.name] = true;
+                            string robotId = robot.gameObject.name;
+                            _robotTargetReached[robotId] = true;
                         }
                     }
                 }

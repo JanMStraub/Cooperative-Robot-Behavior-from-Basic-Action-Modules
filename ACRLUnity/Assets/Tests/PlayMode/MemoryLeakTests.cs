@@ -29,10 +29,11 @@ namespace Tests.PlayMode
             _robotController.endEffectorBase = endEffectorBase.transform;
 
             // Expect initialization warnings since we're not setting up full ArticulationBody chain
+            // Must be called BEFORE the logs appear (before Start() is invoked)
             LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of TestRobot");
-            LogAssert.Expect(LogType.Error, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
 
-            // Wait for Start() to be called
+            // Wait for Start() to be called - this will trigger the expected logs
             yield return null;
         }
 

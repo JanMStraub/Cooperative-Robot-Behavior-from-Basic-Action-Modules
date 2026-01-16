@@ -66,7 +66,7 @@ namespace Core
         /// Default timeout for grasp operations (seconds)
         /// Prevents infinite waiting when grasp target is unreachable
         /// </summary>
-        public const float DEFAULT_GRASP_TIMEOUT_SECONDS = 30f;
+        public const float DEFAULT_GRASP_TIMEOUT_SECONDS = 10f;
 
         /// <summary>
         /// Default timeout for movement operations (seconds)
