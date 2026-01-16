@@ -69,11 +69,25 @@ namespace Robotics
         public Transform IKReferenceFrame;
         public float[] jointDriveTargets;
 
+        [Header("Velocity Control")]
+        [SerializeField]
+        private ArticulationBody endEffectorArticulationBody;
+        private Vector3 _lastEndEffectorPosition;
+        private Vector3 _endEffectorVelocity;
+
         [Header("Gripper Integration")]
         [SerializeField]
         private GripperController _gripperController;
         public bool _closeGripperAfterReach = false;
         private GraspApproach _currentGraspApproach;
+
+        [SerializeField]
+        [Tooltip("Automatically attach the target object to the gripper when grasped")]
+        private bool _attachObjectOnGrasp = true;
+
+        [SerializeField]
+        [Tooltip("Delay in seconds before closing gripper after reaching target")]
+        private float _gripperCloseDelay = 0.2f;
 
         [Header("Target Tracking")]
         [SerializeField]
@@ -112,10 +126,20 @@ namespace Robotics
             if (string.IsNullOrEmpty(robotId))
                 robotId = gameObject.name;
 
-            _ikFrame = IKReferenceFrame != null ? IKReferenceFrame : endEffectorBase.root;
+            _ikFrame = IKReferenceFrame != null
+                ? IKReferenceFrame
+                : (endEffectorBase != null && endEffectorBase.root != null
+                    ? endEffectorBase.root
+                    : transform);
 
             if (_gripperController == null)
+            {
                 _gripperController = GetComponentInChildren<GripperController>();
+                if (_gripperController == null)
+                {
+                    Debug.LogWarning($"{_logPrefix} No GripperController found in children of {robotId}");
+                }
+            }
 
             if (_robotManager != null && !_robotManager.IsRobotRegistered(robotId))
                 _robotManager.RegisterRobot(robotId, gameObject);
@@ -130,7 +154,10 @@ namespace Robotics
         private void InitializeRobot()
         {
             if (robotJoints == null || robotJoints.Length == 0)
+            {
+                Debug.LogWarning($"{_logPrefix} Robot joints are not assigned. Please assign ArticulationBodies.");
                 return;
+            }
 
             int jointCount = robotJoints.Length;
 
@@ -164,6 +191,19 @@ namespace Robotics
             _ikSolver = new IKSolver(jointCount, _dampingFactorLambda);
             _gripperController?.ResetGrippers();
             _sqrTargetMovementThreshold = _targetMovementThreshold * _targetMovementThreshold;
+
+            // Find end effector ArticulationBody for velocity feedback
+            if (endEffectorBase != null && endEffectorArticulationBody == null)
+            {
+                // Try to find ArticulationBody on end effector or parent chain
+                endEffectorArticulationBody = endEffectorBase.GetComponentInParent<ArticulationBody>();
+                if (endEffectorArticulationBody == null)
+                {
+                    Debug.LogWarning($"{_logPrefix} No ArticulationBody found for end effector velocity feedback. Using position-only IK.");
+                }
+            }
+
+            _lastEndEffectorPosition = endEffectorBase != null ? endEffectorBase.position : Vector3.zero;
         }
 
         private void InitializeGraspPipeline()
@@ -212,11 +252,41 @@ namespace Robotics
 
                 if (setting)
                 {
-                    OnTargetReached?.Invoke();
+                    // If close gripper after reach is enabled, use coroutine to handle
+                    // automatic object attachment before closing
                     if (_closeGripperAfterReach && _gripperController != null)
-                        _gripperController.CloseGrippers();
+                    {
+                        StartCoroutine(CloseGripperAfterDelay());
+                    }
+                    else
+                    {
+                        OnTargetReached?.Invoke();
+                    }
                 }
             }
+        }
+
+        /// <summary>
+        /// Close the gripper after a delay to allow the robot to settle.
+        /// Automatically attaches the target object if enabled.
+        /// </summary>
+        private IEnumerator CloseGripperAfterDelay()
+        {
+            yield return new WaitForSeconds(_gripperCloseDelay);
+
+            // Set the target object so it will be attached automatically when gripper closes
+            if (_attachObjectOnGrasp && _targetObject != null)
+            {
+                _gripperController.SetTargetObject(_targetObject);
+            }
+
+            _gripperController.CloseGrippers();
+
+            // Wait for gripper to finish closing
+            yield return new WaitWhile(() => _gripperController.IsMoving);
+            yield return new WaitForSeconds(0.2f); // Extra settle time
+
+            OnTargetReached?.Invoke();
         }
 
         // --- Optimized Core Loop ---
@@ -255,6 +325,22 @@ namespace Robotics
 
         private void UpdateEndEffectorState()
         {
+            // Update end effector velocity (using FixedUpdate time step for stability)
+            if (endEffectorBase != null)
+            {
+                Vector3 currentPosition = endEffectorBase.position;
+                float dt = Time.fixedDeltaTime;
+
+                if (dt > 0f)
+                {
+                    // Calculate velocity in IK frame coordinates
+                    Vector3 worldVelocity = (currentPosition - _lastEndEffectorPosition) / dt;
+                    _endEffectorVelocity = _ikFrame.InverseTransformDirection(worldVelocity);
+                }
+
+                _lastEndEffectorPosition = currentPosition;
+            }
+
             if (_targetTransform == null)
             {
                 _sqrDistanceToTarget = 0f;
@@ -315,7 +401,7 @@ namespace Robotics
 
         public void PerformInverseKinematicsStep()
         {
-            if (robotJoints.Length == 0 || endEffectorBase == null || _targetTransform == null)
+            if (robotJoints == null || robotJoints.Length == 0 || endEffectorBase == null || _targetTransform == null)
                 return;
 
             UpdateEndEffectorState();
@@ -398,16 +484,28 @@ namespace Robotics
             );
             IKState targetState = new IKState(constrainedTargetPos, constrainedTargetRot);
 
-            // OPTIMIZATION: Removed 'new IKSolver()' allocation.
-            // We pass the dynamic lambda directly to the compute function.
-            // Ensure your IKSolver.ComputeJointDeltas signature accepts this optional float!
-            var jointDeltas = _ikSolver.ComputeJointDeltas(
+            // Target velocity (zero for now - future enhancement: use TrajectoryController)
+            Vector3 targetVelocity = Vector3.zero;
+
+            // PD gains for velocity-level IK (tuned to eliminate oscillation)
+            // Kp: Position gain - how strongly to correct position error
+            // Kd: Velocity gain (damping) - prevents overshoot and oscillation
+            float Kp = 1.0f;  // Standard position correction
+            float Kd = 0.5f;  // Damping to prevent oscillation
+
+            // Use velocity-aware IK to eliminate oscillation
+            var jointDeltas = _ikSolver.ComputeJointDeltasWithVelocity(
                 currentState,
                 targetState,
+                _endEffectorVelocity,      // Current velocity for damping
+                targetVelocity,            // Target velocity (zero = stop at target)
                 _cachedJointInfos,
                 posThreshold,
-                finalWeight,
-                dynamicLambda // <--- Pass dynamic lambda here
+                Kp,                        // Position gain
+                Kd,                        // Velocity gain (damping)
+                finalWeight,               // Orientation weight
+                RobotConstants.DEFAULT_ORIENTATION_THRESHOLD_DEGREES * Mathf.Deg2Rad,
+                dynamicLambda              // Dynamic damping for pseudo-inverse
             );
 
             if (jointDeltas == null)

@@ -19,6 +19,15 @@ namespace Robotics
     [RequireComponent(typeof(Collider))]
     public class GripperContactSensor : MonoBehaviour
     {
+        /// <summary>
+        /// Enum to identify which finger a collision belongs to
+        /// </summary>
+        public enum FingerType
+        {
+            Left,
+            Right
+        }
+
         [Header("Finger Configuration")]
         [Tooltip("Left finger ArticulationBody for force sensing")]
         public ArticulationBody leftFinger;
@@ -216,24 +225,172 @@ namespace Robotics
             return objects.ToList();
         }
 
-        // Unity collision callbacks
-        void OnCollisionEnter(Collision collision)
+        // Public methods for trigger forwarding (called by GripperCollisionForwarder)
+        public void OnFingerTriggerEnter(Collider collider, FingerType finger)
         {
-            TrackContact(collision.collider, true);
+            if (debugLogging)
+            {
+                Debug.Log($"[GripperContactSensor] OnFingerTriggerEnter received: {finger} finger, object: {collider.gameObject.name}");
+            }
+            TrackContact(collider, finger, true);
         }
 
-        void OnCollisionStay(Collision collision)
+        public void OnFingerTriggerStay(Collider collider, FingerType finger)
         {
-            TrackContact(collision.collider, true);
+            TrackContact(collider, finger, true);
         }
 
-        void OnCollisionExit(Collision collision)
+        public void OnFingerTriggerExit(Collider collider, FingerType finger)
         {
-            TrackContact(collision.collider, false);
+            if (debugLogging)
+            {
+                Debug.Log($"[GripperContactSensor] OnFingerTriggerExit received: {finger} finger, object: {collider.gameObject.name}");
+            }
+            TrackContact(collider, finger, false);
+        }
+
+        // Unity trigger callbacks (legacy support - for when sensor itself has trigger)
+        void OnTriggerEnter(Collider collider)
+        {
+            // Ignore self-collisions with own fingers
+            if (IsFingerCollider(collider))
+                return;
+
+            TrackContact(collider, true);
+        }
+
+        void OnTriggerStay(Collider collider)
+        {
+            // Ignore self-collisions with own fingers
+            if (IsFingerCollider(collider))
+                return;
+
+            TrackContact(collider, true);
+        }
+
+        void OnTriggerExit(Collider collider)
+        {
+            // Ignore self-collisions with own fingers
+            if (IsFingerCollider(collider))
+                return;
+
+            TrackContact(collider, false);
         }
 
         /// <summary>
-        /// Track contact per finger based on collider hierarchy
+        /// Check if a collider belongs to one of this gripper's fingers.
+        /// Used to filter self-collisions in legacy trigger callbacks.
+        /// </summary>
+        private bool IsFingerCollider(Collider collider)
+        {
+            if (collider == null)
+                return false;
+
+            // Check if collider is on the left or right finger GameObject
+            if (leftFinger != null && collider.gameObject == leftFinger.gameObject)
+                return true;
+
+            if (rightFinger != null && collider.gameObject == rightFinger.gameObject)
+                return true;
+
+            return false;
+        }
+
+        /// <summary>
+        /// Track contact for a specific finger (called by forwarder)
+        /// </summary>
+        private void TrackContact(Collider collider, FingerType finger, bool isContact)
+        {
+            if (collider == null)
+                return;
+
+            bool isLeftFinger = (finger == FingerType.Left);
+            bool isRightFinger = (finger == FingerType.Right);
+
+            GameObject obj = collider.gameObject;
+
+            if (isContact)
+            {
+                // Add contact
+                if (isLeftFinger)
+                {
+                    _leftContacts.Add(collider);
+                }
+                else if (isRightFinger)
+                {
+                    _rightContacts.Add(collider);
+                }
+
+                // Track contact start time (set when BOTH fingers touching)
+                // Check if both fingers are now touching after adding this contact
+                bool bothTouching = _leftContacts.Any(c => c?.gameObject == obj) &&
+                                   _rightContacts.Any(c => c?.gameObject == obj);
+
+                if (bothTouching && !_contactStartTime.ContainsKey(obj))
+                {
+                    // Both fingers touching - start timing
+                    _contactStartTime[obj] = Time.time;
+
+                    if (debugLogging)
+                    {
+                        Debug.Log(
+                            $"[GripperContactSensor] Contact START (both fingers): {obj.name}"
+                        );
+                    }
+                }
+            }
+            else
+            {
+                // Remove contact
+                if (isLeftFinger)
+                {
+                    _leftContacts.Remove(collider);
+                }
+                else if (isRightFinger)
+                {
+                    _rightContacts.Remove(collider);
+                }
+
+                // Check if object is still in contact with either finger after removal
+                bool stillInContact =
+                    _leftContacts.Any(c => c?.gameObject == obj)
+                    || _rightContacts.Any(c => c?.gameObject == obj);
+
+                // Remove timing if no longer in contact with either finger
+                // OR if no longer touching with BOTH fingers (reset timer)
+                if (!stillInContact)
+                {
+                    if (_contactStartTime.ContainsKey(obj))
+                    {
+                        _contactStartTime.Remove(obj);
+
+                        if (debugLogging)
+                        {
+                            Debug.Log($"[GripperContactSensor] Contact END: {obj.name}");
+                        }
+                    }
+                }
+                else
+                {
+                    // Still touching with one finger but not both - reset timer
+                    bool bothTouching = _leftContacts.Any(c => c?.gameObject == obj) &&
+                                       _rightContacts.Any(c => c?.gameObject == obj);
+
+                    if (!bothTouching && _contactStartTime.ContainsKey(obj))
+                    {
+                        _contactStartTime.Remove(obj);
+
+                        if (debugLogging)
+                        {
+                            Debug.Log($"[GripperContactSensor] Contact timer RESET (only one finger): {obj.name}");
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Track contact per finger based on collider hierarchy (legacy method)
         /// </summary>
         private void TrackContact(Collider collider, bool isContact)
         {

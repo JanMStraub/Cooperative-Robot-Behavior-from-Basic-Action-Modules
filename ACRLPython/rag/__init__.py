@@ -270,6 +270,53 @@ class RAGSystem:
         """Check if RAG system is ready for queries"""
         return self.query_engine is not None and self.vector_store is not None
 
+    def get_stats(self) -> Dict[str, Any]:
+        """
+        Get comprehensive statistics about the RAG system.
+
+        Returns:
+            Dict containing:
+                - config: System configuration
+                - indexer_stats: Indexer statistics
+                - vector_store_stats: Vector store statistics
+                - embedding_stats: Embedding generator statistics
+
+        Example:
+            >>> rag = RAGSystem()
+            >>> stats = rag.get_stats()
+            >>> print(stats['vector_store_stats']['num_operations'])
+            17
+        """
+        stats = {
+            "config": {
+                "lm_studio_url": self.embedding_generator.base_url,
+                "embedding_model": self.embedding_generator.model,
+                "vector_store_path": RAG_VECTOR_STORE_PATH,
+                "is_ready": self.is_ready(),
+            },
+            "indexer_stats": {
+                "total_operations": len(self.registry.get_all_operations()) if self.registry else 0,
+            },
+            "embedding_stats": {
+                "embedding_dimension": self.embedding_generator.get_embedding_dimension() if hasattr(self.embedding_generator, 'get_embedding_dimension') else None,
+                "using_lm_studio": self.embedding_generator.is_using_lm_studio() if hasattr(self.embedding_generator, 'is_using_lm_studio') else None,
+            },
+        }
+
+        # Add vector store stats if available
+        if self.vector_store:
+            stats["vector_store_stats"] = {
+                "num_operations": len(self.vector_store),
+                "has_embeddings": len(self.vector_store) > 0,
+            }
+        else:
+            stats["vector_store_stats"] = {
+                "num_operations": 0,
+                "has_embeddings": False,
+            }
+
+        return stats
+
     def __repr__(self) -> str:
         ready = "ready" if self.is_ready() else "not indexed"
         num_ops = len(self.vector_store) if self.vector_store else 0

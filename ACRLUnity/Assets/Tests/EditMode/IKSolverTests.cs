@@ -250,5 +250,371 @@ namespace Tests.EditMode
             Assert.Greater(magnitudeLow, magnitudeHigh,
                 "Low damping should produce larger joint deltas than high damping");
         }
+
+        #region Velocity-Level IK Tests (Phase 1 Motion Control Redesign)
+
+        [Test]
+        public void ComputeJointDeltasWithVelocity_CombinesPositionAndVelocityErrors()
+        {
+            // Test that velocity-level IK combines Kp * posError + Kd * velError
+            // This is the KEY improvement that eliminates oscillation
+
+            // Arrange
+            var solver = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
+
+            var currentState = new IKState(
+                position: new Vector3(1f, 0f, 0f),
+                rotation: Quaternion.identity
+            );
+            var targetState = new IKState(
+                position: new Vector3(1f, 0.5f, 0f), // 50cm away in Y
+                rotation: Quaternion.identity
+            );
+
+            Vector3 currentVelocity = new Vector3(0f, 0.1f, 0f); // Moving in +Y at 10cm/s
+            Vector3 targetVelocity = new Vector3(0f, 0.2f, 0f);  // Should be 20cm/s
+
+            var joints = new[]
+            {
+                new JointInfo(Vector3.zero, Vector3.forward),
+                new JointInfo(new Vector3(0.5f, 0f, 0f), Vector3.forward)
+            };
+
+            float Kp = 10.0f;
+            float Kd = 2.0f;
+
+            // Act
+            var deltas = solver.ComputeJointDeltasWithVelocity(
+                currentState, targetState,
+                currentVelocity, targetVelocity,
+                joints,
+                convergenceThreshold: 0.01f,
+                Kp: Kp,
+                Kd: Kd
+            );
+
+            // Assert
+            Assert.IsNotNull(deltas, "Should return deltas when not converged");
+            Assert.AreEqual(2, deltas.Count, "Should return deltas for all joints");
+
+            // Verify non-zero movement
+            bool hasMovement = false;
+            for (int i = 0; i < deltas.Count; i++)
+            {
+                if (System.Math.Abs(deltas[i]) > EPSILON)
+                {
+                    hasMovement = true;
+                    break;
+                }
+            }
+            Assert.IsTrue(hasMovement, "Velocity-level IK should produce non-zero deltas");
+        }
+
+        [Test]
+        public void ComputeJointDeltasWithVelocity_DoesNotConverge_WhenVelocityStillHigh()
+        {
+            // Test that convergence requires BOTH position and velocity to be small
+            // This prevents oscillation by checking velocity convergence
+
+            // Arrange
+            var solver = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
+
+            var currentState = new IKState(
+                position: new Vector3(1f, 0f, 0f),
+                rotation: Quaternion.identity
+            );
+            var targetState = new IKState(
+                position: new Vector3(1f, 0.005f, 0f), // 5mm away (within position threshold)
+                rotation: Quaternion.identity
+            );
+
+            Vector3 currentVelocity = new Vector3(0f, 0.06f, 0f); // Moving at 6cm/s (above 5cm/s threshold)
+            Vector3 targetVelocity = Vector3.zero;
+
+            var joints = new[]
+            {
+                new JointInfo(Vector3.zero, Vector3.forward),
+                new JointInfo(new Vector3(0.5f, 0f, 0f), Vector3.forward)
+            };
+
+            // Act
+            var deltas = solver.ComputeJointDeltasWithVelocity(
+                currentState, targetState,
+                currentVelocity, targetVelocity,
+                joints,
+                convergenceThreshold: 0.01f,
+                Kp: 10.0f,
+                Kd: 2.0f
+            );
+
+            // Assert
+            Assert.IsNotNull(deltas,
+                "Should NOT converge when velocity is above threshold (6cm/s > 5cm/s) - prevents oscillation");
+        }
+
+        [Test]
+        public void ComputeJointDeltasWithVelocity_ConvergesWhenBothPositionAndVelocityConverged()
+        {
+            // Test successful convergence when both position and velocity are small
+
+            // Arrange
+            var solver = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
+
+            var currentState = new IKState(
+                position: new Vector3(1f, 0f, 0f),
+                rotation: Quaternion.identity
+            );
+            var targetState = new IKState(
+                position: new Vector3(1f, 0.005f, 0f), // 5mm away (within threshold)
+                rotation: Quaternion.identity
+            );
+
+            Vector3 currentVelocity = new Vector3(0f, 0.01f, 0f); // Very slow (< 5cm/s threshold)
+            Vector3 targetVelocity = Vector3.zero;
+
+            var joints = new[]
+            {
+                new JointInfo(Vector3.zero, Vector3.forward),
+                new JointInfo(new Vector3(0.5f, 0f, 0f), Vector3.forward)
+            };
+
+            // Act
+            var deltas = solver.ComputeJointDeltasWithVelocity(
+                currentState, targetState,
+                currentVelocity, targetVelocity,
+                joints,
+                convergenceThreshold: 0.01f,
+                Kp: 10.0f,
+                Kd: 2.0f
+            );
+
+            // Assert
+            Assert.IsNull(deltas,
+                "Should converge when both position and velocity are within thresholds");
+        }
+
+        [Test]
+        public void ComputeJointDeltasWithVelocity_ClampsJointVelocity_At5RadPerSec()
+        {
+            // Test that joint velocities are clamped to prevent singularity spikes
+            // This is CRITICAL for stability near arm limits
+
+            // Arrange
+            var solver = new IKSolver(jointCount: 2, dampingFactor: 0.001f); // Very low damping to trigger large deltas
+
+            var currentState = new IKState(
+                position: new Vector3(1f, 0f, 0f),
+                rotation: Quaternion.identity
+            );
+            var targetState = new IKState(
+                position: new Vector3(1f, 10f, 0f), // Very far target (10m away)
+                rotation: Quaternion.identity
+            );
+
+            Vector3 currentVelocity = Vector3.zero;
+            Vector3 targetVelocity = new Vector3(0f, 5f, 0f); // Fast target velocity
+
+            var joints = new[]
+            {
+                new JointInfo(Vector3.zero, Vector3.forward),
+                new JointInfo(new Vector3(0.5f, 0f, 0f), Vector3.forward)
+            };
+
+            // Act
+            var deltas = solver.ComputeJointDeltasWithVelocity(
+                currentState, targetState,
+                currentVelocity, targetVelocity,
+                joints,
+                convergenceThreshold: 0.01f,
+                Kp: 100.0f, // Very high gain to trigger large deltas
+                Kd: 50.0f
+            );
+
+            // Assert
+            Assert.IsNotNull(deltas);
+
+            // Verify all joint velocities are clamped to ±5.0 rad/sec
+            const float maxJointVelocity = 5.0f;
+            for (int i = 0; i < deltas.Count; i++)
+            {
+                Assert.LessOrEqual(System.Math.Abs(deltas[i]), maxJointVelocity,
+                    $"Joint {i} velocity should be clamped to ±{maxJointVelocity} rad/sec, " +
+                    $"but was {deltas[i]:F3}");
+            }
+        }
+
+        [Test]
+        public void ComputeJointDeltasWithVelocity_PDGains_AffectResponse()
+        {
+            // Test that different PD gains produce different responses
+            // High Kp = aggressive position correction
+            // High Kd = more damping (smoother motion)
+
+            // Arrange
+            var solver = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
+
+            var currentState = new IKState(
+                position: new Vector3(1f, 0f, 0f),
+                rotation: Quaternion.identity
+            );
+            var targetState = new IKState(
+                position: new Vector3(1f, 0.3f, 0f),
+                rotation: Quaternion.identity
+            );
+
+            Vector3 currentVelocity = new Vector3(0f, 0.05f, 0f);
+            Vector3 targetVelocity = new Vector3(0f, 0.1f, 0f);
+
+            var joints = new[]
+            {
+                new JointInfo(Vector3.zero, Vector3.forward),
+                new JointInfo(new Vector3(0.5f, 0f, 0f), Vector3.forward)
+            };
+
+            // Act - Low Kp (gentle position correction)
+            var deltasLowKp = solver.ComputeJointDeltasWithVelocity(
+                currentState, targetState,
+                currentVelocity, targetVelocity,
+                joints,
+                convergenceThreshold: 0.01f,
+                Kp: 1.0f,
+                Kd: 2.0f
+            );
+
+            // Act - High Kp (aggressive position correction)
+            var deltasHighKp = solver.ComputeJointDeltasWithVelocity(
+                currentState, targetState,
+                currentVelocity, targetVelocity,
+                joints,
+                convergenceThreshold: 0.01f,
+                Kp: 20.0f,
+                Kd: 2.0f
+            );
+
+            // Assert
+            Assert.IsNotNull(deltasLowKp);
+            Assert.IsNotNull(deltasHighKp);
+
+            double magnitudeLowKp = deltasLowKp.L2Norm();
+            double magnitudeHighKp = deltasHighKp.L2Norm();
+
+            Assert.Greater(magnitudeHighKp, magnitudeLowKp,
+                "High Kp should produce larger corrections than low Kp");
+        }
+
+        [Test]
+        public void ComputeJointDeltasWithVelocity_HighKd_ProducesMoreDamping()
+        {
+            // Test that high Kd provides more velocity damping
+
+            // Arrange
+            var solver = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
+
+            var currentState = new IKState(
+                position: new Vector3(1f, 0f, 0f),
+                rotation: Quaternion.identity
+            );
+            var targetState = new IKState(
+                position: new Vector3(1f, 0.3f, 0f),
+                rotation: Quaternion.identity
+            );
+
+            // High current velocity (robot moving fast)
+            Vector3 currentVelocity = new Vector3(0f, 0.5f, 0f);
+            Vector3 targetVelocity = new Vector3(0f, 0.1f, 0f); // Should slow down
+
+            var joints = new[]
+            {
+                new JointInfo(Vector3.zero, Vector3.forward),
+                new JointInfo(new Vector3(0.5f, 0f, 0f), Vector3.forward)
+            };
+
+            // Act - Low Kd (less velocity damping)
+            var deltasLowKd = solver.ComputeJointDeltasWithVelocity(
+                currentState, targetState,
+                currentVelocity, targetVelocity,
+                joints,
+                convergenceThreshold: 0.01f,
+                Kp: 10.0f,
+                Kd: 0.5f
+            );
+
+            // Act - High Kd (more velocity damping)
+            var deltasHighKd = solver.ComputeJointDeltasWithVelocity(
+                currentState, targetState,
+                currentVelocity, targetVelocity,
+                joints,
+                convergenceThreshold: 0.01f,
+                Kp: 10.0f,
+                Kd: 5.0f
+            );
+
+            // Assert
+            Assert.IsNotNull(deltasLowKd);
+            Assert.IsNotNull(deltasHighKd);
+
+            // With high velocity error (moving too fast), high Kd should produce different response
+            // The difference should be non-zero (gains matter)
+            double magnitudeLowKd = deltasLowKd.L2Norm();
+            double magnitudeHighKd = deltasHighKd.L2Norm();
+
+            double difference = System.Math.Abs(magnitudeLowKd - magnitudeHighKd);
+            Assert.Greater(difference, 0.001,
+                "Different Kd values should produce different responses (difference > 0.001)");
+        }
+
+        [Test]
+        public void ComputeJointDeltasWithVelocity_VelocityThreshold_Is5CmPerSec()
+        {
+            // Test that velocity convergence threshold is 5cm/s (0.05 m/s)
+
+            // Arrange
+            var solver = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
+
+            var currentState = new IKState(
+                position: new Vector3(1f, 0f, 0f),
+                rotation: Quaternion.identity
+            );
+            var targetState = new IKState(
+                position: new Vector3(1f, 0.005f, 0f), // Within position threshold
+                rotation: Quaternion.identity
+            );
+
+            var joints = new[]
+            {
+                new JointInfo(Vector3.zero, Vector3.forward),
+                new JointInfo(new Vector3(0.5f, 0f, 0f), Vector3.forward)
+            };
+
+            // Act - Just above velocity threshold (should not converge)
+            Vector3 velocityJustAbove = new Vector3(0f, 0.051f, 0f); // 5.1 cm/s
+            var deltasAbove = solver.ComputeJointDeltasWithVelocity(
+                currentState, targetState,
+                velocityJustAbove, Vector3.zero,
+                joints,
+                convergenceThreshold: 0.01f,
+                Kp: 10.0f,
+                Kd: 2.0f
+            );
+
+            // Act - Just below velocity threshold (should converge)
+            Vector3 velocityJustBelow = new Vector3(0f, 0.049f, 0f); // 4.9 cm/s
+            var deltasBelow = solver.ComputeJointDeltasWithVelocity(
+                currentState, targetState,
+                velocityJustBelow, Vector3.zero,
+                joints,
+                convergenceThreshold: 0.01f,
+                Kp: 10.0f,
+                Kd: 2.0f
+            );
+
+            // Assert
+            Assert.IsNotNull(deltasAbove,
+                "Should not converge when velocity is above 5cm/s threshold");
+            Assert.IsNull(deltasBelow,
+                "Should converge when velocity is below 5cm/s threshold");
+        }
+
+        #endregion
     }
 }

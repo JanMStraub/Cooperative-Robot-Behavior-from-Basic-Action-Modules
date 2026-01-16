@@ -23,25 +23,11 @@ namespace Tests.PlayMode
         private RobotController _controller2;
         private RobotController _controller3;
 
-        [OneTimeSetUp]
-        public void OneTimeSetUp()
-        {
-            // Ignore warnings/errors for missing components globally for all tests in this class
-            LogAssert.ignoreFailingMessages = true;
-        }
-
-        [OneTimeTearDown]
-        public void OneTimeTearDown()
-        {
-            // Re-enable log assertions after all tests complete
-            LogAssert.ignoreFailingMessages = false;
-        }
-
         [SetUp]
         public void SetUp()
         {
-            // Temporarily suppress all logs during setup to avoid log assertion failures
-            // RobotControllers will log errors about missing components, which is expected in tests
+            // Suppress log assertions for missing components in test environment
+            // RobotControllers will log warnings/errors about missing ArticulationBodies
             LogAssert.ignoreFailingMessages = true;
 
             // Create test robot 1
@@ -67,12 +53,13 @@ namespace Tests.PlayMode
         private void ExpectRobotInitializationLogs()
         {
             // All three robots log warnings about missing components during Start()
-            LogAssert.Expect(LogType.Log, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
-            LogAssert.Expect(LogType.Error, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
-            LogAssert.Expect(LogType.Log, "[ROBOT_CONTROLLER] No GripperController found in children of Robot2");
-            LogAssert.Expect(LogType.Error, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
-            LogAssert.Expect(LogType.Log, "[ROBOT_CONTROLLER] No GripperController found in children of Robot3");
-            LogAssert.Expect(LogType.Error, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+            // Note: The logs use robotId (Robot1, Robot2, Robot3), not gameObject.name (TestRobot1, etc.)
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot2");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot3");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
         }
 
         [TearDown]
@@ -81,6 +68,9 @@ namespace Tests.PlayMode
             Object.DestroyImmediate(_testRobot1);
             Object.DestroyImmediate(_testRobot2);
             Object.DestroyImmediate(_testRobot3);
+
+            // Reset log assertion behavior after each test
+            LogAssert.ignoreFailingMessages = false;
         }
 
         #region Coordination Mode Switching Tests

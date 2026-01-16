@@ -425,6 +425,14 @@ namespace Robotics
                 for (int i = 0; i < jointCount; i++)
                 {
                     var joint = controller.robotJoints[i];
+                    if (joint == null)
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} Joint at index {i} is null for robot {robotId}. Skipping."
+                        );
+                        continue;
+                    }
+
                     var config = robot.profile.joints[i];
                     var drive = joint.xDrive;
 

@@ -92,11 +92,8 @@ namespace Tests.PlayMode
             // Initialize required fields
             controller.robotJoints = new ArticulationBody[0];
 
-            // Expect the warning message for missing gripper (this is expected in tests)
-            LogAssert.Expect(LogType.Warning, $"[ROBOT_CONTROLLER] No GripperController found in children of {robotId}");
-
-            // Expect the error message for missing joints (this is expected in tests)
-            LogAssert.Expect(LogType.Error, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+            // Note: Expected log assertions should be set BEFORE calling this method
+            // since Start() is called immediately during robot creation
 
             // Register the robot using the proper API
             _robotManager.RegisterRobot(robotId, robotObj);
@@ -139,6 +136,9 @@ namespace Tests.PlayMode
         public IEnumerator VerificationWithWorkspaceManager_RobotInAllocatedRegion_Succeeds()
         {
             // Setup: Create robot in left workspace
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+
             CreateAndRegisterTestRobot("Robot1", new Vector3(-0.5f, 0f, 0.2f));
 
             // Allocate left workspace to Robot1
@@ -165,6 +165,11 @@ namespace Tests.PlayMode
         public IEnumerator VerificationWithWorkspaceManager_RobotTargetingOccupiedRegion_Fails()
         {
             // Setup: Two robots, one has allocated a region
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot2");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+
             CreateAndRegisterTestRobot("Robot1", new Vector3(-0.5f, 0f, 0.2f));
             CreateAndRegisterTestRobot("Robot2", new Vector3(0.5f, 0f, 0.2f));
 
@@ -189,6 +194,9 @@ namespace Tests.PlayMode
         public IEnumerator VerificationWithCollisionZone_RobotTargetingActiveZone_Fails()
         {
             // Setup: Robot targeting a region marked as collision zone
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+
             CreateAndRegisterTestRobot("Robot1", new Vector3(-0.5f, 0f, 0.2f));
 
             // Mark left workspace as collision zone
@@ -210,6 +218,11 @@ namespace Tests.PlayMode
         public IEnumerator VerificationSafeSeparation_RobotsTooClose_Fails()
         {
             // Setup: Two robots with targets too close together
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot2");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+
             CreateAndRegisterTestRobot("Robot1", new Vector3(0f, 0f, 0f));
             CreateAndRegisterTestRobot("Robot2", new Vector3(0.5f, 0f, 0f));
 
@@ -235,6 +248,11 @@ namespace Tests.PlayMode
         public IEnumerator VerificationSafeSeparation_RobotsFarApart_Succeeds()
         {
             // Setup: Two robots with targets far apart
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot2");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+
             CreateAndRegisterTestRobot("Robot1", new Vector3(-0.5f, 0f, 0f));
             CreateAndRegisterTestRobot("Robot2", new Vector3(0.5f, 0f, 0f));
 
@@ -260,6 +278,11 @@ namespace Tests.PlayMode
         public IEnumerator VerificationPathConflict_RobotsMovingToSameArea_Detected()
         {
             // Setup: Two robots with overlapping target paths
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot2");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+
             CreateAndRegisterTestRobot("Robot1", new Vector3(-0.5f, 0f, 0f));
             CreateAndRegisterTestRobot("Robot2", new Vector3(0.5f, 0f, 0f));
 
@@ -337,6 +360,12 @@ namespace Tests.PlayMode
         public IEnumerator Scenario_DualRobotIndependentWorkspaces_BothSucceed()
         {
             // Scenario: Two robots moving in their respective workspaces (no conflict)
+            // Expect warnings for both robots
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot2");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+
             CreateAndRegisterTestRobot("Robot1", new Vector3(-0.5f, 0f, 0.2f));
             CreateAndRegisterTestRobot("Robot2", new Vector3(0.5f, 0f, 0.2f));
 
@@ -369,6 +398,12 @@ namespace Tests.PlayMode
         public IEnumerator Scenario_SharedZoneAccess_Serialized()
         {
             // Scenario: Two robots want to access shared zone (must be serialized)
+            // Expect warnings for both robots
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot2");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+
             CreateAndRegisterTestRobot("Robot1", new Vector3(-0.5f, 0f, 0.2f));
             CreateAndRegisterTestRobot("Robot2", new Vector3(0.5f, 0f, 0.2f));
 
@@ -408,6 +443,12 @@ namespace Tests.PlayMode
         public IEnumerator Scenario_CollisionPrevention_TargetsTooClose()
         {
             // Scenario: Verification prevents collision when targets are too close
+            // Expect warnings for both robots
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot2");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+
             CreateAndRegisterTestRobot("Robot1", new Vector3(0f, 0f, 0f));
             CreateAndRegisterTestRobot("Robot2", new Vector3(0.3f, 0f, 0f));
 

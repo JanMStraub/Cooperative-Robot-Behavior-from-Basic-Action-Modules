@@ -198,9 +198,9 @@ namespace Simulation.CoordinationStrategies
                 }
                 else
                 {
-                    Debug.LogWarning($"{LOG_PREFIX} No alternative path found for {robot2.robotId}, collision warning only");
-                    // Do not block robot - collision detection is advisory only
-                    _blockedRobots.Remove(robot2.robotId);
+                    Debug.LogWarning($"{LOG_PREFIX} No alternative path found for {robot2.robotId}, blocking robot");
+                    // Block robot2 to prevent collision
+                    _blockedRobots.Add(robot2.robotId);
                 }
                 return;
             }
@@ -220,9 +220,9 @@ namespace Simulation.CoordinationStrategies
                 }
                 else
                 {
-                    Debug.LogWarning($"{LOG_PREFIX} No alternative path found for {robot2.robotId}, collision warning only");
-                    // Do not block robot - collision detection is advisory only
-                    _blockedRobots.Remove(robot2.robotId);
+                    Debug.LogWarning($"{LOG_PREFIX} No alternative path found for {robot2.robotId}, blocking robot");
+                    // Block robot2 to prevent collision
+                    _blockedRobots.Add(robot2.robotId);
                 }
                 return;
             }
@@ -374,19 +374,12 @@ namespace Simulation.CoordinationStrategies
                 return false;
             }
 
-            // If no workspace manager, all robots are active (fallback to independent mode)
-            if (_workspaceManager == null)
-            {
-                Debug.LogWarning($"{LOG_PREFIX} Silent fallback to independent mode - WorkspaceManager not available");
-                return true;
-            }
-
             // Check if robot is actively moving
             if (!_activeRobots.Contains(robotId))
                 return true;
 
-            // Check workspace allocation
-            if (_plannedTargets.ContainsKey(robotId))
+            // Check workspace allocation (if WorkspaceManager is available)
+            if (_workspaceManager != null && _plannedTargets.ContainsKey(robotId))
             {
                 Vector3 target = _plannedTargets[robotId];
                 var targetRegion = _workspaceManager.GetRegionAtPosition(target);
@@ -398,6 +391,7 @@ namespace Simulation.CoordinationStrategies
                 }
             }
 
+            // Default: robot is active (collision detection already handled via _blockedRobots)
             return true;
         }
 
