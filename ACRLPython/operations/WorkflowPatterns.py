@@ -633,3 +633,139 @@ def get_global_workflow_registry() -> WorkflowPatternRegistry:
     if _global_workflow_registry is None:
         _global_workflow_registry = WorkflowPatternRegistry()
     return _global_workflow_registry
+
+
+# ============================================================================
+# TEXT-BASED PATTERNS (for RAG indexing and LLM guidance)
+# ============================================================================
+# These are detailed textual descriptions removed from non-atomic operations.
+# They guide the LLM on how to chain atomic operations for complex workflows.
+# ============================================================================
+
+HANDOFF_TEXT_PATTERN = """
+REMOVED OPERATION: hand_over_object_to_another_robot
+=====================================================
+
+This operation was REMOVED because it is NON-ATOMIC (combines 5 steps).
+
+To perform an object handoff, the LLM should chain these ATOMIC operations:
+
+**Step-by-Step Atomic Operation Sequence:**
+
+1. Source robot moves to handoff region
+   → move_to_coordinate(robot_from, handoff_position)
+
+2. Source robot signals ready
+   → signal(robot_from, "ready_for_handoff")
+
+3. Target robot waits for signal and moves
+   → wait_for_signal(robot_to, "ready_for_handoff")
+   → move_to_coordinate(robot_to, handoff_position)
+
+4. Target robot grips object with object_id attachment
+   → control_gripper(robot_to, open=False, object_id=object)
+
+5. Source robot releases
+   → control_gripper(robot_from, open=True)
+   OR: release_object(robot_from)
+
+6. Robots signal completion and move away
+   → signal(robot_to, "handoff_complete")
+   → move_to_coordinate(robot_from, safe_position)
+
+**Why Removed:**
+The original operation hid coordination complexity from the LLM.
+By exposing atomic operations, the LLM can:
+- See exactly what happens at each step
+- Debug failures more easily
+- Adapt the sequence to specific contexts
+- Learn from successful coordination patterns
+
+**Example LLM Usage:**
+"Robot1, hand the red cube to Robot2"
+
+LLM generates:
+```
+move_to_coordinate("Robot1", x=0.0, y=0.0, z=0.15)
+signal("Robot1", "ready_for_handoff")
+wait_for_signal("Robot2", "ready_for_handoff")
+move_to_coordinate("Robot2", x=0.0, y=0.0, z=0.15)
+control_gripper("Robot2", open_gripper=False, object_id="RedCube")
+release_object("Robot1")
+signal("Robot2", "handoff_complete")
+```
+"""
+
+STABILIZE_MANIPULATE_TEXT_PATTERN = """
+REMOVED OPERATION: stabilize_and_manipulate_collaboratively
+=============================================================
+
+This operation was REMOVED because it is NON-ATOMIC (combines grasp + hold + manipulate).
+
+To perform collaborative manipulation, the LLM should chain these ATOMIC operations:
+
+**Step-by-Step Atomic Operation Sequence:**
+
+**Robot1 (Stabilizer):**
+1. Move to object
+   → move_to_coordinate(robot1, object_position)
+
+2. Grasp object
+   → grasp_object(robot1, object_coords)
+
+3. Hold stable with force control
+   → stabilize_object(robot1, object_id, duration_ms=10000)
+
+4. Signal stabilization active
+   → signal(robot1, "stabilization_active")
+
+5. Wait for manipulation complete
+   → wait_for_signal(robot1, "manipulation_complete")
+
+6. Release object
+   → control_gripper(robot1, open=True)
+
+**Robot2 (Manipulator) - runs in parallel:**
+1. Wait for stabilization active
+   → wait_for_signal(robot2, "stabilization_active")
+
+2. Move to manipulation position
+   → move_to_coordinate(robot2, manipulation_position)
+
+3. Perform manipulation operation
+   → [insert/assemble/etc operation]
+
+4. Signal completion
+   → signal(robot2, "manipulation_complete")
+
+**Why Removed:**
+The original operation combined multiple robot behaviors into one.
+By exposing atomic operations, the LLM can:
+- Coordinate parallel robot behaviors explicitly
+- Choose different manipulation strategies
+- Handle edge cases and failures at each step
+- See the full coordination protocol
+
+**Example LLM Usage:**
+"Robot1, hold the board stable while Robot2 inserts a peg"
+
+LLM generates for Robot1:
+```
+move_to_coordinate("Robot1", x=0.2, y=0.0, z=0.05)
+grasp_object("Robot1", object_coords={"x": 0.2, "y": 0.0, "z": 0.05})
+stabilize_object("Robot1", object_id="PegBoard", duration_ms=10000)
+signal("Robot1", "stabilization_active")
+wait_for_signal("Robot1", "manipulation_complete")
+control_gripper("Robot1", open_gripper=True)
+```
+
+LLM generates for Robot2 (parallel):
+```
+wait_for_signal("Robot2", "stabilization_active")
+grasp_object("Robot2", object_coords={"x": 0.1, "y": 0.1, "z": 0.05})
+move_to_coordinate("Robot2", x=0.2, y=0.0, z=0.08)
+move_to_coordinate("Robot2", x=0.2, y=0.0, z=0.05)  # Insert
+control_gripper("Robot2", open_gripper=True)
+signal("Robot2", "manipulation_complete")
+```
+"""

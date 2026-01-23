@@ -16,10 +16,10 @@ MonoBehaviour:
   enabledApproaches:
   - approachType: 0
     enabled: 1
-    preferenceWeight: 1.2
+    preferenceWeight: 1.3
   - approachType: 1
     enabled: 1
-    preferenceWeight: 1
+    preferenceWeight: 0.8
   - approachType: 2
     enabled: 1
     preferenceWeight: 0.8
@@ -50,11 +50,11 @@ MonoBehaviour:
     m_Bits: 4294967295
   enableIKValidation: 1
   maxIKValidationIterations: 100
-  ikValidationThreshold: 0.01
-  ikRotationTolerance: 30
+  ikValidationThreshold: 0.015
+  ikRotationTolerance: 20
   maxJointStepPerIteration: 0.2
   maxReachDistance: 0.6
-  angleVariationRange: 20
-  distanceVariationRange: 0.5
-  depthVariationRange: 0.3
+  angleVariationRange: 10
+  distanceVariationRange: 0.3
+  depthVariationRange: 0.2
   maxPipelineTimeMs: 200

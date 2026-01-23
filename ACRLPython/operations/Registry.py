@@ -12,23 +12,53 @@ import os
 import threading
 from .Base import BasicOperation, OperationCategory, OperationComplexity
 
-from .MoveOperations import MOVE_TO_COORDINATE_OPERATION
+from .MoveOperations import (
+    MOVE_TO_COORDINATE_OPERATION,
+    MOVE_FROM_A_TO_B_OPERATION,
+    ADJUST_END_EFFECTOR_ORIENTATION_OPERATION,
+)
 from .StatusOperations import CHECK_ROBOT_STATUS_OPERATION
-from .GripperOperations import CONTROL_GRIPPER_OPERATION
+from .GripperOperations import (
+    CONTROL_GRIPPER_OPERATION,
+    RELEASE_OBJECT_OPERATION,
+)
 from .GraspOperations import GRASP_OBJECT_OPERATION
 from .DefaultPositionOperation import RETURN_TO_START_POSITION_OPERATION
-from .DetectionOperations import DETECT_OBJECTS_OPERATION
+from .DetectionOperations import (
+    DETECT_OBJECTS_OPERATION,
+    ESTIMATE_DISTANCE_TO_OBJECT_OPERATION,
+    ESTIMATE_DISTANCE_BETWEEN_OBJECTS_OPERATION,
+)
 from .VisionOperations import ANALYZE_SCENE_OPERATION, DETECT_OBJECT_STEREO_OPERATION
 from .SpatialOperations import (
     MOVE_RELATIVE_TO_OBJECT_OPERATION,
     MOVE_BETWEEN_OBJECTS_OPERATION,
     MOVE_TO_REGION_OPERATION,
 )
-
 from .SyncOperations import (
     SIGNAL_OPERATION,
     WAIT_FOR_SIGNAL_OPERATION,
     WAIT_OPERATION,
+)
+from .FieldOperations import (
+    DETECT_FIELD_OPERATION,
+    GET_FIELD_CENTER_OPERATION,
+    DETECT_ALL_FIELDS_OPERATION,
+)
+from .IntermediateOperations import (
+    GRIP_OBJECT_OPERATION,
+    ALIGN_OBJECT_OPERATION,
+    FOLLOW_PATH_OPERATION,
+    DRAW_WITH_PEN_OPERATION,
+)
+from .CoordinationOperations import (
+    DETECT_OTHER_ROBOT_OPERATION,
+    MIRROR_MOVEMENT_OPERATION,
+    # HAND_OVER_OBJECT_OPERATION removed - non-atomic (see WorkflowPatterns.py)
+)
+from .CollaborativeOperations import (
+    STABILIZE_OBJECT_OPERATION,
+    # STABILIZE_AND_MANIPULATE_OPERATION removed - non-atomic (see WorkflowPatterns.py)
 )
 
 class OperationRegistry:
@@ -50,24 +80,70 @@ class OperationRegistry:
     def _initialize_operations(self):
         """Load all available operations into the registry"""
         operations = [
-            # Core atomic operations
+            # ============================================================================
+            # LEVEL 1-2: BASIC OPERATIONS (Atomic actions)
+            # ============================================================================
+
+            # Navigation & Motion
             MOVE_TO_COORDINATE_OPERATION,
-            CHECK_ROBOT_STATUS_OPERATION,
-            CONTROL_GRIPPER_OPERATION,
+            MOVE_FROM_A_TO_B_OPERATION,
+            ADJUST_END_EFFECTOR_ORIENTATION_OPERATION,
             RETURN_TO_START_POSITION_OPERATION,
+
+            # Gripper Control
+            CONTROL_GRIPPER_OPERATION,
+            RELEASE_OBJECT_OPERATION,
+
+            # Perception & Detection
             DETECT_OBJECTS_OPERATION,
             DETECT_OBJECT_STEREO_OPERATION,
             ANALYZE_SCENE_OPERATION,
-            # Advanced manipulation operations
-            GRASP_OBJECT_OPERATION,
-            # Spatial reasoning operations
-            MOVE_RELATIVE_TO_OBJECT_OPERATION,
-            MOVE_BETWEEN_OBJECTS_OPERATION,
-            MOVE_TO_REGION_OPERATION,
-            # Synchronization primitives for multi-robot coordination
+            ESTIMATE_DISTANCE_TO_OBJECT_OPERATION,
+            ESTIMATE_DISTANCE_BETWEEN_OBJECTS_OPERATION,
+
+            # Field Detection (YOLO-based)
+            DETECT_FIELD_OPERATION,
+            GET_FIELD_CENTER_OPERATION,
+            DETECT_ALL_FIELDS_OPERATION,
+
+            # Status
+            CHECK_ROBOT_STATUS_OPERATION,
+
+            # Synchronization Primitives
             SIGNAL_OPERATION,
             WAIT_FOR_SIGNAL_OPERATION,
             WAIT_OPERATION,
+
+            # ============================================================================
+            # LEVEL 3: INTERMEDIATE OPERATIONS (Complex single-robot tasks)
+            # ============================================================================
+
+            # Advanced Manipulation
+            GRASP_OBJECT_OPERATION,
+            GRIP_OBJECT_OPERATION,
+            ALIGN_OBJECT_OPERATION,
+            DRAW_WITH_PEN_OPERATION,
+
+            # Spatial Reasoning & Navigation
+            MOVE_RELATIVE_TO_OBJECT_OPERATION,
+            MOVE_BETWEEN_OBJECTS_OPERATION,
+            MOVE_TO_REGION_OPERATION,
+            FOLLOW_PATH_OPERATION,
+
+            # ============================================================================
+            # LEVEL 4: MULTI-ROBOT COORDINATION (Inter-robot operations)
+            # ============================================================================
+
+            DETECT_OTHER_ROBOT_OPERATION,
+            MIRROR_MOVEMENT_OPERATION,
+            # HAND_OVER_OBJECT_OPERATION removed - use WorkflowPatterns.HANDOFF_PATTERN
+
+            # ============================================================================
+            # LEVEL 5: COLLABORATIVE MANIPULATION (Advanced coordination)
+            # ============================================================================
+
+            STABILIZE_OBJECT_OPERATION,
+            # STABILIZE_AND_MANIPULATE_OPERATION removed - use WorkflowPatterns.STABILIZE_MANIPULATE_PATTERN
         ]
 
         for op in operations:

@@ -111,17 +111,7 @@ namespace Robotics.Grasp
                         continue; // Hitting target is acceptable
                     }
 
-                    /*
-                    // Check if hit object is an ignored workspace object (table, floor, etc.)
-                    if (ShouldIgnoreObject(hit.collider.gameObject))
-                    {
-                        UnityEngine.Debug.Log($"[GRASP_COLLISION_FILTER] Ignoring workspace collision with '{hit.collider.gameObject.name}'");
-                        continue; // Ignore workspace surfaces
-                    }
-                    */
-
                     // Hit an obstacle - path blocked
-
                     return false;
                 }
             }

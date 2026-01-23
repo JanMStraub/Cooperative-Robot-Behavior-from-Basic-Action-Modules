@@ -112,6 +112,13 @@ namespace Robotics.Grasp
                 Vector3 graspPoint =
                     objPos + (perturbedApproachDir * ((dimensionOnAxis * 0.5f) + depthVar));
 
+                // Debug first candidate only
+                if (i == 0 && approach == GraspApproach.Top)
+                {
+                    UnityEngine.Debug.Log($"[GRASP_GEN] {approach} approach: objPos={objPos}, dimensionOnAxis={dimensionOnAxis}, " +
+                        $"depthVar={depthVar}, perturbedApproachDir={perturbedApproachDir}, graspPoint={graspPoint}");
+                }
+
                 // Calculate Rotation
                 // Use gripper-specific rotations (URDF has 90° Z-rotation baked in)
                 Quaternion graspRotation = CalculateGripperRotation(

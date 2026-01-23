@@ -27,28 +27,9 @@ class TestGraspEndToEnd:
 
     @pytest.mark.slow
     def test_grasp_object_full_pipeline_success(self, mock_unity_connection):
-        """Test complete grasp operation from Python to Unity and back."""
-        # Simulate Unity response with detailed execution info
-        unity_response = {
-            "success": True,
-            "data": {
-                "robot_id": "Robot1",
-                "object_id": "Cube_01",
-                "approach_type": "top",
-                "score": 0.92,
-                "status": "completed",
-                "timestamp": time.time(),
-                "execution_details": {
-                    "candidates_generated": 15,
-                    "candidates_after_ik_filter": 12,
-                    "candidates_after_collision_filter": 8,
-                    "best_candidate_score": 0.92,
-                    "execution_time_ms": 145.3,
-                    "waypoints_executed": 3
-                }
-            }
-        }
-        mock_unity_connection.send_command_and_wait.return_value = unity_response
+        """Test grasp operation sends command successfully (async mode)."""
+        # Async mode - command is sent without waiting for Unity response
+        mock_unity_connection.send_command.return_value = True
 
         # Execute grasp operation
         result = grasp_object(
@@ -59,32 +40,24 @@ class TestGraspEndToEnd:
             enable_retreat=True
         )
 
-        # Verify successful execution
+        # Verify command was sent successfully
         assert result["success"] is True
+        assert result["result"]["command_sent"] is True
         assert result["result"]["robot_id"] == "Robot1"
         assert result["result"]["object_id"] == "Cube_01"
-        assert result["result"]["score"] == 0.92
 
-        # Verify execution details
-        details = result["result"]["execution_details"]
-        assert details["candidates_generated"] == 15
-        assert details["best_candidate_score"] == 0.92
-        assert details["execution_time_ms"] < 200, "Should execute in <200ms"
+        # Verify command structure
+        call_args = mock_unity_connection.send_command.call_args[0][0]
+        assert call_args["command_type"] == "grasp_object"
+        assert call_args["parameters"]["use_advanced_planning"] is True
+        assert call_args["parameters"]["preferred_approach"] == "auto"
+        assert call_args["parameters"]["enable_retreat"] is True
+        # Note: Actual execution details come from Unity via SequenceExecutor completion handler
 
     @pytest.mark.slow
     def test_grasp_with_custom_parameters(self, mock_unity_connection):
         """Test grasp with custom approach vector and distances."""
-        unity_response = {
-            "success": True,
-            "data": {
-                "robot_id": "Robot1",
-                "object_id": "Cube_01",
-                "approach_type": "custom",
-                "score": 0.88,
-                "custom_approach_used": True
-            }
-        }
-        mock_unity_connection.send_command_and_wait.return_value = unity_response
+        mock_unity_connection.send_command.return_value = True
 
         result = grasp_object(
             robot_id="Robot1",
@@ -96,81 +69,40 @@ class TestGraspEndToEnd:
         )
 
         assert result["success"] is True
-        assert result["result"]["custom_approach_used"] is True
+        assert result["result"]["command_sent"] is True
 
         # Verify command parameters
-        call_args = mock_unity_connection.send_command_and_wait.call_args[0][0]
+        call_args = mock_unity_connection.send_command.call_args[0][0]
         assert call_args["parameters"]["custom_approach_vector"]["y"] == 1.0
         assert call_args["parameters"]["pre_grasp_distance"] == 0.12
         assert call_args["parameters"]["retreat_distance"] == 0.15
 
     @pytest.mark.slow
     def test_grasp_planning_failure_scenarios(self, mock_unity_connection):
-        """Test various failure scenarios in grasp planning."""
-        failure_scenarios = [
-            {
-                "name": "No valid candidates",
-                "response": {
-                    "success": False,
-                    "error": "No valid grasp candidates found after filtering"
-                },
-                "expected_error": "EXECUTION_FAILED"
-            },
-            {
-                "name": "IK validation failed",
-                "response": {
-                    "success": False,
-                    "error": "All candidates failed IK validation"
-                },
-                "expected_error": "EXECUTION_FAILED"
-            },
-            {
-                "name": "Collision detected",
-                "response": {
-                    "success": False,
-                    "error": "All approach paths have collisions"
-                },
-                "expected_error": "EXECUTION_FAILED"
-            },
-            {
-                "name": "Object not found",
-                "response": {
-                    "success": False,
-                    "error": "Object 'InvalidObject' not found in scene"
-                },
-                "expected_error": "EXECUTION_FAILED"
-            }
-        ]
+        """Test command send failure scenario."""
+        # Test command send failure
+        mock_unity_connection.send_command.return_value = False
 
-        for scenario in failure_scenarios:
-            mock_unity_connection.send_command_and_wait.return_value = scenario["response"]
+        result = grasp_object(
+            robot_id="Robot1",
+            object_id="TestObject"
+        )
 
-            result = grasp_object(
-                robot_id="Robot1",
-                object_id="TestObject"
-            )
+        assert result["success"] is False
+        assert result["error"]["code"] == "COMMUNICATION_ERROR"
+        assert "Failed to send grasp command" in result["error"]["message"]
 
-            assert result["success"] is False, f"Scenario '{scenario['name']}' should fail"
-            assert result["error"]["code"] == scenario["expected_error"]
-            assert scenario["response"]["error"] in result["error"]["message"]
+        # Note: Other failure scenarios (IK validation, collision, object not found)
+        # are handled by Unity's grasp planning pipeline and reported via completion messages
+        # which are processed by SequenceExecutor, not the operation itself
 
     @pytest.mark.slow
     def test_grasp_with_all_approach_types(self, mock_unity_connection):
         """Test grasp execution with all supported approach types."""
         approach_types = ["auto", "top", "front", "side"]
+        mock_unity_connection.send_command.return_value = True
 
         for approach in approach_types:
-            unity_response = {
-                "success": True,
-                "data": {
-                    "robot_id": "Robot1",
-                    "object_id": "Cube_01",
-                    "approach_type": approach if approach != "auto" else "top",
-                    "score": 0.85
-                }
-            }
-            mock_unity_connection.send_command_and_wait.return_value = unity_response
-
             result = grasp_object(
                 robot_id="Robot1",
                 object_id="Cube_01",
@@ -178,22 +110,15 @@ class TestGraspEndToEnd:
             )
 
             assert result["success"] is True, f"Approach '{approach}' should succeed"
+            call_args = mock_unity_connection.send_command.call_args[0][0]
+            assert call_args["parameters"]["preferred_approach"] == approach
 
     @pytest.mark.slow
     def test_grasp_retreat_motion(self, mock_unity_connection):
         """Test grasp with and without retreat motion."""
-        # Test with retreat enabled
-        unity_response_with_retreat = {
-            "success": True,
-            "data": {
-                "robot_id": "Robot1",
-                "object_id": "Cube_01",
-                "retreat_executed": True,
-                "final_position": {"x": 0.3, "y": 0.35, "z": 0.3}
-            }
-        }
-        mock_unity_connection.send_command_and_wait.return_value = unity_response_with_retreat
+        mock_unity_connection.send_command.return_value = True
 
+        # Test with retreat enabled
         result = grasp_object(
             robot_id="Robot1",
             object_id="Cube_01",
@@ -201,20 +126,10 @@ class TestGraspEndToEnd:
         )
 
         assert result["success"] is True
-        assert result["result"]["retreat_executed"] is True
+        call_args = mock_unity_connection.send_command.call_args[0][0]
+        assert call_args["parameters"]["enable_retreat"] is True
 
         # Test with retreat disabled
-        unity_response_no_retreat = {
-            "success": True,
-            "data": {
-                "robot_id": "Robot1",
-                "object_id": "Cube_01",
-                "retreat_executed": False,
-                "final_position": {"x": 0.3, "y": 0.2, "z": 0.3}
-            }
-        }
-        mock_unity_connection.send_command_and_wait.return_value = unity_response_no_retreat
-
         result = grasp_object(
             robot_id="Robot1",
             object_id="Cube_01",
@@ -222,22 +137,14 @@ class TestGraspEndToEnd:
         )
 
         assert result["success"] is True
-        assert result["result"]["retreat_executed"] is False
+        call_args = mock_unity_connection.send_command.call_args[0][0]
+        assert call_args["parameters"]["enable_retreat"] is False
 
     @pytest.mark.slow
     def test_grasp_request_id_correlation(self, mock_unity_connection):
         """Test request ID correlation in Protocol V2."""
         request_id = 12345
-
-        unity_response = {
-            "success": True,
-            "data": {
-                "robot_id": "Robot1",
-                "object_id": "Cube_01",
-                "request_id": request_id
-            }
-        }
-        mock_unity_connection.send_command_and_wait.return_value = unity_response
+        mock_unity_connection.send_command.return_value = True
 
         result = grasp_object(
             robot_id="Robot1",
@@ -246,29 +153,26 @@ class TestGraspEndToEnd:
         )
 
         assert result["success"] is True
+        assert result["result"]["request_id"] == request_id
 
         # Verify request_id was sent correctly
-        call_args = mock_unity_connection.send_command_and_wait.call_args[0][0]
+        call_args = mock_unity_connection.send_command.call_args[0][0]
         assert call_args["request_id"] == request_id
 
     @pytest.mark.slow
     def test_grasp_timeout_handling(self, mock_unity_connection):
-        """Test timeout handling for long-running grasp operations."""
-        # Simulate timeout
-        mock_unity_connection.send_command_and_wait.return_value = None
+        """Test command send in async mode (timeout handled by SequenceExecutor)."""
+        mock_unity_connection.send_command.return_value = True
 
         result = grasp_object(
             robot_id="Robot1",
             object_id="Cube_01"
         )
 
-        assert result["success"] is False
-        assert result["error"]["code"] == "EXECUTION_FAILED"
-        assert "No response" in result["error"]["message"]
-
-        # Verify timeout was set to 30 seconds
-        call_kwargs = mock_unity_connection.send_command_and_wait.call_args[1]
-        assert call_kwargs["timeout"] == 30.0
+        assert result["success"] is True
+        assert result["result"]["command_sent"] is True
+        # Note: Timeout handling for grasp execution is managed by SequenceExecutor
+        # which waits for Unity completion messages with configurable timeout
 
     @pytest.mark.slow
     def test_grasp_performance_benchmark(self, mock_unity_connection):
@@ -379,34 +283,28 @@ class TestGraspPerformance:
 
     @pytest.mark.slow
     def test_pipeline_performance_target(self, mock_unity_connection, benchmark_config):
-        """Verify pipeline meets <200ms performance target."""
+        """Verify command send performance (async mode)."""
         execution_times = []
+        mock_unity_connection.send_command.return_value = True
 
         for i in range(benchmark_config["sample_size"]):
-            unity_response = {
-                "success": True,
-                "data": {
-                    "execution_time_ms": 150 + (i % 30)  # Simulate 150-180ms range
-                }
-            }
-            mock_unity_connection.send_command_and_wait.return_value = unity_response
-
+            start_time = time.time()
             result = grasp_object(robot_id="Robot1", object_id=f"Object_{i}")
+            end_time = time.time()
 
-            if result["success"] and "execution_time_ms" in result["result"]:
-                execution_times.append(result["result"]["execution_time_ms"])
+            if result["success"]:
+                execution_times.append((end_time - start_time) * 1000)  # Convert to ms
 
-        avg_time = sum(execution_times) / len(execution_times)
-        max_time = max(execution_times)
+        avg_time = sum(execution_times) / len(execution_times) if execution_times else 0
+        max_time = max(execution_times) if execution_times else 0
 
-        print(f"\nPipeline Performance:")
+        print(f"\nCommand Send Performance:")
         print(f"  Samples: {len(execution_times)}")
         print(f"  Average: {avg_time:.2f}ms")
         print(f"  Max: {max_time:.2f}ms")
-        print(f"  Target: {benchmark_config['target_time_ms']}ms")
 
-        assert avg_time < benchmark_config["target_time_ms"], \
-            f"Average execution time {avg_time:.2f}ms exceeds target {benchmark_config['target_time_ms']}ms"
+        # Command send should be very fast (< 10ms)
+        assert avg_time < 10.0, \
+            f"Average command send time {avg_time:.2f}ms exceeds 10ms"
 
-        assert max_time < benchmark_config["target_time_ms"] * 1.5, \
-            f"Max execution time {max_time:.2f}ms is too high"
+        # Note: Actual grasp execution time (pipeline performance) measured by Unity

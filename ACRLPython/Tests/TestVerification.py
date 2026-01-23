@@ -184,7 +184,7 @@ class TestPredicateParser:
 class TestOperationVerifier:
     """Test OperationVerifier"""
 
-    @patch('operations.SpatialPredicates.evaluate_predicate')
+    @patch('operations.Verification.evaluate_predicate')
     def test_verify_preconditions_pass(self, mock_evaluate, sample_operation_with_conditions, mock_world_state, cleanup_world_state):
         """Test all preconditions valid"""
         verifier = OperationVerifier()
@@ -209,7 +209,7 @@ class TestOperationVerifier:
         assert result.execution_allowed is True
         assert len(result.violations) == 0
 
-    @patch('operations.SpatialPredicates.evaluate_predicate')
+    @patch('operations.Verification.evaluate_predicate')
     def test_verify_preconditions_fail(self, mock_evaluate, sample_operation_with_conditions, mock_world_state, cleanup_world_state):
         """Test precondition violation blocks execution"""
         verifier = OperationVerifier()
@@ -238,7 +238,7 @@ class TestOperationVerifier:
         assert len(result.violations) == 1
         assert "exceeds max reach" in result.violations[0].reason
 
-    @patch('operations.SpatialPredicates.evaluate_predicate')
+    @patch('operations.Verification.evaluate_predicate')
     def test_verify_postconditions_pass(self, mock_evaluate, sample_operation_with_conditions, mock_world_state, cleanup_world_state):
         """Test postconditions satisfied"""
         verifier = OperationVerifier()
@@ -338,7 +338,7 @@ class TestOperationVerifier:
 class TestQuickVerifyOperation:
     """Test quick_verify_operation helper"""
 
-    @patch('operations.SpatialPredicates.evaluate_predicate')
+    @patch('operations.Verification.evaluate_predicate')
     def test_quick_verify_safe(self, mock_evaluate, sample_operation_with_conditions, mock_world_state, cleanup_world_state):
         """Test quick verification passes"""
         # Mock all predicates pass
@@ -360,7 +360,7 @@ class TestQuickVerifyOperation:
         assert is_safe is True
         assert result.execution_allowed is True
 
-    @patch('operations.SpatialPredicates.evaluate_predicate')
+    @patch('operations.Verification.evaluate_predicate')
     def test_quick_verify_unsafe(self, mock_evaluate, sample_operation_with_conditions, mock_world_state, cleanup_world_state):
         """Test quick verification blocks unsafe operation"""
         # Mock predicate fails

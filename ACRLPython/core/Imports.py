@@ -2,8 +2,7 @@
 Centralized Lazy Import System
 ================================
 
-This module provides centralized lazy import functions to break circular dependencies
-across the Python codebase.
+This module provides centralized lazy import functions to break circular dependencies across the Python codebase.
 
 Circular Dependency Chain (without lazy imports):
     operations/DetectionOperations → servers/ImageServer →

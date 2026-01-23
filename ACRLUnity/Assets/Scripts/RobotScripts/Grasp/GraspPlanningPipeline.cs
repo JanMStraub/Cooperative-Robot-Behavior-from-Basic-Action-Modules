@@ -16,6 +16,7 @@ namespace Robotics.Grasp
         private readonly GraspIKFilter _ikFilter;
         private readonly GraspCollisionFilter _collisionFilter;
         private readonly GraspScorer _scorer;
+        private readonly Transform _endEffector; // Store for orientation consistency scoring
 
         private const string _logPrefix = "[GRASP_PLANNING_PIPELINE]";
 
@@ -36,6 +37,7 @@ namespace Robotics.Grasp
         )
         {
             _config = config;
+            _endEffector = endEffector; // Cache for orientation scoring
             _generator = new GraspCandidateGenerator(config);
             _ikFilter = new GraspIKFilter(
                 config,
@@ -80,7 +82,7 @@ namespace Robotics.Grasp
             }
             else
             {
-                UnityEngine.Debug.Log("Advanced grasp planning with adaptive candidate count");
+                UnityEngine.Debug.Log($"{_logPrefix} Advanced grasp planning with adaptive candidate count");
 
                 // Adaptive candidate count based on time budget
                 int adaptiveCandidateCount = ComputeAdaptiveCandidateCount(targetObject, gripperPosition);
@@ -127,21 +129,26 @@ namespace Robotics.Grasp
                 return FallbackToSimplePlanner(targetObject, gripperPosition, options);
             }
 
-            // Stage 4: Scoring and ranking
+            // Stage 4: Scoring and ranking (with orientation consistency check)
             Vector3 objectSize = GraspUtilities.GetObjectSize(targetObject);
+            Quaternion currentGripperRotation = _endEffector != null ? _endEffector.rotation : Quaternion.identity;
             var rankedCandidates = _scorer.ScoreAndRank(
                 collisionFreeCandidates,
                 objectSize,
-                gripperPosition
+                gripperPosition,
+                currentGripperRotation  // Pass current rotation for orientation consistency scoring
             );
 
             stopwatch.Stop();
             float elapsedMs = (float)stopwatch.Elapsed.TotalMilliseconds;
 
+            var bestCandidate = rankedCandidates[0];
             UnityEngine.Debug.Log(
                 $"{_logPrefix} Pipeline completed in {elapsedMs:F1}ms. " +
-                $"Best candidate score: {rankedCandidates[0].totalScore:F2}, " +
-                $"Approach: {rankedCandidates[0].approachType}"
+                $"Best candidate score: {bestCandidate.totalScore:F2}, " +
+                $"Approach: {bestCandidate.approachType}, " +
+                $"GraspPos: {bestCandidate.graspPosition}, " +
+                $"PreGraspPos: {bestCandidate.preGraspPosition}"
             );
             LogTopCandidatesScores(rankedCandidates);
 
@@ -154,7 +161,7 @@ namespace Robotics.Grasp
             }
 
             // Return best candidate
-            return rankedCandidates[0];
+            return bestCandidate;
         }
 
         /// <summary>
@@ -259,12 +266,14 @@ namespace Robotics.Grasp
                 return result;
             }
 
-            // Stage 4: Score and Rank
+            // Stage 4: Score and Rank (with orientation consistency)
             Vector3 objectSize = GraspUtilities.GetObjectSize(targetObject);
+            Quaternion currentGripperRotation = _endEffector != null ? _endEffector.rotation : Quaternion.identity;
             result.rankedCandidates = _scorer.ScoreAndRank(
                 result.collisionFreeCandidates,
                 objectSize,
-                gripperPosition
+                gripperPosition,
+                currentGripperRotation
             );
 
             stopwatch.Stop();
@@ -379,17 +388,29 @@ namespace Robotics.Grasp
         /// <param name="rankedCandidates">Sorted candidates</param>
         private void LogTopCandidatesScores(List<GraspCandidate> rankedCandidates)
         {
-            int showCount = Mathf.Min(3, rankedCandidates.Count);
-            UnityEngine.Debug.Log($"{_logPrefix} Top {showCount} candidates:");
+            int showCount = Mathf.Min(5, rankedCandidates.Count);
+            UnityEngine.Debug.Log($"{_logPrefix} Top {showCount} candidates (showing weighted contributions):");
 
             for (int i = 0; i < showCount; i++)
             {
                 var c = rankedCandidates[i];
+
+                // Calculate weighted contributions
+                float ikWeighted = c.ikScore * _config.ikScoreWeight;
+                float approachWeighted = c.approachScore * _config.approachScoreWeight;
+                float depthWeighted = c.depthScore * _config.depthScoreWeight;
+                float stabilityWeighted = c.stabilityScore * _config.stabilityScoreWeight;
+                float antipodalWeighted = c.antipodalScore * _config.antipodalScoreWeight;
+
                 UnityEngine.Debug.Log(
-                    $"{_logPrefix}   #{i + 1}: {c.approachType} - Total={c.totalScore:F2} " +
-                    $"(IK={c.ikScore:F2}, Approach={c.approachScore:F2}, " +
-                    $"Depth={c.depthScore:F2}, Stability={c.stabilityScore:F2}, " +
-                    $"Antipodal={c.antipodalScore:F2})"
+                    $"{_logPrefix}   #{i + 1}: {c.approachType} - Total={c.totalScore:F2}\n" +
+                    $"{_logPrefix}      Raw scores: IK={c.ikScore:F3}, Approach={c.approachScore:F3}, " +
+                    $"Depth={c.depthScore:F3}, Stability={c.stabilityScore:F3}, Antipodal={c.antipodalScore:F3}\n" +
+                    $"{_logPrefix}      Weighted:   IK={ikWeighted:F3}({_config.ikScoreWeight:F1}x), " +
+                    $"Approach={approachWeighted:F3}({_config.approachScoreWeight:F1}x), " +
+                    $"Depth={depthWeighted:F3}({_config.depthScoreWeight:F1}x), " +
+                    $"Stability={stabilityWeighted:F3}({_config.stabilityScoreWeight:F1}x), " +
+                    $"Antipodal={antipodalWeighted:F3}({_config.antipodalScoreWeight:F1}x)"
                 );
             }
         }

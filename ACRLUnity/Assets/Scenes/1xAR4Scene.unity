@@ -129,6 +129,11 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 6010296060648620106, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
   m_PrefabInstance: {fileID: 9060350412813614532}
   m_PrefabAsset: {fileID: 0}
+--- !u!4 &175224335 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 2085184109248507353, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &353572704
 GameObject:
   m_ObjectHideFlags: 0
@@ -492,6 +497,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 94d36cbc3e24945949771a0032098589, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp-ACRL::Vision.CameraManager
+--- !u!4 &723378158 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 1856330339786558508, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &920713778 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 240051077821224847, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
@@ -830,7 +840,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!4 &1595579018
 Transform:
   m_ObjectHideFlags: 0
@@ -940,6 +950,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 1116772510549147897, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: attachmentPoint
+      value: 
+      objectReference: {fileID: 723378158}
     - target: {fileID: 1440759134938604137, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: robotId
       value: Robot2
@@ -952,8 +966,32 @@ PrefabInstance:
       propertyPath: debugTarget
       value: 
       objectReference: {fileID: 1397393699}
+    - target: {fileID: 1440759134938604137, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _dampingFactorLambda
+      value: 0.2
+      objectReference: {fileID: 0}
+    - target: {fileID: 1440759134938604137, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: enableDetailedLogging
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1440759134938604137, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _closeGripperAfterReach
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 1782900251721025928, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Enabled
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1782900251721025928, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _dampingFactorLambda
+      value: 0.2
+      objectReference: {fileID: 0}
+    - target: {fileID: 1782900251721025928, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: enableDetailedLogging
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1782900251721025928, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _closeGripperAfterReach
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 3633968665172880842, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
@@ -1032,6 +1070,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Environment
       objectReference: {fileID: 0}
+    - target: {fileID: 7409242131979378376, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: attachmentPoint
+      value: 
+      objectReference: {fileID: 175224335}
     - target: {fileID: 7507869540839737869, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.y
       value: 0.4

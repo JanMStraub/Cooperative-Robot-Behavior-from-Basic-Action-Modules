@@ -42,6 +42,25 @@ namespace PythonCommunication
         public bool enable_retreat; // Whether to retreat after grasping
         public float retreat_distance; // Custom retreat distance (0 = use config)
         public TargetPosition custom_approach_vector; // Custom approach direction
+
+        // New operation parameters (Phase 2 - Atomic Operations)
+        public TargetPosition point_a;          // For move_from_a_to_b
+        public TargetPosition point_b;          // For move_from_a_to_b
+        public float roll;                       // For adjust_orientation
+        public float pitch;                      // For adjust_orientation
+        public float yaw;                        // For adjust_orientation
+        public TargetPosition[] waypoints;       // For follow_path
+        public string alignment_type;            // For align_object
+        public TargetPosition target_orientation; // For align_object
+        public string shape;                     // For draw_with_pen
+        public TargetPosition pen_position;      // For draw_with_pen
+        public TargetPosition paper_position;    // For draw_with_pen
+        public string target_robot_id;           // For mirror_movement
+        public string mirror_axis;               // For mirror_movement
+        public float scale_factor;               // For mirror_movement
+        public int duration_ms;                  // For stabilize_object
+        public float force_limit;                // For stabilize_object
+        public TargetPosition place_position;    // For release_object (deprecated - kept for backward compat)
     }
 
     [System.Serializable]
@@ -290,6 +309,43 @@ namespace PythonCommunication
 
                 case "grasp_object":
                     ExecuteGraspObject(command);
+                    break;
+
+                // New atomic operations (Phase 2)
+                case "release_object":
+                    ExecuteReleaseObject(command);
+                    break;
+
+                case "move_from_a_to_b":
+                    ExecuteMoveFromAToB(command);
+                    break;
+
+                case "adjust_end_effector_orientation":
+                    ExecuteAdjustOrientation(command);
+                    break;
+
+                case "grip_object":
+                    ExecuteGripObject(command);
+                    break;
+
+                case "align_object":
+                    ExecuteAlignObject(command);
+                    break;
+
+                case "follow_path":
+                    ExecuteFollowPath(command);
+                    break;
+
+                case "draw_with_pen":
+                    ExecuteDrawWithPen(command);
+                    break;
+
+                case "mirror_movement":
+                    ExecuteMirrorMovement(command);
+                    break;
+
+                case "stabilize_object":
+                    ExecuteStabilizeObject(command);
                     break;
 
                 // Camera-targeted commands
@@ -825,6 +881,954 @@ namespace PythonCommunication
                 return null;
 
             return new Vector3(vector.x, vector.y, vector.z);
+        }
+
+        /// <summary>
+        /// Execute release_object command - ATOMIC operation that ONLY opens gripper.
+        /// Does NOT move the robot. For positioned release, chain with move_to_coordinate first.
+        /// </summary>
+        private void ExecuteReleaseObject(RobotCommand command)
+        {
+            try
+            {
+                // Validate robot and get instance
+                if (
+                    !ValidateAndGetRobot(
+                        command.robot_id,
+                        "release_object",
+                        out RobotInstance robotInstance,
+                        out _
+                    )
+                )
+                {
+                    return;
+                }
+
+                // Get gripper controller from robot
+                GripperController gripperController =
+                    robotInstance.robotGameObject.GetComponentInChildren<GripperController>();
+                if (gripperController == null)
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} release_object: Robot '{command.robot_id}' has no GripperController component"
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                // Subscribe to completion event
+                string commandKey = $"release_object_{command.robot_id}_{command.request_id}";
+                _activeCommands[commandKey] = command.request_id;
+
+                // Create completion handler
+                System.Action onComplete = null;
+                onComplete = () =>
+                {
+                    gripperController.OnGripperActionComplete -= onComplete;
+                    if (_activeCommands.ContainsKey(commandKey))
+                    {
+                        _activeCommands.Remove(commandKey);
+                        SendCommandCompletion(
+                            command.robot_id,
+                            "release_object",
+                            true,
+                            command.request_id
+                        );
+                    }
+                };
+                gripperController.OnGripperActionComplete += onComplete;
+
+                // Execute ONLY gripper opening (atomic operation)
+                gripperController.OpenGrippers();
+
+                if (_verboseLogging)
+                {
+                    Debug.Log($"{_logPrefix} Releasing object (atomic): {command.robot_id} - gripper only, no movement");
+                }
+
+                _successfulCommands++;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"{_logPrefix} Error executing release_object: {ex.Message}\n{ex.StackTrace}"
+                );
+                _failedCommands++;
+            }
+        }
+
+        /// <summary>
+        /// Execute move_from_a_to_b command - waypoint-based movement.
+        /// Moves robot from point A to point B in a straight line trajectory.
+        /// </summary>
+        private void ExecuteMoveFromAToB(RobotCommand command)
+        {
+            try
+            {
+                // Validate robot and get controller
+                if (
+                    !ValidateAndGetRobot(
+                        command.robot_id,
+                        "move_from_a_to_b",
+                        out RobotInstance robotInstance,
+                        out RobotController controller
+                    )
+                )
+                {
+                    return;
+                }
+
+                // Validate parameters
+                if (command.parameters == null || command.parameters.point_a == null || command.parameters.point_b == null)
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} move_from_a_to_b: Missing parameters or waypoints"
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                Vector3 pointA = new Vector3(
+                    command.parameters.point_a.x,
+                    command.parameters.point_a.y,
+                    command.parameters.point_a.z
+                );
+
+                Vector3 pointB = new Vector3(
+                    command.parameters.point_b.x,
+                    command.parameters.point_b.y,
+                    command.parameters.point_b.z
+                );
+
+                // Start coroutine for waypoint movement
+                StartCoroutine(
+                    MoveFromAToBCoroutine(
+                        controller,
+                        robotInstance.simpleController,
+                        pointA,
+                        pointB,
+                        command.robot_id,
+                        command.request_id
+                    )
+                );
+
+                if (_verboseLogging)
+                {
+                    Debug.Log(
+                        $"{_logPrefix} Moving {command.robot_id} from A({pointA.x:F3}, {pointA.y:F3}, {pointA.z:F3}) to B({pointB.x:F3}, {pointB.y:F3}, {pointB.z:F3})"
+                    );
+                }
+
+                _successfulCommands++;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"{_logPrefix} Error executing move_from_a_to_b: {ex.Message}\n{ex.StackTrace}"
+                );
+                _failedCommands++;
+            }
+        }
+
+        /// <summary>
+        /// Coroutine for move_from_a_to_b - moves through point A then to point B.
+        /// </summary>
+        private IEnumerator MoveFromAToBCoroutine(
+            RobotController controller,
+            SimpleRobotController simpleController,
+            Vector3 pointA,
+            Vector3 pointB,
+            string robotId,
+            uint requestId
+        )
+        {
+            bool usingSimpleController = (controller == null && simpleController != null);
+
+            // Move to point A
+            if (controller != null)
+            {
+                controller.SetTarget(pointA);
+            }
+            else if (simpleController != null)
+            {
+                simpleController.SetTarget(pointA);
+            }
+
+            // Wait for arrival at point A
+            if (usingSimpleController)
+            {
+                while (!simpleController.HasReachedTarget)
+                {
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+            else
+            {
+                while (controller != null && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD)
+                {
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+
+            // Move to point B
+            if (controller != null)
+            {
+                controller.SetTarget(pointB);
+            }
+            else if (simpleController != null)
+            {
+                simpleController.SetTarget(pointB);
+            }
+
+            // Wait for arrival at point B
+            if (usingSimpleController)
+            {
+                while (!simpleController.HasReachedTarget)
+                {
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+            else
+            {
+                while (controller != null && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD)
+                {
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+
+            // Send completion
+            SendCommandCompletion(robotId, "move_from_a_to_b", true, requestId);
+        }
+
+        /// <summary>
+        /// Execute adjust_end_effector_orientation command - rotate end effector without moving position.
+        /// </summary>
+        private void ExecuteAdjustOrientation(RobotCommand command)
+        {
+            try
+            {
+                // Validate robot and get controller
+                if (
+                    !ValidateAndGetRobot(
+                        command.robot_id,
+                        "adjust_end_effector_orientation",
+                        out RobotInstance robotInstance,
+                        out RobotController controller
+                    )
+                )
+                {
+                    return;
+                }
+
+                // Validate parameters
+                if (command.parameters == null)
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} adjust_end_effector_orientation: Missing parameters"
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                // Get current position
+                Vector3 currentPosition = controller != null
+                    ? controller.GetCurrentEndEffectorPosition()
+                    : robotInstance.simpleController.GetCurrentEndEffectorPosition();
+
+                // Create target rotation from euler angles
+                Quaternion targetRotation = Quaternion.Euler(
+                    command.parameters.roll,
+                    command.parameters.pitch,
+                    command.parameters.yaw
+                );
+
+                // Subscribe to completion event
+                string commandKey = $"adjust_orientation_{command.robot_id}_{command.request_id}";
+                _activeCommands[commandKey] = command.request_id;
+
+                System.Action onComplete = null;
+                onComplete = () =>
+                {
+                    if (controller != null)
+                        controller.OnTargetReached -= onComplete;
+                    else if (robotInstance.simpleController != null)
+                        robotInstance.simpleController.OnTargetReached -= onComplete;
+
+                    if (_activeCommands.ContainsKey(commandKey))
+                    {
+                        _activeCommands.Remove(commandKey);
+                        SendCommandCompletion(
+                            command.robot_id,
+                            "adjust_end_effector_orientation",
+                            true,
+                            command.request_id
+                        );
+                    }
+                };
+
+                // Subscribe to appropriate controller event
+                if (controller != null)
+                {
+                    controller.OnTargetReached += onComplete;
+                    controller.SetTarget(currentPosition, targetRotation);
+                }
+                else if (robotInstance.simpleController != null)
+                {
+                    robotInstance.simpleController.OnTargetReached += onComplete;
+                    robotInstance.simpleController.SetTarget(currentPosition, targetRotation);
+                }
+
+                if (_verboseLogging)
+                {
+                    Debug.Log(
+                        $"{_logPrefix} Adjusting orientation for {command.robot_id}: roll={command.parameters.roll:F1}, pitch={command.parameters.pitch:F1}, yaw={command.parameters.yaw:F1}"
+                    );
+                }
+
+                _successfulCommands++;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"{_logPrefix} Error executing adjust_end_effector_orientation: {ex.Message}\n{ex.StackTrace}"
+                );
+                _failedCommands++;
+            }
+        }
+
+        /// <summary>
+        /// Execute grip_object command - simplified grasp operation (wrapper around grasp_object).
+        /// </summary>
+        private void ExecuteGripObject(RobotCommand command)
+        {
+            // grip_object is essentially the same as grasp_object but simplified
+            // Reuse ExecuteGraspObject implementation
+            if (_verboseLogging)
+            {
+                Debug.Log($"{_logPrefix} grip_object -> delegating to grasp_object (simplified)");
+            }
+
+            // Set use_advanced_planning to false for simplified grasping
+            if (command.parameters != null)
+            {
+                command.parameters.use_advanced_planning = false;
+            }
+
+            ExecuteGraspObject(command);
+        }
+
+        /// <summary>
+        /// Execute align_object command - align held object to target orientation.
+        /// </summary>
+        private void ExecuteAlignObject(RobotCommand command)
+        {
+            try
+            {
+                // Validate robot and get controller
+                if (
+                    !ValidateAndGetRobot(
+                        command.robot_id,
+                        "align_object",
+                        out RobotInstance robotInstance,
+                        out RobotController controller
+                    )
+                )
+                {
+                    return;
+                }
+
+                // Validate parameters
+                if (command.parameters == null || command.parameters.target_orientation == null)
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} align_object: Missing parameters or target_orientation"
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                // Get current position (maintain it while rotating)
+                Vector3 currentPosition = controller != null
+                    ? controller.GetCurrentEndEffectorPosition()
+                    : robotInstance.simpleController.GetCurrentEndEffectorPosition();
+
+                // Parse target orientation
+                Quaternion targetRotation = Quaternion.Euler(
+                    command.parameters.target_orientation.x,
+                    command.parameters.target_orientation.y,
+                    command.parameters.target_orientation.z
+                );
+
+                // Subscribe to completion event
+                string commandKey = $"align_object_{command.robot_id}_{command.request_id}";
+                _activeCommands[commandKey] = command.request_id;
+
+                System.Action onComplete = null;
+                onComplete = () =>
+                {
+                    if (controller != null)
+                        controller.OnTargetReached -= onComplete;
+                    else if (robotInstance.simpleController != null)
+                        robotInstance.simpleController.OnTargetReached -= onComplete;
+
+                    if (_activeCommands.ContainsKey(commandKey))
+                    {
+                        _activeCommands.Remove(commandKey);
+                        SendCommandCompletion(
+                            command.robot_id,
+                            "align_object",
+                            true,
+                            command.request_id
+                        );
+                    }
+                };
+
+                // Execute alignment
+                if (controller != null)
+                {
+                    controller.OnTargetReached += onComplete;
+                    controller.SetTarget(currentPosition, targetRotation);
+                }
+                else if (robotInstance.simpleController != null)
+                {
+                    robotInstance.simpleController.OnTargetReached += onComplete;
+                    robotInstance.simpleController.SetTarget(currentPosition, targetRotation);
+                }
+
+                if (_verboseLogging)
+                {
+                    Debug.Log($"{_logPrefix} Aligning object for {command.robot_id}");
+                }
+
+                _successfulCommands++;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"{_logPrefix} Error executing align_object: {ex.Message}\n{ex.StackTrace}"
+                );
+                _failedCommands++;
+            }
+        }
+
+        /// <summary>
+        /// Execute follow_path command - multi-waypoint trajectory following.
+        /// </summary>
+        private void ExecuteFollowPath(RobotCommand command)
+        {
+            try
+            {
+                // Validate robot and get controller
+                if (
+                    !ValidateAndGetRobot(
+                        command.robot_id,
+                        "follow_path",
+                        out RobotInstance robotInstance,
+                        out RobotController controller
+                    )
+                )
+                {
+                    return;
+                }
+
+                // Validate parameters
+                if (command.parameters == null || command.parameters.waypoints == null || command.parameters.waypoints.Length == 0)
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} follow_path: Missing waypoints"
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                // Convert waypoints to Vector3 array
+                Vector3[] waypoints = new Vector3[command.parameters.waypoints.Length];
+                for (int i = 0; i < command.parameters.waypoints.Length; i++)
+                {
+                    waypoints[i] = new Vector3(
+                        command.parameters.waypoints[i].x,
+                        command.parameters.waypoints[i].y,
+                        command.parameters.waypoints[i].z
+                    );
+                }
+
+                // Start coroutine for path following
+                StartCoroutine(
+                    FollowPathCoroutine(
+                        controller,
+                        robotInstance.simpleController,
+                        waypoints,
+                        command.robot_id,
+                        command.request_id
+                    )
+                );
+
+                if (_verboseLogging)
+                {
+                    Debug.Log($"{_logPrefix} Following path with {waypoints.Length} waypoints for {command.robot_id}");
+                }
+
+                _successfulCommands++;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"{_logPrefix} Error executing follow_path: {ex.Message}\n{ex.StackTrace}"
+                );
+                _failedCommands++;
+            }
+        }
+
+        /// <summary>
+        /// Coroutine for follow_path - moves through all waypoints sequentially.
+        /// </summary>
+        private IEnumerator FollowPathCoroutine(
+            RobotController controller,
+            SimpleRobotController simpleController,
+            Vector3[] waypoints,
+            string robotId,
+            uint requestId
+        )
+        {
+            bool usingSimpleController = (controller == null && simpleController != null);
+
+            // Move through each waypoint
+            for (int i = 0; i < waypoints.Length; i++)
+            {
+                Vector3 waypoint = waypoints[i];
+
+                // Set target
+                if (controller != null)
+                {
+                    controller.SetTarget(waypoint);
+                }
+                else if (simpleController != null)
+                {
+                    simpleController.SetTarget(waypoint);
+                }
+
+                // Wait for arrival
+                if (usingSimpleController)
+                {
+                    while (!simpleController.HasReachedTarget)
+                    {
+                        yield return new WaitForSeconds(0.1f);
+                    }
+                }
+                else
+                {
+                    while (controller != null && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD)
+                    {
+                        yield return new WaitForSeconds(0.1f);
+                    }
+                }
+            }
+
+            // Send completion after all waypoints reached
+            SendCommandCompletion(robotId, "follow_path", true, requestId);
+        }
+
+        /// <summary>
+        /// Execute draw_with_pen command - tool manipulation for drawing.
+        /// </summary>
+        private void ExecuteDrawWithPen(RobotCommand command)
+        {
+            try
+            {
+                // Validate robot and get controller
+                if (
+                    !ValidateAndGetRobot(
+                        command.robot_id,
+                        "draw_with_pen",
+                        out RobotInstance robotInstance,
+                        out RobotController controller
+                    )
+                )
+                {
+                    return;
+                }
+
+                // Validate parameters
+                if (command.parameters == null || command.parameters.pen_position == null || command.parameters.paper_position == null)
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} draw_with_pen: Missing pen_position or paper_position"
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                Vector3 penPosition = new Vector3(
+                    command.parameters.pen_position.x,
+                    command.parameters.pen_position.y,
+                    command.parameters.pen_position.z
+                );
+
+                Vector3 paperPosition = new Vector3(
+                    command.parameters.paper_position.x,
+                    command.parameters.paper_position.y,
+                    command.parameters.paper_position.z
+                );
+
+                string shape = command.parameters.shape ?? "line";
+
+                // Start coroutine for drawing operation
+                StartCoroutine(
+                    DrawWithPenCoroutine(
+                        controller,
+                        robotInstance.simpleController,
+                        penPosition,
+                        paperPosition,
+                        shape,
+                        command.robot_id,
+                        command.request_id
+                    )
+                );
+
+                if (_verboseLogging)
+                {
+                    Debug.Log($"{_logPrefix} Drawing {shape} with pen for {command.robot_id}");
+                }
+
+                _successfulCommands++;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"{_logPrefix} Error executing draw_with_pen: {ex.Message}\n{ex.StackTrace}"
+                );
+                _failedCommands++;
+            }
+        }
+
+        /// <summary>
+        /// Coroutine for draw_with_pen - pick up pen, move to paper, draw shape.
+        /// </summary>
+        private IEnumerator DrawWithPenCoroutine(
+            RobotController controller,
+            SimpleRobotController simpleController,
+            Vector3 penPosition,
+            Vector3 paperPosition,
+            string shape,
+            string robotId,
+            uint requestId
+        )
+        {
+            bool usingSimpleController = (controller == null && simpleController != null);
+
+            // Step 1: Move to pen
+            if (controller != null)
+            {
+                controller.SetTarget(penPosition);
+            }
+            else if (simpleController != null)
+            {
+                simpleController.SetTarget(penPosition);
+            }
+
+            // Wait for arrival
+            if (usingSimpleController)
+            {
+                while (!simpleController.HasReachedTarget)
+                {
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+            else
+            {
+                while (controller != null && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD)
+                {
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+
+            // Step 2: Close gripper (pick up pen)
+            // Get gripper controller
+            GripperController gripperController = null;
+            if (controller != null)
+            {
+                gripperController = controller.gameObject.GetComponentInChildren<GripperController>();
+            }
+            else if (simpleController != null)
+            {
+                gripperController = simpleController.gameObject.GetComponentInChildren<GripperController>();
+            }
+
+            if (gripperController != null)
+            {
+                gripperController.CloseGrippers();
+                yield return new WaitForSeconds(0.5f); // Wait for gripper to close
+            }
+
+            // Step 3: Move to paper
+            if (controller != null)
+            {
+                controller.SetTarget(paperPosition);
+            }
+            else if (simpleController != null)
+            {
+                simpleController.SetTarget(paperPosition);
+            }
+
+            // Wait for arrival
+            if (usingSimpleController)
+            {
+                while (!simpleController.HasReachedTarget)
+                {
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+            else
+            {
+                while (controller != null && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD)
+                {
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+
+            // Step 4: Draw shape (placeholder - actual drawing would require LineRenderer or similar)
+            Debug.Log($"Drawing {shape} at paper position");
+            yield return new WaitForSeconds(1.0f);
+
+            // Send completion
+            SendCommandCompletion(robotId, "draw_with_pen", true, requestId);
+        }
+
+        /// <summary>
+        /// Execute mirror_movement command - mirror movements of another robot.
+        /// </summary>
+        private void ExecuteMirrorMovement(RobotCommand command)
+        {
+            try
+            {
+                // Validate robot and get controller
+                if (
+                    !ValidateAndGetRobot(
+                        command.robot_id,
+                        "mirror_movement",
+                        out RobotInstance robotInstance,
+                        out RobotController controller
+                    )
+                )
+                {
+                    return;
+                }
+
+                // Validate parameters
+                if (command.parameters == null || string.IsNullOrEmpty(command.parameters.target_robot_id))
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} mirror_movement: Missing target_robot_id"
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                // Get target robot
+                if (!_robotManager.RobotInstances.TryGetValue(command.parameters.target_robot_id, out RobotInstance targetRobotInstance))
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} mirror_movement: Target robot '{command.parameters.target_robot_id}' not found"
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                string mirrorAxis = command.parameters.mirror_axis ?? "x";
+                float scaleFactor = command.parameters.scale_factor > 0 ? command.parameters.scale_factor : 1.0f;
+
+                // Start coroutine for mirroring
+                StartCoroutine(
+                    MirrorMovementCoroutine(
+                        controller,
+                        robotInstance.simpleController,
+                        targetRobotInstance,
+                        mirrorAxis,
+                        scaleFactor,
+                        command.robot_id,
+                        command.request_id
+                    )
+                );
+
+                if (_verboseLogging)
+                {
+                    Debug.Log($"{_logPrefix} Mirroring movement of {command.parameters.target_robot_id} on {command.robot_id} (axis: {mirrorAxis}, scale: {scaleFactor})");
+                }
+
+                _successfulCommands++;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"{_logPrefix} Error executing mirror_movement: {ex.Message}\n{ex.StackTrace}"
+                );
+                _failedCommands++;
+            }
+        }
+
+        /// <summary>
+        /// Coroutine for mirror_movement - continuously mirror target robot's movements.
+        /// </summary>
+        private IEnumerator MirrorMovementCoroutine(
+            RobotController controller,
+            SimpleRobotController simpleController,
+            RobotInstance targetRobotInstance,
+            string mirrorAxis,
+            float scaleFactor,
+            string robotId,
+            uint requestId
+        )
+        {
+            // Mirror for a fixed duration (or until stopped by another command)
+            float duration = 10.0f; // Default 10 seconds
+            float elapsed = 0f;
+
+            while (elapsed < duration)
+            {
+                // Get target robot position
+                Vector3 targetPosition = Vector3.zero;
+                if (targetRobotInstance.controller != null)
+                {
+                    targetPosition = targetRobotInstance.controller.GetCurrentEndEffectorPosition();
+                }
+                else if (targetRobotInstance.simpleController != null)
+                {
+                    targetPosition = targetRobotInstance.simpleController.GetCurrentEndEffectorPosition();
+                }
+
+                // Mirror position based on axis
+                Vector3 mirroredPosition = targetPosition;
+                if (mirrorAxis == "x")
+                {
+                    mirroredPosition.x = -mirroredPosition.x * scaleFactor;
+                }
+                else if (mirrorAxis == "y")
+                {
+                    mirroredPosition.y = -mirroredPosition.y * scaleFactor;
+                }
+                else if (mirrorAxis == "z")
+                {
+                    mirroredPosition.z = -mirroredPosition.z * scaleFactor;
+                }
+                else if (mirrorAxis == "none")
+                {
+                    mirroredPosition = targetPosition * scaleFactor;
+                }
+
+                // Set mirrored position
+                if (controller != null)
+                {
+                    controller.SetTarget(mirroredPosition);
+                }
+                else if (simpleController != null)
+                {
+                    simpleController.SetTarget(mirroredPosition);
+                }
+
+                elapsed += 0.1f;
+                yield return new WaitForSeconds(0.1f);
+            }
+
+            // Send completion
+            SendCommandCompletion(robotId, "mirror_movement", true, requestId);
+        }
+
+        /// <summary>
+        /// Execute stabilize_object command - hold object stable with force control.
+        /// </summary>
+        private void ExecuteStabilizeObject(RobotCommand command)
+        {
+            try
+            {
+                // Validate robot and get instance
+                if (
+                    !ValidateAndGetRobot(
+                        command.robot_id,
+                        "stabilize_object",
+                        out RobotInstance robotInstance,
+                        out _
+                    )
+                )
+                {
+                    return;
+                }
+
+                // Validate parameters
+                if (command.parameters == null)
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} stabilize_object: Missing parameters"
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                int duration_ms = command.parameters.duration_ms > 0 ? command.parameters.duration_ms : 5000;
+                float force_limit = command.parameters.force_limit > 0 ? command.parameters.force_limit : 10.0f;
+
+                // Get gripper controller
+                GripperController gripperController =
+                    robotInstance.robotGameObject.GetComponentInChildren<GripperController>();
+                if (gripperController == null)
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} stabilize_object: Robot '{command.robot_id}' has no GripperController component"
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                // Start coroutine for stabilization
+                StartCoroutine(
+                    StabilizeObjectCoroutine(
+                        gripperController,
+                        duration_ms,
+                        force_limit,
+                        command.robot_id,
+                        command.request_id
+                    )
+                );
+
+                if (_verboseLogging)
+                {
+                    Debug.Log($"{_logPrefix} Stabilizing object for {command.robot_id}: duration={duration_ms}ms, force_limit={force_limit}N");
+                }
+
+                _successfulCommands++;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"{_logPrefix} Error executing stabilize_object: {ex.Message}\n{ex.StackTrace}"
+                );
+                _failedCommands++;
+            }
+        }
+
+        /// <summary>
+        /// Coroutine for stabilize_object - hold gripper closed with force control for specified duration.
+        /// </summary>
+        private IEnumerator StabilizeObjectCoroutine(
+            GripperController gripperController,
+            int duration_ms,
+            float force_limit,
+            string robotId,
+            uint requestId
+        )
+        {
+            // Ensure gripper is closed
+            if (!gripperController.IsClosed)
+            {
+                gripperController.CloseGrippers();
+                yield return new WaitForSeconds(0.5f); // Wait for gripper to close
+            }
+
+            // Hold for duration (force control would be applied here in a more advanced implementation)
+            float duration_seconds = duration_ms / 1000.0f;
+            yield return new WaitForSeconds(duration_seconds);
+
+            // Send completion
+            SendCommandCompletion(robotId, "stabilize_object", true, requestId);
         }
 
         /// <summary>

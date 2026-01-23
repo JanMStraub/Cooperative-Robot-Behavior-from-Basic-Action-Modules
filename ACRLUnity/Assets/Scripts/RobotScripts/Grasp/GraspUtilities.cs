@@ -20,10 +20,15 @@ namespace Robotics.Grasp
             Collider collider = obj.GetComponent<Collider>();
             if (collider != null)
             {
-                return collider.bounds.size;
+                Vector3 size = collider.bounds.size;
+                Debug.Log(
+                    $"[GRASP_UTILITIES] Object '{obj.name}' size: {size}, bounds: {collider.bounds}, localScale: {obj.transform.localScale}"
+                );
+                return size;
             }
 
             // Fallback to default cube size if no collider
+            Debug.LogWarning($"[GRASP_UTILITIES] Object '{obj.name}' has no collider, using default size"); 
             return Vector3.one * 0.05f;
         }
 
@@ -49,7 +54,9 @@ namespace Robotics.Grasp
             // DEBUG: Log approach selection criteria
             Debug.Log($"[GRASP_APPROACH] Object: {objectPosition}, Gripper: {gripperPosition}");
             Debug.Log($"[GRASP_APPROACH] Delta: {delta}, ObjectSize: {objectSize}");
-            Debug.Log($"[GRASP_APPROACH] distanceX: {distanceX:F3}, distanceZ: {distanceZ:F3}, delta.y: {delta.y:F3}, threshold: {objectSize.y * 0.5f:F3}");
+            Debug.Log(
+                $"[GRASP_APPROACH] distanceX: {distanceX:F3}, distanceZ: {distanceZ:F3}, delta.y: {delta.y:F3}, threshold: {objectSize.y * 0.5f:F3}"
+            );
 
             // If gripper is significantly above object, prefer Top approach
             // This is the most reliable grasp for small objects
@@ -104,14 +111,20 @@ namespace Robotics.Grasp
                 case GraspApproach.Side:
                     float deltaX = gripperPosition.x - objectPosition.x;
                     float sideSign = deltaX > 0 ? 1f : -1f;
-                    graspPosition = objectPosition + Vector3.right * sideSign * (objectSize.x * 0.5f + SIDE_APPROACH_OFFSET);
+                    graspPosition =
+                        objectPosition
+                        + Vector3.right * sideSign * (objectSize.x * 0.5f + SIDE_APPROACH_OFFSET);
                     graspRotation = Quaternion.Euler(0f, deltaX > 0 ? -90f : 90f, 0f);
                     break;
 
                 case GraspApproach.Front:
                     float deltaZ = gripperPosition.z - objectPosition.z;
                     float frontSign = deltaZ > 0 ? 1f : -1f;
-                    graspPosition = objectPosition + Vector3.forward * frontSign * (objectSize.z * 0.5f + SIDE_APPROACH_OFFSET);
+                    graspPosition =
+                        objectPosition
+                        + Vector3.forward
+                            * frontSign
+                            * (objectSize.z * 0.5f + SIDE_APPROACH_OFFSET);
                     graspRotation = Quaternion.Euler(0f, deltaZ > 0 ? 180f : 0f, 0f);
                     break;
 
