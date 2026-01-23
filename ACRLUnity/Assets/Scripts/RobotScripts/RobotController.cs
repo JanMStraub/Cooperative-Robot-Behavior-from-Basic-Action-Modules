@@ -113,6 +113,12 @@ namespace Robotics
         [SerializeField]
         private bool enableDebugVisualization = true;
 
+        [Header("Debug Logging")]
+        [SerializeField]
+        private bool enableIKDebugLogging = true;
+        private float _lastIKLogTime = 0f;
+        private const float IK_LOG_INTERVAL = 1f; // Log every 0.5 seconds
+
         private const string _logPrefix = "[ROBOT_CONTROLLER]";
 
         public event System.Action OnTargetReached;
@@ -126,18 +132,23 @@ namespace Robotics
             if (string.IsNullOrEmpty(robotId))
                 robotId = gameObject.name;
 
-            _ikFrame = IKReferenceFrame != null
-                ? IKReferenceFrame
-                : (endEffectorBase != null && endEffectorBase.root != null
-                    ? endEffectorBase.root
-                    : transform);
+            _ikFrame =
+                IKReferenceFrame != null
+                    ? IKReferenceFrame
+                    : (
+                        endEffectorBase != null && endEffectorBase.root != null
+                            ? endEffectorBase.root
+                            : transform
+                    );
 
             if (_gripperController == null)
             {
                 _gripperController = GetComponentInChildren<GripperController>();
                 if (_gripperController == null)
                 {
-                    Debug.LogWarning($"{_logPrefix} No GripperController found in children of {robotId}");
+                    Debug.LogWarning(
+                        $"{_logPrefix} No GripperController found in children of {robotId}"
+                    );
                 }
             }
 
@@ -155,7 +166,9 @@ namespace Robotics
         {
             if (robotJoints == null || robotJoints.Length == 0)
             {
-                Debug.LogWarning($"{_logPrefix} Robot joints are not assigned. Please assign ArticulationBodies.");
+                Debug.LogWarning(
+                    $"{_logPrefix} Robot joints are not assigned. Please assign ArticulationBodies."
+                );
                 return;
             }
 
@@ -196,14 +209,18 @@ namespace Robotics
             if (endEffectorBase != null && endEffectorArticulationBody == null)
             {
                 // Try to find ArticulationBody on end effector or parent chain
-                endEffectorArticulationBody = endEffectorBase.GetComponentInParent<ArticulationBody>();
+                endEffectorArticulationBody =
+                    endEffectorBase.GetComponentInParent<ArticulationBody>();
                 if (endEffectorArticulationBody == null)
                 {
-                    Debug.LogWarning($"{_logPrefix} No ArticulationBody found for end effector velocity feedback. Using position-only IK.");
+                    Debug.LogWarning(
+                        $"{_logPrefix} No ArticulationBody found for end effector velocity feedback. Using position-only IK."
+                    );
                 }
             }
 
-            _lastEndEffectorPosition = endEffectorBase != null ? endEffectorBase.position : Vector3.zero;
+            _lastEndEffectorPosition =
+                endEffectorBase != null ? endEffectorBase.position : Vector3.zero;
         }
 
         private void InitializeGraspPipeline()
@@ -272,7 +289,13 @@ namespace Robotics
         /// </summary>
         private IEnumerator CloseGripperAfterDelay()
         {
-            yield return new WaitForSeconds(_gripperCloseDelay);
+            // Wait for configured delay or until motion stabilizes, whichever is longer
+            float delayStartTime = Time.time;
+            yield return new WaitUntil(
+                () =>
+                    Time.time - delayStartTime >= _gripperCloseDelay
+                    && _endEffectorVelocity.magnitude < 0.005f
+            );
 
             // Set the target object so it will be attached automatically when gripper closes
             if (_attachObjectOnGrasp && _targetObject != null)
@@ -282,9 +305,14 @@ namespace Robotics
 
             _gripperController.CloseGrippers();
 
-            // Wait for gripper to finish closing
+            // Wait for gripper to finish closing and stabilize
             yield return new WaitWhile(() => _gripperController.IsMoving);
-            yield return new WaitForSeconds(0.2f); // Extra settle time
+
+            // Ensure grip has formed (minimum time + stopped motion)
+            float graspStartTime = Time.time;
+            yield return new WaitUntil(
+                () => Time.time - graspStartTime > 0.2f && !_gripperController.IsMoving
+            );
 
             OnTargetReached?.Invoke();
         }
@@ -401,35 +429,75 @@ namespace Robotics
 
         public void PerformInverseKinematicsStep()
         {
-            if (robotJoints == null || robotJoints.Length == 0 || endEffectorBase == null || _targetTransform == null)
+            if (
+                robotJoints == null
+                || robotJoints.Length == 0
+                || endEffectorBase == null
+                || _targetTransform == null
+            )
                 return;
 
             UpdateEndEffectorState();
 
             // Thresholds
             float posThreshold = _isGraspingTarget
-                ? RobotConstants.DEFAULT_CONVERGENCE_THRESHOLD * RobotConstants.GRASP_CONVERGENCE_MULTIPLIER
+                ? RobotConstants.DEFAULT_CONVERGENCE_THRESHOLD
+                    * RobotConstants.GRASP_CONVERGENCE_MULTIPLIER
                 : RobotConstants.DEFAULT_CONVERGENCE_THRESHOLD;
 
             // Optimization: Compare Squares to avoid SQRT in logic
             float sqrPosThreshold = posThreshold * posThreshold;
 
             float angleError = Quaternion.Angle(_endEffectorLocalRotation, _targetLocalRotation);
-            bool isOrientationCorrect = angleError < RobotConstants.DEFAULT_ORIENTATION_THRESHOLD_DEGREES;
+            bool isOrientationCorrect =
+                angleError < RobotConstants.DEFAULT_ORIENTATION_THRESHOLD_DEGREES;
+
+            // Debug logging (throttled)
+            bool shouldLog =
+                enableIKDebugLogging
+                && (Time.time - _lastIKLogTime > IK_LOG_INTERVAL)
+                && _distanceToTarget < 0.15f;
+            if (shouldLog)
+            {
+                _lastIKLogTime = Time.time;
+                bool posConverged = _sqrDistanceToTarget <= sqrPosThreshold;
+                Debug.Log(
+                    $"{_logPrefix} [{robotId}] IK Debug: "
+                        + $"dist={_distanceToTarget:F4}m (threshold={posThreshold:F4}m, converged={posConverged}), "
+                        + $"angleErr={angleError:F1}° (threshold={RobotConstants.DEFAULT_ORIENTATION_THRESHOLD_DEGREES}°, converged={isOrientationCorrect}), "
+                        + $"velocity={_endEffectorVelocity.magnitude:F3}m/s"
+                );
+            }
 
             // Stop Condition
-            if (_sqrDistanceToTarget <= sqrPosThreshold && isOrientationCorrect)
+            // For grasp operations: only check position (orientation is less critical for contact)
+            // For regular movements: check both position and orientation
+            bool convergenceCondition = _isGraspingTarget
+                ? _sqrDistanceToTarget <= sqrPosThreshold // Grasp: position only
+                : (_sqrDistanceToTarget <= sqrPosThreshold && isOrientationCorrect); // Regular: both
+
+            if (convergenceCondition)
             {
                 if (!_hasReachedTarget)
                 {
+                    string targetInfo =
+                        _targetObject != null ? _targetObject.name : _targetTransform.name;
+                    Vector3 eeWorld = endEffectorBase.position;
+                    Vector3 targetWorld = _targetTransform.position;
+                    Debug.Log(
+                        $"{_logPrefix} [{robotId}] TARGET ({targetInfo}) REACHED: "
+                            + $"dist={_distanceToTarget:F4}m, angleErr={angleError:F1}°, "
+                            + $"eeWorld={eeWorld}, targetWorld={targetWorld}, "
+                            + $"actualDist={Vector3.Distance(eeWorld, targetWorld):F4}m"
+                    );
                     SetTargetReached(true);
                     OnTargetReached?.Invoke();
                 }
                 return;
             }
-            else if (
-                _hasReachedTarget && (_distanceToTarget > posThreshold * 1.5f || angleError > 10f)
-            )
+
+            // Hysteresis: re-enter moving state if drifted too far
+            if (_hasReachedTarget && (_distanceToTarget > posThreshold * 1.5f || angleError > 10f))
             {
                 SetTargetReached(false);
             }
@@ -439,10 +507,25 @@ namespace Robotics
             // --- "Carrot" Logic (Linear Motion) ---
             Vector3 vectorToTarget = _targetLocalPosition - _endEffectorLocalPosition;
 
-            // Blend between carrot and direct based on distance (smooth transition 5-15cm)
-            float blendFactor = Mathf.Clamp01((_distanceToTarget - 0.05f) / 0.10f);
-            Vector3 carrotPos = _endEffectorLocalPosition + (vectorToTarget / _distanceToTarget) * 0.05f;
-            Vector3 constrainedTargetPos = Vector3.Lerp(_targetLocalPosition, carrotPos, blendFactor);
+            // FIX: If we are close (e.g. < 15cm), switch to direct targeting to allow orientation solving
+            // The carrot is only useful for long-distance linear paths.
+            Vector3 constrainedTargetPos;
+            if (_distanceToTarget < 0.15f)
+            {
+                // Blend smoothly from Carrot to Direct Target between 15cm and 5cm
+                float directBlend = Mathf.Clamp01((0.15f - _distanceToTarget) / 0.10f);
+                constrainedTargetPos = Vector3.Lerp(
+                    _endEffectorLocalPosition + (vectorToTarget.normalized * 0.05f),
+                    _targetLocalPosition,
+                    directBlend
+                );
+            }
+            else
+            {
+                // Standard Carrot behavior for long distance
+                constrainedTargetPos =
+                    _endEffectorLocalPosition + vectorToTarget / _distanceToTarget * 0.05f;
+            }
 
             // --- KEY FIX: ALWAYS target the final rotation, but vary the weight ---
             // This allows orientation ramping to work correctly
@@ -452,29 +535,67 @@ namespace Robotics
             float baseWeight = GetOrientationWeight(_currentGraspApproach);
             float orientationRamp = 0f;
 
-            // Start ramping at 30cm instead of 20cm with gentler curve
-            if (_distanceToTarget < 0.30f)
+            // Start orientation alignment earlier to prevent deadlock at target
+            // Begin at 40cm to give enough distance for large rotations
+            float orientationStartDist = 0.4f;
+
+            if (_distanceToTarget < orientationStartDist)
             {
-                // Between 30cm and 10cm - gradually ramp up orientation
-                // At 30cm: ramp = 0 (ignore rotation)
-                // At 10cm: ramp = 1 (full rotation control)
-                float t = Mathf.Clamp01((_distanceToTarget - 0.10f) / 0.20f);
-                orientationRamp = 1.0f - (t * t); // Smooth curve from 0.3m to 0.1m
+                // Linear ramp: 0% at 40cm -> 100% at 0cm
+                orientationRamp = 1f - (_distanceToTarget / orientationStartDist);
+
+                // Apply power curve to start gentle but strengthen quickly
+                // This prevents early oscillation while ensuring convergence
+                orientationRamp = Mathf.Pow(orientationRamp, 0.5f);
             }
-            // else: > 30cm, orientationRamp stays 0 (ignore rotation completely)
 
-            float finalWeight = baseWeight * orientationRamp;
+            // Allow full orientation weight to ensure rotation convergence
+            // The PD control (Kd term) handles oscillation prevention
+            // Cap orientation weight to prevent excessive corrections during grasp transitions
+            float finalWeight = Mathf.Min(baseWeight * orientationRamp, 1.0f);
 
-            // --- Dynamic Damping (Precision) ---
+            // --- Dynamic Damping ---
+            // Keep damping constant throughout motion to avoid Zeno's paradox
+            // Increasing damping when close prevents fine convergence (robot gets "stiff")
+            // The PD control and velocity feedback already provide stability
             float dynamicLambda = _dampingFactorLambda;
-            if (_distanceToTarget < 0.1f)
+
+            // FIX A: Enhanced "Stop and Twist" logic to break orientation deadlock
+            // Allow twist mode if we are close OR if orientation error is high and we are stuck
+            // Define "Stuck" as close distance but high angle error
+            bool positionReached = _sqrDistanceToTarget <= sqrPosThreshold;
+            bool closeEnoughForRotation = _sqrDistanceToTarget <= (sqrPosThreshold * 4.0f); // e.g., within 3-4cm
+            bool orientationBad = angleError > 5.0f;
+            bool orientationReached = isOrientationCorrect;
+
+            if ((positionReached || closeEnoughForRotation) && orientationBad && !_isGraspingTarget)
             {
-                // Increase damping when closer for stability (not decrease)
-                dynamicLambda = Mathf.Lerp(
-                    _dampingFactorLambda,
-                    _dampingFactorLambda * 1.5f,
-                    1f - (_distanceToTarget / 0.1f)
+                // FIX: Don't lock position exactly at current.
+                // Allow it to drift slightly towards the target while rotating
+                constrainedTargetPos = Vector3.Lerp(_endEffectorLocalPosition, _targetLocalPosition, 0.5f);
+
+                // 2. Kill all linear velocity to prevent competing motion
+                _endEffectorVelocity = new Vector3(
+                    _endEffectorVelocity.x * 0.1f,
+                    _endEffectorVelocity.y * 0.1f,
+                    _endEffectorVelocity.z * 0.1f
                 );
+
+                // 3. Increase orientation weight to force wrist rotation (override ramping)
+                // Use 2.0x instead of 5.0x to prevent oscillation while still prioritizing rotation
+                finalWeight = Mathf.Max(finalWeight, 2.0f);
+
+                // 4. Increase damping to prevent orientation oscillation
+                dynamicLambda = Mathf.Max(dynamicLambda, 0.5f);
+
+                // Log when in twist-only mode
+                if (shouldLog)
+                {
+                    Debug.Log(
+                        $"{_logPrefix} [{robotId}] TWIST-ONLY MODE: Position drift allowed (lerp=0.5), forcing rotation. "
+                            + $"dist={_distanceToTarget:F4}m, angleErr={angleError:F1}°, orientWeight={finalWeight:F1}, lambda={dynamicLambda:F1}"
+                    );
+                }
             }
 
             // Input States
@@ -490,29 +611,44 @@ namespace Robotics
             // PD gains for velocity-level IK (tuned to eliminate oscillation)
             // Kp: Position gain - how strongly to correct position error
             // Kd: Velocity gain (damping) - prevents overshoot and oscillation
-            float Kp = 1.0f;  // Standard position correction
-            float Kd = 0.5f;  // Damping to prevent oscillation
+            float Kp = 1.5f; // Position correction (matched to SimpleRobotController)
+            float Kd = 1.0f; // Increased damping to prevent oscillation with higher speeds
 
             // Use velocity-aware IK to eliminate oscillation
             var jointDeltas = _ikSolver.ComputeJointDeltasWithVelocity(
                 currentState,
                 targetState,
-                _endEffectorVelocity,      // Current velocity for damping
-                targetVelocity,            // Target velocity (zero = stop at target)
+                _endEffectorVelocity, // Current velocity for damping
+                targetVelocity, // Target velocity (zero = stop at target)
                 _cachedJointInfos,
                 posThreshold,
-                Kp,                        // Position gain
-                Kd,                        // Velocity gain (damping)
-                finalWeight,               // Orientation weight
+                Kp, // Position gain
+                Kd, // Velocity gain (damping)
+                finalWeight, // Orientation weight
                 RobotConstants.DEFAULT_ORIENTATION_THRESHOLD_DEGREES * Mathf.Deg2Rad,
-                dynamicLambda              // Dynamic damping for pseudo-inverse
+                dynamicLambda // Dynamic damping for pseudo-inverse
             );
 
             if (jointDeltas == null)
             {
+                if (shouldLog)
+                    Debug.Log($"{_logPrefix} [{robotId}] IK returned null (converged)");
                 SetTargetReached(true);
                 OnTargetReached?.Invoke();
                 return;
+            }
+
+            // Log joint deltas magnitude
+            if (shouldLog)
+            {
+                double totalDelta = 0;
+                for (int i = 0; i < jointDeltas.Count; i++)
+                    totalDelta += System.Math.Abs(jointDeltas[i]);
+                Debug.Log(
+                    $"{_logPrefix} [{robotId}] IK Output: "
+                        + $"totalJointDelta={totalDelta:F6}rad, orientWeight={finalWeight:F3}, "
+                        + $"dynamicLambda={dynamicLambda:F3}, orientRamp={orientationRamp:F3}"
+                );
             }
 
             // Speed Calculation
@@ -525,13 +661,16 @@ namespace Robotics
             float adjSpeed = robotProfile != null ? robotProfile.adjustmentSpeed : 1.0f;
             float globalSpeed = _robotManager != null ? _robotManager.globalSpeedMultiplier : 1.0f;
 
+            // Adaptive speed scaling - only slow down very close to target
+            // Use the actual position threshold to determine when to start slowing
+            float slowdownDistance = posThreshold * 2.0f; // Start slowing at 2x threshold distance
             float adaptiveGain = _maxStepSpeed;
-            if (_distanceToTarget < 0.1f)
+            if (_distanceToTarget < slowdownDistance)
             {
                 adaptiveGain = Mathf.Lerp(
                     _minStepSpeedNearTarget,
                     _maxStepSpeed,
-                    _distanceToTarget / 0.1f
+                    _distanceToTarget / slowdownDistance
                 );
             }
 
@@ -621,8 +760,12 @@ namespace Robotics
             GripperController holdingGripper = FindGripperHoldingObject(target);
             if (holdingGripper != null && holdingGripper != _gripperController)
             {
-                Debug.Log($"{_logPrefix} {robotId} detected handoff scenario - object '{target.name}' held by another gripper");
-                _activeGraspCoroutine = StartCoroutine(ExecuteHandoffGrasp(target, holdingGripper, options));
+                Debug.Log(
+                    $"{_logPrefix} {robotId} detected handoff scenario - object '{target.name}' held by another gripper"
+                );
+                _activeGraspCoroutine = StartCoroutine(
+                    ExecuteHandoffGrasp(target, holdingGripper, options)
+                );
                 return;
             }
 
@@ -744,14 +887,19 @@ namespace Robotics
         /// </summary>
         /// <param name="timeoutSeconds">Maximum time to wait before giving up</param>
         /// <param name="onTimeout">Optional callback to invoke on timeout</param>
-        private IEnumerator WaitForTargetWithTimeout(float timeoutSeconds, System.Action onTimeout = null)
+        private IEnumerator WaitForTargetWithTimeout(
+            float timeoutSeconds,
+            System.Action onTimeout = null
+        )
         {
             float startTime = Time.time;
             while (!_hasReachedTarget)
             {
                 if (Time.time - startTime > timeoutSeconds)
                 {
-                    Debug.LogWarning($"{_logPrefix} {robotId} reached target timeout after {timeoutSeconds}s at distance {_distanceToTarget:F3}m");
+                    Debug.LogWarning(
+                        $"{_logPrefix} {robotId} reached target timeout after {timeoutSeconds}s at distance {_distanceToTarget:F3}m"
+                    );
                     onTimeout?.Invoke();
                     yield break;
                 }
@@ -782,9 +930,14 @@ namespace Robotics
                 targetObject,
                 new GraspOptions { closeGripperOnReach = false }
             );
-            yield return StartCoroutine(WaitForTargetWithTimeout(RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS));
-            if (!_hasReachedTarget) yield break; // Abort if timed out
-            yield return new WaitForSeconds(0.2f);
+            yield return StartCoroutine(
+                WaitForTargetWithTimeout(RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS)
+            );
+            if (!_hasReachedTarget)
+                yield break; // Abort if timed out
+
+            // Wait for motion to settle (velocity-based instead of fixed time)
+            yield return new WaitUntil(() => _endEffectorVelocity.magnitude < 0.01f);
 
             // 2. Grasp
             GameObject main = GetCachedTempObject(
@@ -799,12 +952,17 @@ namespace Robotics
                 targetObject,
                 new GraspOptions { closeGripperOnReach = false }
             );
-            yield return StartCoroutine(WaitForTargetWithTimeout(RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS));
-            if (!_hasReachedTarget) yield break; // Abort if timed out
+            yield return StartCoroutine(
+                WaitForTargetWithTimeout(RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS)
+            );
+            if (!_hasReachedTarget)
+                yield break; // Abort if timed out
 
             if (options.closeGripperOnReach && _gripperController != null)
             {
-                yield return new WaitForSeconds(0.3f);
+                // Wait for motion to fully stabilize before closing gripper
+                yield return new WaitUntil(() => _endEffectorVelocity.magnitude < 0.005f);
+
                 // Set target object for attachment before closing gripper
                 _gripperController.SetTargetObject(targetObject);
                 _gripperController.SetGripperPosition(candidate.graspGripperWidth);
@@ -837,9 +995,14 @@ namespace Robotics
                 targetObject,
                 new GraspOptions { closeGripperOnReach = false }
             );
-            yield return StartCoroutine(WaitForTargetWithTimeout(RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS));
-            if (!_hasReachedTarget) yield break; // Abort if timed out
-            yield return new WaitForSeconds(0.1f);
+            yield return StartCoroutine(
+                WaitForTargetWithTimeout(RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS)
+            );
+            if (!_hasReachedTarget)
+                yield break; // Abort if timed out
+
+            // Wait for motion to settle (velocity-based instead of fixed time)
+            yield return new WaitUntil(() => _endEffectorVelocity.magnitude < 0.01f);
 
             // 2. Grasp
             GameObject main = GetCachedTempObject(
@@ -854,17 +1017,27 @@ namespace Robotics
                 targetObject,
                 new GraspOptions { closeGripperOnReach = false }
             );
-            yield return StartCoroutine(WaitForTargetWithTimeout(RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS));
-            if (!_hasReachedTarget) yield break; // Abort if timed out
+            yield return StartCoroutine(
+                WaitForTargetWithTimeout(RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS)
+            );
+            if (!_hasReachedTarget)
+                yield break; // Abort if timed out
 
             if (options.closeGripperOnReach && _gripperController != null)
             {
-                yield return new WaitForSeconds(0.1f);
+                // Wait for motion to fully stabilize before closing gripper
+                yield return new WaitUntil(() => _endEffectorVelocity.magnitude < 0.005f);
+
                 // Set target object for attachment before closing gripper
                 _gripperController.SetTargetObject(targetObject);
                 _gripperController.SetGripperPosition(candidate.graspGripperWidth);
                 yield return new WaitWhile(() => _gripperController.IsMoving);
-                yield return new WaitForSeconds(1.1f);
+
+                // Wait for grip to stabilize (check for contact/force)
+                float graspStartTime = Time.time;
+                yield return new WaitUntil(
+                    () => Time.time - graspStartTime > 0.3f && !_gripperController.IsMoving
+                );
             }
 
             // 3. Retreat
@@ -882,8 +1055,11 @@ namespace Robotics
                     targetObject,
                     new GraspOptions { closeGripperOnReach = false }
                 );
-                yield return StartCoroutine(WaitForTargetWithTimeout(RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS));
-                if (!_hasReachedTarget) yield break; // Abort if timed out
+                yield return StartCoroutine(
+                    WaitForTargetWithTimeout(RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS)
+                );
+                if (!_hasReachedTarget)
+                    yield break; // Abort if timed out
             }
 
             _activeGraspCoroutine = null;
@@ -916,7 +1092,9 @@ namespace Robotics
             // Create a temporary target at the object's position
             GameObject handoffTarget = GetCachedTempObject(ref _cachedTempTargetGrasp, "_handoff");
             handoffTarget.transform.position = objectPosition;
-            handoffTarget.transform.rotation = endEffectorBase.rotation; // Keep current orientation
+            // Use the object's current rotation to align with it
+            // This will be tracked if the object rotates during approach
+            handoffTarget.transform.rotation = targetObject.transform.rotation;
 
             _isGraspingTarget = true;
             SetTargetInternal(
@@ -926,7 +1104,9 @@ namespace Robotics
             );
 
             // Wait for robot to reach the handoff position
-            yield return StartCoroutine(WaitForTargetWithTimeout(RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS));
+            yield return StartCoroutine(
+                WaitForTargetWithTimeout(RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS)
+            );
             if (!_hasReachedTarget)
             {
                 Debug.LogWarning($"{_logPrefix} {robotId} failed to reach handoff position");
@@ -934,8 +1114,8 @@ namespace Robotics
                 yield break;
             }
 
-            // Small delay to settle
-            yield return new WaitForSeconds(0.2f);
+            // Wait for motion to fully stabilize before handoff
+            yield return new WaitUntil(() => _endEffectorVelocity.magnitude < 0.005f);
 
             // Close gripper and attach the object (this will trigger handoff transfer in GripperController)
             if (options.closeGripperOnReach && _gripperController != null)
@@ -944,8 +1124,11 @@ namespace Robotics
                 _gripperController.CloseGrippers();
                 yield return new WaitWhile(() => _gripperController.IsMoving);
 
-                // Wait for grip to stabilize
-                yield return new WaitForSeconds(0.5f);
+                // Wait for grip to stabilize (minimum time + stopped motion)
+                float graspStartTime = Time.time;
+                yield return new WaitUntil(
+                    () => Time.time - graspStartTime > 0.3f && !_gripperController.IsMoving
+                );
             }
 
             Debug.Log($"{_logPrefix} {robotId} handoff grasp complete for '{targetObject.name}'");
@@ -960,7 +1143,9 @@ namespace Robotics
         /// <returns>GripperController holding the object, or null if not held by any gripper</returns>
         private static GripperController FindGripperHoldingObject(GameObject obj)
         {
-            GripperController[] allGrippers = FindObjectsByType<GripperController>(FindObjectsSortMode.None);
+            GripperController[] allGrippers = FindObjectsByType<GripperController>(
+                FindObjectsSortMode.None
+            );
             foreach (var gripper in allGrippers)
             {
                 if (gripper.IsHoldingObject && gripper.GraspedObject == obj)

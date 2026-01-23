@@ -13,7 +13,6 @@ All Unity-facing servers should inherit from this class.
 
 import socket
 import threading
-import logging
 import errno
 from abc import ABC, abstractmethod
 from dataclasses import dataclass

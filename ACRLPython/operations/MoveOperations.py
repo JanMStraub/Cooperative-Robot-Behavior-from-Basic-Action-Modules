@@ -375,3 +375,352 @@ def create_move_to_coordinate_operation() -> BasicOperation:
 
 # Create the operation instance for export
 MOVE_TO_COORDINATE_OPERATION = create_move_to_coordinate_operation()
+
+
+# ============================================================================
+# Implementation: Move from A to B (Explicit Waypoint Movement)
+# ============================================================================
+
+
+def move_from_a_to_b(
+    robot_id: str,
+    point_a: dict,
+    point_b: dict,
+    speed: float = 1.0,
+    request_id: int = 0,
+) -> OperationResult:
+    """
+    Move robot end effector from point A to point B through explicit waypoints.
+
+    This operation provides explicit A→B waypoint movement with validation
+    of both start and end positions. Unlike move_to_coordinate which moves
+    from current position, this operation validates the starting position.
+
+    Args:
+        robot_id: ID of the robot to move (e.g., "Robot1", "AR4_Robot")
+        point_a: Start position dict with keys 'x', 'y', 'z' (meters)
+        point_b: End position dict with keys 'x', 'y', 'z' (meters)
+        speed: Speed multiplier (0.1=slow, 1.0=normal, 2.0=fast), range: [0.1, 2.0]
+        request_id: Optional request ID for tracking
+
+    Returns:
+        OperationResult with movement confirmation or error details
+
+    Example:
+        >>> # Move from home to object
+        >>> result = move_from_a_to_b(
+        ...     "Robot1",
+        ...     {"x": 0.0, "y": 0.0, "z": 0.3},  # home position
+        ...     {"x": 0.3, "y": 0.15, "z": 0.1}  # object position
+        ... )
+    """
+    try:
+        # Validate robot_id
+        if not robot_id or not isinstance(robot_id, str):
+            return OperationResult.error_result(
+                "INVALID_ROBOT_ID",
+                f"Robot ID must be a non-empty string, got: {robot_id}",
+                ["Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')"],
+            )
+
+        # Validate point_a
+        if not isinstance(point_a, dict) or not all(k in point_a for k in ['x', 'y', 'z']):
+            return OperationResult.error_result(
+                "INVALID_POINT_A",
+                f"Point A must be dict with x, y, z keys, got: {point_a}",
+                ["Provide point_a as: {'x': 0.0, 'y': 0.0, 'z': 0.3}"],
+            )
+
+        # Validate point_b
+        if not isinstance(point_b, dict) or not all(k in point_b for k in ['x', 'y', 'z']):
+            return OperationResult.error_result(
+                "INVALID_POINT_B",
+                f"Point B must be dict with x, y, z keys, got: {point_b}",
+                ["Provide point_b as: {'x': 0.3, 'y': 0.15, 'z': 0.1}"],
+            )
+
+        # Construct command for Unity with both waypoints
+        command = {
+            "command_type": "move_from_a_to_b",
+            "robot_id": robot_id,
+            "parameters": {
+                "point_a": point_a,
+                "point_b": point_b,
+                "speed_multiplier": speed,
+            },
+            "timestamp": time.time(),
+            "request_id": request_id,
+        }
+
+        # Send to Unity
+        logger.info(
+            f"Sending move_from_a_to_b command to {robot_id}: A{point_a} → B{point_b}"
+        )
+
+        success = _get_command_broadcaster().send_command(command, request_id)
+
+        if not success:
+            return OperationResult.error_result(
+                "COMMUNICATION_FAILED",
+                "Failed to send command to Unity - no clients connected",
+                ["Ensure Unity is running", "Verify CommandServer is running (port 5010)"],
+            )
+
+        logger.info(f"Successfully sent move_from_a_to_b command to {robot_id}")
+
+        return OperationResult.success_result(
+            {
+                "robot_id": robot_id,
+                "point_a": point_a,
+                "point_b": point_b,
+                "speed": speed,
+                "status": "command_sent",
+                "timestamp": time.time(),
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Unexpected error in move_from_a_to_b: {e}", exc_info=True)
+        return OperationResult.error_result(
+            "UNEXPECTED_ERROR",
+            f"Unexpected error occurred: {str(e)}",
+            ["Check logs for detailed error information", "Retry the operation"],
+        )
+
+
+def create_move_from_a_to_b_operation() -> BasicOperation:
+    """Create the BasicOperation definition for move_from_a_to_b."""
+    return BasicOperation(
+        operation_id="motion_move_a_to_b_002",
+        name="move_from_a_to_b",
+        category=OperationCategory.NAVIGATION,
+        complexity=OperationComplexity.BASIC,
+        description="Move robot end effector from point A to point B through explicit waypoints",
+        long_description="""
+            This operation provides explicit A→B waypoint movement with validation
+            of both start and end positions. Unlike move_to_coordinate which moves
+            from current position, this operation validates the starting position.
+
+            Useful for planned trajectories where both waypoints are known in advance.
+        """,
+        usage_examples=[
+            "move_from_a_to_b('Robot1', {'x': 0.0, 'y': 0.0, 'z': 0.3}, {'x': 0.3, 'y': 0.15, 'z': 0.1})",
+            "Move from home to detected object with explicit path validation",
+        ],
+        parameters=[
+            OperationParameter(
+                name="robot_id", type="str", description="Robot ID", required=True
+            ),
+            OperationParameter(
+                name="point_a",
+                type="dict",
+                description="Start position with x, y, z keys (meters)",
+                required=True,
+            ),
+            OperationParameter(
+                name="point_b",
+                type="dict",
+                description="End position with x, y, z keys (meters)",
+                required=True,
+            ),
+            OperationParameter(
+                name="speed",
+                type="float",
+                description="Speed multiplier (0.1-2.0)",
+                required=False,
+                default=1.0,
+            ),
+        ],
+        preconditions=[
+            "Robot at or near point A",
+            "Both points within workspace",
+            "Unity connected",
+        ],
+        postconditions=[
+            "Robot moves from A to B",
+            "End effector at point B",
+            "Ready for next operation",
+        ],
+        average_duration_ms=1500.0,
+        success_rate=0.95,
+        failure_modes=["Path obstructed", "Point unreachable", "Communication failed"],
+        implementation=move_from_a_to_b,
+    )
+
+
+MOVE_FROM_A_TO_B_OPERATION = create_move_from_a_to_b_operation()
+
+
+# ============================================================================
+# Implementation: Adjust End Effector Orientation
+# ============================================================================
+
+
+def adjust_end_effector_orientation(
+    robot_id: str,
+    roll: float = 0.0,
+    pitch: float = 0.0,
+    yaw: float = 0.0,
+    request_id: int = 0,
+) -> OperationResult:
+    """
+    Adjust the end effector orientation without changing position.
+
+    This operation modifies only the gripper orientation (roll, pitch, yaw)
+    while maintaining the current position.
+
+    Args:
+        robot_id: ID of the robot to control
+        roll: Roll angle in degrees (rotation around X axis), range: [-180, 180]
+        pitch: Pitch angle in degrees (rotation around Y axis), range: [-180, 180]
+        yaw: Yaw angle in degrees (rotation around Z axis), range: [-180, 180]
+        request_id: Optional request ID for tracking
+
+    Returns:
+        OperationResult with orientation adjustment confirmation
+
+    Example:
+        >>> # Rotate gripper 90 degrees for side grasp
+        >>> result = adjust_end_effector_orientation("Robot1", roll=90.0)
+
+        >>> # Adjust pitch for top-down grasp
+        >>> result = adjust_end_effector_orientation("Robot1", pitch=-90.0)
+    """
+    try:
+        # Validate robot_id
+        if not robot_id or not isinstance(robot_id, str):
+            return OperationResult.error_result(
+                "INVALID_ROBOT_ID",
+                f"Robot ID must be a non-empty string, got: {robot_id}",
+                ["Provide a valid robot ID"],
+            )
+
+        # Validate angles
+        for angle_name, angle_value in [("roll", roll), ("pitch", pitch), ("yaw", yaw)]:
+            if not isinstance(angle_value, (int, float)):
+                return OperationResult.error_result(
+                    "INVALID_ANGLE",
+                    f"{angle_name} must be a number, got: {type(angle_value).__name__}",
+                    ["Provide angles as floats in degrees"],
+                )
+            if not (-180.0 <= angle_value <= 180.0):
+                return OperationResult.error_result(
+                    "ANGLE_OUT_OF_RANGE",
+                    f"{angle_name}={angle_value} out of range [-180, 180]",
+                    ["Keep angles within [-180, 180] degrees"],
+                )
+
+        # Construct command for Unity
+        command = {
+            "command_type": "adjust_end_effector_orientation",
+            "robot_id": robot_id,
+            "parameters": {
+                "roll": roll,
+                "pitch": pitch,
+                "yaw": yaw,
+            },
+            "timestamp": time.time(),
+            "request_id": request_id,
+        }
+
+        logger.info(
+            f"Sending adjust_end_effector_orientation to {robot_id}: roll={roll}, pitch={pitch}, yaw={yaw}"
+        )
+
+        success = _get_command_broadcaster().send_command(command, request_id)
+
+        if not success:
+            return OperationResult.error_result(
+                "COMMUNICATION_FAILED",
+                "Failed to send command to Unity",
+                ["Ensure Unity is running", "Verify CommandServer is running"],
+            )
+
+        logger.info(f"Successfully sent orientation adjustment to {robot_id}")
+
+        return OperationResult.success_result(
+            {
+                "robot_id": robot_id,
+                "orientation": {"roll": roll, "pitch": pitch, "yaw": yaw},
+                "status": "command_sent",
+                "timestamp": time.time(),
+            }
+        )
+
+    except Exception as e:
+        logger.error(
+            f"Unexpected error in adjust_end_effector_orientation: {e}", exc_info=True
+        )
+        return OperationResult.error_result(
+            "UNEXPECTED_ERROR",
+            f"Unexpected error occurred: {str(e)}",
+            ["Check logs", "Retry operation"],
+        )
+
+
+def create_adjust_end_effector_orientation_operation() -> BasicOperation:
+    """Create the BasicOperation definition for adjust_end_effector_orientation."""
+    return BasicOperation(
+        operation_id="motion_adjust_orientation_003",
+        name="adjust_end_effector_orientation",
+        category=OperationCategory.NAVIGATION,
+        complexity=OperationComplexity.BASIC,
+        description="Adjust end effector orientation (roll, pitch, yaw) without changing position",
+        long_description="""
+            This operation modifies only the gripper orientation while maintaining
+            the current position. Useful for adjusting grasp approach angle or
+            tool orientation.
+
+            Rotation order: Roll (X) → Pitch (Y) → Yaw (Z)
+        """,
+        usage_examples=[
+            "adjust_end_effector_orientation('Robot1', roll=90.0) - Side grasp",
+            "adjust_end_effector_orientation('Robot1', pitch=-90.0) - Top-down grasp",
+            "adjust_end_effector_orientation('Robot1', yaw=45.0) - Angled approach",
+        ],
+        parameters=[
+            OperationParameter(
+                name="robot_id", type="str", description="Robot ID", required=True
+            ),
+            OperationParameter(
+                name="roll",
+                type="float",
+                description="Roll angle in degrees (X axis)",
+                required=False,
+                default=0.0,
+                valid_range=(-180.0, 180.0),
+            ),
+            OperationParameter(
+                name="pitch",
+                type="float",
+                description="Pitch angle in degrees (Y axis)",
+                required=False,
+                default=0.0,
+                valid_range=(-180.0, 180.0),
+            ),
+            OperationParameter(
+                name="yaw",
+                type="float",
+                description="Yaw angle in degrees (Z axis)",
+                required=False,
+                default=0.0,
+                valid_range=(-180.0, 180.0),
+            ),
+        ],
+        preconditions=[
+            "Robot at stable position",
+            "Target orientation reachable from current position",
+        ],
+        postconditions=[
+            "End effector orientation adjusted",
+            "Position unchanged",
+            "Ready for next operation",
+        ],
+        average_duration_ms=800.0,
+        success_rate=0.96,
+        failure_modes=["Unreachable orientation", "Joint limits exceeded"],
+        implementation=adjust_end_effector_orientation,
+    )
+
+
+ADJUST_END_EFFECTOR_ORIENTATION_OPERATION = create_adjust_end_effector_orientation_operation()

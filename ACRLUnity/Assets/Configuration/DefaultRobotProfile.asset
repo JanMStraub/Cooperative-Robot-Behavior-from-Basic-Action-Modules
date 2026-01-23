@@ -46,4 +46,4 @@ MonoBehaviour:
     upperLimit: 180
     lowerLimit: -180
   adjustmentSpeed: 1
-  maxJointStepRad: 0.2
+  maxJointStepRad: 0.15

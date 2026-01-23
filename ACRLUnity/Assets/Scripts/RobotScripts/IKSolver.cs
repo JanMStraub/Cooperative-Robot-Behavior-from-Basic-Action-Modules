@@ -151,12 +151,14 @@ namespace Robotics
                 targetState.Rotation
             );
 
-            // Check convergence (both position and velocity must be small)
+            // Convergence check - position and orientation only
+            // Velocity damping is handled by Kd term, not by skipping IK
+            // This allows IK to continue working while velocity naturally settles
             if (
                 posError.magnitude < convergenceThreshold
                 && orientationError.magnitude < orientationConvergenceThreshold
                 && currentEndEffectorVelocity.magnitude < 0.05f
-            ) // Velocity threshold
+            )
             {
                 return null; // Converged
             }

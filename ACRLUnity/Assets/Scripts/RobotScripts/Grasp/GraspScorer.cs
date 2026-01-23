@@ -28,18 +28,20 @@ namespace Robotics.Grasp
         /// <param name="candidates">List of candidates to score</param>
         /// <param name="objectSize">Size of target object</param>
         /// <param name="gripperPosition">Current gripper position</param>
+        /// <param name="gripperRotation">Current gripper rotation (optional - for orientation consistency)</param>
         /// <returns>Sorted list of candidates (highest score first)</returns>
         public List<GraspCandidate> ScoreAndRank(
             List<GraspCandidate> candidates,
             Vector3 objectSize,
-            Vector3 gripperPosition
+            Vector3 gripperPosition,
+            Quaternion? gripperRotation = null
         )
         {
             // Score each candidate
             for (int i = 0; i < candidates.Count; i++)
             {
                 var candidate = candidates[i];
-                ScoreCandidate(ref candidate, objectSize, gripperPosition);
+                ScoreCandidate(ref candidate, objectSize, gripperPosition, gripperRotation);
                 candidates[i] = candidate;
             }
 
@@ -54,10 +56,12 @@ namespace Robotics.Grasp
         /// <param name="candidate">Candidate to score (passed by reference)</param>
         /// <param name="objectSize">Size of target object</param>
         /// <param name="gripperPosition">Current gripper position</param>
+        /// <param name="gripperRotation">Current gripper rotation (optional - for orientation consistency)</param>
         private void ScoreCandidate(
             ref GraspCandidate candidate,
             Vector3 objectSize,
-            Vector3 gripperPosition
+            Vector3 gripperPosition,
+            Quaternion? gripperRotation = null
         )
         {
             // Compute individual scores (normalized 0-1)
@@ -65,15 +69,22 @@ namespace Robotics.Grasp
             candidate.approachScore = ComputeApproachScore(ref candidate);
             candidate.depthScore = ComputeDepthScore(ref candidate, objectSize);
             candidate.stabilityScore = ComputeStabilityScore(ref candidate, objectSize);
-            // antipodalScore is already computed during candidate generation
 
-            // Weighted combination (including antipodal score)
+            float orientationConsistency = gripperRotation.HasValue
+                ? ComputeOrientationConsistencyScore(ref candidate, gripperRotation.Value)
+                : 1.0f; // No penalty if current rotation not provided
+
+            // Weighted combination (including antipodal and orientation consistency)
             candidate.totalScore =
                 candidate.ikScore * _config.ikScoreWeight +
                 candidate.approachScore * _config.approachScoreWeight +
                 candidate.depthScore * _config.depthScoreWeight +
                 candidate.stabilityScore * _config.stabilityScoreWeight +
                 candidate.antipodalScore * _config.antipodalScoreWeight;
+
+            // Apply orientation consistency as a multiplicative penalty (not additive weight)
+            // This ensures large rotations always reduce the score significantly
+            candidate.totalScore *= orientationConsistency;
         }
 
         /// <summary>
@@ -113,6 +124,16 @@ namespace Robotics.Grasp
         {
             float weight = _config.GetApproachWeight(candidate.approachType);
 
+            // Debug: Log approach weights to diagnose scoring issues
+            #if UNITY_EDITOR
+            if (UnityEngine.Random.value < 0.01f) // Log 1% of the time to avoid spam
+            {
+                UnityEngine.Debug.Log(
+                    $"[GRASP_SCORER] Approach {candidate.approachType} has preference weight {weight:F2}"
+                );
+            }
+            #endif
+
             // Normalize to 0-1 range (assuming max weight is 2.0)
             return Mathf.Clamp01(weight / 2.0f);
         }
@@ -150,9 +171,10 @@ namespace Robotics.Grasp
         {
             float score = 1.0f;
 
-            // Factor 1: Approach alignment with gravity (top approaches more stable)
+            // Factor 1: Approach alignment with gravity
+            // Reduced penalty for horizontal approaches (more balanced scoring)
             float gravityAlignment = Mathf.Abs(Vector3.Dot(candidate.approachDirection, Vector3.up));
-            score *= 0.3f + 0.7f * gravityAlignment; // Bias toward top approaches
+            score *= 0.5f + 0.5f * gravityAlignment;  // Changed from 0.3+0.7 to 0.5+0.5 (less penalty)
 
             // Factor 2: Gripper can physically grasp object
             if (!_config.gripperGeometry.CanGrasp(objectSize))
@@ -245,6 +267,46 @@ namespace Robotics.Grasp
             }
 
             return 1.0f; // Not near edge
+        }
+
+        /// <summary>
+        /// FIX B: Compute orientation consistency score to prevent "180-degree flip" scenarios.
+        /// Penalizes grasp candidates that require large rotations from current gripper orientation.
+        /// This prevents timeout issues where robots spend all their time trying to flip 180 degrees.
+        /// </summary>
+        /// <param name="candidate">Candidate to evaluate</param>
+        /// <param name="currentGripperRotation">Current gripper rotation</param>
+        /// <returns>Consistency score (0-1, higher = smaller rotation needed)</returns>
+        private float ComputeOrientationConsistencyScore(ref GraspCandidate candidate, Quaternion currentGripperRotation)
+        {
+            // Calculate angular difference between current rotation and candidate grasp rotation
+            // Quaternion.Angle returns the minimum angle in degrees (0-180)
+            float deltaAngle = Quaternion.Angle(currentGripperRotation, candidate.graspRotation);
+
+            // Apply aggressive penalty for large rotations
+            // Thresholds:
+            // - 0-45°: No penalty (score = 1.0)
+            // - 45-90°: Linear penalty (score = 1.0 -> 0.5)
+            // - 90-180°: Heavy penalty (score = 0.5 -> 0.1)
+
+            if (deltaAngle <= 45f)
+            {
+                // Small rotation - no penalty
+                return 1.0f;
+            }
+            else if (deltaAngle <= 90f)
+            {
+                // Medium rotation - linear penalty
+                float t = (deltaAngle - 45f) / 45f; // 0 at 45°, 1 at 90°
+                return Mathf.Lerp(1.0f, 0.5f, t);
+            }
+            else
+            {
+                // Large rotation (>90°) - heavy exponential penalty
+                // At 175° (near flip), score approaches 0.1 (90% penalty)
+                float t = (deltaAngle - 90f) / 90f; // 0 at 90°, 1 at 180°
+                return Mathf.Lerp(0.5f, 0.1f, t * t); // Quadratic falloff for heavy penalty
+            }
         }
 
         /// <summary>
