@@ -151,15 +151,10 @@ namespace Robotics
                 targetState.Rotation
             );
 
-            // Check convergence (both position and velocity must be small)
-            if (
-                posError.magnitude < convergenceThreshold
-                && orientationError.magnitude < orientationConvergenceThreshold
-                && currentEndEffectorVelocity.magnitude < 0.05f
-            ) // Velocity threshold
-            {
-                return null; // Converged
-            }
+            // NOTE: Convergence check disabled in IKSolver
+            // Velocity convergence is now handled by RobotController with adaptive thresholds
+            // This allows different velocity requirements for grasp vs normal movement
+            // IKSolver always returns joint deltas, letting RobotController decide when to stop
 
             // Apply orientation weight
             orientationError *= orientationWeight;
@@ -167,6 +162,14 @@ namespace Robotics
             // PD control: combine position and velocity errors
             // This is what eliminates oscillation!
             Vector3 combinedError = Kp * posError + Kd * velError;
+
+            // Safety clamp: Prevent matrix instability if target teleports far away
+            // Cap error magnitude to reasonable physical limits (1.0 m/s effective velocity command)
+            const float maxErrorMagnitude = 1.0f;
+            if (combinedError.magnitude > maxErrorMagnitude)
+            {
+                combinedError = combinedError.normalized * maxErrorMagnitude;
+            }
 
             // Build 6D error vector with combined position+velocity error
             BuildErrorVector(combinedError, orientationError);

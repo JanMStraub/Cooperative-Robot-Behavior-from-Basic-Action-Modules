@@ -52,7 +52,7 @@ namespace Robotics
         private float _dampingFactorLambda = RobotConstants.DEFAULT_DAMPING_FACTOR;
 
         [SerializeField]
-        private float _convergenceThreshold = 0.02f; // 2cm - adjust in Inspector if needed
+        private float _convergenceThreshold = RobotConstants.DEFAULT_CONVERGENCE_THRESHOLD; // 1.5cm - adjust in Inspector if needed
 
         [SerializeField]
         private float _orientationThresholdDegrees =

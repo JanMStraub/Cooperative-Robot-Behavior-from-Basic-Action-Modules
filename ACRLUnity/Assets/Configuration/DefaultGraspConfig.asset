@@ -50,7 +50,7 @@ MonoBehaviour:
     m_Bits: 4294967295
   enableIKValidation: 1
   maxIKValidationIterations: 100
-  ikValidationThreshold: 0.01
+  ikValidationThreshold: 0.002
   ikRotationTolerance: 30
   maxJointStepPerIteration: 0.2
   maxReachDistance: 0.6

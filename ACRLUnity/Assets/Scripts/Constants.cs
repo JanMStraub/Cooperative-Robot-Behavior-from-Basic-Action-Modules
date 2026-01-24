@@ -76,7 +76,7 @@ namespace Core
 
         /// <summary>
         /// Grasp convergence multiplier (relative to DEFAULT_CONVERGENCE_THRESHOLD)
-        /// Relaxed threshold for grasp precision (0.33 * 0.015m = 5mm instead of 3mm)
+        /// Relaxed threshold for grasp precision (0.33 * 0.015m = 5mm instead of 15mm)
         /// </summary>
         public const float GRASP_CONVERGENCE_MULTIPLIER = 0.33f;
 
