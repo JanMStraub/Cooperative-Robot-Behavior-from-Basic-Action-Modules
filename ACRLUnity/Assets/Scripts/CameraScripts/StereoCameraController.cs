@@ -108,18 +108,11 @@ namespace Vision
                 Transform leftChild = transform.GetChild(0);
                 Transform rightChild = transform.GetChild(1);
 
-                Debug.Log(
-                    $"{_logPrefix} LeftChild: {leftChild.name}, rightChild: {rightChild.name}"
-                );
-
                 _leftCamera = leftChild.GetComponent<Camera>();
                 _rightCamera = rightChild.GetComponent<Camera>();
 
                 if (_leftCamera != null && _rightCamera != null)
                 {
-                    Debug.Log(
-                        $"{_logPrefix} Found cameras: {leftChild.name} and {rightChild.name}"
-                    );
                     return;
                 }
             }
@@ -153,17 +146,6 @@ namespace Vision
             Debug.Log(
                 $"{_logPrefix} Initialized: {_cameraPairId}, Baseline={baseline}m, FOV={fov}°"
             );
-
-            // Log camera positions for debugging
-            if (_leftCamera != null && _rightCamera != null)
-            {
-                Vector3 leftPos = _leftCamera.transform.position;
-                Vector3 rightPos = _rightCamera.transform.position;
-                float actualDistance = Vector3.Distance(leftPos, rightPos);
-                Debug.Log(
-                    $"{_logPrefix} Left camera: {leftPos}, Right camera: {rightPos}, Distance: {actualDistance}m"
-                );
-            }
 
             // Initialize streaming mode
             _streamingInterval = 1.0f / _streamingFPS;

@@ -41,12 +41,6 @@ namespace Tests.EditMode
         }
 
         [Test]
-        public void RobotConstants_StepSpeeds_AreOrdered()
-        {
-            Assert.LessOrEqual(RobotConstants.MIN_STEP_SPEED_NEAR_TARGET, RobotConstants.MAX_STEP_SPEED);
-        }
-
-        [Test]
         public void RobotConstants_MovementThreshold_IsSmall()
         {
             // 1cm threshold

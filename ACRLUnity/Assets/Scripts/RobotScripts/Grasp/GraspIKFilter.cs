@@ -16,7 +16,6 @@ namespace Robotics.Grasp
         private readonly ArticulationBody[] _joints;
         private readonly Transform _ikReferenceFrame;
         private readonly Transform _endEffector;
-        private readonly Transform _robotBase;
 
         // --- Cached Kinematic Structure (Static Geometry) ---
         private readonly Vector3[] _localJointPositions; // Pos relative to parent
@@ -34,7 +33,7 @@ namespace Robotics.Grasp
         // --- Debug and Validation Settings ---
         private readonly bool _enableDebugLogging;
         private readonly bool _enableInitializationValidation;
-        private readonly string _logPrefix = "[ROBOT_CONTROLLER]";
+        private readonly string _logPrefix = "[GRASP_IK_FILTER]";
 
         /// <summary>
         /// Initialize IK filter with robot configuration.
@@ -70,10 +69,9 @@ namespace Robotics.Grasp
             _jointCount = joints.Length;
             _ikSolver = new IKSolver(_jointCount, dampingFactor);
 
-            // 1. Identify Robot Base
-            _robotBase = _joints[0].transform.parent;
-            if (_robotBase == null)
-                _robotBase = _joints[0].transform;
+            // CRITICAL FIX: We no longer need to identify a separate robot base.
+            // The kinematic chain will be cached relative to _ikReferenceFrame directly.
+            // This avoids issues with rotated robot bases (e.g., Robot2 rotated 180°).
 
             // 2. Allocate Caches
             _localJointPositions = new Vector3[_jointCount];
@@ -116,14 +114,16 @@ namespace Robotics.Grasp
             for (int i = 0; i < _jointCount; i++)
             {
                 ArticulationBody joint = _joints[i];
-                Transform parent = (i == 0) ? _robotBase : _joints[i - 1].transform;
+                // FIX: For the first joint (i=0), the "parent" is the IK Reference Frame
+                // For subsequent joints, the parent is the previous joint
+                Transform parentTransform = (i == 0) ? _ikReferenceFrame : _joints[i - 1].transform;
 
-                // A. Cache joint position relative to parent
-                _localJointPositions[i] = parent.InverseTransformPoint(joint.transform.position);
+                // A. Cache joint position relative to IK Frame (for i=0) or previous joint
+                _localJointPositions[i] = parentTransform.InverseTransformPoint(joint.transform.position);
 
-                // B. Cache initial rotation in parent's frame
+                // B. Cache initial rotation relative to IK Frame (for i=0) or previous joint
                 _localJointBindRotations[i] =
-                    Quaternion.Inverse(parent.rotation) * joint.transform.rotation;
+                    Quaternion.Inverse(parentTransform.rotation) * joint.transform.rotation;
 
                 // C. Cache joint axis relative to joint's local frame (for proper FK)
                 Vector3 worldAxis = joint.transform.rotation * joint.anchorRotation * Vector3.right;
@@ -324,6 +324,10 @@ namespace Robotics.Grasp
         {
             // 1. Attempt Pre-Grasp (seed with current robot state)
             CaptureCurrentJointAngles(_bufferJointAngles);
+
+            // DEBUG: Log first failure to understand Robot2 issue
+            Vector3 preGraspLocalPos = _ikReferenceFrame.InverseTransformPoint(candidate.preGraspPosition);
+
             var preGraspResult = AttemptIK(
                 candidate.preGraspPosition,
                 candidate.preGraspRotation,
@@ -332,12 +336,6 @@ namespace Robotics.Grasp
 
             if (!preGraspResult.success)
             {
-                if (_enableDebugLogging)
-                {
-                    Debug.Log(
-                        $"{_logPrefix} Pre-grasp failed: error={preGraspResult.finalError:F4}m, iterations={preGraspResult.iterations}, threshold={_config.ikValidationThreshold:F4}m"
-                    );
-                }
                 candidate.ikValidated = false;
                 candidate.ikScore = 0f;
                 return candidate;
@@ -514,7 +512,7 @@ namespace Robotics.Grasp
 
         /// <summary>
         /// Optimized Forward Kinematics using Vector3/Quaternion math.
-        /// Calculates everything in RobotBase space, transforms to IK Frame only at the end.
+        /// Calculates everything directly in IK Frame space (kinematic chain starts from IK Frame).
         /// Uses pre-allocated buffer to avoid GC allocations.
         /// </summary>
         /// <param name="jointAngles">Joint angles in radians</param>
@@ -525,13 +523,15 @@ namespace Robotics.Grasp
             JointInfo[] jointInfosOut
         )
         {
-            // Start at Robot Base (Identity in Base Space)
+            // Start at IK Reference Frame origin (Identity)
+            // Since kinematic structure is cached relative to IK Frame, we're already in the correct space
             Vector3 currentPos = Vector3.zero;
             Quaternion currentRot = Quaternion.identity;
 
             for (int i = 0; i < _jointCount; i++)
             {
                 // 1. Apply geometric offset from parent
+                // For i=0, this is the offset from IK Frame to Joint 0
                 currentPos += currentRot * _localJointPositions[i];
 
                 // 2. Calculate local rotation (Bind Rotation + Joint Angle)
@@ -547,7 +547,8 @@ namespace Robotics.Grasp
                 // 3. Accumulate rotation
                 currentRot *= jointRotation;
 
-                // 4. Store Joint Info for Jacobian (In Base Space temporarily)
+                // 4. Store Joint Info for Jacobian
+                // Since we started at IK Frame origin, currentPos is already in IK Frame coordinates
                 jointInfosOut[i].WorldPosition = currentPos;
                 jointInfosOut[i].WorldAxis = currentRot * _localJointAxes[i];
             }
@@ -555,45 +556,26 @@ namespace Robotics.Grasp
             // Apply End Effector Offset
             currentPos += currentRot * _endEffectorLocalOffset;
 
-            // --- Transform from Base Space to IK Reference Frame ---
-            // Construct cached transformation matrix
-            Matrix4x4 baseToWorld = _robotBase.localToWorldMatrix;
-            Matrix4x4 worldToIK = _ikReferenceFrame.worldToLocalMatrix;
-            Matrix4x4 baseToIK = worldToIK * baseToWorld;
-
-            // Transform End Effector
-            Vector3 eePosIK = baseToIK.MultiplyPoint3x4(currentPos);
-            Quaternion eeRotIK =
-                (Quaternion.Inverse(_ikReferenceFrame.rotation) * _robotBase.rotation) * currentRot;
-
-            // Transform Joint Infos (reuse buffer, no allocation)
-            for (int i = 0; i < _jointCount; i++)
-            {
-                jointInfosOut[i].WorldPosition = baseToIK.MultiplyPoint3x4(
-                    jointInfosOut[i].WorldPosition
-                );
-                jointInfosOut[i].WorldAxis = baseToIK
-                    .MultiplyVector(jointInfosOut[i].WorldAxis)
-                    .normalized;
-            }
-
-            return new IKState(eePosIK, eeRotIK);
+            // Return result - it's already in IK Frame space, no transformation needed
+            return new IKState(currentPos, currentRot);
         }
 
         /// <summary>
         /// Compute IK quality score from validation results.
-        /// Balanced weights: error (40%), manipulability (30%), iterations (20%), limits (10%).
+        /// Adjusted weights to reduce asymmetry from asymmetric joint limits:
+        /// error (50%), manipulability (35%), iterations (10%), limits (5%).
         /// </summary>
         /// <param name="preGraspResult">Pre-grasp IK result</param>
         /// <param name="graspResult">Grasp IK result</param>
         /// <returns>Quality score (0-1, higher is better)</returns>
         private float ComputeIKQualityScore(IKResult preGraspResult, IKResult graspResult)
         {
-            float maxIterations = _config.maxIKValidationIterations;
             float avgIterations = (preGraspResult.iterations + graspResult.iterations) * 0.5f;
 
-            // Factor 1: Iteration efficiency (fewer iterations is better)
-            float iterationScore = Mathf.Clamp01(1f - (avgIterations / maxIterations));
+            // Factor 1: Iteration efficiency - use hyperbolic decay instead of linear
+            // This prevents score from dropping to 0 when hitting max iterations
+            // At 22 iters: 1/(1+22/100) = 0.82, At 250 iters: 1/(1+250/100) = 0.29 (not 0!)
+            float iterationScore = 1f / (1f + avgIterations / 100f);
 
             // Factor 2: Position accuracy (heavily penalize error)
             float avgError = (preGraspResult.finalError + graspResult.finalError) * 0.5f;
@@ -602,14 +584,36 @@ namespace Robotics.Grasp
             // Factor 3: Manipulability (ability to move from this configuration)
             float manipulability = ComputeManipulability(graspResult.jointAngles);
 
-            // Factor 4: Joint limit proximity (penalize configurations near limits)
+            // Factor 4: Joint limit proximity - reduced weight since AR4 has asymmetric limits
+            // Asymmetric limits (-42.5° to +90° on shoulder) inherently penalize mirrored robots
             float limitScore = ComputeJointLimitScore(graspResult.jointAngles);
 
-            // Weighted combination (favor manipulability and low error for safer, more reliable grasps)
-            return (iterationScore * 0.2f)
-                + (errorScore * 0.4f)
-                + (manipulability * 0.3f)
-                + (limitScore * 0.1f);
+            // Adjusted weights: reduced iteration (10%) and limit (5%) importance
+            // These factors disproportionately penalize robots with asymmetric joint limits
+            const float iterationWeight = 0.10f;
+            const float errorWeight = 0.50f;
+            const float manipWeight = 0.35f;
+            const float limitWeight = 0.05f;
+
+            float total = (iterationScore * iterationWeight)
+                + (errorScore * errorWeight)
+                + (manipulability * manipWeight)
+                + (limitScore * limitWeight);
+
+            // DEBUG: Log IK score components for first candidate to diagnose asymmetry
+            if (UnityEngine.Random.value < 0.02f) // Log 2% of the time
+            {
+                UnityEngine.Debug.Log(
+                    $"{_logPrefix} IK Score Breakdown: " +
+                    $"iteration={iterationScore:F3} ({avgIterations:F1} iters), " +
+                    $"error={errorScore:F3} ({avgError:F4}m), " +
+                    $"manip={manipulability:F3}, " +
+                    $"limit={limitScore:F3}, " +
+                    $"total={total:F3}"
+                );
+            }
+
+            return total;
         }
 
         /// <summary>
@@ -653,6 +657,7 @@ namespace Robotics.Grasp
         /// <summary>
         /// Compute joint limit proximity score.
         /// Penalizes configurations where joints are near their limits.
+        /// Uses soft sigmoid-based scoring to reduce asymmetry from asymmetric joint ranges.
         /// </summary>
         /// <param name="jointAngles">Joint configuration</param>
         /// <returns>Joint limit score (0-1, higher = farther from limits)</returns>
@@ -667,19 +672,30 @@ namespace Robotics.Grasp
                 float max = _jointUpperLimits[i];
                 float range = max - min;
 
-                // Ignore infinite/fixed joints
+                // Ignore infinite/fixed joints (range > 100 rad ≈ 5730°)
                 if (range > 100f || range <= 0f)
                     continue;
 
-                // Normalized position within range (0..1)
-                float t = (jointAngles[i] - min) / range;
+                float angle = jointAngles[i];
 
-                // Distance from center (0.5), range 0..0.5
-                float distFromCenter = Mathf.Abs(t - 0.5f);
+                // Calculate distance from nearest edge as fraction of total range
+                float distFromLowerLimit = angle - min;
+                float distFromUpperLimit = max - angle;
+                float minDistFromEdge = Mathf.Min(distFromLowerLimit, distFromUpperLimit);
+                float edgeFraction = minDistFromEdge / range;
 
-                // Score: 1 at center, 0 at limits
-                // Map 0..0.5 -> 1..0
-                totalScore += 1.0f - (distFromCenter * 2.0f);
+                // Soft sigmoid-based scoring instead of hard threshold
+                // This creates a gradual penalty that doesn't cliff at 10% boundary
+                // sigmoid(x) where x is scaled so 5% from edge ≈ 0.5 score
+                // At 0% (at limit): score ≈ 0.12
+                // At 5% from edge: score ≈ 0.50
+                // At 10% from edge: score ≈ 0.88
+                // At 20%+ from edge: score ≈ 1.0
+                float k = 40f; // Steepness factor
+                float midpoint = 0.05f; // 5% from edge is the midpoint
+                float score = 1f / (1f + Mathf.Exp(-k * (edgeFraction - midpoint)));
+
+                totalScore += score;
                 validJoints++;
             }
 

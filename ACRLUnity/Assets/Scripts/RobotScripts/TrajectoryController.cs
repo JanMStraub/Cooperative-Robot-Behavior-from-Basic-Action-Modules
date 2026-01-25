@@ -29,10 +29,6 @@ namespace Robotics
         private Vector3 _cachedTargetAcceleration;
         private float _lastUpdateTime = -1f;
 
-        // Configuration
-        private const float MAX_VELOCITY = 0.5f; // m/s (safety limit)
-        private const float MAX_ACCELERATION = 1.0f; // m/s² (safety limit)
-
         /// <summary>
         /// Creates a new trajectory controller with specified PD gains
         /// </summary>
@@ -90,7 +86,7 @@ namespace Robotics
 
                 // Feedforward terms
                 _cachedTargetPosition = waypoint.position;
-                _cachedTargetVelocity = direction * Mathf.Clamp(velocity, 0f, MAX_VELOCITY);
+                _cachedTargetVelocity = direction * Mathf.Clamp(velocity, 0f, RobotConstants.MAX_VELOCITY);
 
                 // Acceleration from velocity profile (for feedforward control)
                 _cachedTargetAcceleration = GetAccelerationFromProfile(
@@ -243,7 +239,7 @@ namespace Robotics
             // else: cruise phase, acceleration = 0
 
             // Clamp acceleration
-            acceleration = Mathf.Clamp(acceleration, -MAX_ACCELERATION, MAX_ACCELERATION);
+            acceleration = Mathf.Clamp(acceleration, -RobotConstants.MAX_ACCELERATION, RobotConstants.MAX_ACCELERATION);
 
             // Return scalar acceleration (direction handled by velocity)
             return Vector3.zero; // Acceleration is already included in velocity calculations

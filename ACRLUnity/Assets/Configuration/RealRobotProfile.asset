@@ -10,39 +10,39 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3ad51d904e0a04d10a45f68255ae4ef9, type: 3}
-  m_Name: DefaultRobotProfile
+  m_Name: RealRobotProfile
   m_EditorClassIdentifier: Assembly-CSharp::RobotConfig
   profileName: AR4_Default
   description: Standard AR4 robotic arm configuration
   joints:
-  - stiffness: 5000
-    damping: 1500
-    forceLimit: 2000
+  - stiffness: 800
+    damping: 60
+    forceLimit: 1000
     upperLimit: 170
     lowerLimit: -170
-  - stiffness: 4000
-    damping: 1200
-    forceLimit: 2000
+  - stiffness: 800
+    damping: 45
+    forceLimit: 1000
     upperLimit: 90
     lowerLimit: -42.5
-  - stiffness: 3000
-    damping: 800
-    forceLimit: 1000
+  - stiffness: 400
+    damping: 20
+    forceLimit: 500
     upperLimit: 125
     lowerLimit: -90
-  - stiffness: 2500
-    damping: 500
-    forceLimit: 500
+  - stiffness: 300
+    damping: 10
+    forceLimit: 200
     upperLimit: 105
     lowerLimit: -105
-  - stiffness: 2000
-    damping: 400
-    forceLimit: 500
+  - stiffness: 200
+    damping: 5
+    forceLimit: 100
     upperLimit: 100
     lowerLimit: -100
-  - stiffness: 1500
-    damping: 300
-    forceLimit: 500
+  - stiffness: 100
+    damping: 2
+    forceLimit: 50
     upperLimit: 180
     lowerLimit: -180
   adjustmentSpeed: 0.2

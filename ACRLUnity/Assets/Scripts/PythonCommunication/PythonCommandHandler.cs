@@ -1816,8 +1816,8 @@ namespace PythonCommunication
             uint requestId
         )
         {
-            // Ensure gripper is closed
-            if (!gripperController.IsClosed)
+            // Ensure gripper is closed (targetPosition < 0.1 means closed)
+            if (gripperController.targetPosition > 0.1f)
             {
                 gripperController.CloseGrippers();
                 yield return new WaitForSeconds(0.5f); // Wait for gripper to close

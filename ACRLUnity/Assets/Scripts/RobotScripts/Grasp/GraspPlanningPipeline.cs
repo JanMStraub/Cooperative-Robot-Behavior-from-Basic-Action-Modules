@@ -166,18 +166,19 @@ namespace Robotics.Grasp
 
         /// <summary>
         /// Fallback to simple planner if advanced pipeline fails.
+        /// Uses SimpleRobotController for more robust execution.
         /// </summary>
         /// <param name="targetObject">Object to grasp</param>
         /// <param name="gripperPosition">Current gripper position</param>
         /// <param name="options">Grasp options</param>
-        /// <returns>Simple grasp candidate</returns>
+        /// <returns>Simple grasp candidate with simplified execution flag</returns>
         private GraspCandidate? FallbackToSimplePlanner(
             GameObject targetObject,
             Vector3 gripperPosition,
             GraspOptions? options
         )
         {
-            UnityEngine.Debug.Log($"{_logPrefix} Falling back to simple planner");
+            UnityEngine.Debug.Log($"{_logPrefix} Falling back to simple planner with SimpleRobotController");
 
             try
             {
@@ -201,6 +202,10 @@ namespace Robotics.Grasp
                 candidate.ikValidated = true;
                 candidate.collisionValidated = true;
                 candidate.totalScore = 0.5f; // Medium score for fallback
+
+                // Mark this candidate for simplified execution using SimpleRobotController
+                // This flag will be checked by RobotController to use simpler motion control
+                candidate.useSimplifiedExecution = true;
 
                 return candidate;
             }
@@ -340,12 +345,6 @@ namespace Robotics.Grasp
             int adaptiveCount = Mathf.RoundToInt(baseCandidates * timeBudgetFactor * complexityFactor * distanceFactor);
             adaptiveCount = Mathf.Clamp(adaptiveCount, baseCandidates, baseCandidates * 3);
 
-            UnityEngine.Debug.Log(
-                $"{_logPrefix} Adaptive candidate count: {adaptiveCount} " +
-                $"(base={baseCandidates}, time={timeBudgetFactor:F1}x, " +
-                $"complexity={complexityFactor:F1}x, distance={distanceFactor:F1}x)"
-            );
-
             return adaptiveCount;
         }
 
@@ -388,7 +387,7 @@ namespace Robotics.Grasp
         /// <param name="rankedCandidates">Sorted candidates</param>
         private void LogTopCandidatesScores(List<GraspCandidate> rankedCandidates)
         {
-            int showCount = Mathf.Min(5, rankedCandidates.Count);
+            int showCount = Mathf.Min(3, rankedCandidates.Count);
             UnityEngine.Debug.Log($"{_logPrefix} Top {showCount} candidates (showing weighted contributions):");
 
             for (int i = 0; i < showCount; i++)

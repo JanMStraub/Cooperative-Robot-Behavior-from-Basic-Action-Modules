@@ -52,7 +52,7 @@ namespace Robotics
         private float _dampingFactorLambda = RobotConstants.DEFAULT_DAMPING_FACTOR;
 
         [SerializeField]
-        private float _convergenceThreshold = 0.03f; // 3cm - adjust in Inspector if needed
+        private float _convergenceThreshold = RobotConstants.DEFAULT_CONVERGENCE_THRESHOLD;
 
         [SerializeField]
         private float _orientationThresholdDegrees =
@@ -100,12 +100,14 @@ namespace Robotics
         ]
         private Vector3 _gripperRotationOffset = Vector3.zero;
 
+        [Header("Operation Mode")]
+        [SerializeField]
+        [Tooltip("Enable autonomous operation (FixedUpdate loop). Disable when used as backup by RobotController.")]
+        private bool _enableAutonomousMode = false;
+
         [Header("Debug")]
         [SerializeField]
         private bool enableDebugVisualization = true;
-
-        [SerializeField]
-        public GameObject debugTarget;
 
         #endregion
 
@@ -155,12 +157,18 @@ namespace Robotics
         private void Start()
         {
             InitializeRobot();
-            // Delay gripper and target setup to ensure GripperController has initialized
-            StartCoroutine(DelayedStartup());
+
+            // Only run autonomous startup if enabled (when used standalone, not as backup)
+            if (_enableAutonomousMode)
+            {
+                // Delay gripper and target setup to ensure GripperController has initialized
+                StartCoroutine(DelayedStartup());
+            }
         }
 
         /// <summary>
         /// Delayed startup to ensure GripperController is initialized first.
+        /// Only runs when in autonomous mode.
         /// </summary>
         private IEnumerator DelayedStartup()
         {
@@ -169,17 +177,18 @@ namespace Robotics
 
             // Now open the gripper (this will auto-detach any held object)
             OpenGripper();
-
-            // Then set the target (use GameObject to enable attachment)
-            if (debugTarget != null)
-                SetTarget(debugTarget);
         }
 
         /// <summary>
         /// Unity FixedUpdate callback - performs IK step at physics rate.
+        /// Only runs when in autonomous mode. When used as backup by RobotController,
+        /// RobotController will call PerformInverseKinematicsStep() manually.
         /// </summary>
         private void FixedUpdate()
         {
+            if (!_enableAutonomousMode)
+                return;
+
             if (!_hasTarget || _hasReachedTarget)
                 return;
 
@@ -261,8 +270,6 @@ namespace Robotics
             // Initialize target to current position
             _targetPosition = endEffectorBase.position;
             _targetRotation = endEffectorBase.rotation;
-
-            Debug.Log($"{_logPrefix} [{robotId}] Initialized with {jointCount} joints");
         }
 
         /// <summary>
@@ -290,7 +297,11 @@ namespace Robotics
                 var drive = joint.xDrive;
 
                 // Try to use config from RobotManager (like RobotController does)
-                if (hasConfig && robotInstance.profile?.joints != null && i < robotInstance.profile.joints.Length)
+                if (
+                    hasConfig
+                    && robotInstance.profile?.joints != null
+                    && i < robotInstance.profile.joints.Length
+                )
                 {
                     var jointConfig = robotInstance.profile.joints[i];
                     drive.stiffness = jointConfig.stiffness;
@@ -315,15 +326,6 @@ namespace Robotics
 
                 joint.matchAnchors = true;
                 joint.xDrive = drive;
-            }
-
-            if (hasConfig)
-            {
-                Debug.Log($"{_logPrefix} [{robotId}] Applied RobotConfig profile: {robotInstance.profile.profileName}");
-            }
-            else
-            {
-                Debug.Log($"{_logPrefix} [{robotId}] Using default critical damping (no RobotConfig found)");
             }
         }
 
@@ -383,8 +385,9 @@ namespace Robotics
         /// <summary>
         /// Perform one step of inverse kinematics computation and apply motor updates.
         /// Uses velocity-level IK with PD control to prevent oscillation.
+        /// Public so RobotController can call it when using this as a backup.
         /// </summary>
-        private void PerformInverseKinematicsStep()
+        public void PerformInverseKinematicsStep()
         {
             if (robotJoints.Length == 0 || endEffectorBase == null)
                 return;
@@ -407,7 +410,9 @@ namespace Robotics
             {
                 if (!_hasReachedTarget)
                 {
-                    Debug.Log($"{_logPrefix} [{robotId}] Target reached! Distance: {_distanceToTarget:F4}m, Velocity: {currentVelocity.magnitude:F4}m/s");
+                    Debug.Log(
+                        $"{_logPrefix} [{robotId}] Target reached! Distance: {_distanceToTarget:F4}m, Velocity: {currentVelocity.magnitude:F4}m/s"
+                    );
                     SetTargetReached(true);
                 }
                 return;

@@ -156,23 +156,11 @@ namespace Simulation
                     FindObjectsSortMode.None
                 );
 
-                var simpleControllers = FindObjectsByType<SimpleRobotController>(
-                    FindObjectsInactive.Exclude,
-                    FindObjectsSortMode.None
-                );
-
-                // Combine both arrays
                 _robotControllers = regularControllers;
-                int totalRobots = regularControllers.Length + simpleControllers.Length;
+                int totalRobots = regularControllers.Length;
 
                 // Initialize robot tracking
                 foreach (var robot in regularControllers)
-                {
-                    string robotId = robot.gameObject.name;
-                    _robotTargetReached[robotId] = true; // Start with no active targets
-                }
-
-                foreach (var robot in simpleControllers)
                 {
                     string robotId = robot.gameObject.name;
                     _robotTargetReached[robotId] = true; // Start with no active targets
