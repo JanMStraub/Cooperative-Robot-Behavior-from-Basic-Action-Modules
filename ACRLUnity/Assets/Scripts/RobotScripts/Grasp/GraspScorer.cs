@@ -13,6 +13,8 @@ namespace Robotics.Grasp
     {
         private readonly GraspConfig _config;
 
+        private readonly string _logPrefix = "[GRASP_SCORER]";
+
         /// <summary>
         /// Initialize scorer with configuration.
         /// </summary>
@@ -129,7 +131,7 @@ namespace Robotics.Grasp
             if (UnityEngine.Random.value < 0.01f) // Log 1% of the time to avoid spam
             {
                 UnityEngine.Debug.Log(
-                    $"[GRASP_SCORER] Approach {candidate.approachType} has preference weight {weight:F2}"
+                    $"{_logPrefix} Approach {candidate.approachType} has preference weight {weight:F2}"
                 );
             }
             #endif
@@ -172,9 +174,11 @@ namespace Robotics.Grasp
             float score = 1.0f;
 
             // Factor 1: Approach alignment with gravity
-            // Reduced penalty for horizontal approaches (more balanced scoring)
+            // Further reduced penalty for horizontal approaches to reduce asymmetry
+            // for robots with asymmetric joint limits that can't easily reach Top approaches
+            // Side approach (dot=0): score *= 0.65, Top approach (dot=1): score *= 1.0
             float gravityAlignment = Mathf.Abs(Vector3.Dot(candidate.approachDirection, Vector3.up));
-            score *= 0.5f + 0.5f * gravityAlignment;  // Changed from 0.3+0.7 to 0.5+0.5 (less penalty)
+            score *= 0.65f + 0.35f * gravityAlignment;
 
             // Factor 2: Gripper can physically grasp object
             if (!_config.gripperGeometry.CanGrasp(objectSize))

@@ -27,25 +27,13 @@ namespace Core
         /// physics constraints and prevent Zeno's paradox with over-damping
         /// 15mm (1.5cm) is sufficient precision for grasping with gripper fingers
         /// </summary>
-        public const float DEFAULT_CONVERGENCE_THRESHOLD = 0.015f;
+        public const float DEFAULT_CONVERGENCE_THRESHOLD = 0.02f;
 
         /// <summary>
         /// Default maximum joint step size per iteration (radians)
         /// Moderate steps for smooth, controlled motion (balanced between 0.02 and 0.2)
         /// </summary>
-        public const float DEFAULT_MAX_JOINT_STEP_RAD = 0.05f;
-
-        /// <summary>
-        /// Minimum step speed when very close to target
-        /// Slow final approach for precision (balanced for stability)
-        /// </summary>
-        public const float MIN_STEP_SPEED_NEAR_TARGET = 0.3f;
-
-        /// <summary>
-        /// Maximum step speed for IK adjustments
-        /// Increased for faster motion while maintaining stability (2x original)
-        /// </summary>
-        public const float MAX_STEP_SPEED = 1.0f;
+        public const float DEFAULT_MAX_JOINT_STEP_RAD = 0.2f;
 
         /// <summary>
         /// Movement detection threshold (meters)
@@ -81,12 +69,9 @@ namespace Core
 
         /// <summary>
         /// Grasp convergence multiplier (relative to DEFAULT_CONVERGENCE_THRESHOLD)
-        /// No relaxation for grasp precision (1.0 * 0.002m = 2mm)
-        /// Phase 2: Grasp Reliability - tight tolerance required for >95% success rate
-        /// The grasp point calculation in GraspCandidateGenerator already accounts for
-        /// finger depth, so the IK target position must be precise
+        /// Relaxed threshold for grasp precision (0.33 * 0.015m = 5mm instead of 15mm)
         /// </summary>
-        public const float GRASP_CONVERGENCE_MULTIPLIER = 1.0f;
+        public const float GRASP_CONVERGENCE_MULTIPLIER = 0.33f;
 
         /// <summary>
         /// Pre-grasp convergence multiplier (relative to DEFAULT_CONVERGENCE_THRESHOLD)
@@ -95,7 +80,7 @@ namespace Core
         /// The actual precision happens at the grasp waypoint
         /// 10mm tolerance is acceptable for waypoint positioning
         /// </summary>
-        public const float PREGRASP_CONVERGENCE_MULTIPLIER = 5.0f;
+        public const float PREGRASP_CONVERGENCE_MULTIPLIER = 2.0f;
 
         // Target Finding
         /// <summary>
@@ -108,6 +93,18 @@ namespace Core
         /// If found object is within this distance, use it instead of creating temp target
         /// </summary>
         public const float OBJECT_DISTANCE_THRESHOLD = 0.1f;
+
+
+        // Configuration
+        /// <summary>
+        /// Maximum robot velocity (m/s) - safety limit for trajectory controller
+        /// </summary>
+        public const float MAX_VELOCITY = 0.2f; // m/s (safety limit)
+
+        /// <summary>
+        /// Maximum robot acceleration (m/s²) - safety limit for trajectory controller
+        /// </summary>
+        public const float MAX_ACCELERATION = 0.7f; // m/s² (safety limit)
 
         // GameObject Naming
         /// <summary>

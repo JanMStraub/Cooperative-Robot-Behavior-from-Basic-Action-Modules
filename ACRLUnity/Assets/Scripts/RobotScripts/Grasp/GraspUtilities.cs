@@ -10,6 +10,8 @@ namespace Robotics.Grasp
     {
         private const float SIDE_APPROACH_OFFSET = 0.01f;
 
+        private const string _logPrefix = "[GRASP_UTILITIES]";
+
         /// <summary>
         /// Get the size of an object based on its collider bounds.
         /// </summary>
@@ -22,13 +24,13 @@ namespace Robotics.Grasp
             {
                 Vector3 size = collider.bounds.size;
                 Debug.Log(
-                    $"[GRASP_UTILITIES] Object '{obj.name}' size: {size}, bounds: {collider.bounds}, localScale: {obj.transform.localScale}"
+                    $"{_logPrefix} Object '{obj.name}' size: {size}, bounds: {collider.bounds}, localScale: {obj.transform.localScale}"
                 );
                 return size;
             }
 
             // Fallback to default cube size if no collider
-            Debug.LogWarning($"[GRASP_UTILITIES] Object '{obj.name}' has no collider, using default size"); 
+            Debug.LogWarning($"{_logPrefix} Object '{obj.name}' has no collider, using default size"); 
             return Vector3.one * 0.05f;
         }
 
@@ -52,17 +54,17 @@ namespace Robotics.Grasp
             float distanceZ = Mathf.Abs(delta.z);
 
             // DEBUG: Log approach selection criteria
-            Debug.Log($"[GRASP_APPROACH] Object: {objectPosition}, Gripper: {gripperPosition}");
-            Debug.Log($"[GRASP_APPROACH] Delta: {delta}, ObjectSize: {objectSize}");
+            Debug.Log($"{_logPrefix} Object: {objectPosition}, Gripper: {gripperPosition}");
+            Debug.Log($"{_logPrefix} Delta: {delta}, ObjectSize: {objectSize}");
             Debug.Log(
-                $"[GRASP_APPROACH] distanceX: {distanceX:F3}, distanceZ: {distanceZ:F3}, delta.y: {delta.y:F3}, threshold: {objectSize.y * 0.5f:F3}"
+                $"{_logPrefix} distanceX: {distanceX:F3}, distanceZ: {distanceZ:F3}, delta.y: {delta.y:F3}, threshold: {objectSize.y * 0.5f:F3}"
             );
 
             // If gripper is significantly above object, prefer Top approach
             // This is the most reliable grasp for small objects
             if (delta.y > objectSize.y * 0.5f)
             {
-                Debug.Log($"[GRASP_APPROACH] Selected: TOP (gripper above object)");
+                Debug.Log($"{_logPrefix} Selected: TOP (gripper above object)");
                 return GraspApproach.Top;
             }
 
@@ -71,13 +73,13 @@ namespace Robotics.Grasp
             if (distanceX > distanceZ)
             {
                 // Gripper is more displaced in X - approach from side (along X axis)
-                Debug.Log($"[GRASP_APPROACH] Selected: SIDE (distanceX > distanceZ)");
+                Debug.Log($"{_logPrefix} Selected: SIDE (distanceX > distanceZ)");
                 return GraspApproach.Side;
             }
             else
             {
                 // Gripper is more displaced in Z - approach from front (along Z axis)
-                Debug.Log($"[GRASP_APPROACH] Selected: FRONT (distanceZ >= distanceX)");
+                Debug.Log($"{_logPrefix} Selected: FRONT (distanceZ >= distanceX)");
                 return GraspApproach.Front;
             }
         }

@@ -14,6 +14,8 @@ namespace Robotics.Grasp
         private readonly GraspConfig _config;
         private readonly System.Random _random;
 
+        private const string _logPrefix = "[GRASP_CANDIDATE_GENERATOR]";
+
         // Cached basis vectors for local space calculations to avoid new struct allocs
         private static readonly Vector3[] ApproachAxes =
         {
@@ -115,7 +117,7 @@ namespace Robotics.Grasp
                 // Debug first candidate only
                 if (i == 0 && approach == GraspApproach.Top)
                 {
-                    UnityEngine.Debug.Log($"[GRASP_GEN] {approach} approach: objPos={objPos}, dimensionOnAxis={dimensionOnAxis}, " +
+                    UnityEngine.Debug.Log($"{_logPrefix} {approach} approach: objPos={objPos}, dimensionOnAxis={dimensionOnAxis}, " +
                         $"depthVar={depthVar}, perturbedApproachDir={perturbedApproachDir}, graspPoint={graspPoint}");
                 }
 
@@ -158,12 +160,13 @@ namespace Robotics.Grasp
                 candidate.contactPointEstimate = graspPoint;
                 candidate.approachDirection = perturbedApproachDir;
 
-                // Compute Score
+                // Compute Score (approach-aware antipodal scoring)
                 candidate.antipodalScore = ComputeAntipodalScore(
                     graspPoint,
                     graspRotation,
                     objPos,
-                    objSize
+                    objSize,
+                    approach
                 );
 
                 results.Add(candidate);
@@ -288,43 +291,53 @@ namespace Robotics.Grasp
             return objRot * baseRotation;
         }
 
+        /// <summary>
+        /// Compute antipodal grasp quality score.
+        /// Approach-aware: Top approaches use centering-only scoring since traditional
+        /// antipodal (opposing contact points) concept doesn't apply to top-down grasps.
+        /// </summary>
         private float ComputeAntipodalScore(
             Vector3 graspPos,
             Quaternion graspRot,
             Vector3 objCenter,
-            Vector3 objSize
+            Vector3 objSize,
+            GraspApproach approach
         )
         {
-            // 1. Determine Gripper Closing Axis based on Rotation
-            // Assuming standard parallel jaw: Closing axis is usually the Local X of the gripper
-            Vector3 closingAxis = graspRot * Vector3.right;
-
-            // 2. Project Object Center onto the plane defined by Closing Axis
-            // We want the vector from GraspPoint -> Center to be perpendicular to the Approach,
-            // but specifically aligned with the closing mechanism.
-
             Vector3 toCenter = objCenter - graspPos;
 
-            // Project toCenter onto the closing axis.
-            // If perfectly antipodal, the center should lie exactly halfway between fingers,
-            // meaning the projection onto the NON-closing axis (approach) is small.
+            // For Top approaches, use centering-based scoring instead of antipodal
+            // Top-down grasps on flat surfaces don't have traditional antipodal contact points
+            if (approach == GraspApproach.Top)
+            {
+                // Score based on horizontal centering (XZ plane)
+                // A good top grasp is centered over the object
+                Vector2 horizontalOffset = new Vector2(toCenter.x, toCenter.z);
+                float maxHorizontalExtent = Mathf.Max(objSize.x, objSize.z) * 0.5f;
+                float centeringScore = 1.0f - Mathf.Clamp01(horizontalOffset.magnitude / maxHorizontalExtent);
 
-            // Use simple distance to center line for performance
-            Vector3 approachAxis = graspRot * Vector3.forward; // Z is usually approach
+                // Bonus for being directly above (vertical alignment)
+                float verticalAlignment = Mathf.Abs(Vector3.Dot(toCenter.normalized, Vector3.down));
+                float verticalScore = Mathf.Clamp01(verticalAlignment);
 
-            // Check alignment: The vector to center should be roughly aligned with the approach axis
-            // (meaning the gripper is pointing AT the center of mass)
+                // Top approaches get a baseline score since they're inherently good for table-top objects
+                return 0.3f + (centeringScore * 0.4f) + (verticalScore * 0.3f);
+            }
+
+            // For Side/Front approaches, use traditional antipodal scoring
+            Vector3 closingAxis = graspRot * Vector3.right;
+            Vector3 approachAxis = graspRot * Vector3.forward;
+
+            // Check alignment: gripper should point at object center
             float alignmentDot = Vector3.Dot(toCenter.normalized, approachAxis);
-
-            // 0 to 1 score based on alignment (1.0 = pointing straight at center)
             float pointingScore = Mathf.Clamp01(alignmentDot);
 
-            // Offset penalty: Penalize if the grasp is too far from center line
+            // Centering: grasp should be centered on object
             float distFromCenterLine = Vector3.Cross(toCenter, approachAxis).magnitude;
-            float centeringScore =
+            float sideGraspCenteringScore =
                 1.0f - Mathf.Clamp01(distFromCenterLine / (Mathf.Max(objSize.x, objSize.z) * 0.5f));
 
-            return (pointingScore * 0.6f) + (centeringScore * 0.4f);
+            return (pointingScore * 0.6f) + (sideGraspCenteringScore * 0.4f);
         }
 
         // --- Helpers ---

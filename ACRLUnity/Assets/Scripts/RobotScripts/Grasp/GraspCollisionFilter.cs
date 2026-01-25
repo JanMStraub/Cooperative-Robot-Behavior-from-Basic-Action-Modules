@@ -13,6 +13,8 @@ namespace Robotics.Grasp
         private readonly GraspConfig _config;
         private readonly string[] _ignoredObjectNames = { "BottomPanel", "Workdesk", "Table", "Floor", "Ground", "Plane" };
 
+        private readonly string _logPrefix = "[GRASP_COLLISION_FILTER]";
+
         /// <summary>
         /// Initialize collision filter with configuration.
         /// </summary>
@@ -43,12 +45,15 @@ namespace Robotics.Grasp
                     candidate.collisionValidated = true;
                     candidates[i] = candidate;
                 }
-                UnityEngine.Debug.Log($"[GRASP_COLLISION_FILTER] Collision checking disabled, accepting all {candidates.Count} candidates");
+                UnityEngine.Debug.Log($"{_logPrefix} Collision checking disabled, accepting all {candidates.Count} candidates");
                 return candidates;
             }
 
             var validCandidates = new List<GraspCandidate>();
             int rejectedCount = 0;
+            int rejectedTopCount = 0;
+            int rejectedSideCount = 0;
+            int rejectedFrontCount = 0;
 
             foreach (var candidate in candidates)
             {
@@ -63,10 +68,23 @@ namespace Robotics.Grasp
                 else
                 {
                     rejectedCount++;
+                    // Track which approach types are being rejected
+                    switch (candidate.approachType)
+                    {
+                        case GraspApproach.Top:
+                            rejectedTopCount++;
+                            break;
+                        case GraspApproach.Side:
+                            rejectedSideCount++;
+                            break;
+                        case GraspApproach.Front:
+                            rejectedFrontCount++;
+                            break;
+                    }
                 }
             }
 
-            UnityEngine.Debug.Log($"[GRASP_COLLISION_FILTER] Validated {validCandidates.Count}/{candidates.Count} candidates (rejected {rejectedCount} due to collisions)");
+            UnityEngine.Debug.Log($"{_logPrefix} Validated {validCandidates.Count}/{candidates.Count} candidates (rejected {rejectedCount} due to collisions: Top={rejectedTopCount}, Side={rejectedSideCount}, Front={rejectedFrontCount})");
 
             return validCandidates;
         }
@@ -165,13 +183,13 @@ namespace Robotics.Grasp
                 // Check if hit object is an ignored workspace object
                 if (ShouldIgnoreObject(hit.collider.gameObject))
                 {
-                    UnityEngine.Debug.Log($"[GRASP_COLLISION_FILTER] Ignoring workspace collision in retreat with '{hit.collider.gameObject.name}'");
+                    UnityEngine.Debug.Log($"{_logPrefix} Ignoring workspace collision in retreat with '{hit.collider.gameObject.name}'");
                     return true; // Ignore workspace surfaces in retreat
                 }
                 */
 
                 // Obstacle in retreat path
-                UnityEngine.Debug.Log($"[GRASP_COLLISION_FILTER] Retreat collision detected: hit '{hit.collider.gameObject.name}' (layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)}) at distance {hit.distance:F3}m");
+                UnityEngine.Debug.Log($"{_logPrefix} Retreat collision detected: hit '{hit.collider.gameObject.name}' (layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)}) at distance {hit.distance:F3}m");
                 return false;
             }
 

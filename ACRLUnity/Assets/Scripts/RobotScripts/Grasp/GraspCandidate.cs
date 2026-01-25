@@ -40,6 +40,9 @@ namespace Robotics.Grasp
         public bool collisionValidated;
         public bool isValid => ikValidated && collisionValidated;
 
+        // Execution control
+        public bool useSimplifiedExecution;  // Use SimpleRobotController instead of complex IK pipeline
+
         /// <summary>
         /// Create a basic grasp candidate with minimal information.
         /// Other fields initialized to defaults.
@@ -80,7 +83,8 @@ namespace Robotics.Grasp
                 stabilityScore = 0f,
                 antipodalScore = 0f,
                 ikValidated = false,
-                collisionValidated = false
+                collisionValidated = false,
+                useSimplifiedExecution = false
             };
         }
     }

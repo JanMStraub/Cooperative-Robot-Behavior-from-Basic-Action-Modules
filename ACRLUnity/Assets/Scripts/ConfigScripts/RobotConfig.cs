@@ -33,8 +33,8 @@ namespace Configuration
         public JointConfiguration[] joints = new JointConfiguration[6];
 
         [Header("IK Settings")]
-        [Range(0.1f, 5f)]
-        public float adjustmentSpeed = 1.0f;
+        [Range(0.1f, 1f)]
+        public float adjustmentSpeed = 0.5f;
 
         [Range(0.01f, 0.5f)]
         public float maxJointStepRad = 0.1f;
@@ -53,12 +53,3 @@ namespace Configuration
         }
     }
 }
-
-/*
-                new JointConfiguration(10000, 2000, 5000, 170, -170), // Base
-                new JointConfiguration(8000, 1500, 6000, 90, -90), // Shoulder
-                new JointConfiguration(7000, 1200, 5000, 65, -70), // Elbow
-                new JointConfiguration(5000, 1000, 4000, 135, -135), // Wrist 1
-                new JointConfiguration(4000, 800, 3000, 100, -100), // Wrist 2
-                new JointConfiguration(3000, 600, 2000, 180, -180), // Wrist 3
-*/
