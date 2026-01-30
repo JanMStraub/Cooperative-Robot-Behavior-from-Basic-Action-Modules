@@ -47,9 +47,11 @@ logger = logging.getLogger(__name__)
 
 
 def detect_field(
-    camera_id: str,
+    robot_id: str,
     field_label: str,
+    camera_id: str = "stereo",
     confidence_threshold: float = 0.5,
+    request_id: int = 0,
 ) -> OperationResult:
     """
     Detect a labeled field (A-I) using YOLO model and return 3D coordinates.
@@ -59,6 +61,7 @@ def detect_field(
     "fielda", "fieldb", etc., and stereo detection provides 3D world coordinates.
 
     Args:
+        robot_id: Robot identifier (for context, not used in detection)
         camera_id: Camera ID (e.g., "stereo", "main")
         field_label: Field letter to detect (A-I), case-insensitive
         confidence_threshold: Minimum detection confidence (0.0-1.0)
@@ -71,12 +74,20 @@ def detect_field(
         - confidence: Detection confidence score
 
     Example:
-        >>> result = detect_field("stereo", "D")
-        >>> if result["success"]:
-        ...     center = result["result"]["center"]
+        >>> result = detect_field("Robot1", "D")
+        >>> if result.success:
+        ...     center = result.result["center"]
         ...     print(f"Field D at: {center}")
     """
     try:
+        # Validate robot_id
+        if not robot_id or not isinstance(robot_id, str):
+            return OperationResult.error_result(
+                "INVALID_ROBOT_ID",
+                f"Robot ID must be a non-empty string, got: {robot_id}",
+                ["Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')"],
+            )
+
         # Normalize field_label to lowercase for YOLO class name
         field_label_lower = field_label.strip().lower()
         if len(field_label_lower) != 1 or not field_label_lower.isalpha():
@@ -173,10 +184,18 @@ def detect_field(
             f"Detected field {detected_letter} at world position: {world_position}"
         )
 
+        # Convert world_position tuple (x, y, z) to dict for consistent API
+        if isinstance(world_position, tuple) and len(world_position) == 3:
+            center_dict = {"x": world_position[0], "y": world_position[1], "z": world_position[2]}
+        elif isinstance(world_position, dict):
+            center_dict = world_position
+        else:
+            center_dict = {"x": 0.0, "y": 0.0, "z": 0.0}
+
         return OperationResult.success_result(
             {
                 "field_label": detected_letter,
-                "center": world_position,  # 3D world coordinates
+                "center": center_dict,  # 3D world coordinates as dict
                 "bounds": detection.bbox,  # Bounding box in image
                 "confidence": detection.confidence,
                 "camera_id": camera_id,
@@ -203,8 +222,10 @@ def detect_field(
 
 
 def get_field_center(
+    robot_id: str,
     field_label: str,
     camera_id: str = "stereo",
+    request_id: int = 0,
 ) -> OperationResult:
     """
     Get the 3D center coordinates of a labeled field.
@@ -213,6 +234,7 @@ def get_field_center(
     the center coordinates.
 
     Args:
+        robot_id: Robot identifier (for context)
         field_label: Field letter (A-I)
         camera_id: Camera ID for detection (default: "stereo")
 
@@ -220,14 +242,14 @@ def get_field_center(
         OperationResult with center coordinates
 
     Example:
-        >>> result = get_field_center("E")
-        >>> if result["success"]:
-        ...     center = result["result"]["center"]
+        >>> result = get_field_center("Robot1", "E")
+        >>> if result.success:
+        ...     center = result.result["center"]
         ...     print(f"Field E center: {center}")
     """
     try:
         # Use detect_field to get full detection
-        detection_result = detect_field(camera_id, field_label)
+        detection_result = detect_field(robot_id, field_label, camera_id, request_id=request_id)
 
         if not detection_result.success:
             return detection_result  # Forward error
@@ -258,8 +280,10 @@ def get_field_center(
 
 
 def detect_all_fields(
+    robot_id: str,
     camera_id: str = "stereo",
     confidence_threshold: float = 0.5,
+    request_id: int = 0,
 ) -> OperationResult:
     """
     Detect all visible labeled fields in the image.
@@ -268,6 +292,7 @@ def detect_all_fields(
     and returns their positions.
 
     Args:
+        robot_id: Robot identifier (for context)
         camera_id: Camera ID (default: "stereo")
         confidence_threshold: Minimum detection confidence (0.0-1.0)
 
@@ -275,13 +300,20 @@ def detect_all_fields(
         OperationResult with list of detected fields
 
     Example:
-        >>> result = detect_all_fields("stereo")
-        >>> if result["success"]:
-        ...     fields = result["result"]["fields"]
+        >>> result = detect_all_fields("Robot1", "stereo")
+        >>> if result.success:
+        ...     fields = result.result["fields"]
         ...     for field in fields:
         ...         print(f"Field {field['label']} at {field['center']}")
     """
     try:
+        # Validate robot_id
+        if not robot_id or not isinstance(robot_id, str):
+            return OperationResult.error_result(
+                "INVALID_ROBOT_ID",
+                f"Robot ID must be a non-empty string, got: {robot_id}",
+                ["Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')"],
+            )
         # Import YOLO detector
         try:
             from vision.YOLODetector import YOLODetector
@@ -339,10 +371,19 @@ def detect_all_fields(
             if detected_class.startswith("field"):
                 field_letter = detected_class[5:].upper()  # "fielda" → "A"
 
+                # Convert world_position tuple (x, y, z) to dict for consistent API
+                world_pos = detection.world_position
+                if isinstance(world_pos, tuple) and len(world_pos) == 3:
+                    center_dict = {"x": world_pos[0], "y": world_pos[1], "z": world_pos[2]}
+                elif isinstance(world_pos, dict):
+                    center_dict = world_pos
+                else:
+                    center_dict = {"x": 0.0, "y": 0.0, "z": 0.0}
+
                 fields.append(
                     {
                         "label": field_letter,
-                        "center": detection.world_position,
+                        "center": center_dict,
                         "bounds": detection.bbox,
                         "confidence": detection.confidence,
                     }
@@ -392,15 +433,15 @@ def create_detect_field_operation() -> BasicOperation:
             field D, place on field E".
         """,
         usage_examples=[
-            "detect_field('stereo', 'D') - Detect field D",
-            "detect_field('stereo', 'A', confidence_threshold=0.7) - Higher confidence",
+            "detect_field('Robot1', 'D') - Detect field D",
+            "detect_field('Robot1', 'A', confidence_threshold=0.7) - Higher confidence",
             "Use for: Pick cube from field X, place on field Y",
         ],
         parameters=[
             OperationParameter(
-                name="camera_id",
+                name="robot_id",
                 type="str",
-                description="Camera ID (e.g., 'stereo', 'main')",
+                description="Robot identifier (for context)",
                 required=True,
             ),
             OperationParameter(
@@ -408,6 +449,13 @@ def create_detect_field_operation() -> BasicOperation:
                 type="str",
                 description="Field letter to detect (A-I)",
                 required=True,
+            ),
+            OperationParameter(
+                name="camera_id",
+                type="str",
+                description="Camera ID (e.g., 'stereo', 'main')",
+                required=False,
+                default="stereo",
             ),
             OperationParameter(
                 name="confidence_threshold",
@@ -454,10 +502,16 @@ def create_get_field_center_operation() -> BasicOperation:
             placing object.
         """,
         usage_examples=[
-            "get_field_center('E') - Get field E center coordinates",
-            "center = get_field_center('D')['result']['center']",
+            "get_field_center('Robot1', 'E') - Get field E center coordinates",
+            "center = get_field_center('Robot1', 'D').result['center']",
         ],
         parameters=[
+            OperationParameter(
+                name="robot_id",
+                type="str",
+                description="Robot identifier (for context)",
+                required=True,
+            ),
             OperationParameter(
                 name="field_label",
                 type="str",
@@ -496,10 +550,16 @@ def create_detect_all_fields_operation() -> BasicOperation:
             Useful for scene understanding and multi-field operations.
         """,
         usage_examples=[
-            "detect_all_fields('stereo') - Find all visible fields",
+            "detect_all_fields('Robot1') - Find all visible fields",
             "Get field layout for planning multi-step operations",
         ],
         parameters=[
+            OperationParameter(
+                name="robot_id",
+                type="str",
+                description="Robot identifier (for context)",
+                required=True,
+            ),
             OperationParameter(
                 name="camera_id",
                 type="str",

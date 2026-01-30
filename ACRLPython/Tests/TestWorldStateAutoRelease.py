@@ -285,6 +285,8 @@ class TestWorkspaceAutoRelease:
 def cleanup_world_state():
     """Fixture to cleanup WorldState singleton between tests"""
     # Reset before test
+    if WorldState._instance is not None:
+        WorldState._instance.reset()
     WorldState._instance = None
     yield
     # Reset after test

@@ -277,29 +277,26 @@ namespace EditorScripts
             {
                 client.Prompt =
                 @"PARALLEL GROUP 1:
-                - Robot1: Grab red cube
+- Robot1: Grab red cube
 
-                PARALLEL GROUP 2:
-                - Robot1: Move to coordinate x=-0.1, y=0.5, z=0.0
-                - Robot1: Signal 'object_ready_for_handoff'
-                - Robot2: Wait for signal 'object_ready_for_handoff'
+PARALLEL GROUP 2:
+- Robot1: Move to coordinate x=-0.1, y=0.5, z=0.0
+- Robot1: Signal 'object_ready_for_handoff'
+- Robot2: Wait for signal 'object_ready_for_handoff'
 
-                PARALLEL GROUP 3:
-                - Robot2: Grab red cube
-                - Robot2: Signal 'handoff_complete'
-                - Robot1: Wait for signal 'handoff_complete'
+PARALLEL GROUP 3:
+- Robot2: Grab red cube
+- Robot2: Signal 'handoff_complete'
+- Robot1: Wait for signal 'handoff_complete'
 
-                PARALLEL GROUP 4:
-                - Robot1: Open gripper
-                - Robot1: Wait 500 milliseconds
-
-                PARALLEL GROUP 5:
-                - Robot1: Move to start position
-                - Robot2: Move to start position";
+PARALLEL GROUP 4:
+- Robot1: Open gripper
+- Robot1: Move to start position
+- Robot2: Move to start position";
             }
-            if (GUILayout.Button("None", _buttonStyle))
+            if (GUILayout.Button("Transfer cube short", _buttonStyle))
             {
-                client.Prompt = "";
+                client.Prompt = "Robot1 and Robot2 perform a handoff of the red cube";
             }
             if (GUILayout.Button("None", _buttonStyle))
             {

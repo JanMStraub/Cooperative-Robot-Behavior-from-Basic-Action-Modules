@@ -329,7 +329,7 @@ class OperationVerifier:
                 severity="error",
                 suggestions=(
                     operation_result.error.get("recovery_suggestions", [])
-                    if operation_result.error
+                    if operation_result.error and isinstance(operation_result.error, dict)
                     else []
                 ),
             )

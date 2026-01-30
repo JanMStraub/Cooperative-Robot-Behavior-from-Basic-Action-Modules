@@ -1143,6 +1143,27 @@ namespace Robotics
             _sqrTargetMovementThreshold = _targetMovementThreshold * _targetMovementThreshold;
         }
 
+        /// <summary>
+        /// Clear the current target and stop IK tracking.
+        /// Call this when the robot should no longer maintain its current position
+        /// (e.g., after opening gripper to release an object).
+        /// </summary>
+        public void ClearTarget()
+        {
+            _targetTransform = null;
+            _targetObject = null;
+            _hasReachedTarget = true;
+            _isGraspingTarget = false;
+            _closeGripperAfterReach = false;
+            _isTrackingMovingTarget = false;
+
+            // Reset trajectory
+            _currentPath = null;
+            _trajectoryController?.Reset();
+
+            Debug.Log($"{_logPrefix} [{robotId}] Target cleared");
+        }
+
         public bool IsTargetTrackingEnabled() => _enableMovingTargetTracking;
 
         public Vector3 GetCurrentEndEffectorPosition() =>

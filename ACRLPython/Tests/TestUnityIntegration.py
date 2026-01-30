@@ -69,13 +69,12 @@ class TestUnityCommandExecution:
         # Query status for Robot1 (should exist in Unity scene)
         result = check_robot_status(robot_id="Robot1")
 
-        # Verify we got a valid response
-        assert result["success"] is True
-        assert "robot_id" in result
-        assert result["robot_id"] == "Robot1"
-        assert "position" in result
-        assert isinstance(result["position"], (tuple, list))
-        assert len(result["position"]) == 3  # x, y, z
+        # Verify we got a valid response - result is an OperationResult object
+        assert result.success is True
+        assert "robot_id" in result.result
+        assert result.result["robot_id"] == "Robot1"
+        # Note: The status query returns query_sent status, not full robot state
+        # Full state would be received via Unity's status response system
 
     def test_real_move_command_execution(self):
         """Test executing real movement command in Unity"""
@@ -89,8 +88,8 @@ class TestUnityCommandExecution:
             z=0.15
         )
 
-        # Verify command was sent successfully
-        assert result["success"] is True
+        # Verify command was sent successfully - result is OperationResult object
+        assert result.success is True
 
         # Wait a bit for movement to start
         time.sleep(0.5)
@@ -100,21 +99,21 @@ class TestUnityCommandExecution:
         status = check_robot_status(robot_id="Robot1")
 
         # Robot should be moving or have moved
-        assert status["success"] is True
+        assert status.success is True
 
     def test_real_gripper_control(self):
         """Test real gripper control in Unity"""
         from operations.GripperOperations import control_gripper
 
         # Open gripper
-        result_open = control_gripper(robot_id="Robot1", action="open")
-        assert result_open["success"] is True
+        result_open = control_gripper(robot_id="Robot1", open_gripper=True)
+        assert result_open.success is True
 
         time.sleep(0.3)
 
         # Close gripper
-        result_close = control_gripper(robot_id="Robot1", action="close")
-        assert result_close["success"] is True
+        result_close = control_gripper(robot_id="Robot1", open_gripper=False)
+        assert result_close.success is True
 
 
 @pytest.mark.requires_unity
@@ -211,17 +210,17 @@ class TestUnityProtocolCompatibility:
         # Create completion queue
         broadcaster.create_completion_queue(request_id)
 
-        # Send move command
+        # Send move command (request_id is handled internally by operations)
         result = move_to_coordinate(
             robot_id="Robot1",
             x=0.3,
             y=0.2,
             z=0.1,
-            _request_id=request_id  # If supported
+            request_id=request_id  # Standard parameter name for operations
         )
 
-        # Verify we got a response
-        assert result["success"] is True or result.get("error") is not None
+        # Verify we got a response - result is OperationResult object
+        assert result.success is True or result.error is not None
 
         # Clean up
         broadcaster.remove_completion_queue(request_id)
@@ -281,16 +280,16 @@ class TestUnityObjectDetection:
         if len(camera_ids) == 0:
             pytest.skip("No cameras available")
 
-        # Detect objects using first camera
+        # Detect objects using first camera - use Robot1 as robot_id
         result = detect_objects(
-            camera_id=camera_ids[0],
-            color_filter=None  # Detect all colors
+            robot_id="Robot1",
+            camera_id=camera_ids[0]
         )
 
-        # Verify detection ran successfully
-        assert result["success"] is True
-        assert "detections" in result
-        assert isinstance(result["detections"], list)
+        # Verify detection ran successfully - result is OperationResult object
+        assert result.success is True
+        assert "detections" in result.result
+        assert isinstance(result.result["detections"], list)
 
         # If objects exist in scene, we should detect them
         # (This test is lenient - just verifies detection runs without error)
@@ -305,7 +304,7 @@ class TestUnityEndToEnd:
     def test_full_pick_and_place_workflow(self):
         """Test complete pick and place workflow in Unity"""
         from operations.DetectionOperations import detect_objects
-        from operations.GraspOperations import execute_grasp
+        from operations.GraspOperations import grasp_object
         from servers.ImageStorageCore import UnifiedImageStorage
 
         storage = UnifiedImageStorage()
@@ -317,30 +316,31 @@ class TestUnityEndToEnd:
 
         # 1. Detect objects
         detection_result = detect_objects(
-            camera_id=camera_ids[0],
-            color_filter="blue"  # Look for blue cube
+            robot_id="Robot1",
+            camera_id=camera_ids[0]
         )
 
-        if not detection_result["success"] or len(detection_result["detections"]) == 0:
-            pytest.skip("No blue objects detected in scene")
+        if not detection_result.success or len(detection_result.result.get("detections", [])) == 0:
+            pytest.skip("No objects detected in scene")
 
-        # 2. Get first detected object position
-        detected_obj = detection_result["detections"][0]
+        # 2. Get first detected object
+        detected_obj = detection_result.result["detections"][0]
 
-        # 3. Execute grasp (if grasp operations are available)
+        # For this test, we need object_id not just position
+        # Skip if detection doesn't include object_id
+        if "object_id" not in detected_obj:
+            pytest.skip("Detection does not include object_id (required for grasp_object)")
+
+        # 3. Execute grasp using object_id
         try:
-            grasp_result = execute_grasp(
+            grasp_result = grasp_object(
                 robot_id="Robot1",
-                target_position=(
-                    detected_obj.get("world_x", 0.3),
-                    detected_obj.get("world_y", 0.2),
-                    detected_obj.get("world_z", 0.1)
-                ),
-                approach_direction="Top"
+                object_id=detected_obj["object_id"],
+                preferred_approach="top"
             )
 
-            # Verify grasp executed (may or may not succeed depending on scene)
-            assert "success" in grasp_result
+            # Verify grasp command was sent (may or may not succeed depending on scene)
+            assert grasp_result.success is True or grasp_result.error is not None
 
         except Exception as e:
             pytest.skip(f"Grasp execution not available: {e}")

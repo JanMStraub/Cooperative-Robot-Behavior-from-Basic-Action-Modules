@@ -396,6 +396,7 @@ namespace Robotics
                 rb.linearVelocity = Vector3.zero;
                 rb.angularVelocity = Vector3.zero;
                 rb.isKinematic = true;
+                rb.useGravity = false; // Disable gravity while held
             }
 
             // Parent to attachment point
@@ -481,11 +482,14 @@ namespace Robotics
                 // Make it non-kinematic FIRST (required before setting velocities)
                 rb.isKinematic = false;
 
+                // Re-enable gravity (critical for object to fall when released)
+                rb.useGravity = true;
+
                 // NOW zero out velocities (only works on non-kinematic bodies)
                 rb.linearVelocity = Vector3.zero;
                 rb.angularVelocity = Vector3.zero;
 
-                Debug.Log($"[GripperController] Re-enabled physics at position {rb.position}, velocities zeroed");
+                Debug.Log($"[GripperController] Re-enabled physics at position {rb.position}, gravity enabled, velocities zeroed");
             }
 
             _graspedObject = null;

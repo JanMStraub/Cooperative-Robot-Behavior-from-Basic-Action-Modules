@@ -121,9 +121,9 @@ def _make_handler_safe(handler):
     def safe_emit(record):
         try:
             handler._original_emit(handler, record)
-        except (ValueError, OSError):
-            # Stream closed (e.g., during pytest teardown)
-            # Silently ignore
+        except (ValueError, OSError, RuntimeError):
+            # Stream closed (e.g., during pytest teardown) or reentrant call during shutdown
+            # Silently ignore - these are expected during signal handler shutdown
             pass
 
     def safe_handleError(record):
@@ -131,8 +131,8 @@ def _make_handler_safe(handler):
         import sys
 
         exc_type, exc_val, exc_tb = sys.exc_info()
-        if exc_type in (ValueError, OSError):
-            # Stream closed - silently ignore diagnostics
+        if exc_type in (ValueError, OSError, RuntimeError):
+            # Stream closed or reentrant call - silently ignore diagnostics
             pass
         else:
             # Other errors - use default handling

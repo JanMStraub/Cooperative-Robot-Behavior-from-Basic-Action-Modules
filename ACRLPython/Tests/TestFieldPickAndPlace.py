@@ -228,11 +228,11 @@ class TestFieldPickAndPlace(unittest.TestCase):
                 }
             )
 
-            result = get_field_center("A")
+            result = get_field_center("Robot1", "A")
 
             self.assertTrue(result.success)
             self.assertEqual(result.result["center"], {"x": 0.1, "y": 0.1, "z": 0.0})
-            mock_detect.assert_called_once_with("stereo", "A")
+            mock_detect.assert_called_once_with("Robot1", "A", "stereo", request_id=0)
             print("✓ Convenience wrapper test PASSED")
 
 
