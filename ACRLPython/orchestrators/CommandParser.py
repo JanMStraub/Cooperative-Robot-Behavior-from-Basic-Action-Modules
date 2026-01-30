@@ -17,7 +17,7 @@ Example:
     }
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import json
 import re
 import logging
@@ -27,9 +27,11 @@ import requests
 try:
     from ..rag import RAGSystem
     from ..config.Servers import LMSTUDIO_BASE_URL, DEFAULT_LMSTUDIO_MODEL
+    from ..operations.WorkflowPatterns import WorkflowPatternRegistry, WorkflowPattern
 except ImportError:
     from rag import RAGSystem
     from config.Servers import LMSTUDIO_BASE_URL, DEFAULT_LMSTUDIO_MODEL
+    from operations.WorkflowPatterns import WorkflowPatternRegistry, WorkflowPattern
 
 # Configure logging
 from core.LoggingSetup import setup_logging
@@ -66,6 +68,7 @@ class CommandParser:
         self.lm_studio_url = lm_studio_url or LMSTUDIO_BASE_URL
         self.model = model or DEFAULT_LMSTUDIO_MODEL
         self.registry = get_global_registry()
+        self.workflow_registry = WorkflowPatternRegistry()
 
         # Initialize RAG system for semantic operation search
         self.rag = None
@@ -341,27 +344,57 @@ class CommandParser:
         Get a summary of available operations for the LLM prompt.
 
         If RAG is available and command_text is provided, uses semantic search
-        to prioritize the most relevant operations for the given command.
+        to prioritize the most relevant operations and workflow patterns for the given command.
 
         Args:
             command_text: The command being parsed (for RAG context)
 
         Returns:
-            Formatted string of operations for LLM prompt
+            Formatted string of operations and workflow patterns for LLM prompt
         """
         # If RAG is available, get semantically relevant operations first
         if self.rag and command_text:
             try:
-                # Search for relevant operations
-                rag_results = self.rag.search(command_text, top_k=5)
+                # Search for relevant operations and workflow patterns
+                rag_results = self.rag.search(command_text, top_k=8)  # Increased to get both ops and patterns
                 relevant_ops = set()
+                workflow_results = []
+                operation_results = []
 
                 summary_lines = []
 
-                # Add RAG-matched operations first (most relevant)
+                # Separate workflow patterns from operations
                 if rag_results:
-                    summary_lines.append("Most relevant operations for this command:")
                     for result in rag_results:
+                        result_type = result.get("metadata", {}).get("type", "operation")
+                        if result_type == "workflow":
+                            workflow_results.append(result)
+                        else:
+                            operation_results.append(result)
+
+                # Add relevant workflow patterns first (if any found)
+                if workflow_results:
+                    summary_lines.append("=== RELEVANT WORKFLOW PATTERNS ===")
+                    for result in workflow_results[:3]:  # Top 3 most relevant patterns
+                        pattern_name = result.get("name", "")
+                        pattern = self.workflow_registry.get_pattern_by_name(pattern_name)
+                        if pattern:
+                            summary_lines.append(self._format_workflow_pattern(pattern))
+                        else:
+                            # Try finding by pattern_id in metadata
+                            pattern_id = result.get("metadata", {}).get("pattern_id", "")
+                            if pattern_id:
+                                pattern = self.workflow_registry.get_pattern(pattern_id)
+                                if pattern:
+                                    summary_lines.append(self._format_workflow_pattern(pattern))
+
+                    summary_lines.append("\n=== MOST RELEVANT OPERATIONS ===")
+
+                # Add RAG-matched operations (most relevant)
+                if operation_results:
+                    if not workflow_results:
+                        summary_lines.append("Most relevant operations for this command:")
+                    for result in operation_results[:5]:  # Top 5 operations
                         op = self.registry.get_operation_by_name(result.get("name", ""))
                         if op:
                             relevant_ops.add(op.name)
@@ -371,7 +404,7 @@ class CommandParser:
                                 f"- {op.name}({params}): {op.description} [relevance: {score:.2f}]"
                             )
 
-                    summary_lines.append("\nOther available operations:")
+                    summary_lines.append("\n=== OTHER AVAILABLE OPERATIONS ===")
 
                 # Add remaining operations
                 for op in self.registry.get_all_operations():
@@ -411,6 +444,31 @@ class CommandParser:
                 param_str += f" (valid: {valid_vals})"
             param_strs.append(param_str)
         return ", ".join(param_strs)
+
+    def _format_workflow_pattern(self, pattern: WorkflowPattern) -> str:
+        """
+        Format a workflow pattern for inclusion in LLM prompt.
+
+        Args:
+            pattern: WorkflowPattern to format
+
+        Returns:
+            Formatted pattern description for LLM
+        """
+        steps_text = "\n".join(
+            f"    {i}. {step.operation_id}: {step.description}"
+            for i, step in enumerate(pattern.steps, 1)
+        )
+        examples = "\n".join(f"  - {ex}" for ex in pattern.usage_examples[:2])
+
+        return f"""
+Pattern: {pattern.name}
+Description: {pattern.description}
+Steps:
+{steps_text}
+Examples:
+{examples}
+"""
 
     def _extract_json_from_response(self, content: str) -> Optional[Dict]:
         """Extract JSON object from LLM response text."""
@@ -487,7 +545,71 @@ class CommandParser:
 
             validated.append(validated_cmd)
 
+        # Validate multi-robot plans (signal/wait pairs and variable usage)
+        if len(validated) > 1:
+            is_valid, errors = self._validate_multi_robot_plan(validated)
+            if not is_valid:
+                for error in errors:
+                    logger.warning(f"Multi-robot plan validation warning: {error}")
+
         return validated
+
+    def _validate_multi_robot_plan(
+        self, commands: List[Dict]
+    ) -> Tuple[bool, List[str]]:
+        """
+        Validate signal/wait pairs and variable definitions in multi-robot plans.
+
+        Args:
+            commands: List of validated commands
+
+        Returns:
+            Tuple of (is_valid, list_of_errors)
+        """
+        errors = []
+        defined_signals = set()
+        expected_signals = set()
+        defined_vars = set()
+
+        for cmd in commands:
+            operation = cmd.get("operation", "")
+            params = cmd.get("params", {})
+
+            # Track signal definitions
+            if operation == "signal":
+                event_name = params.get("event_name")
+                if event_name:
+                    defined_signals.add(event_name)
+
+            # Track wait_for_signal expectations
+            elif operation == "wait_for_signal":
+                event_name = params.get("event_name")
+                if event_name:
+                    expected_signals.add(event_name)
+
+            # Track variable definitions
+            if "capture_var" in cmd:
+                var_name = cmd["capture_var"]
+                defined_vars.add(var_name)
+
+            # Check variable usage in parameters
+            for key, val in params.items():
+                if isinstance(val, str) and val.startswith("$"):
+                    # Extract variable name (handle both "$target" and "$target.x" formats)
+                    var_name = val[1:].split(".")[0]
+                    if var_name not in defined_vars:
+                        errors.append(
+                            f"Variable ${var_name} used in {operation}.{key} before definition"
+                        )
+
+        # Check all waited signals are defined
+        missing = expected_signals - defined_signals
+        if missing:
+            errors.append(
+                f"wait_for_signal without matching signal: {', '.join(missing)}"
+            )
+
+        return len(errors) == 0, errors
 
     def _parse_with_regex(self, command_text: str, robot_id: str) -> Dict[str, Any]:
         """

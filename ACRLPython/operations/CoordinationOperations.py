@@ -58,6 +58,7 @@ def detect_other_robot(
     robot_id: str,
     target_robot_id: str,
     camera_id: str = "main",
+    request_id: int = 0,
 ) -> OperationResult:
     """
     Detect another robot in the workspace using vision.

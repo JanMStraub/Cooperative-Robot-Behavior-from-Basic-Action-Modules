@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
 def detect_objects(
     robot_id: str,
     camera_id: str = "main",
+    request_id: int = 0,
 ) -> OperationResult:
     """
     Detect objects in a camera image using color-based detection.
@@ -190,6 +191,7 @@ def create_detect_objects_operation() -> BasicOperation:
 def estimate_distance_to_object(
     robot_id: str,
     object_id: str,
+    request_id: int = 0,
 ) -> OperationResult:
     """
     Estimate the distance from robot end effector to a detected object.
@@ -290,6 +292,7 @@ def estimate_distance_to_object(
 def estimate_distance_between_objects(
     object_id1: str,
     object_id2: str,
+    request_id: int = 0,
 ) -> OperationResult:
     """
     Estimate the distance between two detected objects.

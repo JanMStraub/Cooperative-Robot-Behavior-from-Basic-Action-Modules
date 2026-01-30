@@ -266,6 +266,33 @@ class RAGSystem:
 
         return self.query_engine.find_similar_operations(operation_id, top_k=top_k)
 
+    def search_by_type(
+        self, query: str, result_type: str, top_k: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Search for items of a specific type (operation, workflow, context).
+
+        Args:
+            query: Search query
+            result_type: Filter by type ("operation", "workflow", "context")
+            top_k: Number of results to return
+
+        Returns:
+            List of results matching the specified type
+
+        Example:
+            >>> results = rag.search_by_type("handoff coordination", "workflow", top_k=3)
+            >>> results[0]['metadata']['name']
+            'handoff'
+        """
+        # Get more results than requested to allow for filtering
+        all_results = self.search(query, top_k=top_k * 3)
+        filtered = [
+            r for r in all_results
+            if r.get("metadata", {}).get("type") == result_type
+        ]
+        return filtered[:top_k]
+
     def is_ready(self) -> bool:
         """Check if RAG system is ready for queries"""
         return self.query_engine is not None and self.vector_store is not None

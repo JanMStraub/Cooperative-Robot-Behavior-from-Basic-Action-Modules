@@ -154,11 +154,10 @@ class WorldState:
 
     def __new__(cls):
         """Singleton pattern with thread safety."""
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-                    cls._instance._initialized = False
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+                cls._instance._initialized = False
         return cls._instance
 
     @classmethod
@@ -173,11 +172,13 @@ class WorldState:
 
     def __init__(self):
         """Initialize world state manager."""
-        if self._initialized:
+        # Check if already initialized (instance variable, not class variable)
+        if hasattr(self, '_initialized') and self._initialized:
             return
 
         with self._lock:
-            if self._initialized:
+            # Double-check after acquiring lock
+            if hasattr(self, '_initialized') and self._initialized:
                 return
 
             # Robot state cache
@@ -730,6 +731,11 @@ class WorldState:
             self._robot_cache.clear()
             self._robot_states.clear()
             self._objects.clear()
+
+            # Initialize workspace allocations if not already present
+            if not hasattr(self, '_workspace_allocations'):
+                self._workspace_allocations = {}
+
             self._workspace_allocations = {
                 region: None for region in WORKSPACE_REGIONS.keys()
             }

@@ -658,6 +658,18 @@ namespace PythonCommunication
                 if (openGripper)
                 {
                     gripperController.OpenGrippers();
+
+                    // Clear the robot controller target when opening gripper
+                    // This prevents the IK from continuing to hold position after release
+                    RobotController controller = robotInstance.robotGameObject.GetComponent<RobotController>();
+                    if (controller != null)
+                    {
+                        controller.ClearTarget();
+                        if (_verboseLogging)
+                        {
+                            Debug.Log($"{_logPrefix} Cleared robot target after opening gripper");
+                        }
+                    }
                 }
                 else
                 {

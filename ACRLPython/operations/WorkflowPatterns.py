@@ -595,6 +595,13 @@ class WorkflowPatternRegistry:
         """Retrieve pattern by ID"""
         return self.patterns.get(pattern_id)
 
+    def get_pattern_by_name(self, name: str) -> Optional[WorkflowPattern]:
+        """Retrieve pattern by name (e.g., 'handoff', 'pick_and_place')"""
+        for pattern in self.patterns.values():
+            if pattern.name == name:
+                return pattern
+        return None
+
     def get_all_patterns(self) -> List[WorkflowPattern]:
         """Get all registered patterns"""
         return list(self.patterns.values())

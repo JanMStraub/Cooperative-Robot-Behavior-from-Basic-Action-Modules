@@ -289,12 +289,27 @@ def patch_command_broadcaster(monkeypatch, mock_command_broadcaster):
     Patch _get_command_broadcaster functions in operations modules.
 
     Use this fixture explicitly in tests that need CommandBroadcaster mocking.
+
+    This fixture patches the lazy import system at the core.Imports level to ensure
+    all operations modules get the mocked broadcaster.
     """
+    # Patch at the source: core.Imports.get_command_broadcaster
+    try:
+        import core.Imports as imports_module
+        monkeypatch.setattr(imports_module, 'get_command_broadcaster',
+                          lambda: mock_command_broadcaster)
+    except (ImportError, AttributeError):
+        pass
+
+    # Also patch individual modules for backwards compatibility
     modules_with_broadcaster = [
         'operations.MoveOperations',
         'operations.StatusOperations',
         'operations.GripperOperations',
         'operations.DefaultPositionOperation',
+        'operations.CoordinationOperations',
+        'operations.CollaborativeOperations',
+        'operations.IntermediateOperations',
     ]
 
     for module_name in modules_with_broadcaster:
@@ -328,6 +343,65 @@ def patch_unified_image_storage(monkeypatch, mock_unified_image_storage):
         pass
 
     yield mock_unified_image_storage
+
+
+@pytest.fixture
+def patch_world_state():
+    """
+    Create a context manager for patching WorldState in coordination operations.
+
+    WorldState is imported inside functions with try/except, so we patch it at
+    the operations.WorldState module level where it's actually imported from.
+
+    Returns:
+        Function that returns a context manager for patching WorldState
+
+    Example:
+        def test_detect_robot(mock_world_state_multi_robot, patch_world_state):
+            with patch_world_state(mock_world_state_multi_robot):
+                result = detect_other_robot("Robot1", "Robot2")
+    """
+    from unittest.mock import patch
+
+    def _create_patch(mock_world_state_instance):
+        """Create patch context manager that returns the mock instance."""
+        # Patch at operations.WorldState.WorldState (the class itself)
+        return patch(
+            'operations.WorldState.WorldState',
+            return_value=mock_world_state_instance
+        )
+
+    return _create_patch
+
+
+@pytest.fixture
+def patch_yolo_detector():
+    """
+    Create a context manager for patching YOLODetector in field operations.
+
+    YOLODetector is imported inside functions, so we need to use patch() context manager.
+
+    Returns:
+        Function that returns a context manager for patching YOLODetector
+
+    Example:
+        def test_detect_field(patch_yolo_detector):
+            mock_detector = Mock()
+            mock_detector.detect_objects_stereo = Mock(return_value=results)
+
+            with patch_yolo_detector(mock_detector):
+                result = detect_field("Robot1", "A")
+    """
+    from unittest.mock import patch
+
+    def _create_patch(mock_detector_instance):
+        """Create patch context manager that returns the mock detector."""
+        return patch(
+            'operations.FieldOperations.YOLODetector',
+            return_value=mock_detector_instance
+        )
+
+    return _create_patch
 
 
 @pytest.fixture
@@ -534,14 +608,29 @@ def sample_operation_with_conditions():
     return op
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def cleanup_world_state():
     """
     Clean up WorldState singleton between tests
 
-    Yields control to test, then resets singleton
+    Resets singleton BEFORE test (clean state) and AFTER test (cleanup)
+
+    NOTE: autouse=True means this runs automatically for EVERY test,
+    preventing state pollution between test files.
     """
-    yield
+    # Reset BEFORE test to ensure clean state
+    try:
+        from operations.WorldState import WorldState
+
+        if WorldState._instance:
+            WorldState._instance.reset()
+        WorldState._instance = None
+    except:
+        pass
+
+    yield  # Test runs with clean state
+
+    # Reset AFTER test to clean up
     try:
         from operations.WorldState import WorldState
 
