@@ -16,6 +16,7 @@ namespace PythonCommunication.Core
         STATUS_QUERY = 0x05,
         STATUS_RESPONSE = 0x06,
         STEREO_IMAGE = 0x07,
+        SEQUENCE_QUERY = 0x08,
     }
 
     /// <summary>
@@ -30,15 +31,12 @@ namespace PythonCommunication.Core
     /// </summary>
     public static class UnityProtocol
     {
-        // Protocol constants (must match Python version)
         public const int VERSION = 2;
         public const int INT_SIZE = 4;
         public const int TYPE_SIZE = 1;
-        public const int HEADER_SIZE = TYPE_SIZE + INT_SIZE; // 5 bytes
-        public const int MAX_STRING_LENGTH = 256;
-        public const int MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+        public const int HEADER_SIZE = TYPE_SIZE + INT_SIZE;
+        public const int MAX_IMAGE_SIZE = 10 * 1024 * 1024;
 
-        // Helper variables
         private const string _logPrefix = "[UNITY_PROTOCOL_V2]";
 
         #region Header Encoding/Decoding
@@ -72,7 +70,12 @@ namespace PythonCommunication.Core
             out uint requestId
         )
         {
-            if (data == null || data.Length - offset < HEADER_SIZE)
+            if (data == null)
+            {
+                throw new ArgumentException($"{_logPrefix} Data cannot be null");
+            }
+
+            if (data.Length - offset < HEADER_SIZE)
             {
                 throw new ArgumentException(
                     $"{_logPrefix} Not enough data for header (need {HEADER_SIZE}, have {data.Length - offset})"
@@ -93,7 +96,7 @@ namespace PythonCommunication.Core
         #region Image Messages (Unity → Python)
 
         /// <summary>
-        /// Encode an image message for sending to Python StreamingServer.
+        /// Encode an image message for sending to Python ImageServer.
         /// Format: [type:1][request_id:4][camera_id_len:4][camera_id:N][prompt_len:4][prompt:N][image_len:4][image_data:N]
         /// </summary>
         /// <param name="cameraId">Camera identifier</param>
@@ -108,7 +111,6 @@ namespace PythonCommunication.Core
             uint requestId = 0
         )
         {
-            // Validate inputs
             if (string.IsNullOrEmpty(cameraId))
             {
                 throw new ArgumentException($"{_logPrefix} Camera ID cannot be null or empty");
@@ -126,32 +128,14 @@ namespace PythonCommunication.Core
                 );
             }
 
-            // Ensure prompt is not null
             if (prompt == null)
             {
                 prompt = "";
             }
 
-            // Encode strings to UTF-8
             byte[] cameraIdBytes = Encoding.UTF8.GetBytes(cameraId);
             byte[] promptBytes = Encoding.UTF8.GetBytes(prompt);
 
-            // Validate string lengths
-            if (cameraIdBytes.Length > MAX_STRING_LENGTH)
-            {
-                throw new ArgumentException(
-                    $"{_logPrefix} Camera ID too long: {cameraIdBytes.Length} > {MAX_STRING_LENGTH}"
-                );
-            }
-
-            if (promptBytes.Length > MAX_STRING_LENGTH)
-            {
-                throw new ArgumentException(
-                    $"{_logPrefix} Prompt too long: {promptBytes.Length} > {MAX_STRING_LENGTH}"
-                );
-            }
-
-            // Calculate total message size: header + 3 length fields + data
             int totalSize =
                 HEADER_SIZE
                 + INT_SIZE * 3
@@ -162,12 +146,10 @@ namespace PythonCommunication.Core
 
             int offset = 0;
 
-            // Write header
             byte[] header = EncodeHeader(MessageType.IMAGE, requestId);
             Buffer.BlockCopy(header, 0, message, offset, HEADER_SIZE);
             offset += HEADER_SIZE;
 
-            // Write camera ID length and data
             Buffer.BlockCopy(
                 BitConverter.GetBytes(cameraIdBytes.Length),
                 0,
@@ -179,7 +161,6 @@ namespace PythonCommunication.Core
             Buffer.BlockCopy(cameraIdBytes, 0, message, offset, cameraIdBytes.Length);
             offset += cameraIdBytes.Length;
 
-            // Write prompt length and data
             Buffer.BlockCopy(
                 BitConverter.GetBytes(promptBytes.Length),
                 0,
@@ -191,7 +172,6 @@ namespace PythonCommunication.Core
             Buffer.BlockCopy(promptBytes, 0, message, offset, promptBytes.Length);
             offset += promptBytes.Length;
 
-            // Write image length and data
             Buffer.BlockCopy(
                 BitConverter.GetBytes(imageBytes.Length),
                 0,
@@ -206,10 +186,8 @@ namespace PythonCommunication.Core
         }
 
         /// <summary>
-        /// Encode a stereo image pair message for Python stereo detection server (Protocol V2).
-        ///
-        /// Message format:
-        /// [type:1][request_id:4][pair_id_len:4][pair_id:N][cam_L_id_len:4][cam_L_id:N]
+        /// Encode stereo image pair message for Python stereo detection server (Protocol V2).
+        /// Format: [type:1][request_id:4][pair_id_len:4][pair_id:N][cam_L_id_len:4][cam_L_id:N]
         /// [cam_R_id_len:4][cam_R_id:N][prompt_len:4][prompt:N][img_L_len:4][img_L:N][img_R_len:4][img_R:N]
         /// </summary>
         /// <param name="cameraPairId">Camera pair identifier</param>
@@ -230,7 +208,6 @@ namespace PythonCommunication.Core
             uint requestId = 0
         )
         {
-            // Validate inputs
             if (string.IsNullOrEmpty(cameraPairId))
             {
                 throw new ArgumentException($"{_logPrefix} Camera pair ID cannot be null or empty");
@@ -276,48 +253,16 @@ namespace PythonCommunication.Core
                 );
             }
 
-            // Ensure prompt is not null
             if (prompt == null)
             {
                 prompt = "";
             }
 
-            // Encode strings to UTF-8
             byte[] pairIdBytes = Encoding.UTF8.GetBytes(cameraPairId);
             byte[] leftIdBytes = Encoding.UTF8.GetBytes(cameraLeftId);
             byte[] rightIdBytes = Encoding.UTF8.GetBytes(cameraRightId);
             byte[] promptBytes = Encoding.UTF8.GetBytes(prompt);
 
-            // Validate string lengths
-            if (pairIdBytes.Length > MAX_STRING_LENGTH)
-            {
-                throw new ArgumentException(
-                    $"{_logPrefix} Camera pair ID too long: {pairIdBytes.Length} > {MAX_STRING_LENGTH}"
-                );
-            }
-
-            if (leftIdBytes.Length > MAX_STRING_LENGTH)
-            {
-                throw new ArgumentException(
-                    $"{_logPrefix} Camera left ID too long: {leftIdBytes.Length} > {MAX_STRING_LENGTH}"
-                );
-            }
-
-            if (rightIdBytes.Length > MAX_STRING_LENGTH)
-            {
-                throw new ArgumentException(
-                    $"{_logPrefix} Camera right ID too long: {rightIdBytes.Length} > {MAX_STRING_LENGTH}"
-                );
-            }
-
-            if (promptBytes.Length > MAX_STRING_LENGTH)
-            {
-                throw new ArgumentException(
-                    $"{_logPrefix} Prompt too long: {promptBytes.Length} > {MAX_STRING_LENGTH}"
-                );
-            }
-
-            // Calculate total message size: header + 7 length fields + all data
             int totalSize =
                 HEADER_SIZE
                 + INT_SIZE * 7
@@ -331,12 +276,10 @@ namespace PythonCommunication.Core
 
             int offset = 0;
 
-            // Write header (Protocol V2)
             byte[] header = EncodeHeader(MessageType.STEREO_IMAGE, requestId);
             Buffer.BlockCopy(header, 0, message, offset, HEADER_SIZE);
             offset += HEADER_SIZE;
 
-            // Write camera pair ID length and data
             Buffer.BlockCopy(
                 BitConverter.GetBytes(pairIdBytes.Length),
                 0,
@@ -348,7 +291,6 @@ namespace PythonCommunication.Core
             Buffer.BlockCopy(pairIdBytes, 0, message, offset, pairIdBytes.Length);
             offset += pairIdBytes.Length;
 
-            // Write camera left ID length and data
             Buffer.BlockCopy(
                 BitConverter.GetBytes(leftIdBytes.Length),
                 0,
@@ -360,7 +302,6 @@ namespace PythonCommunication.Core
             Buffer.BlockCopy(leftIdBytes, 0, message, offset, leftIdBytes.Length);
             offset += leftIdBytes.Length;
 
-            // Write camera right ID length and data
             Buffer.BlockCopy(
                 BitConverter.GetBytes(rightIdBytes.Length),
                 0,
@@ -372,7 +313,6 @@ namespace PythonCommunication.Core
             Buffer.BlockCopy(rightIdBytes, 0, message, offset, rightIdBytes.Length);
             offset += rightIdBytes.Length;
 
-            // Write prompt length and data
             Buffer.BlockCopy(
                 BitConverter.GetBytes(promptBytes.Length),
                 0,
@@ -384,7 +324,6 @@ namespace PythonCommunication.Core
             Buffer.BlockCopy(promptBytes, 0, message, offset, promptBytes.Length);
             offset += promptBytes.Length;
 
-            // Write left image length and data
             Buffer.BlockCopy(
                 BitConverter.GetBytes(leftImageBytes.Length),
                 0,
@@ -396,7 +335,6 @@ namespace PythonCommunication.Core
             Buffer.BlockCopy(leftImageBytes, 0, message, offset, leftImageBytes.Length);
             offset += leftImageBytes.Length;
 
-            // Write right image length and data
             Buffer.BlockCopy(
                 BitConverter.GetBytes(rightImageBytes.Length),
                 0,
@@ -433,19 +371,16 @@ namespace PythonCommunication.Core
                 throw new ArgumentException($"{_logPrefix} Expected IMAGE message, got {msgType}");
             }
 
-            // Read camera ID
             int cameraIdLen = BitConverter.ToInt32(data, offset);
             offset += INT_SIZE;
             cameraId = Encoding.UTF8.GetString(data, offset, cameraIdLen);
             offset += cameraIdLen;
 
-            // Read prompt
             int promptLen = BitConverter.ToInt32(data, offset);
             offset += INT_SIZE;
             prompt = Encoding.UTF8.GetString(data, offset, promptLen);
             offset += promptLen;
 
-            // Read image
             int imageLen = BitConverter.ToInt32(data, offset);
             offset += INT_SIZE;
             imageBytes = new byte[imageLen];
@@ -457,7 +392,7 @@ namespace PythonCommunication.Core
         #region Result Messages (Python → Unity)
 
         /// <summary>
-        /// Decode a result message received from Python ResultsServer.
+        /// Decode a result message received from Python CommandServer or SequenceServer.
         /// Format: [type:1][request_id:4][json_len:4][json_data:N]
         /// </summary>
         /// <param name="data">Raw message bytes</param>
@@ -465,7 +400,12 @@ namespace PythonCommunication.Core
         /// <returns>JSON string</returns>
         public static string DecodeResultMessage(byte[] data, out uint requestId)
         {
-            if (data == null || data.Length < HEADER_SIZE + INT_SIZE)
+            if (data == null)
+            {
+                throw new ArgumentException($"{_logPrefix} Data cannot be null");
+            }
+
+            if (data.Length < HEADER_SIZE + INT_SIZE)
             {
                 throw new ArgumentException($"{_logPrefix} Invalid result message: too short");
             }
@@ -477,7 +417,6 @@ namespace PythonCommunication.Core
                 throw new ArgumentException($"{_logPrefix} Expected RESULT message, got {msgType}");
             }
 
-            // Read JSON length
             int jsonLength = BitConverter.ToInt32(data, offset);
             offset += INT_SIZE;
 
@@ -493,7 +432,6 @@ namespace PythonCommunication.Core
                 );
             }
 
-            // Extract JSON data
             return Encoding.UTF8.GetString(data, offset, jsonLength);
         }
 
@@ -523,16 +461,13 @@ namespace PythonCommunication.Core
             byte[] message = new byte[HEADER_SIZE + INT_SIZE + jsonBytes.Length];
             int offset = 0;
 
-            // Write header
             byte[] header = EncodeHeader(MessageType.RESULT, requestId);
             Buffer.BlockCopy(header, 0, message, offset, HEADER_SIZE);
             offset += HEADER_SIZE;
 
-            // Write JSON length
             Buffer.BlockCopy(BitConverter.GetBytes(jsonBytes.Length), 0, message, offset, INT_SIZE);
             offset += INT_SIZE;
 
-            // Write JSON data
             Buffer.BlockCopy(jsonBytes, 0, message, offset, jsonBytes.Length);
 
             return message;
@@ -543,7 +478,7 @@ namespace PythonCommunication.Core
         #region RAG Query Messages (Unity → Python)
 
         /// <summary>
-        /// Encode a RAG query message for sending to Python RAGServer.
+        /// Encode a RAG query message for sending to Python SequenceServer (integrated RAG).
         /// Format: [type:1][request_id:4][query_len:4][query_text:N][top_k:4][filters_json_len:4][filters_json:N]
         /// </summary>
         /// <param name="query">Natural language query text</param>
@@ -558,7 +493,6 @@ namespace PythonCommunication.Core
             uint requestId = 0
         )
         {
-            // Validate inputs
             if (string.IsNullOrEmpty(query))
             {
                 throw new ArgumentException($"{_logPrefix} RAG query cannot be null or empty");
@@ -571,36 +505,24 @@ namespace PythonCommunication.Core
                 );
             }
 
-            // Encode strings to UTF-8
             byte[] queryBytes = Encoding.UTF8.GetBytes(query);
 
-            if (queryBytes.Length > MAX_STRING_LENGTH)
-            {
-                throw new ArgumentException(
-                    $"{_logPrefix} Query too long: {queryBytes.Length} > {MAX_STRING_LENGTH}"
-                );
-            }
-
-            // Handle filters (can be null or empty)
             if (string.IsNullOrEmpty(filtersJson))
             {
-                filtersJson = "{}"; // Empty JSON object
+                filtersJson = "{}";
             }
 
             byte[] filtersBytes = Encoding.UTF8.GetBytes(filtersJson);
 
-            // Calculate total message size: header + query + top_k + filters
             int totalSize = HEADER_SIZE + INT_SIZE * 3 + queryBytes.Length + filtersBytes.Length;
             byte[] message = new byte[totalSize];
 
             int offset = 0;
 
-            // Write header
             byte[] header = EncodeHeader(MessageType.RAG_QUERY, requestId);
             Buffer.BlockCopy(header, 0, message, offset, HEADER_SIZE);
             offset += HEADER_SIZE;
 
-            // Write query length and data
             Buffer.BlockCopy(
                 BitConverter.GetBytes(queryBytes.Length),
                 0,
@@ -612,11 +534,9 @@ namespace PythonCommunication.Core
             Buffer.BlockCopy(queryBytes, 0, message, offset, queryBytes.Length);
             offset += queryBytes.Length;
 
-            // Write top_k
             Buffer.BlockCopy(BitConverter.GetBytes(topK), 0, message, offset, INT_SIZE);
             offset += INT_SIZE;
 
-            // Write filters length and data
             Buffer.BlockCopy(
                 BitConverter.GetBytes(filtersBytes.Length),
                 0,
@@ -650,17 +570,14 @@ namespace PythonCommunication.Core
                 );
             }
 
-            // Read query
             int queryLen = BitConverter.ToInt32(data, offset);
             offset += INT_SIZE;
             query = Encoding.UTF8.GetString(data, offset, queryLen);
             offset += queryLen;
 
-            // Read top_k
             topK = BitConverter.ToInt32(data, offset);
             offset += INT_SIZE;
 
-            // Read filters
             int filtersLen = BitConverter.ToInt32(data, offset);
             offset += INT_SIZE;
             filtersJson = Encoding.UTF8.GetString(data, offset, filtersLen);
@@ -671,7 +588,7 @@ namespace PythonCommunication.Core
         #region RAG Response Messages (Python → Unity)
 
         /// <summary>
-        /// Decode a RAG response message received from Python RAGServer.
+        /// Decode a RAG response message received from Python SequenceServer (integrated RAG).
         /// Format: [type:1][request_id:4][json_len:4][operation_context_json:N]
         /// </summary>
         /// <param name="data">Raw message bytes</param>
@@ -679,7 +596,12 @@ namespace PythonCommunication.Core
         /// <returns>JSON string with operation context</returns>
         public static string DecodeRagResponse(byte[] data, out uint requestId)
         {
-            if (data == null || data.Length < HEADER_SIZE + INT_SIZE)
+            if (data == null)
+            {
+                throw new ArgumentException($"{_logPrefix} Data cannot be null");
+            }
+
+            if (data.Length < HEADER_SIZE + INT_SIZE)
             {
                 throw new ArgumentException($"{_logPrefix} Invalid RAG response: too short");
             }
@@ -693,7 +615,6 @@ namespace PythonCommunication.Core
                 );
             }
 
-            // Read JSON length
             int jsonLength = BitConverter.ToInt32(data, offset);
             offset += INT_SIZE;
 
@@ -702,7 +623,6 @@ namespace PythonCommunication.Core
                 throw new ArgumentException($"{_logPrefix} Incomplete RAG response");
             }
 
-            // Extract JSON data
             return Encoding.UTF8.GetString(data, offset, jsonLength);
         }
 
@@ -723,12 +643,10 @@ namespace PythonCommunication.Core
             byte[] message = new byte[HEADER_SIZE + INT_SIZE + jsonBytes.Length];
             int offset = 0;
 
-            // Write header
             byte[] header = EncodeHeader(MessageType.RAG_RESPONSE, requestId);
             Buffer.BlockCopy(header, 0, message, offset, HEADER_SIZE);
             offset += HEADER_SIZE;
 
-            // Write JSON length and data
             Buffer.BlockCopy(BitConverter.GetBytes(jsonBytes.Length), 0, message, offset, INT_SIZE);
             offset += INT_SIZE;
             Buffer.BlockCopy(jsonBytes, 0, message, offset, jsonBytes.Length);
@@ -741,7 +659,7 @@ namespace PythonCommunication.Core
         #region Status Query Messages (Unity → Python)
 
         /// <summary>
-        /// Encode a status query message for sending to Python StatusServer.
+        /// Encode a status query message for sending to Python CommandServer.
         /// Format: [type:1][request_id:4][robot_id_len:4][robot_id:N][detailed:1]
         /// </summary>
         /// <param name="robotId">Robot identifier (e.g., "Robot1", "AR4_Robot")</param>
@@ -754,34 +672,22 @@ namespace PythonCommunication.Core
             uint requestId = 0
         )
         {
-            // Validate inputs
             if (string.IsNullOrEmpty(robotId))
             {
                 throw new ArgumentException($"{_logPrefix} Robot ID cannot be null or empty");
             }
 
-            // Encode robot_id to UTF-8
             byte[] robotIdBytes = Encoding.UTF8.GetBytes(robotId);
 
-            if (robotIdBytes.Length > MAX_STRING_LENGTH)
-            {
-                throw new ArgumentException(
-                    $"{_logPrefix} Robot ID too long: {robotIdBytes.Length} > {MAX_STRING_LENGTH}"
-                );
-            }
-
-            // Calculate total message size: header + robot_id_len + robot_id + detailed
             int totalSize = HEADER_SIZE + INT_SIZE + robotIdBytes.Length + 1;
             byte[] message = new byte[totalSize];
 
             int offset = 0;
 
-            // Write header
             byte[] header = EncodeHeader(MessageType.STATUS_QUERY, requestId);
             Buffer.BlockCopy(header, 0, message, offset, HEADER_SIZE);
             offset += HEADER_SIZE;
 
-            // Write robot ID length and data
             Buffer.BlockCopy(
                 BitConverter.GetBytes(robotIdBytes.Length),
                 0,
@@ -793,7 +699,6 @@ namespace PythonCommunication.Core
             Buffer.BlockCopy(robotIdBytes, 0, message, offset, robotIdBytes.Length);
             offset += robotIdBytes.Length;
 
-            // Write detailed flag (1 byte: 0 or 1)
             message[offset] = (byte)(detailed ? 1 : 0);
 
             return message;
@@ -818,13 +723,11 @@ namespace PythonCommunication.Core
                 );
             }
 
-            // Read robot ID
             int robotIdLen = BitConverter.ToInt32(data, offset);
             offset += INT_SIZE;
             robotId = Encoding.UTF8.GetString(data, offset, robotIdLen);
             offset += robotIdLen;
 
-            // Read detailed flag
             detailed = data[offset] != 0;
         }
 
@@ -833,7 +736,7 @@ namespace PythonCommunication.Core
         #region Status Response Messages (Python → Unity / Unity → Python)
 
         /// <summary>
-        /// Decode a status response message received from Python StatusServer.
+        /// Decode a status response message received from Python CommandServer or sent by WorldStatePublisher.
         /// Format: [type:1][request_id:4][json_len:4][robot_status_json:N]
         /// </summary>
         /// <param name="data">Raw message bytes</param>
@@ -841,7 +744,12 @@ namespace PythonCommunication.Core
         /// <returns>JSON string with robot status</returns>
         public static string DecodeStatusResponse(byte[] data, out uint requestId)
         {
-            if (data == null || data.Length < HEADER_SIZE + INT_SIZE)
+            if (data == null)
+            {
+                throw new ArgumentException($"{_logPrefix} Data cannot be null");
+            }
+
+            if (data.Length < HEADER_SIZE + INT_SIZE)
             {
                 throw new ArgumentException($"{_logPrefix} Invalid status response: too short");
             }
@@ -855,7 +763,6 @@ namespace PythonCommunication.Core
                 );
             }
 
-            // Read JSON length
             int jsonLength = BitConverter.ToInt32(data, offset);
             offset += INT_SIZE;
 
@@ -864,7 +771,6 @@ namespace PythonCommunication.Core
                 throw new ArgumentException($"{_logPrefix} Incomplete status response");
             }
 
-            // Extract JSON data
             return Encoding.UTF8.GetString(data, offset, jsonLength);
         }
 
@@ -887,16 +793,13 @@ namespace PythonCommunication.Core
             byte[] message = new byte[HEADER_SIZE + INT_SIZE + jsonBytes.Length];
             int offset = 0;
 
-            // Write header
             byte[] header = EncodeHeader(MessageType.STATUS_RESPONSE, requestId);
             Buffer.BlockCopy(header, 0, message, offset, HEADER_SIZE);
             offset += HEADER_SIZE;
 
-            // Write JSON length
             Buffer.BlockCopy(BitConverter.GetBytes(jsonBytes.Length), 0, message, offset, INT_SIZE);
             offset += INT_SIZE;
 
-            // Write JSON data
             Buffer.BlockCopy(jsonBytes, 0, message, offset, jsonBytes.Length);
 
             return message;
@@ -905,16 +808,6 @@ namespace PythonCommunication.Core
         #endregion
 
         #region Validation Helpers
-
-        /// <summary>
-        /// Validate that a string is within the protocol's length limits
-        /// </summary>
-        public static bool IsValidStringLength(string str)
-        {
-            if (str == null)
-                return true; // Null is treated as empty string
-            return Encoding.UTF8.GetByteCount(str) <= MAX_STRING_LENGTH;
-        }
 
         /// <summary>
         /// Validate that image data is within the protocol's size limits
@@ -931,7 +824,12 @@ namespace PythonCommunication.Core
         /// </summary>
         public static MessageType PeekMessageType(byte[] data)
         {
-            if (data == null || data.Length < TYPE_SIZE)
+            if (data == null)
+            {
+                throw new ArgumentException($"{_logPrefix} Data cannot be null");
+            }
+
+            if (data.Length < TYPE_SIZE)
             {
                 throw new ArgumentException($"{_logPrefix} Data too short to peek message type");
             }
@@ -944,7 +842,12 @@ namespace PythonCommunication.Core
         /// </summary>
         public static uint PeekRequestId(byte[] data)
         {
-            if (data == null || data.Length < HEADER_SIZE)
+            if (data == null)
+            {
+                throw new ArgumentException($"{_logPrefix} Data cannot be null");
+            }
+
+            if (data.Length < HEADER_SIZE)
             {
                 throw new ArgumentException($"{_logPrefix} Data too short to peek request ID");
             }

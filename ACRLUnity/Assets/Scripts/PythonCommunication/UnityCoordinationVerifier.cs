@@ -153,10 +153,34 @@ namespace PythonCommunication
 
         /// <summary>
         /// Check if two robot paths will collide using swept sphere collision detection.
+        /// Optimized with early-exit AABB check before expensive line segment math.
         /// </summary>
         private bool WillPathsCollide(Vector3 start1, Vector3 end1, Vector3 start2, Vector3 end2)
         {
-            // Find closest points on two line segments
+            // OPTIMIZATION: Early exit with AABB (Axis-Aligned Bounding Box) check
+            // This is much faster than line segment closest points and filters out distant robots
+            float radius = _minSafeSeparation;
+
+            // Calculate AABB for path 1
+            Vector3 min1 = Vector3.Min(start1, end1) - Vector3.one * radius;
+            Vector3 max1 = Vector3.Max(start1, end1) + Vector3.one * radius;
+
+            // Calculate AABB for path 2
+            Vector3 min2 = Vector3.Min(start2, end2) - Vector3.one * radius;
+            Vector3 max2 = Vector3.Max(start2, end2) + Vector3.one * radius;
+
+            // Check if AABBs overlap
+            bool xOverlap = min1.x <= max2.x && max1.x >= min2.x;
+            bool yOverlap = min1.y <= max2.y && max1.y >= min2.y;
+            bool zOverlap = min1.z <= max2.z && max1.z >= min2.z;
+
+            if (!(xOverlap && yOverlap && zOverlap))
+            {
+                // AABBs don't overlap - robots are far apart, no collision possible
+                return false;
+            }
+
+            // AABBs overlap - perform accurate line segment closest points test
             Vector3 closestPoint1, closestPoint2;
             ClosestPointsOnTwoLines(start1, end1, start2, end2, out closestPoint1, out closestPoint2);
 

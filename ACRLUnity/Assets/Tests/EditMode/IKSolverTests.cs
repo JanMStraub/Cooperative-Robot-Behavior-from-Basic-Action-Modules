@@ -353,9 +353,11 @@ namespace Tests.EditMode
         }
 
         [Test]
-        public void ComputeJointDeltasWithVelocity_ConvergesWhenBothPositionAndVelocityConverged()
+        public void ComputeJointDeltasWithVelocity_AlwaysReturnsDeltas()
         {
-            // Test successful convergence when both position and velocity are small
+            // NOTE: Convergence checking is now handled by RobotController with adaptive thresholds.
+            // IKSolver always returns joint deltas, letting RobotController decide when to stop.
+            // This test verifies that IKSolver returns valid deltas even when close to target.
 
             // Arrange
             var solver = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
@@ -389,8 +391,9 @@ namespace Tests.EditMode
             );
 
             // Assert
-            Assert.IsNull(deltas,
-                "Should converge when both position and velocity are within thresholds");
+            Assert.IsNotNull(deltas,
+                "IKSolver should always return deltas (convergence is handled by RobotController)");
+            Assert.Greater(deltas.Count, 0, "Deltas should have values for each joint");
         }
 
         [Test]
@@ -506,6 +509,7 @@ namespace Tests.EditMode
         public void ComputeJointDeltasWithVelocity_HighKd_ProducesMoreDamping()
         {
             // Test that high Kd provides more velocity damping
+            // NOTE: Use smaller errors to avoid error magnitude clamping at 1.0 m/s
 
             // Arrange
             var solver = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
@@ -515,13 +519,13 @@ namespace Tests.EditMode
                 rotation: Quaternion.identity
             );
             var targetState = new IKState(
-                position: new Vector3(1f, 0.3f, 0f),
+                position: new Vector3(1f, 0.05f, 0f), // Small position error to avoid clamping
                 rotation: Quaternion.identity
             );
 
-            // High current velocity (robot moving fast)
-            Vector3 currentVelocity = new Vector3(0f, 0.5f, 0f);
-            Vector3 targetVelocity = new Vector3(0f, 0.1f, 0f); // Should slow down
+            // Moderate current velocity (robot moving)
+            Vector3 currentVelocity = new Vector3(0f, 0.08f, 0f); // 8 cm/s
+            Vector3 targetVelocity = new Vector3(0f, 0.02f, 0f); // Should slow down to 2 cm/s
 
             var joints = new[]
             {
@@ -535,7 +539,7 @@ namespace Tests.EditMode
                 currentVelocity, targetVelocity,
                 joints,
                 convergenceThreshold: 0.01f,
-                Kp: 10.0f,
+                Kp: 1.0f, // Lower Kp to avoid clamping
                 Kd: 0.5f
             );
 
@@ -545,15 +549,15 @@ namespace Tests.EditMode
                 currentVelocity, targetVelocity,
                 joints,
                 convergenceThreshold: 0.01f,
-                Kp: 10.0f,
-                Kd: 5.0f
+                Kp: 1.0f, // Lower Kp to avoid clamping
+                Kd: 2.0f
             );
 
             // Assert
             Assert.IsNotNull(deltasLowKd);
             Assert.IsNotNull(deltasHighKd);
 
-            // With high velocity error (moving too fast), high Kd should produce different response
+            // With velocity error (moving too fast), high Kd should produce different response
             // The difference should be non-zero (gains matter)
             double magnitudeLowKd = deltasLowKd.L2Norm();
             double magnitudeHighKd = deltasHighKd.L2Norm();
@@ -564,9 +568,11 @@ namespace Tests.EditMode
         }
 
         [Test]
-        public void ComputeJointDeltasWithVelocity_VelocityThreshold_Is5CmPerSec()
+        public void ComputeJointDeltasWithVelocity_AlwaysReturnsDeltas_RegardlessOfVelocity()
         {
-            // Test that velocity convergence threshold is 5cm/s (0.05 m/s)
+            // NOTE: Convergence checking is now handled by RobotController with adaptive thresholds.
+            // IKSolver always returns joint deltas regardless of velocity.
+            // This test verifies that IKSolver returns deltas for both high and low velocities.
 
             // Arrange
             var solver = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
@@ -608,11 +614,15 @@ namespace Tests.EditMode
                 Kd: 2.0f
             );
 
-            // Assert
+            // Assert - IKSolver always returns deltas (convergence is handled by RobotController)
             Assert.IsNotNull(deltasAbove,
-                "Should not converge when velocity is above 5cm/s threshold");
-            Assert.IsNull(deltasBelow,
-                "Should converge when velocity is below 5cm/s threshold");
+                "IKSolver should always return deltas regardless of velocity");
+            Assert.IsNotNull(deltasBelow,
+                "IKSolver should always return deltas regardless of velocity");
+
+            // Verify the deltas are different based on velocity
+            Assert.AreNotEqual(deltasAbove.L2Norm(), deltasBelow.L2Norm(),
+                "Different velocities should produce different joint deltas");
         }
 
         #endregion

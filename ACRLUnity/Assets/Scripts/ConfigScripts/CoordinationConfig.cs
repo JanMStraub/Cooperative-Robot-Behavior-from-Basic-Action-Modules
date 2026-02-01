@@ -23,14 +23,14 @@ namespace Configuration
         /// Hybrid mode: Unity verification first, Python verification on conflicts.
         /// Balances performance and accuracy.
         /// </summary>
-        Hybrid
+        Hybrid,
     }
 
     /// <summary>
     /// Configuration for robot coordination verification.
     /// Controls collision detection, path replanning, and Python verification integration.
     /// </summary>
-    [CreateAssetMenu(fileName = "CoordinationConfig", menuName = "ACRL/Coordination Config", order = 3)]
+    [CreateAssetMenu(fileName = "CoordinationConfig", menuName = "Robotics/Coordination Config")]
     public class CoordinationConfig : ScriptableObject
     {
         [Header("Verification Settings")]

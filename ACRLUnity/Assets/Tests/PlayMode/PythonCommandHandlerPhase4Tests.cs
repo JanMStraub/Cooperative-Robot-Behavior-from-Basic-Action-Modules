@@ -146,8 +146,10 @@ namespace Tests.PlayMode
             yield return null;
 
             // Target is also in left workspace (should be allowed)
-            // Left workspace bounds: min(-0.5, 0.0, -0.45) to max(-0.15, 0.6, 0.45)
-            Vector3 targetInLeftWorkspace = new Vector3(-0.3f, 0.15f, 0.1f);
+            // Left workspace bounds: min(-0.65, 0.0, -0.5) to max(-0.1, 0.7, 0.5)
+            // Center region: min(-0.3, 0.0, -0.3) to max(0.3, 0.3, 0.3)
+            // Use position outside center but inside left_workspace
+            Vector3 targetInLeftWorkspace = new Vector3(-0.4f, 0.15f, 0.1f);
 
             // Verification should pass (we can't directly test private method,
             // but we verify setup is correct)

@@ -33,76 +33,7 @@ namespace PythonCommunication
     }
 
     // ============================================================================
-    // DEPTH RESULT DATA MODELS (DEPRECATED - December 2025)
-    // ============================================================================
-    // NOTE: These classes are no longer used in the unified architecture.
-    // Detection results now come through SequenceServer as OperationResult.
-    // Kept for backward compatibility only - can be removed in future cleanup.
-
-    /// <summary>
-    /// [DEPRECATED] Data structure for stereo detection results with 3D depth information
-    /// Use OperationResult from SequenceServer instead.
-    /// </summary>
-    [Serializable]
-    [System.Obsolete("DepthResult is deprecated. Use OperationResult from SequenceServer instead.")]
-    public class DepthResult
-    {
-        public bool success;
-        public string camera_id;
-        public string timestamp;
-        public ObjectDetection[] detections;
-        public DepthMetadata metadata;
-        public uint request_id; // Protocol V2: for request/response correlation
-    }
-
-    [Serializable]
-    public class ObjectDetection
-    {
-        public string color;
-        public float confidence;
-        public DetectionBoundingBox bbox;
-        public DetectionPixelCoords pixel_center;
-        public Detection3DPosition world_position;
-        public float depth_m;
-        public float disparity;
-    }
-
-    [Serializable]
-    public class DetectionBoundingBox
-    {
-        public int x;
-        public int y;
-        public int width;
-        public int height;
-    }
-
-    [Serializable]
-    public class DetectionPixelCoords
-    {
-        public int x;
-        public int y;
-    }
-
-    [Serializable]
-    public class Detection3DPosition
-    {
-        public float x;
-        public float y;
-        public float z;
-    }
-
-    [Serializable]
-    public class DepthMetadata
-    {
-        public float processing_time_seconds;
-        public string prompt;
-        public float camera_baseline_m;
-        public float camera_fov_deg;
-        public string detection_mode;
-    }
-
-    // ============================================================================
-    // DETECTION RESULT DATA MODELS (original DetectionDataModels)
+    // DETECTION RESULT DATA MODELS
     // ============================================================================
 
     /// <summary>

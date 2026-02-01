@@ -44,23 +44,23 @@ namespace PythonCommunication
         public TargetPosition custom_approach_vector; // Custom approach direction
 
         // New operation parameters (Phase 2 - Atomic Operations)
-        public TargetPosition point_a;          // For move_from_a_to_b
-        public TargetPosition point_b;          // For move_from_a_to_b
-        public float roll;                       // For adjust_orientation
-        public float pitch;                      // For adjust_orientation
-        public float yaw;                        // For adjust_orientation
-        public TargetPosition[] waypoints;       // For follow_path
-        public string alignment_type;            // For align_object
+        public TargetPosition point_a; // For move_from_a_to_b
+        public TargetPosition point_b; // For move_from_a_to_b
+        public float roll; // For adjust_orientation
+        public float pitch; // For adjust_orientation
+        public float yaw; // For adjust_orientation
+        public TargetPosition[] waypoints; // For follow_path
+        public string alignment_type; // For align_object
         public TargetPosition target_orientation; // For align_object
-        public string shape;                     // For draw_with_pen
-        public TargetPosition pen_position;      // For draw_with_pen
-        public TargetPosition paper_position;    // For draw_with_pen
-        public string target_robot_id;           // For mirror_movement
-        public string mirror_axis;               // For mirror_movement
-        public float scale_factor;               // For mirror_movement
-        public int duration_ms;                  // For stabilize_object
-        public float force_limit;                // For stabilize_object
-        public TargetPosition place_position;    // For release_object (deprecated - kept for backward compat)
+        public string shape; // For draw_with_pen
+        public TargetPosition pen_position; // For draw_with_pen
+        public TargetPosition paper_position; // For draw_with_pen
+        public string target_robot_id; // For mirror_movement
+        public string mirror_axis; // For mirror_movement
+        public float scale_factor; // For mirror_movement
+        public int duration_ms; // For stabilize_object
+        public float force_limit; // For stabilize_object
+        public TargetPosition place_position; // For release_object (deprecated - kept for backward compat)
     }
 
     [System.Serializable]
@@ -137,9 +137,41 @@ namespace PythonCommunication
 
         private RobotManager _robotManager;
 
-        // Track active commands for completion notification
+        /// <summary>
+        /// Track active commands for completion notification
+        /// </summary>
         private System.Collections.Generic.Dictionary<string, uint> _activeCommands =
             new System.Collections.Generic.Dictionary<string, uint>();
+
+        /// <summary>
+        /// Track active event listeners per robot to prevent zombie delegates
+        /// </summary>
+        private System.Collections.Generic.Dictionary<string, System.Action> _activeMoveListeners =
+            new System.Collections.Generic.Dictionary<string, System.Action>();
+        private System.Collections.Generic.Dictionary<string, System.Action> _activeGraspListeners =
+            new System.Collections.Generic.Dictionary<string, System.Action>();
+        private System.Collections.Generic.Dictionary<
+            string,
+            System.Action
+        > _activeGripperListeners = new System.Collections.Generic.Dictionary<
+            string,
+            System.Action
+        >();
+        private System.Collections.Generic.Dictionary<
+            string,
+            System.Action
+        > _activeOrientationListeners = new System.Collections.Generic.Dictionary<
+            string,
+            System.Action
+        >();
+
+        /// <summary>
+        /// Object lookup cache to avoid expensive FindObjectsByType calls
+        /// </summary>
+        private System.Collections.Generic.Dictionary<string, GameObject> _objectCache =
+            new System.Collections.Generic.Dictionary<string, GameObject>();
+        private const float OBJECT_CACHE_VALIDITY = 5.0f;
+        private float _lastCacheRefreshTime = 0f;
 
         // Helper variable
         private const string _logPrefix = "[PYTHON_COMMAND_HANDLER]";
@@ -168,7 +200,6 @@ namespace PythonCommunication
         /// </summary>
         private void Start()
         {
-            // Get RobotManager instance
             _robotManager = RobotManager.Instance;
             if (_robotManager == null)
             {
@@ -179,7 +210,6 @@ namespace PythonCommunication
                 return;
             }
 
-            // Get WorkspaceManager instance (Phase 4)
             _workspaceManager = Simulation.WorkspaceManager.Instance;
             if (_workspaceManager == null && _enablePythonVerification)
             {
@@ -190,7 +220,6 @@ namespace PythonCommunication
                 );
             }
 
-            // Initialize coordination verifier based on configuration
             InitializeCoordinationVerifier();
 
             Debug.Log($"{_logPrefix} Initialized and listening for Python commands");
@@ -203,7 +232,9 @@ namespace PythonCommunication
         {
             if (_coordinationConfig == null)
             {
-                Debug.LogWarning($"{_logPrefix} CoordinationConfig not assigned, using Unity-only verification");
+                Debug.LogWarning(
+                    $"{_logPrefix} CoordinationConfig not assigned, using Unity-only verification"
+                );
                 _coordinationVerifier = new UnityCoordinationVerifier(0.2f);
                 return;
             }
@@ -230,12 +261,16 @@ namespace PythonCommunication
                     // Hybrid mode: Use Unity for initial check, Python for conflicts
                     // For now, use Unity-only as hybrid implementation requires more complex logic
                     _coordinationVerifier = new UnityCoordinationVerifier(minSafeSeparation);
-                    Debug.Log($"{_logPrefix} Coordination verification mode: Hybrid (using Unity for now)");
+                    Debug.Log(
+                        $"{_logPrefix} Coordination verification mode: Hybrid (using Unity for now)"
+                    );
                     break;
 
                 default:
                     _coordinationVerifier = new UnityCoordinationVerifier(minSafeSeparation);
-                    Debug.LogWarning($"{_logPrefix} Unknown verification mode, defaulting to Unity-only");
+                    Debug.LogWarning(
+                        $"{_logPrefix} Unknown verification mode, defaulting to Unity-only"
+                    );
                     break;
             }
         }
@@ -290,7 +325,6 @@ namespace PythonCommunication
 
             switch (command.command_type)
             {
-                // Robot-targeted commands
                 case "move_to_coordinate":
                     ExecuteMoveToCoordinate(command);
                     break;
@@ -311,7 +345,6 @@ namespace PythonCommunication
                     ExecuteGraspObject(command);
                     break;
 
-                // New atomic operations (Phase 2)
                 case "release_object":
                     ExecuteReleaseObject(command);
                     break;
@@ -348,7 +381,6 @@ namespace PythonCommunication
                     ExecuteStabilizeObject(command);
                     break;
 
-                // Camera-targeted commands
                 case "capture_stereo_images":
                     ExecuteCaptureSteroImages(command);
                     break;
@@ -384,7 +416,6 @@ namespace PythonCommunication
             robotInstance = null;
             controller = null;
 
-            // Validate robot ID
             if (string.IsNullOrEmpty(robotId))
             {
                 Debug.LogError($"{_logPrefix} {commandName}: robot_id is null or empty");
@@ -392,7 +423,6 @@ namespace PythonCommunication
                 return false;
             }
 
-            // Find robot instance
             if (!_robotManager.RobotInstances.TryGetValue(robotId, out robotInstance))
             {
                 Debug.LogError(
@@ -403,7 +433,6 @@ namespace PythonCommunication
                 return false;
             }
 
-            // Get robot controller (either RobotController or SimpleRobotController)
             controller = robotInstance.controller;
             if (controller == null && robotInstance.simpleController == null)
             {
@@ -450,7 +479,6 @@ namespace PythonCommunication
                     return;
                 }
 
-                // Validate parameters
                 if (command.parameters == null || command.parameters.target_position == null)
                 {
                     Debug.LogError(
@@ -460,11 +488,9 @@ namespace PythonCommunication
                     return;
                 }
 
-                // Get target position
-                Vector3 targetPosition = new Vector3(
-                    command.parameters.target_position.x,
-                    command.parameters.target_position.y,
-                    command.parameters.target_position.z
+                // FIX #4: Get target position using helper
+                Vector3 targetPosition = TargetPositionToVector3(
+                    command.parameters.target_position
                 );
 
                 // Phase 4: Check Python CoordinationVerifier before executing
@@ -488,11 +514,8 @@ namespace PythonCommunication
                     }
                 }
 
-                // Apply speed multiplier if enabled
                 if (_applySpeedMultiplier && command.parameters.speed_multiplier > 0)
                 {
-                    // Note: You may need to add a speed multiplier property to RobotController
-                    // For now, we just log it
                     if (_verboseLogging)
                     {
                         Debug.Log(
@@ -501,19 +524,31 @@ namespace PythonCommunication
                     }
                 }
 
-                // Subscribe to completion event
                 string commandKey = $"move_{command.robot_id}_{command.request_id}";
                 _activeCommands[commandKey] = command.request_id;
 
-                // Create completion handler
+                // FIX #2: CLEANUP - Remove old listener for this robot if one exists
+                string robotListenerKey = $"move_{command.robot_id}";
+                if (_activeMoveListeners.ContainsKey(robotListenerKey))
+                {
+                    System.Action oldListener = _activeMoveListeners[robotListenerKey];
+                    if (controller != null)
+                        controller.OnTargetReached -= oldListener;
+                    else if (robotInstance.simpleController != null)
+                        robotInstance.simpleController.OnTargetReached -= oldListener;
+
+                    _activeMoveListeners.Remove(robotListenerKey);
+                }
+
                 System.Action onComplete = null;
                 onComplete = () =>
                 {
-                    // Unsubscribe from the appropriate event
                     if (controller != null)
                         controller.OnTargetReached -= onComplete;
                     else if (robotInstance.simpleController != null)
                         robotInstance.simpleController.OnTargetReached -= onComplete;
+
+                    _activeMoveListeners.Remove(robotListenerKey);
 
                     if (_activeCommands.ContainsKey(commandKey))
                     {
@@ -537,7 +572,8 @@ namespace PythonCommunication
                     }
                 };
 
-                // Subscribe to the appropriate controller's event
+                _activeMoveListeners[robotListenerKey] = onComplete;
+
                 if (controller != null)
                 {
                     controller.OnTargetReached += onComplete;
@@ -547,7 +583,6 @@ namespace PythonCommunication
                     robotInstance.simpleController.OnTargetReached += onComplete;
                 }
 
-                // Phase 4: Allocate workspace region before movement starts
                 if (_workspaceManager != null)
                 {
                     var region = _workspaceManager.GetRegionAtPosition(targetPosition);
@@ -558,7 +593,6 @@ namespace PythonCommunication
                     }
                 }
 
-                // Execute movement on the appropriate controller
                 if (controller != null)
                 {
                     controller.SetTarget(targetPosition);
@@ -598,7 +632,6 @@ namespace PythonCommunication
         {
             try
             {
-                // Validate robot and get instance
                 if (
                     !ValidateAndGetRobot(
                         command.robot_id,
@@ -611,7 +644,6 @@ namespace PythonCommunication
                     return;
                 }
 
-                // Validate parameters
                 if (command.parameters == null)
                 {
                     Debug.LogError($"{_logPrefix} control_gripper: Missing parameters");
@@ -619,7 +651,6 @@ namespace PythonCommunication
                     return;
                 }
 
-                // Get gripper controller from robot
                 GripperController gripperController =
                     robotInstance.robotGameObject.GetComponentInChildren<GripperController>();
                 if (gripperController == null)
@@ -631,15 +662,23 @@ namespace PythonCommunication
                     return;
                 }
 
-                // Subscribe to completion event
                 string commandKey = $"gripper_{command.robot_id}_{command.request_id}";
                 _activeCommands[commandKey] = command.request_id;
 
-                // Create completion handler
+                // FIX #2: CLEANUP - Remove old gripper listener for this robot if one exists
+                string listenerKey = $"gripper_{command.robot_id}";
+                if (_activeGripperListeners.ContainsKey(listenerKey))
+                {
+                    System.Action oldListener = _activeGripperListeners[listenerKey];
+                    gripperController.OnGripperActionComplete -= oldListener;
+                    _activeGripperListeners.Remove(listenerKey);
+                }
+
                 System.Action onComplete = null;
                 onComplete = () =>
                 {
                     gripperController.OnGripperActionComplete -= onComplete;
+                    _activeGripperListeners.Remove(listenerKey); // FIX #2
                     if (_activeCommands.ContainsKey(commandKey))
                     {
                         _activeCommands.Remove(commandKey);
@@ -651,17 +690,16 @@ namespace PythonCommunication
                         );
                     }
                 };
+                _activeGripperListeners[listenerKey] = onComplete; // FIX #2: Track it
                 gripperController.OnGripperActionComplete += onComplete;
 
-                // Execute gripper action
                 bool openGripper = command.parameters.open_gripper;
                 if (openGripper)
                 {
                     gripperController.OpenGrippers();
 
-                    // Clear the robot controller target when opening gripper
-                    // This prevents the IK from continuing to hold position after release
-                    RobotController controller = robotInstance.robotGameObject.GetComponent<RobotController>();
+                    RobotController controller =
+                        robotInstance.robotGameObject.GetComponent<RobotController>();
                     if (controller != null)
                     {
                         controller.ClearTarget();
@@ -673,18 +711,21 @@ namespace PythonCommunication
                 }
                 else
                 {
-                    // If object_id is specified, set up target for attachment (enables handoff)
                     if (!string.IsNullOrEmpty(command.parameters.object_id))
                     {
                         GameObject targetObj = GameObject.Find(command.parameters.object_id);
                         if (targetObj != null)
                         {
                             gripperController.SetTargetObject(targetObj);
-                            Debug.Log($"{_logPrefix} control_gripper: Set target object '{command.parameters.object_id}' for attachment");
+                            Debug.Log(
+                                $"{_logPrefix} control_gripper: Set target object '{command.parameters.object_id}' for attachment"
+                            );
                         }
                         else
                         {
-                            Debug.LogWarning($"{_logPrefix} control_gripper: Target object '{command.parameters.object_id}' not found");
+                            Debug.LogWarning(
+                                $"{_logPrefix} control_gripper: Target object '{command.parameters.object_id}' not found"
+                            );
                         }
                     }
                     gripperController.CloseGrippers();
@@ -729,7 +770,6 @@ namespace PythonCommunication
                     return;
                 }
 
-                // Validate parameters
                 if (command.parameters == null)
                 {
                     Debug.LogError($"{_logPrefix} grasp_object: Missing parameters");
@@ -737,7 +777,6 @@ namespace PythonCommunication
                     return;
                 }
 
-                // Validate object_id
                 string objectId = command.parameters.object_id;
                 if (string.IsNullOrEmpty(objectId))
                 {
@@ -746,7 +785,6 @@ namespace PythonCommunication
                     return;
                 }
 
-                // Find target object in scene (with flexible matching)
                 GameObject targetObject = FindObjectFlexible(objectId);
                 if (targetObject == null)
                 {
@@ -758,14 +796,21 @@ namespace PythonCommunication
                     return;
                 }
 
-                // Subscribe to target reached event for completion notification
                 string commandKey = $"grasp_{command.robot_id}_{command.request_id}";
                 _activeCommands[commandKey] = command.request_id;
 
-                // Check which controller type is available
+                // FIX #2: CLEANUP - Remove old grasp listener for this robot if one exists
+                string robotGraspKey = $"grasp_{command.robot_id}";
+
                 if (controller != null)
                 {
-                    // Use RobotController with full GraspOptions support
+                    if (_activeGraspListeners.ContainsKey(robotGraspKey))
+                    {
+                        System.Action oldListener = _activeGraspListeners[robotGraspKey];
+                        controller.OnTargetReached -= oldListener;
+                        _activeGraspListeners.Remove(robotGraspKey);
+                    }
+
                     GraspOptions options = new GraspOptions
                     {
                         useGraspPlanning = true,
@@ -774,14 +819,17 @@ namespace PythonCommunication
                         useAdvancedPlanning = command.parameters.use_advanced_planning,
                         approach = ParseApproachType(command.parameters.preferred_approach),
                         overridePreGraspDistance = command.parameters.pre_grasp_distance,
-                        customApproachVector = ParseApproachVector(command.parameters.custom_approach_vector),
-                        graspConfig = null // Use default config from RobotController
+                        customApproachVector = ParseApproachVector(
+                            command.parameters.custom_approach_vector
+                        ),
+                        graspConfig = null,
                     };
 
                     System.Action onComplete = null;
                     onComplete = () =>
                     {
                         controller.OnTargetReached -= onComplete;
+                        _activeGraspListeners.Remove(robotGraspKey); // FIX #2
                         if (_activeCommands.ContainsKey(commandKey))
                         {
                             _activeCommands.Remove(commandKey);
@@ -793,9 +841,9 @@ namespace PythonCommunication
                             );
                         }
                     };
+                    _activeGraspListeners[robotGraspKey] = onComplete;
                     controller.OnTargetReached += onComplete;
 
-                    // Execute grasp with full options
                     controller.SetTarget(targetObject, options);
 
                     if (_verboseLogging)
@@ -808,13 +856,20 @@ namespace PythonCommunication
                 }
                 else if (robotInstance.simpleController != null)
                 {
-                    // Use SimpleRobotController with basic grasp (no GraspOptions)
                     SimpleRobotController simpleController = robotInstance.simpleController;
+
+                    if (_activeGraspListeners.ContainsKey(robotGraspKey))
+                    {
+                        System.Action oldListener = _activeGraspListeners[robotGraspKey];
+                        simpleController.OnTargetReached -= oldListener;
+                        _activeGraspListeners.Remove(robotGraspKey);
+                    }
 
                     System.Action onComplete = null;
                     onComplete = () =>
                     {
                         simpleController.OnTargetReached -= onComplete;
+                        _activeGraspListeners.Remove(robotGraspKey); // FIX #2
                         if (_activeCommands.ContainsKey(commandKey))
                         {
                             _activeCommands.Remove(commandKey);
@@ -826,16 +881,14 @@ namespace PythonCommunication
                             );
                         }
                     };
+                    _activeGraspListeners[robotGraspKey] = onComplete;
                     simpleController.OnTargetReached += onComplete;
 
-                    // Execute basic grasp (SimpleRobotController handles gripper automatically)
                     simpleController.SetTarget(targetObject);
 
                     if (_verboseLogging)
                     {
-                        Debug.Log(
-                            $"{_logPrefix} Simple grasp: {command.robot_id} -> {objectId}"
-                        );
+                        Debug.Log($"{_logPrefix} Simple grasp: {command.robot_id} -> {objectId}");
                     }
                 }
                 else
@@ -877,7 +930,9 @@ namespace PythonCommunication
                 case "side":
                     return GraspApproach.Side;
                 default:
-                    Debug.LogWarning($"{_logPrefix} Unknown approach type '{approachStr}', using auto");
+                    Debug.LogWarning(
+                        $"{_logPrefix} Unknown approach type '{approachStr}', using auto"
+                    );
                     return null;
             }
         }
@@ -892,7 +947,7 @@ namespace PythonCommunication
             if (vector == null)
                 return null;
 
-            return new Vector3(vector.x, vector.y, vector.z);
+            return TargetPositionToVector3(vector); // FIX #3: Use helper
         }
 
         /// <summary>
@@ -903,7 +958,6 @@ namespace PythonCommunication
         {
             try
             {
-                // Validate robot and get instance
                 if (
                     !ValidateAndGetRobot(
                         command.robot_id,
@@ -916,7 +970,6 @@ namespace PythonCommunication
                     return;
                 }
 
-                // Get gripper controller from robot
                 GripperController gripperController =
                     robotInstance.robotGameObject.GetComponentInChildren<GripperController>();
                 if (gripperController == null)
@@ -928,11 +981,9 @@ namespace PythonCommunication
                     return;
                 }
 
-                // Subscribe to completion event
                 string commandKey = $"release_object_{command.robot_id}_{command.request_id}";
                 _activeCommands[commandKey] = command.request_id;
 
-                // Create completion handler
                 System.Action onComplete = null;
                 onComplete = () =>
                 {
@@ -950,12 +1001,13 @@ namespace PythonCommunication
                 };
                 gripperController.OnGripperActionComplete += onComplete;
 
-                // Execute ONLY gripper opening (atomic operation)
                 gripperController.OpenGrippers();
 
                 if (_verboseLogging)
                 {
-                    Debug.Log($"{_logPrefix} Releasing object (atomic): {command.robot_id} - gripper only, no movement");
+                    Debug.Log(
+                        $"{_logPrefix} Releasing object (atomic): {command.robot_id} - gripper only, no movement"
+                    );
                 }
 
                 _successfulCommands++;
@@ -977,7 +1029,6 @@ namespace PythonCommunication
         {
             try
             {
-                // Validate robot and get controller
                 if (
                     !ValidateAndGetRobot(
                         command.robot_id,
@@ -989,9 +1040,11 @@ namespace PythonCommunication
                 {
                     return;
                 }
-
-                // Validate parameters
-                if (command.parameters == null || command.parameters.point_a == null || command.parameters.point_b == null)
+                if (
+                    command.parameters == null
+                    || command.parameters.point_a == null
+                    || command.parameters.point_b == null
+                )
                 {
                     Debug.LogError(
                         $"{_logPrefix} move_from_a_to_b: Missing parameters or waypoints"
@@ -1000,19 +1053,9 @@ namespace PythonCommunication
                     return;
                 }
 
-                Vector3 pointA = new Vector3(
-                    command.parameters.point_a.x,
-                    command.parameters.point_a.y,
-                    command.parameters.point_a.z
-                );
+                Vector3 pointA = TargetPositionToVector3(command.parameters.point_a);
+                Vector3 pointB = TargetPositionToVector3(command.parameters.point_b);
 
-                Vector3 pointB = new Vector3(
-                    command.parameters.point_b.x,
-                    command.parameters.point_b.y,
-                    command.parameters.point_b.z
-                );
-
-                // Start coroutine for waypoint movement
                 StartCoroutine(
                     MoveFromAToBCoroutine(
                         controller,
@@ -1055,8 +1098,8 @@ namespace PythonCommunication
         )
         {
             bool usingSimpleController = (controller == null && simpleController != null);
+            float segmentTimeout = 15.0f;
 
-            // Move to point A
             if (controller != null)
             {
                 controller.SetTarget(pointA);
@@ -1066,18 +1109,41 @@ namespace PythonCommunication
                 simpleController.SetTarget(pointA);
             }
 
-            // Wait for arrival at point A
+            float pointATimer = 0f;
             if (usingSimpleController)
             {
                 while (!simpleController.HasReachedTarget)
                 {
+                    pointATimer += 0.1f;
+                    if (pointATimer > segmentTimeout)
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} MoveFromAToB: Timeout waiting for point A after {segmentTimeout}s. "
+                                + $"Distance: {simpleController.DistanceToTarget:F4}m"
+                        );
+                        SendCommandCompletion(robotId, "move_from_a_to_b", false, requestId);
+                        yield break;
+                    }
                     yield return new WaitForSeconds(0.1f);
                 }
             }
             else
             {
-                while (controller != null && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD)
+                while (
+                    controller != null
+                    && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD
+                )
                 {
+                    pointATimer += 0.1f;
+                    if (pointATimer > segmentTimeout)
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} MoveFromAToB: Timeout waiting for point A after {segmentTimeout}s. "
+                                + $"Distance: {controller.GetDistanceToTarget():F4}m"
+                        );
+                        SendCommandCompletion(robotId, "move_from_a_to_b", false, requestId);
+                        yield break;
+                    }
                     yield return new WaitForSeconds(0.1f);
                 }
             }
@@ -1092,23 +1158,46 @@ namespace PythonCommunication
                 simpleController.SetTarget(pointB);
             }
 
-            // Wait for arrival at point B
+            // FIX #1: Wait for arrival at point B with TIMEOUT
+            float pointBTimer = 0f;
             if (usingSimpleController)
             {
                 while (!simpleController.HasReachedTarget)
                 {
+                    pointBTimer += 0.1f;
+                    if (pointBTimer > segmentTimeout)
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} MoveFromAToB: Timeout waiting for point B after {segmentTimeout}s. "
+                                + $"Distance: {simpleController.DistanceToTarget:F4}m"
+                        );
+                        SendCommandCompletion(robotId, "move_from_a_to_b", false, requestId);
+                        yield break;
+                    }
                     yield return new WaitForSeconds(0.1f);
                 }
             }
             else
             {
-                while (controller != null && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD)
+                while (
+                    controller != null
+                    && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD
+                )
                 {
+                    pointBTimer += 0.1f;
+                    if (pointBTimer > segmentTimeout)
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} MoveFromAToB: Timeout waiting for point B after {segmentTimeout}s. "
+                                + $"Distance: {controller.GetDistanceToTarget():F4}m"
+                        );
+                        SendCommandCompletion(robotId, "move_from_a_to_b", false, requestId);
+                        yield break;
+                    }
                     yield return new WaitForSeconds(0.1f);
                 }
             }
 
-            // Send completion
             SendCommandCompletion(robotId, "move_from_a_to_b", true, requestId);
         }
 
@@ -1119,7 +1208,6 @@ namespace PythonCommunication
         {
             try
             {
-                // Validate robot and get controller
                 if (
                     !ValidateAndGetRobot(
                         command.robot_id,
@@ -1132,7 +1220,6 @@ namespace PythonCommunication
                     return;
                 }
 
-                // Validate parameters
                 if (command.parameters == null)
                 {
                     Debug.LogError(
@@ -1142,21 +1229,31 @@ namespace PythonCommunication
                     return;
                 }
 
-                // Get current position
-                Vector3 currentPosition = controller != null
-                    ? controller.GetCurrentEndEffectorPosition()
-                    : robotInstance.simpleController.GetCurrentEndEffectorPosition();
+                Vector3 currentPosition =
+                    controller != null
+                        ? controller.GetCurrentEndEffectorPosition()
+                        : robotInstance.simpleController.GetCurrentEndEffectorPosition();
 
-                // Create target rotation from euler angles
                 Quaternion targetRotation = Quaternion.Euler(
                     command.parameters.roll,
                     command.parameters.pitch,
                     command.parameters.yaw
                 );
 
-                // Subscribe to completion event
                 string commandKey = $"adjust_orientation_{command.robot_id}_{command.request_id}";
                 _activeCommands[commandKey] = command.request_id;
+
+                // FIX #2: CLEANUP - Remove old orientation listener for this robot if one exists
+                string listenerKey = $"orientation_{command.robot_id}";
+                if (_activeOrientationListeners.ContainsKey(listenerKey))
+                {
+                    System.Action oldListener = _activeOrientationListeners[listenerKey];
+                    if (controller != null)
+                        controller.OnTargetReached -= oldListener;
+                    else if (robotInstance.simpleController != null)
+                        robotInstance.simpleController.OnTargetReached -= oldListener;
+                    _activeOrientationListeners.Remove(listenerKey);
+                }
 
                 System.Action onComplete = null;
                 onComplete = () =>
@@ -1165,6 +1262,8 @@ namespace PythonCommunication
                         controller.OnTargetReached -= onComplete;
                     else if (robotInstance.simpleController != null)
                         robotInstance.simpleController.OnTargetReached -= onComplete;
+
+                    _activeOrientationListeners.Remove(listenerKey); // FIX #2
 
                     if (_activeCommands.ContainsKey(commandKey))
                     {
@@ -1178,7 +1277,8 @@ namespace PythonCommunication
                     }
                 };
 
-                // Subscribe to appropriate controller event
+                _activeOrientationListeners[listenerKey] = onComplete;
+
                 if (controller != null)
                 {
                     controller.OnTargetReached += onComplete;
@@ -1260,9 +1360,10 @@ namespace PythonCommunication
                 }
 
                 // Get current position (maintain it while rotating)
-                Vector3 currentPosition = controller != null
-                    ? controller.GetCurrentEndEffectorPosition()
-                    : robotInstance.simpleController.GetCurrentEndEffectorPosition();
+                Vector3 currentPosition =
+                    controller != null
+                        ? controller.GetCurrentEndEffectorPosition()
+                        : robotInstance.simpleController.GetCurrentEndEffectorPosition();
 
                 // Parse target orientation
                 Quaternion targetRotation = Quaternion.Euler(
@@ -1275,6 +1376,18 @@ namespace PythonCommunication
                 string commandKey = $"align_object_{command.robot_id}_{command.request_id}";
                 _activeCommands[commandKey] = command.request_id;
 
+                // FIX #2: CLEANUP - Remove old alignment listener for this robot if one exists
+                string listenerKey = $"align_{command.robot_id}";
+                if (_activeOrientationListeners.ContainsKey(listenerKey))
+                {
+                    System.Action oldListener = _activeOrientationListeners[listenerKey];
+                    if (controller != null)
+                        controller.OnTargetReached -= oldListener;
+                    else if (robotInstance.simpleController != null)
+                        robotInstance.simpleController.OnTargetReached -= oldListener;
+                    _activeOrientationListeners.Remove(listenerKey);
+                }
+
                 System.Action onComplete = null;
                 onComplete = () =>
                 {
@@ -1282,6 +1395,8 @@ namespace PythonCommunication
                         controller.OnTargetReached -= onComplete;
                     else if (robotInstance.simpleController != null)
                         robotInstance.simpleController.OnTargetReached -= onComplete;
+
+                    _activeOrientationListeners.Remove(listenerKey); // FIX #2
 
                     if (_activeCommands.ContainsKey(commandKey))
                     {
@@ -1294,6 +1409,8 @@ namespace PythonCommunication
                         );
                     }
                 };
+
+                _activeOrientationListeners[listenerKey] = onComplete; // FIX #2: Track it
 
                 // Execute alignment
                 if (controller != null)
@@ -1344,24 +1461,22 @@ namespace PythonCommunication
                 }
 
                 // Validate parameters
-                if (command.parameters == null || command.parameters.waypoints == null || command.parameters.waypoints.Length == 0)
+                if (
+                    command.parameters == null
+                    || command.parameters.waypoints == null
+                    || command.parameters.waypoints.Length == 0
+                )
                 {
-                    Debug.LogError(
-                        $"{_logPrefix} follow_path: Missing waypoints"
-                    );
+                    Debug.LogError($"{_logPrefix} follow_path: Missing waypoints");
                     _failedCommands++;
                     return;
                 }
 
-                // Convert waypoints to Vector3 array
+                // FIX #3: Convert waypoints to Vector3 array using helper
                 Vector3[] waypoints = new Vector3[command.parameters.waypoints.Length];
                 for (int i = 0; i < command.parameters.waypoints.Length; i++)
                 {
-                    waypoints[i] = new Vector3(
-                        command.parameters.waypoints[i].x,
-                        command.parameters.waypoints[i].y,
-                        command.parameters.waypoints[i].z
-                    );
+                    waypoints[i] = TargetPositionToVector3(command.parameters.waypoints[i]);
                 }
 
                 // Start coroutine for path following
@@ -1377,7 +1492,9 @@ namespace PythonCommunication
 
                 if (_verboseLogging)
                 {
-                    Debug.Log($"{_logPrefix} Following path with {waypoints.Length} waypoints for {command.robot_id}");
+                    Debug.Log(
+                        $"{_logPrefix} Following path with {waypoints.Length} waypoints for {command.robot_id}"
+                    );
                 }
 
                 _successfulCommands++;
@@ -1403,6 +1520,7 @@ namespace PythonCommunication
         )
         {
             bool usingSimpleController = (controller == null && simpleController != null);
+            float segmentTimeout = 15.0f; // FIX #1: Timeout per waypoint
 
             // Move through each waypoint
             for (int i = 0; i < waypoints.Length; i++)
@@ -1419,18 +1537,42 @@ namespace PythonCommunication
                     simpleController.SetTarget(waypoint);
                 }
 
-                // Wait for arrival
+                // FIX #1: Wait for arrival with TIMEOUT
+                float timer = 0f;
                 if (usingSimpleController)
                 {
                     while (!simpleController.HasReachedTarget)
                     {
+                        timer += 0.1f;
+                        if (timer > segmentTimeout)
+                        {
+                            Debug.LogWarning(
+                                $"{_logPrefix} FollowPath: Timeout waiting for waypoint {i} after {segmentTimeout}s. "
+                                    + $"Distance: {simpleController.DistanceToTarget:F4}m"
+                            );
+                            SendCommandCompletion(robotId, "follow_path", false, requestId);
+                            yield break;
+                        }
                         yield return new WaitForSeconds(0.1f);
                     }
                 }
                 else
                 {
-                    while (controller != null && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD)
+                    while (
+                        controller != null
+                        && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD
+                    )
                     {
+                        timer += 0.1f;
+                        if (timer > segmentTimeout)
+                        {
+                            Debug.LogWarning(
+                                $"{_logPrefix} FollowPath: Timeout waiting for waypoint {i} after {segmentTimeout}s. "
+                                    + $"Distance: {controller.GetDistanceToTarget():F4}m"
+                            );
+                            SendCommandCompletion(robotId, "follow_path", false, requestId);
+                            yield break;
+                        }
                         yield return new WaitForSeconds(0.1f);
                     }
                 }
@@ -1461,7 +1603,11 @@ namespace PythonCommunication
                 }
 
                 // Validate parameters
-                if (command.parameters == null || command.parameters.pen_position == null || command.parameters.paper_position == null)
+                if (
+                    command.parameters == null
+                    || command.parameters.pen_position == null
+                    || command.parameters.paper_position == null
+                )
                 {
                     Debug.LogError(
                         $"{_logPrefix} draw_with_pen: Missing pen_position or paper_position"
@@ -1470,17 +1616,9 @@ namespace PythonCommunication
                     return;
                 }
 
-                Vector3 penPosition = new Vector3(
-                    command.parameters.pen_position.x,
-                    command.parameters.pen_position.y,
-                    command.parameters.pen_position.z
-                );
-
-                Vector3 paperPosition = new Vector3(
-                    command.parameters.paper_position.x,
-                    command.parameters.paper_position.y,
-                    command.parameters.paper_position.z
-                );
+                // FIX #3: Use helper for Vector3 conversion
+                Vector3 penPosition = TargetPositionToVector3(command.parameters.pen_position);
+                Vector3 paperPosition = TargetPositionToVector3(command.parameters.paper_position);
 
                 string shape = command.parameters.shape ?? "line";
 
@@ -1526,6 +1664,8 @@ namespace PythonCommunication
             uint requestId
         )
         {
+            float timeout = 10.0f; // Safety timeout
+            float timer = 0f;
             bool usingSimpleController = (controller == null && simpleController != null);
 
             // Step 1: Move to pen
@@ -1538,18 +1678,35 @@ namespace PythonCommunication
                 simpleController.SetTarget(penPosition);
             }
 
-            // Wait for arrival
+            // FIX: Wait for arrival at pen with TIMEOUT
             if (usingSimpleController)
             {
                 while (!simpleController.HasReachedTarget)
                 {
+                    timer += 0.1f;
+                    if (timer > timeout)
+                    {
+                        Debug.LogWarning($"{_logPrefix} DrawWithPen timed out reaching pen.");
+                        SendCommandCompletion(robotId, "draw_with_pen", false, requestId);
+                        yield break;
+                    }
                     yield return new WaitForSeconds(0.1f);
                 }
             }
             else
             {
-                while (controller != null && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD)
+                while (
+                    controller != null
+                    && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD
+                )
                 {
+                    timer += 0.1f;
+                    if (timer > timeout)
+                    {
+                        Debug.LogWarning($"{_logPrefix} DrawWithPen timed out reaching pen.");
+                        SendCommandCompletion(robotId, "draw_with_pen", false, requestId);
+                        yield break;
+                    }
                     yield return new WaitForSeconds(0.1f);
                 }
             }
@@ -1559,11 +1716,13 @@ namespace PythonCommunication
             GripperController gripperController = null;
             if (controller != null)
             {
-                gripperController = controller.gameObject.GetComponentInChildren<GripperController>();
+                gripperController =
+                    controller.gameObject.GetComponentInChildren<GripperController>();
             }
             else if (simpleController != null)
             {
-                gripperController = simpleController.gameObject.GetComponentInChildren<GripperController>();
+                gripperController =
+                    simpleController.gameObject.GetComponentInChildren<GripperController>();
             }
 
             if (gripperController != null)
@@ -1582,18 +1741,36 @@ namespace PythonCommunication
                 simpleController.SetTarget(paperPosition);
             }
 
-            // Wait for arrival
+            // FIX: Wait for arrival at paper with TIMEOUT
+            timer = 0f; // Reset timer for paper segment
             if (usingSimpleController)
             {
                 while (!simpleController.HasReachedTarget)
                 {
+                    timer += 0.1f;
+                    if (timer > timeout)
+                    {
+                        Debug.LogWarning($"{_logPrefix} DrawWithPen timed out moving to paper.");
+                        SendCommandCompletion(robotId, "draw_with_pen", false, requestId);
+                        yield break;
+                    }
                     yield return new WaitForSeconds(0.1f);
                 }
             }
             else
             {
-                while (controller != null && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD)
+                while (
+                    controller != null
+                    && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD
+                )
                 {
+                    timer += 0.1f;
+                    if (timer > timeout)
+                    {
+                        Debug.LogWarning($"{_logPrefix} DrawWithPen timed out moving to paper.");
+                        SendCommandCompletion(robotId, "draw_with_pen", false, requestId);
+                        yield break;
+                    }
                     yield return new WaitForSeconds(0.1f);
                 }
             }
@@ -1627,17 +1804,23 @@ namespace PythonCommunication
                 }
 
                 // Validate parameters
-                if (command.parameters == null || string.IsNullOrEmpty(command.parameters.target_robot_id))
+                if (
+                    command.parameters == null
+                    || string.IsNullOrEmpty(command.parameters.target_robot_id)
+                )
                 {
-                    Debug.LogError(
-                        $"{_logPrefix} mirror_movement: Missing target_robot_id"
-                    );
+                    Debug.LogError($"{_logPrefix} mirror_movement: Missing target_robot_id");
                     _failedCommands++;
                     return;
                 }
 
                 // Get target robot
-                if (!_robotManager.RobotInstances.TryGetValue(command.parameters.target_robot_id, out RobotInstance targetRobotInstance))
+                if (
+                    !_robotManager.RobotInstances.TryGetValue(
+                        command.parameters.target_robot_id,
+                        out RobotInstance targetRobotInstance
+                    )
+                )
                 {
                     Debug.LogError(
                         $"{_logPrefix} mirror_movement: Target robot '{command.parameters.target_robot_id}' not found"
@@ -1647,7 +1830,8 @@ namespace PythonCommunication
                 }
 
                 string mirrorAxis = command.parameters.mirror_axis ?? "x";
-                float scaleFactor = command.parameters.scale_factor > 0 ? command.parameters.scale_factor : 1.0f;
+                float scaleFactor =
+                    command.parameters.scale_factor > 0 ? command.parameters.scale_factor : 1.0f;
 
                 // Start coroutine for mirroring
                 StartCoroutine(
@@ -1664,7 +1848,9 @@ namespace PythonCommunication
 
                 if (_verboseLogging)
                 {
-                    Debug.Log($"{_logPrefix} Mirroring movement of {command.parameters.target_robot_id} on {command.robot_id} (axis: {mirrorAxis}, scale: {scaleFactor})");
+                    Debug.Log(
+                        $"{_logPrefix} Mirroring movement of {command.parameters.target_robot_id} on {command.robot_id} (axis: {mirrorAxis}, scale: {scaleFactor})"
+                    );
                 }
 
                 _successfulCommands++;
@@ -1705,7 +1891,8 @@ namespace PythonCommunication
                 }
                 else if (targetRobotInstance.simpleController != null)
                 {
-                    targetPosition = targetRobotInstance.simpleController.GetCurrentEndEffectorPosition();
+                    targetPosition =
+                        targetRobotInstance.simpleController.GetCurrentEndEffectorPosition();
                 }
 
                 // Mirror position based on axis
@@ -1768,15 +1955,15 @@ namespace PythonCommunication
                 // Validate parameters
                 if (command.parameters == null)
                 {
-                    Debug.LogError(
-                        $"{_logPrefix} stabilize_object: Missing parameters"
-                    );
+                    Debug.LogError($"{_logPrefix} stabilize_object: Missing parameters");
                     _failedCommands++;
                     return;
                 }
 
-                int duration_ms = command.parameters.duration_ms > 0 ? command.parameters.duration_ms : 5000;
-                float force_limit = command.parameters.force_limit > 0 ? command.parameters.force_limit : 10.0f;
+                int duration_ms =
+                    command.parameters.duration_ms > 0 ? command.parameters.duration_ms : 5000;
+                float force_limit =
+                    command.parameters.force_limit > 0 ? command.parameters.force_limit : 10.0f;
 
                 // Get gripper controller
                 GripperController gripperController =
@@ -1803,7 +1990,9 @@ namespace PythonCommunication
 
                 if (_verboseLogging)
                 {
-                    Debug.Log($"{_logPrefix} Stabilizing object for {command.robot_id}: duration={duration_ms}ms, force_limit={force_limit}N");
+                    Debug.Log(
+                        $"{_logPrefix} Stabilizing object for {command.robot_id}: duration={duration_ms}ms, force_limit={force_limit}N"
+                    );
                 }
 
                 _successfulCommands++;
@@ -1941,71 +2130,93 @@ namespace PythonCommunication
                 yield break;
             }
 
-            // Store initial joint positions from the actual drive targets
-            float[] startJoints = new float[controller.robotJoints.Length];
-            for (int i = 0; i < controller.robotJoints.Length && i < startJoints.Length; i++)
+            // FIX #5: DISABLE IK during manual joint interpolation
+            controller.IsManuallyDriven = true;
+
+            try
             {
-                startJoints[i] = controller.robotJoints[i].xDrive.target;
-            }
+                // Store initial joint positions from the actual drive targets
+                float[] startJoints = new float[controller.robotJoints.Length];
+                for (int i = 0; i < controller.robotJoints.Length && i < startJoints.Length; i++)
+                {
+                    startJoints[i] = controller.robotJoints[i].xDrive.target;
+                }
 
-            float elapsed = 0f;
+                float elapsed = 0f;
 
-            while (elapsed < duration)
-            {
-                elapsed += Time.fixedDeltaTime;
-                float t = Mathf.Clamp01(elapsed / duration);
+                while (elapsed < duration)
+                {
+                    // FIX #4: Safety check in case robot died during movement
+                    if (controller == null)
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} Robot destroyed during ReturnToStartPosition"
+                        );
+                        yield break;
+                    }
 
-                // Smooth interpolation using ease-in-out
-                float smoothT = t * t * (3f - 2f * t);
+                    elapsed += Time.fixedDeltaTime;
+                    float t = Mathf.Clamp01(elapsed / duration);
 
-                // Interpolate each joint
+                    // Smooth interpolation using ease-in-out
+                    float smoothT = t * t * (3f - 2f * t);
+
+                    // Interpolate each joint
+                    for (
+                        int i = 0;
+                        i < controller.robotJoints.Length && i < targetJoints.Length;
+                        i++
+                    )
+                    {
+                        // Target joints are in radians, drive targets are in degrees
+                        float startDeg = startJoints[i];
+                        float targetDeg = targetJoints[i] * Mathf.Rad2Deg;
+                        float currentTarget = Mathf.Lerp(startDeg, targetDeg, smoothT);
+
+                        controller.jointDriveTargets[i] = currentTarget * Mathf.Deg2Rad;
+
+                        var joint = controller.robotJoints[i];
+                        if (joint != null)
+                        {
+                            var drive = joint.xDrive;
+                            drive.target = currentTarget;
+                            joint.xDrive = drive;
+                        }
+                    }
+
+                    yield return new WaitForFixedUpdate();
+                }
+
+                // Ensure final positions are exact
                 for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
                 {
-                    // Target joints are in radians, drive targets are in degrees
-                    float startDeg = startJoints[i];
-                    float targetDeg = targetJoints[i] * Mathf.Rad2Deg;
-                    float currentTarget = Mathf.Lerp(startDeg, targetDeg, smoothT);
-
-                    controller.jointDriveTargets[i] = currentTarget * Mathf.Deg2Rad;
+                    controller.jointDriveTargets[i] = targetJoints[i];
 
                     var joint = controller.robotJoints[i];
                     if (joint != null)
                     {
                         var drive = joint.xDrive;
-                        drive.target = currentTarget;
+                        drive.target = targetJoints[i] * Mathf.Rad2Deg;
                         joint.xDrive = drive;
                     }
                 }
 
-                yield return new WaitForFixedUpdate();
-            }
+                // FIX #5: Clear the target and mark as reached to allow IK to run again
+                controller.ClearTarget(); // This resets _targetTransform and _hasReachedTarget
 
-            // Ensure final positions are exact
-            for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
-            {
-                controller.jointDriveTargets[i] = targetJoints[i];
-
-                var joint = controller.robotJoints[i];
-                if (joint != null)
+                if (_verboseLogging)
                 {
-                    var drive = joint.xDrive;
-                    drive.target = targetJoints[i] * Mathf.Rad2Deg;
-                    joint.xDrive = drive;
+                    Debug.Log($"{_logPrefix} Return to start position completed for {robotId}");
                 }
+
+                // Send completion notification
+                SendCommandCompletion(robotId, "return_to_start_position", true, requestId);
             }
-
-            // CRITICAL: Clear the target and mark as reached to prevent IK from running
-            // Without this, FixedUpdate() continues to call PerformInverseKinematicsStep()
-            // which pulls the robot back to the old target position
-            controller.SetTargetReached(true);
-
-            if (_verboseLogging)
+            finally
             {
-                Debug.Log($"{_logPrefix} Return to start position completed for {robotId}");
+                // FIX #5: ALWAYS re-enable IK, even if something fails
+                controller.IsManuallyDriven = false;
             }
-
-            // Send completion notification
-            SendCommandCompletion(robotId, "return_to_start_position", true, requestId);
         }
 
         /// <summary>
@@ -2320,7 +2531,7 @@ namespace PythonCommunication
         }
 
         /// <summary>
-        /// Send command completion notification to Python via StatusServer
+        /// Send command completion notification to Python via CommandServer
         /// </summary>
         private void SendCommandCompletion(
             string robotId,
@@ -2428,7 +2639,10 @@ namespace PythonCommunication
 
             // Get current robot position
             Vector3 currentPosition = Vector3.zero;
-            if (_robotManager != null && _robotManager.RobotInstances.TryGetValue(robotId, out var robotInstance))
+            if (
+                _robotManager != null
+                && _robotManager.RobotInstances.TryGetValue(robotId, out var robotInstance)
+            )
             {
                 if (robotInstance.controller != null)
                 {
@@ -2436,12 +2650,17 @@ namespace PythonCommunication
                 }
                 else if (robotInstance.simpleController != null)
                 {
-                    currentPosition = robotInstance.simpleController.GetCurrentEndEffectorPosition();
+                    currentPosition =
+                        robotInstance.simpleController.GetCurrentEndEffectorPosition();
                 }
             }
 
             // Use coordination verifier
-            var result = _coordinationVerifier.VerifyMovement(robotId, targetPosition, currentPosition);
+            var result = _coordinationVerifier.VerifyMovement(
+                robotId,
+                targetPosition,
+                currentPosition
+            );
 
             // Log warnings if any
             if (_verboseLogging && result.warnings != null && result.warnings.Count > 0)
@@ -2457,11 +2676,15 @@ namespace PythonCommunication
             {
                 if (result.isSafe)
                 {
-                    Debug.Log($"{_logPrefix} [Verification] Movement safe for {robotId} using {_coordinationVerifier.VerifierName}: {result.reason}");
+                    Debug.Log(
+                        $"{_logPrefix} [Verification] Movement safe for {robotId} using {_coordinationVerifier.VerifierName}: {result.reason}"
+                    );
                 }
                 else
                 {
-                    Debug.LogWarning($"{_logPrefix} [Verification] Movement blocked for {robotId} using {_coordinationVerifier.VerifierName}: {result.reason}");
+                    Debug.LogWarning(
+                        $"{_logPrefix} [Verification] Movement blocked for {robotId} using {_coordinationVerifier.VerifierName}: {result.reason}"
+                    );
                 }
             }
 
@@ -2494,10 +2717,43 @@ namespace PythonCommunication
             if (string.IsNullOrEmpty(objectId))
                 return null;
 
+            // FIX #3: Check cache first
+            if (_objectCache.TryGetValue(objectId, out GameObject cachedObj))
+            {
+                if (cachedObj != null) // Object still exists in scene
+                {
+                    if (_verboseLogging)
+                        Debug.Log($"{_logPrefix} Found object '{objectId}' via cache");
+                    return cachedObj;
+                }
+                else
+                {
+                    // Object was destroyed, remove from cache
+                    _objectCache.Remove(objectId);
+                }
+            }
+
+            // FIX #3: Periodically clear stale entries (every 5 seconds)
+            if (Time.time - _lastCacheRefreshTime > OBJECT_CACHE_VALIDITY)
+            {
+                var deadKeys = new System.Collections.Generic.List<string>();
+                foreach (var kvp in _objectCache)
+                {
+                    if (kvp.Value == null)
+                        deadKeys.Add(kvp.Key);
+                }
+                foreach (var key in deadKeys)
+                {
+                    _objectCache.Remove(key);
+                }
+                _lastCacheRefreshTime = Time.time;
+            }
+
             // Strategy 1: Exact match
             GameObject obj = GameObject.Find(objectId);
             if (obj != null)
             {
+                _objectCache[objectId] = obj; // FIX #3: Cache it
                 if (_verboseLogging)
                     Debug.Log($"{_logPrefix} Found object '{objectId}' via exact match");
                 return obj;
@@ -2509,6 +2765,7 @@ namespace PythonCommunication
             {
                 if (candidate.name.Equals(objectId, System.StringComparison.OrdinalIgnoreCase))
                 {
+                    _objectCache[objectId] = candidate; // FIX #3: Cache it
                     if (_verboseLogging)
                         Debug.Log(
                             $"{_logPrefix} Found object '{candidate.name}' via case-insensitive match for '{objectId}'"
@@ -2525,6 +2782,7 @@ namespace PythonCommunication
                 obj = GameObject.Find(camelCase);
                 if (obj != null)
                 {
+                    _objectCache[objectId] = obj; // FIX #3: Cache it
                     if (_verboseLogging)
                         Debug.Log(
                             $"{_logPrefix} Found object '{camelCase}' via snake_case->camelCase conversion from '{objectId}'"
@@ -2537,6 +2795,7 @@ namespace PythonCommunication
                 {
                     if (candidate.name.Equals(camelCase, System.StringComparison.OrdinalIgnoreCase))
                     {
+                        _objectCache[objectId] = candidate; // FIX #3: Cache it
                         if (_verboseLogging)
                             Debug.Log(
                                 $"{_logPrefix} Found object '{candidate.name}' via camelCase case-insensitive match for '{objectId}'"
@@ -2553,6 +2812,7 @@ namespace PythonCommunication
                     candidate.name.IndexOf(objectId, System.StringComparison.OrdinalIgnoreCase) >= 0
                 )
                 {
+                    _objectCache[objectId] = candidate; // FIX #3: Cache it
                     if (_verboseLogging)
                         Debug.Log(
                             $"{_logPrefix} Found object '{candidate.name}' via partial match for '{objectId}'"
@@ -2562,6 +2822,16 @@ namespace PythonCommunication
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// FIX #4: Convert TargetPosition to Vector3.
+        /// </summary>
+        private Vector3 TargetPositionToVector3(TargetPosition target)
+        {
+            if (target == null)
+                return Vector3.zero;
+            return new Vector3(target.x, target.y, target.z);
         }
 
         /// <summary>

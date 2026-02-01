@@ -21,6 +21,8 @@ namespace Tests.PlayMode
         private Transform _mockIKFrame;
         private Transform _mockEndEffector;
 
+        private IKConfig _ikConfig;
+
         [SetUp]
         public void Setup()
         {
@@ -34,6 +36,10 @@ namespace Tests.PlayMode
             _testConfig = ScriptableObject.CreateInstance<GraspConfig>();
             _testConfig.InitializeDefaultConfig();
 
+            // Create IK configuration
+            _ikConfig = ScriptableObject.CreateInstance<IKConfig>();
+            _ikConfig.dampingFactor = 0.1f;
+
             // Create mock robot components
             SetupMockRobotComponents();
         }
@@ -46,6 +52,9 @@ namespace Tests.PlayMode
 
             if (_testConfig != null)
                 Object.Destroy(_testConfig);
+
+            if (_ikConfig != null)
+                Object.Destroy(_ikConfig);
 
             CleanupMockRobotComponents();
         }
@@ -185,7 +194,7 @@ namespace Tests.PlayMode
         [Test]
         public void IKFilter_FiltersUnreachablePoses()
         {
-            var ikFilter = new GraspIKFilter(_testConfig, _mockJoints, _mockIKFrame, _mockEndEffector);
+            var ikFilter = new GraspIKFilter(_testConfig, _mockJoints, _mockIKFrame, _mockEndEffector, _ikConfig);
             var generator = new GraspCandidateGenerator(_testConfig);
 
             // Generate candidates with some intentionally unreachable
@@ -211,7 +220,7 @@ namespace Tests.PlayMode
         [Test]
         public void IKFilter_SetsIKValidatedFlag()
         {
-            var ikFilter = new GraspIKFilter(_testConfig, _mockJoints, _mockIKFrame, _mockEndEffector);
+            var ikFilter = new GraspIKFilter(_testConfig, _mockJoints, _mockIKFrame, _mockEndEffector, _ikConfig);
             var generator = new GraspCandidateGenerator(_testConfig);
             var candidates = generator.GenerateCandidates(_testObject, _mockEndEffector.position);
 
@@ -293,7 +302,8 @@ namespace Tests.PlayMode
                 _testConfig,
                 _mockJoints,
                 _mockIKFrame,
-                _mockEndEffector
+                _mockEndEffector,
+                _ikConfig
             );
 
             var options = GraspOptions.Advanced;
@@ -309,7 +319,8 @@ namespace Tests.PlayMode
                 _testConfig,
                 _mockJoints,
                 _mockIKFrame,
-                _mockEndEffector
+                _mockEndEffector,
+                _ikConfig
             );
 
             var options = GraspOptions.Advanced;
@@ -335,7 +346,8 @@ namespace Tests.PlayMode
                 _testConfig,
                 _mockJoints,
                 _mockIKFrame,
-                _mockEndEffector
+                _mockEndEffector,
+                _ikConfig
             );
 
             var result = pipeline.PlanGrasp(unreachableObject, _mockEndEffector.position, GraspOptions.Advanced);
@@ -352,7 +364,8 @@ namespace Tests.PlayMode
                 _testConfig,
                 _mockJoints,
                 _mockIKFrame,
-                _mockEndEffector
+                _mockEndEffector,
+                _ikConfig
             );
 
             var startTime = Time.realtimeSinceStartup;

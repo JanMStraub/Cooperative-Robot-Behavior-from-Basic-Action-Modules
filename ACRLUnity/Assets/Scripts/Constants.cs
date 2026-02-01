@@ -1,10 +1,9 @@
-using UnityEngine;
-
 namespace Core
 {
     /// <summary>
-    /// Centralized constants for the ACRL project.
-    /// Eliminates magic numbers and provides single source of truth for configuration values.
+    /// Centralized system-level constants for the ACRL project.
+    /// Robot-specific parameters have been moved to ScriptableObject configs for runtime tuning.
+    /// This file contains only infrastructure constants that should not change during runtime.
     /// </summary>
     public static class RobotConstants
     {
@@ -15,96 +14,10 @@ namespace Core
         public const int JACOBIAN_DIMENSIONS = 6;
 
         /// <summary>
-        /// Default damping factor for pseudo-inverse stability in IK calculations
-        /// Moderate damping for stable IK without over-regularization
-        /// </summary>
-        public const float DEFAULT_DAMPING_FACTOR = 0.2f;
-
-        /// <summary>
-        /// Default convergence threshold for IK target reached detection (meters)
-        /// Set to 0.015m (15mm) for reliable physics-based grasping
-        /// Phase 2: Grasp Reliability - relaxed from 2mm to 15mm to accommodate ArticulationBody
-        /// physics constraints and prevent Zeno's paradox with over-damping
-        /// 15mm (1.5cm) is sufficient precision for grasping with gripper fingers
-        /// </summary>
-        public const float DEFAULT_CONVERGENCE_THRESHOLD = 0.02f;
-
-        /// <summary>
-        /// Default maximum joint step size per iteration (radians)
-        /// Moderate steps for smooth, controlled motion (balanced between 0.02 and 0.2)
-        /// </summary>
-        public const float DEFAULT_MAX_JOINT_STEP_RAD = 0.2f;
-
-        /// <summary>
         /// Movement detection threshold (meters)
         /// Robot is considered moving if distance to target exceeds this value (1cm)
         /// </summary>
         public const float MOVEMENT_THRESHOLD = 0.01f;
-
-        /// <summary>
-        /// Default orientation convergence threshold (degrees)
-        /// Target orientation is considered reached if angle error is below this value
-        /// </summary>
-        public const float DEFAULT_ORIENTATION_THRESHOLD_DEGREES = 10f;
-
-        /// <summary>
-        /// Distance at which orientation ramping starts (meters)
-        /// Robot begins tracking target orientation when closer than this distance
-        /// Uses smooth quadratic ramping with position-error scaling to prevent oscillation
-        /// </summary>
-        public const float ORIENTATION_RAMP_START_DISTANCE = 0.30f;
-
-        /// <summary>
-        /// Default timeout for grasp operations (seconds)
-        /// Prevents infinite waiting when grasp target is unreachable
-        /// Increased to 30s to accommodate slow IK convergence for multi-waypoint grasps
-        /// </summary>
-        public const float DEFAULT_GRASP_TIMEOUT_SECONDS = 30f;
-
-        /// <summary>
-        /// Default timeout for movement operations (seconds)
-        /// Prevents infinite waiting when movement target is unreachable
-        /// </summary>
-        public const float DEFAULT_MOVEMENT_TIMEOUT_SECONDS = 15f;
-
-        /// <summary>
-        /// Grasp convergence multiplier (relative to DEFAULT_CONVERGENCE_THRESHOLD)
-        /// Relaxed threshold for grasp precision (0.33 * 0.015m = 5mm instead of 15mm)
-        /// </summary>
-        public const float GRASP_CONVERGENCE_MULTIPLIER = 0.33f;
-
-        /// <summary>
-        /// Pre-grasp convergence multiplier (relative to DEFAULT_CONVERGENCE_THRESHOLD)
-        /// Relaxed threshold for pre-grasp waypoints (5.0 * 0.002m = 10mm)
-        /// Pre-grasp is just a safe approach position before the final grasp
-        /// The actual precision happens at the grasp waypoint
-        /// 10mm tolerance is acceptable for waypoint positioning
-        /// </summary>
-        public const float PREGRASP_CONVERGENCE_MULTIPLIER = 2.0f;
-
-        // Target Finding
-        /// <summary>
-        /// Radius for searching for real objects when setting target by coordinate (meters)
-        /// </summary>
-        public const float OBJECT_FINDING_RADIUS = 0.15f;
-
-        /// <summary>
-        /// Distance threshold for matching coordinate to real object (meters, 10cm)
-        /// If found object is within this distance, use it instead of creating temp target
-        /// </summary>
-        public const float OBJECT_DISTANCE_THRESHOLD = 0.1f;
-
-
-        // Configuration
-        /// <summary>
-        /// Maximum robot velocity (m/s) - safety limit for trajectory controller
-        /// </summary>
-        public const float MAX_VELOCITY = 0.2f; // m/s (safety limit)
-
-        /// <summary>
-        /// Maximum robot acceleration (m/s²) - safety limit for trajectory controller
-        /// </summary>
-        public const float MAX_ACCELERATION = 0.7f; // m/s² (safety limit)
 
         // GameObject Naming
         /// <summary>
@@ -208,39 +121,14 @@ namespace Core
         public const int LLM_RESULTS_PORT = 5010;
 
         /// <summary>
-        /// RAG server port (semantic search for robot operations)
-        /// </summary>
-        public const int RAG_SERVER_PORT = 5011;
-
-        /// <summary>
-        /// Status server port (bidirectional robot status queries)
-        /// </summary>
-        public const int STATUS_SERVER_PORT = 5012;
-
-        /// <summary>
         /// Sequence server port (multi-command sequence execution) - primary communication port
         /// </summary>
         public const int SEQUENCE_SERVER_PORT = 5013;
 
         /// <summary>
-        /// Default timeout for Python processes (seconds)
+        /// World state streaming port (one-way broadcast of robot/object states)
         /// </summary>
-        public const int DEFAULT_PYTHON_TIMEOUT = 300;
-
-        /// <summary>
-        /// Maximum concurrent Python processes
-        /// </summary>
-        public const int MAX_CONCURRENT_PROCESSES = 3;
-
-        /// <summary>
-        /// Output buffer size for process streaming (bytes)
-        /// </summary>
-        public const int OUTPUT_BUFFER_SIZE = 4096;
-
-        /// <summary>
-        /// Thread join timeout when stopping receive threads (milliseconds)
-        /// </summary>
-        public const int THREAD_JOIN_TIMEOUT_MS = 1000;
+        public const int WORLD_STATE_PORT = 5014;
 
         /// <summary>
         /// Maximum JSON message size (10MB)
@@ -251,27 +139,10 @@ namespace Core
         /// Auto-reconnect interval after connection loss (seconds)
         /// </summary>
         public const float RECONNECT_INTERVAL = 2f;
-    }
 
-    /// <summary>
-    /// Constants for gripper control
-    /// </summary>
-    public static class GripperConstants
-    {
         /// <summary>
-        /// Default gripper smooth time for SmoothDamp (seconds)
+        /// Thread join timeout when stopping receive threads (milliseconds)
         /// </summary>
-        public const float DEFAULT_SMOOTH_TIME = 0.5f;
-    }
-
-    /// <summary>
-    /// Constants for grasp planning and IK validation
-    /// </summary>
-    public static class GraspPlanningConstants
-    {
-        /// <summary>
-        /// Enable debug logging for grasp IK filter (disable in production for performance)
-        /// </summary>
-        public const bool ENABLE_GRASP_IK_DEBUG_LOGGING = false;
+        public const int THREAD_JOIN_TIMEOUT_MS = 1000;
     }
 }

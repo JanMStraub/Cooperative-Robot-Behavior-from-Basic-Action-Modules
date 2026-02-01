@@ -130,8 +130,8 @@ def return_to_start_position(
                 "COMMUNICATION_FAILED",
                 "Failed to send command to Unity - no clients connected",
                 [
-                    "Ensure Unity is running with LLMResultsReceiver active",
-                    "Verify ResultsServer is running (port 5010)",
+                    "Ensure Unity is running with UnifiedPythonReceiver active",
+                    "Verify CommandServer is running (port 5010)",
                     "Check Unity console for connection errors",
                 ],
             )
@@ -222,8 +222,8 @@ def create_return_to_start_position_operation() -> BasicOperation:
             "Robot arm is initialized and registered with RobotManager",
             "Start joint targets were saved during robot registration",
             "Robot is not currently executing another motion command",
-            "Unity is running with LLMResultsReceiver active",
-            "ResultsServer is running on port 5010",
+            "Unity is running with UnifiedPythonReceiver active",
+            "CommandServer is running on port 5010",
         ],
         postconditions=[
             "Command has been sent to Unity via TCP",
@@ -238,7 +238,7 @@ def create_return_to_start_position_operation() -> BasicOperation:
             "Start joint targets not saved (robot not properly registered)",
             "Joint limits exceeded during movement",
             "Collision detected during return movement",
-            "Communication failed - Unity not connected to ResultsServer",
+            "Communication failed - Unity not connected to CommandServer",
             "Robot ID not found in RobotManager",
         ],
         required_operations=[],

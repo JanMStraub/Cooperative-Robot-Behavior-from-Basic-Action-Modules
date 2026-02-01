@@ -206,10 +206,10 @@ def move_to_coordinate(
                 "COMMUNICATION_FAILED",
                 "Failed to send command to Unity - no clients connected",
                 [
-                    "Ensure Unity is running with LLMResultsReceiver active",
-                    "Verify ResultsServer is running (port 5006)",
+                    "Ensure Unity is running with UnifiedPythonReceiver active",
+                    "Verify CommandServer is running (port 5010)",
                     "Check Unity console for connection errors",
-                    "Restart ResultsServer: python -m LLMCommunication.orchestrators.RunAnalyzer",
+                    "Restart backend: python -m orchestrators.RunRobotController",
                 ],
             )
 
@@ -329,8 +329,8 @@ def create_move_to_coordinate_operation() -> BasicOperation:
             "Target coordinate is within robot's reachable workspace",
             "No obstacles blocking path to target",
             "Robot is not currently executing another motion command",
-            "Unity is running with LLMResultsReceiver active",
-            "ResultsServer is running on port 5006",
+            "Unity is running with UnifiedPythonReceiver active",
+            "CommandServer is running on port 5010",
         ],
         postconditions=[
             "Command has been sent to Unity via TCP",
@@ -346,7 +346,7 @@ def create_move_to_coordinate_operation() -> BasicOperation:
             "Collision detected during movement - motion stopped for safety",
             "Joint limits would be exceeded",
             "Timeout - movement taking too long, possible obstruction",
-            "Communication failed - Unity not connected to ResultsServer",
+            "Communication failed - Unity not connected to CommandServer",
             "Robot ID not found in RobotManager",
         ],
         relationships=OperationRelationship(

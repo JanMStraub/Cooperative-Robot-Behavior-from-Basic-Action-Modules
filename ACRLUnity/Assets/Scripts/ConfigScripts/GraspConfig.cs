@@ -1,4 +1,3 @@
-using Robotics;
 using Robotics.Grasp;
 using UnityEngine;
 
@@ -248,6 +247,83 @@ namespace Configuration
         {
             float avgSize = (objectSize.x + objectSize.y + objectSize.z) / 3f;
             return avgSize * retreatDistanceFactor;
+        }
+
+        /// <summary>
+        /// Validate configuration values to ensure consistency.
+        /// </summary>
+        private void OnValidate()
+        {
+            // Candidate generation
+            candidatesPerApproach = Mathf.Clamp(candidatesPerApproach, 1, 20);
+
+            // Approach distances
+            minPreGraspDistance = Mathf.Max(0.01f, minPreGraspDistance);
+            maxPreGraspDistance = Mathf.Max(0.05f, maxPreGraspDistance);
+            // Ensure min < max
+            if (minPreGraspDistance >= maxPreGraspDistance)
+            {
+                maxPreGraspDistance = minPreGraspDistance + 0.05f;
+            }
+            preGraspDistanceFactor = Mathf.Clamp(preGraspDistanceFactor, 1.0f, 3.0f);
+
+            // Retreat settings
+            retreatDistanceFactor = Mathf.Clamp(retreatDistanceFactor, 1.0f, 5.0f);
+
+            // Gripper settings
+            targetGraspDepth = Mathf.Clamp01(targetGraspDepth);
+
+            // Scoring weights
+            ikScoreWeight = Mathf.Clamp(ikScoreWeight, 0f, 2f);
+            approachScoreWeight = Mathf.Clamp(approachScoreWeight, 0f, 2f);
+            depthScoreWeight = Mathf.Clamp(depthScoreWeight, 0f, 2f);
+            stabilityScoreWeight = Mathf.Clamp(stabilityScoreWeight, 0f, 2f);
+            antipodalScoreWeight = Mathf.Clamp(antipodalScoreWeight, 0f, 2f);
+
+            // Collision checking
+            collisionCheckWaypoints = Mathf.Clamp(collisionCheckWaypoints, 3, 20);
+            collisionCheckRadius = Mathf.Clamp(collisionCheckRadius, 0.01f, 0.1f);
+
+            // IK validation
+            maxIKValidationIterations = Mathf.Clamp(maxIKValidationIterations, 5, 500);
+            ikValidationThreshold = Mathf.Clamp(ikValidationThreshold, 0.001f, 0.1f);
+            ikRotationTolerance = Mathf.Clamp(ikRotationTolerance, 5f, 45f);
+            maxJointStepPerIteration = Mathf.Clamp(maxJointStepPerIteration, 0.05f, 0.5f);
+            maxReachDistance = Mathf.Clamp(maxReachDistance, 0.3f, 1.0f);
+
+            // Ensure IK threshold is reasonable compared to max reach
+            if (ikValidationThreshold >= maxReachDistance)
+            {
+                ikValidationThreshold = maxReachDistance * 0.1f;
+            }
+
+            // Candidate variation ranges
+            angleVariationRange = Mathf.Max(0f, angleVariationRange);
+            distanceVariationRange = Mathf.Max(0f, distanceVariationRange);
+            depthVariationRange = Mathf.Max(0f, depthVariationRange);
+
+            // Performance
+            maxPipelineTimeMs = Mathf.Clamp(maxPipelineTimeMs, 50, 1000);
+
+            // Ensure at least one approach is enabled
+            if (enabledApproaches == null || enabledApproaches.Length == 0)
+            {
+                enabledApproaches = new GraspApproachSettings[]
+                {
+                    new GraspApproachSettings(GraspApproach.Top, true, 1.2f),
+                    new GraspApproachSettings(GraspApproach.Front, true, 1.0f),
+                    new GraspApproachSettings(GraspApproach.Side, true, 0.8f),
+                };
+            }
+
+            // Clamp approach weights
+            foreach (var approach in enabledApproaches)
+            {
+                if (approach != null)
+                {
+                    approach.preferenceWeight = Mathf.Clamp(approach.preferenceWeight, 0f, 2f);
+                }
+            }
         }
     }
 }

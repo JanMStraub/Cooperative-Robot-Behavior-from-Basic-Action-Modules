@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Configuration;
 using UnityEngine;
 
 namespace Robotics
@@ -35,6 +36,11 @@ namespace Robotics
         [Tooltip("Right finger ArticulationBody for force sensing")]
         public ArticulationBody rightFinger;
 
+        [Header("Configuration")]
+        [SerializeField]
+        [Tooltip("Gripper configuration (force thresholds, contact duration, etc.)")]
+        private GripperConfig _gripperConfig;
+
         [Header("Contact Tracking")]
         [Tooltip("Enable debug logging for contact events")]
         public bool debugLogging = false;
@@ -47,16 +53,23 @@ namespace Robotics
         // Unity physics forces can spike to infinity on impact
         // Must use moving average over multiple frames for stable readings
         private Queue<float> _forceHistory = new Queue<float>();
-        private const int FORCE_WINDOW_SIZE = 5; // Average over 5 physics frames
-        private const float MIN_FORCE_THRESHOLD = 0.1f; // Minimum force to register
 
         // Contact duration tracking (helps distinguish stable grasp from collision)
         private Dictionary<GameObject, float> _contactStartTime =
             new Dictionary<GameObject, float>();
-        private const float MIN_CONTACT_DURATION = 0.1f; // Must maintain contact for 100ms
 
         void Start()
         {
+            // Load default config if not assigned
+            if (_gripperConfig == null)
+            {
+                _gripperConfig = Resources.Load<GripperConfig>("Configuration/DefaultGripperConfig");
+            }
+            if (_gripperConfig == null)
+            {
+                _gripperConfig = ScriptableObject.CreateInstance<GripperConfig>();
+            }
+
             // Validate configuration
             if (leftFinger == null || rightFinger == null)
             {
@@ -78,7 +91,7 @@ namespace Robotics
             {
                 Debug.Log(
                     "[GripperContactSensor] Initialized with "
-                        + $"{colliders.Length} colliders, force window size={FORCE_WINDOW_SIZE}"
+                        + $"{colliders.Length} colliders, force window size={_gripperConfig.forceWindowSize}"
                 );
             }
         }
@@ -115,7 +128,8 @@ namespace Robotics
                 if (_contactStartTime.TryGetValue(targetObject, out float startTime))
                 {
                     float duration = Time.time - startTime;
-                    return duration >= MIN_CONTACT_DURATION;
+                    float minDuration = _gripperConfig != null ? _gripperConfig.minContactDuration : 0.1f;
+                    return duration >= minDuration;
                 }
             }
 
@@ -185,11 +199,13 @@ namespace Robotics
         /// </summary>
         private void UpdateForceHistory(float instantaneousForce)
         {
+            int windowSize = _gripperConfig != null ? _gripperConfig.forceWindowSize : 5;
+
             // Add new force reading
             _forceHistory.Enqueue(instantaneousForce);
 
             // Maintain window size
-            if (_forceHistory.Count > FORCE_WINDOW_SIZE)
+            if (_forceHistory.Count > windowSize)
             {
                 _forceHistory.Dequeue();
             }

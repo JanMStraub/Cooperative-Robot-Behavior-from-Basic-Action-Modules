@@ -27,13 +27,13 @@ namespace Robotics.Grasp
         /// <param name="joints">Robot joint articulation bodies</param>
         /// <param name="ikReferenceFrame">IK coordinate frame</param>
         /// <param name="endEffector">End effector transform</param>
-        /// <param name="dampingFactor">IK solver damping factor</param>
+        /// <param name="ikConfig">IK configuration (contains damping factor and other IK parameters)</param>
         public GraspPlanningPipeline(
             GraspConfig config,
             ArticulationBody[] joints,
             Transform ikReferenceFrame,
             Transform endEffector,
-            float dampingFactor = 0.1f
+            IKConfig ikConfig
         )
         {
             _config = config;
@@ -44,8 +44,8 @@ namespace Robotics.Grasp
                 joints,
                 ikReferenceFrame,
                 endEffector,
-                dampingFactor,
-                Core.GraspPlanningConstants.ENABLE_GRASP_IK_DEBUG_LOGGING,
+                ikConfig,
+                enableDebugLogging: false,
                 enableInitializationValidation: true
             );
             _collisionFilter = new GraspCollisionFilter(config);

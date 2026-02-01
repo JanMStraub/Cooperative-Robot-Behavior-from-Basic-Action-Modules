@@ -86,7 +86,7 @@ namespace Robotics
 
                 // Feedforward terms
                 _cachedTargetPosition = waypoint.position;
-                _cachedTargetVelocity = direction * Mathf.Clamp(velocity, 0f, RobotConstants.MAX_VELOCITY);
+                _cachedTargetVelocity = direction * Mathf.Clamp(velocity, 0f, 0.2f); // 0.2 m/s max velocity
 
                 // Acceleration from velocity profile (for feedforward control)
                 _cachedTargetAcceleration = GetAccelerationFromProfile(
@@ -239,7 +239,8 @@ namespace Robotics
             // else: cruise phase, acceleration = 0
 
             // Clamp acceleration
-            acceleration = Mathf.Clamp(acceleration, -RobotConstants.MAX_ACCELERATION, RobotConstants.MAX_ACCELERATION);
+            const float maxAcceleration = 0.7f; // m/s²
+            acceleration = Mathf.Clamp(acceleration, -maxAcceleration, maxAcceleration);
 
             // Return scalar acceleration (direction handled by velocity)
             return Vector3.zero; // Acceleration is already included in velocity calculations

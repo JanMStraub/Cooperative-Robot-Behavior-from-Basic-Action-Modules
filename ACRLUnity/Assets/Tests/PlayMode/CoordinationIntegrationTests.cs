@@ -200,7 +200,9 @@ namespace Tests.PlayMode
         public void Collaborative_WithCollisionAvoidance_BlocksConflictingRobots()
         {
             // Arrange
-            var strategy = new CollaborativeStrategy(minSafeSeparation: 0.3f);
+            var config = ScriptableObject.CreateInstance<CoordinationConfig>();
+            config.minSafeSeparation = 0.3f;
+            var strategy = new CollaborativeStrategy(config);
             var controllers = new[] { _controller1, _controller2 };
             var targetReached = new Dictionary<string, bool>();
 
@@ -222,7 +224,9 @@ namespace Tests.PlayMode
         public void Collaborative_NoConflict_AllowsBothRobots()
         {
             // Arrange
-            var strategy = new CollaborativeStrategy(minSafeSeparation: 0.2f);
+            var config = ScriptableObject.CreateInstance<CoordinationConfig>();
+            config.minSafeSeparation = 0.2f;
+            var strategy = new CollaborativeStrategy(config);
             var controllers = new[] { _controller1, _controller2 };
             var targetReached = new Dictionary<string, bool>();
 
@@ -339,7 +343,9 @@ namespace Tests.PlayMode
         public void ThreeRobots_Collaborative_IndependentRegions_AllActive()
         {
             // Arrange
-            var strategy = new CollaborativeStrategy(minSafeSeparation: 0.2f);
+            var config = ScriptableObject.CreateInstance<CoordinationConfig>();
+            config.minSafeSeparation = 0.2f;
+            var strategy = new CollaborativeStrategy(config);
             var controllers = new[] { _controller1, _controller2, _controller3 };
             var targetReached = new Dictionary<string, bool>();
 
@@ -361,7 +367,9 @@ namespace Tests.PlayMode
         public void ThreeRobots_Collaborative_TwoConflicting_OneIsolated()
         {
             // Arrange
-            var strategy = new CollaborativeStrategy(minSafeSeparation: 0.3f);
+            var config = ScriptableObject.CreateInstance<CoordinationConfig>();
+            config.minSafeSeparation = 0.3f;
+            var strategy = new CollaborativeStrategy(config);
             var controllers = new[] { _controller1, _controller2, _controller3 };
             var targetReached = new Dictionary<string, bool>();
 
@@ -517,8 +525,13 @@ namespace Tests.PlayMode
         public void MinSafeSeparation_ConfigurablePerStrategy()
         {
             // Arrange
-            var strategy1 = new CollaborativeStrategy(minSafeSeparation: 0.1f);
-            var strategy2 = new CollaborativeStrategy(minSafeSeparation: 0.5f);
+            var config1 = ScriptableObject.CreateInstance<CoordinationConfig>();
+            config1.minSafeSeparation = 0.1f;
+            var strategy1 = new CollaborativeStrategy(config1);
+
+            var config2 = ScriptableObject.CreateInstance<CoordinationConfig>();
+            config2.minSafeSeparation = 0.5f;
+            var strategy2 = new CollaborativeStrategy(config2);
             var controllers = new[] { _controller1, _controller2 };
             var targetReached = new Dictionary<string, bool>();
 

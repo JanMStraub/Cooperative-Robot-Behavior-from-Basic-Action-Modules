@@ -7,12 +7,12 @@ and executes them sequentially with completion tracking.
 
 Port: 5013 (SEQUENCE_SERVER_PORT)
 
-Protocol:
+Protocol V2:
     Query (Unity → Python):
-        [request_id:4][command_len:4][command_text:N][robot_id_len:4][robot_id:N][camera_id_len:4][camera_id:N][auto_execute:1]
+        [type:1][request_id:4][command_len:4][command_text:N][robot_id_len:4][robot_id:N][camera_id_len:4][camera_id:N][auto_execute:1]
 
     Response (Python → Unity):
-        [request_id:4][response_len:4][response_json:N]
+        [type:1][request_id:4][response_len:4][response_json:N]
 """
 
 import socket
@@ -25,11 +25,13 @@ from typing import Dict, Any, Optional, Union, TYPE_CHECKING
 try:
     from ..core.TCPServerBase import TCPServerBase, ServerConfig
     from ..core.LoggingSetup import get_logger
+    from ..core.UnityProtocol import MessageType
 
     # NOTE: CommandParser and SequenceExecutor imported lazily in initialize() to avoid circular dependency
 except ImportError:
     from core.TCPServerBase import TCPServerBase, ServerConfig
     from core.LoggingSetup import get_logger
+    from core.UnityProtocol import MessageType
 
     # NOTE: CommandParser and SequenceExecutor imported lazily in initialize() to avoid circular dependency
 
@@ -245,17 +247,26 @@ class SequenceServer(TCPServerBase):
 
         while self._running:
             try:
-                # Read request_id (4 bytes)
-                request_id_bytes = self._recv_exact(client, 4)
-                if not request_id_bytes:
+                # Protocol V2: Read header (type:1 + request_id:4)
+                # Note: Uses little-endian per UnityProtocol.py specification
+                header_bytes = self._recv_exact(client, 5)
+                if not header_bytes:
                     break
-                request_id = struct.unpack("!I", request_id_bytes)[0]
 
-                # Read command length (4 bytes)
+                msg_type = header_bytes[0]
+                request_id = struct.unpack("<I", header_bytes[1:5])[0]
+
+                # Validate message type
+                if msg_type != MessageType.SEQUENCE_QUERY:
+                    logger.error(f"Invalid message type: {msg_type} (expected {MessageType.SEQUENCE_QUERY})")
+                    self._send_error(client, request_id, f"Invalid message type: {msg_type}")
+                    continue
+
+                # Read command length (4 bytes, little-endian)
                 cmd_len_bytes = self._recv_exact(client, 4)
                 if not cmd_len_bytes:
                     break
-                cmd_len = struct.unpack("!I", cmd_len_bytes)[0]
+                cmd_len = struct.unpack("<I", cmd_len_bytes)[0]
 
                 if cmd_len > MAX_STRING_LENGTH * 10:  # Allow longer commands
                     logger.error(f"Command too long: {cmd_len}")
@@ -268,11 +279,11 @@ class SequenceServer(TCPServerBase):
                     break
                 command_text = command_bytes.decode("utf-8")
 
-                # Read robot_id length (4 bytes)
+                # Read robot_id length (4 bytes, little-endian)
                 robot_id_len_bytes = self._recv_exact(client, 4)
                 if not robot_id_len_bytes:
                     break
-                robot_id_len = struct.unpack("!I", robot_id_len_bytes)[0]
+                robot_id_len = struct.unpack("<I", robot_id_len_bytes)[0]
 
                 # Read robot_id
                 robot_id = "Robot1"
@@ -281,11 +292,11 @@ class SequenceServer(TCPServerBase):
                     if robot_id_bytes:
                         robot_id = robot_id_bytes.decode("utf-8")
 
-                # Read camera_id length (4 bytes)
+                # Read camera_id length (4 bytes, little-endian)
                 camera_id_len_bytes = self._recv_exact(client, 4)
                 if not camera_id_len_bytes:
                     break
-                camera_id_len = struct.unpack("!I", camera_id_len_bytes)[0]
+                camera_id_len = struct.unpack("<I", camera_id_len_bytes)[0]
 
                 # Read camera_id
                 camera_id = "TableStereoCamera"
@@ -357,13 +368,18 @@ class SequenceServer(TCPServerBase):
             result: Result dictionary to send
         """
         try:
+            # Add request_id to result for Protocol V2 correlation
+            result["request_id"] = request_id
+
             # Encode result as JSON
             result_json = json.dumps(result).encode("utf-8")
 
-            # Build response: [request_id:4][result_len:4][result_json:N]
-            response = struct.pack("!I", request_id)
-            response += struct.pack("!I", len(result_json))
-            response += result_json
+            # Build response (Protocol V2): [type:1][request_id:4][result_len:4][result_json:N]
+            # Note: Uses little-endian per UnityProtocol.py specification
+            response = struct.pack("B", MessageType.RESULT)  # type (1 byte)
+            response += struct.pack("<I", request_id)  # request_id (4 bytes, little-endian)
+            response += struct.pack("<I", len(result_json))  # json_len (4 bytes, little-endian)
+            response += result_json  # json data
 
             client.sendall(response)
             logger.debug(f"Sent response for request {request_id}")

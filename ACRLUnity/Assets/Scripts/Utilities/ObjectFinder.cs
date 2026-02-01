@@ -5,42 +5,57 @@ using UnityEngine;
 
 namespace Utilities
 {
-    /// <summary>
-    /// Utility class for finding GameObjects within spatial proximity of a target position.
-    /// Uses Physics.OverlapSphere for efficient collision-based queries.
-    /// </summary>
     public class ObjectFinder : MonoBehaviour
     {
         public static ObjectFinder Instance { get; private set; }
 
         [Header("Search Settings")]
         [SerializeField]
-        [Tooltip("Default search radius in meters")]
         private float _defaultSearchRadius = 2.0f;
 
         [SerializeField]
-        [Tooltip("Layer mask for filtering searchable objects")]
-        private LayerMask _searchLayerMask = ~0; // All layers by default
+        [Tooltip("Layers to include in search. Exclude floor/walls to avoid noise")]
+        private LayerMask _searchLayerMask = ~0;
 
         [SerializeField]
-        [Tooltip("Skip objects smaller than this threshold")]
         private float _minObjectSize = 0.01f;
 
         [SerializeField]
-        [Tooltip("Skip robot parts in search results")]
         private bool _skipRobotParts = true;
+
+        [SerializeField]
+        [Tooltip("Skip objects tagged as 'Ground' or 'Floor' to avoid detecting terrain")]
+        private bool _skipGroundObjects = true;
+
+        [SerializeField]
+        [Tooltip(
+            "Maximum mass for graspable objects (kg). Objects heavier than this are too heavy to grasp"
+        )]
+        private float _maxGraspableMass = 5.0f;
+
+        [Header("Performance Settings")]
+        [SerializeField]
+        [Tooltip(
+            "Enable caching for robot part detection. Disable if you spawn/destroy many objects frequently"
+        )]
+        private bool _enableCaching = true;
+
+        [SerializeField]
+        [Tooltip("Interval in seconds to clean up dead cache entries (0 = never)")]
+        private float _cacheCleanupInterval = 60f;
 
         private const string _logPrefix = "[OBJECT_FINDER]";
 
-        /// <summary>
-        /// Unity Awake callback - implements singleton pattern
-        /// </summary>
+        private Dictionary<GameObject, bool> _robotPartCache = new Dictionary<GameObject, bool>();
+        private float _lastCacheCleanupTime = 0f;
+
         private void Awake()
         {
             if (Instance == null)
             {
                 Instance = this;
                 DontDestroyOnLoad(gameObject);
+                _lastCacheCleanupTime = Time.time;
             }
             else
             {
@@ -48,201 +63,269 @@ namespace Utilities
             }
         }
 
-        /// <summary>
-        /// Finds all GameObjects within a default radius of the target position
-        /// </summary>
-        /// <param name="position">Center position for search</param>
-        /// <param name="radius">Search radius in meters</param>
-        /// <returns>List of GameObjects found within radius</returns>
-        public List<GameObject> FindObjectsNearPosition(Vector3 position)
+        private void Update()
         {
-            List<GameObject> foundObjects = new List<GameObject>();
-
-            // Find all colliders within radius using configured layer mask
-            Collider[] colliders = Physics.OverlapSphere(
-                position,
-                _defaultSearchRadius,
-                _searchLayerMask
-            );
-
-            Debug.Log(
-                $"{_logPrefix} Found {colliders.Length} colliders within {_defaultSearchRadius}m of {position}"
-            );
-
-            foreach (Collider col in colliders)
+            if (_enableCaching && _cacheCleanupInterval > 0)
             {
-                GameObject obj = col.gameObject;
-
-                // Skip robot parts if configured
-                if (_skipRobotParts && IsRobotPart(obj))
+                if (Time.time - _lastCacheCleanupTime >= _cacheCleanupInterval)
                 {
-                    continue;
+                    CleanupDeadCacheEntries();
+                    _lastCacheCleanupTime = Time.time;
                 }
-
-                // Skip objects that are too small
-                if (col.bounds.size.magnitude < _minObjectSize)
-                {
-                    continue;
-                }
-
-                foundObjects.Add(obj);
             }
-
-            Debug.Log($"{_logPrefix} Filtered to {foundObjects.Count} valid objects");
-            return foundObjects;
         }
 
         /// <summary>
-        /// Finds graspable objects within the default radius of the target position
+        /// Clears the robot part detection cache completely.
+        /// Call this when scene changes or when many robots are spawned/destroyed at once.
         /// </summary>
-        /// <param name="position">Center position for search</param>
-        /// <param name="radius">Search radius in meters</param>
-        /// <returns>List of graspable GameObjects found within radius</returns>
-        public List<GameObject> FindGraspableObjects(Vector3 position)
+        public void ClearCache()
         {
-            List<GameObject> foundObjects = new List<GameObject>();
+            _robotPartCache.Clear();
+        }
 
-            Collider[] colliders = Physics.OverlapSphere(
-                position,
-                _defaultSearchRadius,
-                _searchLayerMask
-            );
+        /// <summary>
+        /// Removes destroyed objects from the cache while preserving valid entries.
+        /// Automatically called periodically based on _cacheCleanupInterval.
+        /// </summary>
+        private void CleanupDeadCacheEntries()
+        {
+            List<GameObject> deadKeys = new List<GameObject>();
+
+            foreach (var key in _robotPartCache.Keys)
+            {
+                if (key == null)
+                {
+                    deadKeys.Add(key);
+                }
+            }
+
+            foreach (var deadKey in deadKeys)
+            {
+                _robotPartCache.Remove(deadKey);
+            }
+
+            if (deadKeys.Count > 0)
+            {
+                Debug.Log(
+                    $"{_logPrefix} Cleaned up {deadKeys.Count} dead cache entries. Cache size: {_robotPartCache.Count}"
+                );
+            }
+        }
+
+        /// <summary>
+        /// Finds all GameObjects near a position within the specified radius.
+        /// Excludes robot parts and objects smaller than the minimum size threshold.
+        /// </summary>
+        /// <param name="position">Center position for the search sphere</param>
+        /// <param name="radius">Search radius in meters (uses default if negative)</param>
+        /// <returns>List of GameObjects within the search radius</returns>
+        public List<GameObject> FindObjectsNearPosition(Vector3 position, float radius = -1f)
+        {
+            float searchRadius = radius > 0 ? radius : _defaultSearchRadius;
+            HashSet<GameObject> foundObjects = new HashSet<GameObject>();
+            Collider[] colliders = Physics.OverlapSphere(position, searchRadius, _searchLayerMask);
 
             foreach (Collider col in colliders)
             {
                 GameObject obj = col.gameObject;
 
-                // Skip robot parts
+                if (foundObjects.Contains(obj))
+                    continue;
+                if (_skipGroundObjects && IsGroundObject(obj))
+                    continue;
                 if (_skipRobotParts && IsRobotPart(obj))
-                {
                     continue;
-                }
-
-                // Check if object is graspable (has Rigidbody and is not kinematic)
-                Rigidbody rb = obj.GetComponent<Rigidbody>();
-                if (rb == null || rb.isKinematic)
-                {
+                if (col.bounds.size.magnitude < _minObjectSize)
                     continue;
-                }
-
-                // Check size constraints
-                if (
-                    col.bounds.size.magnitude < _minObjectSize
-                    || col.bounds.size.magnitude > SceneConstants.GRASPABLE_OBJECT_SIZE_THRESHOLD
-                )
-                {
-                    continue;
-                }
 
                 foundObjects.Add(obj);
             }
 
-            // Sort objects by distance from search position
-            foundObjects.Sort(
+            return new List<GameObject>(foundObjects);
+        }
+
+        /// <summary>
+        /// Finds all graspable objects near a position, sorted by distance.
+        /// Only returns non-kinematic Rigidbody objects that meet graspability criteria.
+        /// Validates the root object's properties to avoid false positives from child colliders.
+        /// </summary>
+        /// <param name="position">Center position for the search sphere</param>
+        /// <param name="radius">Search radius in meters (uses default if negative)</param>
+        /// <returns>List of graspable GameObjects sorted by distance</returns>
+        public List<GameObject> FindGraspableObjects(Vector3 position, float radius = -1f)
+        {
+            float searchRadius = radius > 0 ? radius : _defaultSearchRadius;
+            HashSet<GameObject> distinctObjects = new HashSet<GameObject>();
+            Collider[] colliders = Physics.OverlapSphere(position, searchRadius, _searchLayerMask);
+
+            foreach (Collider col in colliders)
+            {
+                GameObject obj = col.gameObject;
+
+                if (distinctObjects.Contains(obj))
+                    continue;
+                if (_skipGroundObjects && IsGroundObject(obj))
+                    continue;
+                if (_skipRobotParts && IsRobotPart(obj))
+                    continue;
+
+                if (!obj.TryGetComponent(out Rigidbody rb))
+                    continue;
+                if (rb.isKinematic)
+                    continue;
+
+                Bounds objectBounds = GetObjectBounds(obj);
+                float objectSize = objectBounds.size.magnitude;
+
+                if (objectSize < _minObjectSize)
+                    continue;
+                if (objectSize > SceneConstants.GRASPABLE_OBJECT_SIZE_THRESHOLD)
+                    continue;
+                if (rb.mass > _maxGraspableMass)
+                    continue;
+
+                distinctObjects.Add(obj);
+            }
+
+            List<GameObject> resultList = new List<GameObject>(distinctObjects);
+            resultList.Sort(
                 (a, b) =>
                 {
-                    float distanceA = Vector3.Distance(position, a.transform.position);
-                    float distanceB = Vector3.Distance(position, b.transform.position);
-                    return distanceA.CompareTo(distanceB);
+                    float distA = (position - a.transform.position).sqrMagnitude;
+                    float distB = (position - b.transform.position).sqrMagnitude;
+                    return distA.CompareTo(distB);
                 }
             );
 
-            Debug.Log(
-                $"{_logPrefix} Found {foundObjects.Count} graspable objects (sorted by distance)"
-            );
-            return foundObjects;
+            return resultList;
         }
 
         /// <summary>
-        /// Finds the closest GameObject to the target position within a radius
+        /// Finds the closest GameObject to a position within the specified radius.
+        /// Uses squared distance for performance optimization.
         /// </summary>
-        /// <param name="position">Center position for search</param>
-        /// <param name="radius">Search radius in meters</param>
-        /// <returns>Closest GameObject or null if none found</returns>
+        /// <param name="position">Reference position</param>
+        /// <param name="radius">Maximum search radius in meters</param>
+        /// <returns>Closest GameObject, or null if none found</returns>
         public GameObject FindClosestObject(Vector3 position, float radius)
         {
-            List<GameObject> objects = FindObjectsNearPosition(position);
+            List<GameObject> objects = FindObjectsNearPosition(position, radius);
 
             if (objects.Count == 0)
-            {
                 return null;
-            }
 
             GameObject closest = null;
-            float minDistance = float.MaxValue;
+            float minSqrDistance = float.MaxValue;
 
             foreach (GameObject obj in objects)
             {
-                float distance = Vector3.Distance(position, obj.transform.position);
-                if (distance < minDistance)
+                float sqrDist = (position - obj.transform.position).sqrMagnitude;
+                if (sqrDist < minSqrDistance)
                 {
-                    minDistance = distance;
+                    minSqrDistance = sqrDist;
                     closest = obj;
                 }
             }
 
-            Debug.Log($"{_logPrefix} Closest object: {closest.name} at {minDistance}m distance");
             return closest;
         }
 
         /// <summary>
-        /// Counts objects within a radius of the target position
+        /// Counts the number of GameObjects near a position within the specified radius.
         /// </summary>
-        /// <param name="position">Center position for search</param>
+        /// <param name="position">Center position for the search sphere</param>
         /// <param name="radius">Search radius in meters</param>
-        /// <returns>Number of objects found</returns>
+        /// <returns>Number of GameObjects found</returns>
         public int CountObjectsNearPosition(Vector3 position, float radius)
         {
-            return FindObjectsNearPosition(position).Count;
+            return FindObjectsNearPosition(position, radius).Count;
         }
 
         /// <summary>
-        /// Checks if a GameObject is a robot part
+        /// Checks if a GameObject is part of a robot assembly.
+        /// Uses GetComponentInParent to handle child objects and caching for performance.
         /// </summary>
         /// <param name="obj">GameObject to check</param>
-        /// <returns>True if object is part of a robot</returns>
+        /// <returns>True if the object is part of a robot</returns>
         private bool IsRobotPart(GameObject obj)
         {
-            return obj.GetComponent<RobotController>() != null
-                || obj.GetComponent<SimpleRobotController>() != null
-                || obj.GetComponent<ArticulationBody>() != null
-                || obj.GetComponent<GripperController>() != null;
+            if (obj == null)
+                return false;
+
+            if (_enableCaching && _robotPartCache.TryGetValue(obj, out bool cachedResult))
+            {
+                if (obj == null)
+                {
+                    _robotPartCache.Remove(obj);
+                }
+                else
+                {
+                    return cachedResult;
+                }
+            }
+
+            bool isRobotPart = obj.GetComponentInParent<ArticulationBody>() != null;
+
+            if (!isRobotPart)
+            {
+                isRobotPart =
+                    obj.GetComponentInParent<RobotController>() != null
+                    || obj.GetComponentInParent<GripperController>() != null
+                    || obj.GetComponentInParent<SimpleRobotController>() != null;
+            }
+
+            if (_enableCaching)
+            {
+                _robotPartCache[obj] = isRobotPart;
+            }
+
+            return isRobotPart;
         }
 
         /// <summary>
-        /// Unity OnDestroy callback - cleanup singleton
+        /// Checks if a GameObject is part of the ground/floor/environment.
         /// </summary>
+        /// <param name="obj">GameObject to check</param>
+        /// <returns>True if the object is ground/floor</returns>
+        private bool IsGroundObject(GameObject obj)
+        {
+            return obj.CompareTag("Ground")
+                || obj.CompareTag("Floor")
+                || obj.CompareTag("Terrain")
+                || obj.CompareTag("Environment");
+        }
+
+        /// <summary>
+        /// Calculates the combined bounds of all colliders on a GameObject and its children.
+        /// </summary>
+        /// <param name="obj">GameObject to measure</param>
+        /// <returns>Combined bounds of all colliders</returns>
+        private Bounds GetObjectBounds(GameObject obj)
+        {
+            Collider[] allColliders = obj.GetComponentsInChildren<Collider>();
+
+            if (allColliders.Length == 0)
+            {
+                return new Bounds(obj.transform.position, Vector3.zero);
+            }
+
+            Bounds combinedBounds = allColliders[0].bounds;
+
+            for (int i = 1; i < allColliders.Length; i++)
+            {
+                combinedBounds.Encapsulate(allColliders[i].bounds);
+            }
+
+            return combinedBounds;
+        }
+
         private void OnDestroy()
         {
             if (Instance == this)
             {
                 Instance = null;
             }
-        }
-
-        // Public getters/setters for configuration
-        public float DefaultSearchRadius
-        {
-            get => _defaultSearchRadius;
-            set => _defaultSearchRadius = value;
-        }
-
-        public LayerMask SearchLayerMask
-        {
-            get => _searchLayerMask;
-            set => _searchLayerMask = value;
-        }
-
-        public float MinObjectSize
-        {
-            get => _minObjectSize;
-            set => _minObjectSize = value;
-        }
-
-        public bool SkipRobotParts
-        {
-            get => _skipRobotParts;
-            set => _skipRobotParts = value;
         }
     }
 }

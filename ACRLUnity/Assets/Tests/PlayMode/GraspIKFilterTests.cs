@@ -37,6 +37,10 @@ namespace Tests.PlayMode
             _testConfig.ikValidationThreshold = IK_THRESHOLD;
             _testConfig.maxIKValidationIterations = 10;
 
+            // Create IK configuration
+            var ikConfig = ScriptableObject.CreateInstance<IKConfig>();
+            ikConfig.dampingFactor = 0.1f;
+
             // Create mock robot components
             SetupMockRobotComponents();
 
@@ -46,7 +50,7 @@ namespace Tests.PlayMode
                 _mockJoints,
                 _mockIKFrame,
                 _mockEndEffector,
-                dampingFactor: 0.1f
+                ikConfig
             );
         }
 
@@ -152,13 +156,15 @@ namespace Tests.PlayMode
         [Test]
         public void Constructor_NullJoints_ThrowsException()
         {
+            var ikConfig = ScriptableObject.CreateInstance<IKConfig>();
             Assert.Throws<System.ArgumentNullException>(() =>
             {
                 new GraspIKFilter(
                     _testConfig,
                     null, // null joints
                     _mockIKFrame,
-                    _mockEndEffector
+                    _mockEndEffector,
+                    ikConfig
                 );
             });
         }
@@ -166,13 +172,15 @@ namespace Tests.PlayMode
         [Test]
         public void Constructor_NullConfig_ThrowsException()
         {
+            var ikConfig = ScriptableObject.CreateInstance<IKConfig>();
             Assert.Throws<System.ArgumentNullException>(() =>
             {
                 new GraspIKFilter(
                     null, // null config
                     _mockJoints,
                     _mockIKFrame,
-                    _mockEndEffector
+                    _mockEndEffector,
+                    ikConfig
                 );
             });
         }
@@ -433,7 +441,8 @@ namespace Tests.PlayMode
 
             // Test with large max reach
             _testConfig.maxReachDistance = 1.0f;
-            var filter2 = new GraspIKFilter(_testConfig, _mockJoints, _mockIKFrame, _mockEndEffector);
+            var ikConfig2 = ScriptableObject.CreateInstance<IKConfig>();
+            var filter2 = new GraspIKFilter(_testConfig, _mockJoints, _mockIKFrame, _mockEndEffector, ikConfig2);
             var candidates2 = new List<GraspCandidate>
             {
                 CreateTestCandidate(new Vector3(0.5f, 0f, 0f), new Vector3(0.45f, 0f, 0f))

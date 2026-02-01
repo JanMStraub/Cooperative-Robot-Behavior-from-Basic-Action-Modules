@@ -6,8 +6,6 @@ namespace Simulation.CoordinationStrategies
 {
     /// <summary>
     /// Sequential coordination strategy where robots take turns.
-    /// Only one robot is active at a time. When the active robot reaches its target,
-    /// control switches to the next robot in sequence.
     /// </summary>
     public class SequentialStrategy : ICoordinationStrategy
     {
@@ -16,21 +14,19 @@ namespace Simulation.CoordinationStrategies
         private float _robotActivationTime;
         private float _robotTimeout;
 
-        // Helper variables
         private const string _logPrefix = "[SEQUENTIAL_STRATEGY]";
-        private const float DEFAULT_ROBOT_TIMEOUT = 30f; // Default timeout in seconds
+        private const float DEFAULT_ROBOT_TIMEOUT = 30f;
 
         /// <summary>
-        /// Constructor for SequentialStrategy
+        /// Constructor for SequentialStrategy.
         /// </summary>
-        public SequentialStrategy() : this(DEFAULT_ROBOT_TIMEOUT)
-        {
-        }
+        public SequentialStrategy()
+            : this(DEFAULT_ROBOT_TIMEOUT) { }
 
         /// <summary>
-        /// Constructor for SequentialStrategy with custom timeout
+        /// Constructor for SequentialStrategy with custom timeout.
         /// </summary>
-        /// <param name="robotTimeout">Timeout in seconds before switching to next robot</param>
+        /// <param name="robotTimeout">Timeout in seconds</param>
         public SequentialStrategy(float robotTimeout)
         {
             _activeRobotIndex = 0;
@@ -40,7 +36,6 @@ namespace Simulation.CoordinationStrategies
 
         /// <summary>
         /// Updates the sequential coordination logic.
-        /// Switches to the next robot when the current robot reaches its target or timeout occurs.
         /// </summary>
         public void Update(
             RobotController[] robotControllers,
@@ -52,7 +47,6 @@ namespace Simulation.CoordinationStrategies
 
             _robotControllers = robotControllers;
 
-            // Validate active index
             if (_activeRobotIndex < 0 || _activeRobotIndex >= robotControllers.Length)
                 _activeRobotIndex = 0;
 
@@ -62,11 +56,8 @@ namespace Simulation.CoordinationStrategies
 
             string currentRobotId = currentRobot.robotId;
 
-            // Check timeout
             float timeSinceActivation = Time.time - _robotActivationTime;
             bool hasTimedOut = timeSinceActivation > _robotTimeout;
-
-            // Check if current robot has reached its target (missing entries default to false)
             bool hasReachedTarget = robotTargetReached.GetValueOrDefault(currentRobotId, false);
 
             if (hasReachedTarget || hasTimedOut)
@@ -78,10 +69,9 @@ namespace Simulation.CoordinationStrategies
                     );
                 }
 
-                // Switch to next robot
                 int previousIndex = _activeRobotIndex;
                 _activeRobotIndex = (_activeRobotIndex + 1) % robotControllers.Length;
-                _robotActivationTime = Time.time; // Reset activation time for new robot
+                _robotActivationTime = Time.time;
 
                 Debug.Log(
                     $"{_logPrefix} Robot switch: {currentRobotId} (index {previousIndex}) -> {GetActiveRobotId()} (index {_activeRobotIndex})"

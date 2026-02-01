@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Configuration;
 using Robotics;
 using UnityEngine;
 
@@ -30,7 +31,8 @@ namespace Simulation.CoordinationStrategies
 
         // Path replanning for collision avoidance
         private ICollisionAvoidancePlanner _collisionPlanner;
-        private Dictionary<string, Queue<Vector3>> _robotWaypoints = new Dictionary<string, Queue<Vector3>>();
+        private Dictionary<string, Queue<Vector3>> _robotWaypoints =
+            new Dictionary<string, Queue<Vector3>>();
 
         // Coordination state
         private float _lastCoordinationCheckTime = -1f; // Initialize to -1 to force first check
@@ -40,19 +42,18 @@ namespace Simulation.CoordinationStrategies
         private const string LOG_PREFIX = "[COLLABORATIVE_STRATEGY]";
 
         /// <summary>
-        /// Constructor - initialize workspace manager reference
+        /// Constructor - creates strategy with default configuration (used in tests)
         /// </summary>
-        public CollaborativeStrategy() : this(DEFAULT_MIN_SAFE_SEPARATION)
-        {
-        }
+        public CollaborativeStrategy()
+            : this(ScriptableObject.CreateInstance<CoordinationConfig>()) { }
 
         /// <summary>
         /// Constructor with configurable minimum safe separation
         /// </summary>
         /// <param name="minSafeSeparation">Minimum safe separation distance in meters</param>
-        public CollaborativeStrategy(float minSafeSeparation)
+        public CollaborativeStrategy(CoordinationConfig config)
         {
-            _minSafeSeparation = Mathf.Max(0.05f, minSafeSeparation);
+            _minSafeSeparation = Mathf.Max(0.05f, config.minSafeSeparation);
             _workspaceManager = WorkspaceManager.Instance;
             if (_workspaceManager == null)
             {
@@ -63,10 +64,10 @@ namespace Simulation.CoordinationStrategies
 
             // Initialize collision avoidance planner
             _collisionPlanner = new WaypointCollisionAvoidancePlanner(
-                verticalOffset: 0.15f,
-                lateralOffset: 0.1f,
+                verticalOffset: config.verticalOffset,
+                lateralOffset: config.lateralOffset,
                 minSafeSeparation: _minSafeSeparation,
-                maxWaypoints: 5
+                maxWaypoints: config.maxWaypoints
             );
             Debug.Log($"{LOG_PREFIX} Path replanning enabled with waypoint collision avoidance");
         }
@@ -165,10 +166,10 @@ namespace Simulation.CoordinationStrategies
 
         /// <summary>
         /// Check for conflicts between two robots and attempt path replanning if needed.
+        /// Uses priority system to prevent deadlocks: lower alphabetical ID yields to higher ID.
         /// </summary>
         private void CheckRobotPairConflict(RobotController robot1, RobotController robot2)
         {
-            // Add null checks for GetCurrentTarget()
             var target1Nullable = robot1.GetCurrentTarget();
             var target2Nullable = robot2.GetCurrentTarget();
 
@@ -182,7 +183,18 @@ namespace Simulation.CoordinationStrategies
             Vector3 current1 = robot1.GetCurrentEndEffectorPosition();
             Vector3 current2 = robot2.GetCurrentEndEffectorPosition();
 
-            // Check 1: Target collision (both robots targeting same location)
+            int priority = string.Compare(
+                robot1.robotId,
+                robot2.robotId,
+                System.StringComparison.Ordinal
+            );
+            RobotController lowPriorityRobot = priority < 0 ? robot1 : robot2;
+            RobotController highPriorityRobot = priority < 0 ? robot2 : robot1;
+            Vector3 lowPriorityCurrent = priority < 0 ? current1 : current2;
+            Vector3 lowPriorityTarget = priority < 0 ? target1 : target2;
+            Vector3 highPriorityCurrent = priority < 0 ? current2 : current1;
+            Vector3 highPriorityTarget = priority < 0 ? target2 : target1;
+
             float targetDistance = Vector3.Distance(target1, target2);
             if (targetDistance < _minSafeSeparation)
             {
@@ -190,39 +202,56 @@ namespace Simulation.CoordinationStrategies
                     $"{LOG_PREFIX} Collision detected: {robot1.robotId} and {robot2.robotId} targeting same location (distance: {targetDistance:F3}m)"
                 );
 
-                // Attempt to replan robot2's path
-                if (AttemptReplanning(robot2, current2, target2, new List<Vector3> { current1, target1 }))
+                if (
+                    AttemptReplanning(
+                        lowPriorityRobot,
+                        lowPriorityCurrent,
+                        lowPriorityTarget,
+                        new List<Vector3> { highPriorityCurrent, highPriorityTarget }
+                    )
+                )
                 {
-                    Debug.Log($"{LOG_PREFIX} Replanned path for {robot2.robotId} to avoid {robot1.robotId}");
-                    _blockedRobots.Remove(robot2.robotId);
+                    Debug.Log(
+                        $"{LOG_PREFIX} Replanned path for {lowPriorityRobot.robotId} to avoid {highPriorityRobot.robotId}"
+                    );
+                    _blockedRobots.Remove(lowPriorityRobot.robotId);
                 }
                 else
                 {
-                    Debug.LogWarning($"{LOG_PREFIX} No alternative path found for {robot2.robotId}, blocking robot");
-                    // Block robot2 to prevent collision
-                    _blockedRobots.Add(robot2.robotId);
+                    Debug.LogWarning(
+                        $"{LOG_PREFIX} No alternative path found for {lowPriorityRobot.robotId}, blocking robot"
+                    );
+                    _blockedRobots.Add(lowPriorityRobot.robotId);
                 }
                 return;
             }
 
-            // Check 2: Path collision (robots' paths will cross)
             if (WillPathsCollide(current1, target1, current2, target2))
             {
                 Debug.LogWarning(
                     $"{LOG_PREFIX} Path collision detected between {robot1.robotId} and {robot2.robotId}"
                 );
 
-                // Attempt to replan robot2's path
-                if (AttemptReplanning(robot2, current2, target2, new List<Vector3> { current1, target1 }))
+                if (
+                    AttemptReplanning(
+                        lowPriorityRobot,
+                        lowPriorityCurrent,
+                        lowPriorityTarget,
+                        new List<Vector3> { highPriorityCurrent, highPriorityTarget }
+                    )
+                )
                 {
-                    Debug.Log($"{LOG_PREFIX} Replanned path for {robot2.robotId} to avoid {robot1.robotId}");
-                    _blockedRobots.Remove(robot2.robotId);
+                    Debug.Log(
+                        $"{LOG_PREFIX} Replanned path for {lowPriorityRobot.robotId} to avoid {highPriorityRobot.robotId}"
+                    );
+                    _blockedRobots.Remove(lowPriorityRobot.robotId);
                 }
                 else
                 {
-                    Debug.LogWarning($"{LOG_PREFIX} No alternative path found for {robot2.robotId}, blocking robot");
-                    // Block robot2 to prevent collision
-                    _blockedRobots.Add(robot2.robotId);
+                    Debug.LogWarning(
+                        $"{LOG_PREFIX} No alternative path found for {lowPriorityRobot.robotId}, blocking robot"
+                    );
+                    _blockedRobots.Add(lowPriorityRobot.robotId);
                 }
                 return;
             }
@@ -254,13 +283,23 @@ namespace Simulation.CoordinationStrategies
         /// <summary>
         /// Attempt to replan a robot's path to avoid obstacles.
         /// </summary>
-        private bool AttemptReplanning(RobotController robot, Vector3 current, Vector3 target, List<Vector3> obstacles)
+        private bool AttemptReplanning(
+            RobotController robot,
+            Vector3 current,
+            Vector3 target,
+            List<Vector3> obstacles
+        )
         {
             if (_collisionPlanner == null)
                 return false;
 
             // Generate alternative path
-            var waypoints = _collisionPlanner.PlanAlternativePath(robot.robotId, current, target, obstacles);
+            var waypoints = _collisionPlanner.PlanAlternativePath(
+                robot.robotId,
+                current,
+                target,
+                obstacles
+            );
 
             if (waypoints == null || waypoints.Count == 0)
             {
@@ -443,7 +482,9 @@ namespace Simulation.CoordinationStrategies
             if (waypointQueue.Count > 0)
             {
                 Vector3 reached = waypointQueue.Dequeue();
-                Debug.Log($"{LOG_PREFIX} {robotId} reached waypoint {reached}, {waypointQueue.Count} remaining");
+                Debug.Log(
+                    $"{LOG_PREFIX} {robotId} reached waypoint {reached}, {waypointQueue.Count} remaining"
+                );
             }
         }
 

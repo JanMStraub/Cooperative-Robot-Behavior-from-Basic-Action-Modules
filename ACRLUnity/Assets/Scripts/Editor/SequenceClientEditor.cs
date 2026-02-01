@@ -117,7 +117,7 @@ namespace EditorScripts
                 {
                     client.SendSequence();
                 }
-                
+
                 GUI.backgroundColor = _warningColor;
                 if (GUILayout.Button("Clear Prompt", _warningButtonStyle))
                 {
@@ -258,13 +258,11 @@ namespace EditorScripts
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("Pick Sequence", _buttonStyle))
             {
-                client.Prompt =
-                    "Grab the blue cube on the left";
+                client.Prompt = "Grab the blue cube on the left";
             }
             if (GUILayout.Button("Place Sequence", _buttonStyle))
             {
-                client.Prompt =
-                    "Move to field a and place the object there";
+                client.Prompt = "Move to field a and place the object there";
             }
             EditorGUILayout.EndHorizontal();
 
@@ -276,7 +274,7 @@ namespace EditorScripts
             if (GUILayout.Button("Transfer cube", _buttonStyle))
             {
                 client.Prompt =
-                @"PARALLEL GROUP 1:
+                    @"PARALLEL GROUP 1:
 - Robot1: Grab red cube
 
 PARALLEL GROUP 2:

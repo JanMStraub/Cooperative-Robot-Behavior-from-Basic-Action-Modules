@@ -129,10 +129,10 @@ def check_robot_status(
                 "COMMUNICATION_FAILED",
                 "Failed to send command to Unity - no clients connected",
                 [
-                    "Ensure Unity is running with LLMResultsReceiver active",
-                    "Verify ResultsServer is running (port 5010)",
+                    "Ensure Unity is running with UnifiedPythonReceiver active",
+                    "Verify CommandServer is running (port 5010)",
                     "Check Unity console for connection errors",
-                    "Restart ResultsServer: python -m LLMCommunication.orchestrators.RunAnalyzer",
+                    "Restart backend: python -m orchestrators.RunRobotController",
                 ],
             )
 
@@ -221,8 +221,8 @@ def create_check_robot_status_operation() -> BasicOperation:
         # Conditions
         preconditions=[
             "Robot exists in Unity's RobotManager",
-            "Unity is running with LLMResultsReceiver active",
-            "ResultsServer is running on port 5010",
+            "Unity is running with UnifiedPythonReceiver active",
+            "CommandServer is running on port 5010",
         ],
         postconditions=[
             "Status query command has been sent to Unity",
@@ -234,7 +234,7 @@ def create_check_robot_status_operation() -> BasicOperation:
         success_rate=0.99,  # Very reliable
         failure_modes=[
             "Robot ID not found in RobotManager",
-            "Communication failed - Unity not connected to ResultsServer",
+            "Communication failed - Unity not connected to CommandServer",
             "Invalid parameter type for 'detailed'",
         ],
         # Relationships

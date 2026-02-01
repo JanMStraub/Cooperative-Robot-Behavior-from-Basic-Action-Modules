@@ -4,40 +4,48 @@ namespace Tests.EditMode
 {
     /// <summary>
     /// Centralized test constants that reference production constants.
-    /// This ensures tests stay in sync with production values and eliminates hardcoded magic numbers.
+    /// NOTE: Many constants have been moved to ScriptableObject configs (IKConfig, GripperConfig, TrajectoryConfig).
+    /// Test constants now use hardcoded default values matching the config defaults.
     ///
     /// Usage:
-    /// - Import production constants from Core.RobotConstants
+    /// - Import production constants from Core.RobotConstants (for infrastructure constants)
+    /// - Use hardcoded defaults for robot-specific parameters (now in configs)
     /// - Add test-specific values (iterations, tolerance factors, timeouts)
-    /// - Use in all test files instead of hardcoded values
     /// </summary>
     public static class TestConstants
     {
-        #region Production Constants (from Core.RobotConstants)
-
-        // Inverse Kinematics
-        public const float DEFAULT_CONVERGENCE_THRESHOLD = Core.RobotConstants.DEFAULT_CONVERGENCE_THRESHOLD; // 0.015m (1.5cm)
-        public const float DEFAULT_DAMPING_FACTOR = Core.RobotConstants.DEFAULT_DAMPING_FACTOR; // 0.2f
-        public const float DEFAULT_MAX_JOINT_STEP_RAD = Core.RobotConstants.DEFAULT_MAX_JOINT_STEP_RAD; // 0.2 rad
-        public const float DEFAULT_ORIENTATION_THRESHOLD_DEGREES = Core.RobotConstants.DEFAULT_ORIENTATION_THRESHOLD_DEGREES; // 10 degrees
-        public const float ORIENTATION_RAMP_START_DISTANCE = Core.RobotConstants.ORIENTATION_RAMP_START_DISTANCE; // 0.30m
-
-        // Timeouts
-        public const float DEFAULT_GRASP_TIMEOUT_SECONDS = Core.RobotConstants.DEFAULT_GRASP_TIMEOUT_SECONDS; // 10s
-        public const float DEFAULT_MOVEMENT_TIMEOUT_SECONDS = Core.RobotConstants.DEFAULT_MOVEMENT_TIMEOUT_SECONDS; // 15s
-
-        // Grasp Planning
-        public const float GRASP_CONVERGENCE_MULTIPLIER = Core.RobotConstants.GRASP_CONVERGENCE_MULTIPLIER; // 0.33
-        public const float OBJECT_FINDING_RADIUS = Core.RobotConstants.OBJECT_FINDING_RADIUS; // 0.15m
-        public const float OBJECT_DISTANCE_THRESHOLD = Core.RobotConstants.OBJECT_DISTANCE_THRESHOLD; // 0.1m (10cm)
+        #region Production Constants (from Core.RobotConstants - Infrastructure Only)
 
         // Communication Ports
         public const int STEREO_DETECTION_PORT = Core.CommunicationConstants.STEREO_DETECTION_PORT; // 5006
         public const int LLM_RESULTS_PORT = Core.CommunicationConstants.LLM_RESULTS_PORT; // 5010
         public const int SEQUENCE_SERVER_PORT = Core.CommunicationConstants.SEQUENCE_SERVER_PORT; // 5013
 
-        // Gripper
-        public const float DEFAULT_GRIPPER_SMOOTH_TIME = Core.GripperConstants.DEFAULT_SMOOTH_TIME; // 0.5s
+        #endregion
+
+        #region Default Values (from ScriptableObject Configs)
+
+        // NOTE: These match the defaults in IKConfig, GripperConfig, TrajectoryConfig
+        // If configs change, update these test constants accordingly
+
+        // Inverse Kinematics (from IKConfig)
+        public const float DEFAULT_CONVERGENCE_THRESHOLD = 0.02f; // 2cm (20mm)
+        public const float DEFAULT_DAMPING_FACTOR = 0.2f;
+        public const float DEFAULT_MAX_JOINT_STEP_RAD = 0.2f; // radians
+        public const float DEFAULT_ORIENTATION_THRESHOLD_DEGREES = 10f; // degrees
+        public const float ORIENTATION_RAMP_START_DISTANCE = 0.30f; // 30cm
+
+        // Timeouts (from IKConfig)
+        public const float DEFAULT_GRASP_TIMEOUT_SECONDS = 30f; // seconds
+        public const float DEFAULT_MOVEMENT_TIMEOUT_SECONDS = 15f; // seconds
+
+        // Grasp Planning (from IKConfig)
+        public const float GRASP_CONVERGENCE_MULTIPLIER = 0.33f;
+        public const float OBJECT_FINDING_RADIUS = 0.15f; // 15cm
+        public const float OBJECT_DISTANCE_THRESHOLD = 0.1f; // 10cm
+
+        // Gripper (from GripperConfig)
+        public const float DEFAULT_GRIPPER_SMOOTH_TIME = 0.5f; // seconds
 
         #endregion
 
@@ -212,6 +220,97 @@ namespace Tests.EditMode
 
         #endregion
 
+        #region Test Timeouts (Added for refactoring plan)
+
+        /// <summary>
+        /// Short timeout for quick operations (1 second)
+        /// </summary>
+        public const float SHORT_TIMEOUT = 1.0f;
+
+        /// <summary>
+        /// Medium timeout for moderate operations (5 seconds)
+        /// </summary>
+        public const float MEDIUM_TIMEOUT = 5.0f;
+
+        /// <summary>
+        /// Long timeout for complex operations (15 seconds)
+        /// </summary>
+        public const float LONG_TIMEOUT = 15.0f;
+
+        #endregion
+
+        #region Test Ports (Offset from production ports for isolated testing)
+
+        /// <summary>
+        /// Test port for CommandServer (offset from production 5010)
+        /// </summary>
+        public const int TEST_COMMAND_SERVER_PORT = 6010;
+
+        /// <summary>
+        /// Test port for SequenceServer (offset from production 5013)
+        /// </summary>
+        public const int TEST_SEQUENCE_SERVER_PORT = 6013;
+
+        /// <summary>
+        /// Test port for ImageServer single camera (offset from production 5005)
+        /// </summary>
+        public const int TEST_IMAGE_SERVER_PORT = 6005;
+
+        /// <summary>
+        /// Test port for ImageServer stereo (offset from production 5006)
+        /// </summary>
+        public const int TEST_STEREO_IMAGE_PORT = 6006;
+
+        #endregion
+
+        #region Test Robot Configurations
+
+        /// <summary>
+        /// Default test robot starting position
+        /// </summary>
+        public static readonly Vector3 TEST_ROBOT_START_POSITION = Vector3.zero;
+
+        /// <summary>
+        /// Test robot IDs for multi-robot scenarios
+        /// </summary>
+        public static readonly string[] TEST_ROBOT_IDS = { "TestRobot1", "TestRobot2", "TestRobot3" };
+
+        /// <summary>
+        /// Default test robot ID (single robot scenarios)
+        /// </summary>
+        public const string DEFAULT_TEST_ROBOT_ID = "TestRobot1";
+
+        #endregion
+
+        #region Test Object Configurations
+
+        /// <summary>
+        /// Standard test object size (5cm cube)
+        /// </summary>
+        public const float TEST_OBJECT_SIZE = 0.05f;
+
+        /// <summary>
+        /// Test object spawn positions (above table surface)
+        /// </summary>
+        public static readonly Vector3[] TEST_OBJECT_POSITIONS = new Vector3[]
+        {
+            new Vector3(0.3f, 0.1f, 0.2f),
+            new Vector3(0.4f, 0.1f, 0.3f),
+            new Vector3(0.2f, 0.1f, 0.1f)
+        };
+
+        /// <summary>
+        /// Test object colors (for detection tests)
+        /// </summary>
+        public static readonly Color[] TEST_OBJECT_COLORS = new Color[]
+        {
+            Color.red,
+            Color.blue,
+            Color.green
+        };
+
+        #endregion
+
         #region Helper Methods
 
         /// <summary>
@@ -254,6 +353,30 @@ namespace Tests.EditMode
         public static WaitForSeconds GetPhysicsSettleWait()
         {
             return new WaitForSeconds(0.1f);
+        }
+
+        /// <summary>
+        /// Get a random test robot ID from the predefined list.
+        /// </summary>
+        public static string GetRandomTestRobotId()
+        {
+            return TEST_ROBOT_IDS[Random.Range(0, TEST_ROBOT_IDS.Length)];
+        }
+
+        /// <summary>
+        /// Get a test object position by index (wraps around if out of range).
+        /// </summary>
+        public static Vector3 GetTestObjectPosition(int index)
+        {
+            return TEST_OBJECT_POSITIONS[index % TEST_OBJECT_POSITIONS.Length];
+        }
+
+        /// <summary>
+        /// Get a test object color by index (wraps around if out of range).
+        /// </summary>
+        public static Color GetTestObjectColor(int index)
+        {
+            return TEST_OBJECT_COLORS[index % TEST_OBJECT_COLORS.Length];
         }
 
         #endregion

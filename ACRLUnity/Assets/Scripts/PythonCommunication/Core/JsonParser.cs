@@ -22,23 +22,26 @@ namespace PythonCommunication.Core
             result = default(T);
             errorMessage = null;
 
-            // Validate input
             if (string.IsNullOrEmpty(json))
             {
                 errorMessage = "JSON string is null or empty";
                 return false;
             }
 
+            if (json.TrimStart().StartsWith("["))
+            {
+                errorMessage =
+                    "Unity JsonUtility cannot parse top-level arrays. Wrap array in an object.";
+                return false;
+            }
+
             try
             {
-                // Parse using Unity's JsonUtility
                 result = JsonUtility.FromJson<T>(json);
 
-                // Check if result is null (parsing failed silently)
                 if (result == null)
                 {
-                    errorMessage =
-                        $"Failed to parse JSON into type {typeof(T).Name} (result is null)";
+                    errorMessage = $"Unity failed to create object of type {typeof(T).Name}";
                     return false;
                 }
 
@@ -46,13 +49,11 @@ namespace PythonCommunication.Core
             }
             catch (ArgumentException ex)
             {
-                // Invalid JSON format or type mismatch
                 errorMessage = $"JSON parse error for type {typeof(T).Name}: {ex.Message}";
                 return false;
             }
             catch (Exception ex)
             {
-                // Unexpected error
                 errorMessage =
                     $"Unexpected error parsing JSON for type {typeof(T).Name}: {ex.Message}";
                 return false;

@@ -42,7 +42,7 @@ namespace Robotics.Grasp
         /// <param name="joints">Robot joint articulation bodies</param>
         /// <param name="ikReferenceFrame">IK coordinate frame</param>
         /// <param name="endEffector">End effector transform</param>
-        /// <param name="dampingFactor">IK solver damping factor</param>
+        /// <param name="ikConfig">IK configuration (contains damping factor and other IK parameters)</param>
         /// <param name="enableDebugLogging">Enable debug logging (disable in production)</param>
         /// <param name="enableInitializationValidation">Enable FK validation during initialization (recommended for first-time setup)</param>
         public GraspIKFilter(
@@ -50,7 +50,7 @@ namespace Robotics.Grasp
             ArticulationBody[] joints,
             Transform ikReferenceFrame,
             Transform endEffector,
-            float dampingFactor = 0.1f,
+            IKConfig ikConfig,
             bool enableDebugLogging = false,
             bool enableInitializationValidation = true
         )
@@ -62,12 +62,14 @@ namespace Robotics.Grasp
                 ?? throw new System.ArgumentNullException(nameof(ikReferenceFrame));
             _endEffector =
                 endEffector ?? throw new System.ArgumentNullException(nameof(endEffector));
+            if (ikConfig == null)
+                throw new System.ArgumentNullException(nameof(ikConfig));
 
             _enableDebugLogging = enableDebugLogging;
             _enableInitializationValidation = enableInitializationValidation;
 
             _jointCount = joints.Length;
-            _ikSolver = new IKSolver(_jointCount, dampingFactor);
+            _ikSolver = new IKSolver(_jointCount, ikConfig.dampingFactor);
 
             // CRITICAL FIX: We no longer need to identify a separate robot base.
             // The kinematic chain will be cached relative to _ikReferenceFrame directly.

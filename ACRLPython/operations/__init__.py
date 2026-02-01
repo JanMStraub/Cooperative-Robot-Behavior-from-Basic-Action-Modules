@@ -3,7 +3,7 @@ Operations Module for Robot Control
 ====================================
 
 This module contains implementations of basic operations that control the robot
-through Unity. Each operation sends commands to Unity via the ResultsServer.
+through Unity. Each operation sends commands to Unity via the CommandServer.
 
 Operations are defined with rich metadata for RAG retrieval and structured
 as BasicOperation instances for LLM consumption.

@@ -29,7 +29,7 @@ namespace Tests.EditMode
         [Test]
         public void Protocol_HasCorrectLimits()
         {
-            Assert.AreEqual(256, UnityProtocol.MAX_STRING_LENGTH);
+            // No MAX_STRING_LENGTH - LLM responses can be arbitrarily large
             Assert.AreEqual(10 * 1024 * 1024, UnityProtocol.MAX_IMAGE_SIZE);
         }
 
@@ -133,14 +133,6 @@ namespace Tests.EditMode
             byte[] oversized = new byte[UnityProtocol.MAX_IMAGE_SIZE + 1];
             Assert.Throws<ArgumentException>(() =>
                 UnityProtocol.EncodeImageMessage("Cam1", "prompt", oversized));
-        }
-
-        [Test]
-        public void EncodeImageMessage_ThrowsOnLongCameraId()
-        {
-            string longId = new string('a', 300);
-            Assert.Throws<ArgumentException>(() =>
-                UnityProtocol.EncodeImageMessage(longId, "prompt", new byte[] { 1 }));
         }
 
         #endregion
@@ -337,15 +329,7 @@ namespace Tests.EditMode
 
         #region Validation Helper Tests
 
-        [Test]
-        public void IsValidStringLength_ValidatesCorrectly()
-        {
-            Assert.IsTrue(UnityProtocol.IsValidStringLength("short"));
-            Assert.IsTrue(UnityProtocol.IsValidStringLength(null));
-            Assert.IsTrue(UnityProtocol.IsValidStringLength(""));
-            Assert.IsTrue(UnityProtocol.IsValidStringLength(new string('a', 256)));
-            Assert.IsFalse(UnityProtocol.IsValidStringLength(new string('a', 300)));
-        }
+        // Removed: IsValidStringLength test - no string length limit for LLM responses
 
         [Test]
         public void IsValidImageSize_ValidatesCorrectly()
