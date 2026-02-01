@@ -163,13 +163,32 @@ namespace Tests.PlayMode
         public void RequiresReplanning_ObstacleInPath_ReturnsTrue()
         {
             // Arrange
+            // Create Robot1 (the robot we're checking replanning for)
+            var robot1 = new GameObject("Robot1");
+            var robot1Controller = robot1.AddComponent<RobotController>();
+            robot1Controller.robotId = "Robot1";
+            robot1.transform.position = new Vector3(0f, 0f, 0f); // Start position
+
+            // Set up end effector
+            var endEffector1 = new GameObject("EndEffector1");
+            endEffector1.transform.SetParent(robot1.transform);
+            endEffector1.transform.localPosition = Vector3.zero;
+            robot1Controller.endEffectorBase = endEffector1.transform;
+
+            // Create obstacle robot
             var otherRobot = new GameObject("OtherRobot");
-            var controller = otherRobot.AddComponent<RobotController>();
-            controller.robotId = "OtherRobot";
+            var otherController = otherRobot.AddComponent<RobotController>();
+            otherController.robotId = "OtherRobot";
             otherRobot.transform.position = new Vector3(0.5f, 0f, 0f); // Directly in path
 
+            // Set up end effector for other robot
+            var endEffector2 = new GameObject("EndEffector2");
+            endEffector2.transform.SetParent(otherRobot.transform);
+            endEffector2.transform.localPosition = Vector3.zero;
+            otherController.endEffectorBase = endEffector2.transform;
+
             Vector3 target = new Vector3(1f, 0f, 0f);
-            RobotController[] otherRobots = new[] { controller };
+            RobotController[] otherRobots = new[] { robot1Controller, otherController };
 
             try
             {
@@ -181,6 +200,7 @@ namespace Tests.PlayMode
             }
             finally
             {
+                Object.DestroyImmediate(robot1);
                 Object.DestroyImmediate(otherRobot);
             }
         }
@@ -203,13 +223,31 @@ namespace Tests.PlayMode
         public void RequiresReplanning_ObstacleFarFromPath_ReturnsFalse()
         {
             // Arrange
+            // Create Robot1
+            var robot1 = new GameObject("Robot1");
+            var robot1Controller = robot1.AddComponent<RobotController>();
+            robot1Controller.robotId = "Robot1";
+            robot1.transform.position = new Vector3(0f, 0f, 0f); // Start position
+
+            // Set up end effector
+            var endEffector1 = new GameObject("EndEffector1");
+            endEffector1.transform.SetParent(robot1.transform);
+            endEffector1.transform.localPosition = Vector3.zero;
+            robot1Controller.endEffectorBase = endEffector1.transform;
+
             var otherRobot = new GameObject("OtherRobot");
             var controller = otherRobot.AddComponent<RobotController>();
             controller.robotId = "OtherRobot";
             otherRobot.transform.position = new Vector3(0.5f, 5f, 0f); // Far above
 
+            // Set up end effector for other robot
+            var endEffector2 = new GameObject("EndEffector2");
+            endEffector2.transform.SetParent(otherRobot.transform);
+            endEffector2.transform.localPosition = Vector3.zero;
+            controller.endEffectorBase = endEffector2.transform;
+
             Vector3 target = new Vector3(1f, 0f, 0f);
-            RobotController[] otherRobots = new[] { controller };
+            RobotController[] otherRobots = new[] { robot1Controller, controller };
 
             try
             {
@@ -221,6 +259,7 @@ namespace Tests.PlayMode
             }
             finally
             {
+                Object.DestroyImmediate(robot1);
                 Object.DestroyImmediate(otherRobot);
             }
         }

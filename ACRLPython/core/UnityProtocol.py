@@ -88,6 +88,7 @@ class MessageType(IntEnum):
     STATUS_QUERY = 0x05
     STATUS_RESPONSE = 0x06
     STEREO_IMAGE = 0x07
+    SEQUENCE_QUERY = 0x08
 
 
 class UnityProtocol:

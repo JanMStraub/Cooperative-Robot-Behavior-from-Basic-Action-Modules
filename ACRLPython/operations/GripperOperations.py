@@ -140,9 +140,9 @@ def control_gripper(
                 "Failed to send command to Unity - no clients connected",
                 [
                     "Ensure Unity is running with UnifiedPythonReceiver active",
-                    "Verify ResultsServer is running (port 5010)",
+                    "Verify CommandServer is running (port 5010)",
                     "Check Unity console for connection errors",
-                    "Restart ResultsServer or run analyzer",
+                    "Restart backend: python -m orchestrators.RunRobotController",
                 ],
             )
 
@@ -235,7 +235,7 @@ def create_control_gripper_operation() -> BasicOperation:
             "Robot exists in Unity's RobotManager",
             "GripperController component is attached to robot",
             "Unity is running with UnifiedPythonReceiver active",
-            "ResultsServer is running on port 5010",
+            "CommandServer is running on port 5010",
         ],
         postconditions=[
             "Command has been sent to Unity via TCP",
@@ -249,7 +249,7 @@ def create_control_gripper_operation() -> BasicOperation:
         success_rate=0.98,
         failure_modes=[
             "Robot ID not found in RobotManager",
-            "Communication failed - Unity not connected to ResultsServer",
+            "Communication failed - Unity not connected to CommandServer",
             "Invalid parameter type for 'open_gripper'",
             "GripperController component not found on robot",
             "Gripper mechanism jammed or obstructed",

@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: DefaultIKConfig
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL:Configuration:IKConfig
+  convergenceThreshold: 0.02
+  dampingFactor: 0.2
+  maxJointStepRad: 0.2
+  adjustmentSpeed: 0.5
+  orientationThresholdDegrees: 10
+  orientationRampStartDistance: 0.3
+  graspTimeoutSeconds: 30
+  movementTimeoutSeconds: 15
+  maxVelocity: 0.2
+  maxAcceleration: 0.7
+  graspConvergenceMultiplier: 0.33
+  preGraspConvergenceMultiplier: 2
+  maxJointVelocity: 5
+  maxErrorMagnitude: 1
+  objectFindingRadius: 0.15
+  objectDistanceThreshold: 0.1

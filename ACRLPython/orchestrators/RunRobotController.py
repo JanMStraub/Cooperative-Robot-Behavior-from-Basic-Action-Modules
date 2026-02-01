@@ -6,6 +6,7 @@ Starts all required servers in a single process:
 - ImageServer (ports 5005, 5006) - receives images
 - CommandServer (port 5010) - sends commands, receives completions
 - SequenceServer (port 5013) - processes command sequences
+- WorldStateServer (port 5014) - receives robot/object state updates
 
 Usage:
     python -m orchestrators.RunRobotController
@@ -27,6 +28,7 @@ try:
         STEREO_DETECTION_PORT,
         LLM_RESULTS_PORT,
         SEQUENCE_SERVER_PORT,
+        WORLD_STATE_PORT,
         DEFAULT_LMSTUDIO_MODEL,
         LMSTUDIO_BASE_URL,
     )
@@ -46,6 +48,7 @@ except ImportError:
         STEREO_DETECTION_PORT,
         LLM_RESULTS_PORT,
         SEQUENCE_SERVER_PORT,
+        WORLD_STATE_PORT,
         DEFAULT_LMSTUDIO_MODEL,
         LMSTUDIO_BASE_URL,
     )
@@ -64,11 +67,13 @@ try:
     from ..servers.ImageServer import run_image_server_background
     from ..servers.CommandServer import run_command_server_background, get_command_broadcaster
     from ..servers.SequenceServer import run_sequence_server_background
+    from ..servers.WorldStateServer import WorldStateServer
 except ImportError:
     # Running as python -m orchestrators.RunRobotController
     from servers.ImageServer import run_image_server_background
     from servers.CommandServer import run_command_server_background, get_command_broadcaster
     from servers.SequenceServer import run_sequence_server_background
+    from servers.WorldStateServer import WorldStateServer
 
 # Setup centralized logging (do this early before any logging calls)
 logger = setup_logging(__name__)
@@ -88,6 +93,7 @@ class RobotController:
         stereo_port: int = STEREO_DETECTION_PORT,
         command_port: int = LLM_RESULTS_PORT,
         sequence_port: int = SEQUENCE_SERVER_PORT,
+        world_state_port: int = WORLD_STATE_PORT,
         model: str = DEFAULT_LMSTUDIO_MODEL,
         check_completion: bool = True,
     ):
@@ -100,6 +106,7 @@ class RobotController:
             stereo_port: Port for stereo image pairs
             command_port: Port for commands/results (bidirectional)
             sequence_port: Port for sequence execution
+            world_state_port: Port for world state streaming
             model: LLM model for parsing
             check_completion: Whether to wait for Unity completion signals
         """
@@ -108,12 +115,14 @@ class RobotController:
         self._stereo_port = stereo_port
         self._command_port = command_port
         self._sequence_port = sequence_port
+        self._world_state_port = world_state_port
         self._model = model
         self._check_completion = check_completion
 
         self._image_server = None
         self._command_server = None
         self._sequence_server = None
+        self._world_state_server = None
         self._vision_processor = None
         self._running = False
 
@@ -148,6 +157,13 @@ class RobotController:
             model=self._model,
             check_completion=self._check_completion,
         )
+
+        # Start WorldStateServer (port 5014) - receives robot/object state updates
+        logger.info(f"Starting WorldStateServer (port: {self._world_state_port})")
+        from core.TCPServerBase import ServerConfig
+        world_state_config = ServerConfig(host=self._host, port=self._world_state_port)
+        self._world_state_server = WorldStateServer(config=world_state_config)
+        self._world_state_server.start()
 
         # Share resources between servers
         broadcaster = get_command_broadcaster()
@@ -267,6 +283,13 @@ class RobotController:
                 self._sequence_server.stop()
         except Exception as e:
             logger.error(f"Error stopping SequenceServer: {e}")
+
+        try:
+            if self._world_state_server:
+                self._world_state_server.stop()
+                logger.info("WorldStateServer stopped")
+        except Exception as e:
+            logger.error(f"Error stopping WorldStateServer: {e}")
 
         logger.info("RobotController stopped")
 

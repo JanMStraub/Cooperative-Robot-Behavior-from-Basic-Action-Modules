@@ -60,7 +60,7 @@ public class SaveScreenshots : MonoBehaviour
     public float minBBoxSize = 0.02f;
 
     [Tooltip("Require object center to be in viewport for labeling")]
-    public bool requireCenterInViewport = false;
+    public bool requireCenterInViewport = true;
 
     [Tooltip("Enable occlusion detection - skip objects hidden behind others")]
     public bool enableOcclusionDetection = true;

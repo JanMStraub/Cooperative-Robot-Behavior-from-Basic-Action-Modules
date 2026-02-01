@@ -20,20 +20,18 @@ namespace PythonCommunication.Core
     public abstract class BidirectionalClientBase<TResponse> : TCPClientBase
         where TResponse : class
     {
-        // Response queue for thread-safe communication
         protected Queue<TResponse> _responseQueue = new Queue<TResponse>();
         protected readonly object _queueLock = new object();
 
-        // Receive thread
         protected Thread _receiveThread;
-        protected bool _receiveShouldRun = false;
+        protected volatile bool _receiveShouldRun = false;
 
-        // Pending requests for correlation
         protected Dictionary<uint, Action<TResponse>> _pendingRequests =
             new Dictionary<uint, Action<TResponse>>();
         protected readonly object _pendingLock = new object();
 
-        // Log prefix for this client
+        private const int MAX_ITEMS_PER_FRAME = 50;
+
         protected abstract string LogPrefix { get; }
 
         #region Unity Lifecycle
@@ -41,8 +39,6 @@ namespace PythonCommunication.Core
         protected override void Update()
         {
             base.Update();
-
-            // Process queued responses on main thread
             ProcessResponseQueue();
         }
 
@@ -54,7 +50,6 @@ namespace PythonCommunication.Core
         {
             base.OnConnected();
 
-            // Start receive thread
             _receiveShouldRun = true;
             _receiveThread = new Thread(ReceiveLoop)
             {
@@ -70,22 +65,18 @@ namespace PythonCommunication.Core
         {
             base.OnDisconnecting();
 
-            // Stop receive thread
             _receiveShouldRun = false;
 
-            if (_receiveThread != null && _receiveThread.IsAlive)
+            lock (_queueLock)
             {
-                _receiveThread.Join(1000);
-                _receiveThread = null;
+                _responseQueue.Clear();
             }
-
-            // Clear pending requests
             lock (_pendingLock)
             {
                 _pendingRequests.Clear();
             }
 
-            Debug.Log($"{LogPrefix} Disconnecting, receive thread stopped");
+            Debug.Log($"{LogPrefix} Disconnecting cleanup done");
         }
 
         #endregion
@@ -94,7 +85,8 @@ namespace PythonCommunication.Core
 
         /// <summary>
         /// Background thread that receives responses from server.
-        /// Override ParseResponse() to handle specific protocol.
+        /// Overrides must implement ReceiveResponse() to handle specific protocol.
+        /// Runs on background thread; uses locks and queues to safely marshal to main thread.
         /// </summary>
         protected virtual void ReceiveLoop()
         {
@@ -102,12 +94,10 @@ namespace PythonCommunication.Core
             {
                 try
                 {
-                    // Read response
                     TResponse response = ReceiveResponse();
 
                     if (response != null)
                     {
-                        // Queue for main thread processing
                         lock (_queueLock)
                         {
                             _responseQueue.Enqueue(response);
@@ -116,11 +106,10 @@ namespace PythonCommunication.Core
                 }
                 catch (System.IO.IOException)
                 {
-                    // Connection closed
                     if (_receiveShouldRun)
                     {
-                        Debug.Log($"{LogPrefix} Connection closed");
-                        _isConnected = false;
+                        Debug.LogWarning($"{LogPrefix} Stream closed unexpectedly.");
+                        Disconnect();
                     }
                     break;
                 }
@@ -129,9 +118,18 @@ namespace PythonCommunication.Core
                     if (_receiveShouldRun)
                     {
                         Debug.LogError($"{LogPrefix} Receive error: {ex.Message}");
+                        Disconnect();
                     }
                     break;
                 }
+            }
+
+            if (IsConnected)
+            {
+                Debug.LogWarning(
+                    $"{LogPrefix} Receive thread died unexpectedly, triggering cleanup"
+                );
+                Disconnect();
             }
         }
 
@@ -148,7 +146,7 @@ namespace PythonCommunication.Core
         /// </summary>
         protected virtual uint GetResponseRequestId(TResponse response)
         {
-            return 0; // Default: no correlation
+            return 0;
         }
 
         #endregion
@@ -157,10 +155,13 @@ namespace PythonCommunication.Core
 
         /// <summary>
         /// Process queued responses on main thread.
+        /// Limits to MAX_ITEMS_PER_FRAME per update to prevent frame drops.
         /// </summary>
         protected virtual void ProcessResponseQueue()
         {
-            while (true)
+            int itemsProcessed = 0;
+
+            while (itemsProcessed < MAX_ITEMS_PER_FRAME)
             {
                 TResponse response;
 
@@ -172,7 +173,6 @@ namespace PythonCommunication.Core
                     response = _responseQueue.Dequeue();
                 }
 
-                // Check for pending request callback
                 uint requestId = GetResponseRequestId(response);
                 Action<TResponse> callback = null;
 
@@ -187,7 +187,6 @@ namespace PythonCommunication.Core
                     }
                 }
 
-                // Call specific callback or general handler
                 if (callback != null)
                 {
                     try
@@ -200,8 +199,16 @@ namespace PythonCommunication.Core
                     }
                 }
 
-                // Always call general response handler
-                OnResponseReceived(response);
+                try
+                {
+                    OnResponseReceived(response);
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"{LogPrefix} OnResponseReceived error: {ex.Message}");
+                }
+
+                itemsProcessed++;
             }
         }
 
@@ -224,15 +231,24 @@ namespace PythonCommunication.Core
         /// <returns>True if sent successfully</returns>
         protected bool SendRequest(byte[] data, uint requestId, Action<TResponse> callback = null)
         {
-            if (!WriteToStream(data))
-                return false;
-
             if (callback != null && requestId != 0)
             {
                 lock (_pendingLock)
                 {
                     _pendingRequests[requestId] = callback;
                 }
+            }
+
+            if (!WriteToStream(data))
+            {
+                if (callback != null && requestId != 0)
+                {
+                    lock (_pendingLock)
+                    {
+                        _pendingRequests.Remove(requestId);
+                    }
+                }
+                return false;
             }
 
             return true;
@@ -276,11 +292,8 @@ namespace PythonCommunication.Core
         protected uint ReadUInt32BE()
         {
             byte[] buffer = new byte[4];
-            int read = ReadExactly(_stream, buffer, 4);
-            if (read < 4)
-                throw new System.IO.IOException("Connection closed");
+            ReadExactly(_stream, buffer, 4);
 
-            // Convert from big-endian
             if (BitConverter.IsLittleEndian)
                 Array.Reverse(buffer);
 
@@ -296,10 +309,16 @@ namespace PythonCommunication.Core
             if (length == 0)
                 return string.Empty;
 
+            const int MAX_STRING_LENGTH = 10 * 1024 * 1024;
+            if (length > MAX_STRING_LENGTH)
+            {
+                throw new System.IO.IOException(
+                    $"String length {length} exceeds maximum allowed {MAX_STRING_LENGTH}"
+                );
+            }
+
             byte[] buffer = new byte[length];
-            int read = ReadExactly(_stream, buffer, (int)length);
-            if (read < length)
-                throw new System.IO.IOException("Connection closed");
+            ReadExactly(_stream, buffer, (int)length);
 
             return Encoding.UTF8.GetString(buffer);
         }

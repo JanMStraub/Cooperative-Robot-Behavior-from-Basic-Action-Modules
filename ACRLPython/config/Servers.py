@@ -22,6 +22,7 @@ DEPTH_RESULTS_PORT = int(os.environ.get("DEPTH_RESULTS_PORT", "5007"))  # Sends 
 RAG_SERVER_PORT = int(os.environ.get("RAG_SERVER_PORT", "5011"))  # RAG semantic search server
 STATUS_SERVER_PORT = int(os.environ.get("STATUS_SERVER_PORT", "5012"))  # Status query server
 SEQUENCE_SERVER_PORT = int(os.environ.get("SEQUENCE_SERVER_PORT", "5013"))  # Sequence server
+WORLD_STATE_PORT = int(os.environ.get("WORLD_STATE_PORT", "5014"))  # World state streaming (Unity → Python)
 
 # Legacy port names for backward compatibility
 RESULTS_SERVER_PORT = LLM_RESULTS_PORT
@@ -62,7 +63,7 @@ MAX_RESULT_QUEUE_SIZE = int(os.environ.get("MAX_RESULT_QUEUE_SIZE", "100"))
 THREAD_CLEANUP_INTERVAL = float(os.environ.get("THREAD_CLEANUP_INTERVAL", "10.0"))
 RESULTS_SERVER_KEEPALIVE = float(os.environ.get("RESULTS_SERVER_KEEPALIVE", "1.0"))
 STREAMING_SERVER_MONITOR = float(os.environ.get("STREAMING_SERVER_MONITOR", "60.0"))
-RAG_SERVER_TIMEOUT = float(os.environ.get("RAG_SERVER_TIMEOUT", "90.0"))
+RAG_SERVER_TIMEOUT = float(os.environ.get("RAG_SERVER_TIMEOUT", "20.0"))
 SERVER_INIT_WAIT_TIME = float(os.environ.get("SERVER_INIT_WAIT_TIME", "2.0"))
 
 # ============================================================================

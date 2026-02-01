@@ -7,8 +7,9 @@ namespace PythonCommunication
     // ============================================================================
 
     /// <summary>
-    /// Complete RAG query result from Python RAGServer
+    /// Complete RAG query result from Python SequenceServer
     /// Contains semantic search results for robot operations
+    /// (RAG is now integrated into SequenceServer, not a separate server)
     /// </summary>
     [Serializable]
     public class RagResult

@@ -35,5 +35,14 @@ namespace Configuration
 
         [Tooltip("Enable vertical sync to prevent screen tearing")]
         public bool enableVSync = true;
+
+        /// <summary>
+        /// Validate configuration values.
+        /// </summary>
+        private void OnValidate()
+        {
+            timeScale = Mathf.Max(0.1f, timeScale);
+            targetFrameRate = Mathf.Clamp(targetFrameRate, 10, 120);
+        }
     }
 }

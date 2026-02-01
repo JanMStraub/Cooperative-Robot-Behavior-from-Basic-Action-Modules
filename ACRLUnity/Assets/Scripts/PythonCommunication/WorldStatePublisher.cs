@@ -207,7 +207,9 @@ namespace PythonCommunication
         #region World State Publishing
 
         /// <summary>
-        /// Gather and publish current world state to Python
+        /// Gather and publish current world state to Python.
+        /// Uses dedicated WorldStateClient (port 5014) to avoid message correlation
+        /// conflicts with command/response traffic on port 5010.
         /// </summary>
         private void PublishWorldState()
         {
@@ -220,28 +222,37 @@ namespace PythonCommunication
                     timestamp = Time.time,
                 };
 
-                // Convert to JSON and send via UnifiedPythonReceiver
+                // Convert to JSON and send via dedicated WorldStateClient
                 string json = JsonUtility.ToJson(update);
 
-                if (UnifiedPythonReceiver.Instance != null)
+                // Use dedicated WorldStateClient (port 5014) instead of ResultsClient (port 5010)
+                // This prevents unsolicited broadcasts from interfering with command request/response correlation
+                if (WorldStateClient.Instance != null)
                 {
-                    // Send as a completion message (will be routed to Python)
-                    UnifiedPythonReceiver.Instance.SendCompletion(json, requestId: 0);
+                    bool sent = WorldStateClient.Instance.PublishWorldState(json);
 
-                    _updatesSent++;
-                    _lastUpdateTime = Time.time;
-
-                    if (_verboseLogging)
+                    if (sent)
                     {
-                        Debug.Log(
-                            $"{_logPrefix} Published world state: {update.robots.Count} robots, "
-                                + $"{update.objects.Count} objects"
-                        );
+                        _updatesSent++;
+                        _lastUpdateTime = Time.time;
+
+                        if (_verboseLogging)
+                        {
+                            Debug.Log(
+                                $"{_logPrefix} Published world state: {update.robots.Count} robots, "
+                                    + $"{update.objects.Count} objects"
+                            );
+                        }
                     }
                 }
                 else
                 {
-                    Debug.LogWarning($"{_logPrefix} UnifiedPythonReceiver not available");
+                    if (_verboseLogging)
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} WorldStateClient not available (Python WorldStateServer may not be running)"
+                        );
+                    }
                 }
             }
             catch (Exception ex)

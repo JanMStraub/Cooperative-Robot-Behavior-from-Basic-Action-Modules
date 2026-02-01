@@ -3,6 +3,7 @@ using Core;
 using MathNet.Numerics.LinearAlgebra;
 using UnityEngine;
 using Utilities;
+using Configuration;
 
 namespace Robotics
 {
@@ -49,14 +50,7 @@ namespace Robotics
 
         [Header("IK Settings")]
         [SerializeField]
-        private float _dampingFactorLambda = RobotConstants.DEFAULT_DAMPING_FACTOR;
-
-        [SerializeField]
-        private float _convergenceThreshold = RobotConstants.DEFAULT_CONVERGENCE_THRESHOLD;
-
-        [SerializeField]
-        private float _orientationThresholdDegrees =
-            RobotConstants.DEFAULT_ORIENTATION_THRESHOLD_DEGREES;
+        private IKConfig _ikConfig;
 
         [SerializeField]
         private float _maxJointStepRad = 0.02f; // Reduced from 0.05 to prevent overshoot
@@ -156,6 +150,9 @@ namespace Robotics
         /// </summary>
         private void Start()
         {
+            if (_ikConfig == null)
+                _ikConfig = ScriptableObject.CreateInstance<IKConfig>();
+
             InitializeRobot();
 
             // Only run autonomous startup if enabled (when used standalone, not as backup)
@@ -227,7 +224,7 @@ namespace Robotics
             _cachedJointInfos = new JointInfo[jointCount];
 
             // Initialize IK solver
-            _ikSolver = new IKSolver(jointCount, _dampingFactorLambda);
+            _ikSolver = new IKSolver(jointCount, _ikConfig.dampingFactor);
 
             // Auto-find gripper controller if not assigned
             if (_gripperController == null)
@@ -397,7 +394,7 @@ namespace Robotics
             UpdateJointInfoCache();
 
             // Check convergence - use the Inspector threshold value
-            float effectiveThreshold = _convergenceThreshold; // Use Inspector value (default 3cm)
+            float effectiveThreshold = _ikConfig.convergenceThreshold; // Use Inspector value (default 3cm)
             float sqrPosThreshold = effectiveThreshold * effectiveThreshold;
             Vector3 currentVelocity = GetEndEffectorVelocity();
 
@@ -473,8 +470,8 @@ namespace Robotics
                 Kp: _positionGain,
                 Kd: _velocityGain,
                 orientationWeight: orientationWeight,
-                orientationConvergenceThreshold: _orientationThresholdDegrees * Mathf.Deg2Rad,
-                overrideDamping: _dampingFactorLambda
+                orientationConvergenceThreshold: _ikConfig.orientationThresholdDegrees * Mathf.Deg2Rad,
+                overrideDamping: _ikConfig.dampingFactor
             );
 
             if (jointDeltas != null)
@@ -592,20 +589,21 @@ namespace Robotics
             // Try to find a real object near this position
             if (ObjectFinder.Instance != null)
             {
+                const float objectFindingRadius = 0.15f; // meters
                 GameObject nearbyObject = ObjectFinder.Instance.FindClosestObject(
                     position,
-                    RobotConstants.OBJECT_FINDING_RADIUS
+                    objectFindingRadius
                 );
 
                 if (nearbyObject != null)
                 {
+                    const float objectDistanceThreshold = 0.1f; // meters
                     float distanceSqr = Vector3.SqrMagnitude(
                         position - nearbyObject.transform.position
                     );
                     if (
                         distanceSqr
-                        < RobotConstants.OBJECT_DISTANCE_THRESHOLD
-                            * RobotConstants.OBJECT_DISTANCE_THRESHOLD
+                        < objectDistanceThreshold * objectDistanceThreshold
                     )
                     {
                         // Close enough - use the real object instead
@@ -882,7 +880,7 @@ namespace Robotics
         /// </summary>
         public bool IsToleranceReached()
         {
-            return _distanceToTarget < _convergenceThreshold;
+            return _distanceToTarget < _ikConfig.convergenceThreshold;
         }
 
         /// <summary>

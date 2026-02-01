@@ -15,6 +15,11 @@ namespace PythonCommunication
         public bool success;
 
         /// <summary>
+        /// Request ID for Protocol V2 correlation
+        /// </summary>
+        public uint request_id;
+
+        /// <summary>
         /// Unique identifier for this sequence execution
         /// </summary>
         public string sequence_id;

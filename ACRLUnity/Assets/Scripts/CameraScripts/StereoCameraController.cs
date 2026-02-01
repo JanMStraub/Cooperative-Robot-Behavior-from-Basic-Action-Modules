@@ -1,7 +1,6 @@
 using System;
 using System.Net.Sockets;
 using Core;
-using PythonCommunication;
 using UnityEngine;
 
 namespace Vision
@@ -28,11 +27,11 @@ namespace Vision
         [Header("Image Settings")]
         [SerializeField]
         [Tooltip("Width of captured images in pixels")]
-        private int _imageWidth = 1920; // Good balance of quality and performance
+        private int _imageWidth = 1920;
 
         [SerializeField]
         [Tooltip("Height of captured images in pixels")]
-        private int _imageHeight = 1080; // Good balance of quality and performance
+        private int _imageHeight = 1080;
 
         [SerializeField]
         [Tooltip("JPEG compression quality (1-100)")]
@@ -41,8 +40,8 @@ namespace Vision
 
         [Header("Streaming Mode")]
         [SerializeField]
-        [Tooltip("Enable continuous streaming mode (default: true for Python VisionProcessor)")]
-        private bool _enableStreaming = true;
+        [Tooltip("Enable continuous streaming mode (default: false for Python VisionProcessor)")]
+        private bool _enableStreaming = false;
 
         [SerializeField]
         [Tooltip("Streaming rate in FPS (frames per second)")]
@@ -51,24 +50,17 @@ namespace Vision
 
         private float _stereoBaseline;
         private float _cameraFOV;
-
-        // State
         private int _captureCounter = 0;
-
-        // Streaming state
         private float _streamingInterval;
         private float _timeSinceLastCapture = 0f;
-
-        // Camera
         private Camera _leftCamera;
         private Camera _rightCamera;
         private string _cameraPairId;
 
-        // Helper variables
         private const string _logPrefix = "[STEREO_CAMERA_CONTROLLER]";
 
         /// <summary>
-        /// Get the camera FOV - either from actual camera or manual override
+        /// Get the camera FOV
         /// </summary>
         private float GetCameraFOV()
         {
@@ -80,7 +72,7 @@ namespace Vision
         }
 
         /// <summary>
-        /// Get the stereo baseline - either manual or auto-calculated from camera positions
+        /// Get the stereo baseline
         /// </summary>
         private float GetStereoBaseline()
         {
@@ -102,7 +94,6 @@ namespace Vision
         /// </summary>
         private void FindCameras()
         {
-            // Try to find cameras as children of this GameObject
             if (transform.childCount >= 2)
             {
                 Transform leftChild = transform.GetChild(0);
@@ -123,14 +114,10 @@ namespace Vision
             );
         }
 
-        /// <summary>
-        /// Unity Start - validate configuration and subscribe to results
-        /// </summary>
         private void Start()
         {
             FindCameras();
 
-            // Validate cameras
             if (_leftCamera == null || _rightCamera == null)
             {
                 Debug.LogError($"{_logPrefix} Both left and right cameras must be assigned!");
@@ -138,16 +125,8 @@ namespace Vision
                 return;
             }
 
-            _cameraPairId = name;
+            _cameraPairId = name; // GameObject name
 
-            // Log initialization
-            float fov = GetCameraFOV();
-            float baseline = GetStereoBaseline();
-            Debug.Log(
-                $"{_logPrefix} Initialized: {_cameraPairId}, Baseline={baseline}m, FOV={fov}°"
-            );
-
-            // Initialize streaming mode
             _streamingInterval = 1.0f / _streamingFPS;
             if (_enableStreaming)
             {
@@ -157,9 +136,6 @@ namespace Vision
             }
         }
 
-        /// <summary>
-        /// Unity Update - handle streaming mode
-        /// </summary>
         private void Update()
         {
             if (!_enableStreaming)
@@ -174,7 +150,6 @@ namespace Vision
             }
         }
 
-
         /// <summary>
         /// Capture stereo images and send directly to Python StereoImageServer via TCP.
         /// Called by PythonCommandHandler for the capture_stereo_images command.
@@ -182,25 +157,11 @@ namespace Vision
         /// <param name="cameraId">Camera pair ID to use in the message</param>
         public void CaptureAndSendToServer(string cameraId)
         {
-            if (_leftCamera == null || _rightCamera == null)
-            {
-                Debug.LogError($"{_logPrefix} Cameras not initialized");
-                return;
-            }
-
             try
             {
-                // Capture both images
                 byte[] leftImage = CaptureImage(_leftCamera);
                 byte[] rightImage = CaptureImage(_rightCamera);
 
-                if (leftImage == null || rightImage == null)
-                {
-                    Debug.LogError($"{_logPrefix} Failed to capture stereo images");
-                    return;
-                }
-
-                // Send via TCP to StereoImageServer (port 5006)
                 SendStereoImagesTCP(cameraId, leftImage, rightImage);
 
                 _captureCounter++;
@@ -213,7 +174,6 @@ namespace Vision
 
         /// <summary>
         /// Send stereo images to Python StereoImageServer via TCP.
-        /// Protocol: [type:1][request_id:4][camera_pair_id][cam_L_id][cam_R_id][prompt][img_L][img_R]
         /// </summary>
         private void SendStereoImagesTCP(string cameraPairId, byte[] leftImage, byte[] rightImage)
         {
@@ -227,10 +187,8 @@ namespace Vision
                     );
                     NetworkStream stream = client.GetStream();
 
-                    // Build message
                     byte[] message = EncodeStereoMessage(cameraPairId, leftImage, rightImage);
 
-                    // Send
                     stream.Write(message, 0, message.Length);
                     stream.Flush();
                 }
@@ -254,7 +212,7 @@ namespace Vision
 
             string camLId = cameraPairId + "_L";
             string camRId = cameraPairId + "_R";
-            string prompt = ""; // Could be removed but Python protocol needs to be updated as well
+            string prompt = "";
 
             // Build metadata with camera transform (use left camera position)
             var metadata = new StereoMetadata

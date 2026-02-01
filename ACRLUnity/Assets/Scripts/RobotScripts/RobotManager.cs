@@ -13,7 +13,7 @@ namespace Robotics
         public GameObject robotGameObject;
         public GameObject targetGameObject;
         public RobotController controller;
-        public SimpleRobotController simpleController; // NEW: Support for SimpleRobotController
+        public SimpleRobotController simpleController;
         public RobotConfig profile;
         public bool isActive;
         public float lastTargetChangeTime;
