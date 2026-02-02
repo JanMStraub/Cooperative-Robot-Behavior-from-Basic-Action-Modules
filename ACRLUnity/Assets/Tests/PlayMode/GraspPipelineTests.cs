@@ -328,9 +328,9 @@ namespace Tests.PlayMode
 
             var result = pipeline.PlanGrasp(_testObject, _mockEndEffector.position, options);
 
-            if (result.HasValue)
+            if (result != null)
             {
-                Assert.AreEqual(GraspApproach.Top, result.Value.approachType,
+                Assert.AreEqual(GraspApproach.Top, result.approachType,
                     "Should use overridden approach direction");
             }
         }
@@ -352,7 +352,7 @@ namespace Tests.PlayMode
 
             var result = pipeline.PlanGrasp(unreachableObject, _mockEndEffector.position, GraspOptions.Advanced);
 
-            Assert.IsFalse(result.HasValue, "Should return null for unreachable object");
+            Assert.IsNull(result, "Should return null for unreachable object");
 
             Object.Destroy(unreachableObject);
         }

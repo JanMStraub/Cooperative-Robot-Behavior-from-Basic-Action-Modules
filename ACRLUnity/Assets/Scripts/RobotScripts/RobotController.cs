@@ -23,7 +23,6 @@ namespace Robotics
         [Header("Robot Identity")]
         public string robotId = "Robot1";
 
-        // --- Performance Caching ---
         private Transform _ikFrame;
         private JointInfo[] _cachedJointInfos;
         private ArticulationDrive[] _cachedDriveUpdates;
@@ -31,30 +30,18 @@ namespace Robotics
         private float _lastActiveCheckTime = 0f;
         private const float ACTIVE_CHECK_CACHE_INTERVAL = 0.1f;
 
-        // ---------------------------
-
         [Header("IK Parameters")]
         [SerializeField]
         private IKConfig _ikConfig;
         private IKSolver _ikSolver;
 
-        // --- Trajectory & Motion (From Script B) ---
         private TrajectoryController _trajectoryController;
-        private CartesianPath _currentPath;
-        private float _pathStartTime;
-        private VelocityProfile _velocityProfile;
-
-        // GC optimization: Cached waypoint list
-        private List<CartesianWaypoint> _cachedWaypointList = new List<CartesianWaypoint>(50);
-
-        // --- State Variables ---
         private float _sqrDistanceToTarget;
         private float _distanceToTarget;
         private bool _hasReachedTarget = true;
         private bool _isGraspingTarget = false;
         private Transform _targetTransform;
 
-        // FIX #5: Flag to disable IK when manually driving joints (e.g., ReturnToStartPosition)
         private bool _isManuallyDriven = false;
         public bool IsManuallyDriven
         {
@@ -62,17 +49,13 @@ namespace Robotics
             set => _isManuallyDriven = value;
         }
 
-        // IK State cache
         private Vector3 _endEffectorLocalPosition;
         private Quaternion _endEffectorLocalRotation;
         private Vector3 _targetLocalPosition;
         private Quaternion _targetLocalRotation;
 
-        // Target Objects
         private GameObject _targetObject;
         public GameObject debugTarget;
-
-        // Reusable Temporary Targets
         private GameObject _cachedTempTargetMove;
         private GameObject _cachedTempTargetGrasp;
         private GameObject _cachedTempTargetPre;
@@ -90,7 +73,6 @@ namespace Robotics
         [SerializeField]
         private GripperController _gripperController;
         public bool _closeGripperAfterReach = false;
-        private GraspApproach _currentGraspApproach;
 
         [SerializeField]
         [Tooltip("Automatically attach the target object to the gripper when grasped")]
@@ -115,7 +97,6 @@ namespace Robotics
         private Vector3 _lastTrackedTargetPosition;
         private bool _isTrackingMovingTarget = false;
 
-        // Moving target smoothing
         private Vector3 _smoothedTargetPosition;
         private Vector3 _targetPositionVelocity;
         private const float TARGET_SMOOTHING_TIME = 0.2f;
@@ -197,7 +178,6 @@ namespace Robotics
             for (int i = 0; i < jointCount; i++)
             {
                 var drive = robotJoints[i].xDrive;
-                // Apply Profile from RobotManager if available
                 if (
                     _robotManager != null
                     && _robotManager.RobotInstances.TryGetValue(robotId, out var robotInstance)
@@ -218,8 +198,6 @@ namespace Robotics
 
             _ikSolver = new IKSolver(jointCount, _ikConfig.dampingFactor);
 
-            // Initialize Trajectory Controller (From Script B)
-            // Using slightly stiffer gains for better path tracking
             if (_trajectoryConfig == null)
                 _trajectoryConfig = ScriptableObject.CreateInstance<TrajectoryConfig>();
 
@@ -251,8 +229,6 @@ namespace Robotics
             }
         }
 
-        // --- Core Helpers ---
-
         private GameObject GetCachedTempObject(ref GameObject cacheField, string suffix)
         {
             if (cacheField == null)
@@ -278,7 +254,6 @@ namespace Robotics
 
                 if (setting)
                 {
-                    // Script A Logic: Handle delayed gripper closing via Coroutine
                     if (_closeGripperAfterReach && _gripperController != null)
                     {
                         StartCoroutine(CloseGripperAfterDelay());
@@ -291,15 +266,10 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Script A Feature: Robust gripper closing logic
-        /// </summary>
         private IEnumerator CloseGripperAfterDelay()
         {
-            // Wait for configured delay or until motion stabilizes
             float delayStartTime = Time.time;
 
-            // Use GetEndEffectorVelocity() instead of finite difference
             yield return new WaitUntil(
                 () =>
                     Time.time - delayStartTime >= _gripperCloseDelay
@@ -314,7 +284,6 @@ namespace Robotics
             _gripperController.CloseGrippers();
             yield return new WaitWhile(() => _gripperController.IsMoving);
 
-            // Ensure grip has formed
             float graspStartTime = Time.time;
             yield return new WaitUntil(
                 () => Time.time - graspStartTime > 0.2f && !_gripperController.IsMoving
@@ -323,8 +292,6 @@ namespace Robotics
             OnTargetReached?.Invoke();
         }
 
-        // --- Optimized Core Loop ---
-
         private void FixedUpdate()
         {
             if (_simulationManager != null && _simulationManager.ShouldStopRobots)
@@ -332,7 +299,6 @@ namespace Robotics
             if (_simulationManager != null && !GetCachedIsRobotActive())
                 return;
 
-            // FIX #5: DON'T RUN IK IF BEING MANUALLY DRIVEN (e.g., ReturnToStartPosition)
             if (_isManuallyDriven)
                 return;
 
@@ -358,10 +324,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Script B Feature: Precise Forward Kinematics Velocity Calculation.
-        /// Replaces the noisy (pos - lastPos) calculation from Script A.
-        /// </summary>
         private Vector3 GetEndEffectorVelocity()
         {
             if (robotJoints == null || robotJoints.Length == 0 || endEffectorBase == null)
@@ -372,7 +334,7 @@ namespace Robotics
             for (int i = 0; i < robotJoints.Length; i++)
             {
                 var joint = robotJoints[i];
-                float jointAngularVel = joint.jointVelocity[0]; // rad/sec
+                float jointAngularVel = joint.jointVelocity[0];
                 Vector3 axisWorld = joint.transform.rotation * joint.anchorRotation * Vector3.right;
                 Vector3 jointToEE = endEffectorBase.position - joint.transform.position;
                 Vector3 velContribution = Vector3.Cross(axisWorld * jointAngularVel, jointToEE);
@@ -391,7 +353,6 @@ namespace Robotics
                 return;
             }
 
-            // Moving Target Tracking
             bool hasGrippedTarget = _hasReachedTarget && _closeGripperAfterReach;
             if (
                 _enableMovingTargetTracking
@@ -419,14 +380,11 @@ namespace Robotics
                         _targetTransform.rotation = _targetObject.transform.rotation;
                     }
                     _lastTrackedTargetPosition = _smoothedTargetPosition;
-                    // Recalculate trajectory if target moves significantly?
-                    // For now, allow IK to handle small adjustments, restart if large.
                     if (_hasReachedTarget)
                         SetTargetReached(false);
                 }
             }
 
-            // Update Distances
             _endEffectorLocalPosition = _ikFrame.InverseTransformPoint(endEffectorBase.position);
             _targetLocalPosition = _ikFrame.InverseTransformPoint(_targetTransform.position);
 
@@ -446,23 +404,18 @@ namespace Robotics
 
             UpdateEndEffectorState();
 
-            // 1. REALISTIC THRESHOLDS
-            // 5mm is too tight for PhysX without sub-stepping. 1cm (0.01f) is standard.
-            // 5 degrees is too tight. 7-10 degrees is usually acceptable.
             float posThreshold = _isGraspingTarget
                 ? RobotConstants.MOVEMENT_THRESHOLD
                 : (_ikConfig != null ? _ikConfig.convergenceThreshold : 0.02f);
-            float rotThreshold = 7.0f; // Relaxed from 5.0f to prevent "hunting"
+            float rotThreshold = 7.0f;
 
             float angleError = Quaternion.Angle(_endEffectorLocalRotation, _targetLocalRotation);
             bool isPosReached = _distanceToTarget < posThreshold;
             bool isRotReached = angleError < rotThreshold;
 
-            // "Settled" means velocity is effectively zero
             Vector3 currentVelocity = GetEndEffectorVelocity();
-            bool isSettled = currentVelocity.sqrMagnitude < 0.005f; // < 0.07 m/s (Strict)
+            bool isSettled = currentVelocity.sqrMagnitude < 0.005f;
 
-            // DEBUG: Only log if we are stalled (Settled but NOT reached)
             bool isStalled = isSettled && (!isPosReached || !isRotReached);
             if (_enableDebugVisualization && isStalled && Time.frameCount % 60 == 0)
             {
@@ -471,7 +424,6 @@ namespace Robotics
                 );
             }
 
-            // --- SUCCESS CHECK ---
             if (isPosReached && isRotReached && isSettled)
             {
                 if (!_hasReachedTarget)
@@ -484,7 +436,6 @@ namespace Robotics
                 return;
             }
 
-            // If we drifted away significantly, reset status
             if (
                 _hasReachedTarget
                 && (_distanceToTarget > posThreshold * 1.5f || angleError > rotThreshold * 1.5f)
@@ -495,23 +446,17 @@ namespace Robotics
 
             UpdateJointInfoCache();
 
-            // 2. STALL COMPENSATION ( The "Kick" )
-            // If we are stopped but haven't reached the target, MULTIPLY the gain.
-            // This overcomes the static friction that holds the robot back.
+            // STALL COMPENSATION: Increase gain when stopped but not at target
+            // This overcomes static friction
             float kpMult = isStalled ? 2.5f : 1.0f;
-            float orientationWeight = 1.0f; // Force full orientation control when close
+            float orientationWeight = 1.0f;
 
-            // 3. INPUTS
             Vector3 constrainedTargetPos = _targetLocalPosition;
             Quaternion constrainedTargetRot = _targetLocalRotation;
 
-            IKState currentState = new IKState(
-                _endEffectorLocalPosition,
-                _endEffectorLocalRotation
-            );
-            IKState targetState = new IKState(constrainedTargetPos, constrainedTargetRot);
+            IKState currentState = new(_endEffectorLocalPosition, _endEffectorLocalRotation);
+            IKState targetState = new(constrainedTargetPos, constrainedTargetRot);
 
-            // 4. SOLVE
             var jointDeltas = _ikSolver.ComputeJointDeltasWithVelocity(
                 currentState,
                 targetState,
@@ -519,8 +464,8 @@ namespace Robotics
                 Vector3.zero,
                 _cachedJointInfos,
                 posThreshold,
-                Kp: 3.5f * kpMult, // Base 3.5, boosts to ~8.75 if stalled
-                Kd: 0.5f, // Keep damping low to allow movement
+                Kp: 3.5f * kpMult,
+                Kd: 0.5f,
                 orientationWeight: orientationWeight,
                 orientationConvergenceThreshold: rotThreshold * Mathf.Deg2Rad,
                 overrideDamping: _ikConfig != null ? _ikConfig.dampingFactor : 0.2f
@@ -529,14 +474,12 @@ namespace Robotics
             if (jointDeltas == null)
                 return;
 
-            // 5. APPLY WITH CLAMPING
             RobotConfig robotProfile =
                 _robotManager?.GetRobotProfile(robotId) ?? _robotManager?.RobotProfile;
             float adjSpeed = robotProfile != null ? robotProfile.adjustmentSpeed : 1.0f;
             float globalSpeed = _robotManager != null ? _robotManager.globalSpeedMultiplier : 1.0f;
             float baseScale = Mathf.Rad2Deg * adjSpeed * globalSpeed;
 
-            // Allow faster movement if we are stalled to "break free"
             float maxDegreesPerFrame = isStalled ? 8.0f : 5.0f;
 
             bool hasUpdates = false;
@@ -547,7 +490,6 @@ namespace Robotics
 
                 if (isStalled && Mathf.Abs(idealStepDegrees) > 0.001f)
                 {
-                    // Add 0.05 degrees in the direction of the desired movement
                     idealStepDegrees += Mathf.Sign(idealStepDegrees) * 0.05f;
                 }
 
@@ -593,8 +535,6 @@ namespace Robotics
             }
         }
 
-        // --- Target Setting & Trajectory Generation ---
-
         private void SetTargetInternal(
             Transform targetTransform,
             GameObject originalObject,
@@ -606,81 +546,14 @@ namespace Robotics
             _closeGripperAfterReach = options.closeGripperOnReach;
             SetTargetReached(false);
 
-            _isTrackingMovingTarget = (originalObject != null);
+            _isTrackingMovingTarget = originalObject != null;
             if (_isTrackingMovingTarget)
             {
                 _lastTrackedTargetPosition = originalObject.transform.position;
             }
 
             _ikSolver?.ResetIterationCount();
-
-            // Script B Integration: Generate Trajectory immediately
-            GenerateTrajectoryToTarget();
         }
-
-        /// <summary>
-        /// Script B Feature: Generates smooth path and velocity profile.
-        /// </summary>
-        private void GenerateTrajectoryToTarget()
-        {
-            if (_targetTransform == null || endEffectorBase == null)
-                return;
-
-            Vector3 startPos = endEffectorBase.position;
-            Vector3 endPos = _targetTransform.position;
-
-            float distance = Vector3.Distance(startPos, endPos);
-            // Don't generate trajectory for tiny moves (just use IK)
-            if (distance < 0.05f)
-            {
-                return;
-            }
-
-            const float waypointSpacing = 0.05f;
-            int numWaypoints = Mathf.Max(2, Mathf.CeilToInt(distance / waypointSpacing));
-
-            _cachedWaypointList.Clear();
-            for (int i = 0; i < numWaypoints; i++)
-            {
-                float t = i / (float)(numWaypoints - 1);
-                Vector3 pos = Vector3.Lerp(startPos, endPos, t);
-                Quaternion rot = Quaternion.Slerp(
-                    endEffectorBase.rotation,
-                    _targetTransform.rotation,
-                    t
-                );
-                float dist = t * distance;
-
-                _cachedWaypointList.Add(
-                    new CartesianWaypoint
-                    {
-                        position = pos,
-                        rotation = rot,
-                        distanceFromStart = dist,
-                        timeFromStart = 0f,
-                    }
-                );
-            }
-
-            _currentPath = new CartesianPath
-            {
-                waypoints = _cachedWaypointList,
-                totalDistance = distance,
-                maxVelocity = 0.5f,
-                acceleration = 1.0f,
-            };
-
-            _velocityProfile = VelocityProfile.CreateTrapezoidal(
-                distance,
-                maxVelocity: 0.5f,
-                acceleration: 1.0f
-            );
-
-            _pathStartTime = Time.fixedTime;
-            _trajectoryController?.Reset();
-        }
-
-        // --- Public Interfaces (From Script A with Handoff Support) ---
 
         public void SetTarget(GameObject target, GraspOptions options = default)
         {
@@ -691,7 +564,6 @@ namespace Robotics
             if (options.Equals(default(GraspOptions)))
                 options = GraspOptions.Default;
 
-            // Script A Feature: Handoff Detection
             GripperController holdingGripper = FindGripperHoldingObject(target);
             if (holdingGripper != null && holdingGripper != _gripperController)
             {
@@ -699,32 +571,31 @@ namespace Robotics
                     $"{_logPrefix} {robotId} detected handoff scenario - object '{target.name}' held by another gripper"
                 );
                 _activeGraspCoroutine = StartCoroutine(
-                    ExecuteHandoffGrasp(target, holdingGripper, options)
+                    ExecuteHandoffGrasp(target, options)
                 );
                 return;
             }
 
             if (_graspPipeline != null)
             {
-                GraspCandidate? candidate = null;
+                GraspCandidate candidate;
                 if (options.useAdvancedPlanning)
                 {
                     if (options.graspConfig == null)
                         options.graspConfig = _graspConfig;
                     candidate = _graspPipeline.PlanGrasp(target, endEffectorBase.position, options);
-                    if (candidate.HasValue)
+                    if (candidate != null)
                     {
-                        // Check if this candidate requires simplified execution (fallback mode)
-                        if (candidate.Value.useSimplifiedExecution)
+                        if (candidate.useSimplifiedExecution)
                         {
                             _activeGraspCoroutine = StartCoroutine(
-                                ExecuteSimplifiedGrasp(candidate.Value, target, options)
+                                ExecuteSimplifiedGrasp(candidate, target, options)
                             );
                         }
                         else
                         {
                             _activeGraspCoroutine = StartCoroutine(
-                                ExecuteThreeWaypointGrasp(candidate.Value, target, options)
+                                ExecuteThreeWaypointGrasp(candidate, target, options)
                             );
                         }
                         return;
@@ -743,19 +614,18 @@ namespace Robotics
                         endEffectorBase.position,
                         simpleOpts
                     );
-                    if (candidate.HasValue)
+                    if (candidate != null)
                     {
-                        // Check if this candidate requires simplified execution (fallback mode)
-                        if (candidate.Value.useSimplifiedExecution)
+                        if (candidate.useSimplifiedExecution)
                         {
                             _activeGraspCoroutine = StartCoroutine(
-                                ExecuteSimplifiedGrasp(candidate.Value, target, options)
+                                ExecuteSimplifiedGrasp(candidate, target, options)
                             );
                         }
                         else
                         {
                             _activeGraspCoroutine = StartCoroutine(
-                                ExecuteTwoWaypointGrasp(candidate.Value, target, options)
+                                ExecuteTwoWaypointGrasp(candidate, target, options)
                             );
                         }
                         return;
@@ -828,8 +698,6 @@ namespace Robotics
             SetTargetInternal(temp.transform, null, options);
         }
 
-        // --- Grasp Coroutines (From Script A - Robust/Dynamic Waits) ---
-
         private IEnumerator WaitForTargetWithTimeout(float timeoutSeconds)
         {
             float startTime = Time.time;
@@ -852,9 +720,7 @@ namespace Robotics
         {
             float graspTimeout = _ikConfig != null ? _ikConfig.graspTimeoutSeconds : 30f;
 
-            _currentGraspApproach = candidate.approachType;
-            if (_gripperController != null)
-                _gripperController.SetGripperPosition(candidate.preGraspGripperWidth);
+            _gripperController?.SetGripperPosition(candidate.preGraspGripperWidth);
 
             // 1. Pre-Grasp
             GameObject pre = GetCachedTempObject(ref _cachedTempTargetPre, "_pre");
@@ -918,9 +784,7 @@ namespace Robotics
         {
             float graspTimeout = _ikConfig != null ? _ikConfig.graspTimeoutSeconds : 30f;
 
-            _currentGraspApproach = candidate.approachType;
-            if (_gripperController != null)
-                _gripperController.SetGripperPosition(candidate.preGraspGripperWidth);
+            _gripperController?.SetGripperPosition(candidate.preGraspGripperWidth);
 
             // 1. Pre
             GameObject pre = GetCachedTempObject(ref _cachedTempTargetPre, "_pre");
@@ -1002,7 +866,6 @@ namespace Robotics
 
         private IEnumerator ExecuteHandoffGrasp(
             GameObject targetObject,
-            GripperController sourceGripper,
             GraspOptions options
         )
         {
@@ -1200,7 +1063,6 @@ namespace Robotics
             _isTrackingMovingTarget = false;
 
             // Reset trajectory
-            _currentPath = null;
             _trajectoryController?.Reset();
 
             Debug.Log($"{_logPrefix} [{robotId}] Target cleared");
@@ -1238,19 +1100,6 @@ namespace Robotics
                 _lastActiveCheckTime = t;
             }
             return _cachedIsRobotActive;
-        }
-
-        private float GetOrientationWeight(GraspApproach approach)
-        {
-            switch (approach)
-            {
-                case GraspApproach.Top:
-                    return 1.5f;
-                case GraspApproach.Side:
-                    return 0.7f;
-                default:
-                    return 1.0f;
-            }
         }
 
         private void DrawDebugVisualization()

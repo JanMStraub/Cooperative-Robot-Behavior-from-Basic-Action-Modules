@@ -14,23 +14,49 @@ namespace Robotics.Grasp
 
         /// <summary>
         /// Get the size of an object based on its collider bounds.
+        /// CRITICAL FIX: Uses local bounds to avoid AABB inflation on rotated objects.
+        ///
+        /// Priority:
+        /// 1. BoxCollider local size (most accurate for boxy objects)
+        /// 2. Renderer bounds (tighter than AABB for meshes)
+        /// 3. Collider AABB (fallback, inaccurate for rotated objects)
         /// </summary>
         /// <param name="obj">The object to measure</param>
-        /// <returns>Size vector (x, y, z)</returns>
+        /// <returns>Size vector (x, y, z) in local object space</returns>
         public static Vector3 GetObjectSize(GameObject obj)
         {
-            Collider collider = obj.GetComponent<Collider>();
-            if (collider != null)
+            BoxCollider box = obj.GetComponent<BoxCollider>();
+            if (box != null)
             {
-                Vector3 size = collider.bounds.size;
+                Vector3 size = Vector3.Scale(box.size, obj.transform.lossyScale);
                 Debug.Log(
-                    $"{_logPrefix} Object '{obj.name}' size: {size}, bounds: {collider.bounds}, localScale: {obj.transform.localScale}"
+                    $"{_logPrefix} Object '{obj.name}' size from BoxCollider: {size}, "
+                        + $"localSize: {box.size}, lossyScale: {obj.transform.lossyScale}"
                 );
                 return size;
             }
 
-            // Fallback to default cube size if no collider
-            Debug.LogWarning($"{_logPrefix} Object '{obj.name}' has no collider, using default size"); 
+            Renderer renderer = obj.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                Vector3 size = renderer.bounds.size;
+                Debug.Log($"{_logPrefix} Object '{obj.name}' size from Renderer: {size}");
+                return size;
+            }
+
+            Collider collider = obj.GetComponent<Collider>();
+            if (collider != null)
+            {
+                Vector3 size = collider.bounds.size;
+                Debug.LogWarning(
+                    $"{_logPrefix} Object '{obj.name}' using AABB size (may be inaccurate if rotated): {size}"
+                );
+                return size;
+            }
+
+            Debug.LogWarning(
+                $"{_logPrefix} Object '{obj.name}' has no collider or renderer, using default size"
+            );
             return Vector3.one * 0.05f;
         }
 
@@ -47,38 +73,30 @@ namespace Robotics.Grasp
             Vector3 objectSize
         )
         {
-            // Calculate relative position
             Vector3 delta = gripperPosition - objectPosition;
 
             float distanceX = Mathf.Abs(delta.x);
             float distanceZ = Mathf.Abs(delta.z);
 
-            // DEBUG: Log approach selection criteria
             Debug.Log($"{_logPrefix} Object: {objectPosition}, Gripper: {gripperPosition}");
             Debug.Log($"{_logPrefix} Delta: {delta}, ObjectSize: {objectSize}");
             Debug.Log(
                 $"{_logPrefix} distanceX: {distanceX:F3}, distanceZ: {distanceZ:F3}, delta.y: {delta.y:F3}, threshold: {objectSize.y * 0.5f:F3}"
             );
 
-            // If gripper is significantly above object, prefer Top approach
-            // This is the most reliable grasp for small objects
             if (delta.y > objectSize.y * 0.5f)
             {
                 Debug.Log($"{_logPrefix} Selected: TOP (gripper above object)");
                 return GraspApproach.Top;
             }
 
-            // If gripper is at same height or below, use horizontal approaches
-            // Choose the axis where gripper is farthest from object (most clearance)
             if (distanceX > distanceZ)
             {
-                // Gripper is more displaced in X - approach from side (along X axis)
                 Debug.Log($"{_logPrefix} Selected: SIDE (distanceX > distanceZ)");
                 return GraspApproach.Side;
             }
             else
             {
-                // Gripper is more displaced in Z - approach from front (along Z axis)
                 Debug.Log($"{_logPrefix} Selected: FRONT (distanceZ >= distanceX)");
                 return GraspApproach.Front;
             }

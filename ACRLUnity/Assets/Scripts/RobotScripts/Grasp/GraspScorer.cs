@@ -1,7 +1,7 @@
-using UnityEngine;
-using Configuration;
 using System.Collections.Generic;
 using System.Linq;
+using Configuration;
+using UnityEngine;
 
 namespace Robotics.Grasp
 {
@@ -39,7 +39,6 @@ namespace Robotics.Grasp
             Quaternion? gripperRotation = null
         )
         {
-            // Score each candidate
             for (int i = 0; i < candidates.Count; i++)
             {
                 var candidate = candidates[i];
@@ -47,7 +46,6 @@ namespace Robotics.Grasp
                 candidates[i] = candidate;
             }
 
-            // Sort by total score (descending)
             return candidates.OrderByDescending(c => c.totalScore).ToList();
         }
 
@@ -66,7 +64,6 @@ namespace Robotics.Grasp
             Quaternion? gripperRotation = null
         )
         {
-            // Compute individual scores (normalized 0-1)
             candidate.ikScore = ComputeIKScore(ref candidate, gripperPosition);
             candidate.approachScore = ComputeApproachScore(ref candidate);
             candidate.depthScore = ComputeDepthScore(ref candidate, objectSize);
@@ -74,18 +71,15 @@ namespace Robotics.Grasp
 
             float orientationConsistency = gripperRotation.HasValue
                 ? ComputeOrientationConsistencyScore(ref candidate, gripperRotation.Value)
-                : 1.0f; // No penalty if current rotation not provided
+                : 1.0f;
 
-            // Weighted combination (including antipodal and orientation consistency)
             candidate.totalScore =
-                candidate.ikScore * _config.ikScoreWeight +
-                candidate.approachScore * _config.approachScoreWeight +
-                candidate.depthScore * _config.depthScoreWeight +
-                candidate.stabilityScore * _config.stabilityScoreWeight +
-                candidate.antipodalScore * _config.antipodalScoreWeight;
+                candidate.ikScore * _config.ikScoreWeight
+                + candidate.approachScore * _config.approachScoreWeight
+                + candidate.depthScore * _config.depthScoreWeight
+                + candidate.stabilityScore * _config.stabilityScoreWeight
+                + candidate.antipodalScore * _config.antipodalScoreWeight;
 
-            // Apply orientation consistency as a multiplicative penalty (not additive weight)
-            // This ensures large rotations always reduce the score significantly
             candidate.totalScore *= orientationConsistency;
         }
 
@@ -99,19 +93,14 @@ namespace Robotics.Grasp
         /// <returns>Normalized score (0-1)</returns>
         private float ComputeIKScore(ref GraspCandidate candidate, Vector3 gripperPosition)
         {
-            // If IK validation was performed, use that score
             if (candidate.ikValidated)
             {
-                // IK score was already computed during validation
-                // Just ensure it's normalized
                 return Mathf.Clamp01(candidate.ikScore);
             }
 
-            // Distance-based heuristic
             float distance = Vector3.Distance(candidate.preGraspPosition, gripperPosition);
             float maxReach = _config.maxReachDistance;
 
-            // Closer is better (exponential falloff)
             float normalizedDistance = Mathf.Clamp01(distance / maxReach);
             return 1f - normalizedDistance;
         }
@@ -126,17 +115,15 @@ namespace Robotics.Grasp
         {
             float weight = _config.GetApproachWeight(candidate.approachType);
 
-            // Debug: Log approach weights to diagnose scoring issues
-            #if UNITY_EDITOR
-            if (UnityEngine.Random.value < 0.01f) // Log 1% of the time to avoid spam
+#if UNITY_EDITOR
+            if (UnityEngine.Random.value < 0.01f)
             {
                 UnityEngine.Debug.Log(
                     $"{_logPrefix} Approach {candidate.approachType} has preference weight {weight:F2}"
                 );
             }
-            #endif
+#endif
 
-            // Normalize to 0-1 range (assuming max weight is 2.0)
             return Mathf.Clamp01(weight / 2.0f);
         }
 
@@ -149,14 +136,12 @@ namespace Robotics.Grasp
         /// <returns>Normalized score (0-1)</returns>
         private float ComputeDepthScore(ref GraspCandidate candidate, Vector3 objectSize)
         {
-            // Calculate object-size-aware target depth
             float avgObjectSize = (objectSize.x + objectSize.y + objectSize.z) / 3f;
             float targetDepth = _config.targetGraspDepth * avgObjectSize;
             float actualDepth = candidate.graspDepth;
 
-            // Gaussian-like falloff around target (sigma scales with object size)
             float deviation = Mathf.Abs(actualDepth - targetDepth);
-            float sigma = avgObjectSize * 0.15f; // 15% of object size as tolerance
+            float sigma = avgObjectSize * 0.15f;
 
             return Mathf.Exp(-deviation * deviation / (2f * sigma * sigma));
         }
@@ -173,35 +158,29 @@ namespace Robotics.Grasp
         {
             float score = 1.0f;
 
-            // Factor 1: Approach alignment with gravity
-            // Further reduced penalty for horizontal approaches to reduce asymmetry
-            // for robots with asymmetric joint limits that can't easily reach Top approaches
-            // Side approach (dot=0): score *= 0.65, Top approach (dot=1): score *= 1.0
-            float gravityAlignment = Mathf.Abs(Vector3.Dot(candidate.approachDirection, Vector3.up));
+            float gravityAlignment = Mathf.Abs(
+                Vector3.Dot(candidate.approachDirection, Vector3.up)
+            );
             score *= 0.65f + 0.35f * gravityAlignment;
 
-            // Factor 2: Gripper can physically grasp object
             if (!_config.gripperGeometry.CanGrasp(objectSize))
             {
-                score *= 0.5f; // Penalize if object might not fit
+                score *= 0.5f;
             }
 
-            // Factor 3: Approach distance is reasonable (not too far or too close)
             float idealDistance = _config.CalculatePreGraspDistance(objectSize);
-            float distanceRatio = Mathf.Abs(candidate.approachDistance - idealDistance) / idealDistance;
-            score *= Mathf.Clamp01(1f - distanceRatio); // Penalize distance deviation
+            float distanceRatio =
+                Mathf.Abs(candidate.approachDistance - idealDistance) / idealDistance;
+            score *= Mathf.Clamp01(1f - distanceRatio);
 
-            // Factor 4: Center-of-mass alignment (grasp near object center)
             Vector3 graspOffset = candidate.graspPosition - candidate.contactPointEstimate;
             float centerDeviation = graspOffset.magnitude / objectSize.magnitude;
-            float centerScore = Mathf.Exp(-centerDeviation * 2f); // Exponential falloff
-            score *= 0.7f + 0.3f * centerScore; // Weight center alignment
+            float centerScore = Mathf.Exp(-centerDeviation * 2f);
+            score *= 0.7f + 0.3f * centerScore;
 
-            // Factor 5: Contact area estimation (wider approach = more contact)
             float contactAreaScore = EstimateContactArea(candidate, objectSize);
             score *= 0.8f + 0.2f * contactAreaScore;
 
-            // Factor 6: Edge avoidance (penalize grasps near object edges)
             float edgeScore = ComputeEdgeAvoidanceScore(candidate, objectSize);
             score *= edgeScore;
 
@@ -217,25 +196,24 @@ namespace Robotics.Grasp
         /// <returns>Normalized contact area score (0-1)</returns>
         private float EstimateContactArea(GraspCandidate candidate, Vector3 objectSize)
         {
-            // Determine which object dimension is perpendicular to approach
             Vector3 absApproach = new Vector3(
                 Mathf.Abs(candidate.approachDirection.x),
                 Mathf.Abs(candidate.approachDirection.y),
                 Mathf.Abs(candidate.approachDirection.z)
             );
 
-            // Calculate projected contact area
             float contactArea;
-            if (absApproach.x > 0.9f) // Side approach
+            if (absApproach.x > 0.9f)
                 contactArea = objectSize.y * objectSize.z;
-            else if (absApproach.y > 0.9f) // Top/bottom approach
+            else if (absApproach.y > 0.9f)
                 contactArea = objectSize.x * objectSize.z;
-            else // Front/back approach
+            else
                 contactArea = objectSize.x * objectSize.y;
 
-            // Compare to gripper contact area
-            float gripperArea = _config.gripperGeometry.fingerLength * _config.gripperGeometry.fingerWidth;
-            float areaRatio = Mathf.Min(contactArea, gripperArea) / Mathf.Max(contactArea, gripperArea);
+            float gripperArea =
+                _config.gripperGeometry.fingerLength * _config.gripperGeometry.fingerWidth;
+            float areaRatio =
+                Mathf.Min(contactArea, gripperArea) / Mathf.Max(contactArea, gripperArea);
 
             return areaRatio;
         }
@@ -249,67 +227,55 @@ namespace Robotics.Grasp
         /// <returns>Edge avoidance score (0-1, higher = farther from edges)</returns>
         private float ComputeEdgeAvoidanceScore(GraspCandidate candidate, Vector3 objectSize)
         {
-            // Calculate distance to nearest edge in each dimension
             Vector3 relativePos = candidate.graspPosition - candidate.contactPointEstimate;
 
-            // Normalize to object half-extents
             Vector3 normalizedPos = new Vector3(
                 Mathf.Abs(relativePos.x) / (objectSize.x * 0.5f),
                 Mathf.Abs(relativePos.y) / (objectSize.y * 0.5f),
                 Mathf.Abs(relativePos.z) / (objectSize.z * 0.5f)
             );
 
-            // Find minimum distance to edge (lower = closer to edge)
-            float minDistToEdge = Mathf.Min(normalizedPos.x, Mathf.Min(normalizedPos.y, normalizedPos.z));
+            float minDistToEdge = Mathf.Min(
+                normalizedPos.x,
+                Mathf.Min(normalizedPos.y, normalizedPos.z)
+            );
 
-            // Penalize if too close to edge (within 20% of half-extent)
             if (minDistToEdge > 0.8f)
             {
-                // Near edge - apply penalty
                 float edgePenalty = (minDistToEdge - 0.8f) / 0.2f;
-                return 1.0f - edgePenalty * 0.3f; // Max 30% penalty
+                return 1.0f - edgePenalty * 0.3f;
             }
 
-            return 1.0f; // Not near edge
+            return 1.0f;
         }
 
         /// <summary>
-        /// FIX B: Compute orientation consistency score to prevent "180-degree flip" scenarios.
+        /// Compute orientation consistency score to prevent "180-degree flip" scenarios.
         /// Penalizes grasp candidates that require large rotations from current gripper orientation.
-        /// This prevents timeout issues where robots spend all their time trying to flip 180 degrees.
         /// </summary>
         /// <param name="candidate">Candidate to evaluate</param>
         /// <param name="currentGripperRotation">Current gripper rotation</param>
         /// <returns>Consistency score (0-1, higher = smaller rotation needed)</returns>
-        private float ComputeOrientationConsistencyScore(ref GraspCandidate candidate, Quaternion currentGripperRotation)
+        private float ComputeOrientationConsistencyScore(
+            ref GraspCandidate candidate,
+            Quaternion currentGripperRotation
+        )
         {
-            // Calculate angular difference between current rotation and candidate grasp rotation
-            // Quaternion.Angle returns the minimum angle in degrees (0-180)
             float deltaAngle = Quaternion.Angle(currentGripperRotation, candidate.graspRotation);
-
-            // Apply aggressive penalty for large rotations
-            // Thresholds:
-            // - 0-45°: No penalty (score = 1.0)
-            // - 45-90°: Linear penalty (score = 1.0 -> 0.5)
-            // - 90-180°: Heavy penalty (score = 0.5 -> 0.1)
 
             if (deltaAngle <= 45f)
             {
-                // Small rotation - no penalty
                 return 1.0f;
             }
             else if (deltaAngle <= 90f)
             {
-                // Medium rotation - linear penalty
-                float t = (deltaAngle - 45f) / 45f; // 0 at 45°, 1 at 90°
+                float t = (deltaAngle - 45f) / 45f;
                 return Mathf.Lerp(1.0f, 0.5f, t);
             }
             else
             {
-                // Large rotation (>90°) - heavy exponential penalty
-                // At 175° (near flip), score approaches 0.1 (90% penalty)
-                float t = (deltaAngle - 90f) / 90f; // 0 at 90°, 1 at 180°
-                return Mathf.Lerp(0.5f, 0.1f, t * t); // Quadratic falloff for heavy penalty
+                float t = (deltaAngle - 90f) / 90f;
+                return Mathf.Lerp(0.5f, 0.1f, t * t);
             }
         }
 
@@ -319,7 +285,10 @@ namespace Robotics.Grasp
         /// <param name="candidates">Scored candidates</param>
         /// <param name="minScore">Minimum total score threshold</param>
         /// <returns>Filtered list of candidates</returns>
-        public List<GraspCandidate> FilterByMinScore(List<GraspCandidate> candidates, float minScore)
+        public List<GraspCandidate> FilterByMinScore(
+            List<GraspCandidate> candidates,
+            float minScore
+        )
         {
             return candidates.Where(c => c.totalScore >= minScore).ToList();
         }
@@ -350,7 +319,7 @@ namespace Robotics.Grasp
             float range = maxScore - minScore;
 
             if (range < 0.001f)
-                return; // All scores identical
+                return;
 
             for (int i = 0; i < candidates.Count; i++)
             {

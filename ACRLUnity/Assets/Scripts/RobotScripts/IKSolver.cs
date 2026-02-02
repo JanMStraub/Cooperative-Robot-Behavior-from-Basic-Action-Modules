@@ -14,6 +14,7 @@ namespace Robotics
 
         // Pre-allocated matrices for GC-free operation
         private Matrix<double> _jacobianMatrix;
+        private Matrix<double> _cachedIdentity;
         private Vector<double> _errorVector;
         private Vector<double> _jointDelta;
 
@@ -46,10 +47,10 @@ namespace Robotics
         {
             _dampingFactor = dampingFactor;
 
-            // Pre-allocate matrices (6 DOF: 3 position + 3 orientation)
             _jacobianMatrix = DenseMatrix.Build.Dense(6, jointCount);
             _errorVector = Vector<double>.Build.Dense(6);
             _jointDelta = Vector<double>.Build.Dense(jointCount);
+            _cachedIdentity = DenseMatrix.Build.DenseIdentity(jointCount);
         }
 
         /// <summary>
@@ -74,10 +75,8 @@ namespace Robotics
             float? overrideDamping = null
         )
         {
-            // Increment iteration counter
             _iterationCount++;
 
-            // Calculate position and orientation errors
             Vector3 positionError = targetState.Position - currentState.Position;
             Vector3 orientationError = CalculateOrientationError(
                 currentState.Rotation,
@@ -89,16 +88,13 @@ namespace Robotics
                 && orientationError.magnitude < orientationConvergenceThreshold
             )
             {
-                return null; // Converged
+                return null;
             }
 
-            // Apply orientation weight to emphasize/de-emphasize orientation precision
             orientationError *= orientationWeight;
 
-            // Build 6D error vector
             BuildErrorVector(positionError, orientationError);
 
-            // Compute Jacobian and solve for joint deltas
             CalculateJacobian(currentState, joints);
             ComputePseudoInverse(overrideDamping);
 
@@ -136,16 +132,11 @@ namespace Robotics
             float? overrideDamping = null
         )
         {
-            // Increment iteration counter
             _iterationCount++;
 
-            // Calculate position error (existing)
             Vector3 posError = targetState.Position - currentState.Position;
-
-            // Calculate velocity error (NEW)
             Vector3 velError = targetVelocity - currentEndEffectorVelocity;
 
-            // Calculate orientation errors
             Vector3 orientationError = CalculateOrientationError(
                 currentState.Rotation,
                 targetState.Rotation
@@ -156,25 +147,19 @@ namespace Robotics
             // This allows different velocity requirements for grasp vs normal movement
             // IKSolver always returns joint deltas, letting RobotController decide when to stop
 
-            // Apply orientation weight
             orientationError *= orientationWeight;
 
-            // PD control: combine position and velocity errors
-            // This is what eliminates oscillation!
             Vector3 combinedError = Kp * posError + Kd * velError;
 
             // Safety clamp: Prevent matrix instability if target teleports far away
-            // Cap error magnitude to reasonable physical limits (1.0 m/s effective velocity command)
             const float maxErrorMagnitude = 1.0f;
             if (combinedError.magnitude > maxErrorMagnitude)
             {
                 combinedError = combinedError.normalized * maxErrorMagnitude;
             }
 
-            // Build 6D error vector with combined position+velocity error
             BuildErrorVector(combinedError, orientationError);
 
-            // Compute Jacobian and solve for joint deltas
             CalculateJacobian(currentState, joints);
             ComputePseudoInverse(overrideDamping);
 
@@ -202,15 +187,12 @@ namespace Robotics
             Quaternion quaternionError = target * Quaternion.Inverse(current);
             quaternionError.ToAngleAxis(out float angleDegree, out Vector3 axis);
 
-            // Safety check for singularities
             if (float.IsNaN(axis.x) || float.IsInfinity(axis.x))
                 return Vector3.zero;
 
-            // Ensure shortest path: if angle > 180, map to negative range (e.g. 350 -> -10)
             if (angleDegree > 180f)
                 angleDegree -= 360f;
 
-            // Convert to radians and return axis-angle vector
             return axis.normalized * (angleDegree * Mathf.Deg2Rad);
         }
 
@@ -239,10 +221,8 @@ namespace Robotics
             {
                 JointInfo joint = joints[i];
 
-                // Vector from joint to end effector (in IK frame)
                 Vector3 vectorJointToEndEffector = currentState.Position - joint.WorldPosition;
 
-                // Jacobian column (linear and angular components)
                 Vector3 linearComponent = Vector3.Cross(joint.WorldAxis, vectorJointToEndEffector);
                 Vector3 angularComponent = joint.WorldAxis;
 
@@ -262,22 +242,16 @@ namespace Robotics
         /// <param name="overrideDamping">Optional damping override (null uses default)</param>
         private void ComputePseudoInverse(float? overrideDamping = null)
         {
-            // Jacobian: 6xN
-            var jacobianTranspose = _jacobianMatrix.Transpose(); // Nx6
-            var jacobianJacobianTranspose = _jacobianMatrix * jacobianTranspose; // 6x6
-            var identity = DenseMatrix.Build.DenseIdentity(jacobianJacobianTranspose.RowCount);
+            var jacobianTranspose = _jacobianMatrix.Transpose();
+            var jacobianJacobianTranspose = _jacobianMatrix * jacobianTranspose;
 
-            // Use override damping if provided, otherwise use default
             float damping = overrideDamping ?? _dampingFactor;
 
-            // Damped least squares regularization
-            var regularized = jacobianJacobianTranspose + damping * damping * identity;
+            var regularized = jacobianJacobianTranspose + damping * damping * _cachedIdentity;
 
-            // Solve for intermediate vector: y = (J*J^T + λ²I)^-1 * error
-            var y = regularized.Solve(_errorVector); // 6x1
+            var y = regularized.Solve(_errorVector);
 
-            // Compute joint deltas: Δθ = J^T * y
-            _jointDelta = jacobianTranspose * y; // Nx1
+            _jointDelta = jacobianTranspose * y;
         }
     }
 

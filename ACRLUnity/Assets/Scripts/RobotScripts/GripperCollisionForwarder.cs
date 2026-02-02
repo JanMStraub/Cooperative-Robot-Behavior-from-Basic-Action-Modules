@@ -17,7 +17,6 @@ namespace Robotics
 
         void OnTriggerEnter(Collider collider)
         {
-            // Ignore collisions with gripper's own colliders (parent and siblings)
             if (IsGripperSelfCollision(collider))
                 return;
 
@@ -29,7 +28,6 @@ namespace Robotics
 
         void OnTriggerStay(Collider collider)
         {
-            // Ignore collisions with gripper's own colliders
             if (IsGripperSelfCollision(collider))
                 return;
 
@@ -41,7 +39,6 @@ namespace Robotics
 
         void OnTriggerExit(Collider collider)
         {
-            // Ignore collisions with gripper's own colliders
             if (IsGripperSelfCollision(collider))
                 return;
 
@@ -60,15 +57,12 @@ namespace Robotics
             if (collider == null)
                 return true;
 
-            // Check if collider is on the sensor's GameObject (gripper root)
             if (sensor != null && collider.gameObject == sensor.gameObject)
                 return true;
 
-            // Check if collider is on a sibling finger (same parent)
             Transform colliderTransform = collider.transform;
             Transform thisTransform = transform;
 
-            // If both have the same parent, they're siblings (both fingers)
             if (colliderTransform.parent != null && thisTransform.parent != null &&
                 colliderTransform.parent == thisTransform.parent)
             {

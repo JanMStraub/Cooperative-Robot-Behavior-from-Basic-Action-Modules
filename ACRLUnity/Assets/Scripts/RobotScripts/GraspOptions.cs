@@ -9,16 +9,15 @@ namespace Robotics
     /// </summary>
     public struct GraspOptions
     {
-        public bool useGraspPlanning; // Use GraspPlanner to adjust target pose
-        public bool openGripperOnSet; // Open gripper when setting target
-        public bool closeGripperOnReach; // Close gripper when target reached
-        public GraspApproach? approach; // Optional override for grasp approach (null = auto-determine)
+        public bool useGraspPlanning;
+        public bool openGripperOnSet;
+        public bool closeGripperOnReach;
+        public GraspApproach? approach;
 
-        // Advanced planning options (MoveIt2-inspired pipeline)
-        public bool useAdvancedPlanning; // Use full GraspPlanningPipeline
-        public GraspConfig graspConfig; // Configuration for advanced planning (null = use default)
-        public float overridePreGraspDistance; // Custom pre-grasp distance (0 = use config default)
-        public Vector3? customApproachVector; // Custom approach direction (null = use approach type)
+        public bool useAdvancedPlanning;
+        public GraspConfig graspConfig;
+        public float overridePreGraspDistance;
+        public Vector3? customApproachVector;
 
         /// <summary>
         /// Default: intelligent grasping enabled

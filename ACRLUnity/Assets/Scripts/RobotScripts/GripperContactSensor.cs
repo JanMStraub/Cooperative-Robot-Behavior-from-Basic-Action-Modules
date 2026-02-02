@@ -53,6 +53,7 @@ namespace Robotics
         // Unity physics forces can spike to infinity on impact
         // Must use moving average over multiple frames for stable readings
         private Queue<float> _forceHistory = new Queue<float>();
+        private float _currentForceSum = 0f; // Running sum for O(1) average calculation
 
         // Contact duration tracking (helps distinguish stable grasp from collision)
         private Dictionary<GameObject, float> _contactStartTime =
@@ -147,11 +148,11 @@ namespace Robotics
             if (leftFinger == null || rightFinger == null)
                 return 0f;
 
-            // Return average force over window
+            // Return average force over window (O(1) calculation, 0 garbage)
             if (_forceHistory.Count == 0)
                 return 0f;
 
-            return _forceHistory.Average();
+            return _currentForceSum / _forceHistory.Count;
         }
 
         /// <summary>
@@ -201,13 +202,13 @@ namespace Robotics
         {
             int windowSize = _gripperConfig != null ? _gripperConfig.forceWindowSize : 5;
 
-            // Add new force reading
             _forceHistory.Enqueue(instantaneousForce);
+            _currentForceSum += instantaneousForce; // Add new
 
-            // Maintain window size
             if (_forceHistory.Count > windowSize)
             {
-                _forceHistory.Dequeue();
+                float removed = _forceHistory.Dequeue();
+                _currentForceSum -= removed; // Remove old
             }
         }
 
@@ -217,6 +218,7 @@ namespace Robotics
         public void ResetForceHistory()
         {
             _forceHistory.Clear();
+            _currentForceSum = 0f;
         }
 
         /// <summary>

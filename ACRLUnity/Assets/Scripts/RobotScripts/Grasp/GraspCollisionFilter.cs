@@ -1,6 +1,6 @@
-using UnityEngine;
-using Configuration;
 using System.Collections.Generic;
+using Configuration;
+using UnityEngine;
 
 namespace Robotics.Grasp
 {
@@ -11,7 +11,15 @@ namespace Robotics.Grasp
     public class GraspCollisionFilter
     {
         private readonly GraspConfig _config;
-        private readonly string[] _ignoredObjectNames = { "BottomPanel", "Workdesk", "Table", "Floor", "Ground", "Plane" };
+        private readonly string[] _ignoredObjectNames =
+        {
+            "BottomPanel",
+            "Workdesk",
+            "Table",
+            "Floor",
+            "Ground",
+            "Plane",
+        };
 
         private readonly string _logPrefix = "[GRASP_COLLISION_FILTER]";
 
@@ -38,14 +46,13 @@ namespace Robotics.Grasp
         {
             if (!_config.enableCollisionChecking)
             {
-                // Mark all as collision-validated if checking disabled
-                for (int i = 0; i < candidates.Count; i++)
+                foreach (var candidate in candidates)
                 {
-                    var candidate = candidates[i];
                     candidate.collisionValidated = true;
-                    candidates[i] = candidate;
                 }
-                UnityEngine.Debug.Log($"{_logPrefix} Collision checking disabled, accepting all {candidates.Count} candidates");
+                UnityEngine.Debug.Log(
+                    $"{_logPrefix} Collision checking disabled, accepting all {candidates.Count} candidates"
+                );
                 return candidates;
             }
 
@@ -61,14 +68,12 @@ namespace Robotics.Grasp
 
                 if (collisionFree)
                 {
-                    var validated = candidate;
-                    validated.collisionValidated = true;
-                    validCandidates.Add(validated);
+                    candidate.collisionValidated = true;
+                    validCandidates.Add(candidate);
                 }
                 else
                 {
                     rejectedCount++;
-                    // Track which approach types are being rejected
                     switch (candidate.approachType)
                     {
                         case GraspApproach.Top:
@@ -84,7 +89,9 @@ namespace Robotics.Grasp
                 }
             }
 
-            UnityEngine.Debug.Log($"{_logPrefix} Validated {validCandidates.Count}/{candidates.Count} candidates (rejected {rejectedCount} due to collisions: Top={rejectedTopCount}, Side={rejectedSideCount}, Front={rejectedFrontCount})");
+            UnityEngine.Debug.Log(
+                $"{_logPrefix} Validated {validCandidates.Count}/{candidates.Count} candidates (rejected {rejectedCount} due to collisions: Top={rejectedTopCount}, Side={rejectedSideCount}, Front={rejectedFrontCount})"
+            );
 
             return validCandidates;
         }
@@ -98,14 +105,12 @@ namespace Robotics.Grasp
         /// <returns>True if path is collision-free</returns>
         private bool CheckApproachPath(GraspCandidate candidate, GameObject targetObject)
         {
-            // Generate waypoints along approach path
             Vector3[] waypoints = GenerateWaypoints(
                 candidate.preGraspPosition,
                 candidate.graspPosition,
                 _config.collisionCheckWaypoints
             );
 
-            // Check each segment between waypoints
             for (int i = 0; i < waypoints.Length - 1; i++)
             {
                 Vector3 start = waypoints[i];
@@ -113,28 +118,49 @@ namespace Robotics.Grasp
                 Vector3 direction = end - start;
                 float distance = direction.magnitude;
 
-                // SphereCast along segment
-                if (Physics.SphereCast(
-                    start,
-                    _config.collisionCheckRadius,
-                    direction.normalized,
-                    out RaycastHit hit,
-                    distance,
-                    _config.collisionLayerMask
-                ))
+                if (
+                    Physics.CheckSphere(
+                        start,
+                        _config.collisionCheckRadius,
+                        _config.collisionLayerMask
+                    )
+                )
                 {
-                    // Check if hit object is the target (allowed)
+                    var colliders = Physics.OverlapSphere(
+                        start,
+                        _config.collisionCheckRadius,
+                        _config.collisionLayerMask
+                    );
+
+                    foreach (var col in colliders)
+                    {
+                        if (targetObject == null || col.gameObject != targetObject)
+                        {
+                            return false;
+                        }
+                    }
+                }
+
+                if (
+                    Physics.SphereCast(
+                        start,
+                        _config.collisionCheckRadius,
+                        direction.normalized,
+                        out RaycastHit hit,
+                        distance,
+                        _config.collisionLayerMask
+                    )
+                )
+                {
                     if (targetObject != null && hit.collider.gameObject == targetObject)
                     {
-                        continue; // Hitting target is acceptable
+                        continue;
                     }
 
-                    // Hit an obstacle - path blocked
                     return false;
                 }
             }
 
-            // Additionally check retreat path if enabled
             if (_config.enableRetreat)
             {
                 bool retreatClear = CheckRetreatPath(candidate, targetObject);
@@ -142,7 +168,6 @@ namespace Robotics.Grasp
                     return false;
             }
 
-            // All checks passed
             return true;
         }
 
@@ -159,37 +184,28 @@ namespace Robotics.Grasp
             Vector3 direction = end - start;
             float distance = direction.magnitude;
 
-            // Single SphereCast for retreat (typically straight up)
-            if (Physics.SphereCast(
-                start,
-                _config.collisionCheckRadius,
-                direction.normalized,
-                out RaycastHit hit,
-                distance,
-                _config.collisionLayerMask
-            ))
+            if (
+                Physics.SphereCast(
+                    start,
+                    _config.collisionCheckRadius,
+                    direction.normalized,
+                    out RaycastHit hit,
+                    distance,
+                    _config.collisionLayerMask
+                )
+            )
             {
-                // Check if hit is target object (allowed initially)
                 if (targetObject != null && hit.collider.gameObject == targetObject)
                 {
-                    // Target object in retreat path is OK if hit early (object being lifted)
-                    if (hit.distance < distance * 0.3f) // Within first 30% of retreat
+                    if (hit.distance < distance * 0.3f)
                     {
                         return true;
                     }
                 }
-                
-                /*
-                // Check if hit object is an ignored workspace object
-                if (ShouldIgnoreObject(hit.collider.gameObject))
-                {
-                    UnityEngine.Debug.Log($"{_logPrefix} Ignoring workspace collision in retreat with '{hit.collider.gameObject.name}'");
-                    return true; // Ignore workspace surfaces in retreat
-                }
-                */
 
-                // Obstacle in retreat path
-                UnityEngine.Debug.Log($"{_logPrefix} Retreat collision detected: hit '{hit.collider.gameObject.name}' (layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)}) at distance {hit.distance:F3}m");
+                UnityEngine.Debug.Log(
+                    $"{_logPrefix} Retreat collision detected: hit '{hit.collider.gameObject.name}' (layer: {LayerMask.LayerToName(hit.collider.gameObject.layer)}) at distance {hit.distance:F3}m"
+                );
                 return false;
             }
 
@@ -206,7 +222,6 @@ namespace Robotics.Grasp
         {
             string objName = obj.name;
 
-            // Check exact name matches
             foreach (string ignoredName in _ignoredObjectNames)
             {
                 if (objName.Equals(ignoredName, System.StringComparison.OrdinalIgnoreCase))
@@ -215,7 +230,6 @@ namespace Robotics.Grasp
                 }
             }
 
-            // Check if name contains ignored keywords
             foreach (string ignoredName in _ignoredObjectNames)
             {
                 if (objName.IndexOf(ignoredName, System.StringComparison.OrdinalIgnoreCase) >= 0)
@@ -236,7 +250,7 @@ namespace Robotics.Grasp
         /// <returns>Array of waypoint positions</returns>
         private Vector3[] GenerateWaypoints(Vector3 start, Vector3 end, int count)
         {
-            count = Mathf.Max(2, count); // Minimum 2 waypoints (start and end)
+            count = Mathf.Max(2, count);
             Vector3[] waypoints = new Vector3[count];
 
             for (int i = 0; i < count; i++)
@@ -271,7 +285,6 @@ namespace Robotics.Grasp
         {
             Color pathColor = isCollisionFree ? Color.green : Color.red;
 
-            // Draw approach path
             Vector3[] waypoints = GenerateWaypoints(
                 candidate.preGraspPosition,
                 candidate.graspPosition,
@@ -285,15 +298,13 @@ namespace Robotics.Grasp
                 Gizmos.DrawWireSphere(waypoints[i], _config.collisionCheckRadius);
             }
 
-            // Draw retreat path if enabled
             if (_config.enableRetreat)
             {
-                Gizmos.color = pathColor * 0.7f; // Slightly dimmer
+                Gizmos.color = pathColor * 0.7f;
                 Gizmos.DrawLine(candidate.graspPosition, candidate.retreatPosition);
                 Gizmos.DrawWireSphere(candidate.retreatPosition, _config.collisionCheckRadius);
             }
 
-            // Draw key poses
             Gizmos.color = Color.blue;
             Gizmos.DrawWireSphere(candidate.preGraspPosition, _config.collisionCheckRadius * 1.5f);
             Gizmos.color = Color.yellow;

@@ -5,7 +5,6 @@ using UnityEditor;
 
 namespace Robotics
 {
-    #region Editor
 #if UNITY_EDITOR
     [CustomEditor(typeof(GripperController))]
     public class GripperControllerEditor : Editor
@@ -45,7 +44,6 @@ namespace Robotics
         }
     }
 #endif
-    #endregion
 
     public class GripperController : MonoBehaviour
     {
@@ -59,15 +57,15 @@ namespace Robotics
 
         [Header("Motion Parameters")]
         [Tooltip("Speed of gripper opening/closing in meters per second.")]
-        public float gripSpeed = 0.05f; // Slower speed helps collision detection
+        public float gripSpeed = 0.05f;
 
         [Tooltip(
             "Maximum distance the target can be ahead of the physical finger. Prevents tunneling."
         )]
-        public float maxTargetLead = 0.005f; // 5mm lead max
+        public float maxTargetLead = 0.005f;
 
         [Tooltip("Stiffness (P-Gain).")]
-        public float stiffness = 5000f; // Lowered slightly for stability
+        public float stiffness = 5000f;
 
         [Tooltip("Damping (D-Gain).")]
         public float damping = 500f;
@@ -78,7 +76,6 @@ namespace Robotics
         [Range(0f, 1f)]
         public float targetPosition = 1f;
 
-        // Internal State
         private float _currentPhysicalTarget;
         private float _cachedLowerLimit;
         private float _cachedUpperLimit;
@@ -87,11 +84,10 @@ namespace Robotics
         private bool _isInitialized = false;
         public bool IsMoving { get; private set; }
 
-        // Object Attachment State
         private GameObject _graspedObject;
         private Transform _graspedObjectOriginalParent;
         private bool _isHoldingObject = false;
-        private GameObject _targetObjectToGrasp; // Object to attach when gripper finishes closing
+        private GameObject _targetObjectToGrasp;
         private bool _shouldAttachOnClose = false;
 
         public event System.Action OnGripperActionComplete;
@@ -123,7 +119,6 @@ namespace Robotics
             SetupDrive(leftGripper);
             SetupDrive(rightGripper);
 
-            // Safety check: ensure joint position data is available
             if (leftGripper.jointPosition.dofCount > 0)
             {
                 float currentPos = leftGripper.jointPosition[0];
@@ -132,9 +127,8 @@ namespace Robotics
             }
             else
             {
-                // Initialize with default open position if joint data not available yet
                 _currentPhysicalTarget = _cachedUpperLimit;
-                targetPosition = 1f; // Fully open
+                targetPosition = 1f;
             }
 
             _isInitialized = true;
@@ -145,40 +139,32 @@ namespace Robotics
             if (!_isInitialized || leftGripper == null)
                 return;
 
-            // Safety check: ensure joint position data is available
             if (leftGripper.jointPosition.dofCount == 0)
                 return;
 
             float goalPhysicalPosition = MapNormalizedToPhysical(targetPosition);
             float currentRealPosition = leftGripper.jointPosition[0];
 
-            // 1. Calculate where we WANT to go based on speed
             float nextTargetStep = Mathf.MoveTowards(
                 _currentPhysicalTarget,
                 goalPhysicalPosition,
                 gripSpeed * Time.deltaTime
             );
 
-            // 2. Clamp the target so it doesn't go too far past the REAL position when CLOSING
-            // This prevents the "Tunneling" effect where the target goes deep inside the cube
-            // NOTE: Only apply this when closing (moving toward smaller values), not when opening
             bool isClosing = goalPhysicalPosition < currentRealPosition;
 
             if (isClosing)
             {
-                // When closing, don't let the target get too far ahead of the physical position
                 float minAllowed = currentRealPosition - maxTargetLead;
                 _currentPhysicalTarget = Mathf.Max(nextTargetStep, minAllowed);
             }
             else
             {
-                // When opening, allow the target to move freely - no clamping needed
                 _currentPhysicalTarget = nextTargetStep;
             }
 
-            // Check if we are essentially at the goal (or stalled)
             bool isAtGoal = Mathf.Abs(_currentPhysicalTarget - goalPhysicalPosition) < 0.0001f;
-            bool isStalled = Mathf.Abs(nextTargetStep - _currentPhysicalTarget) > 0.0001f; // We wanted to move but got clamped
+            bool isStalled = Mathf.Abs(nextTargetStep - _currentPhysicalTarget) > 0.0001f;
 
             if (!isAtGoal && !isStalled)
             {
@@ -190,7 +176,6 @@ namespace Robotics
             {
                 if (_wasMoving)
                 {
-                    // Check if we should attach an object after closing
                     if (_shouldAttachOnClose && _targetObjectToGrasp != null && targetPosition < 0.1f)
                     {
                         AttachObject(_targetObjectToGrasp);
@@ -210,7 +195,6 @@ namespace Robotics
         {
             float newTarget = Mathf.Clamp01(normalizedPosition);
 
-            // If target changed significantly, mark as moving
             if (Mathf.Abs(newTarget - targetPosition) > 0.0001f)
             {
                 _wasMoving = false;
@@ -230,13 +214,10 @@ namespace Robotics
         /// </summary>
         public void OpenGrippers()
         {
-            // Detach object first if holding one
             if (_isHoldingObject)
             {
-                // Store reference before detaching (DetachObject sets _graspedObject to null)
                 GameObject objectToMonitor = _graspedObject;
                 DetachObject();
-                // Start monitoring the object to see if something else moves it
                 StartCoroutine(MonitorObjectPosition(objectToMonitor));
             }
 
@@ -256,11 +237,11 @@ namespace Robotics
 
             for (int i = 0; i < 10; i++)
             {
-                yield return null; // Wait one frame
+                yield return null;
                 Vector3 currentPos = obj.transform.position;
                 float distance = Vector3.Distance(releasePosition, currentPos);
 
-                if (distance > 0.01f) // More than 1cm movement
+                if (distance > 0.01f)
                 {
                     Debug.LogWarning(
                         $"[GripperController] Frame {i}: Object moved {distance:F3}m! " +

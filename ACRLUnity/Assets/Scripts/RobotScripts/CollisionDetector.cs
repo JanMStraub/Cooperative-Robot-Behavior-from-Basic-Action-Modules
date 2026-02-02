@@ -66,7 +66,6 @@ namespace Robotics
         /// </summary>
         private void Awake()
         {
-            // Auto-detect target ID if not set
             if (string.IsNullOrEmpty(targetId))
             {
                 targetId = gameObject.name;
@@ -80,13 +79,10 @@ namespace Robotics
         {
             try
             {
-                // Get component references
                 _robotManager = RobotManager.Instance;
 
-                // Validate configuration
                 ValidateConfiguration();
 
-                // Log collision detector initialization
                 Debug.Log(
                     $"{_logPrefix} Initialized for target: {targetId}, GoalTarget: {isGoalTarget}, RewardValue: {targetRewardValue}"
                 );
@@ -169,29 +165,23 @@ namespace Robotics
         /// <param name="collisionType">The type of collision (trigger_enter, trigger_stay)</param>
         private void ProcessCollision(Collider other, string collisionType)
         {
-            // Filter by layer mask
             if ((config.robotLayerMask.value & (1 << other.gameObject.layer)) == 0)
                 return;
 
-            // Filter by ignored tags
             if (config.ignoredTags.Contains(other.tag))
                 return;
 
-            // Get robot controller
             var robotController = other.GetComponent<RobotController>();
             if (robotController == null)
                 return;
 
             string robotId = robotController.gameObject.name;
 
-            // Check collision cooldown
             if (IsInCooldown(robotId))
                 return;
 
-            // Update cooldown
             _lastCollisionTime[robotId] = Time.time;
 
-            // Process the collision
             HandleRobotCollision(other, robotController, robotId, collisionType);
         }
 
@@ -222,7 +212,6 @@ namespace Robotics
         {
             try
             {
-                // Get collision details
                 Collider triggerCollider = GetComponent<Collider>();
                 Vector3 closestPoint =
                     triggerCollider != null
@@ -230,13 +219,11 @@ namespace Robotics
                         : transform.position;
                 float approachSpeed = CalculateApproachSpeed(other);
 
-                // Update robot state if target reached
                 if (config.enableTargetReached && robotController != null)
                 {
                     robotController.SetTargetReached(true);
                 }
 
-                // Create collision data
                 var collisionData = new CollisionData
                 {
                     timestamp = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
@@ -248,7 +235,6 @@ namespace Robotics
                     wasIntended = isGoalTarget,
                 };
 
-                // Update metrics
                 UpdateCollisionMetrics(robotId, collisionData);
 
                 Debug.Log(
@@ -321,7 +307,6 @@ namespace Robotics
         /// </summary>
         private void OnDrawGizmos()
         {
-            // Show collision counts as text in scene view
 #if UNITY_EDITOR
             if (_totalCollisions > 0)
             {
@@ -340,7 +325,6 @@ namespace Robotics
         {
             try
             {
-                // Log final statistics
                 if (_totalCollisions > 0)
                 {
                     Debug.Log(
