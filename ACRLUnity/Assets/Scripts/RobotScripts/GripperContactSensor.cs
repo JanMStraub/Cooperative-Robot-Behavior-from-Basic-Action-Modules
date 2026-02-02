@@ -26,7 +26,7 @@ namespace Robotics
         public enum FingerType
         {
             Left,
-            Right
+            Right,
         }
 
         [Header("Finger Configuration")]
@@ -64,7 +64,9 @@ namespace Robotics
             // Load default config if not assigned
             if (_gripperConfig == null)
             {
-                _gripperConfig = Resources.Load<GripperConfig>("Configuration/DefaultGripperConfig");
+                _gripperConfig = Resources.Load<GripperConfig>(
+                    "Configuration/DefaultGripperConfig"
+                );
             }
             if (_gripperConfig == null)
             {
@@ -129,7 +131,8 @@ namespace Robotics
                 if (_contactStartTime.TryGetValue(targetObject, out float startTime))
                 {
                     float duration = Time.time - startTime;
-                    float minDuration = _gripperConfig != null ? _gripperConfig.minContactDuration : 0.1f;
+                    float minDuration =
+                        _gripperConfig != null ? _gripperConfig.minContactDuration : 0.1f;
                     return duration >= minDuration;
                 }
             }
@@ -248,7 +251,9 @@ namespace Robotics
         {
             if (debugLogging)
             {
-                Debug.Log($"[GripperContactSensor] OnFingerTriggerEnter received: {finger} finger, object: {collider.gameObject.name}");
+                Debug.Log(
+                    $"[GripperContactSensor] OnFingerTriggerEnter received: {finger} finger, object: {collider.gameObject.name}"
+                );
             }
             TrackContact(collider, finger, true);
         }
@@ -262,7 +267,9 @@ namespace Robotics
         {
             if (debugLogging)
             {
-                Debug.Log($"[GripperContactSensor] OnFingerTriggerExit received: {finger} finger, object: {collider.gameObject.name}");
+                Debug.Log(
+                    $"[GripperContactSensor] OnFingerTriggerExit received: {finger} finger, object: {collider.gameObject.name}"
+                );
             }
             TrackContact(collider, finger, false);
         }
@@ -341,8 +348,9 @@ namespace Robotics
 
                 // Track contact start time (set when BOTH fingers touching)
                 // Check if both fingers are now touching after adding this contact
-                bool bothTouching = _leftContacts.Any(c => c?.gameObject == obj) &&
-                                   _rightContacts.Any(c => c?.gameObject == obj);
+                bool bothTouching =
+                    _leftContacts.Any(c => c?.gameObject == obj)
+                    && _rightContacts.Any(c => c?.gameObject == obj);
 
                 if (bothTouching && !_contactStartTime.ContainsKey(obj))
                 {
@@ -391,8 +399,9 @@ namespace Robotics
                 else
                 {
                     // Still touching with one finger but not both - reset timer
-                    bool bothTouching = _leftContacts.Any(c => c?.gameObject == obj) &&
-                                       _rightContacts.Any(c => c?.gameObject == obj);
+                    bool bothTouching =
+                        _leftContacts.Any(c => c?.gameObject == obj)
+                        && _rightContacts.Any(c => c?.gameObject == obj);
 
                     if (!bothTouching && _contactStartTime.ContainsKey(obj))
                     {
@@ -400,7 +409,9 @@ namespace Robotics
 
                         if (debugLogging)
                         {
-                            Debug.Log($"[GripperContactSensor] Contact timer RESET (only one finger): {obj.name}");
+                            Debug.Log(
+                                $"[GripperContactSensor] Contact timer RESET (only one finger): {obj.name}"
+                            );
                         }
                     }
                 }

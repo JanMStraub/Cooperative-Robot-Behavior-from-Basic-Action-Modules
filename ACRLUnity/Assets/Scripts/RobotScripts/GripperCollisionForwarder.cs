@@ -63,8 +63,11 @@ namespace Robotics
             Transform colliderTransform = collider.transform;
             Transform thisTransform = transform;
 
-            if (colliderTransform.parent != null && thisTransform.parent != null &&
-                colliderTransform.parent == thisTransform.parent)
+            if (
+                colliderTransform.parent != null
+                && thisTransform.parent != null
+                && colliderTransform.parent == thisTransform.parent
+            )
             {
                 return true;
             }

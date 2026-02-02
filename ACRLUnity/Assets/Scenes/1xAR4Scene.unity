@@ -412,8 +412,8 @@ GameObject:
   - component: {fileID: 1595579019}
   - component: {fileID: 1595579027}
   - component: {fileID: 1595579028}
-  - component: {fileID: 1595579026}
   - component: {fileID: 1595579029}
+  - component: {fileID: 1595579026}
   m_Layer: 0
   m_Name: PythonManager
   m_TagString: Untagged

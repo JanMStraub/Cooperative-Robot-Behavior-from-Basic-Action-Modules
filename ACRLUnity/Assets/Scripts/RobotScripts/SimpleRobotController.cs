@@ -1,9 +1,8 @@
 using System.Collections;
-using Core;
+using Configuration;
 using MathNet.Numerics.LinearAlgebra;
 using UnityEngine;
 using Utilities;
-using Configuration;
 
 namespace Robotics
 {
@@ -94,7 +93,9 @@ namespace Robotics
 
         [Header("Operation Mode")]
         [SerializeField]
-        [Tooltip("Enable autonomous operation (FixedUpdate loop). Disable when used as backup by RobotController.")]
+        [Tooltip(
+            "Enable autonomous operation (FixedUpdate loop). Disable when used as backup by RobotController."
+        )]
         private bool _enableAutonomousMode = false;
 
         [Header("Debug")]
@@ -403,7 +404,8 @@ namespace Robotics
                 Kp: _positionGain,
                 Kd: _velocityGain,
                 orientationWeight: orientationWeight,
-                orientationConvergenceThreshold: _ikConfig.orientationThresholdDegrees * Mathf.Deg2Rad,
+                orientationConvergenceThreshold: _ikConfig.orientationThresholdDegrees
+                    * Mathf.Deg2Rad,
                 overrideDamping: _ikConfig.dampingFactor
             );
 
@@ -519,10 +521,7 @@ namespace Robotics
                     float distanceSqr = Vector3.SqrMagnitude(
                         position - nearbyObject.transform.position
                     );
-                    if (
-                        distanceSqr
-                        < objectDistanceThreshold * objectDistanceThreshold
-                    )
+                    if (distanceSqr < objectDistanceThreshold * objectDistanceThreshold)
                     {
                         Debug.Log(
                             $"{_logPrefix} [{robotId}] Found nearby object '{nearbyObject.name}' at distance {Mathf.Sqrt(distanceSqr):F3}m, snapping to it"

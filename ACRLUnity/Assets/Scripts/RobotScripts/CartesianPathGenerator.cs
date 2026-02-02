@@ -42,7 +42,7 @@ namespace RobotScripts
                     position = Vector3.Lerp(startPos, targetPos, t),
                     rotation = Quaternion.Slerp(startRot, targetRot, t),
                     distanceFromStart = distance * t,
-                    timeFromStart = 0f
+                    timeFromStart = 0f,
                 };
 
                 waypoints.Add(wp);
@@ -53,7 +53,7 @@ namespace RobotScripts
                 waypoints = waypoints,
                 totalDistance = distance,
                 maxVelocity = 0.2f,
-                acceleration = 0.5f
+                acceleration = 0.5f,
             };
         }
 
@@ -71,7 +71,9 @@ namespace RobotScripts
         {
             // TODO: Implement circular arc path generation
             // For now, fall back to linear path
-            Debug.LogWarning("[CartesianPathGenerator] Arc path not yet implemented, using linear path");
+            Debug.LogWarning(
+                "[CartesianPathGenerator] Arc path not yet implemented, using linear path"
+            );
             return GenerateLinearPath(startPos, startRot, targetPos, targetRot, waypointSpacing);
         }
 
@@ -89,7 +91,9 @@ namespace RobotScripts
         {
             // TODO: Implement obstacle avoidance path generation
             // For now, fall back to linear path
-            Debug.LogWarning("[CartesianPathGenerator] Obstacle avoidance not yet implemented, using linear path");
+            Debug.LogWarning(
+                "[CartesianPathGenerator] Obstacle avoidance not yet implemented, using linear path"
+            );
             return GenerateLinearPath(startPos, startRot, targetPos, targetRot, waypointSpacing);
         }
     }

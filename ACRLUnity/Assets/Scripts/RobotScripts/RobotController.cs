@@ -1,9 +1,7 @@
 using System.Collections;
-using System.Collections.Generic;
 using Configuration;
 using Core;
 using Robotics.Grasp;
-using RobotScripts;
 using Simulation;
 using UnityEngine;
 using Utilities;
@@ -203,7 +201,9 @@ namespace Robotics
 
             _trajectoryController = new TrajectoryController(
                 positionGains: _trajectoryConfig.positionGains,
-                velocityGains: _trajectoryConfig.velocityGains
+                velocityGains: _trajectoryConfig.velocityGains,
+                maxVelocity: _trajectoryConfig.maxVelocity,
+                maxAcceleration: _trajectoryConfig.maxAcceleration
             );
 
             _gripperController?.ResetGrippers();

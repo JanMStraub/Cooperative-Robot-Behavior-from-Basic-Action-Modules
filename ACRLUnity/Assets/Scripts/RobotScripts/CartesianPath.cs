@@ -26,7 +26,7 @@ namespace RobotScripts
                 {
                     position = Vector3.zero,
                     rotation = Quaternion.identity,
-                    distanceFromStart = 0f
+                    distanceFromStart = 0f,
                 };
             }
 
@@ -51,7 +51,7 @@ namespace RobotScripts
                     {
                         position = Vector3.Lerp(current.position, next.position, t),
                         rotation = Quaternion.Slerp(current.rotation, next.rotation, t),
-                        distanceFromStart = distance
+                        distanceFromStart = distance,
                     };
                 }
             }
@@ -99,10 +99,7 @@ namespace RobotScripts
             float accelTime = maxVelocity / acceleration;
             float accelDistance = 0.5f * acceleration * accelTime * accelTime;
 
-            VelocityProfile profile = new VelocityProfile
-            {
-                acceleration = acceleration
-            };
+            VelocityProfile profile = new VelocityProfile { acceleration = acceleration };
 
             if (accelDistance * 2 > totalDistance)
             {
