@@ -176,7 +176,11 @@ namespace Robotics
             {
                 if (_wasMoving)
                 {
-                    if (_shouldAttachOnClose && _targetObjectToGrasp != null && targetPosition < 0.1f)
+                    if (
+                        _shouldAttachOnClose
+                        && _targetObjectToGrasp != null
+                        && targetPosition < 0.1f
+                    )
                     {
                         AttachObject(_targetObjectToGrasp);
                         _targetObjectToGrasp = null;
@@ -233,7 +237,9 @@ namespace Robotics
                 yield break;
 
             Vector3 releasePosition = obj.transform.position;
-            Debug.Log($"[GripperController] Monitoring object '{obj.name}' released at {releasePosition}");
+            Debug.Log(
+                $"[GripperController] Monitoring object '{obj.name}' released at {releasePosition}"
+            );
 
             for (int i = 0; i < 10; i++)
             {
@@ -244,13 +250,15 @@ namespace Robotics
                 if (distance > 0.01f)
                 {
                     Debug.LogWarning(
-                        $"[GripperController] Frame {i}: Object moved {distance:F3}m! " +
-                        $"From {releasePosition} to {currentPos}"
+                        $"[GripperController] Frame {i}: Object moved {distance:F3}m! "
+                            + $"From {releasePosition} to {currentPos}"
                     );
                 }
             }
 
-            Debug.Log($"[GripperController] Monitoring complete. Final position: {obj.transform.position}");
+            Debug.Log(
+                $"[GripperController] Monitoring complete. Final position: {obj.transform.position}"
+            );
         }
 
         public void ResetGrippers()
@@ -358,7 +366,9 @@ namespace Robotics
             GripperController otherGripper = FindGripperHoldingObject(obj);
             if (otherGripper != null && otherGripper != this)
             {
-                Debug.Log($"[GripperController] Handoff detected: transferring '{obj.name}' from another gripper");
+                Debug.Log(
+                    $"[GripperController] Handoff detected: transferring '{obj.name}' from another gripper"
+                );
                 // Force detach from other gripper without re-enabling physics
                 otherGripper.ForceReleaseForHandoff();
             }
@@ -395,7 +405,9 @@ namespace Robotics
         /// <returns>GripperController holding the object, or null if not held</returns>
         private static GripperController FindGripperHoldingObject(GameObject obj)
         {
-            GripperController[] allGrippers = FindObjectsByType<GripperController>(FindObjectsSortMode.None);
+            GripperController[] allGrippers = FindObjectsByType<GripperController>(
+                FindObjectsSortMode.None
+            );
             foreach (var gripper in allGrippers)
             {
                 if (gripper._isHoldingObject && gripper._graspedObject == obj)
@@ -440,7 +452,9 @@ namespace Robotics
             Vector3 worldPosition = _graspedObject.transform.position;
             Quaternion worldRotation = _graspedObject.transform.rotation;
 
-            Debug.Log($"[GripperController] Detaching object '{_graspedObject.name}' at world position {worldPosition}");
+            Debug.Log(
+                $"[GripperController] Detaching object '{_graspedObject.name}' at world position {worldPosition}"
+            );
 
             // Get Rigidbody before making changes
             Rigidbody rb = _graspedObject.GetComponent<Rigidbody>();
@@ -470,7 +484,9 @@ namespace Robotics
                 rb.linearVelocity = Vector3.zero;
                 rb.angularVelocity = Vector3.zero;
 
-                Debug.Log($"[GripperController] Re-enabled physics at position {rb.position}, gravity enabled, velocities zeroed");
+                Debug.Log(
+                    $"[GripperController] Re-enabled physics at position {rb.position}, gravity enabled, velocities zeroed"
+                );
             }
 
             _graspedObject = null;

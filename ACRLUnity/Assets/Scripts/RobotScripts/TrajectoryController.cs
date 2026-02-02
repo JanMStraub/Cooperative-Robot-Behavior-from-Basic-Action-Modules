@@ -1,6 +1,5 @@
-using UnityEngine;
-using Core;
 using RobotScripts;
+using UnityEngine;
 
 namespace Robotics
 {
@@ -22,6 +21,8 @@ namespace Robotics
         // PD gains for Cartesian space control
         private Vector3 _positionGains;
         private Vector3 _velocityGains;
+        private float _maxVelocity;
+        private float _maxAcceleration;
 
         // Cached trajectory state (synchronized with FixedUpdate)
         private Vector3 _cachedTargetPosition;
@@ -34,10 +35,12 @@ namespace Robotics
         /// </summary>
         /// <param name="positionGains">Position gain (K_p) per axis</param>
         /// <param name="velocityGains">Velocity gain (K_d) per axis for damping</param>
-        public TrajectoryController(Vector3? positionGains = null, Vector3? velocityGains = null)
+        public TrajectoryController(Vector3? positionGains = null, Vector3? velocityGains = null, float? maxVelocity = null, float? maxAcceleration = null)
         {
             _positionGains = positionGains ?? new Vector3(10f, 10f, 10f);
             _velocityGains = velocityGains ?? new Vector3(2f, 2f, 2f);
+            _maxVelocity = maxVelocity ?? 0.5f;
+            _maxAcceleration = maxAcceleration ?? 1.0f;
         }
 
         /// <summary>
@@ -61,9 +64,10 @@ namespace Robotics
         public (Vector3 targetPos, Vector3 targetVel, Vector3 targetAccel) GetTrajectoryState(
             float currentTime,
             CartesianPath path,
-            VelocityProfile velocityProfile)
+            VelocityProfile velocityProfile
+        )
         {
-            // ⚠️ CRITICAL: Cache trajectory state in FixedUpdate
+            // CRITICAL: Cache trajectory state in FixedUpdate
             // If called in Update(), trajectory will jitter relative to FixedUpdate()
             // Only recompute if time has changed (i.e., new FixedUpdate frame)
             if (Mathf.Abs(currentTime - _lastUpdateTime) > 0.001f)
@@ -80,7 +84,13 @@ namespace Robotics
                 Vector3 direction = GetPathTangent(path, distance);
 
                 _cachedTargetPosition = waypoint.position;
-                _cachedTargetVelocity = direction * velocity;
+                Vector3 rawVelocity = direction * velocity;
+
+                if (rawVelocity.magnitude > _maxVelocity)
+                {
+                    rawVelocity = rawVelocity.normalized * _maxVelocity;
+                }
+                _cachedTargetVelocity = rawVelocity;
 
                 _cachedTargetAcceleration = GetAccelerationFromProfile(
                     velocityProfile,
@@ -157,7 +167,8 @@ namespace Robotics
             Vector3 currentPos,
             Vector3 targetPos,
             Vector3 currentVel,
-            Vector3 targetVel)
+            Vector3 targetVel
+        )
         {
             Vector3 posError = targetPos - currentPos;
             Vector3 velError = targetVel - currentVel;
@@ -192,7 +203,9 @@ namespace Robotics
 
             // Default to direction of last segment
             int lastIdx = path.waypoints.Count - 1;
-            return (path.waypoints[lastIdx].position - path.waypoints[lastIdx - 1].position).normalized;
+            return (
+                path.waypoints[lastIdx].position - path.waypoints[lastIdx - 1].position
+            ).normalized;
         }
 
         /// <summary>
@@ -201,25 +214,25 @@ namespace Robotics
         private Vector3 GetAccelerationFromProfile(
             VelocityProfile profile,
             float time,
-            float distance)
+            float distance
+        )
         {
             if (profile == null)
                 return Vector3.zero;
 
-            float acceleration = 0f;
+            float accelScalar = 0f;
 
             // Determine phase based on distance
             if (distance < profile.accelerationPhaseDistance)
             {
-                acceleration = profile.acceleration;
+                accelScalar = profile.acceleration;
             }
             else if (distance >= profile.accelerationPhaseDistance + profile.cruisePhaseDistance)
             {
-                acceleration = -profile.acceleration;
+                accelScalar = -profile.acceleration;
             }
 
-            const float maxAcceleration = 0.7f;
-            acceleration = Mathf.Clamp(acceleration, -maxAcceleration, maxAcceleration);
+            accelScalar = Mathf.Clamp(accelScalar, -_maxAcceleration, _maxAcceleration);
 
             return Vector3.zero;
         }

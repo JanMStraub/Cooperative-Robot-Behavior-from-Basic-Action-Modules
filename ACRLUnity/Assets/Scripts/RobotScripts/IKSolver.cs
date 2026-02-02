@@ -50,7 +50,7 @@ namespace Robotics
             _jacobianMatrix = DenseMatrix.Build.Dense(6, jointCount);
             _errorVector = Vector<double>.Build.Dense(6);
             _jointDelta = Vector<double>.Build.Dense(jointCount);
-            _cachedIdentity = DenseMatrix.Build.DenseIdentity(jointCount);
+            _cachedIdentity = DenseMatrix.Build.DenseIdentity(6);
         }
 
         /// <summary>
@@ -216,6 +216,7 @@ namespace Robotics
         {
             if (_jacobianMatrix.ColumnCount != joints.Length)
                 _jacobianMatrix = DenseMatrix.Build.Dense(6, joints.Length);
+                _jointDelta = Vector<double>.Build.Dense(joints.Length);
 
             for (int i = 0; i < joints.Length; i++)
             {
@@ -249,7 +250,7 @@ namespace Robotics
 
             var regularized = jacobianJacobianTranspose + damping * damping * _cachedIdentity;
 
-            var y = regularized.Solve(_errorVector);
+            var y = regularized.LU().Solve(_errorVector);
 
             _jointDelta = jacobianTranspose * y;
         }
