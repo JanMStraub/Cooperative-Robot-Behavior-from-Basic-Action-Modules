@@ -838,7 +838,7 @@ PlayerSettings:
   webWasm2023: 0
   webEnableSubmoduleStrippingCompatibility: 0
   scriptingDefineSymbols:
-    Standalone: 
+    Standalone: ROS2
   additionalCompilerArguments: {}
   platformArchitecture: {}
   scriptingBackend:

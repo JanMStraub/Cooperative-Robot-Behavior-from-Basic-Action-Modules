@@ -80,18 +80,33 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator WorldStatePublisher_WithoutRobotManager_Disables()
         {
-            // Destroy RobotManager
+            // Destroy original publisher from SetUp
+            Object.DestroyImmediate(_publisherObject);
+            _publisherObject = null;
+
+            // Destroy test robot first to avoid any references to RobotManager
+            Object.DestroyImmediate(_testRobotObject);
+            _testRobotObject = null;
+
+            // Destroy RobotManager and clear singleton instance
             Object.DestroyImmediate(_robotManagerObject);
             _robotManagerObject = null;
+
+            // Wait a frame to ensure OnDestroy is called and Instance is cleared
+            yield return null;
+
+            // Verify RobotManager is actually gone
+            Assert.IsNull(RobotManager.Instance, "RobotManager.Instance should be null after destruction");
 
             // Create new publisher (will fail to find RobotManager)
             var newPublisherObj = new GameObject("NewPublisher");
             var newPublisher = newPublisherObj.AddComponent<WorldStatePublisher>();
 
-            LogAssert.Expect(LogType.Error, System.Text.RegularExpressions.Regex.Escape(
-                "[WORLD_STATE_PUBLISHER] RobotManager.Instance is null! Ensure RobotManager GameObject is in the scene."));
+            // Expect error log when Start() is called on next frame
+            LogAssert.Expect(LogType.Error,
+                "[WORLD_STATE_PUBLISHER] RobotManager.Instance is null! Ensure RobotManager GameObject is in the scene.");
 
-            yield return null;
+            yield return null; // Wait for Start() to be called
 
             // Publisher should disable itself
             Assert.IsFalse(newPublisher.enabled, "Publisher should disable without RobotManager");

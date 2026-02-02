@@ -57,6 +57,7 @@ namespace Tests.PlayMode
         {
             // Setup minimal articulation chain
             TestHelpers.SetupMinimalArticulationChain(_robotController);
+            LogAssert.Expect(LogType.Error, "Tag: EndEffector is not defined.");
 
             // Attempt to reach impossibly far target (10 meters away)
             Vector3 unreachablePosition = new Vector3(10f, 10f, 10f);
@@ -77,6 +78,7 @@ namespace Tests.PlayMode
         {
             // Setup minimal articulation chain
             TestHelpers.SetupMinimalArticulationChain(_robotController);
+            LogAssert.Expect(LogType.Error, "Tag: EndEffector is not defined.");
 
             // Position near singularity (fully extended arm)
             Vector3 singularityPosition = new Vector3(0f, 0.2f, 0f); // Straight up
@@ -480,6 +482,7 @@ namespace Tests.PlayMode
         {
             // Create robot with ArticulationBody
             TestHelpers.SetupMinimalArticulationChain(_robotController);
+            LogAssert.Expect(LogType.Error, "Tag: EndEffector is not defined.");
 
             // Find ArticulationBody components
             var bodies = _robotController.GetComponentsInChildren<ArticulationBody>();

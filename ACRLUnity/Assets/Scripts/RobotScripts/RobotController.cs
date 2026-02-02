@@ -130,7 +130,10 @@ namespace Robotics
             if (_ikConfig == null)
                 _ikConfig = ScriptableObject.CreateInstance<IKConfig>();
 
-            _ikSolver = new IKSolver(robotJoints.Length, _ikConfig.dampingFactor);
+            if (robotJoints != null && robotJoints.Length > 0)
+            {
+                _ikSolver = new IKSolver(robotJoints.Length, _ikConfig.dampingFactor);
+            }
 
             _ikFrame =
                 IKReferenceFrame != null
@@ -312,11 +315,17 @@ namespace Robotics
 
         private void UpdateJointInfoCache()
         {
+            if (robotJoints == null || _cachedJointInfos == null || _ikFrame == null)
+                return;
+
             Quaternion ikFrameInverseRot = Quaternion.Inverse(_ikFrame.rotation);
 
             for (int i = 0; i < robotJoints.Length; i++)
             {
                 var joint = robotJoints[i];
+                if (joint == null)
+                    continue;
+
                 Vector3 jointLocalPos = _ikFrame.InverseTransformPoint(joint.transform.position);
                 Vector3 axisWorld = joint.transform.rotation * joint.anchorRotation * Vector3.right;
                 Vector3 axisLocal = ikFrameInverseRot * axisWorld;
@@ -334,6 +343,12 @@ namespace Robotics
             for (int i = 0; i < robotJoints.Length; i++)
             {
                 var joint = robotJoints[i];
+                if (joint == null)
+                    continue;
+
+                if (joint.jointVelocity.dofCount == 0)
+                    continue;
+
                 float jointAngularVel = joint.jointVelocity[0];
                 Vector3 axisWorld = joint.transform.rotation * joint.anchorRotation * Vector3.right;
                 Vector3 jointToEE = endEffectorBase.position - joint.transform.position;
@@ -399,7 +414,7 @@ namespace Robotics
 
         public void PerformInverseKinematicsStep()
         {
-            if (robotJoints.Length == 0 || endEffectorBase == null || _targetTransform == null)
+            if (robotJoints == null || robotJoints.Length == 0 || endEffectorBase == null || _targetTransform == null)
                 return;
 
             UpdateEndEffectorState();
@@ -445,6 +460,10 @@ namespace Robotics
             }
 
             UpdateJointInfoCache();
+
+            // Check if IK solver is initialized
+            if (_ikSolver == null)
+                return;
 
             // STALL COMPENSATION: Increase gain when stopped but not at target
             // This overcomes static friction

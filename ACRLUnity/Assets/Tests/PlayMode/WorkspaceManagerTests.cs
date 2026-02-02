@@ -238,7 +238,9 @@ namespace Tests.PlayMode
             var region = _manager.GetRegionAtPosition(sharedPosition);
 
             Assert.IsNotNull(region);
-            Assert.AreEqual("shared_zone", region.regionName);
+            // Position (0, 0, 0.2) is in both "center" and "shared_zone"
+            // GetRegionAtPosition returns the smallest region, which is "center"
+            Assert.AreEqual("center", region.regionName);
         }
 
         [Test]
@@ -359,8 +361,10 @@ namespace Tests.PlayMode
             var state = _manager.GetAllocationState();
 
             Assert.AreEqual(2, state.Count);
-            Assert.AreEqual("left_workspace", state["Robot1"]);
-            Assert.AreEqual("right_workspace", state["Robot2"]);
+            // GetAllocationState returns Dictionary<string, HashSet<string>>
+            // Each robot can have multiple allocated regions
+            Assert.IsTrue(state["Robot1"].Contains("left_workspace"));
+            Assert.IsTrue(state["Robot2"].Contains("right_workspace"));
         }
 
         [Test]

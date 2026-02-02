@@ -37,7 +37,6 @@ namespace Simulation.CoordinationStrategies
         // Coordination state
         private float _lastCoordinationCheckTime = -1f; // Initialize to -1 to force first check
         private const float COORDINATION_CHECK_INTERVAL = 0.5f; // Check coordination every 500ms
-        private const float DEFAULT_MIN_SAFE_SEPARATION = 0.2f;
 
         private const string LOG_PREFIX = "[COLLABORATIVE_STRATEGY]";
 
@@ -148,6 +147,9 @@ namespace Simulation.CoordinationStrategies
             if (robotControllers.Length < 2)
                 return; // No coordination needed for single robot
 
+            // Clear blocked robots list - will be rebuilt during this check
+            _blockedRobots.Clear();
+
             // Check all pairs of robots for potential conflicts
             for (int i = 0; i < robotControllers.Length; i++)
             {
@@ -188,12 +190,15 @@ namespace Simulation.CoordinationStrategies
                 robot2.robotId,
                 System.StringComparison.Ordinal
             );
-            RobotController lowPriorityRobot = priority < 0 ? robot1 : robot2;
-            RobotController highPriorityRobot = priority < 0 ? robot2 : robot1;
-            Vector3 lowPriorityCurrent = priority < 0 ? current1 : current2;
-            Vector3 lowPriorityTarget = priority < 0 ? target1 : target2;
-            Vector3 highPriorityCurrent = priority < 0 ? current2 : current1;
-            Vector3 highPriorityTarget = priority < 0 ? target2 : target1;
+
+            // When priority < 0, robot1 comes first alphabetically, so it gets HIGH priority
+            // When priority > 0, robot2 comes first alphabetically, so it gets HIGH priority
+            RobotController lowPriorityRobot = priority < 0 ? robot2 : robot1;
+            RobotController highPriorityRobot = priority < 0 ? robot1 : robot2;
+            Vector3 lowPriorityCurrent = priority < 0 ? current2 : current1;
+            Vector3 lowPriorityTarget = priority < 0 ? target2 : target1;
+            Vector3 highPriorityCurrent = priority < 0 ? current1 : current2;
+            Vector3 highPriorityTarget = priority < 0 ? target1 : target2;
 
             float targetDistance = Vector3.Distance(target1, target2);
             if (targetDistance < _minSafeSeparation)
@@ -226,7 +231,15 @@ namespace Simulation.CoordinationStrategies
                 return;
             }
 
-            if (WillPathsCollide(current1, target1, current2, target2))
+            // Skip path collision check if either robot isn't actually moving
+            bool robot1Moving = Vector3.Distance(current1, target1) > 0.001f;
+            bool robot2Moving = Vector3.Distance(current2, target2) > 0.001f;
+
+            if (
+                robot1Moving
+                && robot2Moving
+                && WillPathsCollide(current1, target1, current2, target2)
+            )
             {
                 Debug.LogWarning(
                     $"{LOG_PREFIX} Path collision detected between {robot1.robotId} and {robot2.robotId}"
@@ -275,9 +288,9 @@ namespace Simulation.CoordinationStrategies
                 }
             }
 
-            // If no conflicts detected, unblock both robots
-            _blockedRobots.Remove(robot1.robotId);
-            _blockedRobots.Remove(robot2.robotId);
+            // No conflicts detected between this pair - no action needed
+            // Note: We don't unconditionally unblock robots here because they might be
+            // blocked due to conflicts with OTHER robots checked in previous iterations
         }
 
         /// <summary>
@@ -319,6 +332,35 @@ namespace Simulation.CoordinationStrategies
         /// </summary>
         private bool WillPathsCollide(Vector3 start1, Vector3 end1, Vector3 start2, Vector3 end2)
         {
+            // Check if robots share the same starting position
+            bool sameStart = Vector3.Distance(start1, start2) < 0.001f;
+
+            if (sameStart)
+            {
+                // If starting from same position, check if moving in diverging directions
+                Vector3 dir1 = (end1 - start1).normalized;
+                Vector3 dir2 = (end2 - start2).normalized;
+
+                // If directions are significantly different (angle > 30 degrees), no collision
+                float dotProduct = Vector3.Dot(dir1, dir2);
+                if (dotProduct < 0.866f) // cos(30°) ≈ 0.866
+                {
+                    return false; // Diverging paths from same start
+                }
+
+                // Moving in similar directions from same start - check if one target is much farther
+                // This handles the case where robots move along the same axis but to different distances
+                float dist1 = Vector3.Distance(start1, end1);
+                float dist2 = Vector3.Distance(start2, end2);
+
+                // If one robot is moving significantly farther (>2x distance), consider them non-colliding
+                // The farther robot will naturally pass by the closer one
+                if (dist1 > dist2 * 2f || dist2 > dist1 * 2f)
+                {
+                    return false; // One robot goes much farther, they won't interfere
+                }
+            }
+
             // Find closest points on two line segments
             Vector3 closestPoint1,
                 closestPoint2;
@@ -361,15 +403,42 @@ namespace Simulation.CoordinationStrategies
             float s,
                 t;
 
-            if (denom != 0f)
+            const float epsilon = 1e-6f;
+
+            if (Mathf.Abs(denom) < epsilon)
             {
-                s = Mathf.Clamp01((b * e - c * d) / denom);
-                t = Mathf.Clamp01((a * e - b * d) / denom);
+                s = 0f;
+                t = Mathf.Clamp01(-e / c);
             }
             else
             {
-                s = 0f;
-                t = 0f;
+                s = (b * e - c * d) / denom;
+
+                if (s < 0f)
+                {
+                    s = 0f;
+                    t = Mathf.Clamp01(-e / c);
+                }
+                else if (s > 1f)
+                {
+                    s = 1f;
+                    t = Mathf.Clamp01((b - e) / c);
+                }
+                else
+                {
+                    t = (a * e - b * d) / denom;
+
+                    if (t < 0f)
+                    {
+                        t = 0f;
+                        s = Mathf.Clamp01(-d / a);
+                    }
+                    else if (t > 1f)
+                    {
+                        t = 1f;
+                        s = Mathf.Clamp01((b - d) / a);
+                    }
+                }
             }
 
             closestPoint1 = start1 + dir1 * s;

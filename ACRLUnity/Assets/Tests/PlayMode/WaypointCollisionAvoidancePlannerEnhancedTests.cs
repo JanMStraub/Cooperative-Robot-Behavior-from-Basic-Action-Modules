@@ -276,6 +276,13 @@ namespace Tests.PlayMode
         [Test]
         public void RequiresReplanning_RobotDirectlyInPath_ReturnsTrue()
         {
+            // Create Robot1 (the robot being planned for)
+            var robot1 = new GameObject("Robot1");
+            var robot1Controller = robot1.AddComponent<RobotController>();
+            robot1Controller.robotId = "Robot1";
+            robot1.transform.position = Vector3.zero; // Starting position
+
+            // Create OtherRobot (obstacle)
             var otherRobot = new GameObject("OtherRobot");
             var controller = otherRobot.AddComponent<RobotController>();
             controller.robotId = "OtherRobot";
@@ -284,7 +291,7 @@ namespace Tests.PlayMode
             otherRobot.transform.position = new Vector3(0.5f, 0f, 0f);
 
             Vector3 target = new Vector3(1f, 0f, 0f);
-            RobotController[] otherRobots = new[] { controller };
+            RobotController[] otherRobots = new[] { robot1Controller, controller };
 
             try
             {
@@ -293,6 +300,7 @@ namespace Tests.PlayMode
             }
             finally
             {
+                Object.DestroyImmediate(robot1);
                 Object.DestroyImmediate(otherRobot);
             }
         }
@@ -300,6 +308,13 @@ namespace Tests.PlayMode
         [Test]
         public void RequiresReplanning_RobotAtTarget_ReturnsTrue()
         {
+            // Create Robot1 (the robot being planned for)
+            var robot1 = new GameObject("Robot1");
+            var robot1Controller = robot1.AddComponent<RobotController>();
+            robot1Controller.robotId = "Robot1";
+            robot1.transform.position = Vector3.zero; // Starting position
+
+            // Create OtherRobot (obstacle at target)
             var otherRobot = new GameObject("OtherRobot");
             var controller = otherRobot.AddComponent<RobotController>();
             controller.robotId = "OtherRobot";
@@ -307,7 +322,7 @@ namespace Tests.PlayMode
             Vector3 target = new Vector3(1f, 0f, 0f);
             otherRobot.transform.position = target; // Exactly at target
 
-            RobotController[] otherRobots = new[] { controller };
+            RobotController[] otherRobots = new[] { robot1Controller, controller };
 
             try
             {
@@ -316,6 +331,7 @@ namespace Tests.PlayMode
             }
             finally
             {
+                Object.DestroyImmediate(robot1);
                 Object.DestroyImmediate(otherRobot);
             }
         }
@@ -470,18 +486,26 @@ namespace Tests.PlayMode
         [Test]
         public void RequiresReplanning_MultipleRobotsOnePath_ReturnsTrue()
         {
+            // Create Robot1 (the robot being planned for)
+            var mainRobot = new GameObject("Robot1");
+            var mainController = mainRobot.AddComponent<RobotController>();
+            mainController.robotId = "Robot1";
+            mainRobot.transform.position = Vector3.zero; // Starting position
+
+            // Create Robot2 (first obstacle)
             var robot1 = new GameObject("Robot2");
             var controller1 = robot1.AddComponent<RobotController>();
             controller1.robotId = "Robot2";
             robot1.transform.position = new Vector3(0.3f, 0f, 0f);
 
+            // Create Robot3 (second obstacle)
             var robot2 = new GameObject("Robot3");
             var controller2 = robot2.AddComponent<RobotController>();
             controller2.robotId = "Robot3";
             robot2.transform.position = new Vector3(0.6f, 0f, 0f);
 
             Vector3 target = new Vector3(1f, 0f, 0f);
-            RobotController[] otherRobots = new[] { controller1, controller2 };
+            RobotController[] otherRobots = new[] { mainController, controller1, controller2 };
 
             try
             {
@@ -491,6 +515,7 @@ namespace Tests.PlayMode
             }
             finally
             {
+                Object.DestroyImmediate(mainRobot);
                 Object.DestroyImmediate(robot1);
                 Object.DestroyImmediate(robot2);
             }
