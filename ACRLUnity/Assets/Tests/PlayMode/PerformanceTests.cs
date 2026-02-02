@@ -155,6 +155,7 @@ namespace Tests.PlayMode
             // (Phase 1: Motion Control Redesign requirement)
 
             TestHelpers.SetupMinimalArticulationChain(_robotController);
+            LogAssert.Expect(LogType.Error, "Tag: EndEffector is not defined.");
 
             Vector3 targetPosition = new Vector3(0.15f, 0.15f, 0.15f); // Reachable position
             GameObject target = TestHelpers.CreateTestTarget(targetPosition);
@@ -194,6 +195,7 @@ namespace Tests.PlayMode
             // Test that IK solver uses pre-allocated matrices (GC-free operation)
 
             TestHelpers.SetupMinimalArticulationChain(_robotController);
+            LogAssert.Expect(LogType.Error, "Tag: EndEffector is not defined.");
 
             Vector3 targetPosition = new Vector3(0.15f, 0.15f, 0.15f);
             GameObject target = TestHelpers.CreateTestTarget(targetPosition);
