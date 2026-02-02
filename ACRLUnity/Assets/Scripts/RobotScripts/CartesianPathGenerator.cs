@@ -29,8 +29,6 @@ namespace RobotScripts
         {
             float distance = Vector3.Distance(startPos, targetPos);
 
-            // Calculate number of waypoints based on distance and spacing
-            // Minimum 2 waypoints (start and end)
             int numWaypoints = Mathf.Max(2, Mathf.CeilToInt(distance / waypointSpacing));
 
             List<CartesianWaypoint> waypoints = new List<CartesianWaypoint>(numWaypoints + 1);
@@ -44,7 +42,7 @@ namespace RobotScripts
                     position = Vector3.Lerp(startPos, targetPos, t),
                     rotation = Quaternion.Slerp(startRot, targetRot, t),
                     distanceFromStart = distance * t,
-                    timeFromStart = 0f  // Will be set by velocity profile
+                    timeFromStart = 0f
                 };
 
                 waypoints.Add(wp);
@@ -54,8 +52,8 @@ namespace RobotScripts
             {
                 waypoints = waypoints,
                 totalDistance = distance,
-                maxVelocity = 0.2f,  // Default, will be overridden
-                acceleration = 0.5f  // Default, will be overridden
+                maxVelocity = 0.2f,
+                acceleration = 0.5f
             };
         }
 

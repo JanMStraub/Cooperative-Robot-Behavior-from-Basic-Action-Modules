@@ -33,8 +33,6 @@ namespace Robotics
     [DefaultExecutionOrder(-10)] // Ensure this initializes before other scripts
     public class SimpleRobotController : MonoBehaviour
     {
-        #region --- Configuration ---
-
         [Header("Robot Configuration")]
         [SerializeField]
         public string robotId = "Robot1";
@@ -103,47 +101,30 @@ namespace Robotics
         [SerializeField]
         private bool enableDebugVisualization = true;
 
-        #endregion
-
-        #region --- Internal State ---
-
-        // IK State
+        private Transform _ikFrame;
         private Vector3 _targetPosition;
         private Quaternion _targetRotation = Quaternion.identity;
-        private Transform _ikFrame;
         private IKSolver _ikSolver;
         private JointInfo[] _cachedJointInfos;
         private bool _hasTarget = false;
         private bool _hasReachedTarget = true;
         private float _distanceToTarget;
         private float _sqrDistanceToTarget;
-
-        // Position and orientation state (in IK frame)
         private Vector3 _endEffectorLocalPosition;
         private Quaternion _endEffectorLocalRotation;
         private Vector3 _targetLocalPosition;
         private Quaternion _targetLocalRotation;
 
-        // Grasp State (tracked by object for attachment after reaching target)
         private GameObject _targetObject;
 
-        // Constants
         private const string _logPrefix = "[SIMPLE_ROBOT_CONTROLLER]";
         private const float SqrEpsilon = 1e-6f;
-
-        #endregion
-
-        #region --- Properties & Events ---
 
         public event System.Action OnTargetReached;
 
         public bool HasReachedTarget => _hasReachedTarget;
         public float DistanceToTarget => _distanceToTarget;
         public bool HasTarget => _hasTarget;
-
-        #endregion
-
-        #region --- Unity Lifecycle ---
 
         /// <summary>
         /// Unity Start callback - initializes the robot controller.
@@ -155,7 +136,6 @@ namespace Robotics
 
             InitializeRobot();
 
-            // Only run autonomous startup if enabled (when used standalone, not as backup)
             if (_enableAutonomousMode)
             {
                 // Delay gripper and target setup to ensure GripperController has initialized
@@ -163,16 +143,10 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Delayed startup to ensure GripperController is initialized first.
-        /// Only runs when in autonomous mode.
-        /// </summary>
         private IEnumerator DelayedStartup()
         {
-            // Wait one frame for GripperController.Start() to complete
             yield return null;
 
-            // Now open the gripper (this will auto-detach any held object)
             OpenGripper();
         }
 
@@ -192,10 +166,6 @@ namespace Robotics
             PerformInverseKinematicsStep();
             DrawDebugVisualization();
         }
-
-        #endregion
-
-        #region --- Initialization ---
 
         /// <summary>
         /// Initialize the robot controller, IK solver, and joint caches.
@@ -219,14 +189,11 @@ namespace Robotics
                 return;
             }
 
-            // Initialize joint info cache
             int jointCount = robotJoints.Length;
             _cachedJointInfos = new JointInfo[jointCount];
 
-            // Initialize IK solver
             _ikSolver = new IKSolver(jointCount, _ikConfig.dampingFactor);
 
-            // Auto-find gripper controller if not assigned
             if (_gripperController == null)
             {
                 _gripperController = GetComponentInChildren<GripperController>();
@@ -238,7 +205,6 @@ namespace Robotics
                     );
             }
 
-            // Ensure gripper has attachment point set
             if (_gripperController != null && _gripperController.attachmentPoint == null)
             {
                 _gripperController.attachmentPoint = endEffectorBase;
@@ -247,24 +213,20 @@ namespace Robotics
                 );
             }
 
-            // Tune joint drives for critical damping
             TuneJointDrivesForCriticalDamping();
 
-            // CRITICAL: Set initial joint drive targets to current positions to prevent slumping
             for (int i = 0; i < robotJoints.Length; i++)
             {
                 var joint = robotJoints[i];
                 if (joint != null)
                 {
-                    // Get current joint position and set it as the drive target
                     float currentPosition = joint.jointPosition[0];
                     var drive = joint.xDrive;
-                    drive.target = currentPosition * Mathf.Rad2Deg; // Convert radians to degrees
+                    drive.target = currentPosition * Mathf.Rad2Deg;
                     joint.xDrive = drive;
                 }
             }
 
-            // Initialize target to current position
             _targetPosition = endEffectorBase.position;
             _targetRotation = endEffectorBase.rotation;
         }
@@ -278,7 +240,6 @@ namespace Robotics
             if (robotJoints == null || robotJoints.Length == 0)
                 return;
 
-            // Try to get robot config from RobotManager
             RobotManager robotManager = RobotManager.Instance;
             RobotInstance robotInstance = null;
             bool hasConfig = false;
@@ -293,7 +254,6 @@ namespace Robotics
                 var joint = robotJoints[i];
                 var drive = joint.xDrive;
 
-                // Try to use config from RobotManager (like RobotController does)
                 if (
                     hasConfig
                     && robotInstance.profile?.joints != null
@@ -309,7 +269,6 @@ namespace Robotics
                 }
                 else
                 {
-                    // Fallback: Use critical damping calculation
                     float inertia = joint.inertiaTensor.x;
                     if (inertia < 0.001f)
                         inertia = joint.mass * 0.1f; // Fallback estimate
@@ -326,10 +285,6 @@ namespace Robotics
             }
         }
 
-        #endregion
-
-        #region --- IK Computation ---
-
         /// <summary>
         /// Update the cached joint info for Jacobian computation.
         /// Transforms joint positions and axes to IK frame coordinates.
@@ -342,10 +297,8 @@ namespace Robotics
             {
                 var joint = robotJoints[i];
 
-                // Joint position in IK frame
                 Vector3 jointLocalPos = _ikFrame.InverseTransformPoint(joint.transform.position);
 
-                // Joint axis in world space, then transform to IK frame
                 Vector3 axisWorld = joint.transform.rotation * joint.anchorRotation * Vector3.right;
                 Vector3 axisLocal = ikFrameInverseRot * axisWorld;
 
@@ -361,7 +314,6 @@ namespace Robotics
             if (_ikFrame == null || endEffectorBase == null)
                 return;
 
-            // End effector state in IK frame
             Vector3 eeWorldPos = endEffectorBase.position;
             Quaternion eeWorldRot = endEffectorBase.rotation;
             _endEffectorLocalPosition = _ikFrame.InverseTransformPoint(eeWorldPos);
@@ -369,11 +321,9 @@ namespace Robotics
             Quaternion invFrameRot = Quaternion.Inverse(_ikFrame.rotation);
             _endEffectorLocalRotation = invFrameRot * eeWorldRot;
 
-            // Target state in IK frame
             _targetLocalPosition = _ikFrame.InverseTransformPoint(_targetPosition);
             _targetLocalRotation = invFrameRot * _targetRotation;
 
-            // Calculate distance
             Vector3 distVec = _targetLocalPosition - _endEffectorLocalPosition;
             _sqrDistanceToTarget = distVec.sqrMagnitude;
             _distanceToTarget = Mathf.Sqrt(_sqrDistanceToTarget);
@@ -389,19 +339,15 @@ namespace Robotics
             if (robotJoints.Length == 0 || endEffectorBase == null)
                 return;
 
-            // Update state
             UpdateEndEffectorState();
             UpdateJointInfoCache();
 
-            // Check convergence - use the Inspector threshold value
-            float effectiveThreshold = _ikConfig.convergenceThreshold; // Use Inspector value (default 3cm)
+            float effectiveThreshold = _ikConfig.convergenceThreshold;
             float sqrPosThreshold = effectiveThreshold * effectiveThreshold;
             Vector3 currentVelocity = GetEndEffectorVelocity();
 
-            // Converge when position is close enough AND velocity is low (robot has settled)
-            // Using a more relaxed velocity threshold than IKSolver to avoid getting stuck
             bool positionConverged = _sqrDistanceToTarget <= sqrPosThreshold;
-            bool velocitySettled = currentVelocity.magnitude < 0.1f; // 10cm/s - relaxed from IKSolver's 5cm/s
+            bool velocitySettled = currentVelocity.magnitude < 0.1f;
 
             if (positionConverged && velocitySettled)
             {
@@ -415,56 +361,43 @@ namespace Robotics
                 return;
             }
 
-            // If position is converged but velocity is high, keep running IK to let robot settle
-            // This prevents premature convergence while robot is still moving
             if (positionConverged && !velocitySettled)
             {
-                // Don't call IKSolver, just let physics settle the robot
                 return;
             }
 
-            // LEASH/CARROT APPROACH: Constrain immediate target to small distance ahead
-            // This prevents aggressive corrections that cause oscillation
             Vector3 constrainedTargetPos;
             Quaternion constrainedTargetRot;
 
-            // DISABLE orientation correction completely - it causes shaking
-            // Only focus on position to ensure stable convergence
             float orientationWeight = 0f;
 
             if (_distanceToTarget > _leashDistance)
             {
-                // Target is far - use a "carrot" a short distance ahead
                 Vector3 directionToTarget = (
                     _targetLocalPosition - _endEffectorLocalPosition
                 ).normalized;
                 constrainedTargetPos =
                     _endEffectorLocalPosition + directionToTarget * _leashDistance;
-                constrainedTargetRot = _endEffectorLocalRotation; // Keep current orientation
+                constrainedTargetRot = _endEffectorLocalRotation;
             }
             else
             {
-                // Close enough - go directly to target position
                 constrainedTargetPos = _targetLocalPosition;
-                constrainedTargetRot = _endEffectorLocalRotation; // Still keep current orientation
+                constrainedTargetRot = _endEffectorLocalRotation;
             }
 
-            // Compute IK using IKSolver
             IKState currentState = new IKState(
                 _endEffectorLocalPosition,
                 _endEffectorLocalRotation
             );
             IKState targetState = new IKState(constrainedTargetPos, constrainedTargetRot);
 
-            // Use velocity-level IK with PD control for natural damping
-            // Pass a very small convergence threshold to IKSolver so it never returns null prematurely
-            // The controller handles convergence checking, not the IKSolver
-            const float ikInternalThreshold = 0.001f; // 1mm - effectively disables IKSolver's convergence
+            const float ikInternalThreshold = 0.001f;
             Vector<double> jointDeltas = _ikSolver.ComputeJointDeltasWithVelocity(
                 currentState,
                 targetState,
                 currentVelocity,
-                Vector3.zero, // Target velocity (stationary target)
+                Vector3.zero,
                 _cachedJointInfos,
                 ikInternalThreshold,
                 Kp: _positionGain,
@@ -491,26 +424,20 @@ namespace Robotics
 
             Vector3 endEffectorWorldVelocity = Vector3.zero;
 
-            // Compute velocity contribution from each joint: v = omega x r
             for (int i = 0; i < robotJoints.Length; i++)
             {
                 var joint = robotJoints[i];
 
-                // Get joint angular velocity (rad/sec)
                 float jointAngularVel = joint.jointVelocity[0];
 
-                // Get joint axis in world space
                 Vector3 axisWorld = joint.transform.rotation * joint.anchorRotation * Vector3.right;
 
-                // Get vector from joint to end effector
                 Vector3 jointToEE = endEffectorBase.position - joint.transform.position;
 
-                // Velocity contribution: v = omega x r
                 Vector3 velContribution = Vector3.Cross(axisWorld * jointAngularVel, jointToEE);
                 endEffectorWorldVelocity += velContribution;
             }
 
-            // Transform to IK frame local coordinates
             return Quaternion.Inverse(_ikFrame.rotation) * endEffectorWorldVelocity;
         }
 
@@ -521,7 +448,6 @@ namespace Robotics
         /// <param name="jointDeltas">Joint angle deltas in radians</param>
         private void ApplyMotorUpdates(Vector<double> jointDeltas)
         {
-            // Adaptive gain: slow down near target
             float adaptiveGain = _maxStepSpeed;
             if (_distanceToTarget < 0.1f)
             {
@@ -536,11 +462,9 @@ namespace Robotics
             {
                 double delta = jointDeltas[i];
 
-                // Handle NaN/Infinity
                 if (double.IsNaN(delta) || double.IsInfinity(delta))
                     delta = 0.0;
 
-                // Clamp joint step
                 double clampedDeltaRad = System.Math.Clamp(
                     delta,
                     -_maxJointStepRad,
@@ -549,7 +473,6 @@ namespace Robotics
                 double finalDeltaRad = clampedDeltaRad * adaptiveGain;
                 float deltaAngleDegree = (float)(finalDeltaRad * Mathf.Rad2Deg);
 
-                // Apply to ArticulationBody drive
                 ArticulationDrive drive = robotJoints[i].xDrive;
                 float newTarget = Mathf.Clamp(
                     drive.target + deltaAngleDegree,
@@ -564,10 +487,6 @@ namespace Robotics
                 }
             }
         }
-
-        #endregion
-
-        #region --- Public API ---
 
         /// <summary>
         /// Set a new target position for the robot to move to.
@@ -586,7 +505,6 @@ namespace Robotics
         /// <param name="approach">How the gripper should approach the target</param>
         public void SetTarget(Vector3 position, GripperApproach approach)
         {
-            // Try to find a real object near this position
             if (ObjectFinder.Instance != null)
             {
                 const float objectFindingRadius = 0.15f; // meters
@@ -606,7 +524,6 @@ namespace Robotics
                         < objectDistanceThreshold * objectDistanceThreshold
                     )
                     {
-                        // Close enough - use the real object instead
                         Debug.Log(
                             $"{_logPrefix} [{robotId}] Found nearby object '{nearbyObject.name}' at distance {Mathf.Sqrt(distanceSqr):F3}m, snapping to it"
                         );
@@ -616,7 +533,6 @@ namespace Robotics
                 }
             }
 
-            // No object found nearby - use the position directly
             _targetPosition = position;
             _targetRotation = CalculateApproachRotation(position, approach);
 
@@ -640,11 +556,9 @@ namespace Robotics
         {
             Vector3 robotBase = _ikFrame != null ? _ikFrame.position : transform.position;
 
-            // Direction from robot base to target (horizontal plane)
             Vector3 baseToTarget = targetPosition - robotBase;
             baseToTarget.y = 0;
 
-            // If target is directly above/below robot, use forward as fallback
             if (baseToTarget.sqrMagnitude < 0.001f)
                 baseToTarget = transform.forward;
             else
@@ -655,21 +569,15 @@ namespace Robotics
             switch (approach)
             {
                 case GripperApproach.TopDown:
-                    // Gripper pointing straight down (-Y)
-                    // Gripper's "forward" faces away from robot (toward target direction)
-                    // This ensures fingers can close properly on the object
                     baseRotation = Quaternion.LookRotation(Vector3.down, baseToTarget);
                     break;
 
                 case GripperApproach.Front:
-                    // Gripper pointing horizontally toward the target
-                    // Approaches from robot's side of the object
-                    Vector3 approachDir = -baseToTarget; // Point toward robot (approach from robot's direction)
+                    Vector3 approachDir = -baseToTarget;
                     baseRotation = Quaternion.LookRotation(approachDir, Vector3.up);
                     break;
 
                 case GripperApproach.Side:
-                    // Gripper approaching from the side (perpendicular to robot-target line)
                     Vector3 sideDir = Vector3.Cross(Vector3.up, baseToTarget);
                     if (sideDir.sqrMagnitude < 0.001f)
                         sideDir = Vector3.right;
@@ -678,11 +586,9 @@ namespace Robotics
 
                 case GripperApproach.Current:
                 default:
-                    // Keep current gripper orientation
                     return endEffectorBase != null ? endEffectorBase.rotation : Quaternion.identity;
             }
 
-            // Apply user-configurable offset to align gripper axes
             return baseRotation * Quaternion.Euler(_gripperRotationOffset);
         }
 
@@ -713,7 +619,6 @@ namespace Robotics
             if (target == null)
                 return;
 
-            // Store the object for attachment after grasping
             _targetObject = target;
 
             SetTarget(target.transform.position, target.transform.rotation);
@@ -731,10 +636,6 @@ namespace Robotics
             SetTarget(target.position, target.rotation);
         }
 
-        #endregion
-
-        #region --- Gripper Control ---
-
         /// <summary>
         /// Update target reached state and fire events.
         /// </summary>
@@ -746,10 +647,8 @@ namespace Robotics
                 _hasReachedTarget = reached;
                 if (reached)
                 {
-                    // Clear the target to stop all movement
                     _hasTarget = false;
 
-                    // Close gripper after delay
                     if (_closeGripperOnReach && _gripperController != null)
                     {
                         StartCoroutine(CloseGripperAfterDelay());
@@ -769,18 +668,16 @@ namespace Robotics
         {
             yield return new WaitForSeconds(_gripperCloseDelay);
 
-            // Set the target object so it will be attached automatically when gripper closes
             if (_attachObjectOnGrasp && _targetObject != null)
             {
                 _gripperController.SetTargetObject(_targetObject);
-                _targetObject = null; // Clear our reference
+                _targetObject = null;
             }
 
             _gripperController.CloseGrippers();
 
-            // Wait for gripper to finish closing (attachment happens automatically)
             yield return new WaitWhile(() => _gripperController.IsMoving);
-            yield return new WaitForSeconds(0.2f); // Extra settle time
+            yield return new WaitForSeconds(0.2f);
 
             OnTargetReached?.Invoke();
         }
@@ -813,10 +710,6 @@ namespace Robotics
         {
             _gripperController?.CloseGrippers();
         }
-
-        #endregion
-
-        #region --- Helpers ---
 
         /// <summary>
         /// Clear the current target and stop movement.
@@ -912,7 +805,5 @@ namespace Robotics
                 Gizmos.DrawLine(endEffectorBase.position, _targetPosition);
             }
         }
-
-        #endregion
     }
 }

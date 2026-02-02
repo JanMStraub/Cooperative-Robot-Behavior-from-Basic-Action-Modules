@@ -36,7 +36,6 @@ namespace Robotics
         /// <param name="velocityGains">Velocity gain (K_d) per axis for damping</param>
         public TrajectoryController(Vector3? positionGains = null, Vector3? velocityGains = null)
         {
-            // Default gains tuned for robot arm motion
             _positionGains = positionGains ?? new Vector3(10f, 10f, 10f);
             _velocityGains = velocityGains ?? new Vector3(2f, 2f, 2f);
         }
@@ -71,24 +70,18 @@ namespace Robotics
             {
                 _lastUpdateTime = currentTime;
 
-                // Calculate distance from time using trapezoidal velocity profile
                 float distance = CalculateDistanceFromTime(currentTime, velocityProfile);
                 float velocity = velocityProfile.GetVelocityAtDistance(distance);
 
-                // Clamp to path limits
                 distance = Mathf.Clamp(distance, 0f, path.totalDistance);
 
-                // Get waypoint at this distance
                 CartesianWaypoint waypoint = path.GetWaypointAtDistance(distance);
 
-                // Get direction of motion (tangent to path)
                 Vector3 direction = GetPathTangent(path, distance);
 
-                // Feedforward terms
                 _cachedTargetPosition = waypoint.position;
-                _cachedTargetVelocity = direction * Mathf.Clamp(velocity, 0f, 0.2f); // 0.2 m/s max velocity
+                _cachedTargetVelocity = direction * velocity;
 
-                // Acceleration from velocity profile (for feedforward control)
                 _cachedTargetAcceleration = GetAccelerationFromProfile(
                     velocityProfile,
                     currentTime,
@@ -114,21 +107,17 @@ namespace Robotics
 
             if (time <= tAccel)
             {
-                // Acceleration phase: d = 0.5 * a * t²
                 return 0.5f * a * time * time;
             }
             else if (profile.cruisePhaseDistance > 0f)
             {
-                // Trapezoidal profile with cruise phase
                 float tCruiseEnd = tAccel + (profile.cruisePhaseDistance / vMax);
                 if (time <= tCruiseEnd)
                 {
-                    // Cruise phase: d = d_accel + v * (t - t_accel)
                     return profile.accelerationPhaseDistance + vMax * (time - tAccel);
                 }
                 else
                 {
-                    // Deceleration phase: d = d_accel + d_cruise + v*t - 0.5*a*t²
                     float tDecel = time - tCruiseEnd;
                     return profile.accelerationPhaseDistance
                         + profile.cruisePhaseDistance
@@ -137,7 +126,6 @@ namespace Robotics
             }
             else
             {
-                // Triangular profile (no cruise)
                 float tTotal = 2f * tAccel;
                 if (time <= tAccel)
                 {
@@ -151,7 +139,6 @@ namespace Robotics
                 }
                 else
                 {
-                    // Past end of profile
                     return profile.accelerationPhaseDistance + profile.decelerationPhaseDistance;
                 }
             }
@@ -172,13 +159,9 @@ namespace Robotics
             Vector3 currentVel,
             Vector3 targetVel)
         {
-            // PD control law: correction = K_p*(pos error) + K_d*(vel error)
-            // The velocity term provides natural damping that prevents overshoot
-
             Vector3 posError = targetPos - currentPos;
             Vector3 velError = targetVel - currentVel;
 
-            // Apply gains per axis
             Vector3 posCorrection = Vector3.Scale(_positionGains, posError);
             Vector3 velCorrection = Vector3.Scale(_velocityGains, velError);
 
@@ -228,22 +211,17 @@ namespace Robotics
             // Determine phase based on distance
             if (distance < profile.accelerationPhaseDistance)
             {
-                // Acceleration phase
                 acceleration = profile.acceleration;
             }
             else if (distance >= profile.accelerationPhaseDistance + profile.cruisePhaseDistance)
             {
-                // Deceleration phase
                 acceleration = -profile.acceleration;
             }
-            // else: cruise phase, acceleration = 0
 
-            // Clamp acceleration
-            const float maxAcceleration = 0.7f; // m/s²
+            const float maxAcceleration = 0.7f;
             acceleration = Mathf.Clamp(acceleration, -maxAcceleration, maxAcceleration);
 
-            // Return scalar acceleration (direction handled by velocity)
-            return Vector3.zero; // Acceleration is already included in velocity calculations
+            return Vector3.zero;
         }
 
         /// <summary>

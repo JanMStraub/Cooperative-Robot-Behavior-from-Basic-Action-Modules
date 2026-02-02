@@ -30,10 +30,8 @@ namespace RobotScripts
                 };
             }
 
-            // Clamp distance to path bounds
             distance = Mathf.Clamp(distance, 0f, totalDistance);
 
-            // Find the two waypoints that bracket this distance
             for (int i = 0; i < waypoints.Count - 1; i++)
             {
                 CartesianWaypoint current = waypoints[i];
@@ -41,11 +39,10 @@ namespace RobotScripts
 
                 if (distance >= current.distanceFromStart && distance <= next.distanceFromStart)
                 {
-                    // Interpolate between current and next
                     float segmentDistance = next.distanceFromStart - current.distanceFromStart;
                     if (segmentDistance < 0.0001f)
                     {
-                        return current;  // Avoid division by zero
+                        return current;
                     }
 
                     float t = (distance - current.distanceFromStart) / segmentDistance;
@@ -59,30 +56,7 @@ namespace RobotScripts
                 }
             }
 
-            // If we're at or past the end, return the last waypoint
             return waypoints[waypoints.Count - 1];
-        }
-
-        /// <summary>
-        /// Get position at a specific time along the path (for future velocity-based queries).
-        /// </summary>
-        public Vector3 GetPositionAtTime(float time)
-        {
-            // For now, uses simple constant velocity assumption
-            // Can be enhanced with velocity profile integration later
-            float distance = time * maxVelocity;
-            return GetWaypointAtDistance(distance).position;
-        }
-
-        /// <summary>
-        /// Get rotation at a specific time along the path (for future velocity-based queries).
-        /// </summary>
-        public Quaternion GetRotationAtTime(float time)
-        {
-            // For now, uses simple constant velocity assumption
-            // Can be enhanced with velocity profile integration later
-            float distance = time * maxVelocity;
-            return GetWaypointAtDistance(distance).rotation;
         }
     }
 
@@ -122,7 +96,6 @@ namespace RobotScripts
             float acceleration
         )
         {
-            // Calculate time and distance for acceleration phase
             float accelTime = maxVelocity / acceleration;
             float accelDistance = 0.5f * acceleration * accelTime * accelTime;
 
@@ -131,10 +104,8 @@ namespace RobotScripts
                 acceleration = acceleration
             };
 
-            // Check if we can reach max velocity
             if (accelDistance * 2 > totalDistance)
             {
-                // Triangular profile (no cruise phase) - too short to reach max velocity
                 accelDistance = totalDistance / 2f;
                 float peakVelocity = Mathf.Sqrt(2f * acceleration * accelDistance);
 
@@ -145,7 +116,6 @@ namespace RobotScripts
             }
             else
             {
-                // Trapezoidal profile (has cruise phase)
                 profile.accelerationPhaseDistance = accelDistance;
                 profile.cruisePhaseDistance = totalDistance - (2f * accelDistance);
                 profile.decelerationPhaseDistance = accelDistance;
@@ -165,22 +135,18 @@ namespace RobotScripts
         {
             if (distance < accelerationPhaseDistance)
             {
-                // Acceleration phase: v = sqrt(2 * a * d)
                 return Mathf.Sqrt(2f * acceleration * distance);
             }
             else if (distance < accelerationPhaseDistance + cruisePhaseDistance)
             {
-                // Cruise phase: constant velocity
                 return cruiseVelocity;
             }
             else
             {
-                // Deceleration phase
                 float totalNonDecelDistance = accelerationPhaseDistance + cruisePhaseDistance;
                 float decelDistance = distance - totalNonDecelDistance;
                 float remainingDistance = decelerationPhaseDistance - decelDistance;
 
-                // Ensure we don't go negative
                 if (remainingDistance <= 0f)
                 {
                     return 0f;

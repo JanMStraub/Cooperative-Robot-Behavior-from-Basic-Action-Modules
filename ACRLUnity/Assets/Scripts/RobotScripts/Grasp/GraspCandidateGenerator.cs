@@ -16,7 +16,6 @@ namespace Robotics.Grasp
 
         private const string _logPrefix = "[GRASP_CANDIDATE_GENERATOR]";
 
-        // Cached basis vectors for local space calculations to avoid new struct allocs
         private static readonly Vector3[] ApproachAxes =
         {
             Vector3.up,
@@ -38,7 +37,6 @@ namespace Robotics.Grasp
             Vector3 gripperPosition
         )
         {
-            // 1. Calculate total expected capacity to avoid List resizing
             int totalCandidates = 0;
             foreach (var approach in _config.enabledApproaches)
             {
@@ -48,23 +46,20 @@ namespace Robotics.Grasp
 
             var candidates = new List<GraspCandidate>(totalCandidates);
 
-            // Cache object transform data once
             Transform objTransform = targetObject.transform;
             Vector3 objectPosition = objTransform.position;
             Quaternion objectRotation = objTransform.rotation;
 
-            // Get size (assuming OBB or AABB logic, ideally this comes from a Collider)
             Vector3 objectSize = GraspUtilities.GetObjectSize(targetObject);
             float basePreGraspDist = _config.CalculatePreGraspDistance(objectSize);
 
-            // 2. Single loop generation
             foreach (var approachSetting in _config.enabledApproaches)
             {
                 if (!approachSetting.enabled)
                     continue;
 
                 GenerateCandidatesForApproach(
-                    candidates, // Pass list by reference to avoid alloc
+                    candidates,
                     approachSetting.approachType,
                     objectPosition,
                     objectRotation,
@@ -85,7 +80,6 @@ namespace Robotics.Grasp
             float basePreGraspDist
         )
         {
-            // Determine the local axis for this approach (Top=Y, Side=X, Front=Z)
             GetApproachBasis(
                 approach,
                 objRot,
@@ -93,36 +87,30 @@ namespace Robotics.Grasp
                 out Vector3 approachTangentWorld
             );
 
-            // Determine the dimension magnitude along that axis
             float dimensionOnAxis = GetDimensionOnAxis(approach, objSize);
 
             for (int i = 0; i < _config.candidatesPerApproach; i++)
             {
-                // Sample variations
                 float distVar = SampleDistanceVariation(basePreGraspDist);
-                float angleVar = SampleAngleVariation(); // Degrees
+                float angleVar = SampleAngleVariation();
                 float depthVar = SampleDepthVariation(objSize);
 
-                // Perturb the approach direction vector (Cone sampling)
                 Vector3 perturbedApproachDir = PerturbDirection(
                     approachAxisWorld,
                     approachTangentWorld
                 );
 
-                // Calculate Grasp Position (Surface + Depth)
-                // We move from center -> along axis -> minus depth
                 Vector3 graspPoint =
                     objPos + (perturbedApproachDir * ((dimensionOnAxis * 0.5f) + depthVar));
 
-                // Debug first candidate only
                 if (i == 0 && approach == GraspApproach.Top)
                 {
-                    UnityEngine.Debug.Log($"{_logPrefix} {approach} approach: objPos={objPos}, dimensionOnAxis={dimensionOnAxis}, " +
-                        $"depthVar={depthVar}, perturbedApproachDir={perturbedApproachDir}, graspPoint={graspPoint}");
+                    UnityEngine.Debug.Log(
+                        $"{_logPrefix} {approach} approach: objPos={objPos}, dimensionOnAxis={dimensionOnAxis}, "
+                            + $"depthVar={depthVar}, perturbedApproachDir={perturbedApproachDir}, graspPoint={graspPoint}"
+                    );
                 }
 
-                // Calculate Rotation
-                // Use gripper-specific rotations (URDF has 90° Z-rotation baked in)
                 Quaternion graspRotation = CalculateGripperRotation(
                     approach,
                     perturbedApproachDir,
@@ -131,20 +119,16 @@ namespace Robotics.Grasp
                     angleVar
                 );
 
-                // Pre-grasp Position
                 Vector3 preGraspPos = graspPoint + (perturbedApproachDir * distVar);
 
-                // Retreat Position
                 Vector3 retreatPos = graspPoint;
                 if (_config.enableRetreat)
                 {
-                    // Assuming retreat is simply backing out the way we came
                     retreatPos =
                         graspPoint
                         + (perturbedApproachDir * _config.CalculateRetreatDistance(objSize));
                 }
 
-                // Construct Candidate
                 var candidate = GraspCandidate.Create(
                     preGraspPos,
                     graspRotation,
@@ -160,7 +144,6 @@ namespace Robotics.Grasp
                 candidate.contactPointEstimate = graspPoint;
                 candidate.approachDirection = perturbedApproachDir;
 
-                // Compute Score (approach-aware antipodal scoring)
                 candidate.antipodalScore = ComputeAntipodalScore(
                     graspPoint,
                     graspRotation,
@@ -187,17 +170,16 @@ namespace Robotics.Grasp
         {
             switch (approach)
             {
-                case GraspApproach.Top: // Local Y
+                case GraspApproach.Top:
                     axis = objRot * Vector3.up;
-                    tangent = objRot * Vector3.right; // Arbitrary tangent for roll reference
+                    tangent = objRot * Vector3.right;
                     break;
-                case GraspApproach.Side: // Local X
-                    // Determine which side (left or right) randomly
+                case GraspApproach.Side:
                     float sideSign = _random.NextDouble() > 0.5 ? 1f : -1f;
                     axis = objRot * (Vector3.right * sideSign);
                     tangent = objRot * Vector3.up;
                     break;
-                case GraspApproach.Front: // Local Z
+                case GraspApproach.Front:
                     float frontSign = _random.NextDouble() > 0.5 ? 1f : -1f;
                     axis = objRot * (Vector3.forward * frontSign);
                     tangent = objRot * Vector3.up;
@@ -226,7 +208,9 @@ namespace Robotics.Grasp
         /// </summary>
         private Vector3 PerturbDirection(Vector3 mainAxis, Vector3 tangent)
         {
-            float perturbationAngle = (float)((_random.NextDouble() * 2.0 - 1.0) * _config.angleVariationRange);
+            float perturbationAngle = (float)(
+                (_random.NextDouble() * 2.0 - 1.0) * _config.angleVariationRange
+            );
             float perturbationRoll = (float)(_random.NextDouble() * 360.0);
 
             Quaternion rot = Quaternion.AngleAxis(perturbationAngle, tangent);
@@ -252,31 +236,21 @@ namespace Robotics.Grasp
             float angleVar
         )
         {
-            // Use approach-specific Euler angles to match expected gripper orientation
-            // The gripper's coordinate frame expects specific rotations for each approach
-
             Quaternion baseRotation;
 
             switch (approach)
             {
                 case GraspApproach.Top:
-                    // Top approach: gripper points down
-                    // X-rotation: 180° (point down) + variation
-                    // Z-rotation: 90° (URDF compensation)
                     baseRotation = Quaternion.Euler(180f + angleVar, 0f, 90f);
                     break;
 
                 case GraspApproach.Side:
-                    // Side approach: gripper points horizontally
-                    // Transform approach direction to object's local space to determine side
                     Vector3 localApproachDir = Quaternion.Inverse(objRot) * approachDir;
                     float sideAngle = localApproachDir.x > 0 ? -90f : 90f;
                     baseRotation = Quaternion.Euler(angleVar, sideAngle, 0f);
                     break;
 
                 case GraspApproach.Front:
-                    // Front approach: gripper points horizontally
-                    // Transform approach direction to object's local space to determine front/back
                     Vector3 localFrontDir = Quaternion.Inverse(objRot) * approachDir;
                     float frontAngle = localFrontDir.z > 0 ? 180f : 0f;
                     baseRotation = Quaternion.Euler(angleVar, frontAngle, 0f);
@@ -287,7 +261,6 @@ namespace Robotics.Grasp
                     break;
             }
 
-            // Apply object rotation to align with object's local frame
             return objRot * baseRotation;
         }
 
@@ -306,33 +279,25 @@ namespace Robotics.Grasp
         {
             Vector3 toCenter = objCenter - graspPos;
 
-            // For Top approaches, use centering-based scoring instead of antipodal
-            // Top-down grasps on flat surfaces don't have traditional antipodal contact points
             if (approach == GraspApproach.Top)
             {
-                // Score based on horizontal centering (XZ plane)
-                // A good top grasp is centered over the object
                 Vector2 horizontalOffset = new Vector2(toCenter.x, toCenter.z);
                 float maxHorizontalExtent = Mathf.Max(objSize.x, objSize.z) * 0.5f;
-                float centeringScore = 1.0f - Mathf.Clamp01(horizontalOffset.magnitude / maxHorizontalExtent);
+                float centeringScore =
+                    1.0f - Mathf.Clamp01(horizontalOffset.magnitude / maxHorizontalExtent);
 
-                // Bonus for being directly above (vertical alignment)
                 float verticalAlignment = Mathf.Abs(Vector3.Dot(toCenter.normalized, Vector3.down));
                 float verticalScore = Mathf.Clamp01(verticalAlignment);
 
-                // Top approaches get a baseline score since they're inherently good for table-top objects
                 return 0.3f + (centeringScore * 0.4f) + (verticalScore * 0.3f);
             }
 
-            // For Side/Front approaches, use traditional antipodal scoring
             Vector3 closingAxis = graspRot * Vector3.right;
             Vector3 approachAxis = graspRot * Vector3.forward;
 
-            // Check alignment: gripper should point at object center
             float alignmentDot = Vector3.Dot(toCenter.normalized, approachAxis);
             float pointingScore = Mathf.Clamp01(alignmentDot);
 
-            // Centering: grasp should be centered on object
             float distFromCenterLine = Vector3.Cross(toCenter, approachAxis).magnitude;
             float sideGraspCenteringScore =
                 1.0f - Mathf.Clamp01(distFromCenterLine / (Mathf.Max(objSize.x, objSize.z) * 0.5f));
@@ -340,12 +305,12 @@ namespace Robotics.Grasp
             return (pointingScore * 0.6f) + (sideGraspCenteringScore * 0.4f);
         }
 
-        // --- Helpers ---
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private float SampleDistanceVariation(float baseDist)
         {
-            float variation = (float)((_random.NextDouble() * 2.0 - 1.0) * _config.distanceVariationRange);
+            float variation = (float)(
+                (_random.NextDouble() * 2.0 - 1.0) * _config.distanceVariationRange
+            );
             return Mathf.Clamp(
                 baseDist * (1f + variation),
                 _config.minPreGraspDistance,
@@ -384,7 +349,6 @@ namespace Robotics.Grasp
                 approach
                 ?? GraspUtilities.DetermineOptimalApproach(objPos, gripperPosition, objSize);
 
-            // Use the improved helper to get clean rotation logic even for simple candidates
             GetApproachBasis(
                 selectedApproach,
                 targetObject.transform.rotation,
@@ -392,17 +356,15 @@ namespace Robotics.Grasp
                 out Vector3 tangent
             );
 
-            // Simple center grasp
             float dim = GetDimensionOnAxis(selectedApproach, objSize);
-            Vector3 graspPos = objPos + (approachDir * (dim * 0.5f)); // Surface grasp
+            Vector3 graspPos = objPos + (approachDir * (dim * 0.5f));
 
-            // Orient gripper using same calculation as main generator
             Quaternion graspRot = CalculateGripperRotation(
                 selectedApproach,
                 approachDir,
                 tangent,
                 targetObject.transform.rotation,
-                0f // No angle variation for simple candidate
+                0f
             );
 
             float preGraspDist = _config.CalculatePreGraspDistance(objSize);

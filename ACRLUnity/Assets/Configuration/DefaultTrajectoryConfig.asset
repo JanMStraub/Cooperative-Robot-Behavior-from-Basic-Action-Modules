@@ -14,5 +14,5 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp-ACRL::Configuration.TrajectoryConfig
   positionGains: {x: 10, y: 10, z: 10}
   velocityGains: {x: 2, y: 2, z: 2}
-  maxVelocity: 0.5
+  maxVelocity: 0.2
   maxAcceleration: 1

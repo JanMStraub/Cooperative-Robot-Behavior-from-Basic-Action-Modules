@@ -19,6 +19,6 @@ namespace Robotics.Grasp
         /// <summary>
         /// Approach from the side of the object (useful for tight spaces)
         /// </summary>
-        Side = 2
+        Side = 2,
     }
 }

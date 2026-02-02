@@ -29,8 +29,6 @@ namespace Robotics
         [SerializeField]
         public RobotConfig robotProfile;
 
-        // Configuration values for an AR4 robotic arm
-
         [Header("Global Settings")]
         [SerializeField, Range(0.1f, 5f)]
         public float globalSpeedMultiplier = 1.0f;
@@ -41,7 +39,6 @@ namespace Robotics
         [SerializeField]
         private float _targetChangeCheckInterval = 0.1f;
 
-        // Robot managementxx
         private Dictionary<string, RobotInstance> _robotInstances =
             new Dictionary<string, RobotInstance>();
         private float _nextTargetCheckTime;

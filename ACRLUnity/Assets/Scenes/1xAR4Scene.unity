@@ -539,6 +539,10 @@ PrefabInstance:
       value: 
       objectReference: {fileID: 11400000, guid: 6a4890127a3594371b5277e18bb96ab1, type: 2}
     - target: {fileID: 1440759134938604137, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: debugTarget
+      value: 
+      objectReference: {fileID: 0}
+    - target: {fileID: 1440759134938604137, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: _trajectoryConfig
       value: 
       objectReference: {fileID: 11400000, guid: ff3ab6249be39439ab3045664466134a, type: 2}
@@ -546,6 +550,10 @@ PrefabInstance:
       propertyPath: _ikConfig
       value: 
       objectReference: {fileID: 11400000, guid: 6a4890127a3594371b5277e18bb96ab1, type: 2}
+    - target: {fileID: 1782900251721025928, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: debugTarget
+      value: 
+      objectReference: {fileID: 0}
     - target: {fileID: 1782900251721025928, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: _trajectoryConfig
       value: 

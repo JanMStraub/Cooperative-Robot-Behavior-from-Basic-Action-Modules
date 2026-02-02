@@ -6,46 +6,42 @@ namespace Robotics.Grasp
     /// Extended grasp candidate with scoring metadata, retreat pose, and validation flags.
     /// Used in MoveIt2-inspired grasp planning pipeline for multi-criteria evaluation.
     /// </summary>
-    public struct GraspCandidate
+    public class GraspCandidate
     {
-        // Pose information
         public Vector3 preGraspPosition;
         public Quaternion preGraspRotation;
         public Vector3 graspPosition;
         public Quaternion graspRotation;
-        public Vector3 retreatPosition;      // Post-grasp retreat pose
+        public Vector3 retreatPosition;
         public Quaternion retreatRotation;
 
-        // Gripper configuration
-        public float preGraspGripperWidth;   // 0-1, 1=open
-        public float graspGripperWidth;      // 0-1, typically 0=closed
+        public float[] preGraspJointPositions;
+        public float[] graspJointPositions;
 
-        // Metadata for filtering/scoring
+        public float preGraspGripperWidth;
+        public float graspGripperWidth;
+
         public GraspApproach approachType;
         public float approachDistance;
         public float graspDepth;
         public Vector3 contactPointEstimate;
         public Vector3 approachDirection;
 
-        // Scoring
         public float totalScore;
         public float ikScore;
         public float approachScore;
         public float depthScore;
         public float stabilityScore;
-        public float antipodalScore;      // Antipodal grasp quality (force closure)
+        public float antipodalScore;
 
-        // Validation state
         public bool ikValidated;
         public bool collisionValidated;
         public bool isValid => ikValidated && collisionValidated;
 
-        // Execution control
-        public bool useSimplifiedExecution;  // Use SimpleRobotController instead of complex IK pipeline
+        public bool useSimplifiedExecution;
 
         /// <summary>
         /// Create a basic grasp candidate with minimal information.
-        /// Other fields initialized to defaults.
         /// </summary>
         /// <param name="preGrasp">Pre-grasp position</param>
         /// <param name="preGraspRot">Pre-grasp rotation</param>
@@ -61,21 +57,24 @@ namespace Robotics.Grasp
             GraspApproach approach
         )
         {
+            Vector3 approachDir = (preGrasp - grasp).normalized;
+            float approachDist = Vector3.Distance(preGrasp, grasp);
+
             return new GraspCandidate
             {
                 preGraspPosition = preGrasp,
                 preGraspRotation = preGraspRot,
                 graspPosition = grasp,
                 graspRotation = graspRot,
-                retreatPosition = grasp + Vector3.up * 0.1f, // Default retreat upward
+                retreatPosition = grasp + (approachDir * 0.1f),
                 retreatRotation = graspRot,
                 preGraspGripperWidth = 1.0f,
                 graspGripperWidth = 0.0f,
                 approachType = approach,
-                approachDistance = Vector3.Distance(preGrasp, grasp),
+                approachDistance = approachDist,
                 graspDepth = 0.5f,
                 contactPointEstimate = grasp,
-                approachDirection = (preGrasp - grasp).normalized,
+                approachDirection = approachDir,
                 totalScore = 0f,
                 ikScore = 0f,
                 approachScore = 0f,
@@ -84,7 +83,7 @@ namespace Robotics.Grasp
                 antipodalScore = 0f,
                 ikValidated = false,
                 collisionValidated = false,
-                useSimplifiedExecution = false
+                useSimplifiedExecution = false,
             };
         }
     }
@@ -137,12 +136,12 @@ namespace Robotics.Grasp
         {
             return new GripperGeometry
             {
-                maxWidth = 0.08f,  // 8cm max opening
-                fingerPadWidth = 0.015f,  // 1.5cm finger pad
-                fingerPadDepth = 0.02f,  // 2cm depth
-                fingerLength = 0.04f,  // 4cm finger length
-                fingerWidth = 0.01f,  // 1cm finger width
-                gripperCenterOffset = new Vector3(0f, 0f, 0.05f)  // 5cm forward offset
+                maxWidth = 0.08f, // 8cm max opening
+                fingerPadWidth = 0.015f, // 1.5cm finger pad
+                fingerPadDepth = 0.02f, // 2cm depth
+                fingerLength = 0.04f, // 4cm finger length
+                fingerWidth = 0.01f, // 1cm finger width
+                gripperCenterOffset = new Vector3(0f, 0f, 0.05f), // 5cm forward offset
             };
         }
     }
