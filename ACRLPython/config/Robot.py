@@ -78,3 +78,11 @@ MAX_ROBOT_REACH = float(os.environ.get("MAX_ROBOT_REACH", "0.8"))  # meters
 
 ROBOT_STATUS_CACHE_TTL = float(os.environ.get("ROBOT_STATUS_CACHE_TTL", "0.5"))  # seconds
 WORLD_STATE_UPDATE_INTERVAL = float(os.environ.get("WORLD_STATE_UPDATE_INTERVAL", "0.1"))  # seconds
+
+# ============================================================================
+# Object Liveness Tracking Configuration
+# ============================================================================
+
+CONFIDENCE_DECAY_PER_FRAME = float(os.environ.get("CONFIDENCE_DECAY_PER_FRAME", "0.1"))  # Confidence drops 0.1 per missed detection
+STALE_CONFIDENCE_THRESHOLD = float(os.environ.get("STALE_CONFIDENCE_THRESHOLD", "0.3"))  # Mark stale when confidence < 0.3
+OBJECT_TTL_SECONDS = float(os.environ.get("OBJECT_TTL_SECONDS", "2.0"))  # Delete object if not seen for 2s

@@ -16,12 +16,25 @@ Features:
 import time
 import logging
 import threading
-from typing import Dict, Optional, Tuple, Any
+import math
+from typing import Dict, Optional, Tuple, Any, Set
 from dataclasses import dataclass, field
 try:
-    from config.Robot import WORKSPACE_REGIONS, ROBOT_STATUS_CACHE_TTL
+    from config.Robot import (
+        WORKSPACE_REGIONS,
+        ROBOT_STATUS_CACHE_TTL,
+        CONFIDENCE_DECAY_PER_FRAME,
+        STALE_CONFIDENCE_THRESHOLD,
+        OBJECT_TTL_SECONDS,
+    )
 except ImportError:
-    from ..config.Robot import WORKSPACE_REGIONS, ROBOT_STATUS_CACHE_TTL
+    from ..config.Robot import (
+        WORKSPACE_REGIONS,
+        ROBOT_STATUS_CACHE_TTL,
+        CONFIDENCE_DECAY_PER_FRAME,
+        STALE_CONFIDENCE_THRESHOLD,
+        OBJECT_TTL_SECONDS,
+    )
 from .StatusOperations import check_robot_status
 
 # Configure logging
@@ -103,6 +116,8 @@ class ObjectState:
         grasped_by: Robot ID if currently grasped, None otherwise
         confidence: Detection confidence (0.0 - 1.0)
         timestamp: Time of last detection
+        last_seen: Time when object was last seen (for liveness tracking)
+        stale: True if confidence < threshold (indicates potentially outdated state)
     """
 
     object_id: str
@@ -113,6 +128,8 @@ class ObjectState:
     grasped_by: Optional[str] = None
     confidence: float = 1.0
     timestamp: float = field(default_factory=time.time)
+    last_seen: float = field(default_factory=time.time)
+    stale: bool = False
 
 
 @dataclass
@@ -531,6 +548,278 @@ class WorldState:
         """
         with self._lock:
             return list(self._objects.values())
+
+    def decay_object_confidence(self, seen_object_ids: set[str]):
+        """
+        Update object confidence based on recent detections.
+
+        Called after each detection frame. Decays confidence for objects
+        not seen in this frame and refreshes those that were seen. Objects
+        with very low confidence or not seen for a long time are removed.
+
+        Args:
+            seen_object_ids: Set of object IDs detected in current frame
+        """
+        with self._lock:
+            now = time.time()
+            to_delete = []
+
+            for obj_id, obj in self._objects.items():
+                if obj_id in seen_object_ids:
+                    # Object was seen - refresh confidence
+                    obj.confidence = 1.0
+                    obj.last_seen = now
+                    obj.stale = False
+                    obj.timestamp = now
+                else:
+                    # Object not seen - decay confidence
+                    obj.confidence = max(0.0, obj.confidence - CONFIDENCE_DECAY_PER_FRAME)
+                    obj.stale = obj.confidence < STALE_CONFIDENCE_THRESHOLD
+
+                    # Mark for deletion if TTL exceeded
+                    if now - obj.last_seen > OBJECT_TTL_SECONDS:
+                        to_delete.append(obj_id)
+
+            # Remove stale objects
+            for obj_id in to_delete:
+                logger.debug(f"Removing stale object {obj_id} (not seen for {OBJECT_TTL_SECONDS}s)")
+                del self._objects[obj_id]
+
+            if to_delete:
+                logger.info(f"Removed {len(to_delete)} stale objects from world state")
+
+    def find_objects_near(
+        self,
+        position: Tuple[float, float, float],
+        radius: float = 0.1,
+        exclude_stale: bool = True,
+    ) -> list[ObjectState]:
+        """
+        Find all objects within radius of a position.
+
+        Uses simple Euclidean distance calculation (sufficient for <50 objects).
+
+        Args:
+            position: Center position (x, y, z) to search from
+            radius: Search radius in meters (default 0.1m)
+            exclude_stale: If True, exclude objects marked as stale (default True)
+
+        Returns:
+            List of ObjectState instances within radius
+        """
+        with self._lock:
+            nearby = []
+            for obj in self._objects.values():
+                if exclude_stale and obj.stale:
+                    continue
+
+                # Calculate Euclidean distance
+                distance = math.dist(position, obj.position)
+                if distance <= radius:
+                    nearby.append(obj)
+
+            return nearby
+
+    def find_robots_near(
+        self, position: Tuple[float, float, float], radius: float = 0.2
+    ) -> list[RobotState]:
+        """
+        Find all robots within radius of a position.
+
+        Args:
+            position: Center position (x, y, z) to search from
+            radius: Search radius in meters (default 0.2m)
+
+        Returns:
+            List of RobotState instances within radius
+        """
+        with self._lock:
+            nearby = []
+            for robot in self._robot_states.values():
+                if robot.position is None:
+                    continue
+
+                # Calculate Euclidean distance
+                distance = math.dist(position, robot.position)
+                if distance <= radius:
+                    nearby.append(robot)
+
+            return nearby
+
+    def get_reachable_objects(
+        self, robot_id: str, exclude_stale: bool = True
+    ) -> list[ObjectState]:
+        """
+        Get all objects reachable by a robot.
+
+        Uses spatial predicates to determine reachability:
+        - target_within_reach: Distance from robot base within MAX_ROBOT_REACH
+        - object_accessible_by_robot: Within workspace and collision-free
+
+        Args:
+            robot_id: Robot identifier
+            exclude_stale: If True, exclude objects marked as stale (default True)
+
+        Returns:
+            List of reachable ObjectState instances
+        """
+        with self._lock:
+            # Import here to avoid circular dependencies
+            try:
+                from .SpatialPredicates import (
+                    target_within_reach,
+                    object_accessible_by_robot,
+                )
+            except ImportError:
+                from operations.SpatialPredicates import (
+                    target_within_reach,
+                    object_accessible_by_robot,
+                )
+
+            reachable = []
+            for obj in self._objects.values():
+                if exclude_stale and obj.stale:
+                    continue
+
+                # Check if target is within reach
+                x, y, z = obj.position
+                is_reachable, _ = target_within_reach(robot_id, x, y, z, world_state=self)
+
+                if is_reachable:
+                    # Additional check: object must be accessible (workspace, no collision)
+                    is_accessible, _ = object_accessible_by_robot(
+                        robot_id, obj.position, world_state=self
+                    )
+                    if is_accessible:
+                        reachable.append(obj)
+
+            return reachable
+
+    def get_objects_in_region(
+        self, region: str, exclude_stale: bool = True
+    ) -> list[ObjectState]:
+        """
+        Get all objects in a workspace region.
+
+        Args:
+            region: Region name (e.g., "left_workspace", "shared_zone")
+            exclude_stale: If True, exclude objects marked as stale (default True)
+
+        Returns:
+            List of ObjectState instances in the region
+        """
+        with self._lock:
+            if region not in WORKSPACE_REGIONS:
+                logger.warning(f"Unknown workspace region: {region}")
+                return []
+
+            bounds = WORKSPACE_REGIONS[region]
+            objects_in_region = []
+
+            for obj in self._objects.values():
+                if exclude_stale and obj.stale:
+                    continue
+
+                # Check if object position is within region bounds
+                x, y, z = obj.position
+                if (
+                    bounds["x_min"] <= x <= bounds["x_max"]
+                    and bounds["y_min"] <= y <= bounds["y_max"]
+                    and bounds["z_min"] <= z <= bounds["z_max"]
+                ):
+                    objects_in_region.append(obj)
+
+            return objects_in_region
+
+    def get_region_for_position(
+        self, position: Tuple[float, float, float]
+    ) -> Optional[str]:
+        """
+        Get which workspace region contains a position.
+
+        Args:
+            position: Position (x, y, z) to check
+
+        Returns:
+            Region name or None if position is outside all regions
+        """
+        x, y, z = position
+
+        for region, bounds in WORKSPACE_REGIONS.items():
+            if (
+                bounds["x_min"] <= x <= bounds["x_max"]
+                and bounds["y_min"] <= y <= bounds["y_max"]
+                and bounds["z_min"] <= z <= bounds["z_max"]
+            ):
+                return region
+
+        return None
+
+    def get_world_context_string(self, robot_id: str) -> str:
+        """
+        Generate a natural language context string for LLM consumption.
+
+        Provides robot state and annotated object list with spatial relationships.
+
+        Args:
+            robot_id: Robot identifier for context perspective
+
+        Returns:
+            Formatted context string with robot state and object annotations
+
+        Example:
+            "Robot1 at (-0.3, 0.2, 0.1), gripper open. Objects: RedCube at (0.1, 0.3, 0.0)
+            [reachable, in shared_zone], BlueCube at (0.4, 0.2, 0.1) [not reachable,
+            in right_workspace]."
+        """
+        with self._lock:
+            # Get robot state
+            robot = self._robot_states.get(robot_id)
+            if robot is None or robot.position is None:
+                return f"{robot_id} state unknown."
+
+            # Format robot state
+            pos = robot.position
+            gripper = robot.gripper_state
+            context = f"{robot_id} at ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}), gripper {gripper}."
+
+            # Get reachable objects for this robot
+            reachable_ids = {obj.object_id for obj in self.get_reachable_objects(robot_id)}
+
+            # Format object list
+            if not self._objects:
+                context += " No objects detected."
+                return context
+
+            context += " Objects: "
+            obj_descriptions = []
+
+            for obj in self._objects.values():
+                obj_pos = obj.position
+                desc = f"{obj.object_id} at ({obj_pos[0]:.2f}, {obj_pos[1]:.2f}, {obj_pos[2]:.2f})"
+
+                # Add annotations
+                annotations = []
+                if obj.object_id in reachable_ids:
+                    annotations.append("reachable")
+                else:
+                    annotations.append("not reachable")
+
+                region = self.get_region_for_position(obj_pos)
+                if region:
+                    annotations.append(f"in {region}")
+
+                if obj.stale:
+                    annotations.append("stale")
+
+                if obj.grasped_by:
+                    annotations.append(f"grasped by {obj.grasped_by}")
+
+                desc += f" [{', '.join(annotations)}]"
+                obj_descriptions.append(desc)
+
+            context += ", ".join(obj_descriptions) + "."
+            return context
 
     # ========================================================================
     # Workspace Allocation

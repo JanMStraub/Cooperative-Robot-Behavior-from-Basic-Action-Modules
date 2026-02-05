@@ -575,6 +575,119 @@ def _get_workspace_containing_point(x: float, y: float, z: float) -> Optional[st
 
 
 # ============================================================================
+# Object Liveness and Grasp Predicates (Knowledge Graph Stage A)
+# ============================================================================
+
+
+@register_predicate("object_not_stale")
+def object_not_stale(object_id: str, world_state=None) -> Tuple[bool, str]:
+    """
+    Check if object is still fresh (confidence above stale threshold).
+
+    An object becomes stale when its detection confidence drops below
+    the threshold due to not being seen in recent frames.
+
+    Args:
+        object_id: Object identifier
+        world_state: Optional WorldState instance
+
+    Returns:
+        (is_valid, reason_if_invalid)
+    """
+    if world_state is None:
+        try:
+            from .WorldState import get_world_state
+        except ImportError:
+            from operations.WorldState import get_world_state
+        world_state = get_world_state()
+
+    # Get object from world state
+    obj = world_state._objects.get(object_id)
+    if obj is None:
+        return False, f"Object '{object_id}' not found in world state"
+
+    if obj.stale:
+        return False, f"Object '{object_id}' is stale (confidence: {obj.confidence:.2f})"
+
+    return True, ""
+
+
+@register_predicate("object_not_grasped_by_other")
+def object_not_grasped_by_other(
+    object_id: str, robot_id: str, world_state=None
+) -> Tuple[bool, str]:
+    """
+    Check that object is not currently grasped by a different robot.
+
+    Args:
+        object_id: Object identifier
+        robot_id: Robot that wants to grasp the object
+        world_state: Optional WorldState instance
+
+    Returns:
+        (is_valid, reason_if_invalid)
+    """
+    if world_state is None:
+        try:
+            from .WorldState import get_world_state
+        except ImportError:
+            from operations.WorldState import get_world_state
+        world_state = get_world_state()
+
+    # Get object from world state
+    obj = world_state._objects.get(object_id)
+    if obj is None:
+        return False, f"Object '{object_id}' not found in world state"
+
+    if obj.grasped_by is not None and obj.grasped_by != robot_id:
+        return (
+            False,
+            f"Object '{object_id}' is already grasped by {obj.grasped_by}",
+        )
+
+    return True, ""
+
+
+@register_predicate("region_available_for_robot")
+def region_available_for_robot(
+    region: str, robot_id: str, world_state=None
+) -> Tuple[bool, str]:
+    """
+    Check that a workspace region is not allocated to a different robot.
+
+    Regions can be unallocated (available to all) or allocated to the
+    requesting robot (available), but not allocated to another robot.
+
+    Args:
+        region: Region name (e.g., "left_workspace", "shared_zone")
+        robot_id: Robot that wants to use the region
+        world_state: Optional WorldState instance
+
+    Returns:
+        (is_valid, reason_if_invalid)
+    """
+    if world_state is None:
+        try:
+            from .WorldState import get_world_state
+        except ImportError:
+            from operations.WorldState import get_world_state
+        world_state = get_world_state()
+
+    # Check if region exists
+    if region not in WORKSPACE_REGIONS:
+        return False, f"Unknown workspace region: '{region}'"
+
+    # Get current allocation
+    owner = world_state.get_workspace_owner(region)
+
+    # Region is available if unallocated or allocated to this robot
+    if owner is None or owner == robot_id:
+        return True, ""
+
+    return False, f"Region '{region}' is allocated to {owner}"
+
+
+# ============================================================================
 # Utility Functions
 # ============================================================================
 
