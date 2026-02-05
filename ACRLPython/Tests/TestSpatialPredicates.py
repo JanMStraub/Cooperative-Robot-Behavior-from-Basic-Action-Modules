@@ -10,6 +10,7 @@ import pytest
 from unittest.mock import Mock, patch
 import math
 
+from operations.WorldState import WorldState
 from operations.SpatialPredicates import (
     target_within_reach,
     is_in_robot_workspace,
@@ -380,3 +381,178 @@ class TestPredicateRegistry:
 
         assert is_valid is False
         assert "Unknown predicate" in reason
+
+
+class TestObjectLivenessPredicates:
+    """Test object liveness and grasp predicates (Phase 1.3)"""
+
+    @pytest.fixture
+    def world_state_with_objects(self):
+        """World state with test objects"""
+        world_state = WorldState()
+        world_state.reset()
+
+        # Register fresh object
+        world_state.register_object("fresh_obj", position=(0.1, 0.2, 0.3))
+
+        # Register stale object
+        world_state.register_object("stale_obj", position=(0.4, 0.5, 0.6))
+        world_state._objects["stale_obj"].stale = True
+        world_state._objects["stale_obj"].confidence = 0.2
+
+        # Register grasped object
+        world_state.register_object("grasped_obj", position=(0.2, 0.3, 0.4))
+        world_state.mark_object_grasped("grasped_obj", "Robot1")
+
+        # Register robots
+        world_state.update_robot("Robot1", position=(-0.475, 0.0, 0.0))
+        world_state.update_robot("Robot2", position=(0.475, 0.0, 0.0))
+
+        return world_state
+
+    def test_object_not_stale_fresh_object(self, world_state_with_objects):
+        """Test that fresh objects pass the stale check"""
+        from operations.SpatialPredicates import object_not_stale
+
+        is_valid, reason = object_not_stale(
+            "fresh_obj", world_state=world_state_with_objects
+        )
+
+        assert is_valid is True
+        assert reason == ""
+
+    def test_object_not_stale_stale_object(self, world_state_with_objects):
+        """Test that stale objects fail the check"""
+        from operations.SpatialPredicates import object_not_stale
+
+        is_valid, reason = object_not_stale(
+            "stale_obj", world_state=world_state_with_objects
+        )
+
+        assert is_valid is False
+        assert "stale" in reason
+        assert "0.20" in reason  # confidence value
+
+    def test_object_not_stale_unknown_object(self, world_state_with_objects):
+        """Test behavior with unknown object"""
+        from operations.SpatialPredicates import object_not_stale
+
+        is_valid, reason = object_not_stale(
+            "unknown_obj", world_state=world_state_with_objects
+        )
+
+        assert is_valid is False
+        assert "not found" in reason
+
+    def test_object_not_grasped_by_other_not_grasped(self, world_state_with_objects):
+        """Test that non-grasped objects pass the check"""
+        from operations.SpatialPredicates import object_not_grasped_by_other
+
+        is_valid, reason = object_not_grasped_by_other(
+            "fresh_obj", "Robot1", world_state=world_state_with_objects
+        )
+
+        assert is_valid is True
+        assert reason == ""
+
+    def test_object_not_grasped_by_other_grasped_by_same_robot(
+        self, world_state_with_objects
+    ):
+        """Test that object grasped by same robot passes"""
+        from operations.SpatialPredicates import object_not_grasped_by_other
+
+        is_valid, reason = object_not_grasped_by_other(
+            "grasped_obj", "Robot1", world_state=world_state_with_objects
+        )
+
+        assert is_valid is True
+        assert reason == ""
+
+    def test_object_not_grasped_by_other_grasped_by_different_robot(
+        self, world_state_with_objects
+    ):
+        """Test that object grasped by different robot fails"""
+        from operations.SpatialPredicates import object_not_grasped_by_other
+
+        is_valid, reason = object_not_grasped_by_other(
+            "grasped_obj", "Robot2", world_state=world_state_with_objects
+        )
+
+        assert is_valid is False
+        assert "grasped by Robot1" in reason
+
+    def test_object_not_grasped_by_other_unknown_object(self, world_state_with_objects):
+        """Test behavior with unknown object"""
+        from operations.SpatialPredicates import object_not_grasped_by_other
+
+        is_valid, reason = object_not_grasped_by_other(
+            "unknown_obj", "Robot1", world_state=world_state_with_objects
+        )
+
+        assert is_valid is False
+        assert "not found" in reason
+
+    def test_region_available_for_robot_unallocated(self, world_state_with_objects):
+        """Test that unallocated regions are available"""
+        from operations.SpatialPredicates import region_available_for_robot
+
+        is_valid, reason = region_available_for_robot(
+            "left_workspace", "Robot1", world_state=world_state_with_objects
+        )
+
+        assert is_valid is True
+        assert reason == ""
+
+    def test_region_available_for_robot_allocated_to_same_robot(
+        self, world_state_with_objects
+    ):
+        """Test that region allocated to same robot is available"""
+        from operations.SpatialPredicates import region_available_for_robot
+
+        # Allocate region to Robot1
+        world_state_with_objects.allocate_workspace("left_workspace", "Robot1")
+
+        is_valid, reason = region_available_for_robot(
+            "left_workspace", "Robot1", world_state=world_state_with_objects
+        )
+
+        assert is_valid is True
+        assert reason == ""
+
+    def test_region_available_for_robot_allocated_to_different_robot(
+        self, world_state_with_objects
+    ):
+        """Test that region allocated to different robot is not available"""
+        from operations.SpatialPredicates import region_available_for_robot
+
+        # Allocate region to Robot1
+        world_state_with_objects.allocate_workspace("left_workspace", "Robot1")
+
+        is_valid, reason = region_available_for_robot(
+            "left_workspace", "Robot2", world_state=world_state_with_objects
+        )
+
+        assert is_valid is False
+        assert "allocated to Robot1" in reason
+
+    def test_region_available_for_robot_unknown_region(self, world_state_with_objects):
+        """Test behavior with unknown region"""
+        from operations.SpatialPredicates import region_available_for_robot
+
+        is_valid, reason = region_available_for_robot(
+            "nonexistent_region", "Robot1", world_state=world_state_with_objects
+        )
+
+        assert is_valid is False
+        assert "Unknown workspace region" in reason
+
+    def test_new_predicates_registered(self):
+        """Test that new predicates are registered"""
+        from operations.SpatialPredicates import list_predicates
+
+        predicates = list_predicates()
+
+        # Check that new predicates are registered
+        assert "object_not_stale" in predicates
+        assert "object_not_grasped_by_other" in predicates
+        assert "region_available_for_robot" in predicates

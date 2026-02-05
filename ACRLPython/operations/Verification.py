@@ -389,6 +389,9 @@ class OperationVerifier:
         """
         Generate recovery suggestions for a failed predicate.
 
+        Uses WorldState to provide context-aware suggestions based on current
+        robot positions, object locations, and workspace allocations.
+
         Args:
             predicate_name: Name of failed predicate
             failure_reason: Why it failed
@@ -400,14 +403,28 @@ class OperationVerifier:
         suggestions = []
 
         if predicate_name == "target_within_reach":
-            suggestions.extend(
-                [
-                    "Move target closer to robot base",
-                    "Use a different robot closer to target",
-                    f"Current robot: {params.get('robot_id')}",
-                    "Consider breaking movement into multiple steps",
-                ]
-            )
+            # Query WorldState for which robots CAN reach the target
+            x, y, z = params.get("x"), params.get("y"), params.get("z")
+            if x is not None and y is not None and z is not None:
+                from .SpatialPredicates import target_within_reach
+
+                # Check which other robots can reach this target
+                for robot_id, state in self.world_state._robot_states.items():
+                    if robot_id != params.get("robot_id"):
+                        is_valid, _ = target_within_reach(robot_id, x, y, z, world_state=self.world_state)
+                        if is_valid:
+                            suggestions.append(f"Use {robot_id} instead (target is within reach)")
+
+            # Add generic suggestions if no specific robot found
+            if not suggestions:
+                suggestions.extend(
+                    [
+                        "Move target closer to robot base",
+                        "Use a different robot closer to target",
+                        f"Current robot: {params.get('robot_id')}",
+                        "Consider breaking movement into multiple steps",
+                    ]
+                )
 
         elif predicate_name == "robot_is_initialized":
             suggestions.extend(
@@ -435,6 +452,42 @@ class OperationVerifier:
                     "Consider using shared_zone for handoff operations",
                 ]
             )
+
+        elif predicate_name == "object_accessible_by_robot":
+            # Suggest alternative nearby accessible objects
+            x, y, z = params.get("x"), params.get("y"), params.get("z")
+            if x is None or y is None or z is None:
+                # Try to get from object_position tuple
+                obj_pos = params.get("object_position")
+                if obj_pos and len(obj_pos) == 3:
+                    x, y, z = obj_pos
+
+            if x is not None and y is not None and z is not None:
+                from .SpatialPredicates import object_accessible_by_robot
+
+                # Find nearby objects that ARE accessible
+                nearby = self.world_state.find_objects_near((x, y, z), radius=0.15)
+                robot_id = params.get("robot_id")
+
+                for obj in nearby:
+                    is_valid, _ = object_accessible_by_robot(
+                        robot_id, obj.position, world_state=self.world_state
+                    )
+                    if is_valid:
+                        pos = obj.position
+                        suggestions.append(
+                            f"Try {obj.object_id} at ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}) instead (accessible)"
+                        )
+
+            # Add generic suggestions if no alternatives found
+            if not suggestions:
+                suggestions.extend(
+                    [
+                        "Target object not accessible from robot workspace",
+                        "Move robot to shared zone for better access",
+                        "Consider handoff from another robot",
+                    ]
+                )
 
         elif (
             predicate_name == "gripper_is_open" or predicate_name == "gripper_is_closed"
