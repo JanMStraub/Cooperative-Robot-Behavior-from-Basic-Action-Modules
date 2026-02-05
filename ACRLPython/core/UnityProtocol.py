@@ -125,9 +125,35 @@ class UnityProtocol:
         return bytes(header)
 
     @staticmethod
+    def decode_header(data: bytes) -> Tuple[MessageType, int]:
+        """
+        Decode message header (public API).
+
+        Args:
+            data: Byte array to read from (must be exactly 5 bytes)
+
+        Returns:
+            Tuple of (message_type, request_id)
+
+        Raises:
+            ValueError: If header is malformed
+        """
+        if len(data) < UnityProtocol.HEADER_SIZE:
+            raise ValueError(
+                f"Not enough data for header (need {UnityProtocol.HEADER_SIZE}, have {len(data)})"
+            )
+
+        message_type = MessageType(data[0])
+        request_id = struct.unpack(
+            UnityProtocol.INT_FORMAT, data[1:5]
+        )[0]
+
+        return message_type, request_id
+
+    @staticmethod
     def _decode_header(data: bytes, offset: int = 0) -> Tuple[MessageType, int, int]:
         """
-        Decode message header from data.
+        Decode message header from data (internal use with offset tracking).
 
         Args:
             data: Byte array to read from

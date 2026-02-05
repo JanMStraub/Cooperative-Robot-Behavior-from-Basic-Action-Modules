@@ -58,8 +58,8 @@ class TestWorldStateServer(unittest.TestCase):
             client: Connected socket
             state_data: World state dictionary
         """
-        json_str = json.dumps(state_data)
-        message = UnityProtocol.encode_status_response(json_str, request_id=0)
+        # encode_status_response expects a dict, not a JSON string
+        message = UnityProtocol.encode_status_response(state_data, request_id=0)
         client.sendall(message)
 
     def test_server_starts_and_stops(self):
