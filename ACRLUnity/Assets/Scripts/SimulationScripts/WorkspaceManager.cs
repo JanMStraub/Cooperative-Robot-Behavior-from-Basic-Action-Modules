@@ -241,6 +241,18 @@ namespace Simulation
                     $"{LOG_PREFIX} Created {_workspaceRegions.Count} default workspace regions"
                 );
             }
+
+            // Sync dictionary from any pre-serialized region allocations (set via Inspector)
+            foreach (var region in _workspaceRegions)
+            {
+                if (region.IsAllocated())
+                {
+                    string robotId = region.allocatedRobotId;
+                    if (!_robotWorkspaceAllocation.ContainsKey(robotId))
+                        _robotWorkspaceAllocation[robotId] = new HashSet<string>();
+                    _robotWorkspaceAllocation[robotId].Add(region.regionName);
+                }
+            }
         }
 
         /// <summary>

@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Semantic Robot Description Format (SRDF) for AR4 mk3
+  Generated for MoveIt 2 motion planning
+-->
+<robot name="mk3">
+  <!-- Planning Groups -->
+  <group name="arm">
+    <chain base_link="base_link" tip_link="ee_link"/>
+  </group>
+
+  <group name="gripper">
+    <joint name="gripper_jaw1_joint"/>
+    <joint name="gripper_jaw2_joint"/>
+  </group>
+
+  <!-- Group States (Named Poses) -->
+  <group_state name="home" group="arm">
+    <joint name="joint_1" value="0"/>
+    <joint name="joint_2" value="0"/>
+    <joint name="joint_3" value="0"/>
+    <joint name="joint_4" value="0"/>
+    <joint name="joint_5" value="0"/>
+    <joint name="joint_6" value="0"/>
+  </group_state>
+
+  <group_state name="ready" group="arm">
+    <joint name="joint_1" value="0"/>
+    <joint name="joint_2" value="0.5"/>
+    <joint name="joint_3" value="-0.5"/>
+    <joint name="joint_4" value="0"/>
+    <joint name="joint_5" value="0"/>
+    <joint name="joint_6" value="0"/>
+  </group_state>
+
+  <group_state name="open" group="gripper">
+    <joint name="gripper_jaw1_joint" value="0.014"/>
+    <joint name="gripper_jaw2_joint" value="0.014"/>
+  </group_state>
+
+  <group_state name="closed" group="gripper">
+    <joint name="gripper_jaw1_joint" value="0"/>
+    <joint name="gripper_jaw2_joint" value="0"/>
+  </group_state>
+
+  <!-- End Effector -->
+  <end_effector name="gripper" parent_link="ee_link" group="gripper"/>
+
+  <!-- Virtual Joint (connect robot to world) -->
+  <virtual_joint name="virtual_joint" type="fixed" parent_frame="world" child_link="world"/>
+
+  <!-- Self-Collision Matrix (disable pairs that never collide) -->
+  <disable_collisions link1="base_link" link2="link_1" reason="Adjacent"/>
+  <disable_collisions link1="link_1" link2="link_2" reason="Adjacent"/>
+  <disable_collisions link1="link_2" link2="link_3" reason="Adjacent"/>
+  <disable_collisions link1="link_3" link2="link_4" reason="Adjacent"/>
+  <disable_collisions link1="link_4" link2="link_5" reason="Adjacent"/>
+  <disable_collisions link1="link_5" link2="link_6" reason="Adjacent"/>
+  <disable_collisions link1="link_6" link2="gripper_base_link" reason="Adjacent"/>
+  <disable_collisions link1="gripper_base_link" link2="gripper_jaw1_link" reason="Adjacent"/>
+  <disable_collisions link1="gripper_base_link" link2="gripper_jaw2_link" reason="Adjacent"/>
+  <disable_collisions link1="gripper_jaw1_link" link2="gripper_jaw2_link" reason="Adjacent"/>
+  <!-- Non-adjacent pairs that can't collide due to geometry -->
+  <disable_collisions link1="base_link" link2="link_2" reason="Never"/>
+  <disable_collisions link1="base_link" link2="link_4" reason="Never"/>
+  <disable_collisions link1="base_link" link2="link_5" reason="Never"/>
+  <disable_collisions link1="base_link" link2="link_6" reason="Never"/>
+  <disable_collisions link1="base_link" link2="gripper_base_link" reason="Never"/>
+  <disable_collisions link1="link_1" link2="link_3" reason="Never"/>
+  <disable_collisions link1="link_1" link2="link_5" reason="Never"/>
+  <disable_collisions link1="link_1" link2="link_6" reason="Never"/>
+  <disable_collisions link1="link_2" link2="link_4" reason="Never"/>
+  <disable_collisions link1="link_2" link2="link_5" reason="Never"/>
+  <disable_collisions link1="link_2" link2="link_6" reason="Never"/>
+  <disable_collisions link1="link_3" link2="link_5" reason="Never"/>
+  <disable_collisions link1="link_3" link2="link_6" reason="Never"/>
+  <disable_collisions link1="link_3" link2="gripper_base_link" reason="Never"/>
+  <disable_collisions link1="link_4" link2="link_6" reason="Never"/>
+  <disable_collisions link1="link_4" link2="gripper_base_link" reason="Never"/>
+  <disable_collisions link1="link_5" link2="gripper_base_link" reason="Never"/>
+  <disable_collisions link1="link_6" link2="gripper_jaw1_link" reason="Never"/>
+  <disable_collisions link1="link_6" link2="gripper_jaw2_link" reason="Never"/>
+</robot>

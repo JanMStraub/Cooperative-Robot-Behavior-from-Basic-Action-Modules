@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using UnityEngine;
@@ -104,8 +105,21 @@ namespace PythonCommunication.Core
                         }
                     }
                 }
-                catch (System.IO.IOException)
+                catch (SocketException sockEx)
+                    when (sockEx.SocketErrorCode == SocketError.TimedOut)
                 {
+                    // Read timeout on idle connection — expected, just retry
+                    continue;
+                }
+                catch (System.IO.IOException ioEx)
+                {
+                    // Also check wrapped SocketException timeout
+                    if (ioEx.InnerException is SocketException innerSockEx
+                        && innerSockEx.SocketErrorCode == SocketError.TimedOut)
+                    {
+                        continue;
+                    }
+
                     if (_receiveShouldRun)
                     {
                         Debug.LogWarning($"{LogPrefix} Stream closed unexpectedly.");

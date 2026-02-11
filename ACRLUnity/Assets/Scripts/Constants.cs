@@ -144,5 +144,10 @@ namespace Core
         /// Thread join timeout when stopping receive threads (milliseconds)
         /// </summary>
         public const int THREAD_JOIN_TIMEOUT_MS = 1000;
+
+        /// <summary>
+        /// ROS TCP endpoint port (ros_tcp_endpoint bridge between Unity and ROS 2)
+        /// </summary>
+        public const int ROS_TCP_ENDPOINT_PORT = 10000;
     }
 }

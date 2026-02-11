@@ -94,6 +94,13 @@ namespace Simulation
         public bool IsPaused => _currentState == SimulationState.Paused;
         public bool ShouldStopRobots => _currentState != SimulationState.Running;
 
+        /// <summary>
+        /// Cached ROSControlModeManagers found in the scene.
+        /// Populated during Start() alongside _robotControllers.
+        /// </summary>
+        private Dictionary<string, ROSControlModeManager> _rosControlModeManagers =
+            new Dictionary<string, ROSControlModeManager>();
+
         private const string _logPrefix = "[SIMULATION_MANAGER]";
 
         /// <summary>
@@ -178,6 +185,13 @@ namespace Simulation
                             rootBody.transform.position,
                             rootBody.transform.rotation
                         );
+                    }
+
+                    // Cache ROSControlModeManager if present
+                    var rosControlMode = robot.GetComponent<ROSControlModeManager>();
+                    if (rosControlMode != null)
+                    {
+                        _rosControlModeManagers[robotId] = rosControlMode;
                     }
                 }
 
@@ -466,6 +480,7 @@ namespace Simulation
 
         /// <summary>
         /// Notifies the manager that a robot has reached or is moving towards its target.
+        /// Works for both Unity IK and ROS trajectory paths.
         /// </summary>
         /// <param name="robotId">The robot identifier</param>
         /// <param name="reached">True if target is reached, false if still moving</param>
@@ -477,6 +492,28 @@ namespace Simulation
             {
                 Debug.Log($"{_logPrefix} Robot {robotId} reached target in sequential mode");
             }
+        }
+
+        /// <summary>
+        /// Get the ROS control mode for a specific robot.
+        /// Returns null if the robot doesn't have a ROSControlModeManager.
+        /// </summary>
+        public ControlMode? GetROSControlMode(string robotId)
+        {
+            if (_rosControlModeManagers.TryGetValue(robotId, out var manager))
+                return manager.CurrentMode;
+            return null;
+        }
+
+        /// <summary>
+        /// Check if a robot is currently controlled by ROS (not Unity IK).
+        /// Returns false if no ROSControlModeManager is attached.
+        /// </summary>
+        public bool IsRobotROSControlled(string robotId)
+        {
+            if (_rosControlModeManagers.TryGetValue(robotId, out var manager))
+                return !manager.ShouldUnityIKBeActive;
+            return false;
         }
 
         /// <summary>

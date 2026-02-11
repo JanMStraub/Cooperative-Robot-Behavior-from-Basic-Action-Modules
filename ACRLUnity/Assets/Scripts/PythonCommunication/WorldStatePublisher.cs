@@ -29,6 +29,7 @@ namespace PythonCommunication
         public bool is_moving;
         public bool is_initialized;
         public float[] joint_angles;
+        public string control_mode; // "unity", "ros", "hybrid" (null if no ROSControlModeManager)
     }
 
     [System.Serializable]
@@ -313,6 +314,14 @@ namespace PythonCommunication
                 // Get joint angles
                 float[] jointAngles = GatherJointAngles(controller);
 
+                // Get ROS control mode if available
+                string controlMode = null;
+                var rosControlMode = controller.GetComponent<ROSControlModeManager>();
+                if (rosControlMode != null)
+                {
+                    controlMode = rosControlMode.CurrentMode.ToString().ToLower();
+                }
+
                 var robotState = new RobotStateData
                 {
                     robot_id = robotId,
@@ -323,6 +332,7 @@ namespace PythonCommunication
                     is_moving = isMoving,
                     is_initialized = true,
                     joint_angles = jointAngles,
+                    control_mode = controlMode,
                 };
 
                 robotStates.Add(robotState);

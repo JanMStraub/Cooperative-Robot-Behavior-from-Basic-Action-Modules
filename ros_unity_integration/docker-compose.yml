@@ -1,0 +1,114 @@
+version: '3.8'
+
+services:
+  x-ros-base: &ros-base
+    build: .
+    platform: linux/arm64
+    environment:
+      - ROS_DOMAIN_ID=0
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+
+  foxglove:
+    <<: *ros-base
+    container_name: acrl_foxglove
+    ports:
+      - "8765:8765"
+    command: >
+      /bin/bash -c "
+        source /opt/ros/humble/setup.bash &&
+        ros2 launch foxglove_bridge foxglove_bridge_launch.xml port:=8765 address:=0.0.0.0 send_buffer_limit:=10000000 topic_whitelist:='[\"^(?!/planning_scene$).*\"]'
+      "
+
+  ros_tcp_endpoint:
+      <<: *ros-base
+      container_name: acrl_ros_endpoint
+      ports:
+        - "10000:10000"
+      command: >
+        /bin/bash -c "
+          source /opt/ros/humble/setup.bash &&
+          source /ros_ws/install/setup.bash &&
+          ros2 run ros_tcp_endpoint default_server_endpoint --ros-args -p ROS_IP:=0.0.0.0
+        "
+
+  # Robot1 MoveIt instance
+  moveit_robot1:
+      <<: *ros-base
+      container_name: acrl_moveit_robot1
+      depends_on:
+        - robot_state_publisher_robot1
+      volumes:
+        - ./ar4_moveit_config/config:/ros_ws/src/ar4_moveit_config/config
+      command: >
+        /bin/bash -c "
+          sleep 15 &&
+          source /opt/ros/humble/setup.bash &&
+          source /ros_ws/install/setup.bash &&
+          ros2 launch ar4_moveit_config move_group.launch.py robot_id:=Robot1 use_sim_time:=false
+        "
+
+  # Robot2 MoveIt instance
+  moveit_robot2:
+      <<: *ros-base
+      container_name: acrl_moveit_robot2
+      depends_on:
+        - robot_state_publisher_robot2
+      volumes:
+        - ./ar4_moveit_config/config:/ros_ws/src/ar4_moveit_config/config
+      command: >
+        /bin/bash -c "
+          sleep 15 &&
+          source /opt/ros/humble/setup.bash &&
+          source /ros_ws/install/setup.bash &&
+          ros2 launch ar4_moveit_config move_group.launch.py robot_id:=Robot2 use_sim_time:=false
+        "
+
+  # Robot1 state publisher
+  robot_state_publisher_robot1:
+    <<: *ros-base
+    container_name: acrl_robot_state_publisher_robot1
+    depends_on:
+      - ros_tcp_endpoint
+    command: >
+      /bin/bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /ros_ws/install/setup.bash &&
+        ros2 launch ar4_moveit_config robot_state_publisher.launch.py robot_id:=Robot1
+      "
+
+  # Robot2 state publisher
+  robot_state_publisher_robot2:
+    <<: *ros-base
+    container_name: acrl_robot_state_publisher_robot2
+    depends_on:
+      - ros_tcp_endpoint
+    command: >
+      /bin/bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /ros_ws/install/setup.bash &&
+        ros2 launch ar4_moveit_config robot_state_publisher.launch.py robot_id:=Robot2
+      "
+
+  ros_bridge:
+    <<: *ros-base
+    container_name: acrl_ros_bridge
+    depends_on:
+      - moveit_robot1
+      - moveit_robot2
+    ports:
+      - "5020:5020"
+    volumes:
+      - ../ACRLPython/ros2:/ros_ws/src/ros_bridge
+    command: >
+      /bin/bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /ros_ws/install/setup.bash &&
+        echo 'Waiting for MoveIt action servers...' &&
+        for i in $$(seq 1 60); do
+          ros2 action list 2>/dev/null | grep -q move_action && break || sleep 2;
+        done &&
+        echo 'MoveIt action servers detected, starting ROSMotionClient' &&
+        python3 /ros_ws/src/ros_bridge/ROSMotionClient.py
+      "

@@ -435,7 +435,20 @@ namespace PythonCommunication.Core
             int totalRead = 0;
             while (totalRead < count)
             {
-                int read = stream.Read(buffer, offset + totalRead, count - totalRead);
+                int read;
+                try
+                {
+                    read = stream.Read(buffer, offset + totalRead, count - totalRead);
+                }
+                catch (System.IO.IOException ex)
+                    when (ex.InnerException is SocketException sockEx
+                        && sockEx.SocketErrorCode == SocketError.TimedOut)
+                {
+                    // ReadTimeout expired — rethrow as SocketException so callers can
+                    // distinguish a timeout from a genuine connection close.
+                    throw sockEx;
+                }
+
                 if (read == 0)
                 {
                     // Connection closed gracefully
