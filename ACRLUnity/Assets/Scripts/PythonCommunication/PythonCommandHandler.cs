@@ -461,6 +461,8 @@ namespace PythonCommunication
         /// Execute move_to_coordinate command
         /// Phase 4: Now includes Python CoordinationVerifier integration
         /// Supports both RobotController and SimpleRobotController
+        /// When robot is in ROS control mode, movement is handled by MoveIt
+        /// via ROSTrajectorySubscriber, not by Unity IK.
         /// </summary>
         private void ExecuteMoveToCoordinate(RobotCommand command)
         {
@@ -477,6 +479,28 @@ namespace PythonCommunication
                 )
                 {
                     return;
+                }
+
+                // Check if robot is in ROS control mode - if so, skip Unity IK
+                // Movement will be handled by Python -> ROS -> MoveIt -> ROSTrajectorySubscriber
+                if (controller != null)
+                {
+                    var rosMode = controller.GetComponent<ROSControlModeManager>();
+                    if (rosMode != null && !rosMode.ShouldUnityIKBeActive)
+                    {
+                        Debug.Log(
+                            $"{_logPrefix} Robot {command.robot_id} is in ROS mode. "
+                            + "Skipping Unity IK - movement handled by MoveIt via ROS."
+                        );
+                        SendCommandCompletion(
+                            command.robot_id,
+                            "move_to_coordinate",
+                            true,
+                            command.request_id
+                        );
+                        _successfulCommands++;
+                        return;
+                    }
                 }
 
                 if (command.parameters == null || command.parameters.target_position == null)

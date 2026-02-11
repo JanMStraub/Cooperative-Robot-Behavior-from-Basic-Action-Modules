@@ -1,0 +1,13 @@
+# MoveIt controller configuration for AR4 mk3
+#
+# NOTE: This project uses MoveIt in PLAN-ONLY mode.
+# We do NOT use MoveIt's execution pipeline (no ros2_control, no action servers).
+# Instead, planned trajectories are published directly to a ROS topic
+# that Unity's ROSTrajectorySubscriber picks up and executes.
+#
+# This file is kept for reference / future use if ros2_control is added.
+# The move_group launch does NOT load this file.
+/**:
+  ros__parameters:
+    moveit_simple_controller_manager:
+      controller_names: []

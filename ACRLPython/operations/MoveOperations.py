@@ -46,6 +46,7 @@ def move_to_coordinate(
     approach_offset: float = 0.0,
     use_advanced_planning: bool = True,
     request_id: int = 0,
+    use_ros: bool = None,
 ) -> OperationResult:
     """
     Move robot end effector to specified 3D coordinate.
@@ -174,12 +175,81 @@ def move_to_coordinate(
                 ],
             )
 
+        # Determine whether to use ROS or TCP path
+        _use_ros = use_ros
+        if _use_ros is None:
+            try:
+                from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+                _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
+            except ImportError:
+                _use_ros = False
+
         # Apply approach offset to target position
         actual_x = x
         actual_y = y
         actual_z = z + approach_offset  # Add offset to height for safety
 
-        # Construct command for Unity
+        # Route via ROS if enabled
+        if _use_ros:
+            try:
+                from ros2.ROSBridge import ROSBridge
+                bridge = ROSBridge.get_instance()
+                if not bridge.is_connected:
+                    if not bridge.connect():
+                        # Fall back to TCP if hybrid mode
+                        try:
+                            from config.ROS import DEFAULT_CONTROL_MODE
+                            if DEFAULT_CONTROL_MODE == "hybrid":
+                                logger.warning("ROS bridge unavailable, falling back to TCP")
+                                _use_ros = False
+                            else:
+                                return OperationResult.error_result(
+                                    "ROS_CONNECTION_FAILED",
+                                    "Failed to connect to ROS bridge (port 5020)",
+                                    [
+                                        "Ensure Docker ROS services are running: cd ros_unity_integration && ./start_ros_endpoint.sh",
+                                        "Set DEFAULT_CONTROL_MODE='hybrid' in config/ROS.py for automatic fallback",
+                                    ],
+                                )
+                        except ImportError:
+                            _use_ros = False
+
+                if _use_ros:
+                    result = bridge.plan_and_execute(
+                        position={"x": actual_x, "y": actual_y, "z": actual_z},
+                        robot_id=robot_id,  # Pass robot_id to route to correct MoveIt instance
+                    )
+                    if result and result.get("success"):
+                        logger.info(f"ROS motion completed for {robot_id}")
+                        return OperationResult.success_result({
+                            "robot_id": robot_id,
+                            "target_position": {"x": actual_x, "y": actual_y, "z": actual_z},
+                            "speed": speed,
+                            "approach_offset": approach_offset,
+                            "status": "ros_executed",
+                            "planning_time": result.get("planning_time", 0),
+                            "timestamp": time.time(),
+                        })
+                    else:
+                        error_msg = result.get("error", "Unknown") if result else "No response"
+                        try:
+                            from config.ROS import DEFAULT_CONTROL_MODE
+                            if DEFAULT_CONTROL_MODE == "hybrid":
+                                logger.warning(f"ROS planning failed ({error_msg}), falling back to TCP")
+                                _use_ros = False
+                            else:
+                                return OperationResult.error_result(
+                                    "ROS_PLANNING_FAILED",
+                                    f"MoveIt planning failed: {error_msg}",
+                                    ["Check MoveIt logs", "Verify target is reachable"],
+                                )
+                        except ImportError:
+                            _use_ros = False
+            except ImportError:
+                logger.warning("ros2 module not available, falling back to TCP")
+                _use_ros = False
+
+        # Construct command for Unity (TCP path)
         command = {
             "command_type": "move_to_coordinate",
             "robot_id": robot_id,
