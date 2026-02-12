@@ -155,6 +155,27 @@ class OperationRegistry:
         self.operations["perception_detect_depth_001"] = DETECT_OBJECT_STEREO_OPERATION
         self.operations["perception_depth_detect_001"] = DETECT_OBJECT_STEREO_OPERATION
 
+        # Load generated operations (if dynamic operations feature is enabled)
+        self._load_generated_operations()
+
+    def _load_generated_operations(self):
+        """Load dynamically generated operations into the registry."""
+        try:
+            from operations.generated import load_generated_operations
+
+            loaded = load_generated_operations()
+            for op_name, file_path in loaded:
+                # The operation is loaded by the loader; register it here
+                from operations.generated import _load_operation_from_file
+                from pathlib import Path
+
+                operation = _load_operation_from_file(Path(file_path))
+                if operation and operation.operation_id not in self.operations:
+                    self.operations[operation.operation_id] = operation
+        except Exception:
+            # Silently skip if dynamic operations not available
+            pass
+
     def get_operation(self, operation_id: str) -> Optional[BasicOperation]:
         """
         Retrieve specific operation by ID.
