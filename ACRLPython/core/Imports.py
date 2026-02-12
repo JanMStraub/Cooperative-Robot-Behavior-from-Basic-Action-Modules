@@ -240,6 +240,36 @@ def get_sequence_executor(**kwargs):
 
 
 # ============================================================================
+# Negotiation Components
+# ============================================================================
+
+
+def get_negotiation_hub():
+    """
+    Get NegotiationHub singleton, or None if negotiation is disabled.
+
+    Returns:
+        NegotiationHub instance, or None if NEGOTIATION_ENABLED is False
+
+    Raises:
+        ImportError: If NegotiationHub module cannot be imported
+
+    Used by:
+        - orchestrators/SequenceExecutor.py
+    """
+    try:
+        import config.Negotiation as neg_cfg
+
+        if not neg_cfg.NEGOTIATION_ENABLED:
+            return None
+        from servers.NegotiationHub import NegotiationHub
+
+        return NegotiationHub()
+    except ImportError as e:
+        raise ImportError(f"Failed to import NegotiationHub. Error: {e}")
+
+
+# ============================================================================
 # Utility Functions
 # ============================================================================
 

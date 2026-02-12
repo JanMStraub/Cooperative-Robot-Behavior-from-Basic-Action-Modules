@@ -1188,6 +1188,57 @@ class SequenceExecutor:
             logger.error(f"Error evaluating expression '{expr}': {e}")
             return None
 
+    def negotiate_if_needed(
+        self,
+        command_text: str,
+        robot_id: str = "Robot1",
+    ) -> Optional[List[Dict[str, Any]]]:
+        """
+        Check if a command needs multi-robot negotiation and run it if so.
+
+        Lazy-imports NegotiationHub via core.Imports to avoid circular deps.
+
+        Args:
+            command_text: Natural language command
+            robot_id: Robot that received the command
+
+        Returns:
+            List of negotiated commands if negotiation ran, None to fall back
+            to normal parsing
+        """
+        try:
+            from core.Imports import get_negotiation_hub
+
+            hub = get_negotiation_hub()
+            if hub is None:
+                return None
+
+            if not hub.needs_negotiation(command_text, robot_id):
+                return None
+
+            logger.info(f"Negotiation triggered for: {command_text[:80]}")
+            result = hub.negotiate(command_text)
+
+            if result.success and result.commands:
+                logger.info(
+                    f"Negotiation succeeded: {len(result.commands)} commands, "
+                    f"{result.rounds_taken} rounds, {result.duration_s:.1f}s"
+                )
+                return result.commands
+
+            logger.warning(
+                f"Negotiation failed ({result.state.value}): {result.reasoning}. "
+                f"Falling back to normal parsing."
+            )
+            return None
+
+        except ImportError:
+            logger.debug("NegotiationHub not available, skipping negotiation")
+            return None
+        except Exception as e:
+            logger.error(f"Negotiation error: {e}. Falling back to normal parsing.")
+            return None
+
     def get_variable(self, name: str) -> Optional[Any]:
         """Get a stored variable value."""
         return self._variables.get(name)
