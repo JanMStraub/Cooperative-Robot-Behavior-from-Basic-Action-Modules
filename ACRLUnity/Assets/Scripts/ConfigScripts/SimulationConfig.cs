@@ -9,6 +9,7 @@ namespace Configuration
         MasterSlave, // One robot leads, others follow
         Distributed, // Decentralized decision making
         Sequential, // Robots take turns
+        Negotiated, // Python-side LLM negotiation determines coordination
     }
 
     [CreateAssetMenu(fileName = "SimulationConfig", menuName = "Robotics/Simulation Config")]

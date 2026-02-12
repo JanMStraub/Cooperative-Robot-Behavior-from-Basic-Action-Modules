@@ -245,6 +245,7 @@ namespace Simulation
                 ),
                 RobotCoordinationMode.MasterSlave => new IndependentStrategy(),
                 RobotCoordinationMode.Distributed => new IndependentStrategy(),
+                RobotCoordinationMode.Negotiated => new NegotiatedStrategy(),
                 _ => new IndependentStrategy(),
             };
 
