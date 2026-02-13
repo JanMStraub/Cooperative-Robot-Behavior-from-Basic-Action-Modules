@@ -189,10 +189,14 @@ namespace Robotics
                 var point = msg.points[p];
                 double pointTime = point.time_from_start.sec + point.time_from_start.nanosec * 1e-9;
 
-                // Check time ordering
-                if (p > 0 && pointTime <= prevTime)
+                // Check time ordering - allow equal timestamps (MoveIt may duplicate
+                // the start state at time 0). Execution handles this gracefully.
+                if (p > 0 && pointTime < prevTime)
                 {
-                    Debug.LogError($"{_logPrefix} Non-monotonic time at point {p}");
+                    Debug.LogError(
+                        $"{_logPrefix} Non-monotonic time at point {p}: "
+                        + $"{pointTime:F4}s < prev {prevTime:F4}s"
+                    );
                     return false;
                 }
 

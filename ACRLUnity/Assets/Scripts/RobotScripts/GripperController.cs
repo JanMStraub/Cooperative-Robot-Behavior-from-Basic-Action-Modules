@@ -116,20 +116,16 @@ namespace Robotics
                 return;
 
             CacheLimits();
+
+            // Read the initial target BEFORE SetupDrive potentially changes it
+            float initialTarget = leftGripper.xDrive.target;
+
             SetupDrive(leftGripper);
             SetupDrive(rightGripper);
 
-            if (leftGripper.jointPosition.dofCount > 0)
-            {
-                float currentPos = leftGripper.jointPosition[0];
-                _currentPhysicalTarget = currentPos;
-                targetPosition = MapPhysicalToNormalized(currentPos);
-            }
-            else
-            {
-                _currentPhysicalTarget = _cachedUpperLimit;
-                targetPosition = 1f;
-            }
+            // Initialize from the saved initial target
+            _currentPhysicalTarget = initialTarget;
+            targetPosition = MapPhysicalToNormalized(initialTarget);
 
             _isInitialized = true;
         }
@@ -266,6 +262,10 @@ namespace Robotics
             if (leftGripper == null || rightGripper == null)
                 return;
 
+            // Ensure limits are cached before mapping (handles call before Start())
+            if (_cachedUpperLimit == 0f)
+                CacheLimits();
+
             targetPosition = 1f;
             float openPos = MapNormalizedToPhysical(1f);
             _currentPhysicalTarget = openPos;
@@ -301,6 +301,8 @@ namespace Robotics
             drive.stiffness = stiffness;
             drive.damping = damping;
             drive.forceLimit = maxForce;
+            // Preserve the target value from the prefab
+            // (don't reset it - the prefab target is the initial gripper position)
             gripper.xDrive = drive;
         }
 

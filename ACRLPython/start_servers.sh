@@ -12,12 +12,8 @@ echo "Checking for existing server processes..."
 echo "Stopping any running Python servers..."
 
 # Kill servers by process name pattern
-pkill -9 -f "RunRobotController" 2>/dev/null && echo "  ✓ Killed RunRobotController"
-pkill -9 -f "RunSequenceServer.py" 2>/dev/null && echo "  ✓ Killed RunSequenceServer.py"
-
-# Also kill by orchestrator module pattern
-pkill -9 -f "orchestrators.RunRobotController" 2>/dev/null
-pkill -9 -f "orchestrators.RunSequenceServer" 2>/dev/null
+pkill -9 -f "acrl/bin/python -u -m orchestrators.RunRobotController" 2>/dev/null && echo "  ✓ Killed RunRobotController"
+pkill -9 -f "acrl/bin/python -u -m orchestrators.RunSequenceServer" 2>/dev/null && echo "  ✓ Killed RunSequenceServer"
 
 # Wait for processes to fully terminate
 sleep 2

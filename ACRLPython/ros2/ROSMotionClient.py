@@ -39,7 +39,9 @@ import threading
 import logging
 import time
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [ROSMotionClient] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [ROSMotionClient] %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 # ROS 2 imports - only available inside Docker
@@ -77,6 +79,15 @@ class ROSMotionServer:
     and publishers for each robot namespace.
     """
 
+    # Robot base positions and rotations in Unity world coordinates
+    # These match the positions in Unity Environment.prefab
+    # Robot1: Unity rotation (0, 0, 0, -1) = 360° = 0° effective rotation - facing forward (+Z in Unity)
+    # Robot2: Unity rotation (0, 1, 0, 0) = 180° around Y - facing backward (-Z in Unity)
+    ROBOT_BASE_TRANSFORMS = {
+        "Robot1": {"position": (-0.475, 0.0, 0.0), "y_rotation": 0.0},
+        "Robot2": {"position": (0.475, 0.0, 0.0), "y_rotation": 180.0},
+    }
+
     def __init__(self, host="0.0.0.0", port=5020):
         """Initialize the ROS motion server with multi-robot support."""
         self.host = host
@@ -86,11 +97,11 @@ class ROSMotionServer:
 
         # Multi-robot support: dict of robot_id -> clients/publishers
         self._move_group_clients = {}  # robot_id -> ActionClient
-        self._trajectory_pubs = {}     # robot_id -> Publisher
-        self._gripper_pubs = {}        # robot_id -> Publisher
-        self._joint_state_subs = {}    # robot_id -> Subscription
-        self._current_joint_states = {} # robot_id -> JointState msg
-        self._last_planned_trajectories = {} # robot_id -> JointTrajectory
+        self._trajectory_pubs = {}  # robot_id -> Publisher
+        self._gripper_pubs = {}  # robot_id -> Publisher
+        self._joint_state_subs = {}  # robot_id -> Subscription
+        self._current_joint_states = {}  # robot_id -> JointState msg
+        self._last_planned_trajectories = {}  # robot_id -> JointTrajectory
 
         if HAS_ROS:
             rclpy.init()
@@ -138,13 +149,80 @@ class ROSMotionServer:
             JointState,
             f"/{robot_id}/joint_states",
             lambda msg, rid=robot_id: self._joint_state_callback(rid, msg),
-            10
+            10,
         )
 
         # Cache the last planned trajectory for inspection
         self._last_planned_trajectories[robot_id] = None
 
         logger.info(f"Successfully initialized {robot_id}")
+
+    def _transform_world_to_local(self, world_position: dict, robot_id: str) -> dict:
+        """Transform Unity world coordinates to ROS base_link coordinates.
+
+        Performs three transformations:
+        1. Translation: Unity world → robot-centered Unity coordinates
+        2. Rotation: Apply robot's Y-axis rotation (for Robot2's 180° flip)
+        3. Axis conversion: Unity (Y-up) → ROS (Z-up)
+
+        Unity coordinate system: X=right, Y=up, Z=forward (left-handed)
+        ROS coordinate system: X=forward, Y=left, Z=up (right-handed)
+
+        Example for Robot2 at Unity world (0.475, 0, 0):
+        - User sends Unity world: (0.2, 0.15, 0)
+        - Translate: (0.2-0.475, 0.15, 0) = (-0.275, 0.15, 0) in Unity local
+        - Rotate 180°: (0.275, 0.15, 0) in Unity local
+        - Convert to ROS: (Z, -X, Y) = (0, -0.275, 0.15) in ROS base_link
+
+        Args:
+            world_position: Dict with x, y, z in Unity world coordinates (Y-up)
+            robot_id: Robot namespace (e.g., "Robot1", "Robot2")
+
+        Returns:
+            Dict with x, y, z in ROS base_link coordinates (Z-up)
+        """
+        import math
+
+        if robot_id not in self.ROBOT_BASE_TRANSFORMS:
+            logger.warning(
+                f"Unknown robot_id '{robot_id}' for coordinate transform. "
+                f"Using coordinates as-is. Known robots: {list(self.ROBOT_BASE_TRANSFORMS.keys())}"
+            )
+            return world_position
+
+        transform = self.ROBOT_BASE_TRANSFORMS[robot_id]
+        base_x, base_y, base_z = transform["position"]
+        y_rotation_deg = transform["y_rotation"]
+
+        # Step 1: Translate to robot-centered Unity coordinates
+        unity_local_x = world_position.get("x", 0.0) - base_x
+        unity_local_y = world_position.get("y", 0.0) - base_y
+        unity_local_z = world_position.get("z", 0.0) - base_z
+
+        # Step 2: Apply robot's Y-rotation in Unity space (if any)
+        y_rotation_rad = math.radians(y_rotation_deg)
+        cos_theta = math.cos(y_rotation_rad)
+        sin_theta = math.sin(y_rotation_rad)
+
+        rotated_x = cos_theta * unity_local_x + sin_theta * unity_local_z
+        rotated_y = unity_local_y
+        rotated_z = -sin_theta * unity_local_x + cos_theta * unity_local_z
+
+        # Step 3: Convert from Unity (Y-up, left-handed) to ROS (Z-up, right-handed)
+        # Unity axes: X=right, Y=up, Z=forward
+        # ROS axes:   X=forward, Y=left, Z=up
+        # Conversion: Unity (X, Y, Z) → ROS (Z, -X, Y)
+        ros_x = rotated_z  # Unity Z (forward) → ROS X (forward)
+        ros_y = -rotated_x  # Unity X (right) → ROS -Y (since ROS Y is left)
+        ros_z = rotated_y  # Unity Y (up) → ROS Z (up)
+
+        local_position = {
+            "x": ros_x,
+            "y": ros_y,
+            "z": ros_z,
+        }
+
+        return local_position
 
     def _joint_state_callback(self, robot_id: str, msg):
         """Cache latest joint state from Unity for a specific robot.
@@ -233,7 +311,9 @@ class ROSMotionServer:
         Request must include robot_id to route to correct MoveIt instance.
         """
         command = request.get("command", "")
-        robot_id = request.get("robot_id", "Robot1")  # Default to Robot1 for backward compatibility
+        robot_id = request.get(
+            "robot_id", "Robot1"
+        )  # Default to Robot1 for backward compatibility
 
         logger.info(f"Processing command: {command} for {robot_id}")
 
@@ -265,7 +345,9 @@ class ROSMotionServer:
                 return {"success": False, "error": f"Unknown command: {command}"}
 
         except Exception as e:
-            logger.error(f"Error processing {command} for {robot_id}: {e}", exc_info=True)
+            logger.error(
+                f"Error processing {command} for {robot_id}: {e}", exc_info=True
+            )
             return {"success": False, "error": str(e)}
 
     def _build_move_group_goal(self, request, robot_id):
@@ -274,19 +356,30 @@ class ROSMotionServer:
         Sets planning_only=True so MoveIt plans but does NOT try to execute
         (which would require a FollowJointTrajectory action server).
 
+        When orientation is not provided, only a position constraint is added,
+        allowing MoveIt to reach the target with any feasible orientation.
+
         Args:
             request: Request dict with position, orientation, planning_time
             robot_id: Robot namespace to populate start_state from cached joint states
         """
         position = request.get("position", {})
-        orientation = request.get("orientation", {})
+        orientation = request.get("orientation")
         planning_time = request.get("planning_time", 5.0)
+
+        # Transform world coordinates to robot-local base_link coordinates
+        position = self._transform_world_to_local(position, robot_id)
 
         goal = MoveGroup.Goal()
         goal.request = MotionPlanRequest()
         goal.request.group_name = "arm"
         goal.request.num_planning_attempts = 10
         goal.request.allowed_planning_time = planning_time
+
+        # Set workspace bounds so OMPL knows the planning volume
+        goal.request.workspace_parameters.header.frame_id = "base_link"
+        goal.request.workspace_parameters.min_corner = Vector3(x=-1.0, y=-1.0, z=-1.0)
+        goal.request.workspace_parameters.max_corner = Vector3(x=1.0, y=1.0, z=1.0)
 
         # CRITICAL: plan only, do NOT attempt execution
         # Without this, MoveIt tries to send to a FollowJointTrajectory
@@ -301,7 +394,14 @@ class ROSMotionServer:
         # start state "invalid" and causes OMPL to reject it.
         joint_state = self._current_joint_states.get(robot_id)
         if joint_state is not None:
-            arm_joint_names = ["joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6"]
+            arm_joint_names = [
+                "joint_1",
+                "joint_2",
+                "joint_3",
+                "joint_4",
+                "joint_5",
+                "joint_6",
+            ]
             filtered_js = JointState()
             filtered_js.header = joint_state.header
             for name in arm_joint_names:
@@ -316,7 +416,7 @@ class ROSMotionServer:
             start_state.joint_state = filtered_js
             goal.request.start_state = start_state
 
-        # Set target pose constraint
+        # Build pose for constraints
         pose_goal = PoseStamped()
         pose_goal.header.frame_id = "base_link"
         pose_goal.pose.position = Point(
@@ -324,12 +424,17 @@ class ROSMotionServer:
             y=position.get("y", 0.0),
             z=position.get("z", 0.0),
         )
-        pose_goal.pose.orientation = Quaternion(
-            x=orientation.get("x", 0.0),
-            y=orientation.get("y", 0.0),
-            z=orientation.get("z", 0.0),
-            w=orientation.get("w", 1.0),
-        )
+
+        # Use provided orientation or default for pose
+        if orientation:
+            pose_goal.pose.orientation = Quaternion(
+                x=orientation.get("x", 0.0),
+                y=orientation.get("y", 0.0),
+                z=orientation.get("z", 0.0),
+                w=orientation.get("w", 1.0),
+            )
+        else:
+            pose_goal.pose.orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
 
         # Position constraint
         pos_constraint = PositionConstraint()
@@ -346,19 +451,21 @@ class ROSMotionServer:
         pos_constraint.constraint_region = bounding_vol
         pos_constraint.weight = 1.0
 
-        # Orientation constraint
-        orient_constraint = OrientationConstraint()
-        orient_constraint.header.frame_id = "base_link"
-        orient_constraint.link_name = "ee_link"
-        orient_constraint.orientation = pose_goal.pose.orientation
-        orient_constraint.absolute_x_axis_tolerance = 0.1
-        orient_constraint.absolute_y_axis_tolerance = 0.1
-        orient_constraint.absolute_z_axis_tolerance = 0.1
-        orient_constraint.weight = 1.0
-
         constraints = Constraints()
         constraints.position_constraints.append(pos_constraint)
-        constraints.orientation_constraints.append(orient_constraint)
+
+        # Only add orientation constraint when explicitly requested
+        if orientation:
+            orient_constraint = OrientationConstraint()
+            orient_constraint.header.frame_id = "base_link"
+            orient_constraint.link_name = "ee_link"
+            orient_constraint.orientation = pose_goal.pose.orientation
+            orient_constraint.absolute_x_axis_tolerance = 0.1
+            orient_constraint.absolute_y_axis_tolerance = 0.1
+            orient_constraint.absolute_z_axis_tolerance = 0.1
+            orient_constraint.weight = 1.0
+            constraints.orientation_constraints.append(orient_constraint)
+
         goal.request.goal_constraints.append(constraints)
 
         return goal
@@ -396,7 +503,9 @@ class ROSMotionServer:
 
         # Wait for joint states before planning
         if not self._wait_for_joint_states(robot_id, timeout=10.0):
-            logger.warning(f"No joint states received for {robot_id} yet, planning may fail")
+            logger.warning(
+                f"No joint states received for {robot_id} yet, planning may fail"
+            )
 
         if not move_group_client.wait_for_server(timeout_sec=15.0):
             return None, 0, f"MoveGroup action server not available for {robot_id}"
@@ -465,7 +574,11 @@ class ROSMotionServer:
         if error_code == 1:
             trajectory = result.planned_trajectory.joint_trajectory
             self._last_planned_trajectories[robot_id] = trajectory
-            logger.info(f"Planning succeeded for {robot_id}: {len(trajectory.points)} waypoints")
+
+            logger.info(
+                f"Planning succeeded for {robot_id}: {len(trajectory.points)} waypoints"
+            )
+
             return trajectory, result.planning_time, None
         else:
             error_name = ERROR_CODES.get(error_code, f"UNKNOWN_ERROR_{error_code}")
@@ -481,7 +594,8 @@ class ROSMotionServer:
                 "positions": list(pt.positions),
                 "velocities": list(pt.velocities) if pt.velocities else [],
                 "accelerations": list(pt.accelerations) if pt.accelerations else [],
-                "time_from_start": pt.time_from_start.sec + pt.time_from_start.nanosec * 1e-9,
+                "time_from_start": pt.time_from_start.sec
+                + pt.time_from_start.nanosec * 1e-9,
             }
             points.append(point_dict)
 
@@ -503,7 +617,9 @@ class ROSMotionServer:
         planning_time = request.get("planning_time", 5.0)
         goal = self._build_move_group_goal(request, robot_id)
 
-        trajectory, plan_time, error = self._call_move_group_plan(goal, robot_id, planning_time)
+        trajectory, plan_time, error = self._call_move_group_plan(
+            goal, robot_id, planning_time
+        )
 
         if trajectory is None:
             return {"success": False, "error": error, "robot_id": robot_id}
@@ -535,7 +651,9 @@ class ROSMotionServer:
         planning_time = request.get("planning_time", 5.0)
         goal = self._build_move_group_goal(request, robot_id)
 
-        trajectory, plan_time, error = self._call_move_group_plan(goal, robot_id, planning_time)
+        trajectory, plan_time, error = self._call_move_group_plan(
+            goal, robot_id, planning_time
+        )
 
         if trajectory is None:
             return {"success": False, "error": error, "robot_id": robot_id}
@@ -609,7 +727,9 @@ class ROSMotionServer:
         gripper_pub = self._gripper_pubs[robot_id]
         gripper_pub.publish(msg)
 
-        logger.info(f"Published gripper command to {robot_id}: position={normalized:.3f}")
+        logger.info(
+            f"Published gripper command to {robot_id}: position={normalized:.3f}"
+        )
 
         return {
             "success": True,

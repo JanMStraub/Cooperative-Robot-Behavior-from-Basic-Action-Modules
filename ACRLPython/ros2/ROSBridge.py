@@ -153,24 +153,28 @@ class ROSBridge:
         Plan and execute a motion to target pose for a specific robot.
 
         Args:
-            position: Dict with x, y, z coordinates.
-            orientation: Dict with x, y, z, w quaternion (default: identity).
+            position: Dict with x, y, z coordinates (Unity world space).
+            orientation: Dict with x, y, z, w quaternion. If None, MoveIt plans
+                         to the position with any feasible orientation.
             planning_time: Max planning time in seconds.
             robot_id: Robot namespace (e.g., "Robot1", "Robot2").
 
         Returns:
             Dict with success status and details.
         """
-        if orientation is None:
-            orientation = {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}
 
-        return self._send_command({
+        cmd = {
             "command": "plan_and_execute",
             "robot_id": robot_id,
             "position": position,
-            "orientation": orientation,
             "planning_time": planning_time,
-        })
+        }
+        if orientation is not None:
+            cmd["orientation"] = orientation
+
+        result = self._send_command(cmd)
+
+        return result
 
     def plan_to_pose(self, position, orientation=None, planning_time=5.0, robot_id="Robot1"):
         """
@@ -178,23 +182,24 @@ class ROSBridge:
 
         Args:
             position: Dict with x, y, z coordinates.
-            orientation: Dict with x, y, z, w quaternion.
+            orientation: Dict with x, y, z, w quaternion. If None, MoveIt plans
+                         to the position with any feasible orientation.
             planning_time: Max planning time in seconds.
             robot_id: Robot namespace (e.g., "Robot1", "Robot2").
 
         Returns:
             Dict with success status and trajectory info.
         """
-        if orientation is None:
-            orientation = {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}
-
-        return self._send_command({
+        cmd = {
             "command": "plan_to_pose",
             "robot_id": robot_id,
             "position": position,
-            "orientation": orientation,
             "planning_time": planning_time,
-        })
+        }
+        if orientation is not None:
+            cmd["orientation"] = orientation
+
+        return self._send_command(cmd)
 
     def get_current_pose(self, robot_id="Robot1"):
         """
