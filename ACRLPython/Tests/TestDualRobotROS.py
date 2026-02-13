@@ -28,8 +28,7 @@ from ros2.ROSBridge import ROSBridge
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s"
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -68,14 +67,15 @@ def test_robot1_motion():
 
     bridge = ROSBridge.get_instance()
 
-    # Test position for Robot1
-    target_position = {"x": -0.2, "y": 0.1, "z": 0.2}
+    # Test position for Robot1 (Unity world coordinates - will be auto-transformed)
+    # Send: world (-0.2, 0.15, 0.0)
+    # Robot1 at world (-0.475, 0, 0), rotation 0°
+    # Transform: local = (-0.2 - (-0.475), 0.15, 0) = (0.275, 0.15, 0)
+    target_position = {"x": -0.2, "y": 0.15, "z": 0.0}
 
     logger.info(f"Requesting motion for Robot1 to {target_position}")
     result = bridge.plan_and_execute(
-        position=target_position,
-        robot_id="Robot1",
-        planning_time=10.0
+        position=target_position, robot_id="Robot1", planning_time=10.0
     )
 
     if result and result.get("success"):
@@ -98,14 +98,15 @@ def test_robot2_motion():
 
     bridge = ROSBridge.get_instance()
 
-    # Test position for Robot2 (different from Robot1)
-    target_position = {"x": 0.25, "y": 0.15, "z": 0.25}
+    # Test position for Robot2 (Unity world coordinates - will be auto-transformed)
+    # Send: world (0.2, 0.15, 0)
+    # Robot2 at world (0.475, 0, 0), rotation 180°
+    # Transform: translate (0.2 - 0.475 = -0.275), rotate 180° -> (0.275, 0.15, 0)
+    target_position = {"x": 0.2, "y": 0.15, "z": 0.0}
 
     logger.info(f"Requesting motion for Robot2 to {target_position}")
     result = bridge.plan_and_execute(
-        position=target_position,
-        robot_id="Robot2",
-        planning_time=10.0
+        position=target_position, robot_id="Robot2", planning_time=10.0
     )
 
     if result and result.get("success"):
@@ -129,17 +130,15 @@ def test_simultaneous_motion():
     bridge = ROSBridge.get_instance()
 
     # Target positions for both robots
-    robot1_target = {"x": -0.2, "y": 0.15, "z": 0.15}
-    robot2_target = {"x": 0.2, "y": 0.15, "z": 0.15}
+    robot1_target = {"x": -0.1, "y": 0.15, "z": 0.0}
+    robot2_target = {"x": 0.1, "y": 0.15, "z": 0.0}
 
     logger.info("Sending simultaneous commands to both robots")
 
     # Send Robot1 command
     logger.info(f"Robot1 -> {robot1_target}")
     result1 = bridge.plan_and_execute(
-        position=robot1_target,
-        robot_id="Robot1",
-        planning_time=10.0
+        position=robot1_target, robot_id="Robot1", planning_time=10.0
     )
 
     # Small delay to avoid overwhelming the system
@@ -148,9 +147,7 @@ def test_simultaneous_motion():
     # Send Robot2 command
     logger.info(f"Robot2 -> {robot2_target}")
     result2 = bridge.plan_and_execute(
-        position=robot2_target,
-        robot_id="Robot2",
-        planning_time=10.0
+        position=robot2_target, robot_id="Robot2", planning_time=10.0
     )
 
     # Check results
@@ -182,33 +179,35 @@ def test_gripper_control():
 
     bridge = ROSBridge.get_instance()
 
+    # Close both grippers
+    logger.info("Robot1: Closing gripper")
+    result1 = bridge.control_gripper(position=0.0, robot_id="Robot1")
+
+    time.sleep(1.0)
+
+    logger.info("Robot2: Closing gripper")
+    result2 = bridge.control_gripper(position=0.0, robot_id="Robot2")
+
+    time.sleep(3.0)
+
     # Test Robot1 gripper
     logger.info("Robot1: Opening gripper")
-    result1 = bridge.control_gripper(position=0.014, robot_id="Robot1")
+    result3 = bridge.control_gripper(position=0.014, robot_id="Robot1")
 
     time.sleep(1.0)
 
     # Test Robot2 gripper
     logger.info("Robot2: Opening gripper")
-    result2 = bridge.control_gripper(position=0.014, robot_id="Robot2")
+    result4 = bridge.control_gripper(position=0.014, robot_id="Robot2")
 
-    time.sleep(1.0)
-
-    # Close both grippers
-    logger.info("Robot1: Closing gripper")
-    result3 = bridge.control_gripper(position=0.0, robot_id="Robot1")
-
-    time.sleep(1.0)
-
-    logger.info("Robot2: Closing gripper")
-    result4 = bridge.control_gripper(position=0.0, robot_id="Robot2")
-
-    success = all([
-        result1 and result1.get("success"),
-        result2 and result2.get("success"),
-        result3 and result3.get("success"),
-        result4 and result4.get("success"),
-    ])
+    success = all(
+        [
+            result1 and result1.get("success"),
+            result2 and result2.get("success"),
+            result3 and result3.get("success"),
+            result4 and result4.get("success"),
+        ]
+    )
 
     if success:
         logger.info("All gripper commands successful!")
@@ -233,9 +232,13 @@ def test_get_joint_states():
     if result1 and result1.get("success"):
         logger.info(f"Robot1 joint states received:")
         logger.info(f"  Joint names: {result1.get('joint_names')}")
-        logger.info(f"  Joint positions: {[f'{p:.3f}' for p in result1.get('joint_positions', [])]}")
+        logger.info(
+            f"  Joint positions: {[f'{p:.3f}' for p in result1.get('joint_positions', [])]}"
+        )
     else:
-        logger.warning(f"Robot1 joint states not available: {result1.get('error') if result1 else 'No response'}")
+        logger.warning(
+            f"Robot1 joint states not available: {result1.get('error') if result1 else 'No response'}"
+        )
 
     # Get Robot2 joint states
     logger.info("Requesting Robot2 joint states")
@@ -244,12 +247,18 @@ def test_get_joint_states():
     if result2 and result2.get("success"):
         logger.info(f"Robot2 joint states received:")
         logger.info(f"  Joint names: {result2.get('joint_names')}")
-        logger.info(f"  Joint positions: {[f'{p:.3f}' for p in result2.get('joint_positions', [])]}")
+        logger.info(
+            f"  Joint positions: {[f'{p:.3f}' for p in result2.get('joint_positions', [])]}"
+        )
     else:
-        logger.warning(f"Robot2 joint states not available: {result2.get('error') if result2 else 'No response'}")
+        logger.warning(
+            f"Robot2 joint states not available: {result2.get('error') if result2 else 'No response'}"
+        )
 
     # Success if at least one robot reports joint states
-    success = (result1 and result1.get("success")) or (result2 and result2.get("success"))
+    success = (result1 and result1.get("success")) or (
+        result2 and result2.get("success")
+    )
 
     if success:
         logger.info("Joint state retrieval successful")

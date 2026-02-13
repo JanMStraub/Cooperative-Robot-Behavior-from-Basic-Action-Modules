@@ -10,15 +10,6 @@ Docker-based ROS 2 environment providing **collision-aware motion planning** for
 - ✅ **Zero Code Changes Required** — Default config uses Unity IK (ROS disabled)
 - ✅ **Full Docker Isolation** — All ROS dependencies containerized
 
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| **[QUICKSTART.md](QUICKSTART.md)** | Complete setup guide with examples |
-| **[ARCHITECTURE.md](ARCHITECTURE.md)** | System design, data flows, and component interactions |
-| **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** | Common issues and solutions |
-| **[CLAUDE.md](../CLAUDE.md)** | Main project documentation (ROS Integration section) |
-
 ## Quick Start
 
 ```bash
@@ -108,3 +99,38 @@ Set via `ROSControlModeManager` component in Unity Inspector:
 | `/arm_controller/feedback` | std_msgs/String | Unity -> ROS | Execution feedback |
 | `/gripper/command` | sensor_msgs/JointState | ROS -> Unity | Gripper commands |
 | `/gripper/state` | sensor_msgs/JointState | Unity -> ROS | Gripper state feedback |
+
+## Coordinate Systems
+
+**Important**: The ROS integration automatically handles coordinate transformations between Unity world space and robot-local `base_link` frames.
+
+### Robot Positions in Unity
+- **Robot1**: Unity world position `(-0.475, 0, 0)` meters
+- **Robot2**: Unity world position `(0.475, 0, 0)` meters
+
+### Using World Coordinates (Recommended)
+When sending commands via Python, use **Unity world coordinates**:
+
+```python
+from ros2.ROSBridge import ROSBridge
+
+bridge = ROSBridge.get_instance()
+bridge.connect()
+
+# Send world coordinates - transformation happens automatically
+bridge.plan_and_execute(
+    position={"x": -0.2, "y": 0.05, "z": 0.0},  # Unity world coords
+    robot_id="Robot1"
+)
+```
+
+### Coordinate Transformation
+The `ROSMotionClient` automatically transforms coordinates:
+- **Input**: Unity world coordinates (what you send from Python)
+- **Planning**: MoveIt plans in `base_link` local coordinates
+- **Execution**: Unity executes in world space
+
+Example for Robot1:
+- World position: `(x=-0.2, y=0.05, z=0.0)`
+- Robot1 base at: `(-0.475, 0, 0)`
+- MoveIt receives: `(x=0.275, y=0.05, z=0.0)` ← automatic transformation
