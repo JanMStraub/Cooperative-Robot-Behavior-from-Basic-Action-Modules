@@ -1025,6 +1025,23 @@ def detect_object_stereo(
             f"Detected {best.color if best.color else 'object'} at ({result['x']:.3f}, {result['y']:.3f}, {result['z']:.3f})"
         )
 
+        # Update WorldState with detected object position (for ROS planning and other operations)
+        try:
+            from core.Imports import get_world_state
+            world_state = get_world_state()
+            object_id = best.color if best.color else "unknown_object"
+            world_state.update_object_position(
+                object_id=object_id,
+                position=(best.world_position[0], best.world_position[1], best.world_position[2]),
+                color=best.color,
+                object_type="cube",  # Default to cube for now
+                confidence=best.confidence,
+            )
+            logger.debug(f"Updated WorldState: {object_id} at ({best.world_position[0]:.3f}, {best.world_position[1]:.3f}, {best.world_position[2]:.3f})")
+        except Exception as e:
+            logger.warning(f"Failed to update WorldState: {e}")
+            # Don't fail the detection if WorldState update fails
+
         return OperationResult.success_result(result)
 
     except Exception as e:

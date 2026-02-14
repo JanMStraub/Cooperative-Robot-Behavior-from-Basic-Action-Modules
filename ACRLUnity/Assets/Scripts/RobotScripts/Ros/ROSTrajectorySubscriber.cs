@@ -36,6 +36,12 @@ namespace Robotics
         [SerializeField]
         private float _maxPointGap = 5f;
 
+        [Header("Speed Control")]
+        [Tooltip("Speed scaling factor for trajectory execution (1.0 = normal speed, 0.5 = half speed, 2.0 = double speed)")]
+        [SerializeField]
+        [Range(0.1f, 2.0f)]
+        private float _speedScaling = 0.5f; // Default to 50% speed for slower, more visible motion
+
         [Header("References")]
         [SerializeField]
         private RobotController _robotController;
@@ -288,6 +294,9 @@ namespace Robotics
                 double segmentDuration = targetTime - prevPointTime;
                 if (segmentDuration <= 0)
                     segmentDuration = Time.fixedDeltaTime;
+
+                // Apply speed scaling to slow down trajectory execution in simulation
+                segmentDuration *= (1.0 / _speedScaling);
 
                 // Interpolate from previous point to current
                 float segmentStart = Time.time;

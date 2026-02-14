@@ -127,8 +127,8 @@ def control_gripper(
                 from ros2.ROSBridge import ROSBridge
                 bridge = ROSBridge.get_instance()
                 if bridge.is_connected or bridge.connect():
-                    # Gripper: 0.014 = fully open, 0.0 = fully closed
-                    gripper_position = 0.014 if open_gripper else 0.0
+                    # Gripper: 1.0 = fully open, 0.0 = fully closed (normalized values)
+                    gripper_position = 1.0 if open_gripper else 0.0
                     result = bridge.control_gripper(gripper_position, robot_id=robot_id)  # Pass robot_id
                     if result and result.get("success"):
                         logger.info(f"ROS gripper command sent for {robot_id}")
@@ -397,8 +397,8 @@ def release_object(
                 from ros2.ROSBridge import ROSBridge
                 bridge = ROSBridge.get_instance()
                 if bridge.is_connected or bridge.connect():
-                    # Gripper: 0.014 = fully open
-                    result = bridge.control_gripper(0.014, robot_id=robot_id)
+                    # Gripper: 1.0 = fully open (normalized value)
+                    result = bridge.control_gripper(1.0, robot_id=robot_id)
                     if result and result.get("success"):
                         logger.info(f"ROS release_object command sent for {robot_id}")
                         return OperationResult.success_result({
