@@ -458,6 +458,7 @@ def move_from_a_to_b(
     point_b: dict,
     speed: float = 1.0,
     request_id: int = 0,
+    use_ros: bool = None,
 ) -> OperationResult:
     """
     Move robot end effector from point A to point B through explicit waypoints.
@@ -472,6 +473,7 @@ def move_from_a_to_b(
         point_b: End position dict with keys 'x', 'y', 'z' (meters)
         speed: Speed multiplier (0.1=slow, 1.0=normal, 2.0=fast), range: [0.1, 2.0]
         request_id: Optional request ID for tracking
+        use_ros: Whether to use ROS for motion planning (None = auto-detect from config)
 
     Returns:
         OperationResult with movement confirmation or error details
@@ -509,7 +511,77 @@ def move_from_a_to_b(
                 ["Provide point_b as: {'x': 0.3, 'y': 0.15, 'z': 0.1}"],
             )
 
-        # Construct command for Unity with both waypoints
+        # Determine whether to use ROS or TCP path
+        _use_ros = use_ros
+        if _use_ros is None:
+            try:
+                from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+                _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
+            except ImportError:
+                _use_ros = False
+
+        # Route via ROS if enabled
+        if _use_ros:
+            try:
+                from ros2.ROSBridge import ROSBridge
+                bridge = ROSBridge.get_instance()
+                if not bridge.is_connected:
+                    if not bridge.connect():
+                        # Fall back to TCP if hybrid mode
+                        try:
+                            from config.ROS import DEFAULT_CONTROL_MODE
+                            if DEFAULT_CONTROL_MODE == "hybrid":
+                                logger.warning("ROS bridge unavailable, falling back to TCP")
+                                _use_ros = False
+                            else:
+                                return OperationResult.error_result(
+                                    "ROS_CONNECTION_FAILED",
+                                    "Failed to connect to ROS bridge (port 5020)",
+                                    [
+                                        "Ensure Docker ROS services are running: cd ros_unity_integration && ./start_ros_endpoint.sh",
+                                        "Set DEFAULT_CONTROL_MODE='hybrid' in config/ROS.py for automatic fallback",
+                                    ],
+                                )
+                        except ImportError:
+                            _use_ros = False
+
+                if _use_ros:
+                    # Plan path through both waypoints via ROS
+                    result = bridge.plan_multi_waypoint(
+                        waypoints=[point_a, point_b],
+                        robot_id=robot_id,
+                    )
+                    if result and result.get("success"):
+                        logger.info(f"ROS waypoint motion completed for {robot_id}")
+                        return OperationResult.success_result({
+                            "robot_id": robot_id,
+                            "point_a": point_a,
+                            "point_b": point_b,
+                            "speed": speed,
+                            "status": "ros_executed",
+                            "planning_time": result.get("planning_time", 0),
+                            "timestamp": time.time(),
+                        })
+                    else:
+                        error_msg = result.get("error", "Unknown") if result else "No response"
+                        try:
+                            from config.ROS import DEFAULT_CONTROL_MODE
+                            if DEFAULT_CONTROL_MODE == "hybrid":
+                                logger.warning(f"ROS planning failed ({error_msg}), falling back to TCP")
+                                _use_ros = False
+                            else:
+                                return OperationResult.error_result(
+                                    "ROS_PLANNING_FAILED",
+                                    f"MoveIt planning failed: {error_msg}",
+                                    ["Check MoveIt logs", "Verify waypoints are reachable"],
+                                )
+                        except ImportError:
+                            _use_ros = False
+            except ImportError:
+                logger.warning("ros2 module not available, falling back to TCP")
+                _use_ros = False
+
+        # Construct command for Unity with both waypoints (TCP path)
         command = {
             "command_type": "move_from_a_to_b",
             "robot_id": robot_id,
@@ -632,6 +704,7 @@ def adjust_end_effector_orientation(
     pitch: float = 0.0,
     yaw: float = 0.0,
     request_id: int = 0,
+    use_ros: bool = None,
 ) -> OperationResult:
     """
     Adjust the end effector orientation without changing position.
@@ -645,6 +718,7 @@ def adjust_end_effector_orientation(
         pitch: Pitch angle in degrees (rotation around Y axis), range: [-180, 180]
         yaw: Yaw angle in degrees (rotation around Z axis), range: [-180, 180]
         request_id: Optional request ID for tracking
+        use_ros: Whether to use ROS for motion planning (None = auto-detect from config)
 
     Returns:
         OperationResult with orientation adjustment confirmation
@@ -680,7 +754,72 @@ def adjust_end_effector_orientation(
                     ["Keep angles within [-180, 180] degrees"],
                 )
 
-        # Construct command for Unity
+        # Determine whether to use ROS or TCP path
+        _use_ros = use_ros
+        if _use_ros is None:
+            try:
+                from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+                _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
+            except ImportError:
+                _use_ros = False
+
+        # Route via ROS if enabled
+        if _use_ros:
+            try:
+                from ros2.ROSBridge import ROSBridge
+                bridge = ROSBridge.get_instance()
+                if not bridge.is_connected:
+                    if not bridge.connect():
+                        # Fall back to TCP if hybrid mode
+                        try:
+                            from config.ROS import DEFAULT_CONTROL_MODE
+                            if DEFAULT_CONTROL_MODE == "hybrid":
+                                logger.warning("ROS bridge unavailable, falling back to TCP")
+                                _use_ros = False
+                            else:
+                                return OperationResult.error_result(
+                                    "ROS_CONNECTION_FAILED",
+                                    "Failed to connect to ROS bridge (port 5020)",
+                                    ["Ensure Docker ROS services are running"],
+                                )
+                        except ImportError:
+                            _use_ros = False
+
+                if _use_ros:
+                    # Plan orientation change via ROS
+                    result = bridge.plan_orientation_change(
+                        orientation={"roll": roll, "pitch": pitch, "yaw": yaw},
+                        robot_id=robot_id,
+                    )
+                    if result and result.get("success"):
+                        logger.info(f"ROS orientation adjustment completed for {robot_id}")
+                        return OperationResult.success_result({
+                            "robot_id": robot_id,
+                            "orientation": {"roll": roll, "pitch": pitch, "yaw": yaw},
+                            "status": "ros_executed",
+                            "planning_time": result.get("planning_time", 0),
+                            "timestamp": time.time(),
+                        })
+                    else:
+                        error_msg = result.get("error", "Unknown") if result else "No response"
+                        try:
+                            from config.ROS import DEFAULT_CONTROL_MODE
+                            if DEFAULT_CONTROL_MODE == "hybrid":
+                                logger.warning(f"ROS planning failed ({error_msg}), falling back to TCP")
+                                _use_ros = False
+                            else:
+                                return OperationResult.error_result(
+                                    "ROS_PLANNING_FAILED",
+                                    f"MoveIt planning failed: {error_msg}",
+                                    ["Check MoveIt logs", "Verify orientation is reachable"],
+                                )
+                        except ImportError:
+                            _use_ros = False
+            except ImportError:
+                logger.warning("ros2 module not available, falling back to TCP")
+                _use_ros = False
+
+        # Construct command for Unity (TCP path)
         command = {
             "command_type": "adjust_end_effector_orientation",
             "robot_id": robot_id,

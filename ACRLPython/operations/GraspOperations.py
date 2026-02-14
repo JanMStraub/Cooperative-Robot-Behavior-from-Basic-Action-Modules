@@ -8,6 +8,7 @@ collision checking, and scoring.
 """
 
 import logging
+import time
 from typing import Optional, List
 from .Base import (
     BasicOperation,
@@ -45,7 +46,8 @@ def grasp_object(
     enable_retreat: bool = True,
     retreat_distance: float = 0.0,     # 0 = use config default
     custom_approach_vector: Optional[List[float]] = None,  # [x, y, z] or None
-    request_id: int = 0
+    request_id: int = 0,
+    use_ros: bool = None,
 ) -> OperationResult:
     """
     Plan and execute grasp on detected object using MoveIt2-inspired pipeline.
@@ -78,6 +80,7 @@ def grasp_object(
         retreat_distance: Custom retreat distance in meters (0 = use config)
         custom_approach_vector: Custom approach direction [x, y, z] (overrides preferred_approach)
         request_id: Request ID for tracking (optional)
+        use_ros: Whether to use ROS for motion planning (None = auto-detect from config)
 
     Returns:
         Dict with the following structure:
@@ -167,7 +170,75 @@ def grasp_object(
                     ],
                 )
 
-        # Build command payload with parameters nested (to match Unity's RobotCommand structure)
+        # Determine whether to use ROS or TCP path
+        _use_ros = use_ros
+        if _use_ros is None:
+            try:
+                from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+                _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
+            except ImportError:
+                _use_ros = False
+
+        # Route via ROS if enabled (grasp planning is complex, best handled by MoveIt for collision-free grasps)
+        if _use_ros:
+            try:
+                from ros2.ROSBridge import ROSBridge
+                bridge = ROSBridge.get_instance()
+                if not bridge.is_connected:
+                    if not bridge.connect():
+                        # Fall back to TCP if hybrid mode
+                        try:
+                            from config.ROS import DEFAULT_CONTROL_MODE
+                            if DEFAULT_CONTROL_MODE == "hybrid":
+                                logger.warning("ROS bridge unavailable, falling back to TCP")
+                                _use_ros = False
+                            else:
+                                return OperationResult.error_result(
+                                    "ROS_CONNECTION_FAILED",
+                                    "Failed to connect to ROS bridge (port 5020)",
+                                    ["Ensure Docker ROS services are running"],
+                                )
+                        except ImportError:
+                            _use_ros = False
+
+                if _use_ros:
+                    # Note: ROS grasp planning requires object position - may need to query from WorldState
+                    # For now, send grasp command through ROS bridge (bridge would handle conversion)
+                    result = bridge.plan_grasp(
+                        object_id=object_id,
+                        robot_id=robot_id,
+                        approach=preferred_approach,
+                    )
+                    if result and result.get("success"):
+                        logger.info(f"ROS grasp planning completed for {robot_id}")
+                        return OperationResult.success_result({
+                            "robot_id": robot_id,
+                            "object_id": object_id,
+                            "request_id": request_id,
+                            "status": "ros_executed",
+                            "planning_time": result.get("planning_time", 0),
+                            "timestamp": time.time(),
+                        })
+                    else:
+                        error_msg = result.get("error", "Unknown") if result else "No response"
+                        try:
+                            from config.ROS import DEFAULT_CONTROL_MODE
+                            if DEFAULT_CONTROL_MODE == "hybrid":
+                                logger.warning(f"ROS grasp planning failed ({error_msg}), falling back to TCP")
+                                _use_ros = False
+                            else:
+                                return OperationResult.error_result(
+                                    "ROS_PLANNING_FAILED",
+                                    f"MoveIt grasp planning failed: {error_msg}",
+                                    ["Check MoveIt logs", "Verify object is reachable"],
+                                )
+                        except ImportError:
+                            _use_ros = False
+            except ImportError:
+                logger.warning("ros2 module not available, falling back to TCP")
+                _use_ros = False
+
+        # Build command payload with parameters nested (to match Unity's RobotCommand structure) (TCP path)
         parameters = {
             "object_id": object_id,
             "use_advanced_planning": use_advanced_planning,

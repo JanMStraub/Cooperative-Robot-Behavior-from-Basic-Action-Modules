@@ -89,6 +89,7 @@ namespace Robotics
         private bool _isHoldingObject = false;
         private GameObject _targetObjectToGrasp;
         private bool _shouldAttachOnClose = false;
+        private const string _logPrefix = "[GRIPPER_CONTROLLER]";
 
         public event System.Action OnGripperActionComplete;
 
@@ -106,7 +107,7 @@ namespace Robotics
         {
             if (leftGripper == null || rightGripper == null)
             {
-                Debug.LogError("[GRIPPER_CONTROLLER] Gripper references not assigned!");
+                Debug.LogError($"{_logPrefix} Gripper references not assigned!");
             }
         }
 
@@ -233,9 +234,7 @@ namespace Robotics
                 yield break;
 
             Vector3 releasePosition = obj.transform.position;
-            Debug.Log(
-                $"[GripperController] Monitoring object '{obj.name}' released at {releasePosition}"
-            );
+            Debug.Log($"{_logPrefix} Monitoring object '{obj.name}' released at {releasePosition}");
 
             for (int i = 0; i < 10; i++)
             {
@@ -246,14 +245,14 @@ namespace Robotics
                 if (distance > 0.01f)
                 {
                     Debug.LogWarning(
-                        $"[GripperController] Frame {i}: Object moved {distance:F3}m! "
+                        $"{_logPrefix} Frame {i}: Object moved {distance:F3}m! "
                             + $"From {releasePosition} to {currentPos}"
                     );
                 }
             }
 
             Debug.Log(
-                $"[GripperController] Monitoring complete. Final position: {obj.transform.position}"
+                $"{_logPrefix} Monitoring complete. Final position: {obj.transform.position}"
             );
         }
 
@@ -352,15 +351,13 @@ namespace Robotics
         {
             if (obj == null)
             {
-                Debug.LogWarning("[GripperController] Cannot attach null object");
+                Debug.LogWarning($"{_logPrefix} Cannot attach null object");
                 return;
             }
 
             if (attachmentPoint == null)
             {
-                Debug.LogError(
-                    "[GripperController] No attachment point assigned! Cannot attach object."
-                );
+                Debug.LogError($"{_logPrefix} No attachment point assigned! Cannot attach object.");
                 return;
             }
 
@@ -369,7 +366,7 @@ namespace Robotics
             if (otherGripper != null && otherGripper != this)
             {
                 Debug.Log(
-                    $"[GripperController] Handoff detected: transferring '{obj.name}' from another gripper"
+                    $"{_logPrefix} Handoff detected: transferring '{obj.name}' from another gripper"
                 );
                 // Force detach from other gripper without re-enabling physics
                 otherGripper.ForceReleaseForHandoff();
@@ -397,7 +394,7 @@ namespace Robotics
             _graspedObject = obj;
             _isHoldingObject = true;
 
-            Debug.Log($"[GripperController] Object '{obj.name}' attached to gripper");
+            Debug.Log($"{_logPrefix} Object '{obj.name}' attached to gripper");
         }
 
         /// <summary>
@@ -431,7 +428,7 @@ namespace Robotics
                 return;
             }
 
-            Debug.Log($"[GripperController] Force releasing '{_graspedObject.name}' for handoff");
+            Debug.Log($"{_logPrefix} Force releasing '{_graspedObject.name}' for handoff");
 
             // Just clear our references - don't unparent or re-enable physics
             // The receiving gripper will handle parenting
@@ -455,7 +452,7 @@ namespace Robotics
             Quaternion worldRotation = _graspedObject.transform.rotation;
 
             Debug.Log(
-                $"[GripperController] Detaching object '{_graspedObject.name}' at world position {worldPosition}"
+                $"{_logPrefix} Detaching object '{_graspedObject.name}' at world position {worldPosition}"
             );
 
             // Get Rigidbody before making changes
@@ -487,7 +484,7 @@ namespace Robotics
                 rb.angularVelocity = Vector3.zero;
 
                 Debug.Log(
-                    $"[GripperController] Re-enabled physics at position {rb.position}, gravity enabled, velocities zeroed"
+                    $"{_logPrefix} Re-enabled physics at position {rb.position}, gravity enabled, velocities zeroed"
                 );
             }
 

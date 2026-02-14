@@ -58,6 +58,7 @@ def stabilize_object(
     duration_ms: int = 5000,
     force_limit: float = 10.0,
     request_id: int = 0,
+    use_ros: bool = None,
 ) -> OperationResult:
     """
     Stabilize (hold) an object while another robot manipulates it.
@@ -72,6 +73,7 @@ def stabilize_object(
         duration_ms: Duration to hold stable (milliseconds)
         force_limit: Maximum grip force (Newtons)
         request_id: Optional request ID for tracking
+        use_ros: Whether to use ROS for motion planning (None = auto-detect from config)
 
     Returns:
         OperationResult with stabilization activation confirmation
@@ -116,7 +118,23 @@ def stabilize_object(
                 ["Use force limit between 1N and 50N"],
             )
 
-        # Construct command
+        # Determine whether to use ROS or TCP path
+        _use_ros = use_ros
+        if _use_ros is None:
+            try:
+                from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+                _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
+            except ImportError:
+                _use_ros = False
+
+        # Note: Stabilization requires force control and continuous holding
+        # This is best handled by Unity's force control system (TCP path)
+        # ROS could handle initial positioning, but force feedback loops are Unity-side
+        if _use_ros:
+            logger.info("Stabilization force control via ROS not yet implemented - using Unity direct control")
+            _use_ros = False
+
+        # Construct command (TCP path)
         command = {
             "command_type": "stabilize_object",
             "robot_id": robot_id,

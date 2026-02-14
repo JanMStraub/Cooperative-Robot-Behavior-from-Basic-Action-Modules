@@ -49,6 +49,7 @@ def move_relative_to_object(
     offset: float = 0.1,
     z_override: Optional[float] = None,
     request_id: int = 0,
+    use_ros: bool = None,
 ) -> OperationResult:
     """
     Move robot to a position relative to an object or position.
@@ -65,6 +66,7 @@ def move_relative_to_object(
         offset: Distance from object in meters (default: 0.1m)
         z_override: Optional Z coordinate override (useful for maintaining height)
         request_id: Request tracking ID
+        use_ros: Whether to use ROS for motion planning (None = auto-detect from config)
 
     Returns:
         OperationResult with success status and target position
@@ -148,7 +150,8 @@ def move_relative_to_object(
         )
 
         move_result = move_to_coordinate(
-            robot_id=robot_id, x=target_x, y=target_y, z=target_z, request_id=request_id
+            robot_id=robot_id, x=target_x, y=target_y, z=target_z,
+            request_id=request_id, use_ros=use_ros,
         )
 
         if not move_result.success:
@@ -187,6 +190,7 @@ def move_between_objects(
     bias: float = 0.5,
     z_offset: float = 0.0,
     request_id: int = 0,
+    use_ros: bool = None,
 ) -> OperationResult:
     """
     Move robot to a position between two objects.
@@ -262,7 +266,8 @@ def move_between_objects(
         )
 
         move_result = move_to_coordinate(
-            robot_id=robot_id, x=target_x, y=target_y, z=target_z, request_id=request_id
+            robot_id=robot_id, x=target_x, y=target_y, z=target_z,
+            request_id=request_id, use_ros=use_ros,
         )
 
         if not move_result.success:
@@ -301,6 +306,7 @@ def move_to_region(
     position_in_region: str = "center",
     z_height: Optional[float] = None,
     request_id: int = 0,
+    use_ros: bool = None,
 ) -> OperationResult:
     """
     Move robot to a specific position within a workspace region.
@@ -396,7 +402,8 @@ def move_to_region(
         )
 
         move_result = move_to_coordinate(
-            robot_id=robot_id, x=target_x, y=target_y, z=target_z, request_id=request_id
+            robot_id=robot_id, x=target_x, y=target_y, z=target_z,
+            request_id=request_id, use_ros=use_ros,
         )
 
         if not move_result.success:

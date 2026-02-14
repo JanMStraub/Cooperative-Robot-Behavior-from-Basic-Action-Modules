@@ -19,7 +19,9 @@ class TestGraspEndToEnd:
     @pytest.fixture
     def mock_unity_connection(self):
         """Mock Unity connection for integration tests."""
-        with patch('operations.GraspOperations._get_command_broadcaster') as mock:
+        # Disable ROS to ensure tests use mocked Unity connection
+        with patch('config.ROS.ROS_ENABLED', False), \
+             patch('operations.GraspOperations._get_command_broadcaster') as mock:
             broadcaster = MagicMock()
             broadcaster.send_command_and_wait = MagicMock()
             mock.return_value = broadcaster

@@ -23,6 +23,7 @@ from operations.DetectionOperations import (
 class TestMoveFromAToB(unittest.TestCase):
     """Test cases for move_from_a_to_b operation"""
 
+    @patch("config.ROS.ROS_ENABLED", False)
     @patch("operations.MoveOperations._get_command_broadcaster")
     def test_move_from_a_to_b_success(self, mock_broadcaster):
         """Test successful move from point A to point B"""
@@ -67,6 +68,7 @@ class TestMoveFromAToB(unittest.TestCase):
         self.assertFalse(result.success)
         self.assertEqual(result.error["code"], "INVALID_POINT_B")
 
+    @patch("config.ROS.ROS_ENABLED", False)
     @patch("operations.MoveOperations._get_command_broadcaster")
     def test_move_from_a_to_b_communication_failed(self, mock_broadcaster):
         """Test communication failure"""
@@ -84,6 +86,7 @@ class TestMoveFromAToB(unittest.TestCase):
 class TestAdjustEndEffectorOrientation(unittest.TestCase):
     """Test cases for adjust_end_effector_orientation operation"""
 
+    @patch("config.ROS.ROS_ENABLED", False)
     @patch("operations.MoveOperations._get_command_broadcaster")
     def test_adjust_orientation_success(self, mock_broadcaster):
         """Test successful orientation adjustment"""
@@ -115,6 +118,7 @@ class TestAdjustEndEffectorOrientation(unittest.TestCase):
 class TestReleaseObject(unittest.TestCase):
     """Test cases for release_object operation (ATOMIC - gripper only, no positioning)"""
 
+    @patch("config.ROS.ROS_ENABLED", False)
     @patch("operations.GripperOperations._get_command_broadcaster")
     def test_release_object_atomic(self, mock_broadcaster):
         """Test atomic release (ONLY opens gripper, no movement)"""
@@ -127,6 +131,7 @@ class TestReleaseObject(unittest.TestCase):
         # Atomic operation - no place_position field in result
         self.assertNotIn("place_position", result.result)
 
+    @patch("config.ROS.ROS_ENABLED", False)
     @patch("operations.GripperOperations._get_command_broadcaster")
     def test_release_object_invalid_robot(self, mock_broadcaster):
         """Test with invalid robot ID"""
@@ -135,6 +140,7 @@ class TestReleaseObject(unittest.TestCase):
         self.assertFalse(result.success)
         self.assertEqual(result.error["code"], "INVALID_ROBOT_ID")
 
+    @patch("config.ROS.ROS_ENABLED", False)
     @patch("operations.MoveOperations._get_command_broadcaster")
     @patch("operations.GripperOperations._get_command_broadcaster")
     def test_release_object_chaining_with_move(self, mock_gripper_broadcaster, mock_move_broadcaster):

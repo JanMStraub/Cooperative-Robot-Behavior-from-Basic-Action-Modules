@@ -233,6 +233,93 @@ class ROSBridge:
             "position": position,
         })
 
+    def plan_multi_waypoint(self, waypoints, robot_id="Robot1", planning_time=10.0):
+        """
+        Plan and execute a multi-waypoint trajectory.
+
+        Sends each waypoint as a sequential plan_and_execute to the ROS motion
+        server. The server handles trajectory concatenation.
+
+        Args:
+            waypoints: List of position dicts with x, y, z keys.
+            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
+            planning_time: Max planning time per waypoint in seconds.
+
+        Returns:
+            Dict with success status and details.
+        """
+        cmd = {
+            "command": "plan_multi_waypoint",
+            "robot_id": robot_id,
+            "waypoints": waypoints,
+            "planning_time": planning_time,
+        }
+        return self._send_command(cmd, timeout=planning_time * len(waypoints) + 10)
+
+    def plan_orientation_change(self, orientation, robot_id="Robot1", planning_time=5.0):
+        """
+        Plan and execute an orientation change while maintaining position.
+
+        Args:
+            orientation: Dict with roll, pitch, yaw in degrees (converted to
+                         quaternion by the ROS motion server).
+            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
+            planning_time: Max planning time in seconds.
+
+        Returns:
+            Dict with success status and details.
+        """
+        cmd = {
+            "command": "plan_orientation_change",
+            "robot_id": robot_id,
+            "orientation": orientation,
+            "planning_time": planning_time,
+        }
+        return self._send_command(cmd)
+
+    def plan_grasp(self, object_id, robot_id="Robot1", approach="auto", planning_time=10.0):
+        """
+        Plan and execute a grasp on an object via MoveIt.
+
+        The ROS motion server queries the object pose from the planning scene
+        and plans a grasp approach, grasp, and retreat sequence.
+
+        Args:
+            object_id: ID of the object to grasp.
+            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
+            approach: Approach direction ("auto", "top", "front", "side").
+            planning_time: Max planning time in seconds.
+
+        Returns:
+            Dict with success status and details.
+        """
+        cmd = {
+            "command": "plan_grasp",
+            "robot_id": robot_id,
+            "object_id": object_id,
+            "approach": approach,
+            "planning_time": planning_time,
+        }
+        return self._send_command(cmd, timeout=planning_time + 10)
+
+    def plan_return_to_start(self, robot_id="Robot1", planning_time=5.0):
+        """
+        Plan and execute a return to the robot's start/home configuration.
+
+        Args:
+            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
+            planning_time: Max planning time in seconds.
+
+        Returns:
+            Dict with success status and details.
+        """
+        cmd = {
+            "command": "plan_return_to_start",
+            "robot_id": robot_id,
+            "planning_time": planning_time,
+        }
+        return self._send_command(cmd)
+
     def ping(self):
         """
         Check if the ROS bridge is responsive.

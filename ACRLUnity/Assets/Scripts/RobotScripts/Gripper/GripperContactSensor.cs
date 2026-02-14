@@ -130,7 +130,7 @@ namespace Robotics
                 // Check contact duration
                 if (_contactStartTime.TryGetValue(targetObject, out float startTime))
                 {
-                    float duration = Time.time - startTime;
+                    float duration = Time.fixedTime - startTime;
                     float minDuration =
                         _gripperConfig != null ? _gripperConfig.minContactDuration : 0.1f;
                     return duration >= minDuration;
@@ -336,6 +336,11 @@ namespace Robotics
 
             if (isContact)
             {
+                // Check if both fingers were touching BEFORE adding this contact
+                bool wasBothTouching =
+                    _leftContacts.Any(c => c?.gameObject == obj)
+                    && _rightContacts.Any(c => c?.gameObject == obj);
+
                 // Add contact
                 if (isLeftFinger)
                 {
@@ -348,19 +353,20 @@ namespace Robotics
 
                 // Track contact start time (set when BOTH fingers touching)
                 // Check if both fingers are now touching after adding this contact
-                bool bothTouching =
+                bool isBothTouching =
                     _leftContacts.Any(c => c?.gameObject == obj)
                     && _rightContacts.Any(c => c?.gameObject == obj);
 
-                if (bothTouching && !_contactStartTime.ContainsKey(obj))
+                // Only start timer if this contact event caused transition from single to both fingers
+                if (isBothTouching && !wasBothTouching && !_contactStartTime.ContainsKey(obj))
                 {
-                    // Both fingers touching - start timing
-                    _contactStartTime[obj] = Time.time;
+                    // Both fingers touching - start timing using fixedTime for physics consistency
+                    _contactStartTime[obj] = Time.fixedTime;
 
                     if (debugLogging)
                     {
                         Debug.Log(
-                            $"[GripperContactSensor] Contact START (both fingers): {obj.name}"
+                            $"[GripperContactSensor] Contact START (both fingers): {obj.name} at fixedTime={Time.fixedTime}"
                         );
                     }
                 }
@@ -442,17 +448,17 @@ namespace Robotics
                     _rightContacts.Add(collider);
                 }
 
-                // Track contact start time
+                // Track contact start time using fixedTime for physics consistency
                 GameObject obj = collider.gameObject;
                 if (!_contactStartTime.ContainsKey(obj))
                 {
-                    _contactStartTime[obj] = Time.time;
+                    _contactStartTime[obj] = Time.fixedTime;
 
                     if (debugLogging)
                     {
                         Debug.Log(
                             $"[GripperContactSensor] Contact START: {obj.name} "
-                                + $"(finger: {(isLeftFinger ? "LEFT" : "RIGHT")})"
+                                + $"(finger: {(isLeftFinger ? "LEFT" : "RIGHT")}) at fixedTime={Time.fixedTime}"
                         );
                     }
                 }

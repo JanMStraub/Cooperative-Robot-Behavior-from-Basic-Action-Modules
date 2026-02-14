@@ -292,7 +292,17 @@ def patch_command_broadcaster(monkeypatch, mock_command_broadcaster):
 
     This fixture patches the lazy import system at the core.Imports level to ensure
     all operations modules get the mocked broadcaster.
+
+    Also disables ROS integration so operations use the TCP path (mocked broadcaster)
+    instead of attempting to connect to a ROS bridge that isn't running in tests.
     """
+    # Disable ROS so operations use TCP path (the mocked broadcaster)
+    try:
+        import config.ROS as ros_config
+        monkeypatch.setattr(ros_config, 'ROS_ENABLED', False)
+    except (ImportError, AttributeError):
+        pass
+
     # Patch at the source: core.Imports.get_command_broadcaster
     try:
         import core.Imports as imports_module
@@ -622,10 +632,15 @@ def cleanup_world_state():
     try:
         from operations.WorldState import WorldState
 
-        if WorldState._instance:
-            WorldState._instance.reset()
+        if WorldState._instance is not None:
+            try:
+                WorldState._instance.reset()
+            except Exception:
+                # If reset fails, force null the instance
+                pass
         WorldState._instance = None
-    except:
+    except (ImportError, AttributeError):
+        # WorldState module not available in this test
         pass
 
     yield  # Test runs with clean state
@@ -634,10 +649,15 @@ def cleanup_world_state():
     try:
         from operations.WorldState import WorldState
 
-        if WorldState._instance:
-            WorldState._instance.reset()
+        if WorldState._instance is not None:
+            try:
+                WorldState._instance.reset()
+            except Exception:
+                # If reset fails, force null the instance
+                pass
         WorldState._instance = None
-    except:
+    except (ImportError, AttributeError):
+        # WorldState module not available in this test
         pass
 
 

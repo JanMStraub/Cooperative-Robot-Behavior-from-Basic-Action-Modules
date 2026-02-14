@@ -732,10 +732,7 @@ class WorldState:
             self._robot_states.clear()
             self._objects.clear()
 
-            # Initialize workspace allocations if not already present
-            if not hasattr(self, '_workspace_allocations'):
-                self._workspace_allocations = {}
-
+            # Reinitialize workspace allocations
             self._workspace_allocations = {
                 region: None for region in WORKSPACE_REGIONS.keys()
             }

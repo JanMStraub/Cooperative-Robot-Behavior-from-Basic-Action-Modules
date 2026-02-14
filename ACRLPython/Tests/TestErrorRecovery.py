@@ -294,7 +294,8 @@ class TestGracefulDegradation:
         """Test operations continue when verification is disabled"""
         from operations.MoveOperations import move_to_coordinate
 
-        with patch('operations.MoveOperations._get_command_broadcaster') as mock_broadcaster:
+        with patch('config.ROS.ROS_ENABLED', False), \
+             patch('operations.MoveOperations._get_command_broadcaster') as mock_broadcaster:
             mock_broadcaster.return_value.send_command = Mock(return_value=True)
 
             # Execute without verification (verification optional)
@@ -377,7 +378,7 @@ class TestConcurrentFailures:
 class TestStateRecovery:
     """Test state recovery after failures"""
 
-    def test_world_state_recovery_after_corruption(self):
+    def test_world_state_recovery_after_corruption(self, cleanup_world_state):
         """Test WorldState can recover from corrupted state"""
         from operations.WorldState import get_world_state
 
@@ -398,6 +399,9 @@ class TestStateRecovery:
         except Exception as e:
             # If it raises, verify it's a reasonable error
             assert "objects" in str(e).lower() or "none" in str(e).lower()
+
+        # Explicitly clean up corruption for safety (autouse fixture should handle this, but be explicit)
+        world_state.reset()
 
     def test_singleton_reset_after_failure(self):
         """Test singletons can be reset after failure"""

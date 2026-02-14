@@ -8,12 +8,28 @@ The `ACRLUnity/Assets/Scripts/PythonCommunication` folder contains the high-leve
 - **Real-time world state streaming** for spatial reasoning operations
 - **Bidirectional command/response flow** with Protocol V2 correlation
 - **Multi-robot coordination verification** for collaborative workflows
+- **ROS 2 integration** for MoveIt motion planning (optional, see `RobotScripts/Ros/`)
 
-The system connects to **4 active Python servers** running in the unified backend (`ACRLPython/orchestrators/RunRobotController.py`):
+### Communication Layers
+
+The ACRL system uses a **dual-protocol architecture**:
+
+#### Layer 1: Python Backend (Protocol V2)
+Connects to **4 active Python servers** running in the unified backend (`ACRLPython/orchestrators/RunRobotController.py`):
+
 - **ImageServer** (ports 5005/5006) - Image streaming
 - **CommandServer** (port 5010) - Bidirectional commands & results
 - **SequenceServer** (port 5013) - Multi-command sequences with LLM parsing
 - **WorldStateServer** (port 5014) - Robot/object state streaming
+
+#### Layer 2: ROS 2 Integration (Optional)
+Separate communication path for MoveIt-based motion planning (see `RobotScripts/Ros/`):
+
+- **ROS-TCP-Endpoint** (port 10000) - Unity ↔ Docker ROS topic bridge
+- **ROSBridge** (port 5020) - Python ↔ Docker MoveIt planning requests
+- **Control Modes**: Unity IK (default), ROS (MoveIt), Hybrid (automatic fallback)
+
+**Note**: This directory (`PythonCommunication/`) handles **Layer 1 only** (Python backend via Protocol V2). For ROS integration documentation, see `ACRLUnity/Assets/Scripts/RobotScripts/README.md` and `ACRLUnity/Assets/Scripts/SimulationScripts/ROSConnectionInitializer.cs`.
 
 ---
 
@@ -829,6 +845,39 @@ CollaborativeStrategy
       └─> Execute handoff sequence
 ```
 
+### Example 4: ROS 2 Motion Planning (Separate from PythonCommunication)
+
+**Note**: This flow uses ROS components in `RobotScripts/Ros/`, not the Protocol V2 clients in this directory.
+
+```
+Unity Scene                 Python Backend          Docker Container
+───────────                 ──────────────          ────────────────
+
+User Command
+  │
+  ├─> SequenceClient (port 5013) ──> Python SequenceServer
+  │                                   ├─ Parse command
+  │                                   └─ use_ros=True
+  │                                       │
+  │                                       └──> ROSBridge (port 5020)
+  │                                                │
+  │                                                └───> MoveIt Planning
+  │                                                      ├─ Plan trajectory
+  │                                                      └─ Publish to
+  │                                                        /arm_controller/
+  │                                                        joint_trajectory
+  │                                                            │
+ROSTrajectorySubscriber (port 10000) <───────────────────────┘
+  │
+  └─> TrajectoryController.ExecuteTrajectory()
+      └─> ArticulationBody drives
+
+Meanwhile (50Hz):
+ROSJointStatePublisher ───> /joint_states ───> MoveIt state sync
+```
+
+**Key Difference**: ROS integration bypasses Protocol V2 for trajectory execution, using ROS message serialization instead. Commands still originate from Python backend via Protocol V2, but execution routing depends on control mode (Unity/ROS/Hybrid).
+
 ---
 
 ## Configuration and Constants
@@ -840,23 +889,40 @@ public static class CommunicationConstants
 {
     public const string SERVER_HOST = "127.0.0.1";
 
-    // Active ports (December 2025 unified architecture)
+    // Python Backend Ports (Protocol V2 - handled by this directory)
     public const int IMAGE_SERVER_PORT = 5005;           // Single image streaming
-    public const int STEREO_IMAGE_PORT = 5006;           // Stereo image pairs
-    public const int COMMAND_SERVER_PORT = 5010;         // Bidirectional commands/results
+    public const int STEREO_DETECTION_PORT = 5006;       // Stereo image pairs
+    public const int LLM_RESULTS_PORT = 5010;            // CommandServer (bidirectional)
     public const int SEQUENCE_SERVER_PORT = 5013;        // Multi-command sequences
     public const int WORLD_STATE_PORT = 5014;            // World state streaming
 
-    // Legacy ports (deprecated, kept for reference)
-    // public const int LLM_RESULTS_PORT = 5010;         // Now COMMAND_SERVER_PORT
-    // public const int DETECTION_PORT = 5006;           // Now STEREO_IMAGE_PORT
+    // ROS Integration Ports (handled by RobotScripts/Ros/ and SimulationScripts/)
+    public const int ROS_TCP_ENDPOINT_PORT = 10000;      // Unity ↔ Docker (ROS Connector)
+    // Port 5020 (ROSBridge): Python ↔ Docker, not directly used by Unity
 
     // Protocol settings
     public const int MAX_JSON_LENGTH = 10 * 1024 * 1024; // 10MB
     public const float RECONNECT_INTERVAL = 2f;          // 2 seconds
-    public const int MAX_ITEMS_PER_FRAME = 50;           // Response processing limit
+    public const int THREAD_JOIN_TIMEOUT_MS = 1000;      // Thread cleanup timeout
 }
 ```
+
+### Port Usage Summary
+
+| Port  | Direction         | Protocol    | Component                | Purpose                          |
+|-------|-------------------|-------------|--------------------------|----------------------------------|
+| 5005  | Unity → Python    | Protocol V2 | ImageSender              | Single camera images             |
+| 5006  | Unity → Python    | Protocol V2 | StereoCameraController   | Stereo image pairs               |
+| 5010  | Bidirectional     | Protocol V2 | ResultsClient            | Commands & results               |
+| 5013  | Bidirectional     | Protocol V2 | SequenceClient           | Multi-command sequences          |
+| 5014  | Unity → Python    | Protocol V2 | WorldStateClient         | Robot/object state streaming     |
+| 5020  | Python → Docker   | TCP         | ROSBridge (Python)       | Motion planning requests         |
+| 10000 | Unity ↔ Docker    | ROS Messages| ROS Components           | ROS topic bridge                 |
+
+**Scope Note**: This directory (`PythonCommunication/`) only implements ports 5005-5014 (Protocol V2). For ROS ports (5020, 10000), see:
+- Port 10000: `SimulationScripts/ROSConnectionInitializer.cs`
+- Port 5020: `ACRLPython/ros2/ROSBridge.py`
+- ROS Unity components: `RobotScripts/Ros/`
 
 ---
 
@@ -1381,6 +1447,20 @@ Solution:
   - Consider using UnityCoordinationVerifier for local checks
 ```
 
+**6. "Connection refused" on port 10000**
+
+```
+Symptom: Unity logs show connection refused when starting
+Cause: ROS components trying to connect before Docker is ready
+Solution:
+  - This is NOT a PythonCommunication issue (port 10000 is ROS)
+  - See RobotScripts/README.md for ROS troubleshooting
+  - If not using ROS: Disable ROSConnectionInitializer in scene
+  - If using ROS: Ensure Docker container is running first
+```
+
+Note: Port 10000 is handled by `RobotScripts/Ros/` components, not this directory.
+
 ---
 
 ## Migration Guide
@@ -1430,3 +1510,35 @@ The **PythonCommunication** system provides a production-ready, high-level inter
 - **WorldStatePublisher/Client**: Real-time state streaming for spatial reasoning
 - **PythonCommandHandler**: Async command execution on Unity robots
 - **Coordination Verification**: Dual-robot safety verification (local or remote)
+
+### Relationship with ROS Integration
+
+This directory (`PythonCommunication/`) handles **Protocol V2** communication with the Python backend (ports 5005-5014). It is **separate and independent** from ROS 2 integration:
+
+**PythonCommunication (This Directory)**:
+- Protocol: Custom binary (Protocol V2)
+- Purpose: LLM command parsing, operation execution, world state streaming
+- Components: SequenceClient, ResultsClient, PythonCommandHandler
+- Ports: 5005, 5006, 5010, 5013, 5014
+
+**ROS Integration (RobotScripts/Ros/)**:
+- Protocol: ROS 2 messages (Unity Robotics Connector)
+- Purpose: MoveIt motion planning, trajectory execution, joint state sync
+- Components: ROSJointStatePublisher, ROSTrajectorySubscriber, ROSControlModeManager
+- Ports: 10000 (ROS-TCP-Endpoint), 5020 (Python↔Docker bridge)
+
+**How They Work Together**:
+1. User sends natural language command via **SequenceClient** (Protocol V2, port 5013)
+2. Python backend parses command and determines control mode
+3. **If Unity mode**: PythonCommandHandler executes using Unity's IKSolver
+4. **If ROS mode**: Python sends planning request to Docker MoveIt (port 5020)
+5. MoveIt publishes trajectory to ROS topic
+6. **ROSTrajectorySubscriber** (ROS Connector, port 10000) receives and executes in Unity
+
+Both systems can coexist and switch dynamically via `ROSControlMode` (Unity/ROS/Hybrid). Commands originate through PythonCommunication, but execution routing depends on the control mode setting.
+
+For complete ROS integration details, see:
+- `ACRLUnity/Assets/Scripts/RobotScripts/README.md` (Unity ROS components)
+- `ACRLUnity/Assets/Scripts/SimulationScripts/ROSConnectionInitializer.cs` (ROS connection setup)
+- `ACRLPython/ros2/ROSBridge.py` (Python-Docker bridge)
+- `Core/README.md` (Complete communication architecture diagram)

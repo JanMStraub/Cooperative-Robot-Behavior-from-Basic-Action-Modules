@@ -614,6 +614,15 @@ class SequenceExecutor:
             # Add request_id to params so operation includes it in command to Unity
             params_with_request_id = {**params, "request_id": request_id}
 
+            # Inject use_ros from config if not explicitly set by caller
+            if "use_ros" not in params_with_request_id:
+                try:
+                    from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+                    if ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid"):
+                        params_with_request_id["use_ros"] = True
+                except ImportError:
+                    pass
+
             # Execute the operation
             op_result = self.registry.execute_operation_by_name(
                 operation, **params_with_request_id
@@ -651,6 +660,16 @@ class SequenceExecutor:
 
             # If completion checking is disabled, return immediately
             if not self.check_completion:
+                return {"success": True, "result": op_result.result, "error": None}
+
+            # Skip completion waiting for operations that executed via ROS
+            # (Unity never received the command, so it won't send completion)
+            if op_result.result and op_result.result.get("status") in (
+                "ros_executed", "ros_command_sent"
+            ):
+                logger.debug(
+                    f"Skipping completion wait for ROS-executed operation: {operation}"
+                )
                 return {"success": True, "result": op_result.result, "error": None}
 
             # Skip completion waiting for operations that execute in Python only

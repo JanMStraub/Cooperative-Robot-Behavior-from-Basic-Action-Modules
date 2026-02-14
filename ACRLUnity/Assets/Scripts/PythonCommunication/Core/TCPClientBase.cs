@@ -442,10 +442,11 @@ namespace PythonCommunication.Core
                 }
                 catch (System.IO.IOException ex)
                     when (ex.InnerException is SocketException sockEx
-                        && sockEx.SocketErrorCode == SocketError.TimedOut)
+                        && sockEx.SocketErrorCode == SocketError.TimedOut
+                    )
                 {
-                    // ReadTimeout expired — rethrow as SocketException so callers can
-                    // distinguish a timeout from a genuine connection close.
+                    // ReadTimeout expired — rethrow as SocketException so callers 
+                    // can distinguish a timeout from a genuine connection close.
                     throw sockEx;
                 }
 

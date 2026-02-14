@@ -137,7 +137,10 @@ namespace Robotics
                 return;
 
             // Don't queue messages before the ROS connection is established
-            if (ROSConnectionInitializer.Instance != null && !ROSConnectionInitializer.Instance.IsConnected)
+            if (
+                ROSConnectionInitializer.Instance != null
+                && !ROSConnectionInitializer.Instance.IsConnected
+            )
                 return;
 
             _timeSinceLastStatePublish += Time.deltaTime;
@@ -155,7 +158,15 @@ namespace Robotics
         private void PublishGripperState()
         {
             // Use system clock (Unix epoch) for ROS 2 time synchronization
-            System.DateTime epoch = new System.DateTime(1970, 1, 1, 0, 0, 0, System.DateTimeKind.Utc);
+            System.DateTime epoch = new System.DateTime(
+                1970,
+                1,
+                1,
+                0,
+                0,
+                0,
+                System.DateTimeKind.Utc
+            );
             System.TimeSpan timeSinceEpoch = System.DateTime.UtcNow - epoch;
             double t = timeSinceEpoch.TotalSeconds;
             int sec = (int)t;

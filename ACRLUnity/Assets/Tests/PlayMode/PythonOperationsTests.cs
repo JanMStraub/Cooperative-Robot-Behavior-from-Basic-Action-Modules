@@ -26,12 +26,18 @@ namespace Tests.PlayMode
 
         #region Setup/Teardown
 
-        [SetUp]
-        public void SetUp()
+        [UnitySetUp]
+        public IEnumerator SetUp()
         {
             // Create SequenceClient instance
             _sequenceClientObject = new GameObject("TestSequenceClient");
             _sequenceClient = _sequenceClientObject.AddComponent<SequenceClient>();
+
+            // Wait for Unity to call Start() on the component
+            yield return null;
+
+            // Give the connection time to establish (async connect happens in Start())
+            yield return new WaitForSeconds(0.5f);
 
             // Check if Python backend is available
             _pythonBackendAvailable = IsPythonBackendAvailable();
@@ -56,9 +62,9 @@ namespace Tests.PlayMode
         /// </summary>
         private bool IsPythonBackendAvailable()
         {
-            // Simple check: try connecting to SequenceServer
-            // In production, could use TCP port check or ping command
-            return false; // Default to false for unit tests
+            // Check if SequenceClient successfully connected
+            // The SequenceClient auto-connects to port 5013 on Start()
+            return _sequenceClient != null && _sequenceClient.IsConnected;
         }
 
         #endregion

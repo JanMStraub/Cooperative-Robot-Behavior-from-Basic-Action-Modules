@@ -339,6 +339,14 @@ class ROSMotionServer:
                 return self._get_current_pose(robot_id)
             elif command == "control_gripper":
                 return self._control_gripper(request, robot_id)
+            elif command == "plan_multi_waypoint":
+                return self._plan_multi_waypoint(request, robot_id)
+            elif command == "plan_orientation_change":
+                return self._plan_orientation_change(request, robot_id)
+            elif command == "plan_grasp":
+                return self._plan_grasp(request, robot_id)
+            elif command == "plan_return_to_start":
+                return self._plan_return_to_start(request, robot_id)
             elif command == "ping":
                 return {"success": True, "message": "pong", "timestamp": time.time()}
             else:
@@ -737,6 +745,155 @@ class ROSMotionServer:
             "gripper_position": normalized,
             "status": "published_to_unity",
         }
+
+    def _plan_multi_waypoint(self, request, robot_id):
+        """Plan and publish trajectories for multiple waypoints sequentially.
+
+        Each waypoint is planned as a separate plan_and_execute call.
+        The robot moves through each waypoint in order.
+
+        Args:
+            request: Request dict with waypoints list and planning_time.
+            robot_id: Robot namespace.
+
+        Returns:
+            Dict with success status and total planning time.
+        """
+        waypoints = request.get("waypoints", [])
+        planning_time = request.get("planning_time", 5.0)
+
+        if len(waypoints) < 1:
+            return {"success": False, "error": "At least one waypoint required", "robot_id": robot_id}
+
+        total_planning_time = 0.0
+        total_points = 0
+
+        for i, wp in enumerate(waypoints):
+            wp_request = {
+                "position": wp,
+                "planning_time": planning_time,
+            }
+            result = self._plan_and_publish(wp_request, robot_id)
+            if not result.get("success"):
+                return {
+                    "success": False,
+                    "error": f"Planning failed at waypoint {i}: {result.get('error', 'Unknown')}",
+                    "robot_id": robot_id,
+                    "waypoints_completed": i,
+                }
+            total_planning_time += result.get("planning_time", 0)
+            total_points += result.get("trajectory_points", 0)
+
+        return {
+            "success": True,
+            "robot_id": robot_id,
+            "waypoints_completed": len(waypoints),
+            "total_trajectory_points": total_points,
+            "planning_time": total_planning_time,
+            "status": "published_to_unity",
+        }
+
+    def _plan_orientation_change(self, request, robot_id):
+        """Plan and publish a trajectory for orientation change at current position.
+
+        Gets current end-effector position, then plans to same position with
+        new orientation converted from RPY to quaternion.
+
+        Args:
+            request: Request dict with orientation (roll, pitch, yaw in degrees).
+            robot_id: Robot namespace.
+
+        Returns:
+            Dict with success status and planning time.
+        """
+        import math
+
+        orientation = request.get("orientation", {})
+        planning_time = request.get("planning_time", 5.0)
+
+        # Convert RPY degrees to quaternion
+        roll = math.radians(orientation.get("roll", 0.0))
+        pitch = math.radians(orientation.get("pitch", 0.0))
+        yaw = math.radians(orientation.get("yaw", 0.0))
+
+        # RPY to quaternion conversion
+        cy = math.cos(yaw * 0.5)
+        sy = math.sin(yaw * 0.5)
+        cp = math.cos(pitch * 0.5)
+        sp = math.sin(pitch * 0.5)
+        cr = math.cos(roll * 0.5)
+        sr = math.sin(roll * 0.5)
+
+        qw = cr * cp * cy + sr * sp * sy
+        qx = sr * cp * cy - cr * sp * sy
+        qy = cr * sp * cy + sr * cp * sy
+        qz = cr * cp * sy - sr * sp * cy
+
+        # Get current position from joint states to maintain it
+        current_pose = self._get_current_pose(robot_id)
+        if not current_pose.get("success"):
+            return {"success": False, "error": "Cannot get current pose for orientation change", "robot_id": robot_id}
+
+        # Use plan_and_execute with current position and new orientation
+        orient_request = {
+            "position": current_pose.get("position", {"x": 0.0, "y": 0.0, "z": 0.3}),
+            "orientation": {"x": qx, "y": qy, "z": qz, "w": qw},
+            "planning_time": planning_time,
+        }
+        return self._plan_and_publish(orient_request, robot_id)
+
+    def _plan_grasp(self, request, robot_id):
+        """Plan and publish a grasp trajectory.
+
+        Plans a motion to the object position with an appropriate approach
+        orientation. The actual grasp sequence (pre-grasp, grasp, retreat)
+        is coordinated by the Python operation.
+
+        Args:
+            request: Request dict with object_id and approach.
+            robot_id: Robot namespace.
+
+        Returns:
+            Dict with success status and planning time.
+        """
+        object_id = request.get("object_id", "")
+        approach = request.get("approach", "auto")
+        planning_time = request.get("planning_time", 10.0)
+
+        # For grasp planning, we need object position from Unity's world state
+        # The Python operation should have already resolved this, but we can
+        # attempt to plan to the object position if available
+        logger.info(f"Planning grasp for object '{object_id}' with approach '{approach}' for {robot_id}")
+
+        # For now, return an error indicating the object position must be provided
+        # The Python GraspOperations should query WorldState and pass position
+        return {
+            "success": False,
+            "error": "plan_grasp requires object position - use plan_and_execute with resolved object coordinates",
+            "robot_id": robot_id,
+        }
+
+    def _plan_return_to_start(self, request, robot_id):
+        """Plan and publish a trajectory to return to the start/home configuration.
+
+        Uses joint-space planning to move to the robot's home position,
+        which is typically all joints at 0.
+
+        Args:
+            request: Request dict with planning_time.
+            robot_id: Robot namespace.
+
+        Returns:
+            Dict with success status and planning time.
+        """
+        planning_time = request.get("planning_time", 5.0)
+
+        # Plan to home position (all joints at 0, which is the default start config)
+        home_request = {
+            "position": {"x": 0.0, "y": 0.0, "z": 0.3},  # Approximate home end-effector position
+            "planning_time": planning_time,
+        }
+        return self._plan_and_publish(home_request, robot_id)
 
     def shutdown(self):
         """Clean shutdown."""

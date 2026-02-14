@@ -30,9 +30,10 @@ namespace Tests.PlayMode
             rootBody.jointType = ArticulationJointType.FixedJoint;
 
             // Add collider to gripper (required by GripperContactSensor)
+            // Note: NOT a trigger - finger forwarders handle contact detection
             var gripperCollider = _gripperObject.AddComponent<BoxCollider>();
             gripperCollider.size = new Vector3(0.1f, 0.1f, 0.1f);
-            gripperCollider.isTrigger = true; // Make it a trigger to not interfere with physics
+            gripperCollider.isTrigger = false; // Not a trigger - use finger forwarders instead
 
             // Now add sensor component (requires collider to already exist)
             _sensor = _gripperObject.AddComponent<GripperContactSensor>();

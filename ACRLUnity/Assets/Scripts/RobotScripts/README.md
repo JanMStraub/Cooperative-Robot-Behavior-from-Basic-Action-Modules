@@ -169,9 +169,67 @@ Validates grasp reachability using inverse kinematics.
 - Convergence quality assessment
 - Caches joint positions for execution
 
+### ROS 2 Integration
+
+The ROS 2 integration provides MoveIt-based motion planning with Unity execution. All ROS-related scripts are organized in the `Ros/` subdirectory.
+
+#### `Ros/ROSJointStatePublisher.cs`
+Publishes Unity joint states to ROS 2 at 50Hz for MoveIt state synchronization.
+
+**Key Features:**
+- Automatic joint discovery from ArticulationBody chain
+- State publishing to `/joint_states` topic
+- Configurable update rate (default: 50Hz)
+- Automatic connection management
+
+#### `Ros/ROSTrajectorySubscriber.cs`
+Subscribes to MoveIt-generated joint trajectories and executes them in Unity.
+
+**Key Features:**
+- Listens on `/arm_controller/joint_trajectory` topic
+- Converts ROS trajectories to Unity ArticulationBody targets
+- Sends execution feedback to `/arm_controller/feedback`
+- Integrates with TrajectoryController for smooth execution
+
+#### `Ros/ROSGripperSubscriber.cs`
+Controls gripper based on ROS gripper commands.
+
+**Key Features:**
+- Subscribes to `/gripper/command` topic
+- Publishes gripper state to `/gripper/state` topic
+- Integrates with GripperController for execution
+- Position and effort control support
+
+#### `Ros/ROSControlModeManager.cs`
+Manages switching between Unity IK control and ROS MoveIt control modes.
+
+**Control Modes:**
+- **Unity** (default): Unity's IKSolver handles all motion planning
+- **ROS**: MoveIt generates trajectories, Unity executes them
+- **Hybrid**: ROS takes priority, falls back to Unity IK on failure
+
+**Usage:**
+```csharp
+// Switch control modes
+controlModeManager.SetControlMode(ROSControlMode.ROS);
+controlModeManager.SetControlMode(ROSControlMode.Unity);
+controlModeManager.SetControlMode(ROSControlMode.Hybrid);
+
+// Check current mode
+ROSControlMode currentMode = controlModeManager.CurrentMode;
+
+// Mode automatically manages trajectory execution routing
+```
+
+**Integration Notes:**
+- MoveIt is used for **planning only** - Unity executes all trajectories
+- ROS plans are converted to `JointTrajectory` messages
+- Unity's TrajectoryController provides smooth execution with PD control
+- Feedback published to ROS for monitoring and validation
+
 ### Gripper Control
 
-#### `GripperController.cs`
+#### `Gripper/GripperController.cs`
 ArticulationBody-based parallel-jaw gripper with object attachment.
 
 **Key Features:**
@@ -179,6 +237,7 @@ ArticulationBody-based parallel-jaw gripper with object attachment.
 - Anti-tunneling clamping (max 5mm target lead during closing)
 - Automatic object attachment/detachment with physics state management
 - Handoff support (transfers objects between grippers)
+- ROS integration via ROSGripperSubscriber
 - Custom editor for runtime testing
 
 **Usage:**
@@ -203,7 +262,7 @@ GameObject heldObject = gripperController.GraspedObject;
 bool isMoving = gripperController.IsMoving;
 ```
 
-#### `GripperContactSensor.cs`
+#### `Gripper/GripperContactSensor.cs`
 Multi-criteria grasp verification using contact detection and force estimation.
 
 **Verification Criteria:**
@@ -229,7 +288,7 @@ List<GameObject> contactedObjects = contactSensor.GetContactedObjects();
 contactSensor.ResetForceHistory();
 ```
 
-#### `GripperCollisionForwarder.cs`
+#### `Gripper/GripperCollisionForwarder.cs`
 Forwards trigger events from finger colliders to GripperContactSensor.
 
 **Setup:**
@@ -321,16 +380,61 @@ The motion control system implements a three-layer architecture designed to elim
    - Generates smooth trajectories with trapezoidal velocity profiles
    - Provides target position, velocity, and acceleration
    - Synchronized with FixedUpdate
+   - Used for both Unity IK and ROS trajectory execution
 
 2. **IKSolver** - Velocity-level inverse kinematics
    - Combines position error and velocity error: `Kp * pos_error + Kd * vel_error`
    - Joint velocity clamping prevents singularity spikes
    - Convergence detection with position and velocity thresholds
+   - Active in Unity and Hybrid control modes
 
 3. **ArticulationBody** - Physics integration
    - Critical damping tuning: `damping = 2 * sqrt(stiffness * inertia)`
    - Stiffness: 2000 for all joints
    - `matchAnchors = true` prevents IK/physics conflicts
+
+### ROS 2 Control Integration
+
+The system supports three control modes via `Ros/ROSControlModeManager.cs`:
+
+**Unity Mode (Default):**
+- IKSolver computes joint velocities locally
+- TrajectoryController applies PD control
+- No ROS communication required
+- Best for: Real-time reactive tasks, simple grasps, low-latency control
+
+**ROS Mode:**
+- MoveIt2 plans trajectories in Docker container
+- Python ROSBridge (port 5020) sends motion requests to Docker MoveIt
+- MoveIt plans and publishes `JointTrajectory` to `/arm_controller/joint_trajectory`
+- Unity's ROSTrajectorySubscriber receives and converts to ArticulationBody targets
+- TrajectoryController executes with PD control
+- Best for: Complex collision avoidance, multi-waypoint paths, validated planning
+
+**Hybrid Mode:**
+- Attempts ROS planning first with timeout
+- Falls back to Unity IK on timeout or planning failure
+- Best for: Robust execution with intelligent fallback, production environments
+
+**Architecture:**
+```
+[Python Backend] --TCP:5020--> [Docker ROS 2 + MoveIt2]
+       |                                 |
+   ROSBridge                    ROS-TCP-Endpoint (port 10000)
+   (Python)                              |
+       |                                 |
+       +----------- Unity ROS Components (Ros/ directory) -----------+
+                                         |
+                              ROSControlModeManager
+                                         |
+                 +---------------+---------------+
+                 |                               |
+          ROSTrajectorySubscriber        ROSJointStatePublisher
+                 |                               |
+          TrajectoryController            Joint States (50Hz)
+                 |
+          ArticulationBody
+```
 
 ### Oscillation Prevention
 
@@ -585,6 +689,81 @@ Located in `ACRLUnity/Assets/Tests/PlayMode/`:
 - Project overview: `CLAUDE.md` (repository root)
 - Configuration defaults: `ACRLUnity/Assets/Configuration/`
 
+## ROS 2 Communication Flow
+
+### Complete Architecture
+
+```
+┌──────────────────┐         ┌───────────────────────────┐         ┌──────────────┐
+│  Unity           │         │  Docker Container         │         │  Python      │
+│  (Simulation)    │         │  (ROS 2 + MoveIt2)        │         │  Backend     │
+├──────────────────┤         ├───────────────────────────┤         ├──────────────┤
+│ Ros/             │         │                           │         │              │
+│ - JointState     │───50Hz──┤ /joint_states             │         │              │
+│   Publisher      │         │                           │         │              │
+│                  │         │ MoveIt2                   │◄──TCP───┤ ROSBridge    │
+│ - Trajectory     │◄────────┤ /arm_controller/          │  5020   │ (ros2/)      │
+│   Subscriber     │         │  joint_trajectory         │         │              │
+│                  │         │                           │         │              │
+│ - Gripper        │◄────────┤ /gripper/command          │         │              │
+│   Subscriber     │         │                           │         │              │
+│                  │─────────►/gripper/state             │         │              │
+│                  │         │                           │         │              │
+│ ControlMode      │         │ ROS-TCP-Endpoint          │         │              │
+│ Manager          │◄──────►│ (port 10000)              │         │              │
+└──────────────────┘         └───────────────────────────┘         └──────────────┘
+```
+
+### Topic Architecture
+
+**Unity → ROS (via ROS-TCP-Endpoint on port 10000):**
+- `/joint_states` (50Hz): Current joint positions/velocities for MoveIt state synchronization
+- `/arm_controller/feedback`: Trajectory execution status and progress
+- `/gripper/state`: Gripper position, velocity, and contact state
+
+**ROS → Unity (via ROS-TCP-Endpoint on port 10000):**
+- `/arm_controller/joint_trajectory`: MoveIt-planned trajectories (JointTrajectory messages)
+- `/gripper/command`: Gripper position/effort commands
+
+**Python ↔ Docker (TCP port 5020):**
+- ROSBridge: Python backend sends motion planning requests to MoveIt
+- Returns: MoveIt publishes trajectories to Unity via ROS topics
+
+### Enabling ROS Integration
+
+**In Python Backend** (`ACRLPython/config/ROS.py`):
+```python
+ROS_ENABLED = True  # Enable ROS communication
+DEFAULT_CONTROL_MODE = "ros"  # or "unity" or "hybrid"
+```
+
+**Start with ROS:**
+```bash
+cd ACRLPython
+./start_servers.sh --with-ros
+```
+
+**Per-Operation Override:**
+```python
+# In Python operations
+result = move_to_coordinate(x, y, z, use_ros=True)
+```
+
+**In Unity:**
+- Add `ROSConnectionInitializer` to scene (singleton, located in `SimulationScripts/`)
+- Add ROS components (from `Ros/` directory) to robot:
+  - `ROSJointStatePublisher` (publishes joint states)
+  - `ROSTrajectorySubscriber` (receives MoveIt trajectories)
+  - `ROSGripperSubscriber` (receives gripper commands)
+  - `ROSControlModeManager` (manages control mode switching)
+- Configure ROS endpoint in Inspector (default: localhost:10000)
+
+**Docker Integration:**
+- Docker container runs ROS 2 Humble + MoveIt2
+- ROS-TCP-Endpoint in container bridges Unity ↔ ROS topics
+- Python ROSBridge (port 5020) forwards motion requests to Docker
+- See `ros_unity_integration/` directory for Docker configuration
+
 ## File Organization
 
 ```
@@ -592,33 +771,47 @@ RobotScripts/
 ├── README.md                        (This file)
 │
 ├── Motion Control Layer
-│   ├── RobotController.cs           (Main controller - 1185 lines)
-│   ├── SimpleRobotController.cs     (Fallback controller - 919 lines)
-│   ├── IKSolver.cs                  (Inverse kinematics - 315 lines)
-│   ├── TrajectoryController.cs      (Trajectory generation - 269 lines)
-│   ├── CartesianPath.cs             (Path data structures - 172 lines)
-│   └── CartesianPathGenerator.cs    (Path generation - 99 lines)
+│   ├── RobotController.cs           (Main controller - orchestrates IK + physics)
+│   ├── SimpleRobotController.cs     (Fallback controller - basic IK)
+│   ├── IKSolver.cs                  (Damped least-squares IK solver)
+│   ├── TrajectoryController.cs      (PD control with velocity profiles)
+│   ├── CartesianPath.cs             (Path data structures)
+│   └── CartesianPathGenerator.cs    (Path generation utilities)
 │
 ├── Grasp Planning Layer
-│   ├── GraspOptions.cs              (Configuration struct - 72 lines)
-│   └── Grasp/
-│       ├── GraspPlanningPipeline.cs     (Main pipeline - orchestrates all stages)
-│       ├── GraspCandidateGenerator.cs   (Stochastic candidate generation)
-│       ├── GraspScorer.cs               (Multi-criteria scoring)
-│       ├── GraspCollisionFilter.cs      (SphereCast collision filtering)
-│       ├── GraspIKFilter.cs             (IK reachability validation)
-│       ├── GraspCandidate.cs            (Candidate data structure)
-│       ├── GraspApproach.cs             (Approach enum: Top/Front/Side)
-│       └── GraspUtilities.cs            (Object size, approach determination)
+│   ├── Grasp/
+│   │   ├── GraspOptions.cs              (Configuration struct)
+│   │   ├── GraspPlanningPipeline.cs     (Main pipeline - orchestrates all stages)
+│   │   ├── GraspCandidateGenerator.cs   (Stochastic candidate generation)
+│   │   ├── GraspScorer.cs               (Multi-criteria scoring)
+│   │   ├── GraspCollisionFilter.cs      (SphereCast collision filtering)
+│   │   ├── GraspIKFilter.cs             (IK reachability validation)
+│   │   ├── GraspCandidate.cs            (Candidate data structure)
+│   │   ├── GraspApproach.cs             (Approach enum: Top/Front/Side)
+│   │   └── GraspUtilities.cs            (Object size, approach determination)
 │
 ├── Gripper Control Layer
-│   ├── GripperController.cs         (ArticulationBody gripper - 508 lines)
-│   ├── GripperContactSensor.cs      (Contact & force detection - 537 lines)
-│   └── GripperCollisionForwarder.cs (Trigger event forwarding - 82 lines)
+│   └── Gripper/
+│       ├── GripperController.cs         (ArticulationBody-based gripper)
+│       ├── GripperContactSensor.cs      (Contact & force detection)
+│       └── GripperCollisionForwarder.cs (Trigger event forwarding)
+│
+├── ROS 2 Integration Layer
+│   └── Ros/
+│       ├── ROSJointStatePublisher.cs    (Publishes joint states at 50Hz)
+│       ├── ROSTrajectorySubscriber.cs   (Executes MoveIt trajectories)
+│       ├── ROSGripperSubscriber.cs      (ROS gripper control)
+│       └── ROSControlModeManager.cs     (Switches Unity/ROS/Hybrid modes)
 │
 └── Management Layer
-    ├── RobotManager.cs              (Robot lifecycle - 481 lines)
-    └── CollisionDetector.cs         (Collision detection - 358 lines)
+    ├── RobotManager.cs              (Robot lifecycle & configuration)
+    └── CollisionDetector.cs         (Trigger-based collision detection)
 ```
 
-**Total:** 19 C# files implementing a complete robot manipulation system
+**Total:** 23 C# files implementing a complete robot manipulation system with ROS 2 integration
+
+**Directory Structure:**
+- **Grasp/**: Grasp planning pipeline (9 files)
+- **Gripper/**: Gripper control and sensing (3 files)
+- **Ros/**: ROS 2 communication layer (4 files)
+- **Root**: Motion control and management (7 files)
