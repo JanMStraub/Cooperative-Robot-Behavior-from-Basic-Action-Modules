@@ -202,35 +202,88 @@ def grasp_object(
                             _use_ros = False
 
                 if _use_ros:
-                    # Note: ROS grasp planning requires object position - may need to query from WorldState
-                    # For now, send grasp command through ROS bridge (bridge would handle conversion)
-                    result = bridge.plan_grasp(
-                        object_id=object_id,
-                        robot_id=robot_id,
-                        approach=preferred_approach,
-                    )
-                    if result and result.get("success"):
-                        logger.info(f"ROS grasp planning completed for {robot_id}")
-                        return OperationResult.success_result({
-                            "robot_id": robot_id,
-                            "object_id": object_id,
-                            "request_id": request_id,
-                            "status": "ros_executed",
-                            "planning_time": result.get("planning_time", 0),
-                            "timestamp": time.time(),
-                        })
-                    else:
-                        error_msg = result.get("error", "Unknown") if result else "No response"
+                    # ROS grasp planning requires object position - query from WorldState
+                    # WorldState is updated by detect_object_stereo and other detection operations
+                    try:
+                        from core.Imports import get_world_state
+                        world_state = get_world_state()
+                        object_position = world_state.get_object_position(object_id)
+
+                        if object_position is None:
+                            logger.warning(f"Object {object_id} not found in WorldState - cannot use ROS planning")
+                            try:
+                                from config.ROS import DEFAULT_CONTROL_MODE
+                                if DEFAULT_CONTROL_MODE == "hybrid":
+                                    logger.info("Falling back to TCP for grasp execution")
+                                    _use_ros = False
+                                else:
+                                    return OperationResult.error_result(
+                                        "OBJECT_NOT_FOUND",
+                                        f"Object {object_id} not found in WorldState - run detect_object_stereo first",
+                                        [
+                                            "Use detect_object_stereo to locate the object before grasping",
+                                            "Ensure object detection completed successfully",
+                                        ],
+                                    )
+                            except ImportError:
+                                _use_ros = False
+                        else:
+                            # We have object position - use plan_and_execute instead of plan_grasp
+                            logger.info(f"Resolved {object_id} to position {object_position}, planning with ROS")
+
+                            # Convert position tuple to dict
+                            position_dict = {
+                                "x": object_position[0],
+                                "y": object_position[1],
+                                "z": object_position[2],
+                            }
+
+                            # Use plan_and_execute with resolved coordinates
+                            result = bridge.plan_and_execute(
+                                position=position_dict,
+                                orientation=None,  # Let MoveIt determine best orientation for grasp
+                                planning_time=10.0,
+                                robot_id=robot_id,
+                            )
+
+                            if result and result.get("success"):
+                                logger.info(f"ROS grasp planning completed for {robot_id}")
+                                return OperationResult.success_result({
+                                    "robot_id": robot_id,
+                                    "object_id": object_id,
+                                    "position": object_position,
+                                    "request_id": request_id,
+                                    "status": "ros_executed",
+                                    "planning_time": result.get("planning_time", 0),
+                                    "timestamp": time.time(),
+                                })
+                            else:
+                                error_msg = result.get("error", "Unknown") if result else "No response"
+                                try:
+                                    from config.ROS import DEFAULT_CONTROL_MODE
+                                    if DEFAULT_CONTROL_MODE == "hybrid":
+                                        logger.warning(f"ROS motion planning failed ({error_msg}), falling back to TCP")
+                                        _use_ros = False
+                                    else:
+                                        return OperationResult.error_result(
+                                            "ROS_PLANNING_FAILED",
+                                            f"MoveIt motion planning failed: {error_msg}",
+                                            ["Check MoveIt logs", "Verify object is reachable"],
+                                        )
+                                except ImportError:
+                                    _use_ros = False
+                    except Exception as e:
+                        logger.error(f"Error resolving object position for ROS: {e}")
                         try:
                             from config.ROS import DEFAULT_CONTROL_MODE
                             if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning(f"ROS grasp planning failed ({error_msg}), falling back to TCP")
+                                logger.warning(f"Falling back to TCP due to error: {e}")
                                 _use_ros = False
                             else:
                                 return OperationResult.error_result(
-                                    "ROS_PLANNING_FAILED",
-                                    f"MoveIt grasp planning failed: {error_msg}",
-                                    ["Check MoveIt logs", "Verify object is reachable"],
+                                    "ROS_PLANNING_ERROR",
+                                    f"Error preparing ROS grasp: {str(e)}",
+                                    ["Check logs for details", "Verify WorldState is initialized"],
                                 )
                         except ImportError:
                             _use_ros = False

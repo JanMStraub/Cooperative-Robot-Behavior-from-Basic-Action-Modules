@@ -208,7 +208,18 @@ namespace Robotics
         /// <summary>
         /// Close the grippers. If a target object was set, it will be attached when closing completes.
         /// </summary>
-        public void CloseGrippers() => SetGripperPosition(0f);
+        public void CloseGrippers()
+        {
+            // Check if already at target position (fully closed)
+            if (Mathf.Abs(targetPosition - 0f) < 0.0001f && !IsMoving)
+            {
+                // Already closed - fire completion event immediately
+                OnGripperActionComplete?.Invoke();
+                return;
+            }
+
+            SetGripperPosition(0f);
+        }
 
         /// <summary>
         /// Open the grippers. Automatically detaches any held object first.
@@ -220,6 +231,14 @@ namespace Robotics
                 GameObject objectToMonitor = _graspedObject;
                 DetachObject();
                 StartCoroutine(MonitorObjectPosition(objectToMonitor));
+            }
+
+            // Check if already at target position (fully open)
+            if (Mathf.Abs(targetPosition - 1f) < 0.0001f && !IsMoving)
+            {
+                // Already open - fire completion event immediately
+                OnGripperActionComplete?.Invoke();
+                return;
             }
 
             SetGripperPosition(1f);
