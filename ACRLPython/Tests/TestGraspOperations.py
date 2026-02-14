@@ -55,7 +55,8 @@ class TestGraspObjectOperation:
     @pytest.fixture
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
-        with patch('operations.GraspOperations._get_command_broadcaster') as mock:
+        with patch('operations.GraspOperations._get_command_broadcaster') as mock, \
+             patch('config.ROS.ROS_ENABLED', False):
             broadcaster = MagicMock()
             mock.return_value = broadcaster
             yield broadcaster
@@ -380,7 +381,8 @@ class TestGraspObjectIntegration:
 
     def test_grasp_object_with_all_parameters(self, mock_world_state):
         """Test grasp operation with all parameters specified."""
-        with patch('operations.GraspOperations._get_command_broadcaster') as mock_bc:
+        with patch('operations.GraspOperations._get_command_broadcaster') as mock_bc, \
+             patch('config.ROS.ROS_ENABLED', False):
             broadcaster = MagicMock()
             broadcaster.send_command.return_value = True
             mock_bc.return_value = broadcaster
@@ -421,7 +423,8 @@ class TestGraspTrajectoryValidation:
     @pytest.fixture
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
-        with patch('operations.GraspOperations._get_command_broadcaster') as mock:
+        with patch('operations.GraspOperations._get_command_broadcaster') as mock, \
+             patch('config.ROS.ROS_ENABLED', False):
             broadcaster = MagicMock()
             mock.return_value = broadcaster
             yield broadcaster
@@ -498,7 +501,8 @@ class TestGraspForceEstimation:
     @pytest.fixture
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
-        with patch('operations.GraspOperations._get_command_broadcaster') as mock:
+        with patch('operations.GraspOperations._get_command_broadcaster') as mock, \
+             patch('config.ROS.ROS_ENABLED', False):
             broadcaster = MagicMock()
             mock.return_value = broadcaster
             yield broadcaster
@@ -533,7 +537,8 @@ class TestGraspForceEstimation:
     @pytest.fixture
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
-        with patch('operations.GraspOperations._get_command_broadcaster') as mock:
+        with patch('operations.GraspOperations._get_command_broadcaster') as mock, \
+             patch('config.ROS.ROS_ENABLED', False):
             broadcaster = MagicMock()
             mock.return_value = broadcaster
             yield broadcaster
@@ -572,7 +577,8 @@ class TestGraspFailureRecovery:
     @pytest.fixture
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
-        with patch('operations.GraspOperations._get_command_broadcaster') as mock:
+        with patch('operations.GraspOperations._get_command_broadcaster') as mock, \
+             patch('config.ROS.ROS_ENABLED', False):
             broadcaster = MagicMock()
             mock.return_value = broadcaster
             yield broadcaster

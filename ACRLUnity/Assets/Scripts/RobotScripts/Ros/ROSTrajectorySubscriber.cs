@@ -3,8 +3,6 @@ using System.Collections;
 using Unity.Robotics.ROSTCPConnector;
 using RosMessageTypes.Trajectory;
 using RosMessageTypes.Std;
-using RosMessageTypes.BuiltinInterfaces;
-using Simulation;
 using UnityEngine;
 
 namespace Robotics

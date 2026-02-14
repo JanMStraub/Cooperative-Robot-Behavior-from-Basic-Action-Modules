@@ -124,7 +124,10 @@ class EventBus:
 
 
 def _execute_signal(
-    event_name: str, request_id: Optional[int] = None, robot_id: Optional[str] = None
+    event_name: str,
+    request_id: Optional[int] = None,
+    robot_id: Optional[str] = None,
+    use_ros: bool = False
 ) -> OperationResult:
     """
     Emit a named event for other robots to wait on.
@@ -133,6 +136,7 @@ def _execute_signal(
         event_name: Name of the event to signal
         request_id: Optional request ID for tracking (ignored for sync operations)
         robot_id: Optional robot ID (ignored, sync operations are global)
+        use_ros: Optional ROS flag (ignored, sync operations are local)
 
     Returns:
         OperationResult with success status
@@ -191,7 +195,11 @@ SIGNAL_OPERATION = BasicOperation(
 
 
 def _execute_wait_for_signal(
-    event_name: str, timeout_ms: int = 30000, request_id: Optional[int] = None, robot_id: Optional[str] = None
+    event_name: str,
+    timeout_ms: int = 30000,
+    request_id: Optional[int] = None,
+    robot_id: Optional[str] = None,
+    use_ros: bool = False
 ) -> OperationResult:
     """
     Block until a named event is received.
@@ -201,6 +209,7 @@ def _execute_wait_for_signal(
         timeout_ms: Maximum wait time in milliseconds (default 30 seconds)
         request_id: Optional request ID for tracking (ignored for sync operations)
         robot_id: Optional robot ID (ignored, sync operations are global)
+        use_ros: Optional ROS flag (ignored, sync operations are local)
 
     Returns:
         OperationResult with success if event received, error if timeout
@@ -285,7 +294,10 @@ WAIT_FOR_SIGNAL_OPERATION = BasicOperation(
 
 
 def _execute_wait(
-    duration_ms: int, request_id: Optional[int] = None, robot_id: Optional[str] = None
+    duration_ms: int,
+    request_id: Optional[int] = None,
+    robot_id: Optional[str] = None,
+    use_ros: bool = False
 ) -> OperationResult:
     """
     Pause execution for specified duration.
@@ -294,6 +306,7 @@ def _execute_wait(
         duration_ms: Time to wait in milliseconds
         request_id: Optional request ID for tracking (ignored for sync operations)
         robot_id: Optional robot ID (ignored, sync operations are global)
+        use_ros: Optional ROS flag (ignored, sync operations are local)
 
     Returns:
         OperationResult with success status

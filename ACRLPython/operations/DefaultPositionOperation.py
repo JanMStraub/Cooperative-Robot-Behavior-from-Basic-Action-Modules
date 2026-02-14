@@ -37,6 +37,7 @@ def return_to_start_position(
     robot_id: str,
     speed: float = 1.0,
     request_id: int = 0,
+    use_ros: bool = None,
 ) -> OperationResult:
     """
     Return robot to its initial start position using saved joint targets.
@@ -48,6 +49,7 @@ def return_to_start_position(
     Args:
         robot_id: ID of the robot to move (e.g., "AR4_Robot", "Robot1")
         speed: Speed multiplier (0.1=slow, 1.0=normal, 2.0=fast), range: [0.1, 2.0]
+        use_ros: Whether to use ROS for motion planning (None = auto-detect from config)
 
     Returns:
         Dict with the following structure:
@@ -109,7 +111,67 @@ def return_to_start_position(
                 ],
             )
 
-        # Construct command for Unity
+        # Determine whether to use ROS or TCP path
+        _use_ros = use_ros
+        if _use_ros is None:
+            try:
+                from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+                _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
+            except ImportError:
+                _use_ros = False
+
+        # Route via ROS if enabled
+        if _use_ros:
+            try:
+                from ros2.ROSBridge import ROSBridge
+                bridge = ROSBridge.get_instance()
+                if not bridge.is_connected:
+                    if not bridge.connect():
+                        try:
+                            from config.ROS import DEFAULT_CONTROL_MODE
+                            if DEFAULT_CONTROL_MODE == "hybrid":
+                                logger.warning("ROS bridge unavailable, falling back to TCP")
+                                _use_ros = False
+                            else:
+                                return OperationResult.error_result(
+                                    "ROS_CONNECTION_FAILED",
+                                    "Failed to connect to ROS bridge (port 5020)",
+                                    ["Ensure Docker ROS services are running"],
+                                )
+                        except ImportError:
+                            _use_ros = False
+
+                if _use_ros:
+                    result = bridge.plan_return_to_start(robot_id=robot_id)
+                    if result and result.get("success"):
+                        logger.info(f"ROS return to start completed for {robot_id}")
+                        return OperationResult.success_result({
+                            "robot_id": robot_id,
+                            "speed": speed,
+                            "status": "ros_executed",
+                            "planning_time": result.get("planning_time", 0),
+                            "timestamp": time.time(),
+                        })
+                    else:
+                        error_msg = result.get("error", "Unknown") if result else "No response"
+                        try:
+                            from config.ROS import DEFAULT_CONTROL_MODE
+                            if DEFAULT_CONTROL_MODE == "hybrid":
+                                logger.warning(f"ROS planning failed ({error_msg}), falling back to TCP")
+                                _use_ros = False
+                            else:
+                                return OperationResult.error_result(
+                                    "ROS_PLANNING_FAILED",
+                                    f"MoveIt planning failed: {error_msg}",
+                                    ["Check MoveIt logs"],
+                                )
+                        except ImportError:
+                            _use_ros = False
+            except ImportError:
+                logger.warning("ros2 module not available, falling back to TCP")
+                _use_ros = False
+
+        # Construct command for Unity (TCP path)
         command = {
             "command_type": "return_to_start_position",
             "robot_id": robot_id,

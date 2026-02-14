@@ -344,6 +344,7 @@ CONTROL_GRIPPER_OPERATION = create_control_gripper_operation()
 def release_object(
     robot_id: str,
     request_id: int = 0,
+    use_ros: bool = None,
 ) -> OperationResult:
     """
     Open gripper to release held object.
@@ -381,7 +382,59 @@ def release_object(
                 ["Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')"],
             )
 
-        # Construct command for Unity - ONLY gripper opening, NO positioning
+        # Determine whether to use ROS or TCP path
+        _use_ros = use_ros
+        if _use_ros is None:
+            try:
+                from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+                _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
+            except ImportError:
+                _use_ros = False
+
+        # Route via ROS if enabled
+        if _use_ros:
+            try:
+                from ros2.ROSBridge import ROSBridge
+                bridge = ROSBridge.get_instance()
+                if bridge.is_connected or bridge.connect():
+                    # Gripper: 0.014 = fully open
+                    result = bridge.control_gripper(0.014, robot_id=robot_id)
+                    if result and result.get("success"):
+                        logger.info(f"ROS release_object command sent for {robot_id}")
+                        return OperationResult.success_result({
+                            "robot_id": robot_id,
+                            "status": "ros_command_sent",
+                            "timestamp": time.time(),
+                        })
+                    else:
+                        try:
+                            from config.ROS import DEFAULT_CONTROL_MODE
+                            if DEFAULT_CONTROL_MODE != "hybrid":
+                                error_msg = result.get("error", "Unknown") if result else "No response"
+                                return OperationResult.error_result(
+                                    "ROS_GRIPPER_FAILED",
+                                    f"ROS gripper command failed: {error_msg}",
+                                    ["Check ROS bridge logs"],
+                                )
+                        except ImportError:
+                            pass
+                        logger.warning("ROS gripper failed, falling back to TCP")
+                else:
+                    try:
+                        from config.ROS import DEFAULT_CONTROL_MODE
+                        if DEFAULT_CONTROL_MODE != "hybrid":
+                            return OperationResult.error_result(
+                                "ROS_CONNECTION_FAILED",
+                                "Failed to connect to ROS bridge",
+                                ["Ensure Docker ROS services are running"],
+                            )
+                    except ImportError:
+                        pass
+                    logger.warning("ROS bridge unavailable, falling back to TCP")
+            except ImportError:
+                logger.warning("ros2 module not available, falling back to TCP")
+
+        # Construct command for Unity - ONLY gripper opening, NO positioning (TCP path)
         params: Dict[str, Any] = {
             "open_gripper": True,  # Release means open
         }

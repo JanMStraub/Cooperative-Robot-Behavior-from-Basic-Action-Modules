@@ -108,12 +108,10 @@ namespace PythonCommunication.Core
                 catch (SocketException sockEx)
                     when (sockEx.SocketErrorCode == SocketError.TimedOut)
                 {
-                    // Read timeout on idle connection — expected, just retry
                     continue;
                 }
                 catch (System.IO.IOException ioEx)
                 {
-                    // Also check wrapped SocketException timeout
                     if (ioEx.InnerException is SocketException innerSockEx
                         && innerSockEx.SocketErrorCode == SocketError.TimedOut)
                     {

@@ -181,6 +181,7 @@ def mirror_movement_of_other_robot(
     mirror_axis: str = "x",
     scale_factor: float = 1.0,
     request_id: int = 0,
+    use_ros: bool = None,
 ) -> OperationResult:
     """
     Mirror the movement of another robot.
@@ -194,6 +195,7 @@ def mirror_movement_of_other_robot(
         mirror_axis: Axis to mirror across ("x", "y", "z", or "none" for direct copy)
         scale_factor: Scale factor for mirrored movement (1.0 = same size)
         request_id: Optional request ID for tracking
+        use_ros: Whether to use ROS for motion planning (None = auto-detect from config)
 
     Returns:
         OperationResult with mirroring activation confirmation
@@ -238,7 +240,23 @@ def mirror_movement_of_other_robot(
                 ["Use scale between 0.1 (10%) and 2.0 (200%)"],
             )
 
-        # Construct command
+        # Determine whether to use ROS or TCP path
+        _use_ros = use_ros
+        if _use_ros is None:
+            try:
+                from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+                _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
+            except ImportError:
+                _use_ros = False
+
+        # Note: Mirror movement is a continuous tracking operation
+        # ROS support would require real-time trajectory tracking via ROS topics
+        # For now, this is best handled by Unity directly (TCP path)
+        if _use_ros:
+            logger.info("Mirror movement via ROS not yet implemented - using Unity direct control")
+            _use_ros = False
+
+        # Construct command (TCP path)
         command = {
             "command_type": "mirror_movement",
             "robot_id": robot_id,

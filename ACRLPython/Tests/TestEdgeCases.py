@@ -54,7 +54,8 @@ class TestExtremeCoordinateValues:
 
     def test_move_with_maximum_valid_coordinates(self, mock_broadcaster):
         """Test movement at maximum valid coordinate limits"""
-        with patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
+        with patch('config.ROS.ROS_ENABLED', False), \
+             patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
             result = move_to_coordinate(
                 robot_id="Robot1",
                 x=1.0,   # Maximum X
@@ -66,7 +67,8 @@ class TestExtremeCoordinateValues:
 
     def test_move_with_minimum_valid_coordinates(self, mock_broadcaster):
         """Test movement at minimum valid coordinate limits"""
-        with patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
+        with patch('config.ROS.ROS_ENABLED', False), \
+             patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
             result = move_to_coordinate(
                 robot_id="Robot1",
                 x=-1.0,  # Minimum X
@@ -78,7 +80,8 @@ class TestExtremeCoordinateValues:
 
     def test_move_with_zero_coordinates(self, mock_broadcaster):
         """Test movement to origin (0, 0, 0)"""
-        with patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
+        with patch('config.ROS.ROS_ENABLED', False), \
+             patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
             result = move_to_coordinate(
                 robot_id="Robot1",
                 x=0.0,
@@ -114,7 +117,8 @@ class TestExtremeCoordinateValues:
 
     def test_move_with_very_small_increments(self, mock_broadcaster):
         """Test movement with extremely small coordinate differences"""
-        with patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
+        with patch('config.ROS.ROS_ENABLED', False), \
+             patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
             result = move_to_coordinate(
                 robot_id="Robot1",
                 x=0.000001,  # Very small
@@ -195,7 +199,8 @@ class TestUnicodeAndSpecialCharacters:
 
     def test_robot_id_with_special_characters(self, mock_broadcaster):
         """Test robot ID with special characters"""
-        with patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
+        with patch('config.ROS.ROS_ENABLED', False), \
+             patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
             result = move_to_coordinate(
                 robot_id="Robot-1_v2.0",  # Special chars in ID
                 x=0.3,
@@ -344,7 +349,8 @@ class TestBoundaryTimeValues:
     def test_very_long_timeout(self, mock_broadcaster):
         """Test operation with extremely long timeout"""
         # Should not cause overflow or issues
-        with patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
+        with patch('config.ROS.ROS_ENABLED', False), \
+             patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
             result = move_to_coordinate(
                 robot_id="Robot1",
                 x=0.3,

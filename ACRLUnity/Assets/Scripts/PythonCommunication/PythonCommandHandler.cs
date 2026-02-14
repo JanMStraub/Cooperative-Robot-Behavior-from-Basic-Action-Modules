@@ -446,6 +446,41 @@ namespace PythonCommunication
             return true;
         }
 
+        /// <summary>
+        /// Check if the robot is in ROS control mode and should skip Unity execution.
+        /// When in ROS mode, movement is handled by Python -> ROS -> MoveIt -> ROSTrajectorySubscriber.
+        /// Unity sends an immediate completion response since it won't process the command itself.
+        /// </summary>
+        /// <param name="controller">The RobotController to check.</param>
+        /// <param name="robotId">Robot ID for logging.</param>
+        /// <param name="commandName">Command name for logging and completion.</param>
+        /// <param name="requestId">Request ID for completion response.</param>
+        /// <returns>True if ROS mode is active and Unity should skip execution.</returns>
+        private bool ShouldSkipForROSMode(
+            RobotController controller,
+            string robotId,
+            string commandName,
+            uint requestId
+        )
+        {
+            if (controller == null)
+                return false;
+
+            var rosMode = controller.GetComponent<ROSControlModeManager>();
+            if (rosMode != null && !rosMode.ShouldUnityIKBeActive)
+            {
+                Debug.Log(
+                    $"{_logPrefix} Robot {robotId} is in ROS mode. "
+                        + $"Skipping Unity execution for {commandName} - handled by MoveIt via ROS."
+                );
+                SendCommandCompletion(robotId, commandName, true, requestId);
+                _successfulCommands++;
+                return true;
+            }
+
+            return false;
+        }
+
         #endregion
 
         #region Command Implementations
@@ -483,25 +518,15 @@ namespace PythonCommunication
 
                 // Check if robot is in ROS control mode - if so, skip Unity IK
                 // Movement will be handled by Python -> ROS -> MoveIt -> ROSTrajectorySubscriber
-                if (controller != null)
-                {
-                    var rosMode = controller.GetComponent<ROSControlModeManager>();
-                    if (rosMode != null && !rosMode.ShouldUnityIKBeActive)
-                    {
-                        Debug.Log(
-                            $"{_logPrefix} Robot {command.robot_id} is in ROS mode. "
-                            + "Skipping Unity IK - movement handled by MoveIt via ROS."
-                        );
-                        SendCommandCompletion(
-                            command.robot_id,
-                            "move_to_coordinate",
-                            true,
-                            command.request_id
-                        );
-                        _successfulCommands++;
-                        return;
-                    }
-                }
+                if (
+                    ShouldSkipForROSMode(
+                        controller,
+                        command.robot_id,
+                        "move_to_coordinate",
+                        command.request_id
+                    )
+                )
+                    return;
 
                 if (command.parameters == null || command.parameters.target_position == null)
                 {
@@ -793,6 +818,15 @@ namespace PythonCommunication
                 {
                     return;
                 }
+                if (
+                    ShouldSkipForROSMode(
+                        controller,
+                        command.robot_id,
+                        "grasp_object",
+                        command.request_id
+                    )
+                )
+                    return;
 
                 if (command.parameters == null)
                 {
@@ -1065,6 +1099,15 @@ namespace PythonCommunication
                     return;
                 }
                 if (
+                    ShouldSkipForROSMode(
+                        controller,
+                        command.robot_id,
+                        "move_from_a_to_b",
+                        command.request_id
+                    )
+                )
+                    return;
+                if (
                     command.parameters == null
                     || command.parameters.point_a == null
                     || command.parameters.point_b == null
@@ -1243,6 +1286,15 @@ namespace PythonCommunication
                 {
                     return;
                 }
+                if (
+                    ShouldSkipForROSMode(
+                        controller,
+                        command.robot_id,
+                        "adjust_end_effector_orientation",
+                        command.request_id
+                    )
+                )
+                    return;
 
                 if (command.parameters == null)
                 {
@@ -1372,6 +1424,15 @@ namespace PythonCommunication
                 {
                     return;
                 }
+                if (
+                    ShouldSkipForROSMode(
+                        controller,
+                        command.robot_id,
+                        "align_object",
+                        command.request_id
+                    )
+                )
+                    return;
 
                 // Validate parameters
                 if (command.parameters == null || command.parameters.target_orientation == null)
@@ -1483,6 +1544,15 @@ namespace PythonCommunication
                 {
                     return;
                 }
+                if (
+                    ShouldSkipForROSMode(
+                        controller,
+                        command.robot_id,
+                        "follow_path",
+                        command.request_id
+                    )
+                )
+                    return;
 
                 // Validate parameters
                 if (
@@ -1625,6 +1695,15 @@ namespace PythonCommunication
                 {
                     return;
                 }
+                if (
+                    ShouldSkipForROSMode(
+                        controller,
+                        command.robot_id,
+                        "draw_with_pen",
+                        command.request_id
+                    )
+                )
+                    return;
 
                 // Validate parameters
                 if (
@@ -1826,6 +1905,15 @@ namespace PythonCommunication
                 {
                     return;
                 }
+                if (
+                    ShouldSkipForROSMode(
+                        controller,
+                        command.robot_id,
+                        "mirror_movement",
+                        command.request_id
+                    )
+                )
+                    return;
 
                 // Validate parameters
                 if (
@@ -1969,12 +2057,21 @@ namespace PythonCommunication
                         command.robot_id,
                         "stabilize_object",
                         out RobotInstance robotInstance,
-                        out _
+                        out RobotController controller
                     )
                 )
                 {
                     return;
                 }
+                if (
+                    ShouldSkipForROSMode(
+                        controller,
+                        command.robot_id,
+                        "stabilize_object",
+                        command.request_id
+                    )
+                )
+                    return;
 
                 // Validate parameters
                 if (command.parameters == null)
@@ -2076,6 +2173,15 @@ namespace PythonCommunication
                 {
                     return;
                 }
+                if (
+                    ShouldSkipForROSMode(
+                        controller,
+                        command.robot_id,
+                        "return_to_start_position",
+                        command.request_id
+                    )
+                )
+                    return;
 
                 // Validate start joint targets exist
                 if (

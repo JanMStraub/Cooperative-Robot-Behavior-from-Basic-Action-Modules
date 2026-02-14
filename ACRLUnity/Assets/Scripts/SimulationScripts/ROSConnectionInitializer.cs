@@ -51,7 +51,8 @@ namespace Simulation
         /// (HasConnectionError starts false, so without the thread check,
         /// publishers would queue messages before Connect() is even called).
         /// </summary>
-        public bool IsConnected => _rosConnection != null
+        public bool IsConnected =>
+            _rosConnection != null
             && _rosConnection.HasConnectionThread
             && !_rosConnection.HasConnectionError;
 
@@ -131,9 +132,7 @@ namespace Simulation
             _rosConnection.Connect(_rosHost, _rosPort);
             _reconnectAttempts = 0;
 
-            Debug.Log(
-                $"{_logPrefix} ROS connection configured: {_rosHost}:{_rosPort}"
-            );
+            Debug.Log($"{_logPrefix} ROS connection configured: {_rosHost}:{_rosPort}");
 
             if (_autoReconnect && _healthCheckCoroutine == null)
             {

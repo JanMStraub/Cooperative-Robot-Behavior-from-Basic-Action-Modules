@@ -30,6 +30,7 @@ from operations.Base import OperationResult
 class TestFieldPickAndPlace(unittest.TestCase):
     """Integration test for field-based pick-and-place"""
 
+    @patch("config.ROS.ROS_ENABLED", False)
     @patch("operations.GripperOperations._get_command_broadcaster")
     @patch("operations.MoveOperations._get_command_broadcaster")
     @patch("operations.GraspOperations.grasp_object")

@@ -12,6 +12,7 @@ The SimulationScripts directory contains the top-level simulation management and
 SimulationScripts/
 ├── SimulationManager.cs          # Top-level simulation orchestrator
 ├── WorkspaceManager.cs            # Workspace region allocation and tracking
+├── ROSConnectionInitializer.cs   # ROS 2 connection manager (singleton)
 └── CoordinationStrategies/        # Strategy Pattern implementations
     ├── ICoordinationStrategy.cs           # Strategy interface
     ├── IndependentStrategy.cs             # All robots move simultaneously
@@ -343,6 +344,59 @@ List<Vector3> waypoints = planner.PlanAlternativePath(
 );
 ```
 
+### ROSConnectionInitializer
+
+**Purpose**: Singleton manager for ROS 2 TCP connection with health monitoring and automatic reconnection.
+
+**Key Features**:
+- Unity-ROS TCP bridge configuration (host:port)
+- Delayed connection initialization (2s delay for Docker startup)
+- Automatic health checks (configurable interval, default: 5s)
+- Auto-reconnect on connection loss
+- Connection status monitoring
+
+**Configuration Parameters**:
+```csharp
+[SerializeField] private string _rosHost = "127.0.0.1";        // ROS bridge IP
+[SerializeField] private int _rosPort = 10000;                 // ros_tcp_endpoint port
+[SerializeField] private bool _connectOnStart = true;          // Auto-connect at startup
+[SerializeField] private bool _autoReconnect = true;           // Enable auto-reconnect
+[SerializeField] private float _healthCheckInterval = 5f;      // Health check period
+```
+
+**Public API**:
+```csharp
+// Connection status
+bool IsConnected { get; }               // True if connection thread active and no errors
+string ROSHost { get; }                 // Configured ROS host
+int ROSPort { get; }                    // Configured ROS port
+
+// Connection management
+void InitializeConnection()             // Connect with configured settings
+void Reconnect(string host, int port)   // Reconfigure and reconnect
+```
+
+**Connection Logic**:
+1. `Awake()` - Configure ROSConnection instance, disable auto-connect
+2. `Start()` - Delayed connect after 2s (gives Docker time to start)
+3. Health check loop - Monitors connection every N seconds, auto-reconnects if lost
+
+**Usage Example**:
+```csharp
+// Check connection status before publishing
+if (ROSConnectionInitializer.Instance.IsConnected)
+{
+    _rosConnection.Publish(topicName, message);
+}
+```
+
+**Integration with Docker ROS Services**:
+- Connects to `ros_tcp_endpoint` container (port 10000)
+- Handles Unity <-> ROS 2 topic bridging
+- Required for ROS-based motion planning and state publishing
+
+See `ros_unity_integration/README.md` for Docker setup details.
+
 ## Scene Setup
 
 **Required GameObjects**:
@@ -353,7 +407,13 @@ Scene
 │   └── CoordinationConfig (optional, for Collaborative mode)
 ├── WorkspaceManager (singleton, optional)
 ├── RobotManager (singleton)
+├── ROSConnectionInitializer (singleton, for ROS integration)
 └── Robots (RobotController instances)
+    └── Optional ROS components (per robot):
+        ├── ROSJointStatePublisher (publishes joint states)
+        ├── ROSTrajectorySubscriber (receives planned trajectories)
+        ├── ROSGripperSubscriber (receives gripper commands)
+        └── ROSControlModeManager (switches control modes)
 ```
 
 **Configuration Files**:
@@ -411,6 +471,14 @@ Scene
 - WorldStatePublisher sends robot positions for server-side coordination
 - CoordinationVerifier (TODO) validates multi-robot movements
 - SequenceServer orchestrates coordinated sequences
+- ROSBridge (port 5020) acts as Python <-> Docker ROS bridge
+- ROSMotionClient handles MoveIt planning requests
+
+**ROS Integration**:
+- ROSConnectionInitializer manages Unity <-> ROS TCP connection
+- ROSJointStatePublisher streams joint states to MoveIt (50Hz)
+- ROSTrajectorySubscriber receives planned trajectories from MoveIt
+- ROSControlModeManager switches between Unity IK and ROS planning
 
 ## Testing
 
@@ -445,11 +513,189 @@ Scene
 - **Check**: `maxWaypoints` limit too restrictive
 - **Adjust**: Increase `verticalOffset` or `lateralOffset` in CoordinationConfig
 
+## ROS 2 Integration
+
+**Overview**: Docker-based ROS 2 environment providing collision-aware motion planning via MoveIt 2. MoveIt is used for **planning only** - Unity executes trajectories.
+
+### Architecture
+
+```
+Python Backend → ROSBridge (TCP:5020) → ROSMotionClient (Docker)
+                                               ↓
+                                         MoveIt 2 (plan_only=True)
+                                               ↓
+                                         Publish JointTrajectory
+                                               ↓
+                                         ros_tcp_endpoint (port 10000)
+                                               ↓
+                                         Unity ROSTrajectorySubscriber
+                                               ↓
+                                         ArticulationBody execution
+```
+
+### Unity Components
+
+**Per Robot** (located in `Assets/Scripts/RobotScripts/Ros/`):
+- **ROSJointStatePublisher** - Publishes joint states to `/joint_states` at 50Hz
+- **ROSTrajectorySubscriber** - Executes trajectories from `/arm_controller/joint_trajectory`
+- **ROSGripperSubscriber** - Receives gripper commands on `/gripper/command`
+- **ROSControlModeManager** - Switches between Unity IK, ROS planning, or Hybrid mode
+
+**Scene Singleton**:
+- **ROSConnectionInitializer** (`SimulationScripts/`) - Manages ROS TCP connection (port 10000)
+
+### Python Backend
+
+**Location**: `ACRLPython/ros2/`
+
+- **ROSBridge.py** - TCP server (port 5020) for Python-to-Docker communication
+  - Singleton pattern via `get_instance()`
+  - Methods: `connect()`, `plan_and_execute()`, `disconnect()`
+  - Auto-handles coordinate transformations (Unity world -> robot base_link)
+
+- **ROSMotionClient.py** - Docker-side client for MoveIt interaction
+  - Runs inside `acrl_ros_bridge` container
+  - Interfaces with MoveIt 2 MoveGroup API
+  - Converts Unity world coordinates to robot-local frames
+
+### Control Modes
+
+Set via `ROSControlModeManager` component in Unity Inspector:
+
+| Mode | Unity IK | ROS Planning | Use Case |
+|------|----------|--------------|----------|
+| **Unity** (default) | ✓ Active | ✗ Disabled | Testing, no Docker dependency |
+| **ROS** | ✗ Bypassed | ✓ Active | Collision-aware planning |
+| **Hybrid** | ✓ Dynamic | ✓ Dynamic | Best of both (auto-switching) |
+
+**Default Behavior**: ROS disabled (`ROS_ENABLED = False` in `ACRLPython/config/ROS.py`)
+
+### ROS Topics
+
+| Topic | Type | Direction | Publisher/Subscriber | Description |
+|-------|------|-----------|---------------------|-------------|
+| `/joint_states` | sensor_msgs/JointState | Unity → ROS | ROSJointStatePublisher | Current joint positions (50Hz) |
+| `/arm_controller/joint_trajectory` | trajectory_msgs/JointTrajectory | ROS → Unity | ROSTrajectorySubscriber | Planned trajectories from MoveIt |
+| `/arm_controller/feedback` | std_msgs/String | Unity → ROS | ROSTrajectorySubscriber | Execution feedback |
+| `/gripper/command` | sensor_msgs/JointState | ROS → Unity | ROSGripperSubscriber | Gripper open/close commands |
+| `/gripper/state` | sensor_msgs/JointState | Unity → ROS | ROSGripperSubscriber | Gripper state feedback |
+
+### Docker Services
+
+Located in `ros_unity_integration/`
+
+| Service | Container | Port | Purpose |
+|---------|-----------|------|---------|
+| ros_tcp_endpoint | acrl_ros_endpoint | 10000 | Unity ↔ ROS 2 bridge |
+| moveit | acrl_moveit | - | MoveIt 2 motion planning |
+| robot_state_publisher | acrl_robot_state_publisher | - | TF transforms from URDF |
+| ros_bridge | acrl_ros_bridge | 5020 | Python backend ↔ ROS bridge |
+
+**Management Commands**:
+```bash
+cd ros_unity_integration
+./start_ros_endpoint.sh up       # Start all services
+./start_ros_endpoint.sh down     # Stop services
+./start_ros_endpoint.sh status   # Check status
+./start_ros_endpoint.sh logs     # View logs
+```
+
+### Coordinate Systems
+
+**Robot Positions in Unity World Space**:
+- Robot1: `(-0.475, 0, 0)` meters
+- Robot2: `(0.475, 0, 0)` meters
+
+**Automatic Transformation**:
+- Python sends Unity world coordinates
+- ROSMotionClient transforms to robot-local `base_link` frame
+- MoveIt plans in local coordinates
+- Unity executes in world space
+
+**Example** (Robot1):
+```python
+from ros2.ROSBridge import ROSBridge
+
+bridge = ROSBridge.get_instance()
+bridge.connect()
+
+# Send world coordinates - transformation automatic
+bridge.plan_and_execute(
+    position={"x": -0.2, "y": 0.05, "z": 0.0},  # Unity world coords
+    robot_id="Robot1"
+)
+# → MoveIt receives: (x=0.275, y=0.05, z=0.0) in base_link frame
+```
+
+### Setup Instructions
+
+1. **Start Docker Services**:
+```bash
+cd ros_unity_integration
+./start_ros_endpoint.sh up
+./start_ros_endpoint.sh status  # Verify all containers running
+```
+
+2. **Start Python Backend with ROS**:
+```bash
+cd ACRLPython
+./start_servers.sh --with-ros  # Starts ROSBridge on port 5020
+```
+
+3. **Unity Scene Setup**:
+   - Add `ROSConnectionInitializer` to scene (auto-connects on start)
+   - Add ROS components to each robot GameObject
+   - Verify connection in Console logs: `[ROS_CONNECTION_INITIALIZER] ROS connection initiated`
+
+4. **Enable ROS in Python Config** (optional):
+```python
+# ACRLPython/config/ROS.py
+ROS_ENABLED = True
+DEFAULT_CONTROL_MODE = "hybrid"  # or "ros" for ROS-only
+```
+
+### Troubleshooting
+
+**Issue**: Unity not connecting to ROS
+- **Check**: Docker services running (`./start_ros_endpoint.sh status`)
+- **Check**: Port 10000 not blocked by firewall
+- **Check**: ROSConnectionInitializer `IsConnected` property in Inspector
+
+**Issue**: ROS planning fails
+- **Check**: ROSBridge running on port 5020 (`./start_servers.sh --with-ros`)
+- **Check**: MoveIt container logs (`./start_ros_endpoint.sh logs acrl_moveit`)
+- **Check**: Joint state publishing (verify `/joint_states` topic)
+
+**Issue**: Trajectories not executing in Unity
+- **Check**: ROSTrajectorySubscriber attached to robot
+- **Check**: Control mode set to "ROS" or "Hybrid" in ROSControlModeManager
+- **Check**: ROS topic subscriptions in Unity Console logs
+
+### File Locations
+
+**Unity**:
+- `Assets/Scripts/SimulationScripts/ROSConnectionInitializer.cs`
+- `Assets/Scripts/RobotScripts/Ros/ROSJointStatePublisher.cs`
+- `Assets/Scripts/RobotScripts/Ros/ROSTrajectorySubscriber.cs`
+- `Assets/Scripts/RobotScripts/Ros/ROSGripperSubscriber.cs`
+- `Assets/Scripts/RobotScripts/Ros/ROSControlModeManager.cs`
+
+**Python**:
+- `ACRLPython/ros2/ROSBridge.py`
+- `ACRLPython/ros2/ROSMotionClient.py`
+- `ACRLPython/config/ROS.py`
+
+**Docker**:
+- `ros_unity_integration/README.md` - Full ROS setup guide
+- `ros_unity_integration/ARCHITECTURE.md` - Detailed architecture docs
+- `ros_unity_integration/docker-compose.yml` - Service definitions
+
 ## Future Enhancements
 
 **Planned Features**:
 - ✅ Workspace-based coordination (implemented)
 - ✅ Waypoint collision avoidance (implemented)
+- ✅ ROS 2 + MoveIt integration (implemented)
 - ⏳ Python CoordinationVerifier integration (TODO)
 - ⏳ MasterSlave coordination mode (not implemented)
 - ⏳ Distributed coordination mode (not implemented)
@@ -460,9 +706,12 @@ Scene
 
 **Related Documentation**:
 - Motion control redesign: `ACRLPython/documents/RobotControlRedesign.md`
+- ROS integration guide: `ros_unity_integration/README.md`
+- ROS architecture: `ros_unity_integration/ARCHITECTURE.md`
 - Project overview: `CLAUDE.md`
 - Configuration: `ACRLUnity/Assets/Scripts/ConfigScripts/`
 - Robot control: `ACRLUnity/Assets/Scripts/RobotScripts/`
+- ROS components: `ACRLUnity/Assets/Scripts/RobotScripts/Ros/`
 
 **Key Files**:
 - SimulationManager.cs:100 - Singleton initialization
@@ -470,3 +719,8 @@ Scene
 - WorkspaceManager.cs:196 - Default workspace initialization
 - CollaborativeStrategy.cs:145 - Coordination check logic
 - WaypointCollisionAvoidancePlanner.cs:42 - Path planning algorithm
+- ROSConnectionInitializer.cs:69 - ROS connection singleton setup
+- ROSConnectionInitializer.cs:114 - Delayed connection initialization
+- ROSJointStatePublisher.cs - Joint state publishing (50Hz)
+- ROSTrajectorySubscriber.cs - Trajectory execution from MoveIt
+- ROSControlModeManager.cs - Control mode switching logic
