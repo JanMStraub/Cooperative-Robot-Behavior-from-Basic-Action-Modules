@@ -126,6 +126,11 @@ namespace Core
         public const int SEQUENCE_SERVER_PORT = 5013;
 
         /// <summary>
+        /// AutoRT server port (autonomous task generation)
+        /// </summary>
+        public const int AUTORT_SERVER_PORT = 5015;
+
+        /// <summary>
         /// World state streaming port (one-way broadcast of robot/object states)
         /// </summary>
         public const int WORLD_STATE_PORT = 5014;
@@ -144,5 +149,36 @@ namespace Core
         /// Thread join timeout when stopping receive threads (milliseconds)
         /// </summary>
         public const int THREAD_JOIN_TIMEOUT_MS = 1000;
+    }
+
+    /// <summary>
+    /// Constants for AutoRT (Autonomous Robot Task generation)
+    /// </summary>
+    public static class AutoRTConstants
+    {
+        /// <summary>
+        /// Default number of task candidates to generate
+        /// </summary>
+        public const int DEFAULT_MAX_TASK_CANDIDATES = 5;
+
+        /// <summary>
+        /// Default loop delay between task generations (seconds)
+        /// </summary>
+        public const float DEFAULT_LOOP_DELAY_SECONDS = 5f;
+
+        /// <summary>
+        /// Maximum number of tasks to display in inspector UI
+        /// </summary>
+        public const int MAX_DISPLAY_TASKS = 10;
+
+        /// <summary>
+        /// Task expiration time (seconds) - old tasks auto-removed
+        /// </summary>
+        public const float TASK_EXPIRATION_SECONDS = 300f; // 5 minutes
+
+        /// <summary>
+        /// UI refresh rate for continuous loop mode (seconds)
+        /// </summary>
+        public const float UI_REFRESH_RATE = 0.5f;
     }
 }

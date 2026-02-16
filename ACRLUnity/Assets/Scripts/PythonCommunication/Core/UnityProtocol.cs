@@ -17,6 +17,8 @@ namespace PythonCommunication.Core
         STATUS_RESPONSE = 0x06,
         STEREO_IMAGE = 0x07,
         SEQUENCE_QUERY = 0x08,
+        AUTORT_COMMAND = 0x09,
+        AUTORT_RESPONSE = 0x0A,
     }
 
     /// <summary>
@@ -37,7 +39,7 @@ namespace PythonCommunication.Core
         public const int HEADER_SIZE = TYPE_SIZE + INT_SIZE;
         public const int MAX_IMAGE_SIZE = 10 * 1024 * 1024;
 
-        private const string _logPrefix = "[UNITY_PROTOCOL_V2]";
+        private const string _logPrefix = "[UNITY_PROTOCOL]";
 
         #region Header Encoding/Decoding
 
@@ -800,6 +802,170 @@ namespace PythonCommunication.Core
             Buffer.BlockCopy(BitConverter.GetBytes(jsonBytes.Length), 0, message, offset, INT_SIZE);
             offset += INT_SIZE;
 
+            Buffer.BlockCopy(jsonBytes, 0, message, offset, jsonBytes.Length);
+
+            return message;
+        }
+
+        #endregion
+
+        #region AutoRT Command Messages (Unity → Python)
+
+        /// <summary>
+        /// Encode an AutoRT command message for sending to Python SequenceServer.
+        /// Format: [type:1][request_id:4][cmd_type_len:4][cmd_type:N][params_json_len:4][params_json:N]
+        /// </summary>
+        /// <param name="commandType">Command type ("generate", "start_loop", "stop_loop", "execute_task", "get_status")</param>
+        /// <param name="paramsJson">Parameters JSON string (can be null or empty for "{}")</param>
+        /// <param name="requestId">Request ID for correlation (default 0)</param>
+        /// <returns>Encoded message bytes</returns>
+        public static byte[] EncodeAutoRTCommand(
+            string commandType,
+            string paramsJson = null,
+            uint requestId = 0
+        )
+        {
+            if (string.IsNullOrEmpty(commandType))
+            {
+                throw new ArgumentException($"{_logPrefix} Command type cannot be null or empty");
+            }
+
+            byte[] commandTypeBytes = Encoding.UTF8.GetBytes(commandType);
+
+            if (string.IsNullOrEmpty(paramsJson))
+            {
+                paramsJson = "{}";
+            }
+
+            byte[] paramsBytes = Encoding.UTF8.GetBytes(paramsJson);
+
+            int totalSize =
+                HEADER_SIZE + INT_SIZE * 2 + commandTypeBytes.Length + paramsBytes.Length;
+            byte[] message = new byte[totalSize];
+
+            int offset = 0;
+
+            byte[] header = EncodeHeader(MessageType.AUTORT_COMMAND, requestId);
+            Buffer.BlockCopy(header, 0, message, offset, HEADER_SIZE);
+            offset += HEADER_SIZE;
+
+            Buffer.BlockCopy(
+                BitConverter.GetBytes(commandTypeBytes.Length),
+                0,
+                message,
+                offset,
+                INT_SIZE
+            );
+            offset += INT_SIZE;
+            Buffer.BlockCopy(commandTypeBytes, 0, message, offset, commandTypeBytes.Length);
+            offset += commandTypeBytes.Length;
+
+            Buffer.BlockCopy(
+                BitConverter.GetBytes(paramsBytes.Length),
+                0,
+                message,
+                offset,
+                INT_SIZE
+            );
+            offset += INT_SIZE;
+            Buffer.BlockCopy(paramsBytes, 0, message, offset, paramsBytes.Length);
+
+            return message;
+        }
+
+        /// <summary>
+        /// Decode an AutoRT command message (for testing).
+        /// </summary>
+        public static void DecodeAutoRTCommand(
+            byte[] data,
+            out uint requestId,
+            out string commandType,
+            out string paramsJson
+        )
+        {
+            int offset = DecodeHeader(data, 0, out MessageType msgType, out requestId);
+
+            if (msgType != MessageType.AUTORT_COMMAND)
+            {
+                throw new ArgumentException(
+                    $"{_logPrefix} Expected AUTORT_COMMAND message, got {msgType}"
+                );
+            }
+
+            int commandTypeLen = BitConverter.ToInt32(data, offset);
+            offset += INT_SIZE;
+            commandType = Encoding.UTF8.GetString(data, offset, commandTypeLen);
+            offset += commandTypeLen;
+
+            int paramsLen = BitConverter.ToInt32(data, offset);
+            offset += INT_SIZE;
+            paramsJson = Encoding.UTF8.GetString(data, offset, paramsLen);
+        }
+
+        #endregion
+
+        #region AutoRT Response Messages (Python → Unity)
+
+        /// <summary>
+        /// Decode an AutoRT response message received from Python SequenceServer.
+        /// Format: [type:1][request_id:4][json_len:4][json:N]
+        /// </summary>
+        /// <param name="data">Raw message bytes</param>
+        /// <param name="requestId">Decoded request ID for correlation</param>
+        /// <returns>JSON string with response data (success, tasks[], loop_running, error)</returns>
+        public static string DecodeAutoRTResponse(byte[] data, out uint requestId)
+        {
+            if (data == null)
+            {
+                throw new ArgumentException($"{_logPrefix} Data cannot be null");
+            }
+
+            if (data.Length < HEADER_SIZE + INT_SIZE)
+            {
+                throw new ArgumentException($"{_logPrefix} Invalid AutoRT response: too short");
+            }
+
+            int offset = DecodeHeader(data, 0, out MessageType msgType, out requestId);
+
+            if (msgType != MessageType.AUTORT_RESPONSE)
+            {
+                throw new ArgumentException(
+                    $"{_logPrefix} Expected AUTORT_RESPONSE message, got {msgType}"
+                );
+            }
+
+            int jsonLength = BitConverter.ToInt32(data, offset);
+            offset += INT_SIZE;
+
+            if (data.Length < offset + jsonLength)
+            {
+                throw new ArgumentException($"{_logPrefix} Incomplete AutoRT response");
+            }
+
+            return Encoding.UTF8.GetString(data, offset, jsonLength);
+        }
+
+        /// <summary>
+        /// Encode an AutoRT response message (for testing).
+        /// </summary>
+        public static byte[] EncodeAutoRTResponse(string responseJson, uint requestId = 0)
+        {
+            if (string.IsNullOrEmpty(responseJson))
+            {
+                throw new ArgumentException($"{_logPrefix} Response JSON cannot be null or empty");
+            }
+
+            byte[] jsonBytes = Encoding.UTF8.GetBytes(responseJson);
+
+            byte[] message = new byte[HEADER_SIZE + INT_SIZE + jsonBytes.Length];
+            int offset = 0;
+
+            byte[] header = EncodeHeader(MessageType.AUTORT_RESPONSE, requestId);
+            Buffer.BlockCopy(header, 0, message, offset, HEADER_SIZE);
+            offset += HEADER_SIZE;
+
+            Buffer.BlockCopy(BitConverter.GetBytes(jsonBytes.Length), 0, message, offset, INT_SIZE);
+            offset += INT_SIZE;
             Buffer.BlockCopy(jsonBytes, 0, message, offset, jsonBytes.Length);
 
             return message;

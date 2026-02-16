@@ -28,9 +28,7 @@ class TaskSelector:
         self.history: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
 
     def select_task(
-        self,
-        candidates: List[ProposedTask],
-        strategy: str = "balanced"
+        self, candidates: List[ProposedTask], strategy: str = "balanced"
     ) -> Optional[ProposedTask]:
         """
         Select a task from approved candidates.
@@ -83,7 +81,9 @@ class TaskSelector:
                 # Unknown tasks get neutral score
                 scored.append((task, 0.5))
             else:
-                success_rate = sum(1 for o in outcomes if o.get('success')) / len(outcomes)
+                success_rate = sum(1 for o in outcomes if o.get("success")) / len(
+                    outcomes
+                )
                 scored.append((task, success_rate))
 
         scored.sort(key=lambda x: x[1], reverse=True)
@@ -105,7 +105,9 @@ class TaskSelector:
                 # Untried tasks get high novelty bonus
                 score = 0.5 * 0.6 + 1.0 * 0.4  # 0.7
             else:
-                success_rate = sum(1 for o in outcomes if o.get('success')) / len(outcomes)
+                success_rate = sum(1 for o in outcomes if o.get("success")) / len(
+                    outcomes
+                )
                 novelty = 1.0 / (1.0 + len(outcomes))  # Decays with attempts
                 score = success_rate * 0.6 + novelty * 0.4
 
@@ -123,11 +125,13 @@ class TaskSelector:
             result: Execution result with at least 'success' key
         """
         key = self._task_key(task)
-        self.history[key].append({
-            'success': result.get('success', False),
-            'timestamp': time.time(),
-            'task_id': task.task_id,
-        })
+        self.history[key].append(
+            {
+                "success": result.get("success", False),
+                "timestamp": time.time(),
+                "task_id": task.task_id,
+            }
+        )
 
     def _task_key(self, task: ProposedTask) -> str:
         """

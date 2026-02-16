@@ -89,6 +89,8 @@ class MessageType(IntEnum):
     STATUS_RESPONSE = 0x06
     STEREO_IMAGE = 0x07
     SEQUENCE_QUERY = 0x08
+    AUTORT_COMMAND = 0x09
+    AUTORT_RESPONSE = 0x0A
 
 
 class UnityProtocol:
@@ -461,12 +463,12 @@ class UnityProtocol:
         return bytes(message)
 
     @staticmethod
-    def decode_rag_query(socket_or_data) -> Tuple[int, dict]:
+    def decode_rag_query(data: bytes) -> Tuple[int, dict]:
         """
         Decode a RAG query message from Unity.
 
         Args:
-            socket_or_data: Either a socket object or raw bytes
+            data: Raw message bytes
 
         Returns:
             Tuple of (request_id, query_dict) where query_dict contains query, top_k, and filters
@@ -474,14 +476,6 @@ class UnityProtocol:
         Raises:
             ValueError: If message is malformed
         """
-        # Handle both socket and bytes input
-        if hasattr(socket_or_data, "recv"):
-            # It's a socket - read the complete message
-            data = UnityProtocol._receive_complete_rag_query(socket_or_data)
-        else:
-            # It's already bytes
-            data = socket_or_data
-
         try:
             # Decode header
             msg_type, request_id, offset = UnityProtocol._decode_header(data)
@@ -512,52 +506,6 @@ class UnityProtocol:
 
         except Exception as e:
             raise ValueError(f"Failed to decode RAG query: {e}")
-
-    @staticmethod
-    def _receive_complete_rag_query(client_socket) -> bytes:
-        """
-        Receive a complete RAG query message from socket.
-
-        Args:
-            client_socket: Socket to receive from
-
-        Returns:
-            Complete message bytes
-        """
-        data = bytearray()
-
-        # Read header (type + request_id)
-        header_bytes = client_socket.recv(UnityProtocol.HEADER_SIZE)
-        if not header_bytes or len(header_bytes) < UnityProtocol.HEADER_SIZE:
-            raise ValueError("Connection closed or incomplete header")
-        data.extend(header_bytes)
-
-        # Read query length and text
-        query_len_bytes = client_socket.recv(UnityProtocol.INT_SIZE)
-        if not query_len_bytes:
-            raise ValueError("Connection closed")
-
-        query_len = struct.unpack(UnityProtocol.INT_FORMAT, query_len_bytes)[0]
-        data.extend(query_len_bytes)
-
-        query_bytes = client_socket.recv(query_len)
-        data.extend(query_bytes)
-
-        # Read top_k
-        top_k_bytes = client_socket.recv(UnityProtocol.INT_SIZE)
-        data.extend(top_k_bytes)
-
-        # Read filters length and JSON
-        filters_len_bytes = client_socket.recv(UnityProtocol.INT_SIZE)
-        data.extend(filters_len_bytes)
-
-        filters_len = struct.unpack(UnityProtocol.INT_FORMAT, filters_len_bytes)[0]
-
-        if filters_len > 0:
-            filters_bytes = client_socket.recv(filters_len)
-            data.extend(filters_bytes)
-
-        return bytes(data)
 
     @staticmethod
     def encode_rag_response(operation_context: dict, request_id: int = 0) -> bytes:
@@ -681,12 +629,12 @@ class UnityProtocol:
         return bytes(message)
 
     @staticmethod
-    def decode_status_query(socket_or_data) -> Tuple[int, dict]:
+    def decode_status_query(data: bytes) -> Tuple[int, dict]:
         """
         Decode a status query message from Unity.
 
         Args:
-            socket_or_data: Either a socket object or raw bytes
+            data: Raw message bytes
 
         Returns:
             Tuple of (request_id, query_dict) where query_dict contains robot_id and detailed flag
@@ -694,14 +642,6 @@ class UnityProtocol:
         Raises:
             ValueError: If message is malformed
         """
-        # Handle both socket and bytes input
-        if hasattr(socket_or_data, "recv"):
-            # It's a socket - read the complete message
-            data = UnityProtocol._receive_complete_status_query(socket_or_data)
-        else:
-            # It's already bytes
-            data = socket_or_data
-
         try:
             # Decode header
             msg_type, request_id, offset = UnityProtocol._decode_header(data)
@@ -724,42 +664,6 @@ class UnityProtocol:
 
         except Exception as e:
             raise ValueError(f"Failed to decode status query: {e}")
-
-    @staticmethod
-    def _receive_complete_status_query(client_socket) -> bytes:
-        """
-        Receive a complete status query message from socket.
-
-        Args:
-            client_socket: Socket to receive from
-
-        Returns:
-            Complete message bytes
-        """
-        data = bytearray()
-
-        # Read header (type + request_id)
-        header_bytes = client_socket.recv(UnityProtocol.HEADER_SIZE)
-        if not header_bytes or len(header_bytes) < UnityProtocol.HEADER_SIZE:
-            raise ValueError("Connection closed or incomplete header")
-        data.extend(header_bytes)
-
-        # Read robot_id length and text
-        robot_id_len_bytes = client_socket.recv(UnityProtocol.INT_SIZE)
-        if not robot_id_len_bytes:
-            raise ValueError("Connection closed")
-
-        robot_id_len = struct.unpack(UnityProtocol.INT_FORMAT, robot_id_len_bytes)[0]
-        data.extend(robot_id_len_bytes)
-
-        robot_id_bytes = client_socket.recv(robot_id_len)
-        data.extend(robot_id_bytes)
-
-        # Read detailed flag (1 byte)
-        detailed_byte = client_socket.recv(1)
-        data.extend(detailed_byte)
-
-        return bytes(data)
 
     @staticmethod
     def encode_status_response(robot_status: dict, request_id: int = 0) -> bytes:
@@ -835,6 +739,168 @@ class UnityProtocol:
 
         except Exception as e:
             raise ValueError(f"Failed to decode status response: {e}")
+
+    @staticmethod
+    def encode_autort_command(command_type: str, params: dict, request_id: int = 0) -> bytes:
+        """
+        Encode an AutoRT command message for sending to Python server.
+
+        Format: [type:1][request_id:4][cmd_type_len:4][cmd_type:N][params_json_len:4][params_json:N]
+
+        Args:
+            command_type: Command type ("generate", "start_loop", "stop_loop", "execute_task", "get_status")
+            params: Parameters dictionary (robot_ids, num_tasks, task_id, etc.)
+            request_id: Request ID for correlation (default 0)
+
+        Returns:
+            Encoded message bytes
+
+        Raises:
+            ValueError: If data exceeds limits
+        """
+        # Validate inputs
+        if not command_type:
+            raise ValueError("Command type cannot be empty")
+        if len(command_type) > UnityProtocol.MAX_STRING_LENGTH:
+            raise ValueError(
+                f"Command type too long: {len(command_type)} > {UnityProtocol.MAX_STRING_LENGTH}"
+            )
+
+        # Encode command type
+        cmd_type_bytes = command_type.encode("utf-8")
+
+        # Encode params as JSON
+        params = params or {}
+        params_json = json.dumps(params, ensure_ascii=False)
+        params_bytes = params_json.encode("utf-8")
+
+        # Build message
+        message = bytearray()
+
+        # Header
+        message.extend(
+            UnityProtocol._encode_header(MessageType.AUTORT_COMMAND, request_id)
+        )
+
+        # Command type
+        message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(cmd_type_bytes)))
+        message.extend(cmd_type_bytes)
+
+        # Params JSON
+        message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(params_bytes)))
+        message.extend(params_bytes)
+
+        return bytes(message)
+
+    @staticmethod
+    def decode_autort_command(data: bytes) -> Tuple[int, str, dict]:
+        """
+        Decode an AutoRT command message from Unity.
+
+        Args:
+            data: Raw message bytes
+
+        Returns:
+            Tuple of (request_id, command_type, params_dict)
+
+        Raises:
+            ValueError: If message is malformed
+        """
+        try:
+            # Decode header
+            msg_type, request_id, offset = UnityProtocol._decode_header(data)
+
+            if msg_type != MessageType.AUTORT_COMMAND:
+                raise ValueError(f"Expected AUTORT_COMMAND message, got {msg_type.name}")
+
+            # Read command type
+            command_type, offset = UnityProtocol._read_string(data, offset)
+
+            # Read params JSON
+            params_json, offset = UnityProtocol._read_string(data, offset)
+
+            # Parse params
+            params = json.loads(params_json) if params_json else {}
+
+            return request_id, command_type, params
+
+        except Exception as e:
+            raise ValueError(f"Failed to decode AutoRT command: {e}")
+
+    @staticmethod
+    def encode_autort_response(response_data: dict, request_id: int = 0) -> bytes:
+        """
+        Encode an AutoRT response message for sending to Unity.
+
+        Format: [type:1][request_id:4][json_len:4][json:N]
+
+        Args:
+            response_data: Dictionary containing response data (success, tasks[], loop_running, error)
+            request_id: Request ID for correlation (default 0)
+
+        Returns:
+            Encoded message bytes
+        """
+        # Convert dict to JSON
+        json_str = json.dumps(response_data, ensure_ascii=False)
+        json_bytes = json_str.encode("utf-8")
+
+        # Build message
+        message = bytearray()
+
+        # Header
+        message.extend(
+            UnityProtocol._encode_header(MessageType.AUTORT_RESPONSE, request_id)
+        )
+
+        # JSON data
+        message.extend(struct.pack(UnityProtocol.INT_FORMAT, len(json_bytes)))
+        message.extend(json_bytes)
+
+        return bytes(message)
+
+    @staticmethod
+    def decode_autort_response(data: bytes) -> Tuple[int, dict]:
+        """
+        Decode an AutoRT response message (for testing/verification).
+
+        Args:
+            data: Raw message bytes
+
+        Returns:
+            Tuple of (request_id, response_dict)
+
+        Raises:
+            ValueError: If message is malformed
+        """
+        try:
+            # Decode header
+            msg_type, request_id, offset = UnityProtocol._decode_header(data)
+
+            if msg_type != MessageType.AUTORT_RESPONSE:
+                raise ValueError(
+                    f"Expected AUTORT_RESPONSE message, got {msg_type.name}"
+                )
+
+            # Read JSON data
+            if len(data) - offset < UnityProtocol.INT_SIZE:
+                raise ValueError("Not enough data for JSON length")
+
+            json_length = struct.unpack(
+                UnityProtocol.INT_FORMAT, data[offset : offset + UnityProtocol.INT_SIZE]
+            )[0]
+            offset += UnityProtocol.INT_SIZE
+
+            if offset + json_length > len(data):
+                raise ValueError(f"JSON length {json_length} exceeds remaining data")
+
+            json_bytes = data[offset : offset + json_length]
+            json_str = json_bytes.decode("utf-8")
+
+            return request_id, json.loads(json_str)
+
+        except Exception as e:
+            raise ValueError(f"Failed to decode AutoRT response: {e}")
 
 
 if __name__ == "__main__":

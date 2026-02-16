@@ -412,8 +412,8 @@ GameObject:
   - component: {fileID: 1595579019}
   - component: {fileID: 1595579027}
   - component: {fileID: 1595579028}
-  - component: {fileID: 1595579029}
   - component: {fileID: 1595579026}
+  - component: {fileID: 1595579030}
   m_Layer: 0
   m_Name: PythonManager
   m_TagString: Untagged
@@ -509,7 +509,7 @@ MonoBehaviour:
   _trackedObjects: []
   _updatesSent: 0
   _lastUpdateTime: 0
---- !u!114 &1595579029
+--- !u!114 &1595579030
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -518,14 +518,17 @@ MonoBehaviour:
   m_GameObject: {fileID: 1595579014}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: bc45f76cfcc164c7084a73abcff1f976, type: 3}
+  m_Script: {fileID: 11500000, guid: 67dd424ae24944e7fa5f23fbedd3f946, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-ACRL::PythonCommunication.ResultsClient
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::PythonCommunication.AutoRTManager
   _autoConnect: 1
   _autoReconnect: 1
   _serverPort: 0
   _serverHost: 127.0.0.1
-  _verboseLogging: 1
+  _config: {fileID: 11400000, guid: 498c5e5e7e75949a9aca473a092b3afa, type: 2}
+  _pendingTasks: []
+  _loopRunning: 0
+  _statusMessage: Idle
 --- !u!1001 &9060350412813614532
 PrefabInstance:
   m_ObjectHideFlags: 0

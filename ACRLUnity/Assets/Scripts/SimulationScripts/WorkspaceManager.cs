@@ -193,6 +193,7 @@ namespace Simulation
 
         /// <summary>
         /// Initialize default workspace regions if none configured.
+        /// Also syncs allocation dictionary from any pre-allocated regions (serialized in scene).
         /// </summary>
         private void InitializeWorkspaces()
         {
@@ -239,6 +240,46 @@ namespace Simulation
 
                 Debug.Log(
                     $"{LOG_PREFIX} Created {_workspaceRegions.Count} default workspace regions"
+                );
+            }
+
+            // Sync allocation dictionary from any pre-allocated regions (serialized in scene)
+            SyncAllocationDictionaryFromRegions();
+        }
+
+        /// <summary>
+        /// Sync the allocation dictionary from serialized region allocations.
+        /// This prevents desync warnings when regions are pre-allocated in the Unity scene.
+        /// Called during initialization to ensure consistency.
+        /// </summary>
+        private void SyncAllocationDictionaryFromRegions()
+        {
+            int syncedCount = 0;
+
+            foreach (var region in _workspaceRegions)
+            {
+                if (region.IsAllocated())
+                {
+                    string robotId = region.allocatedRobotId;
+
+                    // Add to dictionary if not already present
+                    if (!_robotWorkspaceAllocation.ContainsKey(robotId))
+                    {
+                        _robotWorkspaceAllocation[robotId] = new HashSet<string>();
+                    }
+
+                    if (!_robotWorkspaceAllocation[robotId].Contains(region.regionName))
+                    {
+                        _robotWorkspaceAllocation[robotId].Add(region.regionName);
+                        syncedCount++;
+                    }
+                }
+            }
+
+            if (syncedCount > 0)
+            {
+                Debug.Log(
+                    $"{LOG_PREFIX} Synced {syncedCount} pre-allocated region(s) to allocation dictionary"
                 );
             }
         }
