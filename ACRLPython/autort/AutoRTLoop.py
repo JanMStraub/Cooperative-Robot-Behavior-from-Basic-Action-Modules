@@ -51,8 +51,9 @@ class AutoRTOrchestrator:
             strategy: Task selection strategy ("balanced", "explore", "exploit", "random")
         """
         self.robot_ids = robot_ids or config.DEFAULT_ROBOTS
-        self.human_in_loop = (human_in_loop if human_in_loop is not None
-                              else config.HUMAN_IN_LOOP_DEFAULT)
+        self.human_in_loop = (
+            human_in_loop if human_in_loop is not None else config.HUMAN_IN_LOOP_DEFAULT
+        )
         if autonomous:
             self.human_in_loop = False
         self.loop_delay = loop_delay_seconds or config.LOOP_DELAY_SECONDS
@@ -69,8 +70,10 @@ class AutoRTOrchestrator:
     def start(self):
         """Run continuous task generation loop"""
         self._running = True
-        logger.info(f"AutoRT starting: robots={self.robot_ids}, "
-                     f"human_in_loop={self.human_in_loop}, strategy={self.strategy}")
+        logger.info(
+            f"AutoRT starting: robots={self.robot_ids}, "
+            f"human_in_loop={self.human_in_loop}, strategy={self.strategy}"
+        )
 
         iteration = 0
         while self._running:
@@ -108,7 +111,9 @@ class AutoRTOrchestrator:
             scene,
             robot_ids=self.robot_ids,
             num_tasks=config.MAX_TASK_CANDIDATES,
-            include_collaborative=(len(self.robot_ids) > 1 and config.ENABLE_COLLABORATIVE_TASKS)
+            include_collaborative=(
+                len(self.robot_ids) > 1 and config.ENABLE_COLLABORATIVE_TASKS
+            ),
         )
 
         if not candidates:
@@ -124,9 +129,13 @@ class AutoRTOrchestrator:
             if verdict.approved:
                 approved.append(task)
                 if verdict.warnings:
-                    logger.info(f"Task '{task.task_id}' approved with warnings: {verdict.warnings}")
+                    logger.info(
+                        f"Task '{task.task_id}' approved with warnings: {verdict.warnings}"
+                    )
             else:
-                logger.info(f"Task '{task.task_id}' rejected: {verdict.rejection_reason}")
+                logger.info(
+                    f"Task '{task.task_id}' rejected: {verdict.rejection_reason}"
+                )
 
         if not approved:
             logger.warning("All tasks rejected by constitution")
@@ -173,15 +182,19 @@ class AutoRTOrchestrator:
             )
 
             if detection_result.success and detection_result.result:
-                detections = detection_result.result.get('detections', [])
+                detections = detection_result.result.get("detections", [])
                 for det in detections:
-                    grounded_objects.append(GroundedObject(
-                        object_id=det.get('object_id', f"obj_{len(grounded_objects)}"),
-                        color=det.get('color', 'unknown'),
-                        position=(det['x'], det['y'], det['z']),
-                        confidence=det.get('confidence', 0.0),
-                        graspable=det.get('is_graspable', True),
-                    ))
+                    grounded_objects.append(
+                        GroundedObject(
+                            object_id=det.get(
+                                "object_id", f"obj_{len(grounded_objects)}"
+                            ),
+                            color=det.get("color", "unknown"),
+                            position=(det["x"], det["y"], det["z"]),
+                            confidence=det.get("confidence", 0.0),
+                            graspable=det.get("is_graspable", True),
+                        )
+                    )
         except Exception as e:
             logger.warning(f"Stereo detection failed: {e}")
 
@@ -189,17 +202,20 @@ class AutoRTOrchestrator:
         for obj_state in self.world_state.get_all_objects():
             # Avoid duplicates (objects already detected by stereo)
             already_detected = any(
-                np.linalg.norm(np.array(g.position) - np.array(obj_state.position)) < 0.05
+                np.linalg.norm(np.array(g.position) - np.array(obj_state.position))
+                < 0.05
                 for g in grounded_objects
             )
             if not already_detected:
-                grounded_objects.append(GroundedObject(
-                    object_id=obj_state.object_id,
-                    color=obj_state.color,
-                    position=obj_state.position,
-                    confidence=obj_state.confidence,
-                    graspable=obj_state.is_graspable,
-                ))
+                grounded_objects.append(
+                    GroundedObject(
+                        object_id=obj_state.object_id,
+                        color=obj_state.color,
+                        position=obj_state.position,
+                        confidence=obj_state.confidence,
+                        graspable=obj_state.is_graspable,
+                    )
+                )
 
         # Step 3: Optional VLM scene reasoning
         scene_summary = ""
@@ -208,11 +224,11 @@ class AutoRTOrchestrator:
                 analysis_result = self.registry.execute_operation_by_name(
                     "analyze_scene",
                     prompt="Describe the robot workspace. List spatial relationships between objects "
-                           "and suggest manipulation priorities. Keep under 100 words.",
+                    "and suggest manipulation priorities. Keep under 100 words.",
                     camera_id="MainCamera",
                 )
                 if analysis_result.success and analysis_result.result:
-                    scene_summary = analysis_result.result.get('analysis', '')
+                    scene_summary = analysis_result.result.get("analysis", "")
             except Exception as e:
                 logger.warning(f"Scene analysis failed: {e}")
 
@@ -226,9 +242,9 @@ class AutoRTOrchestrator:
             state = self.world_state.get_robot_state(rid)
             if state:
                 robot_states[rid] = {
-                    'position': state.position,
-                    'gripper_state': state.gripper_state,
-                    'is_moving': state.is_moving,
+                    "position": state.position,
+                    "gripper_state": state.gripper_state,
+                    "is_moving": state.is_moving,
                 }
 
         return SceneDescription(
@@ -251,25 +267,26 @@ class AutoRTOrchestrator:
             executor = SequenceExecutor()
 
             # Convert operations to executor format
+            # SequenceExecutor expects: {"operation": "...", "params": {"robot_id": "...", ...}}
             commands = []
             for op in task.operations:
-                commands.append({
-                    'operation': op.type,
-                    'robot_id': op.robot_id,
-                    **op.parameters
-                })
+                # Merge robot_id into parameters (params should include robot_id)
+                params = {"robot_id": op.robot_id, **op.parameters}
+                commands.append({"operation": op.type, "params": params})
 
             result = executor.execute_sequence(commands)
             return {
-                'success': result.get('success', False) if isinstance(result, dict) else False,
-                'result': result,
+                "success": (
+                    result.get("success", False) if isinstance(result, dict) else False
+                ),
+                "result": result,
             }
 
         except Exception as e:
             logger.error(f"Task execution failed: {e}", exc_info=True)
             return {
-                'success': False,
-                'error': str(e),
+                "success": False,
+                "error": str(e),
             }
 
     def _request_approval(self, task: ProposedTask) -> Optional[ProposedTask]:
@@ -286,7 +303,7 @@ class AutoRTOrchestrator:
 
         try:
             response = input("Execute this task? [y/N/skip]: ").strip().lower()
-            if response == 'y':
+            if response == "y":
                 return task
         except EOFError:
             pass

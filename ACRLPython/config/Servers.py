@@ -23,6 +23,7 @@ RAG_SERVER_PORT = int(os.environ.get("RAG_SERVER_PORT", "5011"))  # RAG semantic
 STATUS_SERVER_PORT = int(os.environ.get("STATUS_SERVER_PORT", "5012"))  # Status query server
 SEQUENCE_SERVER_PORT = int(os.environ.get("SEQUENCE_SERVER_PORT", "5013"))  # Sequence server
 WORLD_STATE_PORT = int(os.environ.get("WORLD_STATE_PORT", "5014"))  # World state streaming (Unity → Python)
+AUTORT_SERVER_PORT = int(os.environ.get("AUTORT_SERVER_PORT", "5015"))  # AutoRT task generation server
 
 # Legacy port names for backward compatibility
 RESULTS_SERVER_PORT = LLM_RESULTS_PORT
@@ -71,17 +72,16 @@ SERVER_INIT_WAIT_TIME = float(os.environ.get("SERVER_INIT_WAIT_TIME", "2.0"))
 # ============================================================================
 
 LMSTUDIO_BASE_URL = os.environ.get("LMSTUDIO_BASE_URL", "http://192.168.178.53:1234/v1")
-DEFAULT_LMSTUDIO_MODEL = os.environ.get("DEFAULT_LMSTUDIO_MODEL", "mistralai/ministral-3-14b-reasoning")
-DEFAULT_TEMPERATURE = float(os.environ.get("DEFAULT_TEMPERATURE", "0.0"))
+DEFAULT_LMSTUDIO_MODEL = os.environ.get("DEFAULT_LMSTUDIO_MODEL", "ministral-3-14b-reasoning")
+DEFAULT_TEMPERATURE = float(os.environ.get("DEFAULT_TEMPERATURE", "0.1"))
 
 # Popular vision models (for reference)
 VISION_MODELS = [
     "gemma-3-12b",
     "llama-3.2-vision",
-    "llava",
     "qwen3-vl-8b",
     "mistral-3-3b",
-    "mistralai/ministral-3-14b-reasoning",
+    "ministral-3-14b-reasoning",
 ]
 
 # ============================================================================

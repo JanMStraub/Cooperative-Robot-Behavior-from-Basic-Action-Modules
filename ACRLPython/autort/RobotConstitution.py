@@ -7,10 +7,10 @@ Two-layer safety system: Semantic (LLM) + Kinematic (Code)
 import json
 import logging
 import numpy as np
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 from openai import OpenAI
 
-from autort.DataModels import ProposedTask, TaskVerdict, SceneDescription, Operation
+from autort.DataModels import ProposedTask, TaskVerdict, SceneDescription
 from operations.WorldState import get_world_state
 
 logger = logging.getLogger(__name__)
@@ -19,13 +19,19 @@ logger = logging.getLogger(__name__)
 class BoundingBox:
     """Axis-aligned bounding box for workspace bounds checking"""
 
-    def __init__(self, min_corner: Tuple[float, float, float], max_corner: Tuple[float, float, float]):
+    def __init__(
+        self,
+        min_corner: Tuple[float, float, float],
+        max_corner: Tuple[float, float, float],
+    ):
         self.min_corner = min_corner
         self.max_corner = max_corner
 
     def contains(self, point: Tuple[float, float, float]) -> bool:
         """Check if a 3D point is within the bounding box"""
-        return all(self.min_corner[i] <= point[i] <= self.max_corner[i] for i in range(3))
+        return all(
+            self.min_corner[i] <= point[i] <= self.max_corner[i] for i in range(3)
+        )
 
 
 class RobotConstitution:
@@ -50,10 +56,7 @@ class RobotConstitution:
             config: AutoRT config module with safety settings
         """
         self.config = config
-        self.llm_client = OpenAI(
-            base_url=config.LM_STUDIO_URL,
-            api_key="not-needed"
-        )
+        self.llm_client = OpenAI(base_url=config.LM_STUDIO_URL, api_key="not-needed")
         self.model = config.SAFETY_VALIDATION_MODEL
         self.world_state = get_world_state()
 
@@ -69,18 +72,13 @@ class RobotConstitution:
         # Kinematic safety limits (checked by code)
         bounds = config.WORKSPACE_BOUNDS
         self.workspace_bounds = BoundingBox(
-            min_corner=bounds['min_corner'],
-            max_corner=bounds['max_corner']
+            min_corner=bounds["min_corner"], max_corner=bounds["max_corner"]
         )
         self.max_velocity = config.MAX_VELOCITY
         self.min_robot_separation = config.MIN_ROBOT_SEPARATION
         self.max_gripper_force = config.MAX_GRIPPER_FORCE
 
-    def evaluate_task(
-        self,
-        task: ProposedTask,
-        scene: SceneDescription
-    ) -> TaskVerdict:
+    def evaluate_task(self, task: ProposedTask, scene: SceneDescription) -> TaskVerdict:
         """
         Evaluate task through both safety layers.
 
@@ -101,7 +99,7 @@ class RobotConstitution:
         return TaskVerdict(
             approved=True,
             violations=[],
-            warnings=kinematic_verdict.warnings  # Pass through kinematic warnings
+            warnings=kinematic_verdict.warnings,  # Pass through kinematic warnings
         )
 
     def _evaluate_semantic_safety(self, task: ProposedTask) -> TaskVerdict:
@@ -138,7 +136,7 @@ Respond in JSON format ONLY:
             response = self.llm_client.chat.completions.create(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                temperature=0.0
+                temperature=0.0,
             )
             raw = response.choices[0].message.content
 
@@ -157,7 +155,7 @@ Respond in JSON format ONLY:
                 return TaskVerdict(
                     approved=False,
                     violations=[f"Semantic safety: {result.get('reason', 'Unknown')}"],
-                    rejection_reason=f"Violates rule: {result.get('rule_violated', 'Unknown')}"
+                    rejection_reason=f"Violates rule: {result.get('rule_violated', 'Unknown')}",
                 )
 
             return TaskVerdict(approved=True)
@@ -168,13 +166,11 @@ Respond in JSON format ONLY:
             return TaskVerdict(
                 approved=False,
                 violations=["Semantic safety check error"],
-                rejection_reason=f"LLM safety validation failed: {e}"
+                rejection_reason=f"LLM safety validation failed: {e}",
             )
 
     def _evaluate_kinematic_safety(
-        self,
-        task: ProposedTask,
-        scene: SceneDescription
+        self, task: ProposedTask, scene: SceneDescription
     ) -> TaskVerdict:
         """
         LAYER 2: Code-based physics and bounds checking.
@@ -197,10 +193,12 @@ Respond in JSON format ONLY:
         for i, op in enumerate(task.operations):
             # Workspace bounds check
             if op.type in ("move_to_coordinate", "move_from_a_to_b"):
-                target_pos = op.parameters.get('target_position')
+                target_pos = op.parameters.get("target_position")
                 if target_pos:
                     target_tuple = tuple(target_pos)
-                    robot_planned_targets.setdefault(op.robot_id, []).append(target_tuple)
+                    robot_planned_targets.setdefault(op.robot_id, []).append(
+                        target_tuple
+                    )
 
                     if not self.workspace_bounds.contains(target_tuple):
                         violations.append(
@@ -209,8 +207,8 @@ Respond in JSON format ONLY:
                         )
 
             # Velocity check (if specified)
-            if 'velocity' in op.parameters:
-                vel = op.parameters['velocity']
+            if "velocity" in op.parameters:
+                vel = op.parameters["velocity"]
                 if vel > self.max_velocity:
                     violations.append(
                         f"Op {i} ({op.type}): Velocity {vel} m/s exceeds limit {self.max_velocity} m/s"
@@ -218,7 +216,7 @@ Respond in JSON format ONLY:
 
             # Gripper force check
             if op.type == "control_gripper":
-                force = op.parameters.get('force', 0.0)
+                force = op.parameters.get("force", 0.0)
                 if force > self.max_gripper_force:
                     warnings.append(
                         f"Op {i}: High gripper force ({force}N > {self.max_gripper_force}N limit)"
@@ -236,19 +234,13 @@ Respond in JSON format ONLY:
                 approved=False,
                 violations=violations,
                 warnings=warnings,
-                rejection_reason="Kinematic safety violations detected"
+                rejection_reason="Kinematic safety violations detected",
             )
 
-        return TaskVerdict(
-            approved=True,
-            violations=[],
-            warnings=warnings
-        )
+        return TaskVerdict(approved=True, violations=[], warnings=warnings)
 
     def _check_robot_collisions(
-        self,
-        robot_ids: List[str],
-        planned_targets: dict
+        self, robot_ids: List[str], planned_targets: dict
     ) -> List[str]:
         """
         Check robot collision risk using both planned targets AND live WorldState positions.

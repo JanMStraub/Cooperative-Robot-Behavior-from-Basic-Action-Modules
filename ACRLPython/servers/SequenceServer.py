@@ -25,13 +25,13 @@ from typing import Dict, Any, Optional, Union, TYPE_CHECKING
 try:
     from ..core.TCPServerBase import TCPServerBase, ServerConfig
     from ..core.LoggingSetup import get_logger
-    from ..core.UnityProtocol import MessageType
+    from ..core.UnityProtocol import MessageType, UnityProtocol
 
     # NOTE: CommandParser and SequenceExecutor imported lazily in initialize() to avoid circular dependency
 except ImportError:
     from core.TCPServerBase import TCPServerBase, ServerConfig
     from core.LoggingSetup import get_logger
-    from core.UnityProtocol import MessageType
+    from core.UnityProtocol import MessageType, UnityProtocol
 
     # NOTE: CommandParser and SequenceExecutor imported lazily in initialize() to avoid circular dependency
 
@@ -256,9 +256,13 @@ class SequenceServer(TCPServerBase):
                 msg_type = header_bytes[0]
                 request_id = struct.unpack("<I", header_bytes[1:5])[0]
 
-                # Validate message type
-                if msg_type != MessageType.SEQUENCE_QUERY:
-                    logger.error(f"Invalid message type: {msg_type} (expected {MessageType.SEQUENCE_QUERY})")
+                # Route to appropriate handler based on message type
+                if msg_type == MessageType.AUTORT_COMMAND:
+                    # Handle AutoRT command - pass header bytes for complete message reading
+                    self._handle_autort_command(client, header_bytes)
+                    continue
+                elif msg_type != MessageType.SEQUENCE_QUERY:
+                    logger.error(f"Invalid message type: {msg_type} (expected {MessageType.SEQUENCE_QUERY} or {MessageType.AUTORT_COMMAND})")
                     self._send_error(client, request_id, f"Invalid message type: {msg_type}")
                     continue
 
@@ -356,6 +360,97 @@ class SequenceServer(TCPServerBase):
             data += chunk
         return data
 
+    def _handle_autort_command(self, client: socket.socket, header_bytes: bytes):
+        """
+        Handle AutoRT command message from Unity.
+
+        Args:
+            client: Client socket
+            header_bytes: Already-read header (5 bytes: type + request_id)
+        """
+        try:
+            # Import AutoRT handler lazily
+            try:
+                from ..servers.AutoRTIntegration import AutoRTHandler
+            except ImportError:
+                from servers.AutoRTIntegration import AutoRTHandler
+
+            # Receive complete message using TCPServerBase helper
+            complete_message = self._receive_complete_autort_command(client, header_bytes)
+            if not complete_message:
+                logger.error("Failed to receive complete AutoRT command")
+                return
+
+            # Decode using UnityProtocol (now accepts only bytes)
+            request_id, command_type, params = UnityProtocol.decode_autort_command(complete_message)
+
+            logger.info(f"AutoRT command received: {command_type} (params={params})")
+
+            # Get AutoRT handler singleton
+            handler = AutoRTHandler.get_instance()
+
+            # Route command to appropriate method
+            if command_type == "generate":
+                result = handler.generate_tasks(
+                    num_tasks=params.get("num_tasks"),
+                    robot_ids=params.get("robot_ids"),
+                    strategy=params.get("strategy", "balanced"),
+                )
+            elif command_type == "start_loop":
+                result = handler.start_loop(
+                    loop_delay=params.get("loop_delay"),
+                    robot_ids=params.get("robot_ids"),
+                    strategy=params.get("strategy", "balanced"),
+                )
+            elif command_type == "stop_loop":
+                result = handler.stop_loop()
+            elif command_type == "execute_task":
+                task_id = params.get("task_id")
+                if not task_id:
+                    result = {"success": False, "error": "Missing task_id parameter"}
+                else:
+                    result = handler.execute_task(task_id)
+            elif command_type == "get_status":
+                result = handler.get_status()
+            else:
+                result = {
+                    "success": False,
+                    "error": f"Unknown command type: {command_type}",
+                }
+
+            # Send AUTORT_RESPONSE
+            self._send_autort_response(client, request_id, result)
+
+        except Exception as e:
+            logger.error(f"AutoRT command handling failed: {e}", exc_info=True)
+            error_result = {
+                "success": False,
+                "tasks": [],
+                "loop_running": False,
+                "error": str(e),
+            }
+            self._send_autort_response(client, request_id, error_result)
+
+    def _send_autort_response(
+        self, client: socket.socket, request_id: int, result: Dict[str, Any]
+    ):
+        """
+        Send AutoRT response to Unity client.
+
+        Args:
+            client: Client socket
+            request_id: Request ID for correlation
+            result: Result dictionary
+        """
+        try:
+            # Encode using UnityProtocol
+            response_bytes = UnityProtocol.encode_autort_response(result, request_id)
+            client.sendall(response_bytes)
+            logger.info(f"Sent AutoRT response for request {request_id}: success={result.get('success')}, status={result.get('status')}")
+
+        except Exception as e:
+            logger.error(f"Failed to send AutoRT response: {e}")
+
     def _send_response(
         self, client: socket.socket, request_id: int, result: Dict[str, Any]
     ):
@@ -404,7 +499,7 @@ def run_sequence_server_background(
     config: Optional[Union[ServerConfig, Dict[str, Any]]] = None,
     lm_studio_url: Optional[str] = None,
     model: Optional[str] = None,
-    setup_signals: bool = False,
+    setup_signals: bool = False,  # noqa: ARG001
     check_completion: bool = True,
 ) -> SequenceServer:
     """
@@ -476,7 +571,7 @@ if __name__ == "__main__":
     server = SequenceServer(config)
 
     # Handle shutdown
-    def signal_handler(signum, frame):
+    def signal_handler(signum, frame):  # noqa: ARG001
         logger.info("Shutdown signal received")
         server.stop()
 

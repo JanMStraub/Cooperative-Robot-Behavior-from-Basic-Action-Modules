@@ -68,6 +68,13 @@ namespace PythonCommunication
         /// </summary>
         protected override GenericResult ReceiveResponse()
         {
+            // Check if data is available before blocking read (prevents idle timeout disconnects)
+            if (!_stream.DataAvailable)
+            {
+                System.Threading.Thread.Sleep(10); // Brief sleep to avoid tight loop
+                return null; // No data available, try again later
+            }
+
             byte[] header = new byte[UnityProtocol.HEADER_SIZE];
             ReadExactly(_stream, header, UnityProtocol.HEADER_SIZE);
 
