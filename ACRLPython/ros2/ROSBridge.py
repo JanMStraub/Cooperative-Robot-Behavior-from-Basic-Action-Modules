@@ -105,6 +105,36 @@ class ROSBridge:
         self._connected = False
         logger.info("Disconnected from ROS bridge")
 
+    def validate_grasp_candidates(self, candidates, robot_id="Robot1", timeout=10.0):
+        """
+        Validate grasp candidates using MoveIt's IK service.
+
+        Tests each candidate's grasp pose for IK reachability.
+
+        Args:
+            candidates: List of candidate dicts with 'position' and 'rotation' keys
+            robot_id: Robot namespace (e.g., "Robot1", "Robot2")
+            timeout: Command timeout in seconds (default 10s for batch processing)
+
+        Returns:
+            Dict with success status and validation results:
+            {
+                "success": True,
+                "results": [(is_valid, quality_score), ...],
+                "candidates_validated": N
+            }
+        """
+        cmd = {
+            "command": "validate_grasp_candidates",
+            "robot_id": robot_id,
+            "candidates": candidates,
+        }
+
+        # Adjust timeout based on number of candidates (0.5s per candidate + 5s buffer)
+        adjusted_timeout = max(timeout, 5.0 + len(candidates) * 0.5)
+
+        return self._send_command(cmd, timeout=adjusted_timeout)
+
     def _send_command(self, command, timeout=30.0):
         """
         Send a command to the ROS motion server and wait for response.

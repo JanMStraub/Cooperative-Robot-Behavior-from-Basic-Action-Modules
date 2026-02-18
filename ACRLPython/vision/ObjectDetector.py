@@ -139,6 +139,41 @@ except Exception as e:
         return np.zeros((0, 0), dtype=np.float32)
 
 
+def estimate_object_dimensions_from_bbox(
+    bbox: Tuple[int, int, int, int],
+    depth_m: float,
+    focal_length_px: float,
+    camera_config: Optional["CameraConfig"] = None,  # type: ignore
+) -> Tuple[float, float, float]:
+    """
+    Estimate 3D object dimensions from 2D bounding box and depth.
+
+    Converts 2D bounding box dimensions to 3D world dimensions using pinhole camera model.
+    The depth dimension is estimated heuristically as the minimum of width/height scaled by 0.8.
+
+    Args:
+        bbox: Bounding box as (x, y, width_px, height_px) in pixels
+        depth_m: Depth (Z distance from camera) in meters
+        focal_length_px: Camera focal length in pixels
+        camera_config: Optional camera configuration (currently unused, for future extensions)
+
+    Returns:
+        Tuple of (width_m, height_m, depth_m) in meters
+    """
+    x, y, w_px, h_px = bbox
+
+    # Pinhole camera model: world_size = (pixel_size * depth) / focal_length
+    width_m = (w_px * depth_m) / focal_length_px
+    height_m = (h_px * depth_m) / focal_length_px
+
+    # Heuristic: Assume object depth is approximately the smaller of width/height * 0.8
+    # This works reasonably well for cube-like objects
+    # Future improvement: Use multiple view angles or point cloud data for accurate depth
+    depth_m_est = min(width_m, height_m) * 0.8
+
+    return (width_m, height_m, depth_m_est)
+
+
 class CubeDetector:
     """
     Color-based cube detector using HSV segmentation
@@ -352,6 +387,7 @@ class CubeDetector:
 
             # Calculate depth from disparity
             depth_m = None
+            focal_length = None
             if disp_value is not None and disp_value > 1.0:  # Valid disparity
                 # Depth = (baseline * focal_length) / disparity
                 # focal_length = (image_width / 2) / tan(fov/2)
@@ -377,7 +413,17 @@ class CubeDetector:
                 camera_position=camera_position,
             )
 
-            # Create new detection object with world position, depth, and disparity
+            # Estimate 3D dimensions from bounding box and depth
+            dimensions = None
+            if depth_m is not None and focal_length is not None:
+                dimensions = estimate_object_dimensions_from_bbox(
+                    (det.bbox_x, det.bbox_y, det.bbox_w, det.bbox_h),
+                    depth_m,
+                    focal_length,
+                    camera_config,
+                )
+
+            # Create new detection object with world position, depth, disparity, and dimensions
             det_with_depth = DetectionObject(
                 object_id=det.object_id,
                 color=det.color,
@@ -386,6 +432,7 @@ class CubeDetector:
                 world_position=world_pos,
                 depth_m=depth_m,
                 disparity=disp_value,
+                dimensions=dimensions,
             )
 
             detections_with_depth.append(det_with_depth)

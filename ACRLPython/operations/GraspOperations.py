@@ -228,50 +228,168 @@ def grasp_object(
                             except ImportError:
                                 _use_ros = False
                         else:
-                            # We have object position - use plan_and_execute instead of plan_grasp
+                            # We have object position - check for dimensions for grasp planning
                             logger.info(f"Resolved {object_id} to position {object_position}, planning with ROS")
 
-                            # Convert position tuple to dict
-                            position_dict = {
-                                "x": object_position[0],
-                                "y": object_position[1],
-                                "z": object_position[2],
-                            }
+                            # Get object dimensions and current gripper state for grasp planning
+                            object_dimensions = world_state.get_object_dimensions(object_id)
+                            robot_state = world_state.get_robot_state(robot_id)
 
-                            # Use plan_and_execute with resolved coordinates
-                            result = bridge.plan_and_execute(
-                                position=position_dict,
-                                orientation=None,  # Let MoveIt determine best orientation for grasp
-                                planning_time=10.0,
-                                robot_id=robot_id,
-                            )
-
-                            if result and result.get("success"):
-                                logger.info(f"ROS grasp planning completed for {robot_id}")
-                                return OperationResult.success_result({
-                                    "robot_id": robot_id,
-                                    "object_id": object_id,
-                                    "position": object_position,
-                                    "request_id": request_id,
-                                    "status": "ros_executed",
-                                    "planning_time": result.get("planning_time", 0),
-                                    "timestamp": time.time(),
-                                })
-                            else:
-                                error_msg = result.get("error", "Unknown") if result else "No response"
+                            # If dimensions are available, use grasp planning pipeline
+                            if object_dimensions is not None and robot_state is not None and robot_state.position is not None:
                                 try:
-                                    from config.ROS import DEFAULT_CONTROL_MODE
-                                    if DEFAULT_CONTROL_MODE == "hybrid":
-                                        logger.warning(f"ROS motion planning failed ({error_msg}), falling back to TCP")
-                                        _use_ros = False
+                                    from grasp_planning.GraspPlanner import GraspPlanner
+
+                                    logger.info(f"Using grasp planning pipeline for {object_id}")
+
+                                    # Initialize grasp planner
+                                    planner = GraspPlanner()
+
+                                    # Plan grasp with full pipeline
+                                    best_grasp = planner.plan_grasp(
+                                        object_position=object_position,
+                                        object_rotation=(0.0, 0.0, 0.0, 1.0),  # Identity rotation for now
+                                        object_size=object_dimensions,
+                                        robot_id=robot_id,
+                                        gripper_position=robot_state.position,
+                                        gripper_rotation=None,  # Could use robot_state.rotation if available
+                                        use_moveit_ik=True,
+                                        preferred_approach=preferred_approach.lower() if preferred_approach.lower() != "auto" else None,
+                                        min_score=0.3,
+                                    )
+
+                                    if best_grasp is None:
+                                        logger.warning("Grasp planning found no valid candidates, falling back to position-only")
+                                        # Fall through to position-only planning
                                     else:
-                                        return OperationResult.error_result(
-                                            "ROS_PLANNING_FAILED",
-                                            f"MoveIt motion planning failed: {error_msg}",
-                                            ["Check MoveIt logs", "Verify object is reachable"],
+                                        # Use planned grasp pose with orientation
+                                        logger.info(
+                                            f"Grasp planning succeeded: {best_grasp.approach_type} approach, "
+                                            f"score={best_grasp.total_score:.3f}"
                                         )
-                                except ImportError:
-                                    _use_ros = False
+
+                                        # Execute grasp with planned pose
+                                        result = bridge.plan_and_execute(
+                                            position={
+                                                "x": best_grasp.grasp_position[0],
+                                                "y": best_grasp.grasp_position[1],
+                                                "z": best_grasp.grasp_position[2],
+                                            },
+                                            orientation={
+                                                "x": best_grasp.grasp_rotation[0],
+                                                "y": best_grasp.grasp_rotation[1],
+                                                "z": best_grasp.grasp_rotation[2],
+                                                "w": best_grasp.grasp_rotation[3],
+                                            },
+                                            planning_time=10.0,
+                                            robot_id=robot_id,
+                                        )
+
+                                        if result and result.get("success"):
+                                            logger.info(f"ROS grasp execution completed for {robot_id}")
+                                            return OperationResult.success_result({
+                                                "robot_id": robot_id,
+                                                "object_id": object_id,
+                                                "position": object_position,
+                                                "grasp_approach": best_grasp.approach_type,
+                                                "grasp_score": best_grasp.total_score,
+                                                "request_id": request_id,
+                                                "status": "ros_executed_with_grasp_planning",
+                                                "planning_time": result.get("planning_time", 0),
+                                                "timestamp": time.time(),
+                                            })
+                                        else:
+                                            error_msg = result.get("error", "Unknown") if result else "No response"
+                                            try:
+                                                from config.ROS import DEFAULT_CONTROL_MODE
+                                                if DEFAULT_CONTROL_MODE == "hybrid":
+                                                    logger.warning(f"ROS motion planning failed ({error_msg}), falling back to TCP")
+                                                    _use_ros = False
+                                                else:
+                                                    return OperationResult.error_result(
+                                                        "ROS_PLANNING_FAILED",
+                                                        f"MoveIt motion planning failed: {error_msg}",
+                                                        ["Check MoveIt logs", "Verify object is reachable"],
+                                                    )
+                                            except ImportError:
+                                                _use_ros = False
+
+                                        # If we got here, planning succeeded but execution failed
+                                        # If hybrid mode disabled fallback, skip to TCP path
+                                        if not _use_ros:
+                                            pass  # Will fall through to TCP path
+                                        else:
+                                            # Return error (execution failed in non-hybrid mode)
+                                            return OperationResult.error_result(
+                                                "ROS_EXECUTION_FAILED",
+                                                f"Grasp planning succeeded but execution failed",
+                                                ["Check robot state", "Verify trajectory is collision-free"],
+                                            )
+
+                                except ImportError as e:
+                                    logger.warning(f"Grasp planning not available ({e}), using position-only")
+                                    # Fall through to position-only planning
+                                except Exception as e:
+                                    logger.error(f"Error during grasp planning: {e}", exc_info=True)
+                                    try:
+                                        from config.ROS import DEFAULT_CONTROL_MODE
+                                        if DEFAULT_CONTROL_MODE == "hybrid":
+                                            logger.warning(f"Falling back to TCP due to grasp planning error")
+                                            _use_ros = False
+                                        else:
+                                            return OperationResult.error_result(
+                                                "GRASP_PLANNING_ERROR",
+                                                f"Grasp planning failed: {str(e)}",
+                                                ["Check logs for details", "Verify object dimensions are available"],
+                                            )
+                                    except ImportError:
+                                        _use_ros = False
+
+                            # Fallback: position-only planning (no dimensions or grasp planning failed)
+                            if _use_ros:
+                                logger.info(f"Using position-only planning for {object_id}")
+
+                                # Convert position tuple to dict
+                                position_dict = {
+                                    "x": object_position[0],
+                                    "y": object_position[1],
+                                    "z": object_position[2],
+                                }
+
+                                # Use plan_and_execute with resolved coordinates (no orientation)
+                                result = bridge.plan_and_execute(
+                                    position=position_dict,
+                                    orientation=None,  # Let MoveIt determine best orientation
+                                    planning_time=10.0,
+                                    robot_id=robot_id,
+                                )
+
+                                if result and result.get("success"):
+                                    logger.info(f"ROS grasp planning completed for {robot_id}")
+                                    return OperationResult.success_result({
+                                        "robot_id": robot_id,
+                                        "object_id": object_id,
+                                        "position": object_position,
+                                        "request_id": request_id,
+                                        "status": "ros_executed",
+                                        "planning_time": result.get("planning_time", 0),
+                                        "timestamp": time.time(),
+                                    })
+                                else:
+                                    error_msg = result.get("error", "Unknown") if result else "No response"
+                                    try:
+                                        from config.ROS import DEFAULT_CONTROL_MODE
+                                        if DEFAULT_CONTROL_MODE == "hybrid":
+                                            logger.warning(f"ROS motion planning failed ({error_msg}), falling back to TCP")
+                                            _use_ros = False
+                                        else:
+                                            return OperationResult.error_result(
+                                                "ROS_PLANNING_FAILED",
+                                                f"MoveIt motion planning failed: {error_msg}",
+                                                ["Check MoveIt logs", "Verify object is reachable"],
+                                            )
+                                    except ImportError:
+                                        _use_ros = False
                     except Exception as e:
                         logger.error(f"Error resolving object position for ROS: {e}")
                         try:
