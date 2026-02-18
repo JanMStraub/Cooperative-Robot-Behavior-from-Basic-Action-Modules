@@ -25,6 +25,7 @@ class DetectionObject:
         depth_m: Optional[float] = None,
         disparity: Optional[float] = None,
         track_id: Optional[int] = None,
+        dimensions: Optional[Tuple[float, float, float]] = None,
     ):
         """
         Initialize a detected object
@@ -38,6 +39,7 @@ class DetectionObject:
             depth_m: Optional depth in meters (Z distance from camera)
             disparity: Optional disparity value in pixels
             track_id: Optional persistent track ID across frames (for object tracking)
+            dimensions: Optional 3D dimensions (width, height, depth) in meters
         """
         self.object_id = object_id
         self.color = color
@@ -47,6 +49,7 @@ class DetectionObject:
         self.depth_m = depth_m
         self.disparity = disparity
         self.track_id = track_id
+        self.dimensions = dimensions
 
         # Calculate center point
         self.center_x = int(self.bbox_x + self.bbox_w / 2)
@@ -89,6 +92,14 @@ class DetectionObject:
                 result["depth_m"] = round(self.depth_m, 4)
             if self.disparity is not None:
                 result["disparity"] = round(self.disparity, 2)
+
+            # Add dimensions if available
+            if self.dimensions is not None:
+                result["dimensions"] = {
+                    "width": round(self.dimensions[0], 4),
+                    "height": round(self.dimensions[1], 4),
+                    "depth": round(self.dimensions[2], 4),
+                }
         else:
             # Use Unity DetectionResult format (2D only)
             result = {

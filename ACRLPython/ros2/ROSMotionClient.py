@@ -58,6 +58,7 @@ try:
         BoundingVolume,
         RobotState,
     )
+    from moveit_msgs.srv import GetPositionIK
     from geometry_msgs.msg import PoseStamped, Point, Quaternion, Vector3
     from shape_msgs.msg import SolidPrimitive
     from trajectory_msgs.msg import JointTrajectory
@@ -97,6 +98,7 @@ class ROSMotionServer:
 
         # Multi-robot support: dict of robot_id -> clients/publishers
         self._move_group_clients = {}  # robot_id -> ActionClient
+        self._ik_service_clients = {}  # robot_id -> Service Client for IK
         self._trajectory_pubs = {}  # robot_id -> Publisher
         self._gripper_pubs = {}  # robot_id -> Publisher
         self._joint_state_subs = {}  # robot_id -> Subscription
@@ -127,11 +129,16 @@ class ROSMotionServer:
             self._node, MoveGroup, f"/{robot_id}/move_action"
         )
 
+        # MoveIt IK service client (for grasp candidate validation)
+        self._ik_service_clients[robot_id] = self._node.create_client(
+            GetPositionIK, f"/{robot_id}/compute_ik"
+        )
+
         # NOTE: Do not block here waiting for the action server. MoveIt may take
         # 20-30s to fully initialize, and blocking in __init__ causes timeouts when
         # MoveIt is still starting. Instead, we check server availability at request
         # time in _call_move_group_plan with a generous timeout.
-        logger.info(f"Registered move_action client for {robot_id} (non-blocking)")
+        logger.info(f"Registered move_action client and IK service for {robot_id} (non-blocking)")
 
         # Publisher: planned trajectories -> Unity's ROSTrajectorySubscriber
         self._trajectory_pubs[robot_id] = self._node.create_publisher(
@@ -347,6 +354,8 @@ class ROSMotionServer:
                 return self._plan_grasp(request, robot_id)
             elif command == "plan_return_to_start":
                 return self._plan_return_to_start(request, robot_id)
+            elif command == "validate_grasp_candidates":
+                return self._validate_grasp_candidates(request, robot_id)
             elif command == "ping":
                 return {"success": True, "message": "pong", "timestamp": time.time()}
             else:
@@ -894,6 +903,152 @@ class ROSMotionServer:
             "planning_time": planning_time,
         }
         return self._plan_and_publish(home_request, robot_id)
+
+    def _validate_grasp_candidates(self, request, robot_id):
+        """
+        Validate grasp candidates using MoveIt's IK service.
+
+        Tests each candidate's grasp and pre-grasp poses for IK reachability.
+        Returns validation results with IK quality scores.
+
+        Args:
+            request: Request dict with 'candidates' list
+            robot_id: Robot namespace
+
+        Returns:
+            Dict with success status and validation results per candidate
+        """
+        candidates = request.get("candidates", [])
+
+        if not candidates:
+            return {
+                "success": False,
+                "error": "No candidates provided",
+            }
+
+        logger.info(f"Validating {len(candidates)} grasp candidates for {robot_id}")
+
+        # Validate IK for each candidate
+        results = self._validate_ik_batch(candidates, robot_id)
+
+        return {
+            "success": True,
+            "results": results,
+            "candidates_validated": len(results),
+        }
+
+    def _validate_ik_batch(self, candidates, robot_id):
+        """
+        Validate IK for a batch of grasp candidates.
+
+        Uses MoveIt's compute_ik service to check if each candidate's
+        grasp pose can be reached by the robot.
+
+        Args:
+            candidates: List of candidate dicts with position/orientation
+            robot_id: Robot namespace
+
+        Returns:
+            List of (is_valid, quality_score) tuples for each candidate
+        """
+        ik_client = self._ik_service_clients.get(robot_id)
+
+        if not ik_client:
+            logger.error(f"No IK service client for {robot_id}")
+            return [(False, 0.0)] * len(candidates)
+
+        # Wait for IK service to be available
+        if not ik_client.wait_for_service(timeout_sec=5.0):
+            logger.error(f"IK service not available for {robot_id}")
+            return [(False, 0.0)] * len(candidates)
+
+        results = []
+
+        for i, candidate in enumerate(candidates):
+            try:
+                # Extract grasp position and rotation
+                position = candidate.get("position", {})
+                rotation = candidate.get("rotation", {})
+
+                # Transform world coordinates to robot-local frame
+                local_position = self._transform_world_to_local(position, robot_id)
+
+                # Build IK request
+                ik_request = GetPositionIK.Request()
+                ik_request.ik_request.group_name = "arm"
+                ik_request.ik_request.avoid_collisions = False  # Fast validation only
+                ik_request.ik_request.timeout.sec = 0
+                ik_request.ik_request.timeout.nanosec = 100_000_000  # 100ms per candidate
+
+                # Set target pose
+                ik_request.ik_request.pose_stamped.header.frame_id = "base_link"
+                ik_request.ik_request.pose_stamped.pose.position = Point(
+                    x=local_position.get("x", 0.0),
+                    y=local_position.get("y", 0.0),
+                    z=local_position.get("z", 0.0),
+                )
+                ik_request.ik_request.pose_stamped.pose.orientation = Quaternion(
+                    x=rotation.get("x", 0.0),
+                    y=rotation.get("y", 0.0),
+                    z=rotation.get("z", 0.0),
+                    w=rotation.get("w", 1.0),
+                )
+
+                # Set current robot state as starting point
+                joint_state = self._current_joint_states.get(robot_id)
+                if joint_state is not None:
+                    # Filter to arm joints only
+                    arm_joint_names = [
+                        "joint_1", "joint_2", "joint_3",
+                        "joint_4", "joint_5", "joint_6"
+                    ]
+                    filtered_js = JointState()
+                    filtered_js.header = joint_state.header
+                    for name in arm_joint_names:
+                        if name in joint_state.name:
+                            idx = list(joint_state.name).index(name)
+                            filtered_js.name.append(name)
+                            filtered_js.position.append(joint_state.position[idx])
+
+                    ik_request.ik_request.robot_state.joint_state = filtered_js
+
+                # Call IK service (synchronous)
+                future = ik_client.call_async(ik_request)
+
+                # Wait for response with timeout
+                timeout_duration = 0.5  # 500ms max per candidate
+                start_time = time.time()
+                while not future.done():
+                    rclpy.spin_once(self._node, timeout_sec=0.01)
+                    if time.time() - start_time > timeout_duration:
+                        logger.warning(f"IK validation timeout for candidate {i}")
+                        results.append((False, 0.0))
+                        break
+                else:
+                    # Future completed
+                    response = future.result()
+
+                    if response.error_code.val == 1:  # SUCCESS
+                        # IK solution found - compute quality score
+                        # Quality based on error code (1 = perfect)
+                        quality_score = 1.0
+                        results.append((True, quality_score))
+                        logger.debug(f"Candidate {i}: IK valid (score={quality_score:.2f})")
+                    else:
+                        # IK failed
+                        results.append((False, 0.0))
+                        logger.debug(f"Candidate {i}: IK failed (error={response.error_code.val})")
+
+            except Exception as e:
+                logger.error(f"Error validating candidate {i}: {e}")
+                results.append((False, 0.0))
+
+        valid_count = sum(1 for is_valid, _ in results if is_valid)
+        logger.info(
+            f"IK validation complete: {valid_count}/{len(candidates)} candidates valid"
+        )
+
+        return results
 
     def shutdown(self):
         """Clean shutdown."""

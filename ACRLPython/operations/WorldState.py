@@ -102,6 +102,7 @@ class ObjectState:
         is_graspable: True if object can be grasped
         grasped_by: Robot ID if currently grasped, None otherwise
         confidence: Detection confidence (0.0 - 1.0)
+        dimensions: Object dimensions (width, height, depth) in meters
         timestamp: Time of last detection
     """
 
@@ -112,6 +113,7 @@ class ObjectState:
     is_graspable: bool = True
     grasped_by: Optional[str] = None
     confidence: float = 1.0
+    dimensions: Optional[Tuple[float, float, float]] = None
     timestamp: float = field(default_factory=time.time)
 
 
@@ -416,6 +418,7 @@ class WorldState:
         color: str = "unknown",
         object_type: str = "unknown",
         confidence: float = 1.0,
+        dimensions: Optional[Tuple[float, float, float]] = None,
     ):
         """
         Update object position from detection results.
@@ -426,6 +429,7 @@ class WorldState:
             color: Object color
             object_type: Object type
             confidence: Detection confidence
+            dimensions: Optional object dimensions (width, height, depth) in meters
         """
         with self._lock:
             if object_id not in self._objects:
@@ -435,6 +439,7 @@ class WorldState:
                     color=color,
                     object_type=object_type,
                     confidence=confidence,
+                    dimensions=dimensions,
                 )
             else:
                 obj = self._objects[object_id]
@@ -442,6 +447,7 @@ class WorldState:
                 obj.color = color
                 obj.object_type = object_type
                 obj.confidence = confidence
+                obj.dimensions = dimensions
                 obj.timestamp = time.time()
 
             logger.debug(f"Updated object {object_id} at {position}")
@@ -461,6 +467,22 @@ class WorldState:
         with self._lock:
             obj = self._objects.get(object_id)
             return obj.position if obj else None
+
+    def get_object_dimensions(
+        self, object_id: str
+    ) -> Optional[Tuple[float, float, float]]:
+        """
+        Get object dimensions.
+
+        Args:
+            object_id: Object identifier
+
+        Returns:
+            Dimensions tuple (width, height, depth) in meters or None if not found
+        """
+        with self._lock:
+            obj = self._objects.get(object_id)
+            return obj.dimensions if obj else None
 
     def get_objects_by_color(self, color: str) -> list[ObjectState]:
         """

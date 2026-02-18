@@ -1036,8 +1036,10 @@ def detect_object_stereo(
                 color=best.color,
                 object_type="cube",  # Default to cube for now
                 confidence=best.confidence,
+                dimensions=best.dimensions,  # Include dimensions from detection
             )
-            logger.debug(f"Updated WorldState: {object_id} at ({best.world_position[0]:.3f}, {best.world_position[1]:.3f}, {best.world_position[2]:.3f})")
+            dim_str = f" dims=({best.dimensions[0]:.3f}, {best.dimensions[1]:.3f}, {best.dimensions[2]:.3f})m" if best.dimensions else ""
+            logger.debug(f"Updated WorldState: {object_id} at ({best.world_position[0]:.3f}, {best.world_position[1]:.3f}, {best.world_position[2]:.3f}){dim_str}")
         except Exception as e:
             logger.warning(f"Failed to update WorldState: {e}")
             # Don't fail the detection if WorldState update fails
