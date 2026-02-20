@@ -35,6 +35,7 @@ class TestMoveFromAToB(unittest.TestCase):
         result = move_from_a_to_b("Robot1", point_a, point_b)
 
         self.assertTrue(result.success)
+        assert result.result is not None
         self.assertEqual(result.result["robot_id"], "Robot1")
         self.assertEqual(result.result["point_a"], point_a)
         self.assertEqual(result.result["point_b"], point_b)
@@ -48,6 +49,7 @@ class TestMoveFromAToB(unittest.TestCase):
         result = move_from_a_to_b("", point_a, point_b)
 
         self.assertFalse(result.success)
+        assert result.error is not None
         self.assertEqual(result.error["code"], "INVALID_ROBOT_ID")
 
     def test_move_from_a_to_b_invalid_point_a(self):
@@ -57,6 +59,7 @@ class TestMoveFromAToB(unittest.TestCase):
         result = move_from_a_to_b("Robot1", {"x": 0.0}, point_b)
 
         self.assertFalse(result.success)
+        assert result.error is not None
         self.assertEqual(result.error["code"], "INVALID_POINT_A")
 
     def test_move_from_a_to_b_invalid_point_b(self):
@@ -66,6 +69,7 @@ class TestMoveFromAToB(unittest.TestCase):
         result = move_from_a_to_b("Robot1", point_a, {"incomplete": True})
 
         self.assertFalse(result.success)
+        assert result.error is not None
         self.assertEqual(result.error["code"], "INVALID_POINT_B")
 
     @patch("config.ROS.ROS_ENABLED", False)
@@ -80,6 +84,7 @@ class TestMoveFromAToB(unittest.TestCase):
         result = move_from_a_to_b("Robot1", point_a, point_b)
 
         self.assertFalse(result.success)
+        assert result.error is not None
         self.assertEqual(result.error["code"], "COMMUNICATION_FAILED")
 
 
@@ -95,6 +100,7 @@ class TestAdjustEndEffectorOrientation(unittest.TestCase):
         result = adjust_end_effector_orientation("Robot1", roll=90.0, pitch=0.0, yaw=45.0)
 
         self.assertTrue(result.success)
+        assert result.result is not None
         self.assertEqual(result.result["robot_id"], "Robot1")
         self.assertEqual(result.result["orientation"]["roll"], 90.0)
         self.assertEqual(result.result["orientation"]["pitch"], 0.0)
@@ -105,13 +111,15 @@ class TestAdjustEndEffectorOrientation(unittest.TestCase):
         result = adjust_end_effector_orientation("Robot1", roll=200.0)
 
         self.assertFalse(result.success)
+        assert result.error is not None
         self.assertEqual(result.error["code"], "ANGLE_OUT_OF_RANGE")
 
     def test_adjust_orientation_invalid_type(self):
         """Test with invalid angle type"""
-        result = adjust_end_effector_orientation("Robot1", roll="not_a_number")
+        result = adjust_end_effector_orientation("Robot1", roll="not_a_number")  # type: ignore[arg-type]
 
         self.assertFalse(result.success)
+        assert result.error is not None
         self.assertEqual(result.error["code"], "INVALID_ANGLE")
 
 
@@ -127,6 +135,7 @@ class TestReleaseObject(unittest.TestCase):
         result = release_object("Robot1")
 
         self.assertTrue(result.success)
+        assert result.result is not None
         self.assertEqual(result.result["robot_id"], "Robot1")
         # Atomic operation - no place_position field in result
         self.assertNotIn("place_position", result.result)
@@ -138,6 +147,7 @@ class TestReleaseObject(unittest.TestCase):
         result = release_object("")
 
         self.assertFalse(result.success)
+        assert result.error is not None
         self.assertEqual(result.error["code"], "INVALID_ROBOT_ID")
 
     @patch("config.ROS.ROS_ENABLED", False)
@@ -186,6 +196,7 @@ class TestDistanceEstimation(unittest.TestCase):
         result = estimate_distance_to_object("Robot1", "RedCube")
 
         self.assertTrue(result.success)
+        assert result.result is not None
         self.assertEqual(result.result["robot_id"], "Robot1")
         self.assertEqual(result.result["object_id"], "RedCube")
         # Distance should be sqrt(0.3^2 + 0.0^2 + 0.2^2) = sqrt(0.13) ≈ 0.36
@@ -201,6 +212,7 @@ class TestDistanceEstimation(unittest.TestCase):
         result = estimate_distance_to_object("Robot1", "RedCube")
 
         self.assertFalse(result.success)
+        assert result.error is not None
         self.assertEqual(result.error["code"], "ROBOT_NOT_FOUND")
 
     @patch("operations.WorldState.WorldState")
@@ -218,6 +230,7 @@ class TestDistanceEstimation(unittest.TestCase):
         result = estimate_distance_between_objects("RedCube", "BlueCube")
 
         self.assertTrue(result.success)
+        assert result.result is not None
         self.assertEqual(result.result["object_id1"], "RedCube")
         self.assertEqual(result.result["object_id2"], "BlueCube")
         self.assertAlmostEqual(result.result["distance"], 0.3, places=2)

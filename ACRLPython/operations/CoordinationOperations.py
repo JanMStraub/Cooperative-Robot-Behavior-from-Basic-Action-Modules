@@ -129,8 +129,8 @@ def detect_other_robot(
         # Calculate distance between robots
         import math
 
-        detector_pos = detector_state.get("end_effector_position", detector_state.get("position"))
-        target_pos = target_state.get("end_effector_position", target_state.get("position"))
+        detector_pos = detector_state.get("end_effector_position", detector_state.get("position"))  # type: ignore[union-attr]
+        target_pos = target_state.get("end_effector_position", target_state.get("position"))  # type: ignore[union-attr]
 
         if not detector_pos or not target_pos:
             return OperationResult.error_result(
@@ -181,7 +181,7 @@ def mirror_movement_of_other_robot(
     mirror_axis: str = "x",
     scale_factor: float = 1.0,
     request_id: int = 0,
-    use_ros: bool = None,
+    use_ros: Optional[bool] = None,
 ) -> OperationResult:
     """
     Mirror the movement of another robot.

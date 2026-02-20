@@ -17,14 +17,14 @@ from orchestrators.CommandParser import CommandParser
 from operations.WorkflowPatterns import WorkflowPatternRegistry
 
 
-# Check if LLM service is available
+# Check if LM Studio embedding service is available
 def is_llm_available():
-    """Check if LM Studio embedding service is running"""
+    """Check if LM Studio embedding service is running and responding"""
     try:
-        from rag import RAGSystem
-        rag = RAGSystem()
-        return rag.is_initialized()
-    except:
+        from rag.Embeddings import EmbeddingGenerator
+        gen = EmbeddingGenerator()
+        return gen.use_lm_studio
+    except Exception:
         return False
 
 

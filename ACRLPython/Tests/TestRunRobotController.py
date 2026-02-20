@@ -31,7 +31,16 @@ from config.Servers import (
 # ============================================================================
 
 @pytest.fixture
-def robot_controller():
+def mock_world_state_server():
+    """Patch WorldStateServer so tests never bind a real socket."""
+    with patch('orchestrators.RunRobotController.WorldStateServer') as mock_cls:
+        mock_instance = MagicMock()
+        mock_cls.return_value = mock_instance
+        yield mock_instance
+
+
+@pytest.fixture
+def robot_controller(mock_world_state_server):
     """
     Create a RobotController instance for testing.
 
@@ -262,7 +271,7 @@ class TestRobotControllerErrorRecovery:
     @patch('orchestrators.RunRobotController.run_image_server_background')
     @patch('orchestrators.RunRobotController.run_command_server_background')
     @patch('orchestrators.RunRobotController.run_sequence_server_background')
-    def test_shutdown_with_server_error(self, mock_seq_server, mock_cmd_server, mock_img_server):
+    def test_shutdown_with_server_error(self, mock_seq_server, mock_cmd_server, mock_img_server, mock_world_state_server):
         """Test shutdown handles server errors gracefully"""
         # Setup mocks - command server stop raises exception
         mock_img_instance = MagicMock()
@@ -305,7 +314,7 @@ class TestRobotControllerLifecycle:
     @patch('orchestrators.RunRobotController.run_image_server_background')
     @patch('orchestrators.RunRobotController.run_command_server_background')
     @patch('orchestrators.RunRobotController.run_sequence_server_background')
-    def test_multiple_start_stop_cycles(self, mock_seq_server, mock_cmd_server, mock_img_server):
+    def test_multiple_start_stop_cycles(self, mock_seq_server, mock_cmd_server, mock_img_server, mock_world_state_server):
         """Test multiple start/stop cycles"""
         # Setup mocks
         mock_img_server.return_value = MagicMock()

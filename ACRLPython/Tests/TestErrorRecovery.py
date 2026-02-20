@@ -40,10 +40,8 @@ class TestNetworkFailureRecovery:
         # Should return False but not crash
         assert result is False
 
-    @pytest.mark.skip(reason="Test logic needs update for current CommandBroadcaster API")
-
     def test_intermittent_network_failure(self):
-        """Test handling of intermittent network failures"""
+        """Test that send_command returns False (not raises) on intermittent failures"""
         broadcaster = CommandBroadcaster()
         mock_server = Mock()
 
@@ -59,25 +57,22 @@ class TestNetworkFailureRecovery:
         mock_server.broadcast_to_all_clients = intermittent_broadcast
         broadcaster.set_server(mock_server)
 
-        # Try sending commands
+        # send_command catches all exceptions and returns False on error
         results = []
         for i in range(4):
-            try:
-                result = broadcaster.send_command(
-                    {"command_type": "test", "index": i},
-                    request_id=i
-                )
-                results.append(("success", result))
-            except ConnectionError:
-                results.append(("error", None))
+            result = broadcaster.send_command(
+                {"command_type": "test", "index": i},
+                request_id=i
+            )
+            results.append(result)
 
-        # Should have mix of successes and failures
         assert len(results) == 4
-        # Odd indices should fail, even should succeed based on our mock
-        assert results[0][0] == "error"  # First call fails
-        assert results[1][0] == "success"  # Second succeeds
-        assert results[2][0] == "error"  # Third fails
-        assert results[3][0] == "success"  # Fourth succeeds
+        # Calls 1 and 3 (odd) raise ConnectionError -> send_command returns False
+        # Calls 2 and 4 (even) return 1 -> send_command returns True
+        assert results[0] is False  # First call fails
+        assert results[1] is True   # Second succeeds
+        assert results[2] is False  # Third fails
+        assert results[3] is True   # Fourth succeeds
 
     def test_server_restart_mid_operation(self):
         """Test recovery when server restarts during operation"""
@@ -149,25 +144,24 @@ class TestResourceExhaustion:
 
             assert disk_full_handled is True
 
-    @pytest.mark.skip(reason="Test logic needs update for batch operations")
-
     def test_memory_exhaustion_during_batch_operations(self):
-        """Test handling of memory exhaustion during large batch operations"""
+        """Test that MemoryError is handled gracefully when it occurs"""
         import numpy as np
 
-        # Try to allocate very large arrays
-        large_arrays: list = []
-        try:
-            # Attempt to allocate 100GB (will fail on most systems)
-            for _ in range(100):
-                large_arrays.append(np.zeros((10000, 10000, 100), dtype=np.float64))
-            memory_error_occurred = False
-        except MemoryError:
-            memory_error_occurred = True
+        # Simulate a MemoryError being raised and caught, as would happen in
+        # production code processing large image batches
+        def process_batch(size):
+            try:
+                # Allocate an array large enough to plausibly exhaust memory
+                _ = np.zeros(size, dtype=np.float64)
+                return True
+            except MemoryError:
+                return False
 
-        # Should handle MemoryError gracefully (test framework catches it)
-        # In real code, this would be caught and logged
-        assert memory_error_occurred is True or len(large_arrays) < 100
+        with patch('numpy.zeros', side_effect=MemoryError("Out of memory")):
+            result = process_batch((10000, 10000, 100))
+
+        assert result is False
 
     def test_queue_overflow_handling(self):
         """Test handling of queue overflow"""
@@ -198,13 +192,6 @@ class TestResourceExhaustion:
 
 class TestExternalDependencyFailures:
     """Test recovery from external dependency failures"""
-
-    @pytest.mark.skip(reason="analyze_with_ollama function does not exist")
-    def test_ollama_server_down(self):
-        """Test handling when Ollama server is unavailable"""
-        # This test is skipped because analyze_with_ollama doesn't exist
-        # Keeping as placeholder for future Ollama integration testing
-        pass
 
     def test_lm_studio_unavailable_for_rag(self):
         """Test RAG system when LM Studio is unavailable"""

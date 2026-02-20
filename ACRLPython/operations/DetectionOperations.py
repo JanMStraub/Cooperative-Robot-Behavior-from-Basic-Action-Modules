@@ -249,8 +249,8 @@ def estimate_distance_to_object(
         # Calculate Euclidean distance
         import math
 
-        robot_pos = robot_state.get("end_effector_position", robot_state.get("position"))
-        object_pos = obj_state.get("position")
+        robot_pos = robot_state.get("end_effector_position", robot_state.get("position"))  # type: ignore[union-attr]
+        object_pos = obj_state.get("position")  # type: ignore[union-attr]
 
         if not robot_pos or not object_pos:
             return OperationResult.error_result(

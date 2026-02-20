@@ -34,6 +34,7 @@ class TestReturnToStartPosition:
         result = return_to_start_position("Robot1")
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["robot_id"] == "Robot1"
         assert result.result["speed"] == 1.0  # Default speed
         assert result.result["status"] == "command_sent"
@@ -45,6 +46,7 @@ class TestReturnToStartPosition:
         result = return_to_start_position("Robot1", speed=0.5)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["speed"] == 0.5
 
     def test_return_to_start_position_slow_speed(self, patch_command_broadcaster):
@@ -52,6 +54,7 @@ class TestReturnToStartPosition:
         result = return_to_start_position("Robot1", speed=0.3)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["speed"] == 0.3
 
     def test_return_to_start_position_fast_speed(self, patch_command_broadcaster):
@@ -59,6 +62,7 @@ class TestReturnToStartPosition:
         result = return_to_start_position("Robot1", speed=1.5)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["speed"] == 1.5
 
     def test_return_to_start_position_invalid_robot_id_empty(self):
@@ -66,6 +70,7 @@ class TestReturnToStartPosition:
         result = return_to_start_position("")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_return_to_start_position_invalid_robot_id_none(self):
@@ -73,6 +78,7 @@ class TestReturnToStartPosition:
         result = return_to_start_position(None)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_return_to_start_position_invalid_robot_id_number(self):
@@ -80,6 +86,7 @@ class TestReturnToStartPosition:
         result = return_to_start_position(123)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_return_to_start_position_invalid_speed_too_low(self):
@@ -87,6 +94,7 @@ class TestReturnToStartPosition:
         result = return_to_start_position("Robot1", speed=0.05)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_SPEED"
 
     def test_return_to_start_position_invalid_speed_too_high(self):
@@ -94,6 +102,7 @@ class TestReturnToStartPosition:
         result = return_to_start_position("Robot1", speed=3.0)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_SPEED"
 
     def test_return_to_start_position_command_structure(self, patch_command_broadcaster):
@@ -119,6 +128,7 @@ class TestReturnToStartPosition:
         result = return_to_start_position("Robot1")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "COMMUNICATION_FAILED"
 
     def test_return_to_start_position_network_error(self, patch_command_broadcaster):
@@ -128,6 +138,7 @@ class TestReturnToStartPosition:
         result = return_to_start_position("Robot1")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "UNEXPECTED_ERROR"
 
 
@@ -144,6 +155,7 @@ class TestReturnSpeedValidation:
         result = return_to_start_position("Robot1", speed=0.1)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["speed"] == 0.1
 
     def test_return_maximum_valid_speed(self, patch_command_broadcaster):
@@ -151,6 +163,7 @@ class TestReturnSpeedValidation:
         result = return_to_start_position("Robot1", speed=2.0)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["speed"] == 2.0
 
     def test_return_speed_boundary_below_minimum(self):
@@ -158,6 +171,7 @@ class TestReturnSpeedValidation:
         result = return_to_start_position("Robot1", speed=0.099)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_SPEED"
 
     def test_return_speed_boundary_above_maximum(self):
@@ -165,6 +179,7 @@ class TestReturnSpeedValidation:
         result = return_to_start_position("Robot1", speed=2.001)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_SPEED"
 
     def test_return_speed_typical_values(self, patch_command_broadcaster):
@@ -174,6 +189,7 @@ class TestReturnSpeedValidation:
         for speed in typical_speeds:
             result = return_to_start_position("Robot1", speed=speed)
             assert result.success is True
+            assert result.result is not None
             assert result.result["speed"] == speed
 
 
@@ -190,6 +206,7 @@ class TestReturnDifferentRobots:
         result = return_to_start_position("Robot1")
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["robot_id"] == "Robot1"
 
     def test_return_ar4_robot_id(self, patch_command_broadcaster):
@@ -197,6 +214,7 @@ class TestReturnDifferentRobots:
         result = return_to_start_position("AR4_Robot")
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["robot_id"] == "AR4_Robot"
 
     def test_return_numbered_robot_id(self, patch_command_broadcaster):
@@ -204,6 +222,7 @@ class TestReturnDifferentRobots:
         result = return_to_start_position("Robot2")
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["robot_id"] == "Robot2"
 
     def test_return_custom_robot_id(self, patch_command_broadcaster):
@@ -211,6 +230,7 @@ class TestReturnDifferentRobots:
         result = return_to_start_position("CustomRobot_123")
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["robot_id"] == "CustomRobot_123"
 
 
@@ -350,6 +370,7 @@ class TestReturnEdgeCases:
         result = return_to_start_position("Robot1")
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["robot_id"] == "Robot1"
         assert result.result["speed"] == 1.0  # Default
 
@@ -358,6 +379,7 @@ class TestReturnEdgeCases:
         result = return_to_start_position(robot_id="AR4_Robot", speed=0.7, request_id=999)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["robot_id"] == "AR4_Robot"
         assert result.result["speed"] == 0.7
 
@@ -366,6 +388,7 @@ class TestReturnEdgeCases:
         result = return_to_start_position("Robot_Test-123")
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["robot_id"] == "Robot_Test-123"
 
     def test_return_very_slow_speed(self, patch_command_broadcaster):
@@ -373,6 +396,7 @@ class TestReturnEdgeCases:
         result = return_to_start_position("Robot1", speed=0.1)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["speed"] == 0.1
 
     def test_return_very_fast_speed(self, patch_command_broadcaster):
@@ -380,6 +404,7 @@ class TestReturnEdgeCases:
         result = return_to_start_position("Robot1", speed=2.0)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["speed"] == 2.0
 
     def test_return_default_speed_value(self, patch_command_broadcaster):
@@ -387,6 +412,7 @@ class TestReturnEdgeCases:
         result = return_to_start_position("Robot1")
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["speed"] == 1.0
 
     def test_return_timestamp_accuracy(self, patch_command_broadcaster):
@@ -396,6 +422,7 @@ class TestReturnEdgeCases:
         after_time = time.time()
 
         assert result.success is True
+        assert result.result is not None
         timestamp = result.result["timestamp"]
         assert before_time <= timestamp <= after_time
 
@@ -413,6 +440,7 @@ class TestReturnErrorHandling:
         result = return_to_start_position("")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ROBOT_ID"
         assert "recovery_suggestions" in result.error
         assert len(result.error["recovery_suggestions"]) > 0
@@ -422,6 +450,7 @@ class TestReturnErrorHandling:
         result = return_to_start_position("Robot1", speed=5.0)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_SPEED"
         assert "recovery_suggestions" in result.error
         assert len(result.error["recovery_suggestions"]) > 0
@@ -433,6 +462,7 @@ class TestReturnErrorHandling:
         result = return_to_start_position("Robot1")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "COMMUNICATION_FAILED"
         assert "recovery_suggestions" in result.error
         assert len(result.error["recovery_suggestions"]) > 0
@@ -444,6 +474,7 @@ class TestReturnErrorHandling:
         result = return_to_start_position("Robot1")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "UNEXPECTED_ERROR"
         assert "recovery_suggestions" in result.error
         assert len(result.error["recovery_suggestions"]) > 0
@@ -452,11 +483,13 @@ class TestReturnErrorHandling:
         """Test that error messages are clear and descriptive."""
         # Invalid robot ID
         result = return_to_start_position("")
+        assert result.error is not None
         assert result.error["message"]
         assert len(result.error["message"]) > 10
 
         # Invalid speed
         result = return_to_start_position("Robot1", speed=10.0)
+        assert result.error is not None
         assert result.error["message"]
         assert len(result.error["message"]) > 10
 

@@ -319,8 +319,6 @@ class TestWorkspaceAllocation:
         # Should still be owned by Robot1
         assert world_state.get_workspace_owner("left_workspace") == "Robot1"
 
-    @pytest.mark.skip(reason="Concurrent workspace allocation needs implementation")
-
     def test_concurrent_workspace_allocation(self, cleanup_world_state):
         """Test multiple robots competing for workspaces concurrently"""
         import threading
@@ -338,9 +336,9 @@ class TestWorkspaceAllocation:
 
         # All 3 robots try to allocate same workspace simultaneously
         threads = [
-            threading.Thread(target=allocate_workspace, args=("Robot1", "shared_workspace")),
-            threading.Thread(target=allocate_workspace, args=("Robot2", "shared_workspace")),
-            threading.Thread(target=allocate_workspace, args=("Robot3", "shared_workspace")),
+            threading.Thread(target=allocate_workspace, args=("Robot1", "shared_zone")),
+            threading.Thread(target=allocate_workspace, args=("Robot2", "shared_zone")),
+            threading.Thread(target=allocate_workspace, args=("Robot3", "shared_zone")),
         ]
 
         for t in threads:
@@ -357,139 +355,118 @@ class TestWorkspaceAllocation:
         assert len(errors) == 0
 
         # Verify workspace has an owner
-        owner = world_state.get_workspace_owner("shared_workspace")
+        owner = world_state.get_workspace_owner("shared_zone")
         assert owner in ["Robot1", "Robot2", "Robot3"]
 
-    @pytest.mark.skip(reason="Deadlock detection needs implementation")
-
     def test_workspace_deadlock_detection(self, cleanup_world_state):
-        """Test detection of circular workspace dependencies (deadlock)"""
+        """Test circular workspace contention: each robot holds what the other needs."""
         world_state = get_world_state()
 
-        # Robot1 allocates workspace_A
-        world_state.allocate_workspace("workspace_A", "Robot1")
-        # Robot2 allocates workspace_B
-        world_state.allocate_workspace("workspace_B", "Robot2")
+        # Robot1 allocates left_workspace, Robot2 allocates right_workspace
+        world_state.allocate_workspace("left_workspace", "Robot1")
+        world_state.allocate_workspace("right_workspace", "Robot2")
 
-        # Now Robot1 wants workspace_B (owned by Robot2)
-        # And Robot2 wants workspace_A (owned by Robot1)
-        # This is a circular dependency / deadlock
+        # Robot1 tries to get right_workspace (owned by Robot2) - must fail
+        result1 = world_state.allocate_workspace("right_workspace", "Robot1")
+        assert result1 is False
 
-        # Robot1 tries to get workspace_B
-        result1 = world_state.allocate_workspace("workspace_B", "Robot1")
-        assert result1 is False  # Should fail (owned by Robot2)
+        # Robot2 tries to get left_workspace (owned by Robot1) - must fail
+        result2 = world_state.allocate_workspace("left_workspace", "Robot2")
+        assert result2 is False
 
-        # Robot2 tries to get workspace_A
-        result2 = world_state.allocate_workspace("workspace_A", "Robot2")
-        assert result2 is False  # Should fail (owned by Robot1)
-
-        # Both robots are now deadlocked - each holding a workspace the other needs
-        # Verify state
-        assert world_state.get_workspace_owner("workspace_A") == "Robot1"
-        assert world_state.get_workspace_owner("workspace_B") == "Robot2"
-
-    @pytest.mark.skip(reason="Automatic release on failure needs implementation")
+        # Both robots still hold their original workspaces
+        assert world_state.get_workspace_owner("left_workspace") == "Robot1"
+        assert world_state.get_workspace_owner("right_workspace") == "Robot2"
 
     def test_workspace_automatic_release_on_failure(self, cleanup_world_state):
         """Test workspace is released when robot operation fails"""
         world_state = get_world_state()
 
         # Simulate robot allocating workspace for operation
-        world_state.allocate_workspace("operation_workspace", "Robot1")
-        assert world_state.get_workspace_owner("operation_workspace") == "Robot1"
+        world_state.allocate_workspace("center", "Robot1")
+        assert world_state.get_workspace_owner("center") == "Robot1"
 
         # Simulate operation failure and cleanup
-        # In real system, this would be handled by operation failure handler
-        world_state.release_workspace("operation_workspace", "Robot1")
+        world_state.release_workspace("center", "Robot1")
 
         # Workspace should now be free
-        assert world_state.get_workspace_owner("operation_workspace") is None
+        assert world_state.get_workspace_owner("center") is None
 
         # Another robot can now allocate it
-        result = world_state.allocate_workspace("operation_workspace", "Robot2")
+        result = world_state.allocate_workspace("center", "Robot2")
         assert result is True
 
-    @pytest.mark.skip(reason="Priority queue needs implementation")
-
     def test_workspace_priority_queue(self, cleanup_world_state):
-        """Test workspace allocation with multiple waiting robots"""
+        """Test workspace re-allocation after release (first-come-first-served)"""
         world_state = get_world_state()
 
-        # Robot1 allocates workspace
-        world_state.allocate_workspace("priority_workspace", "Robot1")
+        # Robot1 holds shared_zone
+        world_state.allocate_workspace("shared_zone", "Robot1")
 
-        # Multiple robots try to allocate (should all fail)
-        result2 = world_state.allocate_workspace("priority_workspace", "Robot2")
-        result3 = world_state.allocate_workspace("priority_workspace", "Robot3")
-        result4 = world_state.allocate_workspace("priority_workspace", "Robot4")
+        # Other robots cannot allocate the same region
+        result2 = world_state.allocate_workspace("shared_zone", "Robot2")
+        result3 = world_state.allocate_workspace("shared_zone", "Robot3")
+        result4 = world_state.allocate_workspace("shared_zone", "Robot4")
 
         assert result2 is False
         assert result3 is False
         assert result4 is False
 
         # Robot1 releases workspace
-        world_state.release_workspace("priority_workspace", "Robot1")
+        world_state.release_workspace("shared_zone", "Robot1")
 
-        # Now any robot can allocate (first-come-first-served)
-        result_next = world_state.allocate_workspace("priority_workspace", "Robot2")
+        # Now Robot2 can allocate
+        result_next = world_state.allocate_workspace("shared_zone", "Robot2")
         assert result_next is True
-        assert world_state.get_workspace_owner("priority_workspace") == "Robot2"
-
-    @pytest.mark.skip(reason="Multiple allocations per robot needs implementation")
+        assert world_state.get_workspace_owner("shared_zone") == "Robot2"
 
     def test_multiple_workspace_allocation_per_robot(self, cleanup_world_state):
         """Test single robot allocating multiple workspaces"""
         world_state = get_world_state()
 
-        # Robot1 allocates multiple workspaces for complex operation
-        result1 = world_state.allocate_workspace("workspace_left", "Robot1")
-        result2 = world_state.allocate_workspace("workspace_center", "Robot1")
-        result3 = world_state.allocate_workspace("workspace_right", "Robot1")
+        # Robot1 allocates all available regions for a complex operation
+        result1 = world_state.allocate_workspace("left_workspace", "Robot1")
+        result2 = world_state.allocate_workspace("center", "Robot1")
+        result3 = world_state.allocate_workspace("right_workspace", "Robot1")
 
         assert result1 is True
         assert result2 is True
         assert result3 is True
 
         # Verify all owned by Robot1
-        assert world_state.get_workspace_owner("workspace_left") == "Robot1"
-        assert world_state.get_workspace_owner("workspace_center") == "Robot1"
-        assert world_state.get_workspace_owner("workspace_right") == "Robot1"
+        assert world_state.get_workspace_owner("left_workspace") == "Robot1"
+        assert world_state.get_workspace_owner("center") == "Robot1"
+        assert world_state.get_workspace_owner("right_workspace") == "Robot1"
 
         # Release all workspaces
-        world_state.release_workspace("workspace_left", "Robot1")
-        world_state.release_workspace("workspace_center", "Robot1")
-        world_state.release_workspace("workspace_right", "Robot1")
+        world_state.release_workspace("left_workspace", "Robot1")
+        world_state.release_workspace("center", "Robot1")
+        world_state.release_workspace("right_workspace", "Robot1")
 
         # All should be free
-        assert world_state.get_workspace_owner("workspace_left") is None
-        assert world_state.get_workspace_owner("workspace_center") is None
-        assert world_state.get_workspace_owner("workspace_right") is None
-
-    @pytest.mark.skip(reason="Stress test needs verification")
+        assert world_state.get_workspace_owner("left_workspace") is None
+        assert world_state.get_workspace_owner("center") is None
+        assert world_state.get_workspace_owner("right_workspace") is None
 
     def test_workspace_allocation_stress_test(self, cleanup_world_state):
-        """Stress test with 10+ robots competing for workspaces"""
+        """Stress test with 15 robots competing for the 4 available workspace regions"""
         import threading
         world_state = get_world_state()
 
+        workspace_regions = ["left_workspace", "right_workspace", "shared_zone", "center"]
         num_robots = 15
-        num_workspaces = 5
         results = {f"Robot{i}": [] for i in range(num_robots)}
         errors = []
 
         def robot_workflow(robot_id):
             """Simulate robot trying to allocate workspaces"""
             try:
-                for workspace_idx in range(num_workspaces):
-                    workspace_id = f"workspace_{workspace_idx}"
-                    # Try to allocate
+                for workspace_id in workspace_regions:
                     result = world_state.allocate_workspace(workspace_id, robot_id)
                     results[robot_id].append((workspace_id, result))
 
                     if result:
-                        # Hold for short time
                         time.sleep(0.01)
-                        # Release
                         world_state.release_workspace(workspace_id, robot_id)
             except Exception as e:
                 errors.append((robot_id, str(e)))
@@ -505,21 +482,18 @@ class TestWorkspaceAllocation:
         for t in threads:
             t.join(timeout=5.0)
 
-        # Verify no errors occurred
         assert len(errors) == 0
 
-        # Verify some robots got some workspaces (not all should fail)
+        # Verify some robots got some workspaces
         successful_allocations = sum(
             sum(1 for _, success in robot_results if success)
             for robot_results in results.values()
         )
         assert successful_allocations > 0
 
-        # All workspaces should be released at the end
-        for workspace_idx in range(num_workspaces):
-            workspace_id = f"workspace_{workspace_idx}"
+        # All workspaces should be free at the end
+        for workspace_id in workspace_regions:
             owner = world_state.get_workspace_owner(workspace_id)
-            # Owner should be None or one of the robots (if thread still running)
             assert owner is None or owner.startswith("Robot")
 
 

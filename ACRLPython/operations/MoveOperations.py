@@ -8,6 +8,7 @@ through Unity's RobotController via TCP communication.
 
 import time
 import logging
+from typing import Optional
 # Lazy import to avoid circular dependency with servers module
 # from servers.CommandServer import get_command_broadcaster
 from .Base import (
@@ -46,7 +47,7 @@ def move_to_coordinate(
     approach_offset: float = 0.0,
     use_advanced_planning: bool = True,
     request_id: int = 0,
-    use_ros: bool = None,
+    use_ros: Optional[bool] = None,
 ) -> OperationResult:
     """
     Move robot end effector to specified 3D coordinate.
@@ -458,7 +459,7 @@ def move_from_a_to_b(
     point_b: dict,
     speed: float = 1.0,
     request_id: int = 0,
-    use_ros: bool = None,
+    use_ros: Optional[bool] = None,
 ) -> OperationResult:
     """
     Move robot end effector from point A to point B through explicit waypoints.
@@ -704,7 +705,7 @@ def adjust_end_effector_orientation(
     pitch: float = 0.0,
     yaw: float = 0.0,
     request_id: int = 0,
-    use_ros: bool = None,
+    use_ros: Optional[bool] = None,
 ) -> OperationResult:
     """
     Adjust the end effector orientation without changing position.

@@ -50,6 +50,7 @@ class TestDetectOtherRobot:
             result = detect_other_robot("Robot1", "Robot2")
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["robot_id"] == "Robot1"
         assert result.result["target_robot_id"] == "Robot2"
         assert result.result["detected"] is True
@@ -63,6 +64,7 @@ class TestDetectOtherRobot:
         result = detect_other_robot("", "Robot2")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_detect_other_robot_invalid_target_robot_id(self):
@@ -70,6 +72,7 @@ class TestDetectOtherRobot:
         result = detect_other_robot("Robot1", "")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_TARGET_ROBOT_ID"
 
     def test_detect_other_robot_target_not_found(self, mock_world_state_multi_robot, patch_world_state):
@@ -88,6 +91,7 @@ class TestDetectOtherRobot:
             result = detect_other_robot("Robot1", "Robot3")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "TARGET_ROBOT_NOT_FOUND"
 
     def test_detect_other_robot_detector_not_found(self, mock_world_state_multi_robot, patch_world_state):
@@ -106,6 +110,7 @@ class TestDetectOtherRobot:
             result = detect_other_robot("Robot3", "Robot2")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "DETECTOR_ROBOT_NOT_FOUND"
 
     def test_detect_other_robot_missing_position_data(self, mock_world_state_multi_robot, patch_world_state):
@@ -122,6 +127,7 @@ class TestDetectOtherRobot:
             result = detect_other_robot("Robot1", "Robot2")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "POSITION_DATA_MISSING"
 
     def test_detect_other_robot_uses_base_position_fallback(
@@ -146,6 +152,7 @@ class TestDetectOtherRobot:
             result = detect_other_robot("Robot1", "Robot2")
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["distance"] == pytest.approx(0.6, abs=0.01)
 
     def test_detect_other_robot_with_camera_id(self, mock_world_state_multi_robot, patch_world_state):
@@ -167,6 +174,7 @@ class TestDetectOtherRobot:
             result = detect_other_robot("Robot1", "Robot2", camera_id="stereo")
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["camera_id"] == "stereo"
 
 
@@ -183,6 +191,7 @@ class TestMirrorMovement:
         result = mirror_movement_of_other_robot("Robot2", "Robot1", "x")
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["robot_id"] == "Robot2"
         assert result.result["target_robot_id"] == "Robot1"
         assert result.result["mirror_axis"] == "x"
@@ -195,6 +204,7 @@ class TestMirrorMovement:
         result = mirror_movement_of_other_robot("Robot2", "Robot1", "x", scale_factor=0.5)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["scale_factor"] == 0.5
 
     def test_mirror_movement_all_axes(self, patch_command_broadcaster):
@@ -202,6 +212,7 @@ class TestMirrorMovement:
         for axis in ["x", "y", "z", "none"]:
             result = mirror_movement_of_other_robot("Robot2", "Robot1", axis)
             assert result.success is True
+            assert result.result is not None
             assert result.result["mirror_axis"] == axis
 
     def test_mirror_movement_invalid_robot_id(self):
@@ -209,6 +220,7 @@ class TestMirrorMovement:
         result = mirror_movement_of_other_robot("", "Robot1", "x")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_mirror_movement_invalid_target_robot_id(self):
@@ -216,6 +228,7 @@ class TestMirrorMovement:
         result = mirror_movement_of_other_robot("Robot2", "", "x")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_TARGET_ROBOT_ID"
 
     def test_mirror_movement_invalid_mirror_axis(self):
@@ -223,6 +236,7 @@ class TestMirrorMovement:
         result = mirror_movement_of_other_robot("Robot2", "Robot1", "invalid")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_MIRROR_AXIS"
 
     def test_mirror_movement_invalid_scale_factor_too_low(self):
@@ -230,6 +244,7 @@ class TestMirrorMovement:
         result = mirror_movement_of_other_robot("Robot2", "Robot1", "x", scale_factor=0.05)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_SCALE_FACTOR"
 
     def test_mirror_movement_invalid_scale_factor_too_high(self):
@@ -237,6 +252,7 @@ class TestMirrorMovement:
         result = mirror_movement_of_other_robot("Robot2", "Robot1", "x", scale_factor=3.0)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_SCALE_FACTOR"
 
     def test_mirror_movement_command_structure(self, patch_command_broadcaster):
@@ -266,6 +282,7 @@ class TestMirrorMovement:
         result = mirror_movement_of_other_robot("Robot2", "Robot1", "x")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "COMMUNICATION_FAILED"
 
     def test_mirror_movement_network_error(self, patch_command_broadcaster):
@@ -275,6 +292,7 @@ class TestMirrorMovement:
         result = mirror_movement_of_other_robot("Robot2", "Robot1", "x")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "UNEXPECTED_ERROR"
 
 
@@ -375,17 +393,20 @@ class TestCoordinationConcurrency:
         )
 
         results = []
+        lock = threading.Lock()
 
-        def detect_worker():
-            with patch_world_state(mock_world_state_multi_robot):
+        # Patch once at test level, not inside threads (patch is not thread-safe)
+        with patch_world_state(mock_world_state_multi_robot):
+            def detect_worker():
                 result = detect_other_robot("Robot1", "Robot2")
-                results.append(result)
+                with lock:
+                    results.append(result)
 
-        threads = [threading.Thread(target=detect_worker) for _ in range(5)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
+            threads = [threading.Thread(target=detect_worker) for _ in range(5)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
 
         assert len(results) == 5
         assert all(r.success for r in results)
@@ -435,6 +456,7 @@ class TestCoordinationEdgeCases:
             result = detect_other_robot("Robot1", "Robot1")
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["distance"] == pytest.approx(0.0)
 
     def test_mirror_with_boundary_scale_factors(self, patch_command_broadcaster):
@@ -466,6 +488,7 @@ class TestCoordinationEdgeCases:
             result = detect_other_robot("Robot1", "Robot2")
 
         assert result.success is True
+        assert result.result is not None
         # Distance should be sqrt((2)^2 + (2)^2 + (0.5)^2) ≈ 2.915
         assert result.result["distance"] > 2.8
         assert result.result["distance"] < 3.0

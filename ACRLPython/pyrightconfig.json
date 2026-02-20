@@ -1,0 +1,11 @@
+{
+  "venvPath": ".",
+  "venv": "acrl",
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic",
+  "reportMissingModuleSource": "none",
+  "ignore": [
+    "ros2/**",
+    "ros_unity_integration/**"
+  ]
+}

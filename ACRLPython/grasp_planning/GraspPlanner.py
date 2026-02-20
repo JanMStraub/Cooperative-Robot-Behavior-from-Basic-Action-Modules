@@ -197,7 +197,7 @@ class GraspPlanner:
             result = bridge.validate_grasp_candidates(candidate_data, robot_id)
 
             if not result or not result.get("success"):
-                logger.error(f"IK validation failed: {result.get('error', 'Unknown error')}")
+                logger.error(f"IK validation failed: {result.get('error', 'Unknown error') if result else 'Unknown error'}")
                 return candidates
 
             # Update candidates with IK validation results

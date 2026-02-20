@@ -49,7 +49,7 @@ def move_relative_to_object(
     offset: float = 0.1,
     z_override: Optional[float] = None,
     request_id: int = 0,
-    use_ros: bool = None,
+    use_ros: Optional[bool] = None,
 ) -> OperationResult:
     """
     Move robot to a position relative to an object or position.
@@ -190,7 +190,7 @@ def move_between_objects(
     bias: float = 0.5,
     z_offset: float = 0.0,
     request_id: int = 0,
-    use_ros: bool = None,
+    use_ros: Optional[bool] = None,
 ) -> OperationResult:
     """
     Move robot to a position between two objects.
@@ -306,7 +306,7 @@ def move_to_region(
     position_in_region: str = "center",
     z_height: Optional[float] = None,
     request_id: int = 0,
-    use_ros: bool = None,
+    use_ros: Optional[bool] = None,
 ) -> OperationResult:
     """
     Move robot to a specific position within a workspace region.

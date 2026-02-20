@@ -58,7 +58,7 @@ def stabilize_object(
     duration_ms: int = 5000,
     force_limit: float = 10.0,
     request_id: int = 0,
-    use_ros: bool = None,
+    use_ros: Optional[bool] = None,
 ) -> OperationResult:
     """
     Stabilize (hold) an object while another robot manipulates it.

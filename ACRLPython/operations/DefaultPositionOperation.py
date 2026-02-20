@@ -8,6 +8,7 @@ by restoring the start joint targets saved when the robot was registered.
 
 import time
 import logging
+from typing import Optional
 # Lazy import to avoid circular dependency with servers module
 from .Base import (
     BasicOperation,
@@ -37,7 +38,7 @@ def return_to_start_position(
     robot_id: str,
     speed: float = 1.0,
     request_id: int = 0,
-    use_ros: bool = None,
+    use_ros: Optional[bool] = None,
 ) -> OperationResult:
     """
     Return robot to its initial start position using saved joint targets.

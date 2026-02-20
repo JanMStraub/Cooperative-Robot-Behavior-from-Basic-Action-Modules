@@ -39,7 +39,7 @@ except ImportError:
 
 def control_gripper(
     robot_id: str, open_gripper: bool, request_id: int = 0, object_id: Optional[str] = None,
-    use_ros: bool = None,
+    use_ros: Optional[bool] = None,
 ) -> OperationResult:
     """
     Open or close the robot gripper.
@@ -344,7 +344,7 @@ CONTROL_GRIPPER_OPERATION = create_control_gripper_operation()
 def release_object(
     robot_id: str,
     request_id: int = 0,
-    use_ros: bool = None,
+    use_ros: Optional[bool] = None,
 ) -> OperationResult:
     """
     Open gripper to release held object.

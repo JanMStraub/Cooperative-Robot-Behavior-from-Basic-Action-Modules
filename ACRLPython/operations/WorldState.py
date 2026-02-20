@@ -452,27 +452,86 @@ class WorldState:
 
             logger.debug(f"Updated object {object_id} at {position}")
 
+    def get_object_state(self, object_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get object state as a dictionary (compatibility method).
+
+        Uses the same partial-match fallback as get_object_position so that
+        compound names like "red_cube" resolve to an object stored as "red".
+
+        Args:
+            object_id: Object identifier
+
+        Returns:
+            Dict with object state data, or None if not found
+        """
+        with self._lock:
+            obj = self._objects.get(object_id)
+            if obj is None:
+                normalised = object_id.lower().replace(" ", "_").replace("-", "_")
+                for key, candidate in self._objects.items():
+                    key_norm = key.lower().replace(" ", "_").replace("-", "_")
+                    if key_norm in normalised or normalised in key_norm:
+                        obj = candidate
+                        break
+            if obj is None:
+                return None
+            return {
+                "position": {"x": obj.position[0], "y": obj.position[1], "z": obj.position[2]}
+                if obj.position
+                else None,
+                "color": obj.color,
+                "object_type": obj.object_type,
+                "is_graspable": obj.is_graspable,
+                "grasped_by": obj.grasped_by,
+                "confidence": obj.confidence,
+            }
+
     def get_object_position(
         self, object_id: str
     ) -> Optional[Tuple[float, float, float]]:
         """
         Get object position.
 
+        Performs an exact key lookup first. If that fails, falls back to
+        partial matching so that compound names like "red_cube" or "red cube"
+        still resolve to an object stored under the key "red" (as written by
+        VisionOperations which uses just the color as the key).
+
         Args:
-            object_id: Object identifier
+            object_id: Object identifier (exact key, color, or compound like "red_cube")
 
         Returns:
             Position tuple (x, y, z) or None if not found
         """
         with self._lock:
+            # 1. Exact match
             obj = self._objects.get(object_id)
-            return obj.position if obj else None
+            if obj:
+                return obj.position
+
+            # 2. Normalise: replace spaces/hyphens with underscores, lowercase
+            normalised = object_id.lower().replace(" ", "_").replace("-", "_")
+
+            # 3. Try each stored key: match if either string contains the other
+            for key, candidate in self._objects.items():
+                key_norm = key.lower().replace(" ", "_").replace("-", "_")
+                if key_norm in normalised or normalised in key_norm:
+                    logger.debug(
+                        f"get_object_position: resolved '{object_id}' → '{key}' via partial match"
+                    )
+                    return candidate.position
+
+            return None
 
     def get_object_dimensions(
         self, object_id: str
     ) -> Optional[Tuple[float, float, float]]:
         """
         Get object dimensions.
+
+        Uses the same partial-match fallback as get_object_position so that
+        compound names like "red_cube" resolve to an object stored as "red".
 
         Args:
             object_id: Object identifier
@@ -482,7 +541,16 @@ class WorldState:
         """
         with self._lock:
             obj = self._objects.get(object_id)
-            return obj.dimensions if obj else None
+            if obj:
+                return obj.dimensions
+
+            normalised = object_id.lower().replace(" ", "_").replace("-", "_")
+            for key, candidate in self._objects.items():
+                key_norm = key.lower().replace(" ", "_").replace("-", "_")
+                if key_norm in normalised or normalised in key_norm:
+                    return candidate.dimensions
+
+            return None
 
     def get_objects_by_color(self, color: str) -> list[ObjectState]:
         """
