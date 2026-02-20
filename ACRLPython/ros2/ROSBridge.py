@@ -178,7 +178,15 @@ class ROSBridge:
                 self._connected = False
                 return None
 
-    def plan_and_execute(self, position, orientation=None, planning_time=5.0, robot_id="Robot1"):
+    def plan_and_execute(
+        self,
+        position,
+        orientation=None,
+        planning_time=5.0,
+        robot_id="Robot1",
+        max_velocity_scaling=0.0,
+        max_acceleration_scaling=0.0,
+    ):
         """
         Plan and execute a motion to target pose for a specific robot.
 
@@ -188,11 +196,13 @@ class ROSBridge:
                          to the position with any feasible orientation.
             planning_time: Max planning time in seconds.
             robot_id: Robot namespace (e.g., "Robot1", "Robot2").
+            max_velocity_scaling: MoveIt velocity scaling factor (0.0 = default = 1.0).
+                Use values < 1.0 for slow, smooth descent motions (e.g. 0.3 for grasp approach).
+            max_acceleration_scaling: MoveIt acceleration scaling factor (0.0 = default = 1.0).
 
         Returns:
             Dict with success status and details.
         """
-
         cmd = {
             "command": "plan_and_execute",
             "robot_id": robot_id,
@@ -201,10 +211,53 @@ class ROSBridge:
         }
         if orientation is not None:
             cmd["orientation"] = orientation
+        if max_velocity_scaling > 0.0:
+            cmd["max_velocity_scaling"] = max_velocity_scaling
+        if max_acceleration_scaling > 0.0:
+            cmd["max_acceleration_scaling"] = max_acceleration_scaling
 
-        result = self._send_command(cmd)
+        return self._send_command(cmd)
 
-        return result
+    def plan_cartesian_descent(
+        self,
+        position,
+        orientation=None,
+        robot_id="Robot1",
+        max_velocity_scaling=0.3,
+        max_acceleration_scaling=0.3,
+    ):
+        """
+        Plan and execute a straight-line Cartesian descent to a target position.
+
+        Uses MoveIt's GetCartesianPath service to constrain the end-effector to
+        follow a straight line, preventing wrist joints from rotating to an
+        alternate IK solution and causing lateral gripper offset.
+
+        Falls back automatically to free-space planning if the Cartesian path
+        is blocked (e.g. collision avoidance needed).
+
+        Args:
+            position: Dict with x, y, z in Unity world coordinates.
+            orientation: Dict with x, y, z, w quaternion. Should be the same
+                         orientation used for the preceding pre-grasp move.
+            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
+            max_velocity_scaling: Velocity scaling (default 0.3 for slow descent).
+            max_acceleration_scaling: Acceleration scaling (default 0.3).
+
+        Returns:
+            Dict with success status and details.
+        """
+        cmd = {
+            "command": "plan_cartesian_descent",
+            "robot_id": robot_id,
+            "position": position,
+            "max_velocity_scaling": max_velocity_scaling,
+            "max_acceleration_scaling": max_acceleration_scaling,
+        }
+        if orientation is not None:
+            cmd["orientation"] = orientation
+
+        return self._send_command(cmd)
 
     def plan_to_pose(self, position, orientation=None, planning_time=5.0, robot_id="Robot1"):
         """

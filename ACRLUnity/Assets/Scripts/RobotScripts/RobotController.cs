@@ -1087,6 +1087,43 @@ namespace Robotics
             Debug.Log($"{_logPrefix} [{robotId}] Target cleared");
         }
 
+        /// <summary>
+        /// Sync the IK target to the robot's current end-effector pose so that when
+        /// ROS hands back control the IK solver starts with zero positional error.
+        ///
+        /// Call this after a ROS trajectory completes to prevent the IK from driving
+        /// the arm toward a stale pre-ROS target (which causes jitter after grasping).
+        /// Also disables moving-target tracking so a held (kinematic) object does not
+        /// feed back into the IK as a moving target.
+        /// </summary>
+        public void SyncIKTargetToCurrentPose()
+        {
+            if (endEffectorBase == null)
+                return;
+
+            // Reuse the cached move-target GameObject so nothing is heap-allocated.
+            GameObject temp = GetCachedTempObject(
+                ref _cachedTempTargetMove,
+                RobotConstants.TEMP_TARGET_SUFFIX
+            );
+            temp.transform.SetPositionAndRotation(
+                endEffectorBase.position,
+                endEffectorBase.rotation
+            );
+
+            _targetTransform = temp.transform;
+            _targetObject = null;
+            _hasReachedTarget = true;       // IK will not fire until a new target is given
+            _isGraspingTarget = false;
+            _closeGripperAfterReach = false;
+            _isTrackingMovingTarget = false; // Held objects must not feed back as moving targets
+
+            Debug.Log(
+                $"{_logPrefix} [{robotId}] IK target synced to current EE pose "
+                + $"({endEffectorBase.position}) — IK quiesced"
+            );
+        }
+
         public bool IsTargetTrackingEnabled() => _enableMovingTargetTracking;
 
         public Vector3 GetCurrentEndEffectorPosition() =>

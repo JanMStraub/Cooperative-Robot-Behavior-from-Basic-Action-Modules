@@ -42,9 +42,23 @@ namespace Robotics
         [Range(0.1f, 2.0f)]
         private float _speedScaling = 0.5f; // Default to 50% speed for slower, more visible motion
 
+        [Header("Settle Detection")]
+        [Tooltip("Max joint velocity (deg/s) considered 'settled'. Feedback fires only after all joints drop below this.")]
+        [SerializeField]
+        private float _settleVelocityThresholdDegPerSec = 2.0f;
+
+        [Tooltip("Max time (seconds) to wait for joints to settle before firing 'completed' feedback anyway.")]
+        [SerializeField]
+        private float _settleTimeoutSeconds = 1.5f;
+
         [Header("References")]
         [SerializeField]
         private RobotController _robotController;
+
+        [Tooltip("Used to determine whether ROS or Unity IK owns the arm after trajectory completion. "
+               + "Auto-found on the same GameObject if not assigned.")]
+        [SerializeField]
+        private ROSControlModeManager _controlModeManager;
 
         private ROSConnection _ros;
         private Coroutine _executionCoroutine;
@@ -88,6 +102,9 @@ namespace Robotics
                 enabled = false;
                 return;
             }
+
+            if (_controlModeManager == null)
+                _controlModeManager = GetComponentInParent<ROSControlModeManager>();
 
             _joints = _robotController.robotJoints;
 
@@ -305,12 +322,12 @@ namespace Robotics
                 else
                     fromPositions = startPositions;
 
-                double segmentDuration = targetTime - prevPointTime;
-                if (segmentDuration <= 0)
-                    segmentDuration = Time.fixedDeltaTime;
+                double rawSegmentDuration = targetTime - prevPointTime;
+                if (rawSegmentDuration <= 0)
+                    rawSegmentDuration = Time.fixedDeltaTime;
 
-                // Apply speed scaling to slow down trajectory execution in simulation
-                segmentDuration *= (1.0 / _speedScaling);
+                // Wall-clock duration after applying speed scaling (e.g. 0.5x → 2x wall time).
+                double segmentDuration = rawSegmentDuration / _speedScaling;
 
                 // Collect from/to velocities for cubic Hermite interpolation.
                 // MoveIt plans velocity-continuous trajectories; using these velocities
@@ -345,12 +362,17 @@ namespace Robotics
                             if (fromVelocities != null && toVelocities != null
                                 && j < fromVelocities.Length && j < toVelocities.Length)
                             {
-                                // Convert MoveIt rad/s velocities to normalised-time tangents:
-                                //   tangent = velocity_rad_per_s * segmentDuration_s
-                                // segmentDuration already includes the speed-scaling factor,
-                                // so no further division is needed.
-                                double v0 = fromVelocities[j] * segmentDuration;
-                                double v1 = toVelocities[j]   * segmentDuration;
+                                // Convert MoveIt rad/s velocities to normalised-time tangents.
+                                // The Hermite curve is parameterised over t ∈ [0,1] mapping to
+                                // rawSegmentDuration seconds of MoveIt time. The tangent at each
+                                // endpoint must equal velocity_rad_s * rawSegmentDuration (the
+                                // positional change at that velocity over the MoveIt segment).
+                                // Speed scaling stretches wall-clock time but does NOT change the
+                                // shape of the position curve — only when t reaches 1.0. Using
+                                // rawSegmentDuration (not the scaled wall-clock value) keeps the
+                                // curve shape identical to MoveIt's intent.
+                                double v0 = fromVelocities[j] * rawSegmentDuration;
+                                double v1 = toVelocities[j]   * rawSegmentDuration;
                                 double t2 = t * t;
                                 double t3 = t2 * t;
                                 // Standard cubic Hermite basis functions
@@ -387,11 +409,57 @@ namespace Robotics
                 prevPointTime = targetTime;
             }
 
+            // Wait for all joint velocities to physically settle below the threshold.
+            // "Completed" feedback must NOT fire until the arm has actually stopped moving —
+            // otherwise the Python side begins planning the next trajectory (grasp descent)
+            // while the arm is still oscillating, causing a jerk at every waypoint handoff.
+            float settleStartTime = Time.time;
+            bool settled = false;
+            while (Time.time - settleStartTime < _settleTimeoutSeconds)
+            {
+                settled = true;
+                for (int j = 0; j < _jointIndexMap.Length; j++)
+                {
+                    int idx = _jointIndexMap[j];
+                    float velDegPerSec = _joints[idx].jointVelocity.dofCount > 0
+                        ? Mathf.Abs(_joints[idx].jointVelocity[0]) * Mathf.Rad2Deg
+                        : 0f;
+                    if (velDegPerSec > _settleVelocityThresholdDegPerSec)
+                    {
+                        settled = false;
+                        break;
+                    }
+                }
+                if (settled)
+                    break;
+                yield return new WaitForFixedUpdate();
+            }
+
             float totalDuration = Time.time - startTime;
             Debug.Log(
                 $"{_logPrefix} Trajectory completed in {totalDuration:F2}s "
-                + $"for {_robotController.robotId}"
+                + $"(settle: {(settled ? "OK" : "timeout")}) for {_robotController.robotId}"
             );
+
+            // Only sync the IK target when the control mode is ROS or Hybrid.
+            // In those modes Unity IK is normally suppressed; when it re-engages it must
+            // start from the current pose (zero error) or it will fight the ROS position.
+            // In Unity mode the IK owns motion end-to-end and manages its own target, so
+            // we must NOT overwrite it here.
+            bool isROSControlled = _controlModeManager == null
+                || _controlModeManager.CurrentMode != ControlMode.Unity;
+
+            if (isROSControlled)
+            {
+                // Sync the IK solver's target to the current end-effector position BEFORE
+                // re-enabling Unity IK (IsManuallyDriven = false). Without this, the IK wakes
+                // up with a stale _targetTransform pointing to wherever the arm was going before
+                // the ROS trajectory started, and immediately drives the arm away from the
+                // ROS-delivered pose — the main cause of post-grasp jitter.
+                // Also clears moving-target tracking so a kinematic held object doesn't
+                // create a feedback loop (object moves → tracker re-arms IK → arm moves → repeat).
+                _robotController.SyncIKTargetToCurrentPose();
+            }
 
             IsExecutingTrajectory = false;
             _robotController.IsManuallyDriven = false;

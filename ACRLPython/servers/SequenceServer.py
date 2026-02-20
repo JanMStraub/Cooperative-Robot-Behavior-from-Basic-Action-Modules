@@ -242,7 +242,21 @@ class SequenceServer(TCPServerBase):
         """
         logger.info(f"Sequence client connected from {address}")
 
-        # Set socket timeout for persistent connection
+        # Enable TCP keepalives so the OS sends probes during long-running sequence
+        # executions (grasp can take 60+ seconds). Without this, Unity's receive
+        # thread sees no data for >5s and raises a WouldBlock/socket error, causing
+        # it to incorrectly treat the idle-but-alive connection as dropped.
+        client.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        try:
+            # Linux-specific: start probes after 10s idle, then every 5s, 3 attempts
+            client.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
+            client.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 5)
+            client.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+        except (AttributeError, OSError):
+            pass  # Not available on all platforms (e.g. macOS uses different names)
+
+        # Set read timeout only for waiting on the next incoming command header.
+        # This allows the recv loop to check _running periodically.
         client.settimeout(5.0)
 
         while self._running:

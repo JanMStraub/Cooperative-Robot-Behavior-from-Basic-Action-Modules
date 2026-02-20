@@ -196,6 +196,14 @@ class SequenceExecutor:
             {}
         )  # Variable storage for passing results between operations
 
+        # Operation metrics — lightweight runtime counters.
+        # avg_duration_ms uses Welford's online update: O(1) memory, no list accumulation.
+        self._metrics_lock = threading.Lock()
+        self._ops_executed: int = 0
+        self._ops_succeeded: int = 0
+        self._ops_failed: int = 0
+        self._avg_duration_ms: float = 0.0
+
         # Initialize verification components
         if enable_verification:
             self.verifier = OperationVerifier()
@@ -562,6 +570,57 @@ class SequenceExecutor:
 
         return results, completed
 
+    def _record_metric(self, success: bool, duration_ms: float):
+        """
+        Update operation metrics counters in a thread-safe manner.
+
+        Uses Welford's online algorithm for the running average so no sample
+        list needs to be maintained.
+
+        Args:
+            success: Whether the operation succeeded
+            duration_ms: Wall-clock duration of the operation in milliseconds
+        """
+        with self._metrics_lock:
+            self._ops_executed += 1
+            if success:
+                self._ops_succeeded += 1
+            else:
+                self._ops_failed += 1
+            # Welford online mean: avg += (x - avg) / n
+            self._avg_duration_ms += (duration_ms - self._avg_duration_ms) / self._ops_executed
+
+    def get_metrics(self) -> Dict[str, Any]:
+        """
+        Return a snapshot of operation metrics for this executor.
+
+        Returns:
+            Dict with keys: ops_executed, ops_succeeded, ops_failed,
+            ops_success_rate (0.0–1.0), avg_duration_ms.
+        """
+        with self._metrics_lock:
+            executed = self._ops_executed
+            succeeded = self._ops_succeeded
+            failed = self._ops_failed
+            avg_ms = self._avg_duration_ms
+
+        success_rate = (succeeded / executed) if executed > 0 else 0.0
+        return {
+            "ops_executed": executed,
+            "ops_succeeded": succeeded,
+            "ops_failed": failed,
+            "ops_success_rate": round(success_rate, 4),
+            "avg_duration_ms": round(avg_ms, 1),
+        }
+
+    def reset_metrics(self):
+        """Reset all operation metrics counters to zero."""
+        with self._metrics_lock:
+            self._ops_executed = 0
+            self._ops_succeeded = 0
+            self._ops_failed = 0
+            self._avg_duration_ms = 0.0
+
     def _execute_single_command(
         self, operation: str, params: Dict[str, Any], timeout: float
     ) -> Dict[str, Any]:
@@ -578,33 +637,37 @@ class SequenceExecutor:
         """
         # Generate unique request_id using atomic counter + timestamp hybrid
         request_id = self._generate_request_id()
+        _cmd_start = time.time()
 
         # If completion checking is enabled, create queue before sending command
         if self.check_completion:
             self._get_command_broadcaster().create_completion_queue(request_id)
             logger.debug(f"Created completion queue for request_id {request_id}")
 
+        _result: Dict[str, Any] = {"success": False, "result": None, "error": "internal"}
         try:
             # Get operation definition for verification
             op_def = self.registry.get_operation_by_name(operation)
             if op_def is None:
-                return {
+                _result = {
                     "success": False,
                     "result": None,
                     "error": f"Operation '{operation}' not found in registry",
                 }
+                return _result
 
             # === PRIORITY 3: Unified Verification ===
             if self.enable_verification and self.verifier:
                 verification_result = self._verify_operation_safety(op_def, params)
 
                 if not verification_result["safe"]:
-                    return {
+                    _result = {
                         "success": False,
                         "result": None,
                         "error": verification_result["error"],
                         "verification_details": verification_result["details"],
                     }
+                    return _result
 
                 # Log any warnings
                 if verification_result["warnings"]:
@@ -651,16 +714,18 @@ class SequenceExecutor:
                     else "Unknown error"
                 )
                 error_code = op_result.error.get("code") if op_result.error else None
-                return {
+                _result = {
                     "success": False,
                     "result": None,
                     "error": error_msg,
                     "error_code": error_code,
                 }
+                return _result
 
             # If completion checking is disabled, return immediately
             if not self.check_completion:
-                return {"success": True, "result": op_result.result, "error": None}
+                _result = {"success": True, "result": op_result.result, "error": None}
+                return _result
 
             # Skip completion waiting for operations that executed via ROS
             # (Unity never received the command, so it won't send completion)
@@ -670,7 +735,8 @@ class SequenceExecutor:
                 logger.debug(
                     f"Skipping completion wait for ROS-executed operation: {operation}"
                 )
-                return {"success": True, "result": op_result.result, "error": None}
+                _result = {"success": True, "result": op_result.result, "error": None}
+                return _result
 
             # Skip completion waiting for operations that execute in Python only
             op_def = self.registry.get_operation_by_name(operation)
@@ -678,24 +744,31 @@ class SequenceExecutor:
                 logger.debug(
                     f"Skipping completion wait for {op_def.category.value} operation: {operation}"
                 )
-                return {"success": True, "result": op_result.result, "error": None}
+                _result = {"success": True, "result": op_result.result, "error": None}
+                return _result
 
             # Wait for completion using the same request_id
             completed = self._wait_for_completion(operation, request_id, timeout)
 
             if not completed:
-                return {
+                _result = {
                     "success": False,
                     "result": op_result.result,
                     "error": f"Operation timed out after {timeout}s",
                 }
+                return _result
 
-            return {"success": True, "result": op_result.result, "error": None}
+            _result = {"success": True, "result": op_result.result, "error": None}
+            return _result
         finally:
-            # Always clean up the queue to prevent accumulation
+            # Always clean up the queue and record metrics
             if self.check_completion:
                 self._get_command_broadcaster().remove_completion_queue(request_id)
                 logger.debug(f"Removed completion queue for request_id {request_id}")
+            self._record_metric(
+                success=_result.get("success", False),
+                duration_ms=(time.time() - _cmd_start) * 1000,
+            )
 
     def _wait_for_completion(
         self, operation: str, request_id: int, timeout: float

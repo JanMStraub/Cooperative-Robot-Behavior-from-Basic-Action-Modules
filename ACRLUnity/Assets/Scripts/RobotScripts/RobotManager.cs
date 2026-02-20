@@ -196,6 +196,10 @@ namespace Robotics
 
         /// <summary>
         /// Checks all registered robots for target position changes and updates controllers accordingly.
+        /// Skips robots whose gripper is already holding the tracked target — once the robot has
+        /// grasped the object it becomes kinematically parented to the arm, so every arm motion
+        /// would move the object and re-trigger this check, creating a feedback loop that causes
+        /// continuous IK re-arming and jittery motion.
         /// </summary>
         private void CheckForTargetChanges()
         {
@@ -205,21 +209,45 @@ namespace Robotics
                 if (robot.targetGameObject == null || !robot.isActive)
                     continue;
 
+                // Do not re-issue SetTarget when the robot is holding the target itself.
+                // The gripper moves the object kinematically, so any arm motion would appear
+                // as target drift and spin up a new grasp coroutine against a held object.
+                GripperController gripper = robot.controller != null
+                    ? robot.controller.GetComponentInChildren<GripperController>()
+                    : null;
+                if (gripper != null
+                    && gripper.IsHoldingObject
+                    && gripper.GraspedObject == robot.targetGameObject)
+                    continue;
+
                 Vector3 currentPos = robot.targetGameObject.transform.position;
 
-                // Debug logging to understand what's happening
                 if (Vector3.Distance(currentPos, robot.lastTargetPosition) > 0.001f)
                 {
                     robot.lastTargetPosition = currentPos;
                     robot.lastTargetChangeTime = Time.time;
 
-                    // Update robot target
                     if (robot.controller != null)
                     {
                         robot.controller.SetTarget(robot.targetGameObject);
                         OnTargetChanged?.Invoke(robot.robotId, robot.targetGameObject);
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Clears the tracked target object for a robot so that CheckForTargetChanges no longer
+        /// issues SetTarget calls for it. Call this after a successful grasp when the robot
+        /// should hold its position rather than continue tracking the (now-held) object.
+        /// </summary>
+        /// <param name="robotId">The robot identifier</param>
+        public void ClearRobotTarget(string robotId)
+        {
+            if (_robotInstances.TryGetValue(robotId, out RobotInstance robot))
+            {
+                robot.targetGameObject = null;
+                Debug.Log($"{_logPrefix} [{robotId}] Tracked target cleared");
             }
         }
 
