@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   x-ros-base: &ros-base
     build: .

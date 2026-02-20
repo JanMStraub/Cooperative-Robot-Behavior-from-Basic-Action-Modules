@@ -124,6 +124,8 @@ def _execute_grasp_with_follow_target(
                 orientation=orientation,
                 planning_time=8.0,
                 robot_id=robot_id,
+                max_velocity_scaling=0.3,
+                max_acceleration_scaling=0.3,
             )
 
             if not correction_result or not correction_result.get("success"):
@@ -136,7 +138,13 @@ def _execute_grasp_with_follow_target(
         if not FOLLOW_TARGET_ENABLED:
             logger.debug(f"[follow_target] disabled — closing gripper at planned position")
 
-    # Arm is at (corrected) grasp position — close gripper
+    # Arm is at (corrected) grasp position.
+    # Wait for the ArticulationBody PD controller to settle before closing so the
+    # gripper doesn't fire while the arm is still oscillating at the target pose.
+    logger.info(f"[follow_target] {robot_id}: waiting for arm to settle before closing gripper")
+    time.sleep(0.5)
+
+    # Close gripper
     logger.info(f"[follow_target] {robot_id}: closing gripper")
     gripper_result = bridge.control_gripper(0.0, robot_id=robot_id)
     if gripper_result and gripper_result.get("success"):
@@ -412,16 +420,24 @@ def grasp_object(
                                             pre_err = pre_result.get("error", "Unknown") if pre_result else "No response"
                                             logger.warning(f"Pre-grasp move failed ({pre_err}), attempting direct grasp")
 
+                                        # Brief pause after pre-grasp arrival so MoveIt samples
+                                        # settled joint states as the start state for the descent.
+                                        # ROSTrajectorySubscriber already waits for physics settle
+                                        # before firing "completed", but a small extra delay ensures
+                                        # the /joint_states topic has published the resting pose.
+                                        time.sleep(0.3)
+
                                         logger.info(f"Descending to grasp position for {robot_id}")
-                                        result = bridge.plan_and_execute(
+                                        result = bridge.plan_cartesian_descent(
                                             position={
                                                 "x": best_grasp.grasp_position[0],
                                                 "y": best_grasp.grasp_position[1],
                                                 "z": best_grasp.grasp_position[2],
                                             },
                                             orientation=grasp_orientation,
-                                            planning_time=10.0,
                                             robot_id=robot_id,
+                                            max_velocity_scaling=0.3,
+                                            max_acceleration_scaling=0.3,
                                         )
 
                                         if result and result.get("success"):
@@ -547,7 +563,7 @@ def grasp_object(
                                 # 10cm to the grasp position. This keeps the approach vector
                                 # vertical so the arm never nudges the cube sideways.
                                 PRE_GRASP_Y_OFFSET = 0.15  # 15cm above object center
-                                GRASP_Y_OFFSET = 0.05      # 5cm above object center (grasp)
+                                GRASP_Y_OFFSET = 0.03      # 3cm above object center (lower = fingers wrap more of object)
 
                                 pre_grasp_position = {
                                     "x": position_dict["x"],
@@ -585,13 +601,21 @@ def grasp_object(
                                         _use_ros = False
 
                                 if _use_ros:
-                                    # Step 2: Descend straight down to grasp position
+                                    # Brief pause after pre-grasp arrival to let /joint_states
+                                    # publish the settled pose before MoveIt samples start state.
+                                    time.sleep(0.3)
+
+                                    # Step 2: Descend straight down to grasp position.
+                                    # Use Cartesian path to guarantee a vertical descent —
+                                    # free-space planning allows wrist joints to rotate to an
+                                    # alternate IK solution, offsetting the gripper laterally.
                                     logger.info(f"Descending to grasp position for {robot_id}")
-                                    result = bridge.plan_and_execute(
+                                    result = bridge.plan_cartesian_descent(
                                         position=position_dict_with_offset,
                                         orientation=top_down_orientation,
-                                        planning_time=10.0,
                                         robot_id=robot_id,
+                                        max_velocity_scaling=0.3,
+                                        max_acceleration_scaling=0.3,
                                     )
                                 else:
                                     result = None

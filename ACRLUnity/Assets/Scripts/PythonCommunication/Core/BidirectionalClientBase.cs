@@ -106,14 +106,17 @@ namespace PythonCommunication.Core
                     }
                 }
                 catch (SocketException sockEx)
-                    when (sockEx.SocketErrorCode == SocketError.TimedOut)
+                    when (sockEx.SocketErrorCode == SocketError.TimedOut
+                       || sockEx.SocketErrorCode == SocketError.WouldBlock)
                 {
+                    // WouldBlock is the macOS equivalent of TimedOut on non-blocking sockets.
                     continue;
                 }
                 catch (System.IO.IOException ioEx)
                 {
                     if (ioEx.InnerException is SocketException innerSockEx
-                        && innerSockEx.SocketErrorCode == SocketError.TimedOut)
+                        && (innerSockEx.SocketErrorCode == SocketError.TimedOut
+                            || innerSockEx.SocketErrorCode == SocketError.WouldBlock))
                     {
                         continue;
                     }

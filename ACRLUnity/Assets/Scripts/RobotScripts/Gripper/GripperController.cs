@@ -57,21 +57,21 @@ namespace Robotics
 
         [Header("Motion Parameters")]
         [Tooltip("Speed of gripper opening/closing in meters per second.")]
-        public float gripSpeed = 0.05f;
+        public float gripSpeed = 0.10f;  // Doubled from 0.05 → halves close time (~280ms → ~140ms)
 
         [Tooltip(
             "Maximum distance the target can be ahead of the physical finger. Prevents tunneling."
         )]
-        public float maxTargetLead = 0.005f;
+        public float maxTargetLead = 0.008f;  // Increased from 0.005 to reduce anti-tunneling clamping
 
         [Tooltip("Stiffness (P-Gain).")]
-        public float stiffness = 5000f;
+        public float stiffness = 8000f;  // Increased from 5000 for stronger, more positive grip
 
         [Tooltip("Damping (D-Gain).")]
         public float damping = 500f;
 
         [Tooltip("Force Limit.")]
-        public float maxForce = 200f;
+        public float maxForce = 300f;  // Increased from 200 to maintain grip under object weight/inertia
 
         [Range(0f, 1f)]
         public float targetPosition = 1f;
@@ -89,6 +89,9 @@ namespace Robotics
         private bool _isHoldingObject = false;
         private GameObject _targetObjectToGrasp;
         private bool _shouldAttachOnClose = false;
+        // Deferred attachment flag: set in Update() when closing completes, consumed in
+        // FixedUpdate() so the AttachObject call runs in sync with the physics engine.
+        private bool _attachmentPending = false;
         private const string _logPrefix = "[GRIPPER_CONTROLLER]";
 
         public event System.Action OnGripperActionComplete;
@@ -179,17 +182,42 @@ namespace Robotics
                         && targetPosition < 0.1f
                     )
                     {
-                        AttachObject(_targetObjectToGrasp);
-                        _targetObjectToGrasp = null;
-                        _shouldAttachOnClose = false;
+                        // Defer attachment to FixedUpdate so it runs in sync with the physics
+                        // engine. Calling AttachObject here (Update) may see stale physics state
+                        // since ArticulationBody simulation runs in FixedUpdate.
+                        _attachmentPending = true;
                     }
-
-                    OnGripperActionComplete?.Invoke();
+                    else
+                    {
+                        OnGripperActionComplete?.Invoke();
+                    }
                 }
                 IsMoving = false;
             }
 
             _wasMoving = IsMoving;
+        }
+
+        /// <summary>
+        /// Runs in sync with the physics engine (FixedUpdate cadence).
+        /// Consumes the deferred attachment flag set by Update() when gripper closing completes.
+        /// Running here ensures ArticulationBody contact and joint state data are current.
+        /// </summary>
+        private void FixedUpdate()
+        {
+            if (!_attachmentPending)
+                return;
+
+            _attachmentPending = false;
+
+            if (_targetObjectToGrasp != null)
+            {
+                AttachObject(_targetObjectToGrasp);
+                _targetObjectToGrasp = null;
+                _shouldAttachOnClose = false;
+            }
+
+            OnGripperActionComplete?.Invoke();
         }
 
         public void SetGripperPosition(float normalizedPosition)
@@ -414,6 +442,14 @@ namespace Robotics
             _isHoldingObject = true;
 
             Debug.Log($"{_logPrefix} Object '{obj.name}' attached to gripper");
+
+            // Tell RobotManager to stop tracking this object as a live target.
+            // Once the object is kinematically parented to the arm, any arm motion moves the
+            // object — causing CheckForTargetChanges to detect "drift" and repeatedly call
+            // SetTarget, which re-arms the IK and produces jittery post-grasp motion.
+            RobotController rc = GetComponentInParent<RobotController>();
+            if (rc != null && RobotManager.Instance != null)
+                RobotManager.Instance.ClearRobotTarget(rc.robotId);
         }
 
         /// <summary>

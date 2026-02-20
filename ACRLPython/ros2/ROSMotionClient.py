@@ -60,7 +60,7 @@ try:
         PlanningScene,
         CollisionObject,
     )
-    from moveit_msgs.srv import GetPositionIK
+    from moveit_msgs.srv import GetPositionIK, GetCartesianPath
     from geometry_msgs.msg import PoseStamped, Point, Quaternion, Vector3, Pose
     from shape_msgs.msg import SolidPrimitive
     from trajectory_msgs.msg import JointTrajectory
@@ -68,8 +68,12 @@ try:
     from std_msgs.msg import String
 
     HAS_ROS = True
+    # GetCartesianPath gained velocity/acceleration scaling fields in moveit_msgs ~2.3.
+    # Probe once at import time so _plan_cartesian_descent can set them unconditionally.
+    _CARTESIAN_HAS_SCALING = hasattr(GetCartesianPath.Request(), "max_velocity_scaling_factor")
 except ImportError:
     HAS_ROS = False
+    _CARTESIAN_HAS_SCALING = False
     logger.warning("ROS 2 packages not available. Running in stub mode.")
     rclpy = None  # type: ignore[assignment]
     Node = None  # type: ignore[assignment,misc]
@@ -84,6 +88,7 @@ except ImportError:
     PlanningScene = None  # type: ignore[assignment,misc]
     CollisionObject = None  # type: ignore[assignment,misc]
     GetPositionIK = None  # type: ignore[assignment,misc]
+    GetCartesianPath = None  # type: ignore[assignment,misc]
     PoseStamped = None  # type: ignore[assignment,misc]
     Point = None  # type: ignore[assignment,misc]
     Quaternion = None  # type: ignore[assignment,misc]
@@ -124,6 +129,7 @@ class ROSMotionServer:
         # Multi-robot support: dict of robot_id -> clients/publishers
         self._move_group_clients = {}  # robot_id -> ActionClient
         self._ik_service_clients = {}  # robot_id -> Service Client for IK
+        self._cartesian_path_clients = {}  # robot_id -> Service Client for Cartesian paths
         self._trajectory_pubs = {}  # robot_id -> Publisher
         self._gripper_pubs = {}  # robot_id -> Publisher
         self._joint_state_subs = {}  # robot_id -> Subscription
@@ -172,6 +178,11 @@ class ROSMotionServer:
         # MoveIt IK service client (for grasp candidate validation)
         self._ik_service_clients[robot_id] = self._node.create_client(
             GetPositionIK, f"/{robot_id}/compute_ik"
+        )
+
+        # MoveIt Cartesian path service client (for straight-line descents)
+        self._cartesian_path_clients[robot_id] = self._node.create_client(
+            GetCartesianPath, f"/{robot_id}/compute_cartesian_path"
         )
 
         # NOTE: Do not block here waiting for the action server. MoveIt may take
@@ -240,9 +251,13 @@ class ROSMotionServer:
         scene = PlanningScene()
         scene.is_diff = True  # Incremental update, not a full scene replacement
 
-        # Ground plane: 2m x 2m x 2cm slab centered at Z=-0.02 in base_link frame.
-        # Top face at Z=-0.01: 1cm below table surface so objects sitting on the
-        # table (cube bottom at Z=0) are not inside the collision volume.
+        # Ground plane: 2m x 2m x 10cm slab in base_link frame.
+        # Top face at Z=-0.05 (5cm below table surface).
+        # This blocks trajectories that would pass through the floor/table base
+        # while still allowing the gripper to descend to grasp objects sitting on
+        # the table (object top at Z≈0.03, fingers at Z≈-0.02 — well above this).
+        # A shallower plane (Z=-0.01) blocked low-but-valid grasp positions and
+        # caused MoveIt to slam the gripper into the table trying to avoid it.
         ground = CollisionObject()
         ground.header.frame_id = "base_link"
         ground.id = "ground_plane"
@@ -250,12 +265,12 @@ class ROSMotionServer:
 
         box = SolidPrimitive()
         box.type = SolidPrimitive.BOX
-        box.dimensions = [2.0, 2.0, 0.02]  # x, y, z in metres
+        box.dimensions = [2.0, 2.0, 0.10]  # x, y, z in metres
 
         box_pose = Pose()
         box_pose.position.x = 0.0
         box_pose.position.y = 0.0
-        box_pose.position.z = -0.02  # Top face at Z=-0.01, slightly below table surface
+        box_pose.position.z = -0.10  # Top face at Z=-0.05, 5cm below table surface
         box_pose.orientation.w = 1.0
 
         ground.primitives = [box]
@@ -492,6 +507,8 @@ class ROSMotionServer:
                 return self._plan_return_to_start(request, robot_id)
             elif command == "validate_grasp_candidates":
                 return self._validate_grasp_candidates(request, robot_id)
+            elif command == "plan_cartesian_descent":
+                return self._plan_cartesian_descent(request, robot_id)
             elif command == "ping":
                 return {"success": True, "message": "pong", "timestamp": time.time()}
             else:
@@ -539,6 +556,15 @@ class ROSMotionServer:
         goal.request.group_name = "arm"
         goal.request.num_planning_attempts = 10
         goal.request.allowed_planning_time = planning_time
+
+        # Optional velocity/acceleration scaling (0.0 = MoveIt default = no scaling).
+        # Use values < 1.0 for the descent phase to produce slow, smooth approach trajectories.
+        vel_scaling = request.get("max_velocity_scaling", 0.0)
+        acc_scaling = request.get("max_acceleration_scaling", 0.0)
+        if vel_scaling > 0.0:
+            goal.request.max_velocity_scaling_factor = vel_scaling
+        if acc_scaling > 0.0:
+            goal.request.max_acceleration_scaling_factor = acc_scaling
 
         # Set workspace bounds so OMPL knows the planning volume
         goal.request.workspace_parameters.header.frame_id = "base_link"
@@ -844,12 +870,18 @@ class ROSMotionServer:
         # Estimate execution timeout: trajectory duration * speed_scale_factor + buffer.
         # Unity's ROSTrajectorySubscriber runs at 0.5x speed scaling by default,
         # so actual wall time ≈ 2x the trajectory time_from_start of the last point.
+        # Add 10s fixed buffer to cover:
+        #   - Unity physics settle wait (up to 1.5s per ROSTrajectorySubscriber)
+        #   - ROS topic round-trip latency for feedback message
+        #   - Short MoveIt plans (near-zero traj_duration) that still take several
+        #     seconds to execute due to speed scaling and settle
+        # Minimum 15s ensures even instantaneous-plan trajectories have enough time.
         if trajectory.points:
             last_pt = trajectory.points[-1]
             traj_duration = last_pt.time_from_start.sec + last_pt.time_from_start.nanosec * 1e-9
         else:
             traj_duration = 5.0
-        execution_timeout = traj_duration * 2.5 + 5.0  # 2.5x for speed scaling + buffer
+        execution_timeout = max(15.0, traj_duration * 2.5 + 10.0)
 
         completed = self._wait_for_trajectory_completion(robot_id, timeout=execution_timeout)
         if not completed:
@@ -1027,6 +1059,153 @@ class ROSMotionServer:
             "planning_time": planning_time,
         }
         return self._plan_and_publish(orient_request, robot_id)
+
+    def _plan_cartesian_descent(self, request, robot_id):
+        """Plan and publish a straight-line Cartesian descent to a target position.
+
+        Uses MoveIt's GetCartesianPath service to constrain the end-effector to
+        follow a straight line from the current pose to the target. This prevents
+        IK redundancy from causing joint 4 (or any wrist joint) to rotate to a
+        different solution mid-descent, which would offset the gripper laterally.
+
+        Intended for the final grasp descent: after arriving at the pre-grasp
+        hover, call this instead of plan_and_execute so the arm descends straight
+        down to the object without any lateral drift.
+
+        Args:
+            request: Dict with keys:
+                position: Target position dict {x, y, z} in Unity world coords.
+                orientation: Target orientation dict {x, y, z, w} (optional).
+                max_velocity_scaling: Velocity scaling factor (default 0.3).
+                max_acceleration_scaling: Acceleration scaling factor (default 0.3).
+            robot_id: Robot namespace (e.g. "Robot1").
+
+        Returns:
+            Dict with success status and trajectory info.
+        """
+        cartesian_client = self._cartesian_path_clients.get(robot_id)
+        if cartesian_client is None:
+            logger.error(f"No Cartesian path client for {robot_id}")
+            return {"success": False, "error": f"No Cartesian path client for {robot_id}"}
+
+        if not cartesian_client.wait_for_service(timeout_sec=10.0):
+            logger.error(f"Cartesian path service not available for {robot_id}")
+            return {"success": False, "error": "compute_cartesian_path service unavailable"}
+
+        position = request.get("position", {})
+        orientation = request.get("orientation")
+        vel_scaling = request.get("max_velocity_scaling", 0.3)
+        acc_scaling = request.get("max_acceleration_scaling", 0.3)
+
+        # Transform Unity world coords → ROS base_link frame
+        local_position = self._transform_world_to_local(position, robot_id)
+
+        logger.info(
+            f"[CARTESIAN] {robot_id} descent to base_link: "
+            f"x={local_position['x']:.3f}, y={local_position['y']:.3f}, z={local_position['z']:.3f}"
+        )
+
+        # Build target waypoint pose
+        target_pose = PoseStamped()
+        target_pose.header.frame_id = "base_link"
+        target_pose.pose.position = Point(
+            x=local_position.get("x", 0.0),
+            y=local_position.get("y", 0.0),
+            z=local_position.get("z", 0.0),
+        )
+        if orientation:
+            target_pose.pose.orientation = Quaternion(
+                x=orientation.get("x", 0.0),
+                y=orientation.get("y", 0.0),
+                z=orientation.get("z", 0.0),
+                w=orientation.get("w", 1.0),
+            )
+        else:
+            target_pose.pose.orientation = Quaternion(x=0.0, y=0.0, z=0.0, w=1.0)
+
+        req = GetCartesianPath.Request()
+        req.header.frame_id = "base_link"
+        req.group_name = "arm"
+        req.link_name = "ee_link"
+        req.waypoints = [target_pose.pose]
+        req.max_step = 0.01          # 1cm maximum interpolation step along the path
+        req.jump_threshold = 0.0     # Disable jump detection (causes false failures)
+        req.avoid_collisions = True
+        # max_velocity/acceleration_scaling_factor were added to GetCartesianPath in
+        # moveit_msgs ~2.3. _CARTESIAN_HAS_SCALING is set once at import time.
+        if _CARTESIAN_HAS_SCALING:
+            req.max_velocity_scaling_factor = vel_scaling
+            req.max_acceleration_scaling_factor = acc_scaling
+
+        # Set current joint state as start
+        joint_state = self._current_joint_states.get(robot_id)
+        if joint_state is not None:
+            arm_joint_names = ["joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6"]
+            filtered_js = JointState()
+            filtered_js.header = joint_state.header
+            for name in arm_joint_names:
+                if name in joint_state.name:
+                    idx = list(joint_state.name).index(name)
+                    filtered_js.name.append(name)
+                    filtered_js.position.append(joint_state.position[idx])
+            start_state = RobotState()
+            start_state.joint_state = filtered_js
+            req.start_state = start_state
+
+        future = cartesian_client.call_async(req)
+
+        # Poll for completion — do NOT call spin_until_future_complete (ros_spin thread is spinning)
+        deadline = time.time() + 15.0
+        while not future.done() and time.time() < deadline:
+            time.sleep(0.05)
+
+        if not future.done() or future.result() is None:
+            return {"success": False, "error": "Cartesian path planning timed out", "robot_id": robot_id}
+
+        response = future.result()
+        fraction = response.fraction
+
+        if fraction < 0.95:
+            logger.warning(
+                f"{robot_id}: Cartesian path only {fraction*100:.0f}% complete — "
+                "falling back to free-space plan"
+            )
+            # Fall back to free-space planning if Cartesian path is mostly blocked
+            return self._plan_and_publish(request, robot_id)
+
+        trajectory = response.solution.joint_trajectory
+        if not trajectory.points:
+            return {"success": False, "error": "Cartesian path returned empty trajectory", "robot_id": robot_id}
+
+        logger.info(
+            f"{robot_id}: Cartesian path {fraction*100:.0f}% complete, "
+            f"{len(trajectory.points)} points"
+        )
+
+        # Publish and wait for completion (same as _plan_and_publish)
+        trajectory_pub = self._trajectory_pubs[robot_id]
+        self._trajectory_feedback_event[robot_id].clear()
+        self._trajectory_feedback[robot_id] = None
+        trajectory_pub.publish(trajectory)
+
+        if trajectory.points:
+            last_pt = trajectory.points[-1]
+            traj_duration = last_pt.time_from_start.sec + last_pt.time_from_start.nanosec * 1e-9
+        else:
+            traj_duration = 5.0
+        execution_timeout = max(15.0, traj_duration * 2.5 + 10.0)
+
+        completed = self._wait_for_trajectory_completion(robot_id, timeout=execution_timeout)
+        if not completed:
+            logger.warning(f"{robot_id}: Cartesian trajectory completion not confirmed within {execution_timeout:.1f}s")
+
+        return {
+            "success": completed,
+            "robot_id": robot_id,
+            "trajectory_points": len(trajectory.points),
+            "cartesian_fraction": fraction,
+            "status": "completed" if completed else "timeout",
+        }
 
     def _plan_grasp(self, request, robot_id):
         """Plan and publish a grasp trajectory.

@@ -83,6 +83,9 @@ class TCPServerBase(ABC):
     - handle_client_connection(): Process individual client connections
     """
 
+    # Heartbeat interval in seconds — how often the server logs its health status.
+    HEARTBEAT_INTERVAL: float = 30.0
+
     def __init__(self, config: ServerConfig):
         """
         Initialize the TCP server.
@@ -102,6 +105,12 @@ class TCPServerBase(ABC):
             []
         )  # Track client handler threads
         self._client_threads_lock = threading.Lock()  # Protect thread list
+        self._heartbeat_thread: Optional[threading.Thread] = None
+
+        # Connection monitoring counters (thread-safe: GIL protects int +=)
+        self._total_connections: int = 0
+        self._total_disconnections: int = 0
+        self._start_time: Optional[datetime] = None
 
         # Setup centralized logging
         self._logger = setup_logging(self.__class__.__module__)
@@ -136,6 +145,7 @@ class TCPServerBase(ABC):
             self._server_socket.settimeout(self._config.socket_timeout)
 
             self._running = True
+            self._start_time = datetime.now()
             self._logger.info(f"Server started on {self._config.host}:{self._config.port}")
 
             # Start accept thread
@@ -143,6 +153,12 @@ class TCPServerBase(ABC):
                 target=self._accept_loop, daemon=True
             )
             self._accept_thread.start()
+
+            # Start heartbeat thread for periodic health logging
+            self._heartbeat_thread = threading.Thread(
+                target=self._heartbeat_loop, daemon=True, name=f"{self.__class__.__name__}_heartbeat"
+            )
+            self._heartbeat_thread.start()
 
         except Exception as e:
             self._logger.error(f"Failed to start server: {e}")
@@ -157,9 +173,11 @@ class TCPServerBase(ABC):
         self._logger.info("Stopping server...")
         self._running = False
 
-        # Wait for accept thread to finish
+        # Wait for accept and heartbeat threads to finish
         if self._accept_thread and self._accept_thread.is_alive():
             self._accept_thread.join(timeout=2.0)
+        if self._heartbeat_thread and self._heartbeat_thread.is_alive():
+            self._heartbeat_thread.join(timeout=2.0)
 
         # Close all client connections
         with self._clients_lock:
@@ -434,12 +452,19 @@ class TCPServerBase(ABC):
         """
         Wrapper around subclass's handle_client_connection method.
         Ensures cleanup happens even if handler raises exception.
+        Increments connection/disconnection counters for monitoring.
         """
+        self._total_connections += 1
+        self._logger.info(
+            f"Client connected from {address} "
+            f"(total connections: {self._total_connections})"
+        )
         try:
             self.handle_client_connection(client, address)
         except Exception as e:
             self._logger.error(f"Error handling client {address}: {e}")
         finally:
+            self._total_disconnections += 1
             # Remove from client list
             with self._clients_lock:
                 self._remove_client(client)
@@ -450,7 +475,59 @@ class TCPServerBase(ABC):
             except (OSError, ConnectionError) as e:
                 self._logger.debug(f"Error closing client socket: {e}")
 
-            self._logger.debug(f"Client disconnected from {address}")
+            self._logger.info(
+                f"Client disconnected from {address} "
+                f"(active: {self.get_client_count()}, "
+                f"total disconnections: {self._total_disconnections})"
+            )
+
+    def _heartbeat_loop(self):
+        """
+        Periodic health logging thread.
+
+        Logs server uptime, active client count, and cumulative connection
+        metrics every HEARTBEAT_INTERVAL seconds. Exits when the server stops.
+        """
+        import time
+
+        while self._running:
+            # Sleep in small increments so we respond to stop() promptly.
+            for _ in range(int(self.HEARTBEAT_INTERVAL / 1.0)):
+                if not self._running:
+                    break
+                time.sleep(1.0)
+
+            if not self._running:
+                break
+
+            stats = self.get_stats()
+            self._logger.info(
+                f"[HEARTBEAT] {self.__class__.__name__} on :{self._config.port} | "
+                f"uptime={stats['uptime_seconds']:.0f}s | "
+                f"active_clients={stats['active_clients']} | "
+                f"total_connections={stats['total_connections']} | "
+                f"total_disconnections={stats['total_disconnections']}"
+            )
+
+    def get_stats(self) -> dict:
+        """
+        Return a snapshot of server health and connection metrics.
+
+        Returns:
+            Dict with keys: uptime_seconds, active_clients, total_connections,
+            total_disconnections, port.
+        """
+        uptime = 0.0
+        if self._start_time is not None:
+            uptime = (datetime.now() - self._start_time).total_seconds()
+
+        return {
+            "port": self._config.port,
+            "uptime_seconds": uptime,
+            "active_clients": self.get_client_count(),
+            "total_connections": self._total_connections,
+            "total_disconnections": self._total_disconnections,
+        }
 
     def _cleanup_completed_threads(self):
         """Remove completed threads from the thread list"""
