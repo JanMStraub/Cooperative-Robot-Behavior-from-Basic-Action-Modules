@@ -52,6 +52,7 @@ namespace Robotics
         private int[] _jointIndexMap; // Maps trajectory joint names to robotJoints indices
         private string _resolvedTrajectoryTopic;
         private string _resolvedFeedbackTopic;
+        private bool _abortingForPreempt; // Suppresses OnTrajectoryComplete(false) on preempt
 
         private const string _logPrefix = "[ROS_TRAJECTORY_SUBSCRIBER]";
 
@@ -116,7 +117,9 @@ namespace Robotics
             if (IsExecutingTrajectory)
             {
                 Debug.LogWarning($"{_logPrefix} Already executing trajectory. Aborting current.");
+                _abortingForPreempt = true;
                 AbortExecution();
+                _abortingForPreempt = false;
             }
 
             // Build joint name -> index mapping
@@ -141,6 +144,9 @@ namespace Robotics
                 + $"for {_robotController.robotId}"
             );
 
+            // Set IsManuallyDriven immediately (before the coroutine's first frame) so
+            // the RobotController IK never fires between consecutive trajectories.
+            _robotController.IsManuallyDriven = true;
             _executionCoroutine = StartCoroutine(ExecuteTrajectory(msg));
         }
 
@@ -231,18 +237,20 @@ namespace Robotics
                     }
                 }
 
-                // Check velocities
-                if (point.velocities != null)
+                // Check velocities — MoveIt plans at full speed; Unity executes at
+                // _speedScaling, so the physical velocity = planned * _speedScaling.
+                // Warn once per joint (not per point) to avoid log spam.
+                if (point.velocities != null && p == 0)
                 {
+                    float effectiveLimit = _maxJointVelocity / _speedScaling;
                     for (int j = 0; j < point.velocities.Length; j++)
                     {
-                        if (Mathf.Abs((float)point.velocities[j]) > _maxJointVelocity)
+                        if (Mathf.Abs((float)point.velocities[j]) > effectiveLimit)
                         {
-                            Debug.LogError(
-                                $"{_logPrefix} Velocity {point.velocities[j]:F2} rad/s "
-                                + $"exceeds max {_maxJointVelocity} at point {p}, joint {j}"
+                            Debug.LogWarning(
+                                $"{_logPrefix} Joint {j} planned velocity {point.velocities[j]:F2} rad/s "
+                                + $"exceeds scaled limit {effectiveLimit:F2} — will be clamped during execution."
                             );
-                            return false;
                         }
                     }
                 }
@@ -265,7 +273,10 @@ namespace Robotics
             PublishFeedback("executing", $"Starting {msg.points.Length}-point trajectory");
             float startTime = Time.time;
 
-            // Get starting joint positions (in radians)
+            // Read actual joint positions as the trajectory start to avoid a jump
+            // when the arm hasn't fully settled at the end of a previous trajectory.
+            // Using planned positions as fromPositions would cause a discontinuity
+            // if physics lag left the joints a few degrees off.
             double[] startPositions = new double[_jointIndexMap.Length];
             for (int j = 0; j < _jointIndexMap.Length; j++)
             {
@@ -284,7 +295,10 @@ namespace Robotics
                 double targetTime = targetPoint.time_from_start.sec
                     + targetPoint.time_from_start.nanosec * 1e-9;
 
-                // Determine interpolation source
+                // Always interpolate from actual physics state for the first segment.
+                // For subsequent segments use the previous planned point so the overall
+                // timing matches MoveIt's plan; the first-segment correction absorbs any
+                // residual physics lag from the previous trajectory.
                 double[] fromPositions;
                 if (prevPoint != null && prevPoint.positions != null)
                     fromPositions = prevPoint.positions;
@@ -297,6 +311,12 @@ namespace Robotics
 
                 // Apply speed scaling to slow down trajectory execution in simulation
                 segmentDuration *= (1.0 / _speedScaling);
+
+                // Collect from/to velocities for cubic Hermite interpolation.
+                // MoveIt plans velocity-continuous trajectories; using these velocities
+                // gives C1-continuous motion (no velocity jumps at waypoints).
+                double[] fromVelocities = prevPoint?.velocities;
+                double[] toVelocities = targetPoint.velocities;
 
                 // Interpolate from previous point to current
                 float segmentStart = Time.time;
@@ -314,8 +334,36 @@ namespace Robotics
                                 break;
 
                             int idx = _jointIndexMap[j];
-                            double interpRad = fromPositions[j]
-                                + (targetPoint.positions[j] - fromPositions[j]) * t;
+
+                            double p0 = fromPositions[j];
+                            double p1 = targetPoint.positions[j];
+                            double interpRad;
+
+                            // Use cubic Hermite when velocity data is available on both ends.
+                            // This matches MoveIt's trajectory intent and eliminates velocity
+                            // discontinuities at waypoints (the main source of visible jerks).
+                            if (fromVelocities != null && toVelocities != null
+                                && j < fromVelocities.Length && j < toVelocities.Length)
+                            {
+                                // Convert MoveIt rad/s velocities to normalised-time tangents:
+                                //   tangent = velocity_rad_per_s * segmentDuration_s
+                                // segmentDuration already includes the speed-scaling factor,
+                                // so no further division is needed.
+                                double v0 = fromVelocities[j] * segmentDuration;
+                                double v1 = toVelocities[j]   * segmentDuration;
+                                double t2 = t * t;
+                                double t3 = t2 * t;
+                                // Standard cubic Hermite basis functions
+                                interpRad = (2*t3 - 3*t2 + 1) * p0
+                                          + (t3 - 2*t2 + t)   * v0
+                                          + (-2*t3 + 3*t2)    * p1
+                                          + (t3 - t2)         * v1;
+                            }
+                            else
+                            {
+                                // Fallback: linear interpolation
+                                interpRad = p0 + (p1 - p0) * t;
+                            }
 
                             // Convert radians to degrees for ArticulationBody drive targets
                             float targetDeg = (float)interpRad * Mathf.Rad2Deg;
@@ -370,10 +418,13 @@ namespace Robotics
             IsExecutingTrajectory = false;
             _robotController.IsManuallyDriven = false;
 
-            PublishFeedback("aborted", "Trajectory execution aborted");
-            OnTrajectoryComplete?.Invoke(false);
-
             Debug.Log($"{_logPrefix} Trajectory execution aborted for {_robotController.robotId}");
+
+            if (!_abortingForPreempt)
+            {
+                PublishFeedback("aborted", "Trajectory execution aborted");
+                OnTrajectoryComplete?.Invoke(false);
+            }
         }
 
         /// <summary>

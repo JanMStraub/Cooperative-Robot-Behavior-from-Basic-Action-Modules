@@ -33,6 +33,7 @@ class TestStabilizeObject:
         result = stabilize_object("Robot1", "LargeCube", duration_ms=5000, force_limit=10.0)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["robot_id"] == "Robot1"
         assert result.result["object_id"] == "LargeCube"
         assert result.result["duration_ms"] == 5000
@@ -45,6 +46,7 @@ class TestStabilizeObject:
         result = stabilize_object("Robot1", "Cube01")
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["duration_ms"] == 5000  # Default
         assert result.result["force_limit"] == 10.0  # Default
 
@@ -53,6 +55,7 @@ class TestStabilizeObject:
         result = stabilize_object("Robot1", "AssemblyPart", duration_ms=10000)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["duration_ms"] == 10000
 
     def test_stabilize_object_custom_force_limit(self, patch_command_broadcaster):
@@ -60,6 +63,7 @@ class TestStabilizeObject:
         result = stabilize_object("Robot1", "FragileObject", force_limit=5.0)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["force_limit"] == 5.0
 
     def test_stabilize_object_invalid_robot_id(self):
@@ -67,6 +71,7 @@ class TestStabilizeObject:
         result = stabilize_object("", "Cube01")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_stabilize_object_invalid_object_id(self):
@@ -74,6 +79,7 @@ class TestStabilizeObject:
         result = stabilize_object("Robot1", "")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_OBJECT_ID"
 
     def test_stabilize_object_invalid_duration_too_low(self):
@@ -81,6 +87,7 @@ class TestStabilizeObject:
         result = stabilize_object("Robot1", "Cube01", duration_ms=50)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_DURATION"
 
     def test_stabilize_object_invalid_duration_too_high(self):
@@ -88,6 +95,7 @@ class TestStabilizeObject:
         result = stabilize_object("Robot1", "Cube01", duration_ms=40000)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_DURATION"
 
     def test_stabilize_object_invalid_force_limit_too_low(self):
@@ -95,6 +103,7 @@ class TestStabilizeObject:
         result = stabilize_object("Robot1", "Cube01", force_limit=0.5)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_FORCE_LIMIT"
 
     def test_stabilize_object_invalid_force_limit_too_high(self):
@@ -102,6 +111,7 @@ class TestStabilizeObject:
         result = stabilize_object("Robot1", "Cube01", force_limit=60.0)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_FORCE_LIMIT"
 
     def test_stabilize_object_boundary_duration_values(self, patch_command_broadcaster):
@@ -151,6 +161,7 @@ class TestStabilizeObject:
         result = stabilize_object("Robot1", "Cube01")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "COMMUNICATION_FAILED"
 
     def test_stabilize_object_network_error(self, patch_command_broadcaster):
@@ -160,6 +171,7 @@ class TestStabilizeObject:
         result = stabilize_object("Robot1", "Cube01")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "UNEXPECTED_ERROR"
 
 
@@ -185,6 +197,7 @@ class TestDualArmStabilization:
         result = stabilize_object("Robot1", "SmallPart", duration_ms=1000, force_limit=5.0)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["duration_ms"] == 1000
 
     def test_long_duration_stabilization(self, patch_command_broadcaster):
@@ -192,6 +205,7 @@ class TestDualArmStabilization:
         result = stabilize_object("Robot1", "AssemblyBase", duration_ms=25000, force_limit=30.0)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["duration_ms"] == 25000
 
     def test_low_force_fragile_object(self, patch_command_broadcaster):
@@ -199,6 +213,7 @@ class TestDualArmStabilization:
         result = stabilize_object("Robot1", "GlassVial", duration_ms=5000, force_limit=2.0)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["force_limit"] == 2.0
 
     def test_high_force_heavy_object(self, patch_command_broadcaster):
@@ -206,6 +221,7 @@ class TestDualArmStabilization:
         result = stabilize_object("Robot1", "HeavyBlock", duration_ms=5000, force_limit=45.0)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["force_limit"] == 45.0
 
 
@@ -336,6 +352,7 @@ class TestStabilizationEdgeCases:
         result = stabilize_object("Robot1", "Object1")
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["robot_id"] == "Robot1"
         assert result.result["object_id"] == "Object1"
 
@@ -350,6 +367,7 @@ class TestStabilizationEdgeCases:
         )
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["duration_ms"] == 15000
         assert result.result["force_limit"] == 25.0
 
@@ -358,6 +376,7 @@ class TestStabilizationEdgeCases:
         result = stabilize_object("Robot1", "Object_123-ABC")
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["object_id"] == "Object_123-ABC"
 
     def test_stabilize_robot_id_with_numbers(self, patch_command_broadcaster):
@@ -365,6 +384,7 @@ class TestStabilizationEdgeCases:
         result = stabilize_object("AR4_Robot_2", "Cube01")
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["robot_id"] == "AR4_Robot_2"
 
     def test_stabilize_minimum_duration_maximum_force(self, patch_command_broadcaster):
@@ -372,6 +392,7 @@ class TestStabilizationEdgeCases:
         result = stabilize_object("Robot1", "HeavyObject", duration_ms=100, force_limit=50.0)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["duration_ms"] == 100
         assert result.result["force_limit"] == 50.0
 
@@ -380,6 +401,7 @@ class TestStabilizationEdgeCases:
         result = stabilize_object("Robot1", "DelicateObject", duration_ms=30000, force_limit=1.0)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["duration_ms"] == 30000
         assert result.result["force_limit"] == 1.0
 

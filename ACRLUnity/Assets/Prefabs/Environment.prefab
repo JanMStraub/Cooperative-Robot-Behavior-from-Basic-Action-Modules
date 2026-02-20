@@ -2659,6 +2659,10 @@ GameObject:
   - component: {fileID: 3735913397023177065}
   - component: {fileID: 1440759134938604137}
   - component: {fileID: 5673991503912598442}
+  - component: {fileID: 5699709490432778825}
+  - component: {fileID: 384678295724699492}
+  - component: {fileID: 3861989622656847497}
+  - component: {fileID: 1217348618543889257}
   m_Layer: 7
   m_Name: Robot2
   m_TagString: robot
@@ -2712,7 +2716,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.RobotController
   robotId: Robot2
-  _dampingFactorLambda: 0.2
+  _ikConfig: {fileID: 11400000, guid: 6a4890127a3594371b5277e18bb96ab1, type: 2}
   debugTarget: {fileID: 0}
   robotJoints:
   - {fileID: 9190433156514923117}
@@ -2738,7 +2742,8 @@ MonoBehaviour:
   _enableMovingTargetTracking: 0
   _targetMovementThreshold: 0.01
   _graspConfig: {fileID: 11400000, guid: a83c177827c05458e94f36395b5ad440, type: 2}
-  enableDebugVisualization: 1
+  _trajectoryConfig: {fileID: 11400000, guid: ff3ab6249be39439ab3045664466134a, type: 2}
+  _enableDebugVisualization: 1
 --- !u!114 &5673991503912598442
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2761,9 +2766,7 @@ MonoBehaviour:
   - {fileID: 4237859500205483745}
   endEffectorBase: {fileID: 1856330339786558508}
   IKReferenceFrame: {fileID: 4004495261394536712}
-  _dampingFactorLambda: 2
-  _convergenceThreshold: 0.02
-  _orientationThresholdDegrees: 10
+  _ikConfig: {fileID: 11400000, guid: 6a4890127a3594371b5277e18bb96ab1, type: 2}
   _maxJointStepRad: 0.05
   _minStepSpeedNearTarget: 0.1
   _maxStepSpeed: 0.4
@@ -2777,6 +2780,75 @@ MonoBehaviour:
   _gripperRotationOffset: {x: 0, y: 90, z: 0}
   _enableAutonomousMode: 0
   enableDebugVisualization: 1
+--- !u!114 &5699709490432778825
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1523614578368514234}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5e40cb458152e449392e9d9edbd0dcfa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSControlModeManager
+  _initialMode: 1
+  _robotController: {fileID: 1440759134938604137}
+  _jointStatePublisher: {fileID: 384678295724699492}
+  _trajectorySubscriber: {fileID: 3861989622656847497}
+  _gripperSubscriber: {fileID: 1217348618543889257}
+--- !u!114 &384678295724699492
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1523614578368514234}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2c8fbb95022b74d33828c250f09c3415, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSJointStatePublisher
+  _topicName: /joint_states
+  _publishRate: 50
+  _includeGripperJoints: 1
+  _robotController: {fileID: 1440759134938604137}
+  _gripperController: {fileID: 1116772510549147897}
+--- !u!114 &3861989622656847497
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1523614578368514234}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cc33dc9b197ed4052a88802fbc3dd69c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSTrajectorySubscriber
+  _trajectoryTopic: /arm_controller/joint_trajectory
+  _feedbackTopic: /arm_controller/feedback
+  _maxJointVelocity: 1.05
+  _maxPointGap: 5
+  _speedScaling: 0.5
+  _robotController: {fileID: 1440759134938604137}
+--- !u!114 &1217348618543889257
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1523614578368514234}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9fcb7efc39231426a9b2adbb790f3575, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSGripperSubscriber
+  _commandTopic: /gripper/command
+  _stateTopic: /gripper/state
+  _statePublishRate: 10
+  _gripperController: {fileID: 1116772510549147897}
+  _robotController: {fileID: 1440759134938604137}
 --- !u!1 &1614731032102589465
 GameObject:
   m_ObjectHideFlags: 0
@@ -3881,11 +3953,11 @@ MonoBehaviour:
   leftGripper: {fileID: 8827493265013950776}
   rightGripper: {fileID: 1842315821876788058}
   attachmentPoint: {fileID: 1856330339786558508}
-  gripSpeed: 0.01
+  gripSpeed: 0.05
   maxTargetLead: 0.005
-  stiffness: 5000
-  damping: 1000
-  maxForce: 100
+  stiffness: 500
+  damping: 5
+  maxForce: 20
   targetPosition: 1
 --- !u!1 &2276408368286962627
 GameObject:
@@ -9695,6 +9767,10 @@ GameObject:
   - component: {fileID: 1188714533813295264}
   - component: {fileID: 1782900251721025928}
   - component: {fileID: 7888947935727383794}
+  - component: {fileID: 2811135550562663997}
+  - component: {fileID: 5824589639710925805}
+  - component: {fileID: 7753383895358973258}
+  - component: {fileID: 2521286999404157459}
   m_Layer: 7
   m_Name: Robot1
   m_TagString: robot
@@ -9748,7 +9824,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.RobotController
   robotId: Robot1
-  _dampingFactorLambda: 0.2
+  _ikConfig: {fileID: 11400000, guid: 6a4890127a3594371b5277e18bb96ab1, type: 2}
   debugTarget: {fileID: 0}
   robotJoints:
   - {fileID: 2129013924218306092}
@@ -9774,7 +9850,8 @@ MonoBehaviour:
   _enableMovingTargetTracking: 0
   _targetMovementThreshold: 0.01
   _graspConfig: {fileID: 11400000, guid: a83c177827c05458e94f36395b5ad440, type: 2}
-  enableDebugVisualization: 1
+  _trajectoryConfig: {fileID: 11400000, guid: ff3ab6249be39439ab3045664466134a, type: 2}
+  _enableDebugVisualization: 1
 --- !u!114 &7888947935727383794
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -9797,9 +9874,7 @@ MonoBehaviour:
   - {fileID: 1866393755694586488}
   endEffectorBase: {fileID: 2085184109248507353}
   IKReferenceFrame: {fileID: 2575517363061894445}
-  _dampingFactorLambda: 2
-  _convergenceThreshold: 0.03
-  _orientationThresholdDegrees: 10
+  _ikConfig: {fileID: 11400000, guid: 6a4890127a3594371b5277e18bb96ab1, type: 2}
   _maxJointStepRad: 0.05
   _minStepSpeedNearTarget: 0.1
   _maxStepSpeed: 0.4
@@ -9813,6 +9888,75 @@ MonoBehaviour:
   _gripperRotationOffset: {x: 0, y: -90, z: 0}
   _enableAutonomousMode: 0
   enableDebugVisualization: 1
+--- !u!114 &2811135550562663997
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5503568802072259119}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5e40cb458152e449392e9d9edbd0dcfa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSControlModeManager
+  _initialMode: 1
+  _robotController: {fileID: 1782900251721025928}
+  _jointStatePublisher: {fileID: 5824589639710925805}
+  _trajectorySubscriber: {fileID: 7753383895358973258}
+  _gripperSubscriber: {fileID: 2521286999404157459}
+--- !u!114 &5824589639710925805
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5503568802072259119}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2c8fbb95022b74d33828c250f09c3415, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSJointStatePublisher
+  _topicName: /joint_states
+  _publishRate: 50
+  _includeGripperJoints: 1
+  _robotController: {fileID: 1782900251721025928}
+  _gripperController: {fileID: 7409242131979378376}
+--- !u!114 &7753383895358973258
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5503568802072259119}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cc33dc9b197ed4052a88802fbc3dd69c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSTrajectorySubscriber
+  _trajectoryTopic: /arm_controller/joint_trajectory
+  _feedbackTopic: /arm_controller/feedback
+  _maxJointVelocity: 1.05
+  _maxPointGap: 5
+  _speedScaling: 0.5
+  _robotController: {fileID: 1782900251721025928}
+--- !u!114 &2521286999404157459
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5503568802072259119}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9fcb7efc39231426a9b2adbb790f3575, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSGripperSubscriber
+  _commandTopic: /gripper/command
+  _stateTopic: /gripper/state
+  _statePublishRate: 10
+  _gripperController: {fileID: 7409242131979378376}
+  _robotController: {fileID: 1782900251721025928}
 --- !u!1 &5510509683987005590
 GameObject:
   m_ObjectHideFlags: 0
@@ -12283,96 +12427,6 @@ Transform:
   - {fileID: 663608598013227848}
   m_Father: {fileID: 5982761930909881620}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &6740733946462499616
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 2067854793221986915}
-  - component: {fileID: 9201678206578219062}
-  - component: {fileID: 524285025002432058}
-  m_Layer: 0
-  m_Name: RightSignal
-  m_TagString: EditorOnly
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 0
---- !u!4 &2067854793221986915
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6740733946462499616}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.486, y: 0.75, z: 0}
-  m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 5325205603228533685}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!33 &9201678206578219062
-MeshFilter:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6740733946462499616}
-  m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
---- !u!23 &524285025002432058
-MeshRenderer:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6740733946462499616}
-  m_Enabled: 1
-  m_CastShadows: 0
-  m_ReceiveShadows: 1
-  m_DynamicOccludee: 1
-  m_StaticShadowCaster: 0
-  m_MotionVectors: 1
-  m_LightProbeUsage: 1
-  m_ReflectionProbeUsage: 1
-  m_RayTracingMode: 2
-  m_RayTraceProcedural: 0
-  m_RayTracingAccelStructBuildFlagsOverride: 0
-  m_RayTracingAccelStructBuildFlags: 1
-  m_SmallMeshCulling: 1
-  m_ForceMeshLod: -1
-  m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
-  m_RendererPriority: 0
-  m_Materials:
-  - {fileID: 2100000, guid: d255291749bad4f39a3125e2344acd53, type: 2}
-  m_StaticBatchInfo:
-    firstSubMesh: 0
-    subMeshCount: 0
-  m_StaticBatchRoot: {fileID: 0}
-  m_ProbeAnchor: {fileID: 0}
-  m_LightProbeVolumeOverride: {fileID: 0}
-  m_ScaleInLightmap: 1
-  m_ReceiveGI: 1
-  m_PreserveUVs: 0
-  m_IgnoreNormalsForChartDetection: 0
-  m_ImportantGI: 0
-  m_StitchLightmapSeams: 1
-  m_SelectedEditorRenderState: 3
-  m_MinimumChartSize: 4
-  m_AutoUVMaxDistance: 0.5
-  m_AutoUVMaxAngle: 89
-  m_LightmapParameters: {fileID: 0}
-  m_GlobalIlluminationMeshLod: 0
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
-  m_SortingOrder: 0
-  m_MaskInteraction: 0
-  m_AdditionalVertexStreams: {fileID: 0}
 --- !u!1 &6897178052544332906
 GameObject:
   m_ObjectHideFlags: 0
@@ -13386,8 +13440,6 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 338619037395171824}
-  - {fileID: 6353607015076688692}
-  - {fileID: 2067854793221986915}
   - {fileID: 7252414524044527693}
   m_Father: {fileID: 5271878870994714299}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
@@ -16507,96 +16559,6 @@ Transform:
   - {fileID: 1494281286752342179}
   m_Father: {fileID: 4676577136013274302}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!1 &9147740158055289664
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 6353607015076688692}
-  - component: {fileID: 4354171528087856945}
-  - component: {fileID: 5369489056152228206}
-  m_Layer: 0
-  m_Name: LeftSignal
-  m_TagString: EditorOnly
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 0
---- !u!4 &6353607015076688692
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9147740158055289664}
-  serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: 0.486, y: 0.75, z: 0}
-  m_LocalScale: {x: 0.1, y: 0.1, z: 0.1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 5325205603228533685}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!33 &4354171528087856945
-MeshFilter:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9147740158055289664}
-  m_Mesh: {fileID: 10207, guid: 0000000000000000e000000000000000, type: 0}
---- !u!23 &5369489056152228206
-MeshRenderer:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 9147740158055289664}
-  m_Enabled: 1
-  m_CastShadows: 0
-  m_ReceiveShadows: 1
-  m_DynamicOccludee: 1
-  m_StaticShadowCaster: 0
-  m_MotionVectors: 1
-  m_LightProbeUsage: 1
-  m_ReflectionProbeUsage: 1
-  m_RayTracingMode: 2
-  m_RayTraceProcedural: 0
-  m_RayTracingAccelStructBuildFlagsOverride: 0
-  m_RayTracingAccelStructBuildFlags: 1
-  m_SmallMeshCulling: 1
-  m_ForceMeshLod: -1
-  m_MeshLodSelectionBias: 0
-  m_RenderingLayerMask: 1
-  m_RendererPriority: 0
-  m_Materials:
-  - {fileID: 2100000, guid: d255291749bad4f39a3125e2344acd53, type: 2}
-  m_StaticBatchInfo:
-    firstSubMesh: 0
-    subMeshCount: 0
-  m_StaticBatchRoot: {fileID: 0}
-  m_ProbeAnchor: {fileID: 0}
-  m_LightProbeVolumeOverride: {fileID: 0}
-  m_ScaleInLightmap: 1
-  m_ReceiveGI: 1
-  m_PreserveUVs: 0
-  m_IgnoreNormalsForChartDetection: 0
-  m_ImportantGI: 0
-  m_StitchLightmapSeams: 1
-  m_SelectedEditorRenderState: 3
-  m_MinimumChartSize: 4
-  m_AutoUVMaxDistance: 0.5
-  m_AutoUVMaxAngle: 89
-  m_LightmapParameters: {fileID: 0}
-  m_GlobalIlluminationMeshLod: 0
-  m_SortingLayerID: 0
-  m_SortingLayer: 0
-  m_SortingOrder: 0
-  m_MaskInteraction: 0
-  m_AdditionalVertexStreams: {fileID: 0}
 --- !u!1 &9162039031949359958
 GameObject:
   m_ObjectHideFlags: 0

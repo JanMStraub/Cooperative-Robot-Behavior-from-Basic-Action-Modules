@@ -120,7 +120,19 @@ namespace PythonCommunication.Core
 
                     if (_receiveShouldRun)
                     {
-                        Debug.LogWarning($"{LogPrefix} Stream closed unexpectedly.");
+                        // Distinguish a remote close (EOF / connection reset) from a
+                        // true unexpected error. EOF means the server shut down cleanly.
+                        bool isRemoteClose =
+                            ioEx.Message.StartsWith("Connection closed") // graceful EOF from ReadExactly
+                            || (ioEx.InnerException is SocketException sockEx2
+                                && (sockEx2.SocketErrorCode == SocketError.ConnectionReset
+                                    || sockEx2.SocketErrorCode == SocketError.ConnectionAborted));
+
+                        if (isRemoteClose)
+                            Debug.Log($"{LogPrefix} Server closed the connection.");
+                        else
+                            Debug.LogWarning($"{LogPrefix} Stream closed unexpectedly: {ioEx.Message}");
+
                         Disconnect();
                     }
                     break;

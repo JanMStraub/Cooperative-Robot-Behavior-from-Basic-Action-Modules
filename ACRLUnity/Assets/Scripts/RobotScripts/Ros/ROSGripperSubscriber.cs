@@ -100,6 +100,11 @@ namespace Robotics
         /// Handle incoming gripper command from ROS.
         /// Position[0] = normalized gripper position (0=closed, 1=open).
         /// Effort[0] = optional max force limit.
+        ///
+        /// When closing (position &lt; 0.1), automatically finds and sets the nearest
+        /// graspable object so GripperController.AttachObject fires on close completion.
+        /// This mirrors what RobotController.ExecuteThreeWaypointGrasp does for the
+        /// Unity IK path; without it the gripper closes but never captures the object.
         /// </summary>
         private void OnGripperCommandReceived(JointStateMsg msg)
         {
@@ -114,6 +119,29 @@ namespace Robotics
                     $"{_logPrefix} Gripper command received: position={normalizedPosition:F2}"
                 );
 
+                // When closing, arm the attachment by finding the nearest Target-tagged object
+                // within the gripper's reach so GripperController.AttachObject fires.
+                if (normalizedPosition < 0.1f)
+                {
+                    GameObject nearestTarget = FindNearestGraspableObject();
+                    if (nearestTarget != null)
+                    {
+                        _gripperController.SetTargetObject(nearestTarget);
+                        Debug.Log(
+                            $"{_logPrefix} Arming grasp attachment for '{nearestTarget.name}'"
+                        );
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"{_logPrefix} Close command received but no graspable object found nearby");
+                    }
+                }
+                else
+                {
+                    // Opening: clear any pending attachment target
+                    _gripperController.ClearTargetObject();
+                }
+
                 _gripperController.SetGripperPosition(normalizedPosition);
             }
             else if (msg.name != null && msg.name.Length > 0)
@@ -122,13 +150,75 @@ namespace Robotics
                 string command = msg.name[0].ToLower();
                 if (command == "open")
                 {
+                    _gripperController.ClearTargetObject();
                     _gripperController.OpenGrippers();
                 }
                 else if (command == "close")
                 {
+                    GameObject nearestTarget = FindNearestGraspableObject();
+                    if (nearestTarget != null)
+                        _gripperController.SetTargetObject(nearestTarget);
                     _gripperController.CloseGrippers();
                 }
             }
+        }
+
+        /// <summary>
+        /// Find the nearest GameObject tagged "Target" within gripper reach.
+        /// Searches from the finger positions (below ee_link) with a generous radius
+        /// to account for the offset between the attachment point and the cube center.
+        /// Falls back to the attachment point or transform if fingers are unavailable.
+        /// </summary>
+        private GameObject FindNearestGraspableObject()
+        {
+            // Prefer finger positions — they sit closer to the grasped object than
+            // the attachment point (ee_link / gripper_focus) which is above them.
+            Vector3 searchOrigin;
+            if (_gripperController.leftGripper != null)
+            {
+                // Average of both finger positions gives the centre of the gripper mouth
+                Vector3 left = _gripperController.leftGripper.transform.position;
+                Vector3 right = _gripperController.rightGripper != null
+                    ? _gripperController.rightGripper.transform.position
+                    : left;
+                searchOrigin = (left + right) * 0.5f;
+            }
+            else if (_gripperController.attachmentPoint != null)
+            {
+                searchOrigin = _gripperController.attachmentPoint.position;
+            }
+            else
+            {
+                searchOrigin = _gripperController.transform.position;
+            }
+
+            // 20cm radius: finger tips are ~5cm below ee_link, cube half-height ~3cm,
+            // so worst-case cube centre is ~8cm from ee_link. 20cm gives ample margin.
+            const float searchRadius = 0.20f;
+            Collider[] hits = Physics.OverlapSphere(searchOrigin, searchRadius);
+
+            GameObject nearest = null;
+            float nearestDist = float.MaxValue;
+
+            foreach (var hit in hits)
+            {
+                if (!hit.CompareTag("Target"))
+                    continue;
+
+                float dist = Vector3.Distance(searchOrigin, hit.transform.position);
+                if (dist < nearestDist)
+                {
+                    nearestDist = dist;
+                    nearest = hit.gameObject;
+                }
+            }
+
+            if (nearest != null)
+                Debug.Log($"{_logPrefix} Found '{nearest.name}' at {nearestDist*100f:F1}cm from gripper centre");
+            else
+                Debug.LogWarning($"{_logPrefix} No Target-tagged object within {searchRadius*100f:F0}cm of {searchOrigin}");
+
+            return nearest;
         }
 
         private void Update()

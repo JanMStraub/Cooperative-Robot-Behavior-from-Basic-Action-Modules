@@ -121,8 +121,7 @@ def detect_field(
                 ],
             )
 
-        left_image = stereo_data.get("left_image")
-        right_image = stereo_data.get("right_image")
+        left_image, right_image, _, _, stereo_metadata = stereo_data
 
         if left_image is None or right_image is None:
             return OperationResult.error_result(
@@ -134,11 +133,10 @@ def detect_field(
         # Run YOLO detection with field class filter
         detector = YOLODetector()
         detections = detector.detect_objects_stereo(
-            left_image=left_image,
-            right_image=right_image,
-            camera_params=stereo_data.get("camera_params", {}),
+            imgL=left_image,
+            imgR=right_image,
+            camera_config=stereo_metadata.get("camera_params") if stereo_metadata else None,
             filter_classes=[yolo_class],
-            confidence_threshold=confidence_threshold,
         )
 
         if not detections or len(detections.detections) == 0:
@@ -157,11 +155,12 @@ def detect_field(
         detection = detections.detections[0]
 
         # Extract field letter from YOLO class name ("fielda" → "A")
-        detected_class = detection.class_name.lower()
+        # DetectionObject stores class name in .color field for YOLO detections
+        detected_class = detection.color.lower()
         if not detected_class.startswith("field"):
             return OperationResult.error_result(
                 "INVALID_DETECTION_CLASS",
-                f"Unexpected class name: {detection.class_name}",
+                f"Unexpected class name: {detection.color}",
                 ["Verify YOLO model is correct field detector model"],
             )
 
@@ -196,7 +195,7 @@ def detect_field(
             {
                 "field_label": detected_letter,
                 "center": center_dict,  # 3D world coordinates as dict
-                "bounds": detection.bbox,  # Bounding box in image
+                "bounds": (detection.bbox_x, detection.bbox_y, detection.bbox_w, detection.bbox_h),
                 "confidence": detection.confidence,
                 "camera_id": camera_id,
                 "timestamp": time.time(),
@@ -255,7 +254,7 @@ def get_field_center(
             return detection_result  # Forward error
 
         # Extract center coordinates
-        center = detection_result.result.get("center")
+        center = detection_result.result.get("center") if detection_result.result else None
 
         return OperationResult.success_result(
             {
@@ -331,8 +330,7 @@ def detect_all_fields(
                 ["Ensure Unity is sending stereo images"],
             )
 
-        left_image = stereo_data.get("left_image")
-        right_image = stereo_data.get("right_image")
+        left_image, right_image, _, _, stereo_metadata = stereo_data
 
         if left_image is None or right_image is None:
             return OperationResult.error_result(
@@ -346,11 +344,10 @@ def detect_all_fields(
 
         detector = YOLODetector()
         detections = detector.detect_objects_stereo(
-            left_image=left_image,
-            right_image=right_image,
-            camera_params=stereo_data.get("camera_params", {}),
+            imgL=left_image,
+            imgR=right_image,
+            camera_config=stereo_metadata.get("camera_params") if stereo_metadata else None,
             filter_classes=field_classes,
-            confidence_threshold=confidence_threshold,
         )
 
         if not detections or len(detections.detections) == 0:
@@ -367,7 +364,8 @@ def detect_all_fields(
         fields = []
         for detection in detections.detections:
             # Extract field letter from class name
-            detected_class = detection.class_name.lower()
+            # DetectionObject stores class name in .color field for YOLO detections
+            detected_class = detection.color.lower()
             if detected_class.startswith("field"):
                 field_letter = detected_class[5:].upper()  # "fielda" → "A"
 
@@ -384,7 +382,7 @@ def detect_all_fields(
                     {
                         "label": field_letter,
                         "center": center_dict,
-                        "bounds": detection.bbox,
+                        "bounds": (detection.bbox_x, detection.bbox_y, detection.bbox_w, detection.bbox_h),
                         "confidence": detection.confidence,
                     }
                 )

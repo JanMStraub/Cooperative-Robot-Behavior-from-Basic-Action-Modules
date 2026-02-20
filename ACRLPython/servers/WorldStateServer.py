@@ -53,19 +53,19 @@ class WorldStateServer(TCPServerBase):
         self._updates_received = 0
         self._last_update_time = None
 
-    def handle_client_connection(self, client_socket, address: tuple) -> None:
+    def handle_client_connection(self, client, address: tuple) -> None:
         """
         Handle incoming world state update from Unity.
         Runs in dedicated client thread.
 
         Args:
-            client_socket: Connected client socket
+            client: Connected client socket
             address: Client address tuple (host, port)
         """
         try:
             while self.is_running():
                 # Read Protocol V2 header: [Type:1][RequestId:4]
-                header = self._recv_exactly(client_socket, UnityProtocol.HEADER_SIZE)
+                header = self._recv_exactly(client, UnityProtocol.HEADER_SIZE)
                 if not header:
                     break  # Connection closed
 
@@ -84,7 +84,7 @@ class WorldStateServer(TCPServerBase):
                     )
 
                 # Read JSON length (4 bytes, little-endian per UnityProtocol.py)
-                len_bytes = self._recv_exactly(client_socket, 4)
+                len_bytes = self._recv_exactly(client, 4)
                 if not len_bytes:
                     break
                 import struct
@@ -96,7 +96,7 @@ class WorldStateServer(TCPServerBase):
                     break
 
                 # Read JSON body
-                json_bytes = self._recv_exactly(client_socket, json_length)
+                json_bytes = self._recv_exactly(client, json_length)
                 if not json_bytes:
                     break
 

@@ -20,6 +20,7 @@ import sys
 import os
 import time
 import logging
+import pytest
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -33,6 +34,18 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _ros_bridge_available() -> bool:
+    """Check whether the ROS bridge is reachable."""
+    bridge = ROSBridge.get_instance()
+    return bridge.connect(timeout=3.0)
+
+
+pytestmark = pytest.mark.skipif(
+    not _ros_bridge_available(),
+    reason="ROS bridge unavailable (Docker not running on port 5020)",
+)
+
+
 def test_dual_robot_connection():
     """Test connection to ROS bridge and verify multi-robot support."""
     logger.info("=" * 60)
@@ -43,20 +56,18 @@ def test_dual_robot_connection():
     bridge = ROSBridge.get_instance()
 
     if not bridge.connect(timeout=10.0):
-        logger.error("Failed to connect to ROS bridge on port 5020")
-        logger.error("Make sure Docker services are running:")
-        logger.error("  cd ros_unity_integration && ./start_ros_endpoint.sh")
-        return False
+        pytest.fail(
+            "Failed to connect to ROS bridge on port 5020. "
+            "Make sure Docker services are running: cd ros_unity_integration && ./start_ros_endpoint.sh"
+        )
 
     logger.info("Successfully connected to ROS bridge")
 
     # Verify ping works
     if not bridge.ping():
-        logger.error("Ping failed - bridge not responsive")
-        return False
+        pytest.fail("Ping failed - bridge not responsive")
 
     logger.info("Bridge is responsive")
-    return True
 
 
 def test_robot1_motion():
@@ -83,11 +94,9 @@ def test_robot1_motion():
         logger.info(f"  Planning time: {result.get('planning_time', 0):.2f}s")
         logger.info(f"  Trajectory points: {result.get('trajectory_points', 0)}")
         logger.info(f"  Status: {result.get('status')}")
-        return True
     else:
         error = result.get("error", "Unknown error") if result else "No response"
-        logger.error(f"Robot1 motion failed: {error}")
-        return False
+        pytest.fail(f"Robot1 motion failed: {error}")
 
 
 def test_robot2_motion():
@@ -114,11 +123,9 @@ def test_robot2_motion():
         logger.info(f"  Planning time: {result.get('planning_time', 0):.2f}s")
         logger.info(f"  Trajectory points: {result.get('trajectory_points', 0)}")
         logger.info(f"  Status: {result.get('status')}")
-        return True
     else:
         error = result.get("error", "Unknown error") if result else "No response"
-        logger.error(f"Robot2 motion failed: {error}")
-        return False
+        pytest.fail(f"Robot2 motion failed: {error}")
 
 
 def test_simultaneous_motion():
@@ -160,15 +167,13 @@ def test_simultaneous_motion():
             logger.info(f"  Robot1 planning: {result1.get('planning_time', 0):.2f}s")
         if result2:
             logger.info(f"  Robot2 planning: {result2.get('planning_time', 0):.2f}s")
-        return True
     else:
+        errors = []
         if not success1:
-            error1 = result1.get("error", "Unknown") if result1 else "No response"
-            logger.error(f"Robot1 failed: {error1}")
+            errors.append(f"Robot1: {result1.get('error', 'Unknown') if result1 else 'No response'}")
         if not success2:
-            error2 = result2.get("error", "Unknown") if result2 else "No response"
-            logger.error(f"Robot2 failed: {error2}")
-        return False
+            errors.append(f"Robot2: {result2.get('error', 'Unknown') if result2 else 'No response'}")
+        pytest.fail(f"Simultaneous motion failed - {'; '.join(errors)}")
 
 
 def test_gripper_control():
@@ -211,10 +216,8 @@ def test_gripper_control():
 
     if success:
         logger.info("All gripper commands successful!")
-        return True
     else:
-        logger.error("Some gripper commands failed")
-        return False
+        pytest.fail("Some gripper commands failed")
 
 
 def test_get_joint_states():
@@ -262,10 +265,8 @@ def test_get_joint_states():
 
     if success:
         logger.info("Joint state retrieval successful")
-        return True
     else:
-        logger.warning("No joint states available - Unity may not be running")
-        return False
+        pytest.fail("No joint states available - Unity may not be running")
 
 
 def run_all_tests():

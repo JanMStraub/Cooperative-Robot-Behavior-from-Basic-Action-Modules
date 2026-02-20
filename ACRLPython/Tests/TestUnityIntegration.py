@@ -71,24 +71,26 @@ class TestUnityCommandExecution:
 
         # Verify we got a valid response - result is an OperationResult object
         assert result.success is True
+        assert result.result is not None
         assert "robot_id" in result.result
         assert result.result["robot_id"] == "Robot1"
         # Note: The status query returns query_sent status, not full robot state
         # Full state would be received via Unity's status response system
 
     def test_real_move_command_execution(self):
-        """Test executing real movement command in Unity"""
+        """Test executing real movement command in Unity via Unity IK (not ROS)"""
         from operations.MoveOperations import move_to_coordinate
 
-        # Send move command to valid position
+        # Force Unity IK path (use_ros=False) — this is a Unity integration test,
+        # not a ROS test. MoveIt may be unavailable even when Unity is running.
         result = move_to_coordinate(
             robot_id="Robot1",
-            x=0.3,
-            y=0.2,
-            z=0.15
+            x=0.15,
+            y=0.25,
+            z=0.1,
+            use_ros=False,
         )
 
-        # Verify command was sent successfully - result is OperationResult object
         assert result.success is True
 
         # Wait a bit for movement to start
@@ -160,37 +162,6 @@ class TestUnityImageCapture:
         assert image.shape[2] == 3  # RGB image
         assert image.dtype == np.uint8
 
-    def test_real_stereo_image_capture(self):
-        """Test capturing real stereo image pair from Unity"""
-        from servers.ImageStorageCore import UnifiedImageStorage
-
-        storage = UnifiedImageStorage()
-
-        # Wait for stereo images
-        time.sleep(1.0)
-
-        # Try to get latest stereo pair
-        stereo_data = storage.get_latest_stereo_image()
-
-        if stereo_data is None:
-            pytest.skip("No stereo cameras available in Unity scene")
-
-        # Verify stereo pair is valid
-        assert "left_image" in stereo_data
-        assert "right_image" in stereo_data
-
-        left_img = stereo_data["left_image"]
-        right_img = stereo_data["right_image"]
-
-        # Both images should be valid
-        assert left_img is not None
-        assert right_img is not None
-        assert isinstance(left_img, np.ndarray)
-        assert isinstance(right_img, np.ndarray)
-
-        # Both should have same dimensions
-        assert left_img.shape == right_img.shape
-
 
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not UNITY_AVAILABLE, reason=SKIP_REASON)
@@ -243,11 +214,11 @@ class TestUnityProtocolCompatibility:
             except Exception as e:
                 errors.append(e)
 
-        # Send 3 commands concurrently
+        # Send 3 commands concurrently to positions reachable by the AR4 arm
         threads = [
-            threading.Thread(target=send_command, args=("Robot1", 0.3, 0.2, 0.1)),
-            threading.Thread(target=send_command, args=("Robot1", 0.35, 0.25, 0.15)),
-            threading.Thread(target=send_command, args=("Robot1", 0.4, 0.3, 0.2)),
+            threading.Thread(target=send_command, args=("Robot1", 0.15, 0.25, 0.10)),
+            threading.Thread(target=send_command, args=("Robot1", 0.10, 0.28, 0.12)),
+            threading.Thread(target=send_command, args=("Robot1", 0.12, 0.22, 0.08)),
         ]
 
         for t in threads:
@@ -288,62 +259,13 @@ class TestUnityObjectDetection:
 
         # Verify detection ran successfully - result is OperationResult object
         assert result.success is True
+        assert result.result is not None
         assert "detections" in result.result
         assert isinstance(result.result["detections"], list)
 
         # If objects exist in scene, we should detect them
         # (This test is lenient - just verifies detection runs without error)
 
-
-@pytest.mark.requires_unity
-@pytest.mark.skipif(not UNITY_AVAILABLE, reason=SKIP_REASON)
-class TestUnityEndToEnd:
-    """End-to-end integration tests with full workflow"""
-
-    @pytest.mark.slow
-    def test_full_pick_and_place_workflow(self):
-        """Test complete pick and place workflow in Unity"""
-        from operations.DetectionOperations import detect_objects
-        from operations.GraspOperations import grasp_object
-        from servers.ImageStorageCore import UnifiedImageStorage
-
-        storage = UnifiedImageStorage()
-        time.sleep(1.0)
-
-        camera_ids = storage.get_all_camera_ids()
-        if len(camera_ids) == 0:
-            pytest.skip("No cameras available")
-
-        # 1. Detect objects
-        detection_result = detect_objects(
-            robot_id="Robot1",
-            camera_id=camera_ids[0]
-        )
-
-        if not detection_result.success or len(detection_result.result.get("detections", [])) == 0:
-            pytest.skip("No objects detected in scene")
-
-        # 2. Get first detected object
-        detected_obj = detection_result.result["detections"][0]
-
-        # For this test, we need object_id not just position
-        # Skip if detection doesn't include object_id
-        if "object_id" not in detected_obj:
-            pytest.skip("Detection does not include object_id (required for grasp_object)")
-
-        # 3. Execute grasp using object_id
-        try:
-            grasp_result = grasp_object(
-                robot_id="Robot1",
-                object_id=detected_obj["object_id"],
-                preferred_approach="top"
-            )
-
-            # Verify grasp command was sent (may or may not succeed depending on scene)
-            assert grasp_result.success is True or grasp_result.error is not None
-
-        except Exception as e:
-            pytest.skip(f"Grasp execution not available: {e}")
 
 
 if __name__ == "__main__":

@@ -56,7 +56,7 @@ def grip_object(
     object_position: Dict[str, float],
     approach_direction: str = "top",
     request_id: int = 0,
-    use_ros: bool = None,
+    use_ros: Optional[bool] = None,
 ) -> OperationResult:
     """
     Simplified grasping operation - wrapper around grasp_object.
@@ -227,7 +227,7 @@ def align_object(
     target_orientation: Dict[str, float],
     alignment_type: str = "gripper",
     request_id: int = 0,
-    use_ros: bool = None,
+    use_ros: Optional[bool] = None,
 ) -> OperationResult:
     """
     Align object or gripper to target orientation.
@@ -401,7 +401,7 @@ def follow_path(
     waypoints: List[Dict[str, float]],
     speed: float = 1.0,
     request_id: int = 0,
-    use_ros: bool = None,
+    use_ros: Optional[bool] = None,
 ) -> OperationResult:
     """
     Follow a multi-waypoint trajectory.
@@ -587,7 +587,7 @@ def draw_with_pen(
     shape: str = "line",
     shape_params: Optional[Dict[str, Any]] = None,
     request_id: int = 0,
-    use_ros: bool = None,
+    use_ros: Optional[bool] = None,
 ) -> OperationResult:
     """
     Draw with a pen tool on paper surface.

@@ -169,101 +169,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &95769279 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 1116772510549147897, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-  m_PrefabInstance: {fileID: 9060350412813614532}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cedd687a87f7f47049833e3eeeeb3324, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.GripperController
---- !u!1 &808100426 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 1523614578368514234, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-  m_PrefabInstance: {fileID: 9060350412813614532}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &808100429 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 1440759134938604137, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-  m_PrefabInstance: {fileID: 9060350412813614532}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 808100426}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d022baada5fcb4ff9bb0b5fe65f2d0c8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.RobotController
---- !u!114 &808100431
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 808100426}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9fcb7efc39231426a9b2adbb790f3575, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSGripperSubscriber
-  _commandTopic: /gripper/command
-  _stateTopic: /gripper/state
-  _statePublishRate: 10
-  _gripperController: {fileID: 95769279}
-  _robotController: {fileID: 808100429}
---- !u!114 &808100432
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 808100426}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cc33dc9b197ed4052a88802fbc3dd69c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSTrajectorySubscriber
-  _trajectoryTopic: /arm_controller/joint_trajectory
-  _feedbackTopic: /arm_controller/feedback
-  _maxJointVelocity: 1.05
-  _maxPointGap: 5
-  _robotController: {fileID: 808100429}
---- !u!114 &808100433
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 808100426}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2c8fbb95022b74d33828c250f09c3415, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSJointStatePublisher
-  _topicName: /joint_states
-  _publishRate: 50
-  _includeGripperJoints: 1
-  _robotController: {fileID: 808100429}
-  _gripperController: {fileID: 95769279}
---- !u!114 &808100434
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 808100426}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5e40cb458152e449392e9d9edbd0dcfa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSControlModeManager
-  _initialMode: 1
-  _robotController: {fileID: 808100429}
-  _jointStatePublisher: {fileID: 808100433}
-  _trajectorySubscriber: {fileID: 808100432}
-  _gripperSubscriber: {fileID: 808100431}
 --- !u!1 &1032633142
 GameObject:
   m_ObjectHideFlags: 0
@@ -347,101 +252,6 @@ MonoBehaviour:
   _minRobotSeparation: 0.2
   _allowMovementInVoid: 1
   _enableDebugVisualization: 0
---- !u!1 &1095181315 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 5503568802072259119, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-  m_PrefabInstance: {fileID: 9060350412813614532}
-  m_PrefabAsset: {fileID: 0}
---- !u!114 &1095181317
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1095181315}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5e40cb458152e449392e9d9edbd0dcfa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSControlModeManager
-  _initialMode: 1
-  _robotController: {fileID: 1095181323}
-  _jointStatePublisher: {fileID: 1095181320}
-  _trajectorySubscriber: {fileID: 1095181319}
-  _gripperSubscriber: {fileID: 1095181318}
---- !u!114 &1095181318
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1095181315}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9fcb7efc39231426a9b2adbb790f3575, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSGripperSubscriber
-  _commandTopic: /gripper/command
-  _stateTopic: /gripper/state
-  _statePublishRate: 10
-  _gripperController: {fileID: 1150721081}
-  _robotController: {fileID: 1095181323}
---- !u!114 &1095181319
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1095181315}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cc33dc9b197ed4052a88802fbc3dd69c, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSTrajectorySubscriber
-  _trajectoryTopic: /arm_controller/joint_trajectory
-  _feedbackTopic: /arm_controller/feedback
-  _maxJointVelocity: 1.05
-  _maxPointGap: 5
-  _robotController: {fileID: 1095181323}
---- !u!114 &1095181320
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1095181315}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2c8fbb95022b74d33828c250f09c3415, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSJointStatePublisher
-  _topicName: /joint_states
-  _publishRate: 50
-  _includeGripperJoints: 1
-  _robotController: {fileID: 1095181323}
-  _gripperController: {fileID: 1150721081}
---- !u!114 &1095181323 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 1782900251721025928, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-  m_PrefabInstance: {fileID: 9060350412813614532}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1095181315}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d022baada5fcb4ff9bb0b5fe65f2d0c8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.RobotController
---- !u!114 &1150721081 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 7409242131979378376, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-  m_PrefabInstance: {fileID: 9060350412813614532}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cedd687a87f7f47049833e3eeeeb3324, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.GripperController
 --- !u!1 &1168411245
 GameObject:
   m_ObjectHideFlags: 0
@@ -651,8 +461,8 @@ GameObject:
   - component: {fileID: 1595579018}
   - component: {fileID: 1595579019}
   - component: {fileID: 1595579027}
-  - component: {fileID: 1595579028}
   - component: {fileID: 1595579029}
+  - component: {fileID: 1595579028}
   - component: {fileID: 1595579026}
   m_Layer: 0
   m_Name: PythonManager
@@ -765,7 +575,7 @@ MonoBehaviour:
   _autoReconnect: 1
   _serverPort: 0
   _serverHost: 127.0.0.1
-  _verboseLogging: 1
+  _verboseLogging: 0
 --- !u!1 &1800216808
 GameObject:
   m_ObjectHideFlags: 0
@@ -902,46 +712,6 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 1116772510549147897, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: damping
-      value: 5
-      objectReference: {fileID: 0}
-    - target: {fileID: 1116772510549147897, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: maxForce
-      value: 20
-      objectReference: {fileID: 0}
-    - target: {fileID: 1116772510549147897, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: gripSpeed
-      value: 0.05
-      objectReference: {fileID: 0}
-    - target: {fileID: 1116772510549147897, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: stiffness
-      value: 500
-      objectReference: {fileID: 0}
-    - target: {fileID: 1440759134938604137, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: _ikConfig
-      value: 
-      objectReference: {fileID: 11400000, guid: 6a4890127a3594371b5277e18bb96ab1, type: 2}
-    - target: {fileID: 1440759134938604137, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: debugTarget
-      value: 
-      objectReference: {fileID: 0}
-    - target: {fileID: 1440759134938604137, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: _trajectoryConfig
-      value: 
-      objectReference: {fileID: 11400000, guid: ff3ab6249be39439ab3045664466134a, type: 2}
-    - target: {fileID: 1782900251721025928, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: _ikConfig
-      value: 
-      objectReference: {fileID: 11400000, guid: 6a4890127a3594371b5277e18bb96ab1, type: 2}
-    - target: {fileID: 1782900251721025928, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: debugTarget
-      value: 
-      objectReference: {fileID: 0}
-    - target: {fileID: 1782900251721025928, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: _trajectoryConfig
-      value: 
-      objectReference: {fileID: 11400000, guid: ff3ab6249be39439ab3045664466134a, type: 2}
     - target: {fileID: 5271878870994714299, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -982,22 +752,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 5673991503912598442, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: _ikConfig
-      value: 
-      objectReference: {fileID: 11400000, guid: 6a4890127a3594371b5277e18bb96ab1, type: 2}
     - target: {fileID: 6897178052544332906, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
       value: Environment
       objectReference: {fileID: 0}
-    - target: {fileID: 7409242131979378376, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: targetPosition
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 7888947935727383794, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: _ikConfig
-      value: 
-      objectReference: {fileID: 11400000, guid: 6a4890127a3594371b5277e18bb96ab1, type: 2}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -1029,30 +787,6 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 5568275854205183551, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       insertIndex: -1
       addedObject: {fileID: 0}
-    - targetCorrespondingSourceObject: {fileID: 5503568802072259119, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1095181317}
-    - targetCorrespondingSourceObject: {fileID: 5503568802072259119, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1095181320}
-    - targetCorrespondingSourceObject: {fileID: 5503568802072259119, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1095181319}
-    - targetCorrespondingSourceObject: {fileID: 5503568802072259119, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1095181318}
-    - targetCorrespondingSourceObject: {fileID: 1523614578368514234, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 808100434}
-    - targetCorrespondingSourceObject: {fileID: 1523614578368514234, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 808100433}
-    - targetCorrespondingSourceObject: {fileID: 1523614578368514234, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 808100432}
-    - targetCorrespondingSourceObject: {fileID: 1523614578368514234, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 808100431}
   m_SourcePrefab: {fileID: 100100000, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

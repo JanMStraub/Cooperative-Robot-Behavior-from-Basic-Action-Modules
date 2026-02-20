@@ -40,6 +40,7 @@ class TestGripObject:
         result = grip_object("Robot1", object_pos)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["robot_id"] == "Robot1"
         assert result.result["object_position"] == object_pos
         assert result.result["approach_direction"] == "top"  # Default
@@ -53,6 +54,7 @@ class TestGripObject:
         for direction in ["top", "front", "side"]:
             result = grip_object("Robot1", object_pos, approach_direction=direction)
             assert result.success is True
+            assert result.result is not None
             assert result.result["approach_direction"] == direction
 
     def test_grip_object_invalid_robot_id(self):
@@ -61,6 +63,7 @@ class TestGripObject:
         result = grip_object("", object_pos)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_grip_object_invalid_position_not_dict(self):
@@ -68,6 +71,7 @@ class TestGripObject:
         result = grip_object("Robot1", "invalid_position")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_OBJECT_POSITION"
 
     def test_grip_object_invalid_position_missing_keys(self):
@@ -76,6 +80,7 @@ class TestGripObject:
         result = grip_object("Robot1", {"x": 0.3, "y": 0.15})
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_OBJECT_POSITION"
 
     def test_grip_object_invalid_approach_direction(self):
@@ -84,6 +89,7 @@ class TestGripObject:
         result = grip_object("Robot1", object_pos, approach_direction="invalid")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_APPROACH_DIRECTION"
 
     def test_grip_object_command_structure(self, patch_command_broadcaster):
@@ -112,6 +118,7 @@ class TestGripObject:
         result = grip_object("Robot1", object_pos)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "COMMUNICATION_FAILED"
 
 
@@ -129,6 +136,7 @@ class TestAlignObject:
         result = align_object("Robot1", orientation)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["robot_id"] == "Robot1"
         assert result.result["target_orientation"] == orientation
         assert result.result["alignment_type"] == "gripper"  # Default
@@ -142,6 +150,7 @@ class TestAlignObject:
         for align_type in ["gripper", "object"]:
             result = align_object("Robot1", orientation, alignment_type=align_type)
             assert result.success is True
+            assert result.result is not None
             assert result.result["alignment_type"] == align_type
 
     def test_align_object_invalid_robot_id(self):
@@ -150,6 +159,7 @@ class TestAlignObject:
         result = align_object("", orientation)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_align_object_invalid_orientation_not_dict(self):
@@ -157,6 +167,7 @@ class TestAlignObject:
         result = align_object("Robot1", "invalid_orientation")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ORIENTATION"
 
     def test_align_object_invalid_orientation_missing_keys(self):
@@ -165,6 +176,7 @@ class TestAlignObject:
         result = align_object("Robot1", {"roll": 0, "pitch": -90})
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ORIENTATION"
 
     def test_align_object_invalid_alignment_type(self):
@@ -173,6 +185,7 @@ class TestAlignObject:
         result = align_object("Robot1", orientation, alignment_type="invalid")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ALIGNMENT_TYPE"
 
     def test_align_object_command_structure(self, patch_command_broadcaster):
@@ -201,6 +214,7 @@ class TestAlignObject:
         result = align_object("Robot1", orientation)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "COMMUNICATION_FAILED"
 
 
@@ -222,6 +236,7 @@ class TestFollowPath:
         result = follow_path("Robot1", waypoints)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["robot_id"] == "Robot1"
         assert result.result["waypoints"] == waypoints
         assert result.result["waypoint_count"] == 3
@@ -238,6 +253,7 @@ class TestFollowPath:
         result = follow_path("Robot1", waypoints, speed=0.5)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["speed"] == 0.5
 
     def test_follow_path_two_waypoints(self, patch_command_broadcaster):
@@ -249,6 +265,7 @@ class TestFollowPath:
         result = follow_path("Robot1", waypoints)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["waypoint_count"] == 2
 
     def test_follow_path_many_waypoints(self, patch_command_broadcaster):
@@ -257,6 +274,7 @@ class TestFollowPath:
         result = follow_path("Robot1", waypoints)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["waypoint_count"] == 10
 
     def test_follow_path_invalid_robot_id(self):
@@ -268,6 +286,7 @@ class TestFollowPath:
         result = follow_path("", waypoints)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_follow_path_not_a_list(self):
@@ -275,6 +294,7 @@ class TestFollowPath:
         result = follow_path("Robot1", "invalid_waypoints")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_WAYPOINTS"
 
     def test_follow_path_too_few_waypoints(self):
@@ -283,6 +303,7 @@ class TestFollowPath:
         result = follow_path("Robot1", waypoints)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_WAYPOINTS"
 
     def test_follow_path_invalid_waypoint_structure(self):
@@ -294,6 +315,7 @@ class TestFollowPath:
         result = follow_path("Robot1", waypoints)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_WAYPOINT"
 
     def test_follow_path_invalid_speed_too_low(self):
@@ -305,6 +327,7 @@ class TestFollowPath:
         result = follow_path("Robot1", waypoints, speed=0.05)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_SPEED"
 
     def test_follow_path_invalid_speed_too_high(self):
@@ -316,6 +339,7 @@ class TestFollowPath:
         result = follow_path("Robot1", waypoints, speed=3.0)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_SPEED"
 
     def test_follow_path_command_structure(self, patch_command_broadcaster):
@@ -351,6 +375,7 @@ class TestFollowPath:
         result = follow_path("Robot1", waypoints)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "COMMUNICATION_FAILED"
 
 
@@ -370,6 +395,7 @@ class TestDrawWithPen:
         result = draw_with_pen("Robot1", pen_pos, paper_pos)
 
         assert result.success is True
+        assert result.result is not None
         assert result.result["robot_id"] == "Robot1"
         assert result.result["pen_position"] == pen_pos
         assert result.result["paper_position"] == paper_pos
@@ -385,6 +411,7 @@ class TestDrawWithPen:
         for shape in ["line", "circle", "square", "custom"]:
             result = draw_with_pen("Robot1", pen_pos, paper_pos, shape=shape)
             assert result.success is True
+            assert result.result is not None
             assert result.result["shape"] == shape
 
     def test_draw_with_pen_shape_params(self, patch_command_broadcaster):
@@ -396,6 +423,7 @@ class TestDrawWithPen:
         line_params = {"length": 0.1, "angle": 45}
         result = draw_with_pen("Robot1", pen_pos, paper_pos, shape="line", shape_params=line_params)
         assert result.success is True
+        assert result.result is not None
         assert result.result["shape_params"] == line_params
 
         # Circle parameters
@@ -404,6 +432,7 @@ class TestDrawWithPen:
             "Robot1", pen_pos, paper_pos, shape="circle", shape_params=circle_params
         )
         assert result.success is True
+        assert result.result is not None
         assert result.result["shape_params"] == circle_params
 
     def test_draw_with_pen_invalid_robot_id(self):
@@ -414,6 +443,7 @@ class TestDrawWithPen:
         result = draw_with_pen("", pen_pos, paper_pos)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_draw_with_pen_invalid_pen_position(self):
@@ -424,6 +454,7 @@ class TestDrawWithPen:
         result = draw_with_pen("Robot1", {"x": 0.2, "y": 0.0}, paper_pos)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_PEN_POSITION"
 
     def test_draw_with_pen_invalid_paper_position(self):
@@ -434,6 +465,7 @@ class TestDrawWithPen:
         result = draw_with_pen("Robot1", pen_pos, {"x": 0.3, "y": 0.0})
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_PAPER_POSITION"
 
     def test_draw_with_pen_invalid_shape(self):
@@ -444,6 +476,7 @@ class TestDrawWithPen:
         result = draw_with_pen("Robot1", pen_pos, paper_pos, shape="invalid_shape")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_SHAPE"
 
     def test_draw_with_pen_command_structure(self, patch_command_broadcaster):
@@ -480,6 +513,7 @@ class TestDrawWithPen:
         result = draw_with_pen("Robot1", pen_pos, paper_pos)
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "COMMUNICATION_FAILED"
 
 

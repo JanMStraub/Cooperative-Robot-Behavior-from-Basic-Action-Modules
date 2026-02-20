@@ -57,17 +57,42 @@ try:
         OrientationConstraint,
         BoundingVolume,
         RobotState,
+        PlanningScene,
+        CollisionObject,
     )
     from moveit_msgs.srv import GetPositionIK
-    from geometry_msgs.msg import PoseStamped, Point, Quaternion, Vector3
+    from geometry_msgs.msg import PoseStamped, Point, Quaternion, Vector3, Pose
     from shape_msgs.msg import SolidPrimitive
     from trajectory_msgs.msg import JointTrajectory
     from sensor_msgs.msg import JointState
+    from std_msgs.msg import String
 
     HAS_ROS = True
 except ImportError:
     HAS_ROS = False
     logger.warning("ROS 2 packages not available. Running in stub mode.")
+    rclpy = None  # type: ignore[assignment]
+    Node = None  # type: ignore[assignment,misc]
+    ActionClient = None  # type: ignore[assignment,misc]
+    MoveGroup = None  # type: ignore[assignment,misc]
+    MotionPlanRequest = None  # type: ignore[assignment,misc]
+    Constraints = None  # type: ignore[assignment,misc]
+    PositionConstraint = None  # type: ignore[assignment,misc]
+    OrientationConstraint = None  # type: ignore[assignment,misc]
+    BoundingVolume = None  # type: ignore[assignment,misc]
+    RobotState = None  # type: ignore[assignment,misc]
+    PlanningScene = None  # type: ignore[assignment,misc]
+    CollisionObject = None  # type: ignore[assignment,misc]
+    GetPositionIK = None  # type: ignore[assignment,misc]
+    PoseStamped = None  # type: ignore[assignment,misc]
+    Point = None  # type: ignore[assignment,misc]
+    Quaternion = None  # type: ignore[assignment,misc]
+    Vector3 = None  # type: ignore[assignment,misc]
+    Pose = None  # type: ignore[assignment,misc]
+    SolidPrimitive = None  # type: ignore[assignment,misc]
+    JointTrajectory = None  # type: ignore[assignment,misc]
+    JointState = None  # type: ignore[assignment,misc]
+    String = None  # type: ignore[assignment,misc]
 
 
 class ROSMotionServer:
@@ -104,16 +129,31 @@ class ROSMotionServer:
         self._joint_state_subs = {}  # robot_id -> Subscription
         self._current_joint_states = {}  # robot_id -> JointState msg
         self._last_planned_trajectories = {}  # robot_id -> JointTrajectory
+        self._trajectory_feedback = {}  # robot_id -> last feedback status string
+        self._trajectory_feedback_event = {}  # robot_id -> threading.Event
 
         if HAS_ROS:
             rclpy.init()
             self._node = rclpy.create_node("acrl_motion_client")
+
+            # Per-robot planning scene publishers (namespaced, one per robot)
+            # move_group runs under /{robot_id}/ namespace, so its planning scene
+            # topic is /{robot_id}/planning_scene.
+            self._planning_scene_pubs = {}
 
             # Initialize clients for both Robot1 and Robot2
             for robot_id in ["Robot1", "Robot2"]:
                 self._initialize_robot(robot_id)
 
             logger.info("ROS 2 node initialized (plan-only mode, multi-robot support)")
+
+            # Publish ground plane to each robot's planning scene so MoveIt
+            # won't plan trajectories that pass through the table surface.
+            # Brief sleep so the publisher has time to connect to move_group's
+            # planning scene subscriber before we send the first message.
+            time.sleep(0.5)
+            for robot_id in ["Robot1", "Robot2"]:
+                self._publish_ground_plane(robot_id)
 
     def _initialize_robot(self, robot_id: str):
         """Initialize MoveIt clients and publishers for a specific robot.
@@ -162,7 +202,68 @@ class ROSMotionServer:
         # Cache the last planned trajectory for inspection
         self._last_planned_trajectories[robot_id] = None
 
+        # Execution feedback from Unity's ROSTrajectorySubscriber
+        self._trajectory_feedback[robot_id] = None
+        self._trajectory_feedback_event[robot_id] = threading.Event()
+        self._node.create_subscription(
+            String,
+            f"/{robot_id}/arm_controller/feedback",
+            lambda msg, rid=robot_id: self._feedback_callback(rid, msg),
+            10,
+        )
+
         logger.info(f"Successfully initialized {robot_id}")
+
+    def _publish_ground_plane(self, robot_id: str):
+        """Publish a ground/table collision object to a robot's MoveIt planning scene.
+
+        The table surface in Unity is at Y=0 (same as robot base_link origin).
+        In ROS base_link frame (Z-up), Z=0 is the floor. We add a large flat box
+        at Z=-0.01 (just below the surface) so MoveIt treats the table surface as
+        a collision boundary and plans paths that stay above it.
+
+        Published to /{robot_id}/planning_scene once at startup. MoveIt's planning
+        scene monitor picks it up and applies it to all subsequent planning requests.
+
+        Args:
+            robot_id: Robot namespace (e.g., "Robot1", "Robot2")
+        """
+        if not HAS_ROS:
+            return
+
+        # Create publisher if not already created for this robot
+        if robot_id not in self._planning_scene_pubs:
+            self._planning_scene_pubs[robot_id] = self._node.create_publisher(
+                PlanningScene, f"/{robot_id}/planning_scene", 10
+            )
+
+        scene = PlanningScene()
+        scene.is_diff = True  # Incremental update, not a full scene replacement
+
+        # Ground plane: 2m x 2m x 2cm slab centered at Z=-0.02 in base_link frame.
+        # Top face at Z=-0.01: 1cm below table surface so objects sitting on the
+        # table (cube bottom at Z=0) are not inside the collision volume.
+        ground = CollisionObject()
+        ground.header.frame_id = "base_link"
+        ground.id = "ground_plane"
+        ground.operation = CollisionObject.ADD
+
+        box = SolidPrimitive()
+        box.type = SolidPrimitive.BOX
+        box.dimensions = [2.0, 2.0, 0.02]  # x, y, z in metres
+
+        box_pose = Pose()
+        box_pose.position.x = 0.0
+        box_pose.position.y = 0.0
+        box_pose.position.z = -0.02  # Top face at Z=-0.01, slightly below table surface
+        box_pose.orientation.w = 1.0
+
+        ground.primitives = [box]
+        ground.primitive_poses = [box_pose]
+
+        scene.world.collision_objects = [ground]
+        self._planning_scene_pubs[robot_id].publish(scene)
+        logger.info(f"Published ground plane collision object to {robot_id} planning scene")
 
     def _transform_world_to_local(self, world_position: dict, robot_id: str) -> dict:
         """Transform Unity world coordinates to ROS base_link coordinates.
@@ -245,6 +346,41 @@ class ROSMotionServer:
                 f"{len(msg.name)} joints ({', '.join(msg.name[:6])}...)"
             )
         self._current_joint_states[robot_id] = msg
+
+    def _feedback_callback(self, robot_id: str, msg):
+        """Handle trajectory execution feedback from Unity's ROSTrajectorySubscriber.
+
+        Args:
+            robot_id: Robot namespace
+            msg: String message containing JSON feedback with 'status' field
+        """
+        try:
+            data = json.loads(msg.data)
+            status = data.get("status", "")
+            self._trajectory_feedback[robot_id] = status
+            if status in ("completed", "aborted", "rejected"):
+                self._trajectory_feedback_event[robot_id].set()
+        except (json.JSONDecodeError, Exception):
+            pass
+
+    def _wait_for_trajectory_completion(self, robot_id: str, timeout: float = 30.0) -> bool:
+        """Wait until Unity reports the current trajectory as completed or aborted.
+
+        Args:
+            robot_id: Robot namespace
+            timeout: Maximum seconds to wait
+
+        Returns:
+            True if completed successfully, False if aborted/rejected/timed out.
+        """
+        event = self._trajectory_feedback_event[robot_id]
+        event.clear()
+        signalled = event.wait(timeout=timeout)
+        if not signalled:
+            logger.warning(f"{robot_id}: Timed out waiting for trajectory completion")
+            return False
+        status = self._trajectory_feedback.get(robot_id, "")
+        return status == "completed"
 
     def start(self):
         """Start the TCP server and ROS spin thread."""
@@ -384,8 +520,19 @@ class ROSMotionServer:
         orientation = request.get("orientation")
         planning_time = request.get("planning_time", 5.0)
 
+        # Log incoming world position for debugging coordinate transform issues
+        logger.info(
+            f"[GRASP_DEBUG] {robot_id} raw Unity world position: "
+            f"x={position.get('x',0):.3f}, y={position.get('y',0):.3f}, z={position.get('z',0):.3f}"
+        )
+
         # Transform world coordinates to robot-local base_link coordinates
         position = self._transform_world_to_local(position, robot_id)
+
+        logger.info(
+            f"[GRASP_DEBUG] {robot_id} ROS base_link position: "
+            f"x={position.get('x',0):.3f}, y={position.get('y',0):.3f}, z={position.get('z',0):.3f}"
+        )
 
         goal = MoveGroup.Goal()
         goal.request = MotionPlanRequest()
@@ -462,7 +609,7 @@ class ROSMotionServer:
         bounding_vol = BoundingVolume()
         primitive = SolidPrimitive()
         primitive.type = SolidPrimitive.SPHERE
-        primitive.dimensions = [0.01]  # 1cm tolerance
+        primitive.dimensions = [0.02]  # 2cm tolerance
         bounding_vol.primitives.append(primitive)
         bounding_vol.primitive_poses.append(pose_goal.pose)
         pos_constraint.constraint_region = bounding_vol
@@ -517,6 +664,11 @@ class ROSMotionServer:
             trajectory is a JointTrajectory or None on failure.
         """
         move_group_client = self._move_group_clients[robot_id]
+
+        # Re-publish ground plane before each planning call.
+        # MoveIt may reset its planning scene on reconnect or after a long idle,
+        # so we ensure the table collision object is always present.
+        self._publish_ground_plane(robot_id)
 
         # Wait for joint states before planning
         if not self._wait_for_joint_states(robot_id, timeout=10.0):
@@ -677,6 +829,11 @@ class ROSMotionServer:
 
         # Publish the planned trajectory to Unity (namespaced topic)
         trajectory_pub = self._trajectory_pubs[robot_id]
+
+        # Clear any stale feedback before publishing so the wait below starts fresh
+        self._trajectory_feedback_event[robot_id].clear()
+        self._trajectory_feedback[robot_id] = None
+
         trajectory_pub.publish(trajectory)
 
         logger.info(
@@ -684,12 +841,29 @@ class ROSMotionServer:
             f"(planned in {plan_time:.2f}s)"
         )
 
+        # Estimate execution timeout: trajectory duration * speed_scale_factor + buffer.
+        # Unity's ROSTrajectorySubscriber runs at 0.5x speed scaling by default,
+        # so actual wall time ≈ 2x the trajectory time_from_start of the last point.
+        if trajectory.points:
+            last_pt = trajectory.points[-1]
+            traj_duration = last_pt.time_from_start.sec + last_pt.time_from_start.nanosec * 1e-9
+        else:
+            traj_duration = 5.0
+        execution_timeout = traj_duration * 2.5 + 5.0  # 2.5x for speed scaling + buffer
+
+        completed = self._wait_for_trajectory_completion(robot_id, timeout=execution_timeout)
+        if not completed:
+            logger.warning(
+                f"{robot_id}: Trajectory completion not confirmed within {execution_timeout:.1f}s "
+                "(may have timed out or been aborted)"
+            )
+
         return {
-            "success": True,
+            "success": completed,
             "robot_id": robot_id,
             "trajectory_points": len(trajectory.points),
             "planning_time": plan_time,
-            "status": "published_to_unity",
+            "status": "completed" if completed else "timeout",
         }
 
     def _get_current_pose(self, robot_id):
@@ -792,6 +966,9 @@ class ROSMotionServer:
                 }
             total_planning_time += result.get("planning_time", 0)
             total_points += result.get("trajectory_points", 0)
+
+            # _plan_and_publish already waits for trajectory completion, so each
+            # waypoint is fully executed before the next one is published.
 
         return {
             "success": True,
