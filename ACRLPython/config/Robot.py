@@ -50,6 +50,7 @@ WORKSPACE_REGIONS = {
 # Robot Workspace Assignments (default allocation)
 # ============================================================================
 
+# TODO: use ROBOT_WORKSPACE_ASSIGNMENTS in WorkspaceManager default allocation
 ROBOT_WORKSPACE_ASSIGNMENTS = {
     "Robot1": "left_workspace",
     "Robot2": "right_workspace",
@@ -59,6 +60,7 @@ ROBOT_WORKSPACE_ASSIGNMENTS = {
 # Robot Base Positions (world coordinates, meters)
 # ============================================================================
 
+# TODO: use ROBOT_BASE_POSITIONS in WorkspaceManager / collision avoidance
 ROBOT_BASE_POSITIONS = {
     "Robot1": (-0.475, 0.0, 0.0),
     "Robot2": (0.475, 0.0, 0.0),
@@ -68,6 +70,7 @@ ROBOT_BASE_POSITIONS = {
 # Multi-Robot Coordination Safety Parameters
 # ============================================================================
 
+# TODO: use COLLISION_SAFETY_MARGIN in collision avoidance planner
 COLLISION_SAFETY_MARGIN = float(os.environ.get("COLLISION_SAFETY_MARGIN", "0.01"))  # meters
 MIN_ROBOT_SEPARATION = float(os.environ.get("MIN_ROBOT_SEPARATION", "0.2"))  # meters
 MAX_ROBOT_REACH = float(os.environ.get("MAX_ROBOT_REACH", "0.8"))  # meters
@@ -77,4 +80,6 @@ MAX_ROBOT_REACH = float(os.environ.get("MAX_ROBOT_REACH", "0.8"))  # meters
 # ============================================================================
 
 ROBOT_STATUS_CACHE_TTL = float(os.environ.get("ROBOT_STATUS_CACHE_TTL", "0.5"))  # seconds
+# TODO: use WORLD_STATE_UPDATE_INTERVAL in WorldStatePublisher polling rate
 WORLD_STATE_UPDATE_INTERVAL = float(os.environ.get("WORLD_STATE_UPDATE_INTERVAL", "0.1"))  # seconds
+WORKSPACE_ALLOCATION_TIMEOUT = float(os.environ.get("WORKSPACE_ALLOCATION_TIMEOUT", "60.0"))  # seconds

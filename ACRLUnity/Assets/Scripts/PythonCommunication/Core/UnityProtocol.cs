@@ -37,7 +37,7 @@ namespace PythonCommunication.Core
         public const int HEADER_SIZE = TYPE_SIZE + INT_SIZE;
         public const int MAX_IMAGE_SIZE = 10 * 1024 * 1024;
 
-        private const string _logPrefix = "[UNITY_PROTOCOL_V2]";
+        private const string _logPrefix = "[UNITY_PROTOCOL]";
 
         #region Header Encoding/Decoding
 

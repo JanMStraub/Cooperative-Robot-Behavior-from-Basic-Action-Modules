@@ -7,6 +7,7 @@ including camera parameters, reconstruction settings, and server configuration.
 
 from dataclasses import dataclass
 from typing import Optional
+from config.Servers import DEFAULT_HOST, STREAMING_SERVER_PORT
 
 
 @dataclass
@@ -76,8 +77,8 @@ class FeatureMatchConfig:
 class ServerConfig:
     """Streaming server configuration"""
 
-    host: str = "127.0.0.1"
-    port: int = 5005
+    host: str = DEFAULT_HOST
+    port: int = STREAMING_SERVER_PORT
     max_connections: int = 5
     timeout: float = 1.0
 

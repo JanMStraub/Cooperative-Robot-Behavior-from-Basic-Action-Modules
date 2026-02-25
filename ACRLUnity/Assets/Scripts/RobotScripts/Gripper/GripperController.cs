@@ -92,6 +92,11 @@ namespace Robotics
         // Deferred attachment flag: set in Update() when closing completes, consumed in
         // FixedUpdate() so the AttachObject call runs in sync with the physics engine.
         private bool _attachmentPending = false;
+        // Deferred detachment flag: set in OpenGrippers(), consumed in FixedUpdate()
+        // once the gripper has opened enough to avoid trapping the object between fingers.
+        private bool _detachmentPending = false;
+        private bool _detachInFixedUpdate = false;
+        private GameObject _objectToMonitorAfterDetach;
         private const string _logPrefix = "[GRIPPER_CONTROLLER]";
 
         public event System.Action OnGripperActionComplete;
@@ -166,6 +171,15 @@ namespace Robotics
             bool isAtGoal = Mathf.Abs(_currentPhysicalTarget - goalPhysicalPosition) < 0.0001f;
             bool isStalled = Mathf.Abs(nextTargetStep - _currentPhysicalTarget) > 0.0001f;
 
+            // While the gripper is opening, check if it has opened enough to safely detach
+            // the held object. Threshold 0.5 means the gripper is at least half open,
+            // ensuring the fingers have cleared the object before re-enabling physics.
+            if (_detachmentPending && targetPosition > 0.5f && MapPhysicalToNormalized(currentRealPosition) > 0.4f)
+            {
+                _detachmentPending = false;
+                _detachInFixedUpdate = true;
+            }
+
             if (!isAtGoal && !isStalled)
             {
                 IsMoving = true;
@@ -200,11 +214,17 @@ namespace Robotics
 
         /// <summary>
         /// Runs in sync with the physics engine (FixedUpdate cadence).
-        /// Consumes the deferred attachment flag set by Update() when gripper closing completes.
+        /// Consumes deferred attachment/detachment flags set by Update().
         /// Running here ensures ArticulationBody contact and joint state data are current.
         /// </summary>
         private void FixedUpdate()
         {
+            if (_detachInFixedUpdate)
+            {
+                _detachInFixedUpdate = false;
+                PerformDeferredDetach();
+            }
+
             if (!_attachmentPending)
                 return;
 
@@ -250,21 +270,25 @@ namespace Robotics
         }
 
         /// <summary>
-        /// Open the grippers. Automatically detaches any held object first.
+        /// Open the grippers. Detachment of any held object is deferred until the
+        /// gripper has opened enough to avoid trapping the object between the fingers.
         /// </summary>
         public void OpenGrippers()
         {
             if (_isHoldingObject)
             {
-                GameObject objectToMonitor = _graspedObject;
-                DetachObject();
-                StartCoroutine(MonitorObjectPosition(objectToMonitor));
+                _detachmentPending = true;
+                _objectToMonitorAfterDetach = _graspedObject;
             }
 
             // Check if already at target position (fully open)
             if (Mathf.Abs(targetPosition - 1f) < 0.0001f && !IsMoving)
             {
-                // Already open - fire completion event immediately
+                // Already open - detach immediately and fire completion
+                if (_detachmentPending)
+                {
+                    PerformDeferredDetach();
+                }
                 OnGripperActionComplete?.Invoke();
                 return;
             }
@@ -552,6 +576,21 @@ namespace Robotics
         /// Release the currently held object (alias for DetachObject).
         /// </summary>
         public void ReleaseObject() => DetachObject();
+
+        /// <summary>
+        /// Executes the deferred detachment: detaches the object and starts monitoring.
+        /// Called from FixedUpdate once the gripper has opened enough for safe release.
+        /// </summary>
+        private void PerformDeferredDetach()
+        {
+            DetachObject();
+
+            if (_objectToMonitorAfterDetach != null)
+            {
+                StartCoroutine(MonitorObjectPosition(_objectToMonitorAfterDetach));
+                _objectToMonitorAfterDetach = null;
+            }
+        }
 
         #endregion
     }

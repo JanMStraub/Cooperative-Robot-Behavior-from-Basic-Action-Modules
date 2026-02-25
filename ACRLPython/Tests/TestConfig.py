@@ -18,12 +18,9 @@ from config.Servers import (
     RAG_SERVER_PORT,
     STATUS_SERVER_PORT,
     SEQUENCE_SERVER_PORT,
-    RESULTS_SERVER_PORT,
-    DETECTION_SERVER_PORT,
     MAX_CONNECTIONS_BACKLOG,
     MAX_CLIENT_THREADS,
     SOCKET_ACCEPT_TIMEOUT,
-    SOCKET_RECEIVE_TIMEOUT,
     MAX_STRING_LENGTH,
     MAX_IMAGE_SIZE,
     DEFAULT_LMSTUDIO_MODEL,
@@ -35,6 +32,8 @@ from config.Servers import (
     LOG_LEVEL,
     DEFAULT_OUTPUT_DIR,
     SERVER_INIT_WAIT_TIME,
+    LLM_REQUEST_TIMEOUT,
+    WORLDSTATE_CHECK_INTERVAL,
 )
 
 from config.Vision import (
@@ -55,6 +54,7 @@ from config.Vision import (
     DEFAULT_STEREO_BASELINE,
     DEFAULT_STEREO_FOV,
     STEREO_CHECK_INTERVAL,
+    VISION_OPERATION_TIMEOUT,
 )
 
 
@@ -64,22 +64,16 @@ class TestConfigConstants:
     def test_network_config(self):
         """Test network configuration constants"""
         assert DEFAULT_HOST == "127.0.0.1"
-        # Legacy ports (kept for backward compatibility)
         assert STREAMING_SERVER_PORT == 5005
         assert STEREO_DETECTION_PORT == 5006
         assert DEPTH_RESULTS_PORT == 5007
-        # Active ports
         assert LLM_RESULTS_PORT == 5010
         assert RAG_SERVER_PORT == 5011
         assert STATUS_SERVER_PORT == 5012
         assert SEQUENCE_SERVER_PORT == 5013
-        # Aliases
-        assert RESULTS_SERVER_PORT == LLM_RESULTS_PORT
-        assert DETECTION_SERVER_PORT == DEPTH_RESULTS_PORT
         assert MAX_CONNECTIONS_BACKLOG > 0
         assert MAX_CLIENT_THREADS > 0
         assert SOCKET_ACCEPT_TIMEOUT > 0
-        assert SOCKET_RECEIVE_TIMEOUT > 0
 
     def test_protocol_limits(self):
         """Test protocol limit constants"""
@@ -95,6 +89,9 @@ class TestConfigConstants:
         assert IMAGE_CHECK_INTERVAL > 0
         assert SERVER_INIT_WAIT_TIME > 0
         assert DUPLICATE_TIME_THRESHOLD >= 0
+        assert LLM_REQUEST_TIMEOUT > 0
+        assert WORLDSTATE_CHECK_INTERVAL > 0
+        assert VISION_OPERATION_TIMEOUT > 0
 
     def test_llm_config(self):
         """Test LLM configuration constants"""

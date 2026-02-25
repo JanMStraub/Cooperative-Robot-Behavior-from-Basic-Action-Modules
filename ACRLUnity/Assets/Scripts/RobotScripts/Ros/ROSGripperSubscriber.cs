@@ -98,13 +98,14 @@ namespace Robotics
 
         /// <summary>
         /// Handle incoming gripper command from ROS.
-        /// Position[0] = normalized gripper position (0=closed, 1=open).
+        /// Position[0] = gripper jaw position in meters (0=closed, 0.014=fully open).
+        /// This matches ROSMotionClient.control_gripper() which sends raw meter values.
         /// Effort[0] = optional max force limit.
         ///
-        /// When closing (position &lt; 0.1), automatically finds and sets the nearest
-        /// graspable object so GripperController.AttachObject fires on close completion.
-        /// This mirrors what RobotController.ExecuteThreeWaypointGrasp does for the
-        /// Unity IK path; without it the gripper closes but never captures the object.
+        /// When closing (position &lt; 0.002m, i.e. ~2mm = effectively closed), automatically
+        /// finds and sets the nearest graspable object so GripperController.AttachObject
+        /// fires on close completion. This mirrors what RobotController.ExecuteThreeWaypointGrasp
+        /// does for the Unity IK path; without it the gripper closes but never captures the object.
         /// </summary>
         private void OnGripperCommandReceived(JointStateMsg msg)
         {
@@ -113,15 +114,17 @@ namespace Robotics
 
             if (msg.position != null && msg.position.Length > 0)
             {
-                float normalizedPosition = Mathf.Clamp01((float)msg.position[0]);
+                // Value is in meters (0=closed, 0.014=fully open) — clamp to valid jaw range.
+                float positionMeters = Mathf.Clamp((float)msg.position[0], 0f, 0.014f);
 
                 Debug.Log(
-                    $"{_logPrefix} Gripper command received: position={normalizedPosition:F2}"
+                    $"{_logPrefix} Gripper command received: position={positionMeters:F4}m"
                 );
 
                 // When closing, arm the attachment by finding the nearest Target-tagged object
                 // within the gripper's reach so GripperController.AttachObject fires.
-                if (normalizedPosition < 0.1f)
+                // Threshold of 0.002m (~2mm) treats near-zero positions as a close command.
+                if (positionMeters < 0.002f)
                 {
                     GameObject nearestTarget = FindNearestGraspableObject();
                     if (nearestTarget != null)
@@ -135,14 +138,15 @@ namespace Robotics
                     {
                         Debug.LogWarning($"{_logPrefix} Close command received but no graspable object found nearby");
                     }
+                    _gripperController.CloseGrippers();
                 }
                 else
                 {
-                    // Opening: clear any pending attachment target
-                    _gripperController.ClearTargetObject();
+                    // Opening: use OpenGrippers() so _detachmentPending is set and the held
+                    // object is properly released. SetGripperPosition() alone only moves the
+                    // fingers without triggering the deferred-detach state machine.
+                    _gripperController.OpenGrippers();
                 }
-
-                _gripperController.SetGripperPosition(normalizedPosition);
             }
             else if (msg.name != null && msg.name.Length > 0)
             {
@@ -199,12 +203,14 @@ namespace Robotics
 
             GameObject nearest = null;
             float nearestDist = float.MaxValue;
+            int candidateCount = 0;
 
             foreach (var hit in hits)
             {
                 if (!hit.CompareTag("Target"))
                     continue;
 
+                candidateCount++;
                 float dist = Vector3.Distance(searchOrigin, hit.transform.position);
                 if (dist < nearestDist)
                 {
@@ -214,7 +220,16 @@ namespace Robotics
             }
 
             if (nearest != null)
-                Debug.Log($"{_logPrefix} Found '{nearest.name}' at {nearestDist*100f:F1}cm from gripper centre");
+            {
+                if (candidateCount > 1)
+                    Debug.LogWarning(
+                        $"{_logPrefix} {candidateCount} Target-tagged objects within {searchRadius*100f:F0}cm — "
+                        + $"attaching to nearest ('{nearest.name}' at {nearestDist*100f:F1}cm). "
+                        + "Wrong object may be grasped in dense scenes."
+                    );
+                else
+                    Debug.Log($"{_logPrefix} Found '{nearest.name}' at {nearestDist*100f:F1}cm from gripper centre");
+            }
             else
                 Debug.LogWarning($"{_logPrefix} No Target-tagged object within {searchRadius*100f:F0}cm of {searchOrigin}");
 

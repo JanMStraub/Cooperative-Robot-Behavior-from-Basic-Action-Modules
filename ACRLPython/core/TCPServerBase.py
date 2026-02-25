@@ -27,6 +27,7 @@ try:
         MAX_CONNECTIONS_BACKLOG,
         MAX_CLIENT_THREADS,
         SOCKET_ACCEPT_TIMEOUT,
+        SERVER_HEARTBEAT_INTERVAL,
     )
     from core.LoggingSetup import setup_logging
 except ImportError:
@@ -35,6 +36,7 @@ except ImportError:
         MAX_CONNECTIONS_BACKLOG,
         MAX_CLIENT_THREADS,
         SOCKET_ACCEPT_TIMEOUT,
+        SERVER_HEARTBEAT_INTERVAL,
     )
     from ..core.LoggingSetup import setup_logging
 
@@ -71,8 +73,12 @@ class ServerConfig:
     host: str = DEFAULT_HOST
     port: int = 5000
     max_connections: int = MAX_CONNECTIONS_BACKLOG  # Max backlog for listen()
-    max_client_threads: int = MAX_CLIENT_THREADS  # Max concurrent client handler threads
-    socket_timeout: float = SOCKET_ACCEPT_TIMEOUT  # Timeout for accept() to allow periodic shutdown checks
+    max_client_threads: int = (
+        MAX_CLIENT_THREADS  # Max concurrent client handler threads
+    )
+    socket_timeout: float = (
+        SOCKET_ACCEPT_TIMEOUT  # Timeout for accept() to allow periodic shutdown checks
+    )
 
 
 class TCPServerBase(ABC):
@@ -84,7 +90,7 @@ class TCPServerBase(ABC):
     """
 
     # Heartbeat interval in seconds — how often the server logs its health status.
-    HEARTBEAT_INTERVAL: float = 30.0
+    HEARTBEAT_INTERVAL: float = SERVER_HEARTBEAT_INTERVAL
 
     def __init__(self, config: ServerConfig):
         """
@@ -111,6 +117,9 @@ class TCPServerBase(ABC):
         self._total_connections: int = 0
         self._total_disconnections: int = 0
         self._start_time: Optional[datetime] = None
+
+        # Last-logged connection snapshot — heartbeat only logs when these change
+        self._last_heartbeat_snapshot: Optional[tuple] = None
 
         # Setup centralized logging
         self._logger = setup_logging(self.__class__.__module__)
@@ -146,7 +155,9 @@ class TCPServerBase(ABC):
 
             self._running = True
             self._start_time = datetime.now()
-            self._logger.info(f"Server started on {self._config.host}:{self._config.port}")
+            self._logger.info(
+                f"Server started on {self._config.host}:{self._config.port}"
+            )
 
             # Start accept thread
             self._accept_thread = threading.Thread(
@@ -156,7 +167,9 @@ class TCPServerBase(ABC):
 
             # Start heartbeat thread for periodic health logging
             self._heartbeat_thread = threading.Thread(
-                target=self._heartbeat_loop, daemon=True, name=f"{self.__class__.__name__}_heartbeat"
+                target=self._heartbeat_loop,
+                daemon=True,
+                name=f"{self.__class__.__name__}_heartbeat",
             )
             self._heartbeat_thread.start()
 
@@ -265,17 +278,19 @@ class TCPServerBase(ABC):
             Bytes received, or None if connection closed or error occurred
         """
         self._update_client_state(sock, ConnectionState.RECEIVING)
-        data = b""
-        while len(data) < num_bytes:
+        chunks = []
+        received = 0
+        while received < num_bytes:
             try:
-                chunk = sock.recv(num_bytes - len(data))
+                chunk = sock.recv(num_bytes - received)
                 if not chunk:
                     return None
-                data += chunk
+                chunks.append(chunk)
+                received += len(chunk)
                 self._record_bytes_received(sock, len(chunk))
             except Exception:
                 return None
-        return data
+        return b"".join(chunks)
 
     def _read_int(self, sock: socket.socket) -> Optional[int]:
         """
@@ -288,9 +303,10 @@ class TCPServerBase(ABC):
             Integer value, or None if read failed
         """
         import struct
+
         data = self._recv_exactly(sock, 4)
         if data:
-            return struct.unpack('<I', data)[0]  # Little-endian unsigned int
+            return struct.unpack("<I", data)[0]  # Little-endian unsigned int
         return None
 
     def _is_connection_error_fatal(self, error: Exception) -> Tuple[bool, str]:
@@ -501,13 +517,20 @@ class TCPServerBase(ABC):
                 break
 
             stats = self.get_stats()
-            self._logger.info(
-                f"[HEARTBEAT] {self.__class__.__name__} on :{self._config.port} | "
-                f"uptime={stats['uptime_seconds']:.0f}s | "
-                f"active_clients={stats['active_clients']} | "
-                f"total_connections={stats['total_connections']} | "
-                f"total_disconnections={stats['total_disconnections']}"
+            snapshot = (
+                stats["active_clients"],
+                stats["total_connections"],
+                stats["total_disconnections"],
             )
+            if snapshot != self._last_heartbeat_snapshot:
+                self._last_heartbeat_snapshot = snapshot
+                self._logger.info(
+                    f"[HEARTBEAT] {self.__class__.__name__} on :{self._config.port} | "
+                    f"uptime={stats['uptime_seconds']:.0f}s | "
+                    f"active_clients={stats['active_clients']} | "
+                    f"total_connections={stats['total_connections']} | "
+                    f"total_disconnections={stats['total_disconnections']}"
+                )
 
     def get_stats(self) -> dict:
         """

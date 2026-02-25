@@ -40,6 +40,7 @@ try:
         DEFAULT_STEREO_CAMERA_POSITION,
         DEFAULT_STEREO_CAMERA_ROTATION,
         ENABLE_VISION_STREAMING,
+        VISION_OPERATION_TIMEOUT,
     )
     from config.Servers import DEFAULT_LMSTUDIO_MODEL
 except ImportError:
@@ -49,6 +50,7 @@ except ImportError:
         DEFAULT_STEREO_CAMERA_POSITION,
         DEFAULT_STEREO_CAMERA_ROTATION,
         ENABLE_VISION_STREAMING,
+        VISION_OPERATION_TIMEOUT,
     )
     from ..config.Servers import DEFAULT_LMSTUDIO_MODEL
 
@@ -153,7 +155,7 @@ def detect_object(
         broadcaster.send_command(capture_command, request_id)
 
         # Wait for images to arrive (poll with timeout)
-        timeout = 20.0
+        timeout = VISION_OPERATION_TIMEOUT
         poll_interval = 0.1
         start_time = time.time()
         stereo_data = None
@@ -716,7 +718,7 @@ def detect_object_stereo(
             broadcaster.send_command(capture_command, request_id)
 
             # Wait for images to arrive
-            timeout = 20.0
+            timeout = VISION_OPERATION_TIMEOUT
             poll_interval = 0.1
             start_time = time.time()
             stereo_data = None
@@ -1029,20 +1031,27 @@ def detect_object_stereo(
         try:
             from core.Imports import get_world_state
             world_state = get_world_state()
-            object_id = best.color if best.color else "unknown_object"
+            ws_object_id = best.color if best.color else "unknown_object"
             world_state.update_object_position(
-                object_id=object_id,
+                object_id=ws_object_id,
                 position=(best.world_position[0], best.world_position[1], best.world_position[2]),
                 color=best.color,
-                object_type="cube",  # Default to cube for now
+                object_type="cube",
                 confidence=best.confidence,
-                dimensions=best.dimensions,  # Include dimensions from detection
+                dimensions=best.dimensions,
             )
-            dim_str = f" dims=({best.dimensions[0]:.3f}, {best.dimensions[1]:.3f}, {best.dimensions[2]:.3f})m" if best.dimensions else ""
-            logger.debug(f"Updated WorldState: {object_id} at ({best.world_position[0]:.3f}, {best.world_position[1]:.3f}, {best.world_position[2]:.3f}){dim_str}")
+            dim_str = (
+                f" dims=({best.dimensions[0]:.3f}, {best.dimensions[1]:.3f}, {best.dimensions[2]:.3f})m"
+                if best.dimensions else ""
+            )
+            logger.info(
+                f"WorldState updated: key='{ws_object_id}' at "
+                f"({best.world_position[0]:.3f}, {best.world_position[1]:.3f}, {best.world_position[2]:.3f}){dim_str}"
+            )
         except Exception as e:
-            logger.warning(f"Failed to update WorldState: {e}")
-            # Don't fail the detection if WorldState update fails
+            # Log at ERROR level so this is never silently missed — a WorldState write
+            # failure means grasp_object will fail to find the object on the next call.
+            logger.error(f"Failed to update WorldState after detection: {e}", exc_info=True)
 
         return OperationResult.success_result(result)
 

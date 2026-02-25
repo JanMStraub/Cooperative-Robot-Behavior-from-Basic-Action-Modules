@@ -677,12 +677,21 @@ class SequenceExecutor:
             # Add request_id to params so operation includes it in command to Unity
             params_with_request_id = {**params, "request_id": request_id}
 
-            # Inject use_ros from config if not explicitly set by caller
-            if "use_ros" not in params_with_request_id:
+            # Inject use_ros from config only for operations whose implementation
+            # signature explicitly accepts it.  Injecting it blindly into every call
+            # crashes operations like detect_field that have no such parameter.
+            if "use_ros" not in params_with_request_id and op_def is not None:
                 try:
                     from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
                     if ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid"):
-                        params_with_request_id["use_ros"] = True
+                        import inspect
+                        impl = op_def.implementation
+                        sig = inspect.signature(impl)
+                        if "use_ros" in sig.parameters or any(
+                            p.kind == inspect.Parameter.VAR_KEYWORD
+                            for p in sig.parameters.values()
+                        ):
+                            params_with_request_id["use_ros"] = True
                 except ImportError:
                     pass
 

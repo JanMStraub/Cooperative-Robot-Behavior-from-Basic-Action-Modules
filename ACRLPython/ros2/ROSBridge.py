@@ -48,12 +48,16 @@ class ROSBridge:
             port: ROS bridge server port (default from config)
         """
         try:
-            from config.ROS import ROS_BRIDGE_HOST, ROS_BRIDGE_PORT
+            from config.ROS import ROS_BRIDGE_HOST, ROS_BRIDGE_PORT, ROS_TIMEOUT_BASE, ROS_TIMEOUT_PER_CANDIDATE
             self._host = host or ROS_BRIDGE_HOST
             self._port = port or ROS_BRIDGE_PORT
+            self._timeout_base = ROS_TIMEOUT_BASE
+            self._timeout_per_candidate = ROS_TIMEOUT_PER_CANDIDATE
         except ImportError:
             self._host = host or "127.0.0.1"
             self._port = port or 5020
+            self._timeout_base = 5.0
+            self._timeout_per_candidate = 0.5
 
         self._socket = None
         self._connected = False
@@ -130,8 +134,8 @@ class ROSBridge:
             "candidates": candidates,
         }
 
-        # Adjust timeout based on number of candidates (0.5s per candidate + 5s buffer)
-        adjusted_timeout = max(timeout, 5.0 + len(candidates) * 0.5)
+        # Adjust timeout based on number of candidates
+        adjusted_timeout = max(timeout, self._timeout_base + len(candidates) * self._timeout_per_candidate)
 
         return self._send_command(cmd, timeout=adjusted_timeout)
 

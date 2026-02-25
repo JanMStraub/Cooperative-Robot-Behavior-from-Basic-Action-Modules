@@ -21,11 +21,14 @@ MAX_IMAGE_AGE = float(os.environ.get("MAX_IMAGE_AGE", "30.0"))
 
 # Monitoring intervals (seconds)
 IMAGE_CHECK_INTERVAL = float(os.environ.get("IMAGE_CHECK_INTERVAL", "1.0"))
+# TODO: wire DETECTION_CHECK_INTERVAL / STEREO_CHECK_INTERVAL into image processing loops
 DETECTION_CHECK_INTERVAL = float(os.environ.get("DETECTION_CHECK_INTERVAL", "1.0"))
 STEREO_CHECK_INTERVAL = float(os.environ.get("STEREO_CHECK_INTERVAL", "0.5"))
 
 # Duplicate detection
 DUPLICATE_TIME_THRESHOLD = float(os.environ.get("DUPLICATE_TIME_THRESHOLD", "0.1"))
+
+VISION_OPERATION_TIMEOUT = float(os.environ.get("VISION_OPERATION_TIMEOUT", "20.0"))
 
 # ============================================================================
 # YOLO vs HSV Detection Toggle
@@ -69,6 +72,7 @@ MIN_CONFIDENCE = float(os.environ.get("MIN_CONFIDENCE", "0.3"))
 
 ENABLE_DEBUG_IMAGES = os.environ.get("ENABLE_DEBUG_IMAGES", "false").lower() in ("true", "1", "yes")
 DEBUG_IMAGES_DIR = os.environ.get("DEBUG_IMAGES_DIR", str(_CONFIG_DIR / "debug_detections"))
+# TODO: implement disparity map saving (SAVE_DEBUG_DISPARITY_MAPS flag not yet wired in)
 SAVE_DEBUG_DISPARITY_MAPS = os.environ.get("SAVE_DEBUG_DISPARITY_MAPS", "false").lower() in ("true", "1", "yes")
 DEBUG_DISPARITY_DIR = os.environ.get("DEBUG_DISPARITY_DIR", str(_CONFIG_DIR / "debug_detections"))
 
@@ -89,12 +93,14 @@ DEFAULT_STEREO_CAMERA_ROTATION = [20.0, 0.0, 0.0]  # Pitch, yaw, roll
 
 ENABLE_VISION_STREAMING = os.environ.get("ENABLE_VISION_STREAMING", "false").lower() in ("true", "1", "yes")
 VISION_STREAM_FPS = float(os.environ.get("VISION_STREAM_FPS", "5.0"))
+# TODO: use STEREO_JPEG_QUALITY in stereo image encoding pipeline
 STEREO_JPEG_QUALITY = int(os.environ.get("STEREO_JPEG_QUALITY", "75"))
 
 # ============================================================================
 # Depth Estimation
 # ============================================================================
 
+# TODO: use DEFAULT_SGBM_PRESET / DEPTH_SAMPLE_INNER_PERCENT in depth estimation pipeline
 DEFAULT_SGBM_PRESET = os.environ.get("SGBM_PRESET", "medium")  # close, medium, far, auto
 ENABLE_ADAPTIVE_SGBM = os.environ.get("ENABLE_ADAPTIVE_SGBM", "false").lower() in ("true", "1", "yes")
 DEPTH_SAMPLING_STRATEGY = os.environ.get("DEPTH_SAMPLING_STRATEGY", "median_inner_50pct")
@@ -121,6 +127,7 @@ TRACKING_MIN_IOU = float(os.environ.get("TRACKING_MIN_IOU", "0.3"))
 # YOLO Advanced Configuration
 # ============================================================================
 
+# TODO: implement YOLO segmentation mode (YOLO_TASK / YOLO_SEGMENTATION_MODEL unused)
 YOLO_TASK = os.environ.get("YOLO_TASK", "detect")  # detect or segment
 YOLO_SEGMENTATION_MODEL = os.environ.get(
     "YOLO_SEGMENTATION_MODEL",
@@ -133,6 +140,7 @@ YOLO_INPUT_SIZE = None  # Downscale for speed (None = original)
 # ============================================================================
 
 SHARED_VISION_STATE_ENABLED = os.environ.get("SHARED_VISION_STATE_ENABLED", "true").lower() in ("true", "1", "yes")
+# TODO: implement multi-robot vision conflict resolution (OBJECT_CLAIM_TIMEOUT / CONFLICT_* unused)
 OBJECT_CLAIM_TIMEOUT = float(os.environ.get("OBJECT_CLAIM_TIMEOUT", "10.0"))
 CONFLICT_RESOLUTION_STRATEGY = os.environ.get("CONFLICT_RESOLUTION_STRATEGY", "closest_robot")
 CONFLICT_MIN_DISTANCE_DIFF = float(os.environ.get("CONFLICT_MIN_DISTANCE_DIFF", "0.05"))
@@ -143,5 +151,6 @@ CONFLICT_MIN_DISTANCE_DIFF = float(os.environ.get("CONFLICT_MIN_DISTANCE_DIFF", 
 
 ENABLE_VISION_VISUALIZATION = os.environ.get("ENABLE_VISION_VISUALIZATION", "false").lower() in ("true", "1", "yes")
 ENABLE_DISPARITY_CACHE = os.environ.get("ENABLE_DISPARITY_CACHE", "true").lower() in ("true", "1", "yes")
+# TODO: wire DISPARITY_CACHE_TTL into disparity cache implementation
 DISPARITY_CACHE_TTL = float(os.environ.get("DISPARITY_CACHE_TTL", "0.5"))
 ENABLE_PARALLEL_JPEG_ENCODING = os.environ.get("ENABLE_PARALLEL_JPEG_ENCODING", "true").lower() in ("true", "1", "yes")

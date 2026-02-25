@@ -249,10 +249,15 @@ class SequenceServer(TCPServerBase):
         client.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
         try:
             # Linux-specific: start probes after 10s idle, then every 5s, 3 attempts
-            client.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
-            client.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 5)
-            client.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
-        except (AttributeError, OSError):
+            # TCP_KEEPIDLE is Linux-only; getattr avoids AttributeError on macOS/Windows
+            TCP_KEEPIDLE = getattr(socket, "TCP_KEEPIDLE", None)
+            TCP_KEEPINTVL = getattr(socket, "TCP_KEEPINTVL", None)
+            TCP_KEEPCNT = getattr(socket, "TCP_KEEPCNT", None)
+            if TCP_KEEPIDLE is not None:
+                client.setsockopt(socket.IPPROTO_TCP, TCP_KEEPIDLE, 10)
+                client.setsockopt(socket.IPPROTO_TCP, TCP_KEEPINTVL, 5)  # type: ignore[arg-type]
+                client.setsockopt(socket.IPPROTO_TCP, TCP_KEEPCNT, 3)  # type: ignore[arg-type]
+        except OSError:
             pass  # Not available on all platforms (e.g. macOS uses different names)
 
         # Set read timeout only for waiting on the next incoming command header.
@@ -272,8 +277,12 @@ class SequenceServer(TCPServerBase):
 
                 # Validate message type
                 if msg_type != MessageType.SEQUENCE_QUERY:
-                    logger.error(f"Invalid message type: {msg_type} (expected {MessageType.SEQUENCE_QUERY})")
-                    self._send_error(client, request_id, f"Invalid message type: {msg_type}")
+                    logger.error(
+                        f"Invalid message type: {msg_type} (expected {MessageType.SEQUENCE_QUERY})"
+                    )
+                    self._send_error(
+                        client, request_id, f"Invalid message type: {msg_type}"
+                    )
                     continue
 
                 # Read command length (4 bytes, little-endian)
@@ -353,21 +362,34 @@ class SequenceServer(TCPServerBase):
 
     def _recv_exact(self, client: socket.socket, num_bytes: int) -> Optional[bytes]:
         """
-        Receive exact number of bytes from client.
+        Receive exact number of bytes from client, preserving partial reads across
+        socket timeouts.
+
+        The client socket has a 1-second timeout so the outer loop can check
+        is_running(). Without this guard, a timeout mid-read discards accumulated
+        bytes and causes TCP stream desynchronization (next bytes are mis-parsed
+        as a new message header).
 
         Args:
             client: Client socket
             num_bytes: Number of bytes to receive
 
         Returns:
-            Received bytes or None if connection closed
+            Received bytes or None if connection closed or server stopped
         """
         data = b""
         while len(data) < num_bytes:
-            chunk = client.recv(num_bytes - len(data))
-            if not chunk:
-                return None
-            data += chunk
+            try:
+                chunk = client.recv(num_bytes - len(data))
+                if not chunk:
+                    return None
+                data += chunk
+            except socket.timeout:
+                # Timeout during partial read — check for shutdown, then retry.
+                # Do NOT discard data: partial bytes must be preserved.
+                if not self.is_running():
+                    return None
+                continue
         return data
 
     def _send_response(
@@ -391,8 +413,12 @@ class SequenceServer(TCPServerBase):
             # Build response (Protocol V2): [type:1][request_id:4][result_len:4][result_json:N]
             # Note: Uses little-endian per UnityProtocol.py specification
             response = struct.pack("B", MessageType.RESULT)  # type (1 byte)
-            response += struct.pack("<I", request_id)  # request_id (4 bytes, little-endian)
-            response += struct.pack("<I", len(result_json))  # json_len (4 bytes, little-endian)
+            response += struct.pack(
+                "<I", request_id
+            )  # request_id (4 bytes, little-endian)
+            response += struct.pack(
+                "<I", len(result_json)
+            )  # json_len (4 bytes, little-endian)
             response += result_json  # json data
 
             client.sendall(response)
@@ -451,9 +477,7 @@ def run_sequence_server_background(
                 port=config.get("port", SEQUENCE_SERVER_PORT),
             )
     else:
-        server_config = ServerConfig(
-            host=DEFAULT_HOST, port=SEQUENCE_SERVER_PORT
-        )
+        server_config = ServerConfig(host=DEFAULT_HOST, port=SEQUENCE_SERVER_PORT)
 
     # Create and start server
     server = SequenceServer(server_config)
