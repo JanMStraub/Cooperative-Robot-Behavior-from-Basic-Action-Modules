@@ -10,7 +10,6 @@ import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional
-from datetime import datetime
 
 # Import config
 try:
@@ -82,26 +81,16 @@ def setup_logging(module_name: Optional[str] = None) -> logging.Logger:
                 log_dir = Path(LOG_DIR)
                 log_dir.mkdir(parents=True, exist_ok=True)
 
-                # Clean up old log files, keeping only the most recent LOG_FILE_BACKUP_COUNT files
-                log_files = sorted(log_dir.glob("server_logs_*.txt"), key=lambda p: p.stat().st_mtime, reverse=True)
-                if len(log_files) >= LOG_FILE_BACKUP_COUNT:
-                    for old_file in log_files[LOG_FILE_BACKUP_COUNT - 1:]:
-                        try:
-                            old_file.unlink()
-                        except Exception as e:
-                            pass  # Ignore errors when deleting old logs
-
-                # Generate filename with timestamp
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                log_file_name = f"server_logs_{timestamp}.txt"
-                log_file_path = log_dir / log_file_name
+                # Use a fixed filename so RotatingFileHandler manages rotation
+                # via the standard .1, .2 ... .N suffix mechanism.
+                log_file_path = log_dir / "server_logs.txt"
 
                 # Create rotating file handler
                 file_handler = RotatingFileHandler(
                     filename=str(log_file_path),
                     maxBytes=LOG_FILE_MAX_BYTES,
                     backupCount=LOG_FILE_BACKUP_COUNT,
-                    encoding='utf-8'
+                    encoding="utf-8",
                 )
                 file_handler.setLevel(getattr(logging, LOG_LEVEL))
                 file_formatter = logging.Formatter(LOG_FORMAT)
@@ -110,9 +99,9 @@ def setup_logging(module_name: Optional[str] = None) -> logging.Logger:
 
                 # Log to console that file logging is enabled
                 root_logger.info(f"File logging enabled: {log_file_path}")
-                root_logger.info(f"Log rotation: {LOG_FILE_MAX_BYTES / (1024*1024):.1f}MB max, {LOG_FILE_BACKUP_COUNT} backups")
-                if len(log_files) >= LOG_FILE_BACKUP_COUNT:
-                    root_logger.info(f"Cleaned up {len(log_files) - LOG_FILE_BACKUP_COUNT + 1} old log file(s)")
+                root_logger.info(
+                    f"Log rotation: {LOG_FILE_MAX_BYTES / (1024*1024):.1f}MB max, {LOG_FILE_BACKUP_COUNT} backups"
+                )
 
             except Exception as e:
                 # If file logging fails, continue with console only

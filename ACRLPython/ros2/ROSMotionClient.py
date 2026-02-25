@@ -252,12 +252,13 @@ class ROSMotionServer:
         scene.is_diff = True  # Incremental update, not a full scene replacement
 
         # Ground plane: 2m x 2m x 10cm slab in base_link frame.
-        # Top face at Z=-0.05 (5cm below table surface).
-        # This blocks trajectories that would pass through the floor/table base
-        # while still allowing the gripper to descend to grasp objects sitting on
-        # the table (object top at Z≈0.03, fingers at Z≈-0.02 — well above this).
-        # A shallower plane (Z=-0.01) blocked low-but-valid grasp positions and
-        # caused MoveIt to slam the gripper into the table trying to avoid it.
+        # Top face at Z=-0.10 (10cm below table surface).
+        # Prevents trajectories from going far below the table while giving
+        # enough room for the arm links (link_2, link_3) to sweep low when
+        # reaching laterally at grasp height. At full extension (Y≈-0.27),
+        # the elbow can dip to Z≈-0.07 — a ground plane at Z=-0.05 caused
+        # "Unable to sample any valid states for goal tree" because the arm
+        # geometry collided with the collision box at every IK solution.
         ground = CollisionObject()
         ground.header.frame_id = "base_link"
         ground.id = "ground_plane"
@@ -270,7 +271,7 @@ class ROSMotionServer:
         box_pose = Pose()
         box_pose.position.x = 0.0
         box_pose.position.y = 0.0
-        box_pose.position.z = -0.10  # Top face at Z=-0.05, 5cm below table surface
+        box_pose.position.z = -0.15  # Top face at Z=-0.10, 10cm below table surface
         box_pose.orientation.w = 1.0
 
         ground.primitives = [box]
@@ -501,8 +502,6 @@ class ROSMotionServer:
                 return self._plan_multi_waypoint(request, robot_id)
             elif command == "plan_orientation_change":
                 return self._plan_orientation_change(request, robot_id)
-            elif command == "plan_grasp":
-                return self._plan_grasp(request, robot_id)
             elif command == "plan_return_to_start":
                 return self._plan_return_to_start(request, robot_id)
             elif command == "validate_grasp_candidates":
@@ -1136,6 +1135,11 @@ class ROSMotionServer:
         if _CARTESIAN_HAS_SCALING:
             req.max_velocity_scaling_factor = vel_scaling
             req.max_acceleration_scaling_factor = acc_scaling
+        else:
+            logger.warning(
+                "moveit_msgs lacks velocity/acceleration scaling fields on GetCartesianPath — "
+                "running Cartesian descent at default MoveIt speed"
+            )
 
         # Set current joint state as start
         joint_state = self._current_joint_states.get(robot_id)
@@ -1166,6 +1170,17 @@ class ROSMotionServer:
         fraction = response.fraction
 
         if fraction < 0.95:
+            if fraction < 0.50:
+                # Very low completion means the goal itself is likely in collision
+                # or kinematically unreachable — don't waste time retrying with
+                # free-space planning (OMPL will also fail with "Unable to sample
+                # any valid states for goal tree").
+                logger.error(
+                    f"{robot_id}: Cartesian path only {fraction*100:.0f}% complete — "
+                    "goal likely unreachable or in collision, skipping free-space fallback"
+                )
+                return {"success": False, "error": f"Cartesian descent failed ({fraction*100:.0f}% complete) — goal unreachable", "robot_id": robot_id}
+
             logger.warning(
                 f"{robot_id}: Cartesian path only {fraction*100:.0f}% complete — "
                 "falling back to free-space plan"
@@ -1205,37 +1220,6 @@ class ROSMotionServer:
             "trajectory_points": len(trajectory.points),
             "cartesian_fraction": fraction,
             "status": "completed" if completed else "timeout",
-        }
-
-    def _plan_grasp(self, request, robot_id):
-        """Plan and publish a grasp trajectory.
-
-        Plans a motion to the object position with an appropriate approach
-        orientation. The actual grasp sequence (pre-grasp, grasp, retreat)
-        is coordinated by the Python operation.
-
-        Args:
-            request: Request dict with object_id and approach.
-            robot_id: Robot namespace.
-
-        Returns:
-            Dict with success status and planning time.
-        """
-        object_id = request.get("object_id", "")
-        approach = request.get("approach", "auto")
-        planning_time = request.get("planning_time", 10.0)
-
-        # For grasp planning, we need object position from Unity's world state
-        # The Python operation should have already resolved this, but we can
-        # attempt to plan to the object position if available
-        logger.info(f"Planning grasp for object '{object_id}' with approach '{approach}' for {robot_id}")
-
-        # For now, return an error indicating the object position must be provided
-        # The Python GraspOperations should query WorldState and pass position
-        return {
-            "success": False,
-            "error": "plan_grasp requires object position - use plan_and_execute with resolved object coordinates",
-            "robot_id": robot_id,
         }
 
     def _plan_return_to_start(self, request, robot_id):
@@ -1371,11 +1355,15 @@ class ROSMotionServer:
                 # Call IK service (synchronous)
                 future = ik_client.call_async(ik_request)
 
-                # Wait for response with timeout
+                # Wait for response with timeout.
+                # NOTE: Do NOT call rclpy.spin_once() here — the _ros_spin
+                # thread is already spinning the node. Two threads spinning
+                # the same node is not thread-safe in rclpy (see comment in
+                # _call_move_group_plan). Poll the future instead.
                 timeout_duration = 0.5  # 500ms max per candidate
                 start_time = time.time()
                 while not future.done():
-                    rclpy.spin_once(self._node, timeout_sec=0.01)
+                    time.sleep(0.01)
                     if time.time() - start_time > timeout_duration:
                         logger.warning(f"IK validation timeout for candidate {i}")
                         results.append((False, 0.0))

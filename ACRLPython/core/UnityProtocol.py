@@ -19,6 +19,7 @@ Message Type Enumeration:
 - 0x05: STATUS_QUERY - Robot status request
 - 0x06: STATUS_RESPONSE - Robot status data
 - 0x07: STEREO_IMAGE - Stereo camera pair
+- 0x08: SEQUENCE_QUERY - Sqeuencial robot coordination
 
 Message formats (ALL with header):
 1. Image Message (Unity → Python, single camera):
@@ -55,7 +56,6 @@ import struct
 import json
 from typing import Tuple, Optional
 from enum import IntEnum
-import logging
 
 # Import config
 try:
@@ -72,9 +72,11 @@ except ImportError:
 # Configure logging
 try:
     from core.LoggingSetup import setup_logging
+
     setup_logging(__name__)
 except ImportError:
     from .LoggingSetup import setup_logging
+
     setup_logging(__name__)
 
 
@@ -106,6 +108,37 @@ class UnityProtocol:
     INT_SIZE = 4
     TYPE_SIZE = 1  # Message type byte
     HEADER_SIZE = TYPE_SIZE + INT_SIZE  # type + request_id
+
+    @staticmethod
+    def _recv_exactly(sock, num_bytes: int) -> bytes:
+        """
+        Receive exactly num_bytes from a socket, looping until all bytes arrive.
+
+        TCP is a stream protocol — a single recv() call may return fewer bytes
+        than requested. This helper retries until the full payload is available
+        or raises ConnectionError on EOF or socket error.
+
+        Args:
+            sock: Connected socket to read from
+            num_bytes: Exact number of bytes required
+
+        Returns:
+            Exactly num_bytes as bytes
+
+        Raises:
+            ConnectionError: If the connection is closed before all bytes arrive
+        """
+        chunks = []
+        received = 0
+        while received < num_bytes:
+            chunk = sock.recv(num_bytes - received)
+            if not chunk:
+                raise ConnectionError(
+                    f"Connection closed after {received}/{num_bytes} bytes"
+                )
+            chunks.append(chunk)
+            received += len(chunk)
+        return b"".join(chunks)
 
     @staticmethod
     def _encode_header(message_type: MessageType, request_id: int) -> bytes:
@@ -144,9 +177,7 @@ class UnityProtocol:
             )
 
         message_type = MessageType(data[0])
-        request_id = struct.unpack(
-            UnityProtocol.INT_FORMAT, data[1:5]
-        )[0]
+        request_id = struct.unpack(UnityProtocol.INT_FORMAT, data[1:5])[0]
 
         return message_type, request_id
 
@@ -550,37 +581,33 @@ class UnityProtocol:
         Returns:
             Complete message bytes
         """
+        recv = UnityProtocol._recv_exactly
         data = bytearray()
 
         # Read header (type + request_id)
-        header_bytes = client_socket.recv(UnityProtocol.HEADER_SIZE)
-        if not header_bytes or len(header_bytes) < UnityProtocol.HEADER_SIZE:
-            raise ValueError("Connection closed or incomplete header")
+        header_bytes = recv(client_socket, UnityProtocol.HEADER_SIZE)
         data.extend(header_bytes)
 
         # Read query length and text
-        query_len_bytes = client_socket.recv(UnityProtocol.INT_SIZE)
-        if not query_len_bytes:
-            raise ValueError("Connection closed")
-
+        query_len_bytes = recv(client_socket, UnityProtocol.INT_SIZE)
         query_len = struct.unpack(UnityProtocol.INT_FORMAT, query_len_bytes)[0]
         data.extend(query_len_bytes)
 
-        query_bytes = client_socket.recv(query_len)
+        query_bytes = recv(client_socket, query_len)
         data.extend(query_bytes)
 
         # Read top_k
-        top_k_bytes = client_socket.recv(UnityProtocol.INT_SIZE)
+        top_k_bytes = recv(client_socket, UnityProtocol.INT_SIZE)
         data.extend(top_k_bytes)
 
         # Read filters length and JSON
-        filters_len_bytes = client_socket.recv(UnityProtocol.INT_SIZE)
+        filters_len_bytes = recv(client_socket, UnityProtocol.INT_SIZE)
         data.extend(filters_len_bytes)
 
         filters_len = struct.unpack(UnityProtocol.INT_FORMAT, filters_len_bytes)[0]
 
         if filters_len > 0:
-            filters_bytes = client_socket.recv(filters_len)
+            filters_bytes = recv(client_socket, filters_len)
             data.extend(filters_bytes)
 
         return bytes(data)
@@ -762,27 +789,23 @@ class UnityProtocol:
         Returns:
             Complete message bytes
         """
+        recv = UnityProtocol._recv_exactly
         data = bytearray()
 
         # Read header (type + request_id)
-        header_bytes = client_socket.recv(UnityProtocol.HEADER_SIZE)
-        if not header_bytes or len(header_bytes) < UnityProtocol.HEADER_SIZE:
-            raise ValueError("Connection closed or incomplete header")
+        header_bytes = recv(client_socket, UnityProtocol.HEADER_SIZE)
         data.extend(header_bytes)
 
         # Read robot_id length and text
-        robot_id_len_bytes = client_socket.recv(UnityProtocol.INT_SIZE)
-        if not robot_id_len_bytes:
-            raise ValueError("Connection closed")
-
+        robot_id_len_bytes = recv(client_socket, UnityProtocol.INT_SIZE)
         robot_id_len = struct.unpack(UnityProtocol.INT_FORMAT, robot_id_len_bytes)[0]
         data.extend(robot_id_len_bytes)
 
-        robot_id_bytes = client_socket.recv(robot_id_len)
+        robot_id_bytes = recv(client_socket, robot_id_len)
         data.extend(robot_id_bytes)
 
         # Read detailed flag (1 byte)
-        detailed_byte = client_socket.recv(1)
+        detailed_byte = recv(client_socket, 1)
         data.extend(detailed_byte)
 
         return bytes(data)

@@ -19,9 +19,9 @@ import threading
 from typing import Dict, Optional, Tuple, Any
 from dataclasses import dataclass, field
 try:
-    from config.Robot import WORKSPACE_REGIONS, ROBOT_STATUS_CACHE_TTL
+    from config.Robot import WORKSPACE_REGIONS, ROBOT_STATUS_CACHE_TTL, WORKSPACE_ALLOCATION_TIMEOUT
 except ImportError:
-    from ..config.Robot import WORKSPACE_REGIONS, ROBOT_STATUS_CACHE_TTL
+    from ..config.Robot import WORKSPACE_REGIONS, ROBOT_STATUS_CACHE_TTL, WORKSPACE_ALLOCATION_TIMEOUT
 from .StatusOperations import check_robot_status
 
 # Configure logging
@@ -194,7 +194,7 @@ class WorldState:
             self._workspace_allocations: Dict[str, Optional[WorkspaceAllocation]] = {
                 region: None for region in WORKSPACE_REGIONS.keys()
             }
-            self._workspace_timeout = 60.0  # Default 60s timeout for workspace allocations
+            self._workspace_timeout = WORKSPACE_ALLOCATION_TIMEOUT
 
             # In-flight command tracking
             self._pending_commands: Dict[int, Dict[str, Any]] = {}

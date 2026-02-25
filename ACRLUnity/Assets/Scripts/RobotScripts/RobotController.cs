@@ -789,6 +789,16 @@ namespace Robotics
                 yield return new WaitUntil(() => GetEndEffectorVelocity().magnitude < 0.005f);
                 _gripperController.SetTargetObject(targetObject);
                 _gripperController.SetGripperPosition(candidate.graspGripperWidth);
+                // Wait for gripper to finish closing and attachment to complete before signalling
+                // grasp success. Without this wait, a fast follow-up open command arrives while
+                // _isHoldingObject is still false (attachment pending in FixedUpdate), causing the
+                // object to be attached AFTER the open command — leaving it permanently stuck.
+                yield return new WaitWhile(() => _gripperController.IsMoving);
+
+                float graspStartTime = Time.time;
+                yield return new WaitUntil(
+                    () => Time.time - graspStartTime > 0.3f && !_gripperController.IsMoving
+                );
             }
 
             _activeGraspCoroutine = null;

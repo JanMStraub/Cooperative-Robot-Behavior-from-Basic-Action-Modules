@@ -310,9 +310,13 @@ namespace Robotics
 #if UNITY_EDITOR
             if (_totalCollisions > 0)
             {
+                var style = new GUIStyle();
+                style.normal.textColor = Color.red;
+                style.fontSize = 12;
                 UnityEditor.Handles.Label(
                     transform.position + Vector3.up * 0.2f,
-                    $"Collisions: {_totalCollisions}"
+                    $"Collisions: {_totalCollisions}",
+                    style
                 );
             }
 #endif

@@ -215,8 +215,10 @@ namespace Robotics
         private void CalculateJacobian(IKState currentState, JointInfo[] joints)
         {
             if (_jacobianMatrix.ColumnCount != joints.Length)
+            {
                 _jacobianMatrix = DenseMatrix.Build.Dense(6, joints.Length);
                 _jointDelta = Vector<double>.Build.Dense(joints.Length);
+            }
 
             for (int i = 0; i < joints.Length; i++)
             {

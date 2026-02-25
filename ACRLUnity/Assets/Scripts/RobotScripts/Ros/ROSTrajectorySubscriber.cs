@@ -436,10 +436,14 @@ namespace Robotics
             }
 
             float totalDuration = Time.time - startTime;
-            Debug.Log(
+            string settleStatus = settled ? "OK" : "timeout";
+            string logMessage =
                 $"{_logPrefix} Trajectory completed in {totalDuration:F2}s "
-                + $"(settle: {(settled ? "OK" : "timeout")}) for {_robotController.robotId}"
-            );
+                + $"(settle: {settleStatus}) for {_robotController.robotId}";
+            if (settled)
+                Debug.Log(logMessage);
+            else
+                Debug.LogWarning(logMessage);
 
             // Only sync the IK target when the control mode is ROS or Hybrid.
             // In those modes Unity IK is normally suppressed; when it re-engages it must

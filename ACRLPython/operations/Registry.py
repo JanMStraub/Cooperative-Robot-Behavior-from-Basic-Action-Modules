@@ -22,7 +22,7 @@ from .GripperOperations import (
     CONTROL_GRIPPER_OPERATION,
     RELEASE_OBJECT_OPERATION,
 )
-from .GraspOperations import GRASP_OBJECT_OPERATION
+from .GraspOperations import GRASP_OBJECT_OPERATION, GRASP_OBJECT_FOR_HANDOFF_OPERATION
 from .DefaultPositionOperation import RETURN_TO_START_POSITION_OPERATION
 from .DetectionOperations import (
     DETECT_OBJECTS_OPERATION,
@@ -136,6 +136,7 @@ class OperationRegistry:
 
             DETECT_OTHER_ROBOT_OPERATION,
             MIRROR_MOVEMENT_OPERATION,
+            GRASP_OBJECT_FOR_HANDOFF_OPERATION,
             # HAND_OVER_OBJECT_OPERATION removed - use WorkflowPatterns.HANDOFF_PATTERN
 
             # ============================================================================

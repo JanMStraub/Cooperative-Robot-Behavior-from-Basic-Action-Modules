@@ -747,9 +747,13 @@ namespace Simulation
                     Gizmos.DrawWireCube(center, size);
 
 #if UNITY_EDITOR
+                    var labelStyle = new GUIStyle();
+                    labelStyle.normal.textColor = Color.white;
+                    labelStyle.fontSize = 11;
                     UnityEditor.Handles.Label(
                         center + Vector3.up * (size.y / 2 + 0.05f),
-                        $"{region.regionName}\n{(region.IsAllocated() ? $"[{region.allocatedRobotId}]" : "[Free]")}"
+                        $"{region.regionName}\n{(region.IsAllocated() ? $"[{region.allocatedRobotId}]" : "[Free]")}",
+                        labelStyle
                     );
 #endif
                 }

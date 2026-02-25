@@ -26,11 +26,21 @@ import requests
 # Handle both direct execution and package import
 try:
     from ..rag import RAGSystem
-    from ..config.Servers import LMSTUDIO_BASE_URL, DEFAULT_LMSTUDIO_MODEL
+    from ..config.Servers import (
+        LMSTUDIO_BASE_URL,
+        DEFAULT_LMSTUDIO_MODEL,
+        DEFAULT_TEMPERATURE,
+        LLM_REQUEST_TIMEOUT,
+    )
     from ..operations.WorkflowPatterns import WorkflowPatternRegistry, WorkflowPattern
 except ImportError:
     from rag import RAGSystem
-    from config.Servers import LMSTUDIO_BASE_URL, DEFAULT_LMSTUDIO_MODEL
+    from config.Servers import (
+        LMSTUDIO_BASE_URL,
+        DEFAULT_LMSTUDIO_MODEL,
+        DEFAULT_TEMPERATURE,
+        LLM_REQUEST_TIMEOUT,
+    )
     from operations.WorkflowPatterns import WorkflowPatternRegistry, WorkflowPattern
 
 # Configure logging
@@ -150,10 +160,10 @@ class CommandParser:
                         },
                         {"role": "user", "content": prompt},
                     ],
-                    "temperature": 0.1,  # Low temperature for deterministic parsing
+                    "temperature": DEFAULT_TEMPERATURE,  # Low temperature for deterministic parsing
                     "max_tokens": 3000,  # Increased for multi-robot coordination (was 1000)
                 },
-                timeout=90,
+                timeout=LLM_REQUEST_TIMEOUT,
             )
 
             if response.status_code != 200:
@@ -292,21 +302,25 @@ class CommandParser:
 
         === GRASP OBJECT OPERATION ===
 
-        For "grab/grasp the [color] cube" commands, use grasp_object with a LITERAL object_id:
-        - Object names in Unity follow the pattern: "red_cube", "blue_cube", "green_cube"
-        - Use the literal object name directly, NOT a $variable
+        ALWAYS run detect_object_stereo BEFORE grasp_object in a separate earlier parallel_group.
+        detect_object_stereo populates the internal position database that grasp_object reads from.
+        Skipping detection causes grasp_object to fail with "Object not in WorldState".
 
-        Example for grabbing a red cube:
+        - Object names use the pattern: "red_cube", "blue_cube", "green_cube"
+        - Use the literal object name as object_id in grasp_object (NOT a $variable)
+        - detect_object_stereo color must match the object prefix: "red" for "red_cube"
+
+        Example for grabbing a red cube (CORRECT — detection always first):
         {{
         "commands": [
-            {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "red_cube"}}}}
+            {{"parallel_group": 1, "operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "capture_var": "target"}},
+            {{"parallel_group": 2, "operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "red_cube"}}}}
         ]
         }}
 
-        If you need detection first (e.g., to verify the object exists), detect THEN grasp:
+        INCORRECT — never put grasp_object without a prior detect_object_stereo:
         {{
         "commands": [
-            {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "capture_var": "target"}},
             {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "red_cube"}}}}
         ]
         }}
@@ -356,7 +370,9 @@ class CommandParser:
         if self.rag and command_text:
             try:
                 # Search for relevant operations and workflow patterns
-                rag_results = self.rag.search(command_text, top_k=8)  # Increased to get both ops and patterns
+                rag_results = self.rag.search(
+                    command_text, top_k=8
+                )  # Increased to get both ops and patterns
                 relevant_ops = set()
                 workflow_results = []
                 operation_results = []
@@ -366,7 +382,9 @@ class CommandParser:
                 # Separate workflow patterns from operations
                 if rag_results:
                     for result in rag_results:
-                        result_type = result.get("metadata", {}).get("type", "operation")
+                        result_type = result.get("metadata", {}).get(
+                            "type", "operation"
+                        )
                         if result_type == "workflow":
                             workflow_results.append(result)
                         else:
@@ -377,23 +395,31 @@ class CommandParser:
                     summary_lines.append("=== RELEVANT WORKFLOW PATTERNS ===")
                     for result in workflow_results[:3]:  # Top 3 most relevant patterns
                         pattern_name = result.get("name", "")
-                        pattern = self.workflow_registry.get_pattern_by_name(pattern_name)
+                        pattern = self.workflow_registry.get_pattern_by_name(
+                            pattern_name
+                        )
                         if pattern:
                             summary_lines.append(self._format_workflow_pattern(pattern))
                         else:
                             # Try finding by pattern_id in metadata
-                            pattern_id = result.get("metadata", {}).get("pattern_id", "")
+                            pattern_id = result.get("metadata", {}).get(
+                                "pattern_id", ""
+                            )
                             if pattern_id:
                                 pattern = self.workflow_registry.get_pattern(pattern_id)
                                 if pattern:
-                                    summary_lines.append(self._format_workflow_pattern(pattern))
+                                    summary_lines.append(
+                                        self._format_workflow_pattern(pattern)
+                                    )
 
                     summary_lines.append("\n=== MOST RELEVANT OPERATIONS ===")
 
                 # Add RAG-matched operations (most relevant)
                 if operation_results:
                     if not workflow_results:
-                        summary_lines.append("Most relevant operations for this command:")
+                        summary_lines.append(
+                            "Most relevant operations for this command:"
+                        )
                     for result in operation_results[:5]:  # Top 5 operations
                         op = self.registry.get_operation_by_name(result.get("name", ""))
                         if op:

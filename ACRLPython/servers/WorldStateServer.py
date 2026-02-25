@@ -24,6 +24,7 @@ import threading
 from typing import Dict, List, Optional
 from core.TCPServerBase import TCPServerBase, ServerConfig
 from core.UnityProtocol import UnityProtocol, MessageType
+from config.Servers import WORLD_STATE_PORT, DEFAULT_HOST, WORLDSTATE_CHECK_INTERVAL
 
 
 class WorldStateServer(TCPServerBase):
@@ -42,7 +43,7 @@ class WorldStateServer(TCPServerBase):
             config: Server configuration (default: port 5014, host 0.0.0.0)
         """
         if config is None:
-            config = ServerConfig(host="0.0.0.0", port=5014)
+            config = ServerConfig(host=DEFAULT_HOST, port=WORLD_STATE_PORT)
         super().__init__(config)
 
         # Latest world state snapshot
@@ -237,7 +238,7 @@ class WorldStateServer(TCPServerBase):
 if __name__ == "__main__":
     import time
 
-    print("Starting WorldStateServer on port 5014...")
+    print(f"Starting WorldStateServer on port {WORLD_STATE_PORT}...")
     server = WorldStateServer()
     server.start()
 
@@ -246,7 +247,7 @@ if __name__ == "__main__":
         print("Press Ctrl+C to stop.\n")
 
         while True:
-            time.sleep(5)  # Check every 5 seconds
+            time.sleep(WORLDSTATE_CHECK_INTERVAL)
 
             state = server.get_latest_state()
             if state:

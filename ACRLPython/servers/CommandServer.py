@@ -549,13 +549,27 @@ class CommandServer(TCPServerBase):
             logger.error(f"Error handling world state update: {e}", exc_info=True)
 
     def _recv_exact(self, client: socket.socket, num_bytes: int) -> Optional[bytes]:
-        """Receive exactly num_bytes."""
+        """
+        Receive exactly num_bytes, preserving partial reads across socket timeouts.
+
+        The client socket has a 1-second timeout so the outer loop can check
+        is_running(). Without this guard, a timeout mid-read discards accumulated
+        bytes and causes TCP stream desynchronization (next bytes are mis-parsed
+        as a new message header).
+        """
         data = b""
         while len(data) < num_bytes:
-            chunk = client.recv(num_bytes - len(data))
-            if not chunk:
-                return None
-            data += chunk
+            try:
+                chunk = client.recv(num_bytes - len(data))
+                if not chunk:
+                    return None
+                data += chunk
+            except socket.timeout:
+                # Timeout during partial read — check for shutdown, then retry.
+                # Do NOT discard data: partial bytes must be preserved.
+                if not self.is_running():
+                    return None
+                continue
         return data
 
     def _send_queued_results(self, client: socket.socket):

@@ -21,38 +21,10 @@ Usage:
 
 Design Notes:
     - All imports are lazy (deferred until function call)
-    - Thread-safe singleton caching where appropriate
+    - Singleton management is delegated to each underlying module
     - Clear error messages if imports fail
     - Minimal overhead for repeated calls
 """
-
-import threading
-
-# ============================================================================
-# Cached Instances (Thread-Safe Singletons)
-# ============================================================================
-
-_cached_instances = {}
-_cache_lock = threading.RLock()
-
-
-def _get_cached(key: str, factory_fn):
-    """
-    Get or create a cached singleton instance.
-
-    Args:
-        key: Cache key for the instance
-        factory_fn: Function to create the instance if not cached
-
-    Returns:
-        Cached or newly created instance
-    """
-    if key not in _cached_instances:
-        with _cache_lock:
-            if key not in _cached_instances:
-                _cached_instances[key] = factory_fn()
-    return _cached_instances[key]
-
 
 # ============================================================================
 # Server Components
@@ -89,8 +61,11 @@ def get_unified_image_storage():
     """
     Get the UnifiedImageStorage singleton instance.
 
+    UnifiedImageStorage uses __new__-based singleton enforcement, so calling
+    UnifiedImageStorage() always returns the same underlying instance.
+
     Returns:
-        UnifiedImageStorage instance for accessing camera images
+        UnifiedImageStorage singleton for accessing camera images
 
     Raises:
         ImportError: If ImageStorageCore module cannot be imported
@@ -104,9 +79,7 @@ def get_unified_image_storage():
 
         return UnifiedImageStorage()
     except ImportError as e:
-        raise ImportError(
-            f"Failed to import UnifiedImageStorage. Error: {e}"
-        )
+        raise ImportError(f"Failed to import UnifiedImageStorage. Error: {e}")
 
 
 # ============================================================================
@@ -239,27 +212,3 @@ def get_sequence_executor(**kwargs):
         raise ImportError(f"Failed to import SequenceExecutor. Error: {e}")
 
 
-# ============================================================================
-# Utility Functions
-# ============================================================================
-
-
-def clear_import_cache():
-    """
-    Clear all cached singleton instances.
-
-    Useful for testing or when reinitializing the system.
-    """
-    with _cache_lock:
-        _cached_instances.clear()
-
-
-def get_cached_instances():
-    """
-    Get all currently cached instances (for debugging).
-
-    Returns:
-        Dict of cached instances
-    """
-    with _cache_lock:
-        return dict(_cached_instances)
