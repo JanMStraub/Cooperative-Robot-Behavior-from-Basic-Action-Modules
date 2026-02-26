@@ -11,7 +11,6 @@ coordinates from stereo detection.
 
 import time
 import logging
-from typing import Optional, Dict, Any, List
 
 # Import from centralized lazy import system
 try:
@@ -26,6 +25,7 @@ try:
         OperationCategory,
         OperationComplexity,
         OperationParameter,
+        OperationRelationship,
         OperationResult,
     )
 except ImportError:
@@ -34,6 +34,7 @@ except ImportError:
         OperationCategory,
         OperationComplexity,
         OperationParameter,
+        OperationRelationship,
         OperationResult,
     )
 
@@ -132,10 +133,13 @@ def detect_field(
 
         # Run YOLO detection with field class filter
         detector = YOLODetector()
+        detector.conf_threshold = confidence_threshold
         detections = detector.detect_objects_stereo(
             imgL=left_image,
             imgR=right_image,
-            camera_config=stereo_metadata.get("camera_params") if stereo_metadata else None,
+            camera_config=(
+                stereo_metadata.get("camera_params") if stereo_metadata else None
+            ),
             filter_classes=[yolo_class],
         )
 
@@ -185,7 +189,11 @@ def detect_field(
 
         # Convert world_position tuple (x, y, z) to dict for consistent API
         if isinstance(world_position, tuple) and len(world_position) == 3:
-            center_dict = {"x": world_position[0], "y": world_position[1], "z": world_position[2]}
+            center_dict = {
+                "x": world_position[0],
+                "y": world_position[1],
+                "z": world_position[2],
+            }
         elif isinstance(world_position, dict):
             center_dict = world_position
         else:
@@ -195,7 +203,12 @@ def detect_field(
             {
                 "field_label": detected_letter,
                 "center": center_dict,  # 3D world coordinates as dict
-                "bounds": (detection.bbox_x, detection.bbox_y, detection.bbox_w, detection.bbox_h),
+                "bounds": (
+                    detection.bbox_x,
+                    detection.bbox_y,
+                    detection.bbox_w,
+                    detection.bbox_h,
+                ),
                 "confidence": detection.confidence,
                 "camera_id": camera_id,
                 "timestamp": time.time(),
@@ -248,13 +261,17 @@ def get_field_center(
     """
     try:
         # Use detect_field to get full detection
-        detection_result = detect_field(robot_id, field_label, camera_id, request_id=request_id)
+        detection_result = detect_field(
+            robot_id, field_label, camera_id, request_id=request_id
+        )
 
         if not detection_result.success:
             return detection_result  # Forward error
 
         # Extract center coordinates
-        center = detection_result.result.get("center") if detection_result.result else None
+        center = (
+            detection_result.result.get("center") if detection_result.result else None
+        )
 
         return OperationResult.success_result(
             {
@@ -343,10 +360,13 @@ def detect_all_fields(
         field_classes = [f"field{chr(ord('a') + i)}" for i in range(9)]  # fielda-fieldi
 
         detector = YOLODetector()
+        detector.conf_threshold = confidence_threshold
         detections = detector.detect_objects_stereo(
             imgL=left_image,
             imgR=right_image,
-            camera_config=stereo_metadata.get("camera_params") if stereo_metadata else None,
+            camera_config=(
+                stereo_metadata.get("camera_params") if stereo_metadata else None
+            ),
             filter_classes=field_classes,
         )
 
@@ -372,7 +392,11 @@ def detect_all_fields(
                 # Convert world_position tuple (x, y, z) to dict for consistent API
                 world_pos = detection.world_position
                 if isinstance(world_pos, tuple) and len(world_pos) == 3:
-                    center_dict = {"x": world_pos[0], "y": world_pos[1], "z": world_pos[2]}
+                    center_dict = {
+                        "x": world_pos[0],
+                        "y": world_pos[1],
+                        "z": world_pos[2],
+                    }
                 elif isinstance(world_pos, dict):
                     center_dict = world_pos
                 else:
@@ -382,7 +406,12 @@ def detect_all_fields(
                     {
                         "label": field_letter,
                         "center": center_dict,
-                        "bounds": (detection.bbox_x, detection.bbox_y, detection.bbox_w, detection.bbox_h),
+                        "bounds": (
+                            detection.bbox_x,
+                            detection.bbox_y,
+                            detection.bbox_w,
+                            detection.bbox_h,
+                        ),
                         "confidence": detection.confidence,
                     }
                 )
@@ -480,6 +509,24 @@ def create_detect_field_operation() -> BasicOperation:
             "YOLO model not loaded",
             "Stereo images unavailable",
         ],
+        relationships=OperationRelationship(
+            operation_id="perception_detect_field_004",
+            required_operations=[],
+            commonly_paired_with=[
+                "motion_move_to_coord_001",
+                "manipulation_grasp_object_001",
+                "perception_get_field_center_005",
+            ],
+            pairing_reasons={
+                "motion_move_to_coord_001": "Move robot to detected field coordinates for pick/place",
+                "manipulation_grasp_object_001": "Grasp object located at detected field position",
+                "perception_get_field_center_005": "Get precise center of detected field for navigation",
+            },
+            typical_before=[
+                "motion_move_to_coord_001",
+                "manipulation_grasp_object_001",
+            ],
+        ),
         implementation=detect_field,
     )
 
@@ -529,6 +576,19 @@ def create_get_field_center_operation() -> BasicOperation:
         average_duration_ms=100,
         success_rate=0.92,
         failure_modes=["Field not detected"],
+        relationships=OperationRelationship(
+            operation_id="perception_get_field_center_005",
+            required_operations=["perception_detect_field_004"],
+            required_reasons={
+                "perception_detect_field_004": "Field must be visible and detected before its center can be retrieved",
+            },
+            commonly_paired_with=["motion_move_to_coord_001"],
+            pairing_reasons={
+                "motion_move_to_coord_001": "Move robot to the field center for precise pick/place operations",
+            },
+            typical_after=["perception_detect_field_004"],
+            typical_before=["motion_move_to_coord_001"],
+        ),
         implementation=get_field_center,
     )
 
@@ -578,6 +638,19 @@ def create_detect_all_fields_operation() -> BasicOperation:
         average_duration_ms=150,
         success_rate=0.90,
         failure_modes=["No fields visible", "Poor lighting"],
+        relationships=OperationRelationship(
+            operation_id="perception_detect_all_fields_006",
+            required_operations=[],
+            commonly_paired_with=[
+                "perception_detect_field_004",
+                "motion_move_to_coord_001",
+            ],
+            pairing_reasons={
+                "perception_detect_field_004": "Use detect_field for precise single-field detection after scene overview",
+                "motion_move_to_coord_001": "Move to a specific field identified in the scene overview",
+            },
+            typical_before=["perception_detect_field_004", "motion_move_to_coord_001"],
+        ),
         implementation=detect_all_fields,
     )
 

@@ -7,7 +7,10 @@ including camera parameters, reconstruction settings, and server configuration.
 
 from dataclasses import dataclass
 from typing import Optional
-from config.Servers import DEFAULT_HOST, STREAMING_SERVER_PORT
+try:
+    from config.Servers import DEFAULT_HOST, STREAMING_SERVER_PORT
+except ImportError:
+    from ..config.Servers import DEFAULT_HOST, STREAMING_SERVER_PORT
 
 
 @dataclass

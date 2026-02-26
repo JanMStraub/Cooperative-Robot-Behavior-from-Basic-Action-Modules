@@ -581,25 +581,38 @@ class ROSMotionServer:
         # 8 joints including gripper_jaw1/jaw2, but MoveIt's "arm" planning group
         # only knows about the 6 arm joints. Including gripper joints makes the
         # start state "invalid" and causes OMPL to reject it.
+        #
+        # Also clamp each joint to its URDF bounds before submitting. Unity's
+        # ArticulationBody physics can overshoot by a small amount at the end of
+        # a trajectory (especially after settle timeout), causing OMPL to reject
+        # the start state entirely with "invalid bounds" even for sub-milliradian
+        # violations — which aborts planning with error code 99999.
+        _ARM_JOINT_LIMITS = {
+            "joint_1": (-2.9670597283903604, 2.9670597283903604),
+            "joint_2": (-0.7330382858376184, 1.5707963267948966),
+            "joint_3": (-1.5533430342749532, 0.9075712110370514),
+            "joint_4": (-3.141592653589793, 3.141592653589793),
+            "joint_5": (-1.8325957145940461, 1.8325957145940461),
+            "joint_6": (-3.141592653589793, 3.141592653589793),
+        }
         joint_state = self._current_joint_states.get(robot_id)
         if joint_state is not None:
-            arm_joint_names = [
-                "joint_1",
-                "joint_2",
-                "joint_3",
-                "joint_4",
-                "joint_5",
-                "joint_6",
-            ]
             filtered_js = JointState()
             filtered_js.header = joint_state.header
-            for name in arm_joint_names:
+            for name, (lower, upper) in _ARM_JOINT_LIMITS.items():
                 if name in joint_state.name:
                     idx = list(joint_state.name).index(name)
+                    raw = joint_state.position[idx]
+                    clamped = max(lower, min(upper, raw))
+                    if abs(clamped - raw) > 1e-6:
+                        logger.warning(
+                            f"{robot_id} {name} position {raw:.6f} rad out of bounds "
+                            f"[{lower:.4f}, {upper:.4f}] — clamped to {clamped:.6f} for MoveIt start state"
+                        )
                     filtered_js.name.append(name)
-                    filtered_js.position.append(joint_state.position[idx])
+                    filtered_js.position.append(clamped)
                     if joint_state.velocity:
-                        filtered_js.velocity.append(joint_state.velocity[idx])
+                        filtered_js.velocity.append(0.0)  # zero velocity at start
 
             start_state = RobotState()
             start_state.joint_state = filtered_js

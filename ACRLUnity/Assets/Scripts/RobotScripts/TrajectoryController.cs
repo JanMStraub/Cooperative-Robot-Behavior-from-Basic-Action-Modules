@@ -72,6 +72,9 @@ namespace Robotics
             // Only recompute if time has changed (i.e., new FixedUpdate frame)
             if (Mathf.Abs(currentTime - _lastUpdateTime) > 0.001f)
             {
+                if (path == null || velocityProfile == null)
+                    return (Vector3.zero, Vector3.zero, Vector3.zero);
+
                 _lastUpdateTime = currentTime;
 
                 float distance = CalculateDistanceFromTime(currentTime, velocityProfile);
@@ -95,7 +98,8 @@ namespace Robotics
                 _cachedTargetAcceleration = GetAccelerationFromProfile(
                     velocityProfile,
                     currentTime,
-                    distance
+                    distance,
+                    direction
                 );
             }
 
@@ -214,7 +218,8 @@ namespace Robotics
         private Vector3 GetAccelerationFromProfile(
             VelocityProfile profile,
             float time,
-            float distance
+            float distance,
+            Vector3 direction
         )
         {
             if (profile == null)
@@ -234,7 +239,7 @@ namespace Robotics
 
             accelScalar = Mathf.Clamp(accelScalar, -_maxAcceleration, _maxAcceleration);
 
-            return Vector3.zero;
+            return direction * accelScalar;
         }
 
         /// <summary>

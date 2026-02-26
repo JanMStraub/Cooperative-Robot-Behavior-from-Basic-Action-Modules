@@ -15,6 +15,7 @@ Checks performed:
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, field
+
 try:
     from config.Robot import (
         ROBOT_BASE_POSITIONS,
@@ -178,9 +179,7 @@ class CoordinationVerifier:
         result.checked_robots.append(robot_id)
 
         # Get all other robots in system
-        other_robots = [
-            rid for rid in ROBOT_BASE_POSITIONS.keys() if rid != robot_id
-        ]
+        other_robots = [rid for rid in ROBOT_BASE_POSITIONS.keys() if rid != robot_id]
 
         # Check 1: Path collision with other robots
         if operation_category == OperationCategory.NAVIGATION:
@@ -465,7 +464,7 @@ class CoordinationVerifier:
             # Potential deadlock: this robot going to other's workspace,
             # other robot going to this robot's workspace
             if (
-                target_workspace == other_state.target_position
+                target_workspace == other_target_workspace
                 and other_target_workspace == robot_current_workspace
             ):
                 return CoordinationIssue(

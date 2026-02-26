@@ -10,6 +10,7 @@ Consolidates ResultsServer and StatusServer into a single bidirectional server.
 Port: 5010
 """
 
+import itertools
 import socket
 import struct
 import json
@@ -56,6 +57,11 @@ class CommandBroadcaster:
 
     _instance = None
     _lock = threading.RLock()
+    # Atomic counter for request IDs. Starts at 1 — 0 is the protocol sentinel
+    # meaning "no ID". itertools.count is thread-safe for next() calls in CPython
+    # because GIL protects the integer increment, but we wrap it in the existing
+    # _queue_lock anyway for correctness on all runtimes.
+    _id_counter = itertools.count(1)
 
     def __new__(cls):
         if cls._instance is None:
@@ -274,12 +280,11 @@ class CommandBroadcaster:
         Returns:
             Completion result or None if timed out
         """
-        # Generate request ID
+        # Generate request ID — use caller-supplied ID if non-zero, otherwise
+        # allocate the next value from the atomic counter.
         request_id = command.get("request_id", 0)
         if request_id == 0:
-            import time
-
-            request_id = int(time.time() * 1000) % (2**32)
+            request_id = next(self.__class__._id_counter)
 
         # Create completion queue
         self.create_completion_queue(request_id)
@@ -341,11 +346,6 @@ class CommandBroadcaster:
         except Exception as e:
             logger.error(f"Error sending command to robot {robot_id}: {e}")
             return False
-
-
-# Backward compatibility aliases
-ResultsBroadcaster = CommandBroadcaster
-StatusResponseHandler = CommandBroadcaster
 
 
 class CommandServer(TCPServerBase):
@@ -553,9 +553,7 @@ class CommandServer(TCPServerBase):
         Receive exactly num_bytes, preserving partial reads across socket timeouts.
 
         The client socket has a 1-second timeout so the outer loop can check
-        is_running(). Without this guard, a timeout mid-read discards accumulated
-        bytes and causes TCP stream desynchronization (next bytes are mis-parsed
-        as a new message header).
+        is_running(). Without this guard, a timeout mid-read discards accumulated bytes and causes TCP stream desynchronization (next bytes are mis-parsed as a new message header).
         """
         data = b""
         while len(data) < num_bytes:

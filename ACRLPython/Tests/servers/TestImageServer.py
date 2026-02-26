@@ -359,9 +359,10 @@ class TestConcurrentAccess:
         for t in threads:
             t.join()
 
-        # All images should be stored
+        # Images may be evicted due to MAX_STORED_IMAGES limit (20 images)
         camera_ids = image_storage.get_all_camera_ids()
-        assert len(camera_ids) == num_threads * images_per_thread
+        expected = min(num_threads * images_per_thread, 20)
+        assert len(camera_ids) == expected
 
     def test_concurrent_read_write(self, image_storage, sample_image):
         """Test concurrent reads and writes"""

@@ -399,21 +399,3 @@ class TestGlobalRegistry:
         ops = registry.get_all_operations()
         assert len(ops) > 0
 
-
-# ============================================================================
-# Test Class: Backward Compatibility
-# ============================================================================
-
-class TestRegistryBackwardCompatibility:
-    """Test backward compatibility aliases."""
-
-    def test_detect_object_alias(self):
-        """Test that old detect_object operation ID maps to unified operation."""
-        registry = OperationRegistry()
-
-        # Old alias should map to new unified operation
-        old_op = registry.get_operation("perception_detect_object_001")
-        new_op = registry.get_operation_by_name("detect_object_stereo")
-
-        assert old_op is not None
-        assert old_op is new_op

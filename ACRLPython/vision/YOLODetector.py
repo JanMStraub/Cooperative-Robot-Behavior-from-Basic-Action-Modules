@@ -108,7 +108,7 @@ try:
     try:
         from .StereoConfig import CameraConfig, DEFAULT_CAMERA_CONFIG
     except ImportError:
-        from StereoConfig import CameraConfig, DEFAULT_CAMERA_CONFIG
+        from vision.StereoConfig import CameraConfig, DEFAULT_CAMERA_CONFIG
 
     try:
         from .DepthEstimator import (

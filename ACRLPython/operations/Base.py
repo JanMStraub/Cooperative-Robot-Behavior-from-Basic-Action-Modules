@@ -163,8 +163,7 @@ class ParameterFlow:
     Defines how data flows from one operation's output to another's input.
 
     This enables automatic parameter chaining, where the output of one operation
-    (e.g., detected object coordinates) can be used as input to another operation
-    (e.g., move_to_coordinate).
+    (e.g., detected object coordinates) can be used as input to another operation (e.g., move_to_coordinate).
 
     Attributes:
         source_operation: Operation ID that produces the output
@@ -518,25 +517,36 @@ class BasicOperation:
         return doc
 
     def to_json(self) -> str:
-        """Convert to JSON for structured storage"""
-        return json.dumps(
-            {
-                "operation_id": self.operation_id,
-                "name": self.name,
-                "category": self.category.value,
-                "complexity": self.complexity.value,
-                "description": self.description,
-                "long_description": self.long_description,
-                "usage_examples": self.usage_examples,
-                "parameters": [p.to_dict() for p in self.parameters],
-                "preconditions": self.preconditions,
-                "postconditions": self.postconditions,
-                "average_duration_ms": self.average_duration_ms,
-                "success_rate": self.success_rate,
-                "failure_modes": self.failure_modes,
-                "required_operations": self.required_operations,
-                "commonly_paired_with": self.commonly_paired_with,
-                "mutually_exclusive_with": self.mutually_exclusive_with,
-            },
-            indent=2,
-        )
+        """
+        Convert to JSON for structured storage.
+
+        Serializes the full rich OperationRelationship object when present
+        (includes required_reasons, pairing_reasons, parameter_flows, etc.).
+        Falls back to the deprecated flat lists for operations that have not
+        yet been migrated to the rich format.
+        """
+        data: Dict[str, Any] = {
+            "operation_id": self.operation_id,
+            "name": self.name,
+            "category": self.category.value,
+            "complexity": self.complexity.value,
+            "description": self.description,
+            "long_description": self.long_description,
+            "usage_examples": self.usage_examples,
+            "parameters": [p.to_dict() for p in self.parameters],
+            "preconditions": self.preconditions,
+            "postconditions": self.postconditions,
+            "average_duration_ms": self.average_duration_ms,
+            "success_rate": self.success_rate,
+            "failure_modes": self.failure_modes,
+        }
+
+        if self.relationships is not None:
+            data["relationships"] = self.relationships.to_dict()
+        else:
+            # Backward-compatible fallback for operations still on flat deprecated fields
+            data["required_operations"] = self.required_operations
+            data["commonly_paired_with"] = self.commonly_paired_with
+            data["mutually_exclusive_with"] = self.mutually_exclusive_with
+
+        return json.dumps(data, indent=2)

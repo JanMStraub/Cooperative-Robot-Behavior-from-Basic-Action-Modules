@@ -452,18 +452,26 @@ class SharedVisionState:
 # ===========================
 
 _shared_vision_state: Optional[SharedVisionState] = None
+_shared_vision_state_lock = threading.Lock()
 
 
 def get_shared_vision_state() -> SharedVisionState:
     """
-    Get singleton SharedVisionState instance.
+    Get singleton SharedVisionState instance (thread-safe).
+
+    Uses double-checked locking to prevent duplicate initialization when
+    multiple threads call this function simultaneously during startup.
 
     Returns:
         SharedVisionState singleton
     """
     global _shared_vision_state
     if _shared_vision_state is None:
-        _shared_vision_state = SharedVisionState(claim_timeout=OBJECT_CLAIM_TIMEOUT)
+        with _shared_vision_state_lock:
+            if _shared_vision_state is None:
+                _shared_vision_state = SharedVisionState(
+                    claim_timeout=OBJECT_CLAIM_TIMEOUT
+                )
     return _shared_vision_state
 
 

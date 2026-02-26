@@ -54,11 +54,13 @@ class TestFieldPickAndPlace(unittest.TestCase):
         # Mock stereo image storage
         mock_storage_instance = MagicMock()
         mock_image_storage.return_value = mock_storage_instance
-        mock_storage_instance.get_latest_stereo_image.return_value = {
-            "left_image": MagicMock(),
-            "right_image": MagicMock(),
-            "camera_params": {},
-        }
+        mock_storage_instance.get_latest_stereo_image.return_value = (
+            MagicMock(),
+            MagicMock(),
+            "",
+            0.0,
+            {"camera_params": {}},
+        )
 
         # Mock YOLO detector for field detection
         mock_yolo_instance = MagicMock()
@@ -67,6 +69,7 @@ class TestFieldPickAndPlace(unittest.TestCase):
         # Mock field D detection
         mock_detection_d = MagicMock()
         mock_detection_d.class_name = "fieldd"
+        mock_detection_d.color = "fieldd"
         mock_detection_d.world_position = {"x": 0.2, "y": -0.1, "z": 0.0}
         mock_detection_d.bbox = {"x": 100, "y": 100, "w": 80, "h": 80}
         mock_detection_d.confidence = 0.95
@@ -74,6 +77,7 @@ class TestFieldPickAndPlace(unittest.TestCase):
         # Mock field E detection
         mock_detection_e = MagicMock()
         mock_detection_e.class_name = "fielde"
+        mock_detection_e.color = "fielde"
         mock_detection_e.world_position = {"x": 0.3, "y": 0.1, "z": 0.0}
         mock_detection_e.bbox = {"x": 200, "y": 100, "w": 80, "h": 80}
         mock_detection_e.confidence = 0.93
@@ -191,11 +195,13 @@ class TestFieldPickAndPlace(unittest.TestCase):
         # Mock stereo image storage
         mock_storage_instance = MagicMock()
         mock_image_storage.return_value = mock_storage_instance
-        mock_storage_instance.get_latest_stereo_image.return_value = {
-            "left_image": MagicMock(),
-            "right_image": MagicMock(),
-            "camera_params": {},
-        }
+        mock_storage_instance.get_latest_stereo_image.return_value = (
+            MagicMock(),
+            MagicMock(),
+            "",
+            0.0,
+            {"camera_params": {}},
+        )
 
         # Mock YOLO to return no detections
         mock_yolo_instance = MagicMock()

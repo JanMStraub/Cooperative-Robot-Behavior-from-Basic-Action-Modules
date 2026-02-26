@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using Configuration;
 using Robotics;
 using UnityEngine;
@@ -28,6 +27,10 @@ namespace Simulation.CoordinationStrategies
         private HashSet<string> _activeRobots = new HashSet<string>();
         private HashSet<string> _blockedRobots = new HashSet<string>();
         private float _minSafeSeparation;
+
+        // Pre-allocated GC-free buffers for hot-path operations
+        private readonly List<string> _staleRobotBuffer = new List<string>();
+        private readonly List<Vector3> _obstacleBuffer = new List<Vector3>(2);
 
         // Path replanning for collision avoidance
         private ICollisionAvoidancePlanner _collisionPlanner;
@@ -119,19 +122,31 @@ namespace Simulation.CoordinationStrategies
         }
 
         /// <summary>
-        /// Cleanup stale entries for robots that are no longer in the scene
+        /// Cleanup stale entries for robots that are no longer in the scene.
+        /// Uses pre-allocated buffer to avoid per-frame GC allocations.
         /// </summary>
         private void CleanupStaleEntries(RobotController[] robotControllers)
         {
-            HashSet<string> currentRobotIds = new HashSet<string>();
-            foreach (var controller in robotControllers)
+            _staleRobotBuffer.Clear();
+
+            // Identify stale IDs by scanning active set against the controllers array directly
+            foreach (string id in _activeRobots)
             {
-                currentRobotIds.Add(controller.robotId);
+                bool found = false;
+                for (int i = 0; i < robotControllers.Length; i++)
+                {
+                    if (robotControllers[i].robotId == id)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                    _staleRobotBuffer.Add(id);
             }
 
-            // Remove entries for robots that no longer exist
-            var staleRobots = _activeRobots.Where(id => !currentRobotIds.Contains(id)).ToList();
-            foreach (var robotId in staleRobots)
+            // Remove stale entries
+            foreach (string robotId in _staleRobotBuffer)
             {
                 _activeRobots.Remove(robotId);
                 _plannedTargets.Remove(robotId);
@@ -207,12 +222,15 @@ namespace Simulation.CoordinationStrategies
                     $"{LOG_PREFIX} Collision detected: {robot1.robotId} and {robot2.robotId} targeting same location (distance: {targetDistance:F3}m)"
                 );
 
+                _obstacleBuffer.Clear();
+                _obstacleBuffer.Add(highPriorityCurrent);
+                _obstacleBuffer.Add(highPriorityTarget);
                 if (
                     AttemptReplanning(
                         lowPriorityRobot,
                         lowPriorityCurrent,
                         lowPriorityTarget,
-                        new List<Vector3> { highPriorityCurrent, highPriorityTarget }
+                        _obstacleBuffer
                     )
                 )
                 {
@@ -245,12 +263,15 @@ namespace Simulation.CoordinationStrategies
                     $"{LOG_PREFIX} Path collision detected between {robot1.robotId} and {robot2.robotId}"
                 );
 
+                _obstacleBuffer.Clear();
+                _obstacleBuffer.Add(highPriorityCurrent);
+                _obstacleBuffer.Add(highPriorityTarget);
                 if (
                     AttemptReplanning(
                         lowPriorityRobot,
                         lowPriorityCurrent,
                         lowPriorityTarget,
-                        new List<Vector3> { highPriorityCurrent, highPriorityTarget }
+                        _obstacleBuffer
                     )
                 )
                 {
@@ -512,7 +533,10 @@ namespace Simulation.CoordinationStrategies
                 return "None";
 
             if (_activeRobots.Count == 1)
-                return _activeRobots.First();
+            {
+                foreach (string id in _activeRobots)
+                    return id;
+            }
 
             return string.Join(", ", _activeRobots);
         }

@@ -18,10 +18,19 @@ import logging
 import threading
 from typing import Dict, Optional, Tuple, Any
 from dataclasses import dataclass, field
+
 try:
-    from config.Robot import WORKSPACE_REGIONS, ROBOT_STATUS_CACHE_TTL, WORKSPACE_ALLOCATION_TIMEOUT
+    from config.Robot import (
+        WORKSPACE_REGIONS,
+        ROBOT_STATUS_CACHE_TTL,
+        WORKSPACE_ALLOCATION_TIMEOUT,
+    )
 except ImportError:
-    from ..config.Robot import WORKSPACE_REGIONS, ROBOT_STATUS_CACHE_TTL, WORKSPACE_ALLOCATION_TIMEOUT
+    from ..config.Robot import (
+        WORKSPACE_REGIONS,
+        ROBOT_STATUS_CACHE_TTL,
+        WORKSPACE_ALLOCATION_TIMEOUT,
+    )
 from .StatusOperations import check_robot_status
 
 # Configure logging
@@ -175,12 +184,12 @@ class WorldState:
     def __init__(self):
         """Initialize world state manager."""
         # Check if already initialized (instance variable, not class variable)
-        if hasattr(self, '_initialized') and self._initialized:
+        if hasattr(self, "_initialized") and self._initialized:
             return
 
         with self._lock:
             # Double-check after acquiring lock
-            if hasattr(self, '_initialized') and self._initialized:
+            if hasattr(self, "_initialized") and self._initialized:
                 return
 
             # Robot state cache
@@ -302,7 +311,9 @@ class WorldState:
                 robot_state = self._robot_states[robot_id]
                 age = time.time() - robot_state.timestamp
                 if robot_state.position is not None and age < max_age:
-                    logger.debug(f"Using fresh position for {robot_id} (age: {age:.3f}s)")
+                    logger.debug(
+                        f"Using fresh position for {robot_id} (age: {age:.3f}s)"
+                    )
                     return robot_state.position
 
         # Force refresh if cached data is stale
@@ -477,9 +488,11 @@ class WorldState:
             if obj is None:
                 return None
             return {
-                "position": {"x": obj.position[0], "y": obj.position[1], "z": obj.position[2]}
-                if obj.position
-                else None,
+                "position": (
+                    {"x": obj.position[0], "y": obj.position[1], "z": obj.position[2]}
+                    if obj.position
+                    else None
+                ),
                 "color": obj.color,
                 "object_type": obj.object_type,
                 "is_graspable": obj.is_graspable,
@@ -646,8 +659,13 @@ class WorldState:
             self._cleanup_stale_allocations()
 
             current_allocation = self._workspace_allocations[region]
-            if current_allocation is not None and current_allocation.robot_id != robot_id:
-                logger.warning(f"Region {region} already allocated to {current_allocation.robot_id}")
+            if (
+                current_allocation is not None
+                and current_allocation.robot_id != robot_id
+            ):
+                logger.warning(
+                    f"Region {region} already allocated to {current_allocation.robot_id}"
+                )
                 return False
 
             self._workspace_allocations[region] = WorkspaceAllocation(
@@ -696,6 +714,7 @@ class WorldState:
             Robot ID or None if not allocated
         """
         with self._lock:
+            self._cleanup_stale_allocations()
             allocation = self._workspace_allocations.get(region)
             return allocation.robot_id if allocation else None
 

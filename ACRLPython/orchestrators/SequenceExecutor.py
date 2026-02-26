@@ -18,23 +18,24 @@ from typing import Dict, Any, List, Optional, Callable
 import time
 import logging
 import threading
+from concurrent.futures import (
+    ThreadPoolExecutor,
+    as_completed,
+    TimeoutError as FuturesTimeoutError,
+)
 
 # Lazy imports to avoid circular dependency
 # Handle both direct execution and package import
 try:
-    # from ..operations.Registry import get_global_registry
     from ..operations.Base import OperationCategory
     from ..operations.Verification import OperationVerifier
     from ..operations.CoordinationVerifier import CoordinationVerifier
     from ..core.Imports import get_world_state
-    # from ..servers.CommandServer import get_command_broadcaster
 except ImportError:
-    # from operations.Registry import get_global_registry
     from operations.Base import OperationCategory
     from operations.Verification import OperationVerifier
     from operations.CoordinationVerifier import CoordinationVerifier
     from core.Imports import get_world_state
-    # from servers.CommandServer import get_command_broadcaster
 
 # Configure logging with safe handler for background threads
 logger = logging.getLogger(__name__)
@@ -217,6 +218,7 @@ class SequenceExecutor:
     def _get_command_broadcaster(self):
         """Get command broadcaster using centralized lazy import system"""
         from core.Imports import get_command_broadcaster
+
         return get_command_broadcaster()
 
     @classmethod
@@ -448,7 +450,6 @@ class SequenceExecutor:
             )
 
             # Execute all commands in this group concurrently
-            threads = []
             thread_results = {}
             result_lock = threading.Lock()
 
@@ -483,22 +484,48 @@ class SequenceExecutor:
                 with result_lock:
                     thread_results[index] = (result_entry, cmd_result, capture_var)
 
-            # Launch all threads for this group
-            for idx, cmd in group_commands:
-                thread = threading.Thread(
-                    target=execute_command_thread, args=(idx, cmd), daemon=True
-                )
-                threads.append(thread)
-                thread.start()
-
-            # Wait for all threads in this group to complete
-            # Track which threads actually completed vs timed out
-            thread_completed = {}
-            for i, thread in enumerate(threads):
-                thread.join(timeout=timeout + 5.0)  # Add 5s buffer
-                thread_completed[i] = not thread.is_alive()
-                if thread.is_alive():
-                    logger.warning(f"[Group {group_num}] Thread {i} still running after join timeout")
+            # Launch all futures for this group via ThreadPoolExecutor.
+            # Using as_completed with an overall timeout so that unhandled
+            # exceptions inside execute_command_thread propagate via
+            # future.result() instead of silently disappearing.
+            with ThreadPoolExecutor(max_workers=len(group_commands)) as pool:
+                future_to_idx = {
+                    pool.submit(execute_command_thread, idx, cmd): idx
+                    for idx, cmd in group_commands
+                }
+                try:
+                    for future in as_completed(future_to_idx, timeout=timeout + 5.0):
+                        idx = future_to_idx[future]
+                        try:
+                            future.result()  # re-raises any exception from the worker
+                        except Exception as exc:
+                            logger.error(
+                                f"[Group {group_num}] Command {idx} raised an exception: {exc}"
+                            )
+                            # Write an error result so the group-result loop sees it
+                            cmd = dict(group_commands)[idx]
+                            with result_lock:
+                                thread_results[idx] = (
+                                    {
+                                        "index": idx,
+                                        "operation": cmd.get("operation", ""),
+                                        "success": False,
+                                        "result": None,
+                                        "error": str(exc),
+                                        "duration_ms": 0,
+                                        "parallel_group": group_num,
+                                    },
+                                    {"success": False, "error": str(exc)},
+                                    cmd.get("capture_var"),
+                                )
+                except FuturesTimeoutError:
+                    # One or more futures did not finish within timeout+5s;
+                    # remaining futures are cancelled automatically by the
+                    # context-manager exit.  The results loop below will
+                    # produce a timeout error for any idx not in thread_results.
+                    logger.warning(
+                        f"[Group {group_num}] as_completed timed out; some commands may not have finished"
+                    )
 
             # Process results from this group
             group_success = True
@@ -588,7 +615,9 @@ class SequenceExecutor:
             else:
                 self._ops_failed += 1
             # Welford online mean: avg += (x - avg) / n
-            self._avg_duration_ms += (duration_ms - self._avg_duration_ms) / self._ops_executed
+            self._avg_duration_ms += (
+                duration_ms - self._avg_duration_ms
+            ) / self._ops_executed
 
     def get_metrics(self) -> Dict[str, Any]:
         """
@@ -644,7 +673,11 @@ class SequenceExecutor:
             self._get_command_broadcaster().create_completion_queue(request_id)
             logger.debug(f"Created completion queue for request_id {request_id}")
 
-        _result: Dict[str, Any] = {"success": False, "result": None, "error": "internal"}
+        _result: Dict[str, Any] = {
+            "success": False,
+            "result": None,
+            "error": "internal",
+        }
         try:
             # Get operation definition for verification
             op_def = self.registry.get_operation_by_name(operation)
@@ -683,9 +716,15 @@ class SequenceExecutor:
             if "use_ros" not in params_with_request_id and op_def is not None:
                 try:
                     from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+
                     if ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid"):
                         import inspect
+
                         impl = op_def.implementation
+                        if impl is None:
+                            raise RuntimeError(
+                                f"Operation '{op_def.name}' has no implementation"
+                            )
                         sig = inspect.signature(impl)
                         if "use_ros" in sig.parameters or any(
                             p.kind == inspect.Parameter.VAR_KEYWORD
@@ -739,7 +778,8 @@ class SequenceExecutor:
             # Skip completion waiting for operations that executed via ROS
             # (Unity never received the command, so it won't send completion)
             if op_result.result and op_result.result.get("status") in (
-                "ros_executed", "ros_command_sent"
+                "ros_executed",
+                "ros_command_sent",
             ):
                 logger.debug(
                     f"Skipping completion wait for ROS-executed operation: {operation}"
@@ -749,7 +789,10 @@ class SequenceExecutor:
 
             # Skip completion waiting for operations that execute in Python only
             op_def = self.registry.get_operation_by_name(operation)
-            if op_def and op_def.category in (OperationCategory.PERCEPTION, OperationCategory.SYNC):
+            if op_def and op_def.category in (
+                OperationCategory.PERCEPTION,
+                OperationCategory.SYNC,
+            ):
                 logger.debug(
                     f"Skipping completion wait for {op_def.category.value} operation: {operation}"
                 )
@@ -803,7 +846,7 @@ class SequenceExecutor:
 
         # Adaptive polling parameters
         min_poll_interval = 0.05  # Start at 50ms
-        max_poll_interval = 0.5   # Max 500ms
+        max_poll_interval = 0.5  # Max 500ms
         poll_increase_rate = 1.1  # Increase by 10% each iteration
         current_poll_interval = min_poll_interval
 
@@ -1098,7 +1141,9 @@ class SequenceExecutor:
                             f"Auto-injected {target_param}='{var_value['color']}' (extracted from detection result ${source_var_name})"
                         )
                     else:
-                        logger.warning(f"Detection result missing 'color' field, cannot auto-inject {target_param}")
+                        logger.warning(
+                            f"Detection result missing 'color' field, cannot auto-inject {target_param}"
+                        )
                 else:
                     enhanced_params[target_param] = var_value
                     logger.info(
@@ -1165,9 +1210,13 @@ class SequenceExecutor:
                             # Detection results have 'color' field (e.g., "blue_cube")
                             if "color" in var_value:
                                 resolved[key] = var_value["color"]
-                                logger.info(f"Extracted object_id='{var_value['color']}' from detection result")
+                                logger.info(
+                                    f"Extracted object_id='{var_value['color']}' from detection result"
+                                )
                             else:
-                                logger.warning(f"Detection result missing 'color' field, cannot extract object_id")
+                                logger.warning(
+                                    f"Detection result missing 'color' field, cannot extract object_id"
+                                )
                                 resolved[key] = value
                         else:
                             resolved[key] = var_value

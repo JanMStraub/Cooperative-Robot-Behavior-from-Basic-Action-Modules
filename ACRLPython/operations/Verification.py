@@ -246,8 +246,20 @@ class OperationVerifier:
             # Parse the precondition
             parsed = PredicateParser.parse(precondition)
             if parsed is None:
-                # Not a parseable predicate - treat as informational
-                logger.debug(f"Skipping non-parseable precondition: {precondition}")
+                # Malformed predicate — log warning and record as a violation so callers
+                # are aware that a precondition was skipped rather than evaluated.
+                logger.warning(
+                    f"Skipping malformed precondition (cannot parse): '{precondition}'"
+                )
+                result.add_violation(
+                    predicate=precondition,
+                    reason="Predicate could not be parsed — verify syntax (expected: 'predicate_name(param1, ...)')",
+                    severity="warning",
+                    suggestions=[
+                        "Check precondition syntax: use predicate_name(param) format",
+                        "Verify the predicate name is registered in SpatialPredicates",
+                    ],
+                )
                 continue
 
             predicate_name, param_names = parsed
@@ -329,7 +341,8 @@ class OperationVerifier:
                 severity="error",
                 suggestions=(
                     operation_result.error.get("recovery_suggestions", [])
-                    if operation_result.error and isinstance(operation_result.error, dict)
+                    if operation_result.error
+                    and isinstance(operation_result.error, dict)
                     else []
                 ),
             )
@@ -342,8 +355,20 @@ class OperationVerifier:
             # Parse the postcondition
             parsed = PredicateParser.parse(postcondition)
             if parsed is None:
-                # Not a parseable predicate - treat as informational
-                logger.debug(f"Skipping non-parseable postcondition: {postcondition}")
+                # Malformed predicate — log warning and record as a violation so callers
+                # are aware that a postcondition was skipped rather than evaluated.
+                logger.warning(
+                    f"Skipping malformed postcondition (cannot parse): '{postcondition}'"
+                )
+                result.add_violation(
+                    predicate=postcondition,
+                    reason="Predicate could not be parsed — verify syntax (expected: 'predicate_name(param1, ...)')",
+                    severity="warning",
+                    suggestions=[
+                        "Check postcondition syntax: use predicate_name(param) format",
+                        "Verify the predicate name is registered in SpatialPredicates",
+                    ],
+                )
                 continue
 
             predicate_name, param_names = parsed

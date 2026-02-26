@@ -42,6 +42,9 @@ namespace PythonCommunication
         private SequenceResult _lastResult;
         private List<string> _recentCommands = new List<string>();
 
+        // Pre-allocated 4-byte buffer for reading response length prefix — avoids per-receive allocation
+        private readonly byte[] _lenBuffer = new byte[4];
+
         protected override string LogPrefix => "[SEQUENCE_CLIENT]";
 
         /// <summary>
@@ -223,9 +226,8 @@ namespace PythonCommunication
                 throw new System.IO.IOException($"Protocol violation: Expected RESULT, got {type}");
             }
 
-            byte[] lenBuffer = new byte[4];
-            ReadExactly(_stream, lenBuffer, 4);
-            int jsonLen = BitConverter.ToInt32(lenBuffer, 0);
+            ReadExactly(_stream, _lenBuffer, 4);
+            int jsonLen = BitConverter.ToInt32(_lenBuffer, 0);
 
             if (jsonLen <= 0 || jsonLen > CommunicationConstants.MAX_JSON_LENGTH)
             {
@@ -325,9 +327,12 @@ namespace PythonCommunication
             byte[] packet = new byte[size];
             int offset = 0;
 
-            // Header: [type:1][request_id:4] - request_id in little-endian
+            // Header: [type:1][request_id:4] — direct byte writes, zero allocation
             packet[0] = (byte)MessageType.SEQUENCE_QUERY;
-            Buffer.BlockCopy(BitConverter.GetBytes(requestId), 0, packet, 1, 4);
+            packet[1] = (byte)(requestId);
+            packet[2] = (byte)(requestId >> 8);
+            packet[3] = (byte)(requestId >> 16);
+            packet[4] = (byte)(requestId >> 24);
             offset += UnityProtocol.HEADER_SIZE;
 
             // Body: all integers in little-endian to match Python protocol
@@ -349,12 +354,16 @@ namespace PythonCommunication
         }
 
         /// <summary>
-        /// Write a 4-byte little-endian integer to buffer at offset.
+        /// Write a 4-byte little-endian integer directly into buffer at offset, then advance offset by 4.
         /// Matches Python protocol: "All integers are little-endian unsigned 32-bit".
+        /// Zero-allocation alternative to BitConverter.GetBytes(int).
         /// </summary>
         private void WriteInt32LE(byte[] buffer, ref int offset, int value)
         {
-            Buffer.BlockCopy(BitConverter.GetBytes(value), 0, buffer, offset, 4);
+            buffer[offset]     = (byte)(value);
+            buffer[offset + 1] = (byte)(value >> 8);
+            buffer[offset + 2] = (byte)(value >> 16);
+            buffer[offset + 3] = (byte)(value >> 24);
             offset += 4;
         }
 

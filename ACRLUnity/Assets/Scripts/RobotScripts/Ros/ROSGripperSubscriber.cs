@@ -196,9 +196,11 @@ namespace Robotics
                 searchOrigin = _gripperController.transform.position;
             }
 
-            // 20cm radius: finger tips are ~5cm below ee_link, cube half-height ~3cm,
-            // so worst-case cube centre is ~8cm from ee_link. 20cm gives ample margin.
-            const float searchRadius = 0.20f;
+            // 10cm radius: finger tips are ~5cm below ee_link, cube half-height ~3cm,
+            // so worst-case cube centre is ~8cm from ee_link. 10cm is tight enough to
+            // exclude adjacent cubes in dense scenes while still reliably catching the
+            // target object that the gripper has descended onto.
+            const float searchRadius = 0.10f;
             Collider[] hits = Physics.OverlapSphere(searchOrigin, searchRadius);
 
             GameObject nearest = null;

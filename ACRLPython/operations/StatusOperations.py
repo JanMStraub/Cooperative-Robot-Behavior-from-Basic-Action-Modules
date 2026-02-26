@@ -8,12 +8,14 @@ robot state without causing any movement or changes.
 
 import time
 import logging
+
 # Lazy import to avoid circular dependency with servers module
 from .Base import (
     BasicOperation,
     OperationCategory,
     OperationComplexity,
     OperationParameter,
+    OperationRelationship,
     OperationResult,
 )
 
@@ -238,11 +240,19 @@ def create_check_robot_status_operation() -> BasicOperation:
             "Invalid parameter type for 'detailed'",
         ],
         # Relationships
-        required_operations=[],  # No prerequisites
-        commonly_paired_with=[
-            "motion_move_to_coord_001",  # Check before/after movement
-        ],
-        mutually_exclusive_with=[],  # Can run anytime
+        relationships=OperationRelationship(
+            operation_id="status_check_robot_001",
+            required_operations=[],
+            commonly_paired_with=["motion_move_to_coord_001"],
+            pairing_reasons={
+                "motion_move_to_coord_001": "Verify robot is ready and not in error state before commanding movement",
+            },
+            typical_before=[
+                "motion_move_to_coord_001",
+                "manipulation_control_gripper_001",
+                "manipulation_grasp_object_001",
+            ],
+        ),
         # Implementation
         implementation=check_robot_status,
     )

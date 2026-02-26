@@ -22,6 +22,7 @@ import json
 import re
 import logging
 import requests
+import functools
 
 # Handle both direct execution and package import
 try:
@@ -63,6 +64,7 @@ class CommandParser:
         lm_studio_url: Optional[str] = None,
         model: Optional[str] = None,
         use_rag: bool = True,
+        use_cache: bool = True,
     ):
         """
         Initialize the CommandParser.
@@ -79,16 +81,31 @@ class CommandParser:
         self.model = model or DEFAULT_LMSTUDIO_MODEL
         self.registry = get_global_registry()
         self.workflow_registry = WorkflowPatternRegistry()
+        self.use_cache = use_cache
+
+        # Connection pooling for LLM requests
+        from requests.adapters import HTTPAdapter
+
+        self._session = requests.Session()
+        adapter = HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=1)
+        self._session.mount("http://", adapter)
+        self._session.mount("https://", adapter)
+
+        # Initialize LRU Cache for parsed commands
+        if self.use_cache:
+            self._parse_cache = functools.lru_cache(maxsize=128)(self._do_llm_request)
+        else:
+            self._parse_cache = self._do_llm_request
 
         # Initialize RAG system for semantic operation search
         self.rag = None
         if use_rag:
             try:
                 self.rag = RAGSystem()
-                # Always rebuild index on startup to prevent dimension mismatches
-                self.rag.index_operations(rebuild=True)
+                # Provide control over index rebuilding to speed up startups
+                self.rag.index_operations(rebuild=False)
                 logger.info(
-                    "RAG system initialized for command parsing (index rebuilt)"
+                    "RAG system initialized for command parsing (using existing index if present)"
                 )
             except Exception as e:
                 logger.warning(f"Failed to initialize RAG: {e}. Using registry only.")
@@ -148,44 +165,14 @@ class CommandParser:
         prompt = self._build_parsing_prompt(command_text, robot_id, available_ops)
 
         try:
-            # Call LM Studio
-            response = requests.post(
-                f"{self.lm_studio_url}/chat/completions",
-                json={
-                    "model": self.model,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "You are a robot command parser. Map natural language variations to valid parameter values (e.g., 'leftmost' → 'left', 'rightmost' → 'right', 'nearest' → 'closest'). Output only valid JSON.",
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    "temperature": DEFAULT_TEMPERATURE,  # Low temperature for deterministic parsing
-                    "max_tokens": 3000,  # Increased for multi-robot coordination (was 1000)
-                },
-                timeout=LLM_REQUEST_TIMEOUT,
-            )
+            # Use cached or direct request depending on initialization
+            result = self._parse_cache(prompt, command_text)
 
-            if response.status_code != 200:
-                return {
-                    "success": False,
-                    "commands": [],
-                    "error": f"LLM request failed with status {response.status_code}",
-                }
+            if not result.get("success"):
+                return result
 
-            # Extract content from response
-            result = response.json()
-            content = result["choices"][0]["message"]["content"]
-            logger.info(f"LLM response: {content}")
-
-            # Parse JSON from response
-            parsed = self._extract_json_from_response(content)
-            if not parsed:
-                return {
-                    "success": False,
-                    "commands": [],
-                    "error": f"Failed to extract JSON from LLM response: {content[:200]}",
-                }
+            parsed = result["parsed"]
+            content = result["content"]
 
             # Normalize multi-robot "plan" format to "commands" format
             if "plan" in parsed and "commands" not in parsed:
@@ -222,6 +209,69 @@ class CommandParser:
                 "commands": [],
                 "error": f"LLM parsing error: {str(e)}",
             }
+
+    def _do_llm_request(self, prompt: str, command_text: str) -> Dict[str, Any]:
+        """Actual HTTP request to LLM, separated for caching purposes."""
+        try:
+            response = self._session.post(
+                f"{self.lm_studio_url}/chat/completions",
+                json={
+                    "model": self.model,
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are a robot command parser. Map natural language variations to valid parameter values (e.g., 'leftmost' → 'left', 'rightmost' → 'right', 'nearest' → 'closest'). Output only valid JSON.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": DEFAULT_TEMPERATURE,  # Low temperature for deterministic parsing
+                    "max_tokens": 3000,  # Increased for multi-robot coordination (was 1000)
+                },
+                timeout=LLM_REQUEST_TIMEOUT,
+            )
+
+            if response.status_code != 200:
+                return {
+                    "success": False,
+                    "parsed": None,
+                    "content": None,
+                    "error": f"LLM request failed with status {response.status_code}",
+                }
+
+            # Extract content from response
+            result = response.json()
+            content = result["choices"][0]["message"]["content"]
+            logger.info(f"LLM response: {content}")
+
+            # Parse JSON from response
+            parsed = self._extract_json_from_response(content)
+
+            # Catch array responses
+            if isinstance(parsed, list):
+                logger.info(f"LLM returned an array directly, wrapping in dict")
+                parsed = {"commands": parsed}
+
+            if not parsed:
+                return {
+                    "success": False,
+                    "parsed": None,
+                    "content": content,
+                    "error": f"Failed to extract JSON from LLM response: {content[:200]}",
+                }
+
+            return {
+                "success": True,
+                "parsed": parsed,
+                "content": content,
+                "error": None,
+            }
+
+        except requests.exceptions.Timeout:
+            raise
+        except requests.exceptions.ConnectionError:
+            raise
+        except Exception as e:
+            raise
 
     def _build_parsing_prompt(
         self, command_text: str, robot_id: str, available_ops: str
@@ -516,7 +566,7 @@ Examples:
                 )
 
         # Try to find JSON object in text
-        json_match = re.search(r"\{.*\}", content, re.DOTALL)
+        json_match = re.search(r"\{.*?\}", content, re.DOTALL)
         if json_match:
             json_str = json_match.group(0)
             try:
@@ -620,13 +670,16 @@ Examples:
 
             # Check variable usage in parameters
             for key, val in params.items():
-                if isinstance(val, str) and val.startswith("$"):
-                    # Extract variable name (handle both "$target" and "$target.x" formats)
-                    var_name = val[1:].split(".")[0]
-                    if var_name not in defined_vars:
-                        errors.append(
-                            f"Variable ${var_name} used in {operation}.{key} before definition"
-                        )
+                if isinstance(val, str) and "$" in val:
+                    # Find all variables in the string, which might be expressions like "$target.x + 0.5"
+                    # Capture groups will only pick up the variable name [a-zA-Z0-9_]+
+                    matches = re.finditer(r"\$([a-zA-Z0-9_]+)", val)
+                    for match in matches:
+                        var_name = match.group(1)
+                        if var_name not in defined_vars:
+                            errors.append(
+                                f"Variable ${var_name} used in {operation}.{key} before definition"
+                            )
 
         # Check all waited signals are defined
         missing = expected_signals - defined_signals

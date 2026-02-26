@@ -199,8 +199,9 @@ namespace Configuration
         /// <returns>Preference weight (0 if disabled)</returns>
         public float GetApproachWeight(GraspApproach approach)
         {
-            foreach (var setting in enabledApproaches)
+            for (int i = 0; i < enabledApproaches.Length; i++)
             {
+                GraspApproachSettings setting = enabledApproaches[i];
                 if (setting.approachType == approach && setting.enabled)
                 {
                     return setting.preferenceWeight;
@@ -216,11 +217,11 @@ namespace Configuration
         /// <returns>True if enabled</returns>
         public bool IsApproachEnabled(GraspApproach approach)
         {
-            foreach (var setting in enabledApproaches)
+            for (int i = 0; i < enabledApproaches.Length; i++)
             {
-                if (setting.approachType == approach)
+                if (enabledApproaches[i].approachType == approach)
                 {
-                    return setting.enabled;
+                    return enabledApproaches[i].enabled;
                 }
             }
             return false;
@@ -249,6 +250,7 @@ namespace Configuration
             return avgSize * retreatDistanceFactor;
         }
 
+#if UNITY_EDITOR
         /// <summary>
         /// Validate configuration values to ensure consistency.
         /// </summary>
@@ -325,5 +327,6 @@ namespace Configuration
                 }
             }
         }
+#endif
     }
 }

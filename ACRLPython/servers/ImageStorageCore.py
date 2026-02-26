@@ -36,8 +36,16 @@ Consolidation:
 import threading
 import time
 import logging
+from collections import OrderedDict
 from typing import Optional, Tuple, List, Dict
 import numpy as np
+
+# Maximum number of camera entries retained in each storage dict.
+# Oldest entries (by insertion order) are evicted when this limit is exceeded.
+# With 2-4 physical cameras this cap is never reached in normal use, but it
+# prevents unbounded growth if Unity keeps spawning new camera IDs (e.g. in
+# scene reloads or stress tests).
+MAX_STORED_IMAGES = 20
 
 # Import config
 try:
@@ -69,18 +77,27 @@ class UnifiedImageStorage:
 
     def _init_storage(self):
         """Initialize storage structures."""
-        self._single_images: Dict[str, Tuple[np.ndarray, float, str]] = {}
+        # OrderedDict preserves insertion order so popitem(last=False) evicts the
+        # oldest camera ID when the cap is reached.
+        self._single_images: OrderedDict[str, Tuple[np.ndarray, float, str]] = (
+            OrderedDict()
+        )
         # Stereo: (imgL, imgR, prompt, timestamp, metadata)
-        self._stereo_images: Dict[
+        self._stereo_images: OrderedDict[
             str, Tuple[np.ndarray, np.ndarray, str, float, dict]
-        ] = {}
+        ] = OrderedDict()
         self._data_lock = threading.Lock()
 
     # Single camera methods
     def store_single_image(self, camera_id: str, image: np.ndarray, prompt: str = ""):
-        """Store a single camera image."""
+        """Store a single camera image, evicting the oldest entry if the cap is reached."""
         with self._data_lock:
+            # Re-inserting an existing key moves it to the end in OrderedDict,
+            # keeping its position as "most recently used".
+            self._single_images.pop(camera_id, None)
             self._single_images[camera_id] = (image, time.time(), prompt)
+            while len(self._single_images) > MAX_STORED_IMAGES:
+                self._single_images.popitem(last=False)
 
     def get_single_image(self, camera_id: str) -> Optional[np.ndarray]:
         """Get the latest single camera image."""
@@ -123,8 +140,9 @@ class UnifiedImageStorage:
         prompt: str = "",
         metadata: Optional[dict] = None,
     ):
-        """Store a stereo image pair with optional metadata."""
+        """Store a stereo image pair with optional metadata, evicting oldest if cap is reached."""
         with self._data_lock:
+            self._stereo_images.pop(camera_pair_id, None)
             self._stereo_images[camera_pair_id] = (
                 imgL,
                 imgR,
@@ -132,6 +150,8 @@ class UnifiedImageStorage:
                 time.time(),
                 metadata or {},
             )
+            while len(self._stereo_images) > MAX_STORED_IMAGES:
+                self._stereo_images.popitem(last=False)
 
             if not ENABLE_VISION_STREAMING:
                 logger.info(

@@ -137,6 +137,13 @@ namespace PythonCommunication
         private Dictionary<string, ObjectStateData> _detectedObjects =
             new Dictionary<string, ObjectStateData>();
 
+        // Pre-allocated collections to avoid per-frame GC allocations
+        private readonly List<RobotStateData> _robotStates = new List<RobotStateData>();
+        private readonly List<ObjectStateData> _objectStates = new List<ObjectStateData>();
+
+        // Pre-allocated joint angle buffer sized for AR4 (6 joints); grows if needed
+        private float[] _jointAnglesCache = new float[6];
+
         #region Unity Lifecycle
 
         /// <summary>
@@ -216,10 +223,19 @@ namespace PythonCommunication
         {
             try
             {
+                // Reuse pre-allocated lists — clear in-place instead of allocating new ones
+                _robotStates.Clear();
+                _objectStates.Clear();
+
+                if (_publishRobots)
+                    GatherRobotStates(_robotStates);
+                if (_publishObjects)
+                    GatherObjectStates(_objectStates);
+
                 var update = new WorldStateUpdate
                 {
-                    robots = _publishRobots ? GatherRobotStates() : new List<RobotStateData>(),
-                    objects = _publishObjects ? GatherObjectStates() : new List<ObjectStateData>(),
+                    robots = _robotStates,
+                    objects = _objectStates,
                     timestamp = Time.time,
                 };
 
@@ -265,12 +281,10 @@ namespace PythonCommunication
         }
 
         /// <summary>
-        /// Gather current state of all robots
+        /// Gather current state of all robots into the supplied list (cleared by caller).
         /// </summary>
-        private List<RobotStateData> GatherRobotStates()
+        private void GatherRobotStates(List<RobotStateData> robotStates)
         {
-            var robotStates = new List<RobotStateData>();
-
             foreach (var kvp in _robotManager.RobotInstances)
             {
                 string robotId = kvp.Key;
@@ -301,20 +315,13 @@ namespace PythonCommunication
                     robotInstance.robotGameObject.GetComponentInChildren<GripperController>();
                 if (gripperController != null)
                 {
-                    if (gripperController.targetPosition > 0.9f)
-                    {
-                        gripperState = "open";
-                    }
-                    else
-                    {
-                        gripperState = "closed";
-                    }
+                    gripperState = gripperController.targetPosition > 0.9f ? "open" : "closed";
                 }
 
-                // Get joint angles
+                // Get joint angles into pre-allocated cache (grows if robot has more than 6 joints)
                 float[] jointAngles = GatherJointAngles(controller);
 
-                // Get ROS control mode if available
+                // Get ROS control mode if available — ToString().ToLower() only called when mode is present
                 string controlMode = null;
                 var rosControlMode = controller.GetComponent<ROSControlModeManager>();
                 if (rosControlMode != null)
@@ -337,38 +344,39 @@ namespace PythonCommunication
 
                 robotStates.Add(robotState);
             }
-
-            return robotStates;
         }
 
         /// <summary>
-        /// Gather joint angles from robot controller
+        /// Gather joint angles from robot controller into the pre-allocated cache array.
+        /// Returns the cached array (resized only when joint count exceeds current capacity).
         /// </summary>
         private float[] GatherJointAngles(RobotController controller)
         {
             if (controller.robotJoints == null)
                 return new float[0];
 
-            float[] jointAngles = new float[controller.robotJoints.Length];
-            for (int i = 0; i < controller.robotJoints.Length; i++)
+            int count = controller.robotJoints.Length;
+
+            // Grow the cache only when needed — avoids allocation in the common case
+            if (_jointAnglesCache.Length < count)
+                _jointAnglesCache = new float[count];
+
+            for (int i = 0; i < count; i++)
             {
                 var joint = controller.robotJoints[i];
-                if (joint != null && joint.jointType == ArticulationJointType.RevoluteJoint)
-                {
-                    jointAngles[i] = joint.jointPosition[0];
-                }
+                _jointAnglesCache[i] = (joint != null && joint.jointType == ArticulationJointType.RevoluteJoint)
+                    ? joint.jointPosition[0]
+                    : 0f;
             }
 
-            return jointAngles;
+            return _jointAnglesCache;
         }
 
         /// <summary>
-        /// Gather current state of all tracked objects
+        /// Gather current state of all tracked objects into the supplied list (cleared by caller).
         /// </summary>
-        private List<ObjectStateData> GatherObjectStates()
+        private void GatherObjectStates(List<ObjectStateData> objectStates)
         {
-            var objectStates = new List<ObjectStateData>();
-
             // Add tracked GameObjects from scene
             foreach (var obj in _trackedObjects)
             {
@@ -392,38 +400,36 @@ namespace PythonCommunication
             {
                 objectStates.Add(kvp.Value);
             }
-
-            return objectStates;
         }
 
         /// <summary>
-        /// Infer object color from GameObject name
+        /// Infer object color from GameObject name.
+        /// Uses IndexOf with OrdinalIgnoreCase to avoid the ToLower() string allocation.
         /// </summary>
         private string InferColorFromName(string name)
         {
-            string nameLower = name.ToLower();
-            if (nameLower.Contains("red"))
+            if (name.IndexOf("red", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "red";
-            if (nameLower.Contains("blue"))
+            if (name.IndexOf("blue", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "blue";
-            if (nameLower.Contains("green"))
+            if (name.IndexOf("green", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "green";
-            if (nameLower.Contains("yellow"))
+            if (name.IndexOf("yellow", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "yellow";
             return "unknown";
         }
 
         /// <summary>
-        /// Infer object type from GameObject name
+        /// Infer object type from GameObject name.
+        /// Uses IndexOf with OrdinalIgnoreCase to avoid the ToLower() string allocation.
         /// </summary>
         private string InferTypeFromName(string name)
         {
-            string nameLower = name.ToLower();
-            if (nameLower.Contains("cube"))
+            if (name.IndexOf("cube", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "cube";
-            if (nameLower.Contains("sphere"))
+            if (name.IndexOf("sphere", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "sphere";
-            if (nameLower.Contains("cylinder"))
+            if (name.IndexOf("cylinder", StringComparison.OrdinalIgnoreCase) >= 0)
                 return "cylinder";
             return "unknown";
         }

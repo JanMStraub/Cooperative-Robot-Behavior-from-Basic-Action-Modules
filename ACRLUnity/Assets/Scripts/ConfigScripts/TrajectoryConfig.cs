@@ -25,6 +25,7 @@ namespace Configuration
         [Tooltip("Maximum acceleration for trajectory generation (m/s²)")]
         public float maxAcceleration = 1.0f;
 
+#if UNITY_EDITOR
         /// <summary>
         /// Validate configuration values to ensure consistency.
         /// </summary>
@@ -43,5 +44,6 @@ namespace Configuration
             maxVelocity = Mathf.Clamp(maxVelocity, 0.1f, 1f);
             maxAcceleration = Mathf.Clamp(maxAcceleration, 0.3f, 2f);
         }
+#endif
     }
 }

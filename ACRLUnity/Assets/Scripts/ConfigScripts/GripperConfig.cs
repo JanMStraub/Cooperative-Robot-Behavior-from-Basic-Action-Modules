@@ -31,6 +31,7 @@ namespace Configuration
         [Tooltip("Smooth time for gripper position interpolation (seconds)")]
         public float smoothTime = 0.5f;
 
+#if UNITY_EDITOR
         /// <summary>
         /// Validate configuration values to ensure consistency.
         /// </summary>
@@ -55,5 +56,6 @@ namespace Configuration
             // Smooth time
             smoothTime = Mathf.Clamp(smoothTime, 0.1f, 2f);
         }
+#endif
     }
 }
