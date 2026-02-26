@@ -203,7 +203,7 @@ namespace Robotics
         /// </summary>
         private void CheckForTargetChanges()
         {
-            foreach (var robotEntry in _robotInstances.ToList())
+            foreach (var robotEntry in _robotInstances)
             {
                 var robot = robotEntry.Value;
                 if (robot.targetGameObject == null || !robot.isActive)

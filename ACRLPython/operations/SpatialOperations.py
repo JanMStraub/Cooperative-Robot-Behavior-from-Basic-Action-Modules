@@ -150,8 +150,12 @@ def move_relative_to_object(
         )
 
         move_result = move_to_coordinate(
-            robot_id=robot_id, x=target_x, y=target_y, z=target_z,
-            request_id=request_id, use_ros=use_ros,
+            robot_id=robot_id,
+            x=target_x,
+            y=target_y,
+            z=target_z,
+            request_id=request_id,
+            use_ros=use_ros,
         )
 
         if not move_result.success:
@@ -266,8 +270,12 @@ def move_between_objects(
         )
 
         move_result = move_to_coordinate(
-            robot_id=robot_id, x=target_x, y=target_y, z=target_z,
-            request_id=request_id, use_ros=use_ros,
+            robot_id=robot_id,
+            x=target_x,
+            y=target_y,
+            z=target_z,
+            request_id=request_id,
+            use_ros=use_ros,
         )
 
         if not move_result.success:
@@ -402,8 +410,12 @@ def move_to_region(
         )
 
         move_result = move_to_coordinate(
-            robot_id=robot_id, x=target_x, y=target_y, z=target_z,
-            request_id=request_id, use_ros=use_ros,
+            robot_id=robot_id,
+            x=target_x,
+            y=target_y,
+            z=target_z,
+            request_id=request_id,
+            use_ros=use_ros,
         )
 
         if not move_result.success:

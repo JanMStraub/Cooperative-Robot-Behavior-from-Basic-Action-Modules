@@ -17,11 +17,11 @@ Usage:
 
 import argparse
 import signal
-import time
+import threading
 import logging
 
 # Import config
-try:
+try: 
     from config.Servers import (
         DEFAULT_HOST,
         STREAMING_SERVER_PORT,
@@ -65,13 +65,19 @@ except ImportError:
 # Import servers - handle both direct execution and package import
 try:
     from ..servers.ImageServer import run_image_server_background
-    from ..servers.CommandServer import run_command_server_background, get_command_broadcaster
+    from ..servers.CommandServer import (
+        run_command_server_background,
+        get_command_broadcaster,
+    )
     from ..servers.SequenceServer import run_sequence_server_background
     from ..servers.WorldStateServer import WorldStateServer
 except ImportError:
     # Running as python -m orchestrators.RunRobotController
     from servers.ImageServer import run_image_server_background
-    from servers.CommandServer import run_command_server_background, get_command_broadcaster
+    from servers.CommandServer import (
+        run_command_server_background,
+        get_command_broadcaster,
+    )
     from servers.SequenceServer import run_sequence_server_background
     from servers.WorldStateServer import WorldStateServer
 
@@ -125,6 +131,7 @@ class RobotController:
         self._world_state_server = None
         self._vision_processor = None
         self._running = False
+        self._stop_event = threading.Event()
 
     def start(self):
         """Start all servers."""
@@ -137,7 +144,9 @@ class RobotController:
         logger.info("=" * 60)
 
         # Start ImageServer (ports 5005, 5006)
-        logger.info(f"Starting ImageServer (single: {self._single_port}, stereo: {self._stereo_port})")
+        logger.info(
+            f"Starting ImageServer (single: {self._single_port}, stereo: {self._stereo_port})"
+        )
         self._image_server = run_image_server_background(
             single_port=self._single_port,
             stereo_port=self._stereo_port,
@@ -161,6 +170,7 @@ class RobotController:
         # Start WorldStateServer (port 5014) - receives robot/object state updates
         logger.info(f"Starting WorldStateServer (port: {self._world_state_port})")
         from core.TCPServerBase import ServerConfig
+
         world_state_config = ServerConfig(host=self._host, port=self._world_state_port)
         self._world_state_server = WorldStateServer(config=world_state_config)
         self._world_state_server.start()
@@ -195,8 +205,7 @@ class RobotController:
 
                     # Determine if we should use main thread (macOS with visualization)
                     use_main_thread = (
-                        platform.system() == "Darwin"
-                        and ENABLE_VISION_VISUALIZATION
+                        platform.system() == "Darwin" and ENABLE_VISION_VISUALIZATION
                     )
 
                     if use_main_thread:
@@ -241,9 +250,7 @@ class RobotController:
         logger.info(f"  Sequence Server:        {self._host}:{self._sequence_port}")
         logger.info(f"  LLM Model:              {self._model}")
         if ENABLE_VISION_STREAMING and self._vision_processor:
-            logger.info(
-                f"  Vision Streaming:       Enabled ({VISION_STREAM_FPS} FPS)"
-            )
+            logger.info(f"  Vision Streaming:       Enabled ({VISION_STREAM_FPS} FPS)")
             if ENABLE_VISION_VISUALIZATION:
                 logger.info(f"  Visualization:          Enabled (press 'q' to close)")
         logger.info("=" * 60)
@@ -257,6 +264,7 @@ class RobotController:
 
         # Mark as stopped first to prevent re-entry
         self._running = False
+        self._stop_event.set()
 
         # Stop vision processor first (may need to close OpenCV windows)
         try:
@@ -313,11 +321,10 @@ class RobotController:
                 # When run() returns, stop the controller
                 self.stop()
             else:
-                # Normal wait loop
-                while self._running:
-                    time.sleep(1)
-
-                    # Log status periodically
+                # Block until stop() sets the event (wakes immediately on shutdown,
+                # unlike a polling sleep loop).  We still log camera status
+                # periodically by using a short timeout on each wait() call.
+                while not self._stop_event.wait(timeout=1.0):
                     if self._image_server:
                         storage = self._image_server.get_storage()
                         cameras = storage.get_all_camera_ids()

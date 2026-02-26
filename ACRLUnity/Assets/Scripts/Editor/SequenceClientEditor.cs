@@ -31,6 +31,10 @@ namespace EditorScripts
         private readonly Color _errorColor = new Color(0.9f, 0.3f, 0.3f);
         private readonly Color _infoColor = new Color(0.4f, 0.7f, 1.0f);
 
+        // Original GUI colors captured at the start of each OnInspectorGUI call
+        private Color _originalColor;
+        private Color _originalBgColor;
+
         /// <summary>
         /// Initialize custom styles
         /// </summary>
@@ -84,11 +88,20 @@ namespace EditorScripts
         }
 
         /// <summary>
+        /// Drive constant repaints while in Play Mode for real-time updates,
+        /// without busy-looping inside OnInspectorGUI.
+        /// </summary>
+        public override bool RequiresConstantRepaint() => Application.isPlaying;
+
+        /// <summary>
         /// Draw custom inspector UI
         /// </summary>
         public override void OnInspectorGUI()
         {
             InitializeStyles();
+
+            _originalColor = GUI.color;
+            _originalBgColor = GUI.backgroundColor;
 
             SequenceClient client = (SequenceClient)target;
 
@@ -123,7 +136,7 @@ namespace EditorScripts
                 {
                     client.ClearPrompt();
                 }
-                GUI.backgroundColor = Color.white;
+                GUI.backgroundColor = _originalBgColor;
 
                 EditorGUILayout.EndHorizontal();
             });
@@ -168,12 +181,6 @@ namespace EditorScripts
             EditorGUILayout.EndFoldoutHeaderGroup();
 
             EditorGUILayout.Space(10);
-
-            // Force repaint for real-time updates
-            if (Application.isPlaying)
-            {
-                Repaint();
-            }
         }
 
         /// <summary>
@@ -215,7 +222,7 @@ namespace EditorScripts
                 EditorGUILayout.LabelField("Not connected - retrying...", EditorStyles.boldLabel);
             }
 
-            GUI.color = Color.white;
+            GUI.color = _originalColor;
             EditorGUILayout.EndHorizontal();
             EditorGUILayout.EndVertical();
         }
@@ -232,22 +239,30 @@ namespace EditorScripts
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("Move to Position", _buttonStyle))
             {
+                Undo.RecordObject(client, "Change Prompt");
                 client.Prompt = "Move robot to position x=0, y=0.3, z=0";
+                EditorUtility.SetDirty(client);
             }
             if (GUILayout.Button("Start Position", _buttonStyle))
             {
+                Undo.RecordObject(client, "Change Prompt");
                 client.Prompt = "Move the robot to the start position";
+                EditorUtility.SetDirty(client);
             }
             EditorGUILayout.EndHorizontal();
 
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("Open Gripper", _buttonStyle))
             {
+                Undo.RecordObject(client, "Change Prompt");
                 client.Prompt = "Open gripper";
+                EditorUtility.SetDirty(client);
             }
             if (GUILayout.Button("Close Gripper", _buttonStyle))
             {
+                Undo.RecordObject(client, "Change Prompt");
                 client.Prompt = "Close gripper";
+                EditorUtility.SetDirty(client);
             }
             EditorGUILayout.EndHorizontal();
 
@@ -258,11 +273,15 @@ namespace EditorScripts
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("Pick Sequence", _buttonStyle))
             {
+                Undo.RecordObject(client, "Change Prompt");
                 client.Prompt = "Grab the blue cube on the left";
+                EditorUtility.SetDirty(client);
             }
             if (GUILayout.Button("Place Sequence", _buttonStyle))
             {
+                Undo.RecordObject(client, "Change Prompt");
                 client.Prompt = "Move to field a and place the object there";
+                EditorUtility.SetDirty(client);
             }
             EditorGUILayout.EndHorizontal();
 
@@ -273,6 +292,7 @@ namespace EditorScripts
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("Transfer cube", _buttonStyle))
             {
+                Undo.RecordObject(client, "Change Prompt");
                 client.Prompt =
                     @"PARALLEL GROUP 1:
 - Robot1: Grab red cube
@@ -291,14 +311,19 @@ PARALLEL GROUP 4:
 - Robot1: Open gripper
 - Robot1: Move to start position
 - Robot2: Move to start position";
+                EditorUtility.SetDirty(client);
             }
             if (GUILayout.Button("Transfer cube short", _buttonStyle))
             {
+                Undo.RecordObject(client, "Change Prompt");
                 client.Prompt = "Robot1 and Robot2 perform a handoff of the red cube";
+                EditorUtility.SetDirty(client);
             }
             if (GUILayout.Button("None", _buttonStyle))
             {
+                Undo.RecordObject(client, "Change Prompt");
                 client.Prompt = "";
+                EditorUtility.SetDirty(client);
             }
             EditorGUILayout.EndHorizontal();
 
@@ -337,7 +362,7 @@ PARALLEL GROUP 4:
                     GUI.color = _errorColor;
                     EditorGUILayout.LabelField("FAILED", EditorStyles.boldLabel);
                 }
-                GUI.color = Color.white;
+                GUI.color = _originalColor;
                 EditorGUILayout.EndHorizontal();
 
                 // Stats row
@@ -358,7 +383,7 @@ PARALLEL GROUP 4:
                         $"Error: {result.error}",
                         EditorStyles.wordWrappedMiniLabel
                     );
-                    GUI.color = Color.white;
+                    GUI.color = _originalColor;
                 }
 
                 // Individual command results
@@ -382,11 +407,11 @@ PARALLEL GROUP 4:
                             GUI.color = _errorColor;
                             GUILayout.Label("●", GUILayout.Width(15));
                         }
-                        GUI.color = Color.white;
+                        GUI.color = _originalColor;
 
                         // Operation name and duration
                         EditorGUILayout.LabelField(
-                            $"{cmdResult.operation}",
+                            cmdResult.operation,
                             EditorStyles.miniLabel,
                             GUILayout.ExpandWidth(true)
                         );
@@ -406,7 +431,7 @@ PARALLEL GROUP 4:
                                 $"  └ {cmdResult.error}",
                                 EditorStyles.miniLabel
                             );
-                            GUI.color = Color.white;
+                            GUI.color = _originalColor;
                         }
                     }
                 }
@@ -438,7 +463,7 @@ PARALLEL GROUP 4:
                     // Command number
                     GUI.color = _infoColor;
                     EditorGUILayout.LabelField($"{i + 1}.", GUILayout.Width(20));
-                    GUI.color = Color.white;
+                    GUI.color = _originalColor;
 
                     // Command text (truncated if too long)
                     string cmdText = client.RecentCommands[i];
@@ -451,7 +476,9 @@ PARALLEL GROUP 4:
                     // Use button
                     if (GUILayout.Button("Use", GUILayout.Width(40)))
                     {
+                        Undo.RecordObject(client, "Change Prompt");
                         client.Prompt = client.RecentCommands[i];
+                        EditorUtility.SetDirty(client);
                     }
 
                     EditorGUILayout.EndHorizontal();

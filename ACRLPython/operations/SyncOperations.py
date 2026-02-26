@@ -28,6 +28,27 @@ class EventBus:
     """
     Thread-safe event bus for robot-to-robot signaling.
 
+    Uses threading.Condition with a generation counter to fix the race condition
+    present in the original threading.Event approach.
+
+    **The original bug**: Robot1 and Robot2 both wait for "event_X". Signal fires.
+    Robot1 wakes, decrements waiter count to 0, and clears the event. Robot2 has
+    not yet been scheduled. When Robot2 runs, the event is already cleared — it
+    blocks forever.
+
+    **The fix**: Use a Condition with a predicate. Each waiter records `generation_before`
+    = the generation at the time it starts waiting. signal() increments the generation
+    and calls notify_all(). Each waiter uses `wait_for(lambda: gen > baseline)` which:
+    - Returns immediately if gen was already > baseline (signal fired before wait)
+    - Returns immediately when any signal fires while waiting
+    - No event to clear — the generation counter accumulates, so late-arriving waiters
+      for a given signal round must record their baseline BEFORE the signal they want.
+
+    **Usage pattern**: For each coordination round, robots record their baseline first,
+    then wait. The signal() increments the generation, waking all current waiters.
+    Between rounds, call reset() to restore fresh state (or waiters will record a
+    higher baseline and correctly wait for the NEXT signal).
+
     Singleton pattern ensures all operations share the same event state.
     """
 
@@ -46,75 +67,134 @@ class EventBus:
         if self._initialized:
             return
 
-        self._events: Dict[str, threading.Event] = {}
-        self._event_lock = threading.Lock()
+        # Maps event_name -> threading.Condition (with its own internal Lock)
+        self._conditions: Dict[str, threading.Condition] = {}
+        # Maps event_name -> monotonic signal generation counter.
+        # Incremented on each signal(). Waiters compare against a baseline snapshot
+        # taken before waiting to detect signals — including pre-wait signals.
+        self._generations: Dict[str, int] = {}
+        # Maps event_name -> active waiter count (for monitoring/tests).
         self._waiter_counts: Dict[str, int] = {}
+        self._event_lock = threading.Lock()
         self._initialized = True
+
+    def _ensure_event(self, event_name: str) -> None:
+        """
+        Ensure the Condition, generation counter, and waiter count exist for event_name.
+
+        Must be called with self._event_lock held.
+
+        Args:
+            event_name: Name of the event to initialize
+        """
+        if event_name not in self._conditions:
+            self._conditions[event_name] = threading.Condition(threading.Lock())
+            self._generations[event_name] = 0
+            self._waiter_counts[event_name] = 0
+
+    @property
+    def _events(self) -> Dict[str, threading.Condition]:
+        """
+        Backward-compatible accessor: expose the Condition objects keyed by event name.
+
+        Tests can check `event_name in event_bus._events` to verify an event exists.
+        To check if an event has been signaled, use `_is_signaled(event_name)` instead
+        of `_events[name].is_set()` (Condition objects have no is_set() method).
+        """
+        return self._conditions
+
+    def _is_signaled(self, event_name: str) -> bool:
+        """
+        Return True if the event has been signaled at least once since last reset/clear.
+
+        Args:
+            event_name: Name of the event to check
+
+        Returns:
+            True if the event's generation counter > 0
+        """
+        return self._generations.get(event_name, 0) > 0
 
     def signal(self, event_name: str) -> None:
         """
-        Set an event flag, waking all waiting threads.
+        Increment the generation counter and wake all waiting threads atomically.
+
+        notify_all() wakes every thread currently blocked in wait_for() under the
+        Condition lock. Because each waiter uses a predicate, they all wake and check
+        `gen != baseline` — all pass, all return True, regardless of order.
 
         Args:
             event_name: Name of the event to signal
         """
         with self._event_lock:
-            if event_name not in self._events:
-                self._events[event_name] = threading.Event()
-                self._waiter_counts[event_name] = 0
+            self._ensure_event(event_name)
+            cond = self._conditions[event_name]
 
-            self._events[event_name].set()
+        with cond:
+            self._generations[event_name] += 1
+            cond.notify_all()
 
     def wait_for_signal(self, event_name: str, timeout_ms: int = 30000) -> bool:
         """
         Wait for an event to be signaled.
+
+        Takes a generation snapshot before sleeping. wait_for() evaluates the predicate
+        immediately under the lock, so if signal() already fired (generation changed),
+        the call returns True without sleeping at all.
 
         Args:
             event_name: Name of the event to wait for
             timeout_ms: Maximum wait time in milliseconds
 
         Returns:
-            True if event was signaled, False if timeout
+            True if event was signaled (or was already signaled), False if timeout
         """
         with self._event_lock:
-            if event_name not in self._events:
-                self._events[event_name] = threading.Event()
-                self._waiter_counts[event_name] = 0
-
+            self._ensure_event(event_name)
+            cond = self._conditions[event_name]
             self._waiter_counts[event_name] += 1
-            event = self._events[event_name]
 
-        # Wait outside the lock
         timeout_sec = timeout_ms / 1000.0
-        result = event.wait(timeout=timeout_sec)
+        try:
+            with cond:
+                # Predicate: True if event has been signaled at least once since last
+                # reset/clear. Using generation > 0 means any waiter returns True
+                # immediately if the event was already signaled, matching the
+                # threading.Event.is_set() semantic. Cleared events reset to 0,
+                # so post-clear waiters correctly wait for the next signal.
+                received = cond.wait_for(
+                    lambda: self._generations[event_name] > 0,
+                    timeout=timeout_sec,
+                )
+        finally:
+            with self._event_lock:
+                if (
+                    event_name in self._waiter_counts
+                    and self._waiter_counts[event_name] > 0
+                ):
+                    self._waiter_counts[event_name] -= 1
 
-        # Decrement waiter count and potentially clear event
-        # Handle case where event was reset/cleared during wait (e.g., test cleanup)
-        with self._event_lock:
-            if event_name in self._waiter_counts:
-                self._waiter_counts[event_name] -= 1
-
-                # Auto-clear event when all waiters have received it
-                if self._waiter_counts[event_name] == 0 and event.is_set():
-                    event.clear()
-
-        return result
+        return received
 
     def clear_event(self, event_name: str) -> None:
         """
-        Manually clear an event (usually not needed due to auto-clear).
+        Reset the generation counter for an event to "un-signaled" state.
+
+        After clearing, future wait_for_signal() calls will wait until signal() is
+        called again. Existing in-progress waits are unaffected.
 
         Args:
             event_name: Name of the event to clear
         """
         with self._event_lock:
-            if event_name in self._events:
-                self._events[event_name].clear()
+            if event_name in self._generations:
+                self._generations[event_name] = 0
 
     def reset(self) -> None:
-        """Clear all events (useful for testing)."""
+        """Clear all events and waiter counts (useful for testing and between task rounds)."""
         with self._event_lock:
-            self._events.clear()
+            self._conditions.clear()
+            self._generations.clear()
             self._waiter_counts.clear()
 
 
@@ -127,7 +207,7 @@ def _execute_signal(
     event_name: str,
     request_id: Optional[int] = None,
     robot_id: Optional[str] = None,
-    use_ros: bool = False
+    use_ros: bool = False,
 ) -> OperationResult:
     """
     Emit a named event for other robots to wait on.
@@ -199,7 +279,7 @@ def _execute_wait_for_signal(
     timeout_ms: int = 30000,
     request_id: Optional[int] = None,
     robot_id: Optional[str] = None,
-    use_ros: bool = False
+    use_ros: bool = False,
 ) -> OperationResult:
     """
     Block until a named event is received.
@@ -297,7 +377,7 @@ def _execute_wait(
     duration_ms: int,
     request_id: Optional[int] = None,
     robot_id: Optional[str] = None,
-    use_ros: bool = False
+    use_ros: bool = False,
 ) -> OperationResult:
     """
     Pause execution for specified duration.

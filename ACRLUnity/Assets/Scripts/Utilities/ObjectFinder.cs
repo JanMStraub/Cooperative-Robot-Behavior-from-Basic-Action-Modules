@@ -46,6 +46,12 @@ namespace Utilities
 
         private const string _logPrefix = "[OBJECT_FINDER]";
 
+        // Pre-allocated buffers to eliminate per-call GC allocations.
+        private const int _colliderBufferSize = 512;
+        private readonly Collider[] _colliderBuffer = new Collider[_colliderBufferSize];
+        private readonly List<Collider> _colliderListBuffer = new List<Collider>();
+        private readonly List<GameObject> _deadKeyBuffer = new List<GameObject>();
+
         private Dictionary<GameObject, bool> _robotPartCache = new Dictionary<GameObject, bool>();
         private float _lastCacheCleanupTime = 0f;
 
@@ -87,28 +93,29 @@ namespace Utilities
         /// <summary>
         /// Removes destroyed objects from the cache while preserving valid entries.
         /// Automatically called periodically based on _cacheCleanupInterval.
+        /// Uses a pre-allocated buffer to avoid GC allocations during cleanup.
         /// </summary>
         private void CleanupDeadCacheEntries()
         {
-            List<GameObject> deadKeys = new List<GameObject>();
+            _deadKeyBuffer.Clear();
 
             foreach (var key in _robotPartCache.Keys)
             {
                 if (key == null)
                 {
-                    deadKeys.Add(key);
+                    _deadKeyBuffer.Add(key);
                 }
             }
 
-            foreach (var deadKey in deadKeys)
+            foreach (var deadKey in _deadKeyBuffer)
             {
                 _robotPartCache.Remove(deadKey);
             }
 
-            if (deadKeys.Count > 0)
+            if (_deadKeyBuffer.Count > 0)
             {
                 Debug.Log(
-                    $"{_logPrefix} Cleaned up {deadKeys.Count} dead cache entries. Cache size: {_robotPartCache.Count}"
+                    $"{_logPrefix} Cleaned up {_deadKeyBuffer.Count} dead cache entries. Cache size: {_robotPartCache.Count}"
                 );
             }
         }
@@ -116,6 +123,7 @@ namespace Utilities
         /// <summary>
         /// Finds all GameObjects near a position within the specified radius.
         /// Excludes robot parts and objects smaller than the minimum size threshold.
+        /// Uses NonAlloc physics query and a pre-allocated collider buffer to avoid GC pressure.
         /// </summary>
         /// <param name="position">Center position for the search sphere</param>
         /// <param name="radius">Search radius in meters (uses default if negative)</param>
@@ -124,10 +132,16 @@ namespace Utilities
         {
             float searchRadius = radius > 0 ? radius : _defaultSearchRadius;
             HashSet<GameObject> foundObjects = new HashSet<GameObject>();
-            Collider[] colliders = Physics.OverlapSphere(position, searchRadius, _searchLayerMask);
+            int hitCount = Physics.OverlapSphereNonAlloc(
+                position,
+                searchRadius,
+                _colliderBuffer,
+                _searchLayerMask
+            );
 
-            foreach (Collider col in colliders)
+            for (int i = 0; i < hitCount; i++)
             {
+                Collider col = _colliderBuffer[i];
                 GameObject obj = col.gameObject;
 
                 if (foundObjects.Contains(obj))
@@ -148,7 +162,10 @@ namespace Utilities
         /// <summary>
         /// Finds all graspable objects near a position, sorted by distance.
         /// Only returns non-kinematic Rigidbody objects that meet graspability criteria.
-        /// Validates the root object's properties to avoid false positives from child colliders.
+        /// Uses attachedRigidbody to correctly handle compound colliders where the Rigidbody
+        /// lives on a parent and colliders are on children. Deduplication is keyed on the
+        /// Rigidbody's GameObject to avoid duplicate entries for multi-collider objects.
+        /// Uses NonAlloc physics query to avoid GC allocations.
         /// </summary>
         /// <param name="position">Center position for the search sphere</param>
         /// <param name="radius">Search radius in meters (uses default if negative)</param>
@@ -157,22 +174,34 @@ namespace Utilities
         {
             float searchRadius = radius > 0 ? radius : _defaultSearchRadius;
             HashSet<GameObject> distinctObjects = new HashSet<GameObject>();
-            Collider[] colliders = Physics.OverlapSphere(position, searchRadius, _searchLayerMask);
+            int hitCount = Physics.OverlapSphereNonAlloc(
+                position,
+                searchRadius,
+                _colliderBuffer,
+                _searchLayerMask
+            );
 
-            foreach (Collider col in colliders)
+            for (int i = 0; i < hitCount; i++)
             {
-                GameObject obj = col.gameObject;
+                Collider col = _colliderBuffer[i];
+
+                // Use attachedRigidbody so compound colliders on child objects correctly
+                // resolve to the Rigidbody on the parent root.
+                Rigidbody rb = col.attachedRigidbody;
+                if (rb == null)
+                    continue;
+                if (rb.isKinematic)
+                    continue;
+
+                // Key deduplication on the Rigidbody's GameObject, not the collider's
+                // GameObject, so compound colliders sharing one Rigidbody only appear once.
+                GameObject obj = rb.gameObject;
 
                 if (distinctObjects.Contains(obj))
                     continue;
                 if (_skipGroundObjects && IsGroundObject(obj))
                     continue;
                 if (_skipRobotParts && IsRobotPart(obj))
-                    continue;
-
-                if (!obj.TryGetComponent(out Rigidbody rb))
-                    continue;
-                if (rb.isKinematic)
                     continue;
 
                 Bounds objectBounds = GetObjectBounds(obj);
@@ -188,38 +217,64 @@ namespace Utilities
                 distinctObjects.Add(obj);
             }
 
+            // Pre-compute squared distances once and sort by them, so sqrMagnitude is
+            // not recalculated O(N log N) times inside the comparator.
             List<GameObject> resultList = new List<GameObject>(distinctObjects);
-            resultList.Sort(
-                (a, b) =>
-                {
-                    float distA = (position - a.transform.position).sqrMagnitude;
-                    float distB = (position - b.transform.position).sqrMagnitude;
-                    return distA.CompareTo(distB);
-                }
-            );
+            int count = resultList.Count;
+            float[] sqrDistances = new float[count];
+            for (int i = 0; i < count; i++)
+            {
+                sqrDistances[i] = (position - resultList[i].transform.position).sqrMagnitude;
+            }
 
-            return resultList;
+            // Sort a separate index array, then reorder resultList in one pass.
+            // This avoids any O(N) lookup inside the comparator.
+            int[] indices = new int[count];
+            for (int i = 0; i < count; i++)
+                indices[i] = i;
+
+            System.Array.Sort(indices, (a, b) => sqrDistances[a].CompareTo(sqrDistances[b]));
+
+            List<GameObject> sortedList = new List<GameObject>(count);
+            for (int i = 0; i < count; i++)
+                sortedList.Add(resultList[indices[i]]);
+
+            return sortedList;
         }
 
         /// <summary>
         /// Finds the closest GameObject to a position within the specified radius.
-        /// Uses squared distance for performance optimization.
+        /// Iterates directly over the NonAlloc physics buffer to avoid allocating
+        /// an intermediate list.
         /// </summary>
         /// <param name="position">Reference position</param>
         /// <param name="radius">Maximum search radius in meters</param>
         /// <returns>Closest GameObject, or null if none found</returns>
         public GameObject FindClosestObject(Vector3 position, float radius)
         {
-            List<GameObject> objects = FindObjectsNearPosition(position, radius);
-
-            if (objects.Count == 0)
-                return null;
+            float searchRadius = radius > 0 ? radius : _defaultSearchRadius;
+            int hitCount = Physics.OverlapSphereNonAlloc(
+                position,
+                searchRadius,
+                _colliderBuffer,
+                _searchLayerMask
+            );
 
             GameObject closest = null;
             float minSqrDistance = float.MaxValue;
 
-            foreach (GameObject obj in objects)
+            for (int i = 0; i < hitCount; i++)
             {
+                Collider col = _colliderBuffer[i];
+                GameObject obj = col.gameObject;
+
+                if (_skipGroundObjects && IsGroundObject(obj))
+                    continue;
+                if (_skipRobotParts && IsRobotPart(obj))
+                    continue;
+                if (col.bounds.size.magnitude < _minObjectSize)
+                    continue;
+
                 float sqrDist = (position - obj.transform.position).sqrMagnitude;
                 if (sqrDist < minSqrDistance)
                 {
@@ -233,13 +288,43 @@ namespace Utilities
 
         /// <summary>
         /// Counts the number of GameObjects near a position within the specified radius.
+        /// Iterates directly over the NonAlloc physics buffer to avoid allocating
+        /// an intermediate collection.
         /// </summary>
         /// <param name="position">Center position for the search sphere</param>
         /// <param name="radius">Search radius in meters</param>
         /// <returns>Number of GameObjects found</returns>
         public int CountObjectsNearPosition(Vector3 position, float radius)
         {
-            return FindObjectsNearPosition(position, radius).Count;
+            float searchRadius = radius > 0 ? radius : _defaultSearchRadius;
+            int hitCount = Physics.OverlapSphereNonAlloc(
+                position,
+                searchRadius,
+                _colliderBuffer,
+                _searchLayerMask
+            );
+
+            // Count distinct GameObjects, applying the same filters as FindObjectsNearPosition.
+            HashSet<GameObject> counted = new HashSet<GameObject>();
+
+            for (int i = 0; i < hitCount; i++)
+            {
+                Collider col = _colliderBuffer[i];
+                GameObject obj = col.gameObject;
+
+                if (counted.Contains(obj))
+                    continue;
+                if (_skipGroundObjects && IsGroundObject(obj))
+                    continue;
+                if (_skipRobotParts && IsRobotPart(obj))
+                    continue;
+                if (col.bounds.size.magnitude < _minObjectSize)
+                    continue;
+
+                counted.Add(obj);
+            }
+
+            return counted.Count;
         }
 
         /// <summary>
@@ -255,14 +340,7 @@ namespace Utilities
 
             if (_enableCaching && _robotPartCache.TryGetValue(obj, out bool cachedResult))
             {
-                if (obj == null)
-                {
-                    _robotPartCache.Remove(obj);
-                }
-                else
-                {
-                    return cachedResult;
-                }
+                return cachedResult;
             }
 
             bool isRobotPart = obj.GetComponentInParent<ArticulationBody>() != null;
@@ -298,23 +376,27 @@ namespace Utilities
 
         /// <summary>
         /// Calculates the combined bounds of all colliders on a GameObject and its children.
+        /// Uses a pre-allocated List buffer with the list-overload of GetComponentsInChildren
+        /// to avoid allocating a new Collider[] on every call.
         /// </summary>
         /// <param name="obj">GameObject to measure</param>
         /// <returns>Combined bounds of all colliders</returns>
         private Bounds GetObjectBounds(GameObject obj)
         {
-            Collider[] allColliders = obj.GetComponentsInChildren<Collider>();
+            // Clear before use: the list overload appends, it does not replace.
+            _colliderListBuffer.Clear();
+            obj.GetComponentsInChildren<Collider>(_colliderListBuffer);
 
-            if (allColliders.Length == 0)
+            if (_colliderListBuffer.Count == 0)
             {
                 return new Bounds(obj.transform.position, Vector3.zero);
             }
 
-            Bounds combinedBounds = allColliders[0].bounds;
+            Bounds combinedBounds = _colliderListBuffer[0].bounds;
 
-            for (int i = 1; i < allColliders.Length; i++)
+            for (int i = 1; i < _colliderListBuffer.Count; i++)
             {
-                combinedBounds.Encapsulate(allColliders[i].bounds);
+                combinedBounds.Encapsulate(_colliderListBuffer[i].bounds);
             }
 
             return combinedBounds;

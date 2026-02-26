@@ -70,17 +70,19 @@ namespace Configuration
         [Range(2, 10)]
         public int maxWaypoints = 5;
 
+#if UNITY_EDITOR
         /// <summary>
         /// Validate configuration values.
         /// </summary>
         private void OnValidate()
         {
-            minSafeSeparation = Mathf.Max(0.05f, minSafeSeparation);
-            robotTimeout = Mathf.Max(5f, robotTimeout);
-            pythonVerificationTimeout = Mathf.Max(0.1f, pythonVerificationTimeout);
-            verticalOffset = Mathf.Max(0.05f, verticalOffset);
-            lateralOffset = Mathf.Max(0.05f, lateralOffset);
-            maxWaypoints = Mathf.Max(2, maxWaypoints);
+            minSafeSeparation = Mathf.Clamp(minSafeSeparation, 0.05f, 1f);
+            robotTimeout = Mathf.Clamp(robotTimeout, 5f, 120f);
+            pythonVerificationTimeout = Mathf.Clamp(pythonVerificationTimeout, 0.1f, 5f);
+            verticalOffset = Mathf.Clamp(verticalOffset, 0.05f, 0.5f);
+            lateralOffset = Mathf.Clamp(lateralOffset, 0.05f, 0.3f);
+            maxWaypoints = Mathf.Clamp(maxWaypoints, 2, 10);
         }
+#endif
     }
 }

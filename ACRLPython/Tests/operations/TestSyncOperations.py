@@ -85,7 +85,7 @@ class TestEventBusCore:
         event_bus.signal(event_name)
 
         assert event_name in event_bus._events
-        assert event_bus._events[event_name].is_set()
+        assert event_bus._is_signaled(event_name)
 
     def test_wait_for_signal_blocks_until_signaled(self, event_bus, async_executor):
         """Test wait_for_signal() blocks until signal is received"""
@@ -155,8 +155,9 @@ class TestEventBusCore:
         assert len(wait_results) == 3
         assert all(r is True for r in wait_results)
 
-        # Event should be auto-cleared now
-        assert not event_bus._events[event_name].is_set()
+        # Event is NOT auto-cleared in the generation-based implementation;
+        # the generation counter remains elevated (signal persists) but new
+        # waiters can still wait for the NEXT signal by recording their baseline.
         assert event_bus._waiter_counts[event_name] == 0
 
     def test_manual_clear_event(self, event_bus):
@@ -164,10 +165,10 @@ class TestEventBusCore:
         event_name = "manual_clear"
 
         event_bus.signal(event_name)
-        assert event_bus._events[event_name].is_set()
+        assert event_bus._is_signaled(event_name)
 
         event_bus.clear_event(event_name)
-        assert not event_bus._events[event_name].is_set()
+        assert not event_bus._is_signaled(event_name)
 
     def test_signal_nonexistent_event_creates_it(self, event_bus):
         """Test signaling non-existent event creates it"""
@@ -178,7 +179,7 @@ class TestEventBusCore:
         event_bus.signal(event_name)
 
         assert event_name in event_bus._events
-        assert event_bus._events[event_name].is_set()
+        assert event_bus._is_signaled(event_name)
         assert event_bus._waiter_counts[event_name] == 0
 
     def test_wait_on_already_signaled_event(self, event_bus):
@@ -225,8 +226,8 @@ class TestEventBusThreadSafety:
 
         assert len(errors) == 0
         assert len(event_bus._events) == num_threads
-        # All events should be set
-        assert all(event_bus._events[f"event_{i}"].is_set() for i in range(num_threads))
+        # All events should be signaled
+        assert all(event_bus._is_signaled(f"event_{i}") for i in range(num_threads))
 
     def test_concurrent_signals_same_event(self, event_bus, thread_error_collector):
         """Test multiple threads signaling the same event simultaneously"""
@@ -248,7 +249,7 @@ class TestEventBusThreadSafety:
             t.join()
 
         assert len(errors) == 0
-        assert event_bus._events[event_name].is_set()
+        assert event_bus._is_signaled(event_name)
 
     def test_multiple_waiters_same_event(self, event_bus):
         """Test multiple threads waiting on the same event"""
@@ -380,8 +381,8 @@ class TestEventBusThreadSafety:
         # Signal after timeout - should have no effect on completed wait
         event_bus.signal(event_name)
 
-        # Event should still be set
-        assert event_bus._events[event_name].is_set()
+        # Event should still be signaled (signal persists in generation counter)
+        assert event_bus._is_signaled(event_name)
 
     def test_rapid_signal_wait_cycles(self, event_bus):
         """Test rapid signal/wait cycles (stress test)"""
@@ -463,8 +464,8 @@ class TestEventBusThreadSafety:
         assert len(wait_results) == 15
         assert all(r is True for r in wait_results)
 
-        # Event should be auto-cleared
-        assert not event_bus._events[event_name].is_set()
+        # All waiters received the signal; waiter count back to 0
+        assert event_bus._waiter_counts[event_name] == 0
 
     def test_waiter_decrement_on_timeout(self, event_bus):
         """Test waiter count decrements correctly on timeout"""

@@ -9,12 +9,14 @@ by restoring the start joint targets saved when the robot was registered.
 import time
 import logging
 from typing import Optional
+
 # Lazy import to avoid circular dependency with servers module
 from .Base import (
     BasicOperation,
     OperationCategory,
     OperationComplexity,
     OperationParameter,
+    OperationRelationship,
     OperationResult,
 )
 
@@ -117,6 +119,7 @@ def return_to_start_position(
         if _use_ros is None:
             try:
                 from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+
                 _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
             except ImportError:
                 _use_ros = False
@@ -125,13 +128,17 @@ def return_to_start_position(
         if _use_ros:
             try:
                 from ros2.ROSBridge import ROSBridge
+
                 bridge = ROSBridge.get_instance()
                 if not bridge.is_connected:
                     if not bridge.connect():
                         try:
                             from config.ROS import DEFAULT_CONTROL_MODE
+
                             if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning("ROS bridge unavailable, falling back to TCP")
+                                logger.warning(
+                                    "ROS bridge unavailable, falling back to TCP"
+                                )
                                 _use_ros = False
                             else:
                                 return OperationResult.error_result(
@@ -146,19 +153,26 @@ def return_to_start_position(
                     result = bridge.plan_return_to_start(robot_id=robot_id)
                     if result and result.get("success"):
                         logger.info(f"ROS return to start completed for {robot_id}")
-                        return OperationResult.success_result({
-                            "robot_id": robot_id,
-                            "speed": speed,
-                            "status": "ros_executed",
-                            "planning_time": result.get("planning_time", 0),
-                            "timestamp": time.time(),
-                        })
+                        return OperationResult.success_result(
+                            {
+                                "robot_id": robot_id,
+                                "speed": speed,
+                                "status": "ros_executed",
+                                "planning_time": result.get("planning_time", 0),
+                                "timestamp": time.time(),
+                            }
+                        )
                     else:
-                        error_msg = result.get("error", "Unknown") if result else "No response"
+                        error_msg = (
+                            result.get("error", "Unknown") if result else "No response"
+                        )
                         try:
                             from config.ROS import DEFAULT_CONTROL_MODE
+
                             if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning(f"ROS planning failed ({error_msg}), falling back to TCP")
+                                logger.warning(
+                                    f"ROS planning failed ({error_msg}), falling back to TCP"
+                                )
                                 _use_ros = False
                             else:
                                 return OperationResult.error_result(
@@ -304,9 +318,22 @@ def create_return_to_start_position_operation() -> BasicOperation:
             "Communication failed - Unity not connected to CommandServer",
             "Robot ID not found in RobotManager",
         ],
-        required_operations=[],
-        commonly_paired_with=["move_to_coordinate", "control_gripper"],
-        mutually_exclusive_with=[],
+        relationships=OperationRelationship(
+            operation_id="motion_return_to_start_001",
+            required_operations=[],
+            commonly_paired_with=[
+                "motion_move_to_coord_001",
+                "manipulation_control_gripper_001",
+            ],
+            pairing_reasons={
+                "motion_move_to_coord_001": "Return to home after completing task at target position",
+                "manipulation_control_gripper_001": "Release object then return to home position",
+            },
+            typical_after=[
+                "manipulation_grasp_object_001",
+                "motion_move_to_coord_001",
+            ],
+        ),
         implementation=return_to_start_position,
     )
 

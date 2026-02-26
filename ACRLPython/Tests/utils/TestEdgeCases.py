@@ -297,9 +297,9 @@ class TestResourceLimits:
             camera_id = f"camera_{i}"
             storage.store_single_image(camera_id, image, f"prompt_{i}")
 
-        # All should be stored
+        # Images may be evicted due to MAX_STORED_IMAGES limit (20 images)
         camera_ids = storage.get_all_camera_ids()
-        assert len(camera_ids) == 100
+        assert len(camera_ids) == min(100, 20)
 
     def test_image_storage_with_very_large_image(self, cleanup_singletons):
         """Test storing a very large image"""

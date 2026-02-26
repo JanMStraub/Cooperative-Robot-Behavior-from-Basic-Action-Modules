@@ -73,6 +73,10 @@ public class SaveScreenshots : MonoBehaviour
 
     private int captureCount = 0;
     private Dictionary<string, int> classNameToId;
+
+    // Caches (classId, className) per object instance ID to avoid repeated ExtractClassName allocations
+    private Dictionary<int, (int classId, string className)> _objectClassCache;
+
     public Camera cam;
     private RenderTexture renderTexture;
     private Texture2D screenShot;
@@ -93,6 +97,17 @@ public class SaveScreenshots : MonoBehaviour
 
             InitializeClassMapping();
             CreateClassesFile();
+
+            // Pre-build per-object cache to avoid repeated ExtractClassName allocations at label time
+            _objectClassCache = new Dictionary<int, (int, string)>();
+            foreach (var obj in objectsToLabel)
+            {
+                if (obj == null)
+                    continue;
+                string cn = ExtractClassName(obj.name);
+                classNameToId.TryGetValue(cn, out int cid);
+                _objectClassCache[obj.GetInstanceID()] = (cid, cn);
+            }
         }
 
         // Validate split ratios
@@ -310,19 +325,6 @@ public class SaveScreenshots : MonoBehaviour
     }
 
     /// <summary>
-    /// Waits for specified delay then captures screenshot
-    /// </summary>
-    IEnumerator CaptureAfterDelay(float delay)
-    {
-        yield return new WaitForSeconds(delay);
-
-        // Capture screenshot at fixed resolution
-        CaptureToFile();
-
-        captureCount++;
-    }
-
-    /// <summary>
     /// Determines which dataset split (train/test/valid) to use for the current capture
     /// </summary>
     string GetDatasetSplit()
@@ -508,9 +510,10 @@ public class SaveScreenshots : MonoBehaviour
             float width_yolo = width_unity;
             float height_yolo = height_unity;
 
-            // Get class ID based on object name
-            int classId = GetClassId(obj.name);
-            string className = ExtractClassName(obj.name);
+            // Get class ID and name from cache (avoids duplicate ExtractClassName allocations)
+            var (classId, className) = _objectClassCache.TryGetValue(obj.GetInstanceID(), out var info)
+                ? info
+                : (0, ExtractClassName(obj.name));
 
             // Debug: log what we're detecting
             Debug.Log(
@@ -533,71 +536,28 @@ public class SaveScreenshots : MonoBehaviour
     }
 
     /// <summary>
-    /// Gets the combined bounds of all renderers in an object
-    /// </summary>
-    Bounds GetObjectBounds(GameObject obj)
-    {
-        Renderer[] renderers = obj.GetComponentsInChildren<Renderer>();
-        if (renderers.Length == 0)
-            return new Bounds(obj.transform.position, Vector3.zero);
-
-        Bounds bounds = renderers[0].bounds;
-        for (int i = 1; i < renderers.Length; i++)
-        {
-            bounds.Encapsulate(renderers[i].bounds);
-        }
-        return bounds;
-    }
-
-    /// <summary>
-    /// Gets world-space points for tight bounding box calculation
-    /// Uses only the primary mesh renderer to avoid including unintended child objects
+    /// Gets world-space points for bounding box calculation using the 8 local AABB corners.
+    /// Transforms only 8 corners instead of every mesh vertex (O(8) vs O(N vertices)).
+    /// Slightly looser than per-vertex bbox for rotated meshes, acceptable for YOLO labels.
     /// </summary>
     Vector3[] GetObjectWorldPoints(GameObject obj)
     {
-        // Try to get the primary MeshFilter (not children)
+        // Try primary MeshFilter first (not children)
         MeshFilter meshFilter = obj.GetComponent<MeshFilter>();
 
         if (meshFilter != null && meshFilter.sharedMesh != null)
         {
-            Mesh mesh = meshFilter.sharedMesh;
-            Transform transform = meshFilter.transform;
-
-            // Get all vertices for accurate tight bbox (cubes typically have 24 vertices)
-            Vector3[] vertices = mesh.vertices;
-            List<Vector3> worldPoints = new List<Vector3>(vertices.Length);
-
-            for (int i = 0; i < vertices.Length; i++)
-            {
-                // Transform vertex to world space
-                Vector3 worldPoint = transform.TransformPoint(vertices[i]);
-                worldPoints.Add(worldPoint);
-            }
-
-            return worldPoints.ToArray();
+            return GetLocalBoundsCorners(meshFilter);
         }
 
-        // Fallback: Try to get first child MeshFilter if no direct component
+        // Fallback: first child MeshFilter
         MeshFilter[] childFilters = obj.GetComponentsInChildren<MeshFilter>();
         if (childFilters.Length > 0 && childFilters[0].sharedMesh != null)
         {
-            MeshFilter firstFilter = childFilters[0];
-            Mesh mesh = firstFilter.sharedMesh;
-            Transform transform = firstFilter.transform;
-
-            Vector3[] vertices = mesh.vertices;
-            List<Vector3> worldPoints = new List<Vector3>(vertices.Length);
-
-            for (int i = 0; i < vertices.Length; i++)
-            {
-                Vector3 worldPoint = transform.TransformPoint(vertices[i]);
-                worldPoints.Add(worldPoint);
-            }
-
-            return worldPoints.ToArray();
+            return GetLocalBoundsCorners(childFilters[0]);
         }
 
-        // Last fallback: use renderer bounds corners
+        // Last fallback: world-space renderer bounds corners
         Renderer renderer = obj.GetComponent<Renderer>();
         if (renderer == null)
             renderer = obj.GetComponentInChildren<Renderer>();
@@ -607,8 +567,31 @@ public class SaveScreenshots : MonoBehaviour
             return GetBoundsCorners(renderer.bounds);
         }
 
-        // No mesh or renderer found, return empty
         return new Vector3[0];
+    }
+
+    /// <summary>
+    /// Returns the 8 world-space corners of a mesh's local AABB.
+    /// Avoids iterating every vertex by operating on the precomputed bounds only.
+    /// </summary>
+    Vector3[] GetLocalBoundsCorners(MeshFilter meshFilter)
+    {
+        Bounds localBounds = meshFilter.sharedMesh.bounds;
+        Transform t = meshFilter.transform;
+        Vector3 c = localBounds.center;
+        Vector3 e = localBounds.extents;
+
+        return new Vector3[]
+        {
+            t.TransformPoint(c + new Vector3(-e.x, -e.y, -e.z)),
+            t.TransformPoint(c + new Vector3(-e.x, -e.y,  e.z)),
+            t.TransformPoint(c + new Vector3(-e.x,  e.y, -e.z)),
+            t.TransformPoint(c + new Vector3(-e.x,  e.y,  e.z)),
+            t.TransformPoint(c + new Vector3( e.x, -e.y, -e.z)),
+            t.TransformPoint(c + new Vector3( e.x, -e.y,  e.z)),
+            t.TransformPoint(c + new Vector3( e.x,  e.y, -e.z)),
+            t.TransformPoint(c + new Vector3( e.x,  e.y,  e.z)),
+        };
     }
 
     /// <summary>

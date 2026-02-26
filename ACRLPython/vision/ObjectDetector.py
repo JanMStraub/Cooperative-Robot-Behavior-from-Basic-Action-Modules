@@ -78,8 +78,8 @@ if USE_YOLO:
         YOLO_AVAILABLE = True
         logging.info("YOLO detection enabled")
     except ImportError as e:
-        logging.warning(f"YOLO enabled in config but import failed: {e}")
-        logging.warning("Falling back to HSV color detection")
+        logging.error(f"YOLO enabled in config but import failed: {e}")
+        logging.error("Falling back to HSV color detection — install ultralytics to enable YOLO")
 
 # Import stereo depth estimation
 try:
@@ -91,7 +91,7 @@ try:
             DEFAULT_RECONSTRUCTION_CONFIG,
         )
     except ImportError:
-        from StereoConfig import (
+        from vision.StereoConfig import (
             CameraConfig,
             ReconstructionConfig,
             DEFAULT_CAMERA_CONFIG,
@@ -176,15 +176,18 @@ def estimate_object_dimensions_from_bbox(
 
 class CubeDetector:
     """
-    Color-based cube detector using HSV segmentation
+    YOLO-based object detector with HSV fallback.
+
+    Uses YOLODetector when USE_YOLO=true (default) and ultralytics is installed.
+    Falls back to HSV color segmentation only if YOLO is unavailable.
     """
 
     def __init__(self):
         """
-        Initialize the cube detector with color ranges from config
+        Initialize the detector.
 
-        If USE_YOLO is enabled in config, uses YOLODetector.
-        Otherwise, uses HSV color-based detection.
+        Uses YOLODetector if USE_YOLO is enabled in config and ultralytics is installed.
+        Logs an error and falls back to HSV if YOLO is not available.
         """
         # Check if YOLO should be used (read dynamically for testability)
         try:
@@ -203,7 +206,7 @@ class CubeDetector:
                 )
             except Exception as e:
                 logging.error(f"Failed to initialize YOLO detector: {e}")
-                logging.info("Falling back to HSV color detection")
+                logging.error("Falling back to HSV color detection — YOLO is unavailable")
                 self.use_yolo = False
 
         # Always initialize HSV detector (for fallback or direct use)
@@ -237,9 +240,10 @@ class CubeDetector:
         self, image: np.ndarray, camera_id: str = "unknown"
     ) -> DetectionResult:
         """
-        Detect any colored objects in an image
+        Detect objects in an image using YOLO.
 
-        Uses YOLO if enabled in config, otherwise uses HSV color detection.
+        Uses YOLO by default. Falls back to HSV color detection only if YOLO
+        is unavailable (missing ultralytics package).
 
         Args:
             image: OpenCV image (BGR format)
@@ -295,10 +299,11 @@ class CubeDetector:
         camera_position: Optional[List[float]] = None,
     ) -> DetectionResult:
         """
-        Detect cubes in stereo images and estimate 3D world positions.
+        Detect objects in stereo images and estimate 3D world positions.
 
-        Uses YOLO if enabled in config, otherwise uses HSV color detection.
-        Detects objects in the left image and computes depth using stereo disparity.
+        Uses YOLO by default. Falls back to HSV color detection only if YOLO
+        is unavailable. Detects objects in the left image and computes depth
+        using stereo disparity.
 
         Args:
             imgL: Left camera image (BGR format)

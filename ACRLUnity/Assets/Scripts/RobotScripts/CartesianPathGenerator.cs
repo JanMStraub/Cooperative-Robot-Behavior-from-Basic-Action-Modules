@@ -18,13 +18,17 @@ namespace RobotScripts
         /// <param name="targetPos">Target position in local coordinates</param>
         /// <param name="targetRot">Target rotation</param>
         /// <param name="waypointSpacing">Distance between waypoints in meters (default 3cm)</param>
+        /// <param name="maxVelocity">Maximum path velocity in m/s (default 0.2)</param>
+        /// <param name="acceleration">Path acceleration in m/s² (default 0.5)</param>
         /// <returns>CartesianPath with linearly interpolated waypoints</returns>
         public static CartesianPath GenerateLinearPath(
             Vector3 startPos,
             Quaternion startRot,
             Vector3 targetPos,
             Quaternion targetRot,
-            float waypointSpacing = 0.03f
+            float waypointSpacing = 0.03f,
+            float maxVelocity = 0.2f,
+            float acceleration = 0.5f
         )
         {
             float distance = Vector3.Distance(startPos, targetPos);
@@ -52,8 +56,8 @@ namespace RobotScripts
             {
                 waypoints = waypoints,
                 totalDistance = distance,
-                maxVelocity = 0.2f,
-                acceleration = 0.5f,
+                maxVelocity = maxVelocity,
+                acceleration = acceleration,
             };
         }
 

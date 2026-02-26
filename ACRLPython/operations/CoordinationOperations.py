@@ -15,15 +15,13 @@ All operations are atomic - the LLM chains them to create complex workflows.
 
 import time
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional
 
 # Import from centralized lazy import system
 try:
     from ..core.Imports import get_command_broadcaster as _get_command_broadcaster
-    from ..core.Imports import get_unified_image_storage
 except ImportError:
     from core.Imports import get_command_broadcaster as _get_command_broadcaster
-    from core.Imports import get_unified_image_storage
 
 # Handle both direct execution and package import
 try:
@@ -129,8 +127,21 @@ def detect_other_robot(
         # Calculate distance between robots
         import math
 
-        detector_pos = detector_state.get("end_effector_position", detector_state.get("position"))  # type: ignore[union-attr]
-        target_pos = target_state.get("end_effector_position", target_state.get("position"))  # type: ignore[union-attr]
+        # Support both RobotState dataclass (production) and dict mocks (tests).
+        # RobotState has a `position` attribute; dicts use key access.
+        if isinstance(detector_state, dict):
+            detector_pos = detector_state.get(
+                "end_effector_position"
+            ) or detector_state.get("position")
+        else:
+            detector_pos = getattr(detector_state, "position", None)
+
+        if isinstance(target_state, dict):
+            target_pos = target_state.get("end_effector_position") or target_state.get(
+                "position"
+            )
+        else:
+            target_pos = getattr(target_state, "position", None)
 
         if not detector_pos or not target_pos:
             return OperationResult.error_result(
@@ -139,11 +150,15 @@ def detect_other_robot(
                 ["Ensure WorldStatePublisher is active"],
             )
 
-        distance = math.sqrt(
-            (detector_pos["x"] - target_pos["x"]) ** 2
-            + (detector_pos["y"] - target_pos["y"]) ** 2
-            + (detector_pos["z"] - target_pos["z"]) ** 2
-        )
+        # Extract x/y/z supporting both tuple/list (RobotState.position) and
+        # dict (e.g. {"x": ..., "y": ..., "z": ...}) from test mocks.
+        def _xyz(pos):
+            if isinstance(pos, dict):
+                return pos.get("x", 0.0), pos.get("y", 0.0), pos.get("z", 0.0)
+            return pos[0], pos[1], pos[2]
+
+        dx, dy, dz = tuple(a - b for a, b in zip(_xyz(detector_pos), _xyz(target_pos)))
+        distance = math.sqrt(dx * dx + dy * dy + dz * dz)
 
         logger.info(
             f"Robot {robot_id} detected {target_robot_id} at distance {distance:.3f}m"
@@ -245,6 +260,7 @@ def mirror_movement_of_other_robot(
         if _use_ros is None:
             try:
                 from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+
                 _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
             except ImportError:
                 _use_ros = False
@@ -253,7 +269,9 @@ def mirror_movement_of_other_robot(
         # ROS support would require real-time trajectory tracking via ROS topics
         # For now, this is best handled by Unity directly (TCP path)
         if _use_ros:
-            logger.info("Mirror movement via ROS not yet implemented - using Unity direct control")
+            logger.info(
+                "Mirror movement via ROS not yet implemented - using Unity direct control"
+            )
             _use_ros = False
 
         # Construct command (TCP path)
@@ -371,6 +389,25 @@ def create_detect_other_robot_operation() -> BasicOperation:
         average_duration_ms=80,
         success_rate=0.96,
         failure_modes=["Target robot not in view", "WorldState not updated"],
+        relationships=OperationRelationship(
+            operation_id="coordination_detect_robot_001",
+            required_operations=["status_check_robot_001"],
+            required_reasons={
+                "status_check_robot_001": "Verify this robot is active before attempting inter-robot detection",
+            },
+            commonly_paired_with=[
+                "coordination_mirror_movement_002",
+                "motion_move_to_coord_001",
+                "sync_signal_001",
+            ],
+            pairing_reasons={
+                "coordination_mirror_movement_002": "Detect robot position before enabling mirrored movement",
+                "motion_move_to_coord_001": "Move relative to other robot's detected position",
+                "sync_signal_001": "Signal readiness for coordination after detecting peer",
+            },
+            typical_before=["coordination_mirror_movement_002", "sync_signal_001"],
+            typical_after=["status_check_robot_001"],
+        ),
         implementation=detect_other_robot,
     )
 
@@ -427,6 +464,25 @@ def create_mirror_movement_operation() -> BasicOperation:
         average_duration_ms=50,  # Activation time
         success_rate=0.89,
         failure_modes=["Workspace collision", "Robot limits exceeded"],
+        relationships=OperationRelationship(
+            operation_id="coordination_mirror_movement_002",
+            required_operations=["coordination_detect_robot_001"],
+            required_reasons={
+                "coordination_detect_robot_001": "Must know other robot's position and proximity before enabling mirroring",
+            },
+            commonly_paired_with=[
+                "coordination_detect_robot_001",
+                "sync_signal_001",
+                "sync_wait_for_signal_001",
+            ],
+            pairing_reasons={
+                "coordination_detect_robot_001": "Detect target robot first to establish baseline position",
+                "sync_signal_001": "Signal when mirroring is active so other robot can proceed",
+                "sync_wait_for_signal_001": "Wait for peer readiness before starting synchronized movement",
+            },
+            typical_before=["sync_signal_001"],
+            typical_after=["coordination_detect_robot_001", "sync_wait_for_signal_001"],
+        ),
         implementation=mirror_movement_of_other_robot,
     )
 

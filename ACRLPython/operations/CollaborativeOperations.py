@@ -15,7 +15,7 @@ All operations are atomic - the LLM chains them to create complex workflows.
 
 import time
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional
 
 # Import from centralized lazy import system
 try:
@@ -123,6 +123,7 @@ def stabilize_object(
         if _use_ros is None:
             try:
                 from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+
                 _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
             except ImportError:
                 _use_ros = False
@@ -131,7 +132,9 @@ def stabilize_object(
         # This is best handled by Unity's force control system (TCP path)
         # ROS could handle initial positioning, but force feedback loops are Unity-side
         if _use_ros:
-            logger.info("Stabilization force control via ROS not yet implemented - using Unity direct control")
+            logger.info(
+                "Stabilization force control via ROS not yet implemented - using Unity direct control"
+            )
             _use_ros = False
 
         # Construct command (TCP path)

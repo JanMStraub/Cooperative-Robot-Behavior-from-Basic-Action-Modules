@@ -111,6 +111,7 @@ def grip_object(
         if _use_ros is None:
             try:
                 from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+
                 _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
             except ImportError:
                 _use_ros = False
@@ -119,14 +120,18 @@ def grip_object(
         if _use_ros:
             try:
                 from ros2.ROSBridge import ROSBridge
+
                 bridge = ROSBridge.get_instance()
                 if not bridge.is_connected:
                     if not bridge.connect():
                         # Fall back to TCP if hybrid mode
                         try:
                             from config.ROS import DEFAULT_CONTROL_MODE
+
                             if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning("ROS bridge unavailable, falling back to TCP")
+                                logger.warning(
+                                    "ROS bridge unavailable, falling back to TCP"
+                                )
                                 _use_ros = False
                             else:
                                 return OperationResult.error_result(
@@ -144,20 +149,27 @@ def grip_object(
                     )
                     if result and result.get("success"):
                         logger.info(f"ROS grip motion completed for {robot_id}")
-                        return OperationResult.success_result({
-                            "robot_id": robot_id,
-                            "object_position": object_position,
-                            "approach_direction": approach_direction,
-                            "status": "ros_executed",
-                            "planning_time": result.get("planning_time", 0),
-                            "timestamp": time.time(),
-                        })
+                        return OperationResult.success_result(
+                            {
+                                "robot_id": robot_id,
+                                "object_position": object_position,
+                                "approach_direction": approach_direction,
+                                "status": "ros_executed",
+                                "planning_time": result.get("planning_time", 0),
+                                "timestamp": time.time(),
+                            }
+                        )
                     else:
-                        error_msg = result.get("error", "Unknown") if result else "No response"
+                        error_msg = (
+                            result.get("error", "Unknown") if result else "No response"
+                        )
                         try:
                             from config.ROS import DEFAULT_CONTROL_MODE
+
                             if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning(f"ROS planning failed ({error_msg}), falling back to TCP")
+                                logger.warning(
+                                    f"ROS planning failed ({error_msg}), falling back to TCP"
+                                )
                                 _use_ros = False
                             else:
                                 return OperationResult.error_result(
@@ -285,6 +297,7 @@ def align_object(
         if _use_ros is None:
             try:
                 from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+
                 _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
             except ImportError:
                 _use_ros = False
@@ -293,14 +306,18 @@ def align_object(
         if _use_ros:
             try:
                 from ros2.ROSBridge import ROSBridge
+
                 bridge = ROSBridge.get_instance()
                 if not bridge.is_connected:
                     if not bridge.connect():
                         # Fall back to TCP if hybrid mode
                         try:
                             from config.ROS import DEFAULT_CONTROL_MODE
+
                             if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning("ROS bridge unavailable, falling back to TCP")
+                                logger.warning(
+                                    "ROS bridge unavailable, falling back to TCP"
+                                )
                                 _use_ros = False
                             else:
                                 return OperationResult.error_result(
@@ -318,26 +335,36 @@ def align_object(
                     )
                     if result and result.get("success"):
                         logger.info(f"ROS alignment completed for {robot_id}")
-                        return OperationResult.success_result({
-                            "robot_id": robot_id,
-                            "target_orientation": target_orientation,
-                            "alignment_type": alignment_type,
-                            "status": "ros_executed",
-                            "planning_time": result.get("planning_time", 0),
-                            "timestamp": time.time(),
-                        })
+                        return OperationResult.success_result(
+                            {
+                                "robot_id": robot_id,
+                                "target_orientation": target_orientation,
+                                "alignment_type": alignment_type,
+                                "status": "ros_executed",
+                                "planning_time": result.get("planning_time", 0),
+                                "timestamp": time.time(),
+                            }
+                        )
                     else:
-                        error_msg = result.get("error", "Unknown") if result else "No response"
+                        error_msg = (
+                            result.get("error", "Unknown") if result else "No response"
+                        )
                         try:
                             from config.ROS import DEFAULT_CONTROL_MODE
+
                             if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning(f"ROS planning failed ({error_msg}), falling back to TCP")
+                                logger.warning(
+                                    f"ROS planning failed ({error_msg}), falling back to TCP"
+                                )
                                 _use_ros = False
                             else:
                                 return OperationResult.error_result(
                                     "ROS_PLANNING_FAILED",
                                     f"MoveIt planning failed: {error_msg}",
-                                    ["Check MoveIt logs", "Verify orientation is reachable"],
+                                    [
+                                        "Check MoveIt logs",
+                                        "Verify orientation is reachable",
+                                    ],
                                 )
                         except ImportError:
                             _use_ros = False
@@ -357,9 +384,7 @@ def align_object(
             "request_id": request_id,
         }
 
-        logger.info(
-            f"Sending align_object command to {robot_id}: {target_orientation}"
-        )
+        logger.info(f"Sending align_object command to {robot_id}: {target_orientation}")
 
         success = _get_command_broadcaster().send_command(command, request_id)
 
@@ -467,6 +492,7 @@ def follow_path(
         if _use_ros is None:
             try:
                 from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+
                 _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
             except ImportError:
                 _use_ros = False
@@ -475,14 +501,18 @@ def follow_path(
         if _use_ros:
             try:
                 from ros2.ROSBridge import ROSBridge
+
                 bridge = ROSBridge.get_instance()
                 if not bridge.is_connected:
                     if not bridge.connect():
                         # Fall back to TCP if hybrid mode
                         try:
                             from config.ROS import DEFAULT_CONTROL_MODE
+
                             if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning("ROS bridge unavailable, falling back to TCP")
+                                logger.warning(
+                                    "ROS bridge unavailable, falling back to TCP"
+                                )
                                 _use_ros = False
                             else:
                                 return OperationResult.error_result(
@@ -500,27 +530,37 @@ def follow_path(
                     )
                     if result and result.get("success"):
                         logger.info(f"ROS multi-waypoint path completed for {robot_id}")
-                        return OperationResult.success_result({
-                            "robot_id": robot_id,
-                            "waypoints": waypoints,
-                            "waypoint_count": len(waypoints),
-                            "speed": speed,
-                            "status": "ros_executed",
-                            "planning_time": result.get("planning_time", 0),
-                            "timestamp": time.time(),
-                        })
+                        return OperationResult.success_result(
+                            {
+                                "robot_id": robot_id,
+                                "waypoints": waypoints,
+                                "waypoint_count": len(waypoints),
+                                "speed": speed,
+                                "status": "ros_executed",
+                                "planning_time": result.get("planning_time", 0),
+                                "timestamp": time.time(),
+                            }
+                        )
                     else:
-                        error_msg = result.get("error", "Unknown") if result else "No response"
+                        error_msg = (
+                            result.get("error", "Unknown") if result else "No response"
+                        )
                         try:
                             from config.ROS import DEFAULT_CONTROL_MODE
+
                             if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning(f"ROS planning failed ({error_msg}), falling back to TCP")
+                                logger.warning(
+                                    f"ROS planning failed ({error_msg}), falling back to TCP"
+                                )
                                 _use_ros = False
                             else:
                                 return OperationResult.error_result(
                                     "ROS_PLANNING_FAILED",
                                     f"MoveIt planning failed: {error_msg}",
-                                    ["Check MoveIt logs", "Verify all waypoints are reachable"],
+                                    [
+                                        "Check MoveIt logs",
+                                        "Verify all waypoints are reachable",
+                                    ],
                                 )
                         except ImportError:
                             _use_ros = False
@@ -668,6 +708,7 @@ def draw_with_pen(
         if _use_ros is None:
             try:
                 from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+
                 _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
             except ImportError:
                 _use_ros = False
@@ -676,14 +717,18 @@ def draw_with_pen(
         if _use_ros:
             try:
                 from ros2.ROSBridge import ROSBridge
+
                 bridge = ROSBridge.get_instance()
                 if not bridge.is_connected:
                     if not bridge.connect():
                         # Fall back to TCP if hybrid mode
                         try:
                             from config.ROS import DEFAULT_CONTROL_MODE
+
                             if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning("ROS bridge unavailable, falling back to TCP")
+                                logger.warning(
+                                    "ROS bridge unavailable, falling back to TCP"
+                                )
                                 _use_ros = False
                             else:
                                 return OperationResult.error_result(
@@ -697,35 +742,48 @@ def draw_with_pen(
                 if _use_ros:
                     # For drawing, generate waypoints based on shape and use multi-waypoint planning
                     # This is a simplified approach - full implementation would generate shape-specific paths
-                    waypoints = [pen_position, paper_position]  # Simplified: pick up pen, move to paper
+                    waypoints = [
+                        pen_position,
+                        paper_position,
+                    ]  # Simplified: pick up pen, move to paper
                     result = bridge.plan_multi_waypoint(
                         waypoints=waypoints,
                         robot_id=robot_id,
                     )
                     if result and result.get("success"):
                         logger.info(f"ROS drawing motion completed for {robot_id}")
-                        return OperationResult.success_result({
-                            "robot_id": robot_id,
-                            "pen_position": pen_position,
-                            "paper_position": paper_position,
-                            "shape": shape,
-                            "shape_params": shape_params,
-                            "status": "ros_executed",
-                            "planning_time": result.get("planning_time", 0),
-                            "timestamp": time.time(),
-                        })
+                        return OperationResult.success_result(
+                            {
+                                "robot_id": robot_id,
+                                "pen_position": pen_position,
+                                "paper_position": paper_position,
+                                "shape": shape,
+                                "shape_params": shape_params,
+                                "status": "ros_executed",
+                                "planning_time": result.get("planning_time", 0),
+                                "timestamp": time.time(),
+                            }
+                        )
                     else:
-                        error_msg = result.get("error", "Unknown") if result else "No response"
+                        error_msg = (
+                            result.get("error", "Unknown") if result else "No response"
+                        )
                         try:
                             from config.ROS import DEFAULT_CONTROL_MODE
+
                             if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning(f"ROS planning failed ({error_msg}), falling back to TCP")
+                                logger.warning(
+                                    f"ROS planning failed ({error_msg}), falling back to TCP"
+                                )
                                 _use_ros = False
                             else:
                                 return OperationResult.error_result(
                                     "ROS_PLANNING_FAILED",
                                     f"MoveIt planning failed: {error_msg}",
-                                    ["Check MoveIt logs", "Verify positions are reachable"],
+                                    [
+                                        "Check MoveIt logs",
+                                        "Verify positions are reachable",
+                                    ],
                                 )
                         except ImportError:
                             _use_ros = False
@@ -747,9 +805,7 @@ def draw_with_pen(
             "request_id": request_id,
         }
 
-        logger.info(
-            f"Sending draw_with_pen command to {robot_id}: shape={shape}"
-        )
+        logger.info(f"Sending draw_with_pen command to {robot_id}: shape={shape}")
 
         success = _get_command_broadcaster().send_command(command, request_id)
 
@@ -830,6 +886,30 @@ def create_grip_object_operation() -> BasicOperation:
         average_duration_ms=1500.0,
         success_rate=0.93,
         failure_modes=["Object not reachable", "Grasp failed"],
+        relationships=OperationRelationship(
+            operation_id="manipulation_grip_object_003",
+            required_operations=[
+                "perception_stereo_detect_001",
+                "motion_move_to_coord_001",
+            ],
+            required_reasons={
+                "perception_stereo_detect_001": "Object must be detected with 3D coordinates before grasping",
+                "motion_move_to_coord_001": "Robot must be positioned near object before grip",
+            },
+            commonly_paired_with=[
+                "manipulation_control_gripper_001",
+                "motion_return_to_start_001",
+            ],
+            pairing_reasons={
+                "manipulation_control_gripper_001": "Open gripper before gripping, close during grip action",
+                "motion_return_to_start_001": "Return to home after successful grip",
+            },
+            typical_after=["motion_move_to_coord_001", "perception_stereo_detect_001"],
+            typical_before=[
+                "motion_return_to_start_001",
+                "manipulation_control_gripper_001",
+            ],
+        ),
         implementation=grip_object,
     )
 
@@ -876,6 +956,23 @@ def create_align_object_operation() -> BasicOperation:
         average_duration_ms=900.0,
         success_rate=0.94,
         failure_modes=["Unreachable orientation", "Joint limits"],
+        relationships=OperationRelationship(
+            operation_id="manipulation_align_object_004",
+            required_operations=["motion_move_to_coord_001"],
+            required_reasons={
+                "motion_move_to_coord_001": "Robot must be positioned at target location before orientation can be adjusted",
+            },
+            commonly_paired_with=[
+                "manipulation_control_gripper_001",
+                "manipulation_grip_object_003",
+            ],
+            pairing_reasons={
+                "manipulation_control_gripper_001": "Release object with correct orientation for placement",
+                "manipulation_grip_object_003": "Align before precise grip to ensure correct approach angle",
+            },
+            typical_after=["motion_move_to_coord_001"],
+            typical_before=["manipulation_control_gripper_001"],
+        ),
         implementation=align_object,
     )
 
@@ -922,6 +1019,26 @@ def create_follow_path_operation() -> BasicOperation:
         average_duration_ms=2000.0,
         success_rate=0.91,
         failure_modes=["Waypoint unreachable", "Path obstructed"],
+        relationships=OperationRelationship(
+            operation_id="navigation_follow_path_004",
+            required_operations=["status_check_robot_001"],
+            required_reasons={
+                "status_check_robot_001": "Confirm robot is ready before commanding multi-waypoint trajectory",
+            },
+            commonly_paired_with=[
+                "manipulation_grip_object_003",
+                "manipulation_control_gripper_001",
+            ],
+            pairing_reasons={
+                "manipulation_grip_object_003": "Follow path to object location then grip",
+                "manipulation_control_gripper_001": "Control gripper at end of path (grasp or release)",
+            },
+            typical_after=["status_check_robot_001"],
+            typical_before=[
+                "manipulation_grip_object_003",
+                "manipulation_control_gripper_001",
+            ],
+        ),
         implementation=follow_path,
     )
 
@@ -979,6 +1096,23 @@ def create_draw_with_pen_operation() -> BasicOperation:
         average_duration_ms=3000.0,
         success_rate=0.85,
         failure_modes=["Pen not detected", "Paper position inaccurate"],
+        relationships=OperationRelationship(
+            operation_id="manipulation_draw_with_pen_005",
+            required_operations=[
+                "perception_stereo_detect_001",
+                "manipulation_control_gripper_001",
+            ],
+            required_reasons={
+                "perception_stereo_detect_001": "Detect pen and paper surface positions before drawing",
+                "manipulation_control_gripper_001": "Grip pen tool before drawing operation",
+            },
+            commonly_paired_with=["motion_move_to_coord_001"],
+            pairing_reasons={
+                "motion_move_to_coord_001": "Navigate to pen pickup position before gripping tool",
+            },
+            typical_after=["manipulation_control_gripper_001"],
+            typical_before=["motion_return_to_start_001"],
+        ),
         implementation=draw_with_pen,
     )
 

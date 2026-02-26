@@ -43,6 +43,7 @@ def mock_detection_result():
     """Create a mock detection result from YOLO."""
     detection = Mock()
     detection.class_name = "fielda"
+    detection.color = "fielda"
     detection.bbox = {"x": 100, "y": 100, "width": 50, "height": 50}
     detection.confidence = 0.85
     detection.world_position = (0.3, 0.0, 0.1)  # Tuple format
@@ -62,11 +63,7 @@ def mock_image_storage_with_stereo():
     right_image = np.zeros((480, 640, 3), dtype=np.uint8)
 
     storage.get_latest_stereo_image = Mock(
-        return_value={
-            "left_image": left_image,
-            "right_image": right_image,
-            "camera_params": {},
-        }
+        return_value=(left_image, right_image, "", 0.0, {"camera_params": {}})
     )
     return storage
 
@@ -136,6 +133,7 @@ class TestDetectField:
             # Create detection result for this letter
             detection = Mock()
             detection.class_name = f"field{letter.lower()}"
+            detection.color = f"field{letter.lower()}"
             detection.bbox = {"x": 100, "y": 100, "width": 50, "height": 50}
             detection.confidence = 0.8
             detection.world_position = (0.2, 0.0, 0.1)
@@ -192,10 +190,7 @@ class TestDetectField:
         """Test field detection when stereo pair is incomplete."""
         storage = Mock()
         storage.get_latest_stereo_image = Mock(
-            return_value={
-                "left_image": np.zeros((480, 640, 3), dtype=np.uint8),
-                "right_image": None,  # Missing right image
-            }
+            return_value=(np.zeros((480, 640, 3), dtype=np.uint8), None, "", 0.0, {})
         )
 
         monkeypatch.setattr(
@@ -248,8 +243,7 @@ class TestDetectField:
 
             assert result.success is True
             # Verify YOLO was called with correct confidence threshold
-            call_kwargs = mock_detector.detect_objects_stereo.call_args[1]
-            assert call_kwargs["confidence_threshold"] == 0.7
+            assert mock_detector.conf_threshold == 0.7
 
     def test_detect_field_no_3d_coordinates(
         self, mock_image_storage_with_stereo, monkeypatch
@@ -263,6 +257,7 @@ class TestDetectField:
         # Detection without world position
         detection = Mock()
         detection.class_name = "fielda"
+        detection.color = "fielda"
         detection.bbox = {"x": 100, "y": 100, "width": 50, "height": 50}
         detection.confidence = 0.85
         detection.world_position = None  # No 3D position
@@ -292,6 +287,7 @@ class TestDetectField:
         # Detection with world position as dict
         detection = Mock()
         detection.class_name = "fieldb"
+        detection.color = "fieldb"
         detection.bbox = {"x": 100, "y": 100, "width": 50, "height": 50}
         detection.confidence = 0.85
         detection.world_position = {"x": 0.4, "y": 0.1, "z": 0.0}  # Dict format
@@ -376,12 +372,14 @@ class TestDetectAllFields:
         # Create multiple field detections
         detection_a = Mock()
         detection_a.class_name = "fielda"
+        detection_a.color = "fielda"
         detection_a.bbox = {"x": 100, "y": 100, "width": 50, "height": 50}
         detection_a.confidence = 0.85
         detection_a.world_position = (0.2, 0.0, 0.1)
 
         detection_d = Mock()
         detection_d.class_name = "fieldd"
+        detection_d.color = "fieldd"
         detection_d.bbox = {"x": 200, "y": 100, "width": 50, "height": 50}
         detection_d.confidence = 0.90
         detection_d.world_position = (0.3, 0.1, 0.1)
@@ -477,8 +475,7 @@ class TestDetectAllFields:
             result = detect_all_fields("Robot1", confidence_threshold=0.8)
 
             # Verify YOLO was called with correct confidence threshold
-            call_kwargs = mock_detector.detect_objects_stereo.call_args[1]
-            assert call_kwargs["confidence_threshold"] == 0.8
+            assert mock_detector.conf_threshold == 0.8
 
 
 # ============================================================================
@@ -566,6 +563,7 @@ class TestFieldOperationsEdgeCases:
         for i, letter in enumerate("ABCDEFGHI"):
             detection = Mock()
             detection.class_name = f"field{letter.lower()}"
+            detection.color = f"field{letter.lower()}"
             detection.bbox = {"x": i * 50, "y": 100, "width": 50, "height": 50}
             detection.confidence = 0.85
             detection.world_position = (0.1 + i * 0.05, 0.0, 0.1)

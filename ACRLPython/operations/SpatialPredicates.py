@@ -11,7 +11,8 @@ All predicates are registered in PREDICATE_REGISTRY for dynamic lookup.
 
 import math
 import logging
-from typing import Tuple, Dict, Callable, Any, Optional
+from typing import Tuple, Dict, Callable, Optional
+
 try:
     from config.Robot import (
         ROBOT_BASE_POSITIONS,
@@ -230,7 +231,9 @@ def robot_is_initialized(robot_id: str, world_state=None) -> Tuple[bool, str]:
                 status = world_state.get_robot_status(robot_id)
                 if status is None:
                     # Status unavailable, fall back to basic check
-                    logger.debug(f"Robot '{robot_id}' status unavailable, using basic check")
+                    logger.debug(
+                        f"Robot '{robot_id}' status unavailable, using basic check"
+                    )
                 elif "is_initialized" in status:
                     # We have actual status information from Unity
                     if not status.get("is_initialized"):
@@ -239,7 +242,9 @@ def robot_is_initialized(robot_id: str, world_state=None) -> Tuple[bool, str]:
                 else:
                     # Status query was sent but no response yet (e.g., status="query_sent")
                     # Fall back to basic check
-                    logger.debug(f"Robot '{robot_id}' status pending, using basic check")
+                    logger.debug(
+                        f"Robot '{robot_id}' status pending, using basic check"
+                    )
             except Exception as e:
                 logger.warning(f"Could not query robot status: {e}")
                 # Fall through to basic check
@@ -530,12 +535,45 @@ def _calculate_segment_distance(
     # Avoid division by zero
     denominator = a * c - b * b
     if abs(denominator) < 1e-10:
-        # Segments are parallel
-        # Calculate distance from p2_start to segment 1
-        t1 = max(0.0, min(1.0, -d / a if a > 1e-10 else 0.0))
-        point1 = tuple(p1_start[i] + t1 * d1[i] for i in range(3))
-        dist = math.sqrt(sum((point1[i] - p2_start[i]) ** 2 for i in range(3)))
-        return dist
+        # Segments are parallel — evaluate all 4 endpoint-to-opposite-segment distances
+        # and return the minimum, since a single endpoint projection is not sufficient
+        # when segments are adjacent (end-to-end) or overlapping.
+        def _point_to_seg1_dist(pt: Tuple[float, float, float]) -> float:
+            t = max(
+                0.0,
+                min(
+                    1.0,
+                    (
+                        sum((pt[i] - p1_start[i]) * d1[i] for i in range(3)) / a
+                        if a > 1e-10
+                        else 0.0
+                    ),
+                ),
+            )
+            closest = tuple(p1_start[i] + t * d1[i] for i in range(3))
+            return math.sqrt(sum((closest[i] - pt[i]) ** 2 for i in range(3)))
+
+        def _point_to_seg2_dist(pt: Tuple[float, float, float]) -> float:
+            t = max(
+                0.0,
+                min(
+                    1.0,
+                    (
+                        sum((pt[i] - p2_start[i]) * d2[i] for i in range(3)) / c
+                        if c > 1e-10
+                        else 0.0
+                    ),
+                ),
+            )
+            closest = tuple(p2_start[i] + t * d2[i] for i in range(3))
+            return math.sqrt(sum((closest[i] - pt[i]) ** 2 for i in range(3)))
+
+        return min(
+            _point_to_seg1_dist(p2_start),
+            _point_to_seg1_dist(p2_end),
+            _point_to_seg2_dist(p1_start),
+            _point_to_seg2_dist(p1_end),
+        )
 
     # Calculate parameters for closest points
     t1 = (b * e - c * d) / denominator

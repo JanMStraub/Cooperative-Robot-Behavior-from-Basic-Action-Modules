@@ -22,9 +22,19 @@ Usage:
 import json
 import threading
 from typing import Dict, List, Optional
-from core.TCPServerBase import TCPServerBase, ServerConfig
-from core.UnityProtocol import UnityProtocol, MessageType
-from config.Servers import WORLD_STATE_PORT, DEFAULT_HOST, WORLDSTATE_CHECK_INTERVAL
+
+try:
+    from core.TCPServerBase import TCPServerBase, ServerConfig
+    from core.UnityProtocol import UnityProtocol, MessageType
+    from config.Servers import WORLD_STATE_PORT, DEFAULT_HOST, WORLDSTATE_CHECK_INTERVAL
+except ImportError:
+    from ..core.TCPServerBase import TCPServerBase, ServerConfig
+    from ..core.UnityProtocol import UnityProtocol, MessageType
+    from ..config.Servers import (
+        WORLD_STATE_PORT,
+        DEFAULT_HOST,
+        WORLDSTATE_CHECK_INTERVAL,
+    )
 
 
 class WorldStateServer(TCPServerBase):
@@ -89,6 +99,7 @@ class WorldStateServer(TCPServerBase):
                 if not len_bytes:
                     break
                 import struct
+
                 json_length = struct.unpack("<I", len_bytes)[0]
 
                 # Validate length
@@ -101,15 +112,15 @@ class WorldStateServer(TCPServerBase):
                 if not json_bytes:
                     break
 
-                json_str = json_bytes.decode('utf-8')
+                json_str = json_bytes.decode("utf-8")
 
                 # Parse and store world state
                 try:
                     state_update = json.loads(json_str)
                     self._update_world_state(state_update)
 
-                    robots_count = len(state_update.get('robots', []))
-                    objects_count = len(state_update.get('objects', []))
+                    robots_count = len(state_update.get("robots", []))
+                    objects_count = len(state_update.get("objects", []))
                     self._logger.debug(
                         f"Received world state update: {robots_count} robots, "
                         f"{objects_count} objects"
@@ -163,9 +174,9 @@ class WorldStateServer(TCPServerBase):
             if not self._latest_state:
                 return None
 
-            robots = self._latest_state.get('robots', [])
+            robots = self._latest_state.get("robots", [])
             for robot in robots:
-                if robot.get('robot_id') == robot_id:
+                if robot.get("robot_id") == robot_id:
                     return robot.copy()
 
             return None
@@ -184,9 +195,9 @@ class WorldStateServer(TCPServerBase):
             if not self._latest_state:
                 return None
 
-            objects = self._latest_state.get('objects', [])
+            objects = self._latest_state.get("objects", [])
             for obj in objects:
-                if obj.get('object_id') == object_id:
+                if obj.get("object_id") == object_id:
                     return obj.copy()
 
             return None
@@ -202,8 +213,8 @@ class WorldStateServer(TCPServerBase):
             if not self._latest_state:
                 return []
 
-            robots = self._latest_state.get('robots', [])
-            return [robot.get('robot_id') for robot in robots if 'robot_id' in robot]
+            robots = self._latest_state.get("robots", [])
+            return [robot.get("robot_id") for robot in robots if "robot_id" in robot]
 
     def get_all_object_ids(self) -> List[str]:
         """
@@ -216,8 +227,8 @@ class WorldStateServer(TCPServerBase):
             if not self._latest_state:
                 return []
 
-            objects = self._latest_state.get('objects', [])
-            return [obj.get('object_id') for obj in objects if 'object_id' in obj]
+            objects = self._latest_state.get("objects", [])
+            return [obj.get("object_id") for obj in objects if "object_id" in obj]
 
     def get_statistics(self) -> Dict:
         """
@@ -228,9 +239,9 @@ class WorldStateServer(TCPServerBase):
         """
         with self._state_lock:
             return {
-                'updates_received': self._updates_received,
-                'last_update_time': self._last_update_time,
-                'has_state': self._latest_state is not None
+                "updates_received": self._updates_received,
+                "last_update_time": self._last_update_time,
+                "has_state": self._latest_state is not None,
             }
 
 
@@ -259,13 +270,15 @@ if __name__ == "__main__":
                 print(f"Timestamp: {state.get('timestamp', 'N/A')}")
 
                 # Print robot details
-                for robot in state.get('robots', []):
-                    robot_id = robot.get('robot_id', 'unknown')
-                    pos = robot.get('position', {})
-                    gripper = robot.get('gripper_state', 'unknown')
-                    moving = robot.get('is_moving', False)
-                    print(f"  {robot_id}: pos=({pos.get('x', 0):.2f}, {pos.get('y', 0):.2f}, {pos.get('z', 0):.2f}), "
-                          f"gripper={gripper}, moving={moving}")
+                for robot in state.get("robots", []):
+                    robot_id = robot.get("robot_id", "unknown")
+                    pos = robot.get("position", {})
+                    gripper = robot.get("gripper_state", "unknown")
+                    moving = robot.get("is_moving", False)
+                    print(
+                        f"  {robot_id}: pos=({pos.get('x', 0):.2f}, {pos.get('y', 0):.2f}, {pos.get('z', 0):.2f}), "
+                        f"gripper={gripper}, moving={moving}"
+                    )
             else:
                 print("No world state received yet...")
 

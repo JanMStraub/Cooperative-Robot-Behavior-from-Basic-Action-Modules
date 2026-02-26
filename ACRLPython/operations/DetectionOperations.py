@@ -23,6 +23,7 @@ try:
         OperationCategory,
         OperationComplexity,
         OperationParameter,
+        OperationRelationship,
         OperationResult,
     )
 except ImportError:
@@ -31,6 +32,7 @@ except ImportError:
         OperationCategory,
         OperationComplexity,
         OperationParameter,
+        OperationRelationship,
         OperationResult,
     )
 
@@ -49,9 +51,9 @@ def detect_objects(
     request_id: int = 0,
 ) -> OperationResult:
     """
-    Detect objects in a camera image using color-based detection.
+    Detect objects in a camera image using YOLO.
 
-    Retrieves the latest image from ImageStorage and runs detection.
+    Retrieves the latest image from ImageStorage and runs YOLO detection.
     Returns pixel coordinates of detected objects.
 
     Args:
@@ -127,20 +129,19 @@ def create_detect_objects_operation() -> BasicOperation:
         name="detect_objects",
         category=OperationCategory.PERCEPTION,
         complexity=OperationComplexity.BASIC,
-        description="Detect colored objects in camera image using HSV color segmentation",
+        description="Detect objects in camera image using YOLO",
         long_description="""
-            This perception operation detects colored cubes (red, blue) in a camera
-            image using HSV color segmentation and contour detection.
+            This perception operation detects objects (cubes, robot parts, field markers)
+            in a camera image using YOLO object detection.
 
             The operation:
             1. Retrieves the latest image from ImageStorage for the specified camera
-            2. Converts to HSV color space
-            3. Applies color masks for red and blue
-            4. Finds contours and filters by size/aspect ratio
-            5. Returns bounding boxes and pixel coordinates
+            2. Runs YOLO inference on the image
+            3. Filters detections by confidence and area thresholds
+            4. Returns bounding boxes and pixel coordinates
 
             This returns 2D pixel coordinates only. For 3D world coordinates,
-            use detect_with_depth which uses stereo vision.
+            use detect_object_stereo which uses stereo vision.
         """,
         usage_examples=[
             "detect_objects('Robot1', 'main') - Detect objects from main camera",
@@ -173,12 +174,23 @@ def create_detect_objects_operation() -> BasicOperation:
         success_rate=0.95,
         failure_modes=[
             "No image available - camera not sending images",
-            "No objects detected - empty scene or wrong colors",
-            "Poor lighting - affects color detection accuracy",
+            "No objects detected - empty scene or objects not in YOLO training classes",
+            "Poor lighting - affects YOLO detection accuracy",
         ],
-        required_operations=[],
-        commonly_paired_with=["navigation_move_001", "manipulation_grip_001"],
-        mutually_exclusive_with=[],
+        relationships=OperationRelationship(
+            operation_id="perception_detect_objects_001",
+            required_operations=[],
+            commonly_paired_with=[
+                "motion_move_to_coord_001",
+                "manipulation_control_gripper_001",
+            ],
+            pairing_reasons={
+                "motion_move_to_coord_001": "Move robot toward detected object coordinates",
+                "manipulation_control_gripper_001": "Grip detected object after navigation",
+            },
+            typical_after=["status_check_robot_001"],
+            typical_before=["motion_move_to_coord_001"],
+        ),
         implementation=detect_objects,
     )
 
@@ -265,9 +277,7 @@ def estimate_distance_to_object(
             + (robot_pos["z"] - object_pos["z"]) ** 2
         )
 
-        logger.info(
-            f"Distance from {robot_id} to {object_id}: {distance:.3f}m"
-        )
+        logger.info(f"Distance from {robot_id} to {object_id}: {distance:.3f}m")
 
         return OperationResult.success_result(
             {
@@ -358,9 +368,7 @@ def estimate_distance_between_objects(
             + (pos1["z"] - pos2["z"]) ** 2
         )
 
-        logger.info(
-            f"Distance between {object_id1} and {object_id2}: {distance:.3f}m"
-        )
+        logger.info(f"Distance between {object_id1} and {object_id2}: {distance:.3f}m")
 
         return OperationResult.success_result(
             {
@@ -374,9 +382,7 @@ def estimate_distance_between_objects(
         )
 
     except Exception as e:
-        logger.error(
-            f"Error in estimate_distance_between_objects: {e}", exc_info=True
-        )
+        logger.error(f"Error in estimate_distance_between_objects: {e}", exc_info=True)
         return OperationResult.error_result(
             "ESTIMATION_ERROR",
             f"Distance estimation failed: {str(e)}",
@@ -437,6 +443,26 @@ def create_estimate_distance_to_object_operation() -> BasicOperation:
             "Robot position unavailable",
             "WorldState not updated",
         ],
+        relationships=OperationRelationship(
+            operation_id="perception_distance_to_object_002",
+            required_operations=["perception_stereo_detect_001"],
+            required_reasons={
+                "perception_stereo_detect_001": "Object must be detected with 3D coordinates before distance can be calculated",
+            },
+            commonly_paired_with=[
+                "motion_move_to_coord_001",
+                "manipulation_grasp_object_001",
+            ],
+            pairing_reasons={
+                "motion_move_to_coord_001": "Check distance before moving to verify object is within reach",
+                "manipulation_grasp_object_001": "Confirm distance is within grasp range before executing grasp",
+            },
+            typical_after=["perception_stereo_detect_001"],
+            typical_before=[
+                "manipulation_grasp_object_001",
+                "motion_move_to_coord_001",
+            ],
+        ),
         implementation=estimate_distance_to_object,
     )
 
@@ -487,6 +513,22 @@ def create_estimate_distance_between_objects_operation() -> BasicOperation:
             "Objects not detected",
             "Position data missing",
         ],
+        relationships=OperationRelationship(
+            operation_id="perception_distance_between_objects_003",
+            required_operations=["perception_stereo_detect_001"],
+            required_reasons={
+                "perception_stereo_detect_001": "Both objects must be detected with 3D coordinates before inter-object distance can be measured",
+            },
+            commonly_paired_with=[
+                "manipulation_grasp_object_001",
+                "motion_move_between_objects_001",
+            ],
+            pairing_reasons={
+                "manipulation_grasp_object_001": "Verify clearance between objects before attempting grasp or placement",
+                "motion_move_between_objects_001": "Measure gap before navigating between two objects",
+            },
+            typical_after=["perception_stereo_detect_001"],
+        ),
         implementation=estimate_distance_between_objects,
     )
 
@@ -497,4 +539,6 @@ def create_estimate_distance_between_objects_operation() -> BasicOperation:
 
 DETECT_OBJECTS_OPERATION = create_detect_objects_operation()
 ESTIMATE_DISTANCE_TO_OBJECT_OPERATION = create_estimate_distance_to_object_operation()
-ESTIMATE_DISTANCE_BETWEEN_OBJECTS_OPERATION = create_estimate_distance_between_objects_operation()
+ESTIMATE_DISTANCE_BETWEEN_OBJECTS_OPERATION = (
+    create_estimate_distance_between_objects_operation()
+)

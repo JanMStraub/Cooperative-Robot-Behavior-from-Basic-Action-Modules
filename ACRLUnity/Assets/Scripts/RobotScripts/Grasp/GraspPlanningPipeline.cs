@@ -18,6 +18,11 @@ namespace Robotics.Grasp
         private readonly GraspScorer _scorer;
         private readonly Transform _endEffector; // Store for orientation consistency scoring
 
+        // Pre-allocated intermediate lists to avoid per-call heap allocations in PlanGrasp
+        private readonly List<GraspCandidate> _ikValidCandidates = new List<GraspCandidate>(32);
+        private readonly List<GraspCandidate> _collisionFreeCandidates = new List<GraspCandidate>(32);
+        private readonly List<GraspCandidate> _rankedCandidates = new List<GraspCandidate>(32);
+
         private const string _logPrefix = "[GRASP_PLANNING_PIPELINE]";
 
         /// <summary>
@@ -106,28 +111,29 @@ namespace Robotics.Grasp
                 return null;
             }
 
-            var ikValidCandidates = _ikFilter.FilterCandidates(candidates, gripperPosition);
+            _ikValidCandidates.Clear();
+            _ikValidCandidates.AddRange(_ikFilter.FilterCandidates(candidates, gripperPosition));
             UnityEngine.Debug.Log(
-                $"{_logPrefix} {ikValidCandidates.Count} candidates passed IK filter"
+                $"{_logPrefix} {_ikValidCandidates.Count} candidates passed IK filter"
             );
-            LogApproachDistribution("IK-filtered", ikValidCandidates);
+            LogApproachDistribution("IK-filtered", _ikValidCandidates);
 
-            if (ikValidCandidates.Count == 0)
+            if (_ikValidCandidates.Count == 0)
             {
                 UnityEngine.Debug.LogWarning($"{_logPrefix} No candidates passed IK validation");
                 return FallbackToSimplePlanner(targetObject, gripperPosition, options);
             }
 
-            var collisionFreeCandidates = _collisionFilter.FilterCandidates(
-                ikValidCandidates,
-                targetObject
+            _collisionFreeCandidates.Clear();
+            _collisionFreeCandidates.AddRange(
+                _collisionFilter.FilterCandidates(_ikValidCandidates, targetObject)
             );
             UnityEngine.Debug.Log(
-                $"{_logPrefix} {collisionFreeCandidates.Count} candidates passed collision filter"
+                $"{_logPrefix} {_collisionFreeCandidates.Count} candidates passed collision filter"
             );
-            LogApproachDistribution("Collision-free", collisionFreeCandidates);
+            LogApproachDistribution("Collision-free", _collisionFreeCandidates);
 
-            if (collisionFreeCandidates.Count == 0)
+            if (_collisionFreeCandidates.Count == 0)
             {
                 UnityEngine.Debug.LogWarning($"{_logPrefix} No collision-free candidates found");
                 return FallbackToSimplePlanner(targetObject, gripperPosition, options);
@@ -136,17 +142,18 @@ namespace Robotics.Grasp
             Vector3 objectSize = GraspUtilities.GetObjectSize(targetObject);
             Quaternion currentGripperRotation =
                 _endEffector != null ? _endEffector.rotation : Quaternion.identity;
-            var rankedCandidates = _scorer.ScoreAndRank(
-                collisionFreeCandidates,
+            _rankedCandidates.Clear();
+            _rankedCandidates.AddRange(_scorer.ScoreAndRank(
+                _collisionFreeCandidates,
                 objectSize,
                 gripperPosition,
                 currentGripperRotation
-            );
+            ));
 
             stopwatch.Stop();
             float elapsedMs = (float)stopwatch.Elapsed.TotalMilliseconds;
 
-            var bestCandidate = rankedCandidates[0];
+            var bestCandidate = _rankedCandidates[0];
             UnityEngine.Debug.Log(
                 $"{_logPrefix} Pipeline completed in {elapsedMs:F1}ms. "
                     + $"Best candidate score: {bestCandidate.totalScore:F2}, "
@@ -154,7 +161,7 @@ namespace Robotics.Grasp
                     + $"GraspPos: {bestCandidate.graspPosition}, "
                     + $"PreGraspPos: {bestCandidate.preGraspPosition}"
             );
-            LogTopCandidatesScores(rankedCandidates);
+            LogTopCandidatesScores(_rankedCandidates);
 
             if (elapsedMs > _config.maxPipelineTimeMs)
             {

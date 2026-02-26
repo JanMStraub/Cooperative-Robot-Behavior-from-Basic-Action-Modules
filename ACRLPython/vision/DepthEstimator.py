@@ -29,8 +29,10 @@ try:
         SGBM_MEDIUM,
         SGBM_FAR,
     )
-except ImportError:
-    from StereoConfig import (
+except ImportError as e:
+    import sys
+    print("FIRST IMPORT ERROR:", e, file=sys.stderr)
+    from vision.StereoConfig import (
         CameraConfig,
         ReconstructionConfig,
         SGBMPreset,

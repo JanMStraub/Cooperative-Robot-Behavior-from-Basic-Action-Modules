@@ -57,6 +57,10 @@ namespace Vision
         private Camera _rightCamera;
         private string _cameraPairId;
 
+        // Pre-allocated shared textures to avoid per-frame GPU memory churn
+        private RenderTexture _sharedRT;
+        private Texture2D _sharedTex;
+
         private const string _logPrefix = "[STEREO_CAMERA_CONTROLLER]";
 
         /// <summary>
@@ -126,6 +130,10 @@ namespace Vision
             }
 
             _cameraPairId = name; // GameObject name
+
+            // Pre-allocate shared textures once to avoid per-frame GPU allocations
+            _sharedRT = new RenderTexture(_imageWidth, _imageHeight, 24);
+            _sharedTex = new Texture2D(_imageWidth, _imageHeight, TextureFormat.RGB24, false);
 
             _streamingInterval = 1.0f / _streamingFPS;
             if (_enableStreaming)
@@ -326,60 +334,60 @@ namespace Vision
         }
 
         /// <summary>
-        /// Capture image from a camera
+        /// Capture image from a camera using pre-allocated shared textures.
+        /// Left and right cameras are captured sequentially (never in parallel),
+        /// so a single shared RenderTexture + Texture2D pair is safe to reuse.
         /// </summary>
         private byte[] CaptureImage(Camera camera)
         {
             if (camera == null)
                 return null;
 
-            RenderTexture rt = null;
-            Texture2D texture = null;
-
             try
             {
-                // Create render texture
-                rt = new RenderTexture(_imageWidth, _imageHeight, 24);
-                camera.targetTexture = rt;
+                // Render into the shared RenderTexture
+                camera.targetTexture = _sharedRT;
                 camera.Render();
 
-                // Read pixels
-                RenderTexture.active = rt;
-                texture = new Texture2D(_imageWidth, _imageHeight, TextureFormat.RGB24, false);
-                texture.ReadPixels(new Rect(0, 0, _imageWidth, _imageHeight), 0, 0);
-                texture.Apply();
+                // Read pixels into the shared Texture2D
+                RenderTexture.active = _sharedRT;
+                _sharedTex.ReadPixels(new Rect(0, 0, _imageWidth, _imageHeight), 0, 0);
+                _sharedTex.Apply();
 
-                // Cleanup render texture
+                // Restore camera and active RT before encoding
                 camera.targetTexture = null;
                 RenderTexture.active = null;
 
                 // Encode to JPEG
-                byte[] bytes = texture.EncodeToJPG(_JPEGQuality);
-                return bytes;
+                return _sharedTex.EncodeToJPG(_JPEGQuality);
             }
             catch (Exception ex)
             {
                 Debug.LogError($"{_logPrefix} Error capturing image: {ex.Message}");
+                camera.targetTexture = null;
+                RenderTexture.active = null;
                 return null;
-            }
-            finally
-            {
-                // Cleanup resources
-                if (rt != null)
-                    Destroy(rt);
-                if (texture != null)
-                    Destroy(texture);
             }
         }
 
         /// <summary>
-        /// Unity OnDestroy - cleanup
+        /// Unity OnDestroy - release pre-allocated shared textures
         /// </summary>
         private void OnDestroy()
         {
             if (_captureCounter > 0)
             {
                 Debug.Log($"{_logPrefix} Destroyed after {_captureCounter} captures");
+            }
+
+            if (_sharedRT != null)
+            {
+                _sharedRT.Release();
+                Destroy(_sharedRT);
+            }
+            if (_sharedTex != null)
+            {
+                Destroy(_sharedTex);
             }
         }
     }

@@ -9,6 +9,7 @@ through Unity's RobotController via TCP communication.
 import time
 import logging
 from typing import Optional
+
 # Lazy import to avoid circular dependency with servers module
 # from servers.CommandServer import get_command_broadcaster
 from .Base import (
@@ -22,6 +23,7 @@ from .Base import (
 
 # Configure logging
 from core.LoggingSetup import setup_logging
+
 setup_logging(__name__)
 logger = logging.getLogger(__name__)
 
@@ -122,34 +124,34 @@ def move_to_coordinate(
             )
 
         # Validate X coordinate
-        if not (-1.0 <= x <= 1.0):
+        if not (-0.65 <= x <= 0.65):
             return OperationResult.error_result(
                 "INVALID_X_COORDINATE",
-                f"X coordinate {x} out of range [-1.0, 1.0]",
+                f"X coordinate {x} out of range [-0.65, 0.65]",
                 [
-                    "Adjust X to be within robot workspace [-1.0, 1.0]",
+                    "Adjust X to be within robot workspace [-0.65, 0.65]",
                     "Use detect_object to get valid coordinates",
                 ],
             )
 
         # Validate Y coordinate
-        if not (-1.0 <= y <= 1.0):
+        if not (0.0 <= y <= 0.7):
             return OperationResult.error_result(
                 "INVALID_Y_COORDINATE",
-                f"Y coordinate {y} out of range [-1.0, 1.0]",
+                f"Y coordinate {y} out of range [0.0, 0.7]",
                 [
-                    "Adjust Y to be within robot workspace [-1.0, 1.0]",
+                    "Adjust Y to be within robot workspace [0.0, 0.7]",
                     "Use detect_object to get valid coordinates",
                 ],
             )
 
         # Validate Z coordinate
-        if not (-0.5 <= z <= 0.6):
+        if not (-0.5 <= z <= 0.5):
             return OperationResult.error_result(
                 "INVALID_Z_COORDINATE",
-                f"Z coordinate {z} out of range [-0.5, 0.6]",
+                f"Z coordinate {z} out of range [-0.5, 0.5]",
                 [
-                    "Adjust Z to be within robot workspace [-0.5, 0.6]",
+                    "Adjust Z to be within robot workspace [-0.5, 0.5]",
                     "Z can be negative (below robot base level)",
                 ],
             )
@@ -181,6 +183,7 @@ def move_to_coordinate(
         if _use_ros is None:
             try:
                 from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+
                 _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
             except ImportError:
                 _use_ros = False
@@ -194,14 +197,18 @@ def move_to_coordinate(
         if _use_ros:
             try:
                 from ros2.ROSBridge import ROSBridge
+
                 bridge = ROSBridge.get_instance()
                 if not bridge.is_connected:
                     if not bridge.connect():
                         # Fall back to TCP if hybrid mode
                         try:
                             from config.ROS import DEFAULT_CONTROL_MODE
+
                             if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning("ROS bridge unavailable, falling back to TCP")
+                                logger.warning(
+                                    "ROS bridge unavailable, falling back to TCP"
+                                )
                                 _use_ros = False
                             else:
                                 return OperationResult.error_result(
@@ -222,21 +229,32 @@ def move_to_coordinate(
                     )
                     if result and result.get("success"):
                         logger.info(f"ROS motion completed for {robot_id}")
-                        return OperationResult.success_result({
-                            "robot_id": robot_id,
-                            "target_position": {"x": actual_x, "y": actual_y, "z": actual_z},
-                            "speed": speed,
-                            "approach_offset": approach_offset,
-                            "status": "ros_executed",
-                            "planning_time": result.get("planning_time", 0),
-                            "timestamp": time.time(),
-                        })
+                        return OperationResult.success_result(
+                            {
+                                "robot_id": robot_id,
+                                "target_position": {
+                                    "x": actual_x,
+                                    "y": actual_y,
+                                    "z": actual_z,
+                                },
+                                "speed": speed,
+                                "approach_offset": approach_offset,
+                                "status": "ros_executed",
+                                "planning_time": result.get("planning_time", 0),
+                                "timestamp": time.time(),
+                            }
+                        )
                     else:
-                        error_msg = result.get("error", "Unknown") if result else "No response"
+                        error_msg = (
+                            result.get("error", "Unknown") if result else "No response"
+                        )
                         try:
                             from config.ROS import DEFAULT_CONTROL_MODE
+
                             if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning(f"ROS planning failed ({error_msg}), falling back to TCP")
+                                logger.warning(
+                                    f"ROS planning failed ({error_msg}), falling back to TCP"
+                                )
                                 _use_ros = False
                             else:
                                 return OperationResult.error_result(
@@ -362,21 +380,21 @@ def create_move_to_coordinate_operation() -> BasicOperation:
                 type="float",
                 description="X coordinate in meters (forward/back from robot base)",
                 required=True,
-                valid_range=(-1.0, 1.0),
+                valid_range=(-0.65, 0.65),
             ),
             OperationParameter(
                 name="y",
                 type="float",
                 description="Y coordinate in meters (left/right from robot base)",
                 required=True,
-                valid_range=(-1.0, 1.0),
+                valid_range=(0.0, 0.7),
             ),
             OperationParameter(
                 name="z",
                 type="float",
                 description="Z coordinate in meters (height above robot base)",
                 required=True,
-                valid_range=(-0.5, 0.6),
+                valid_range=(-0.5, 0.5),
             ),
             OperationParameter(
                 name="speed",
@@ -497,7 +515,9 @@ def move_from_a_to_b(
             )
 
         # Validate point_a
-        if not isinstance(point_a, dict) or not all(k in point_a for k in ['x', 'y', 'z']):
+        if not isinstance(point_a, dict) or not all(
+            k in point_a for k in ["x", "y", "z"]
+        ):
             return OperationResult.error_result(
                 "INVALID_POINT_A",
                 f"Point A must be dict with x, y, z keys, got: {point_a}",
@@ -505,7 +525,9 @@ def move_from_a_to_b(
             )
 
         # Validate point_b
-        if not isinstance(point_b, dict) or not all(k in point_b for k in ['x', 'y', 'z']):
+        if not isinstance(point_b, dict) or not all(
+            k in point_b for k in ["x", "y", "z"]
+        ):
             return OperationResult.error_result(
                 "INVALID_POINT_B",
                 f"Point B must be dict with x, y, z keys, got: {point_b}",
@@ -517,6 +539,7 @@ def move_from_a_to_b(
         if _use_ros is None:
             try:
                 from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+
                 _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
             except ImportError:
                 _use_ros = False
@@ -525,14 +548,18 @@ def move_from_a_to_b(
         if _use_ros:
             try:
                 from ros2.ROSBridge import ROSBridge
+
                 bridge = ROSBridge.get_instance()
                 if not bridge.is_connected:
                     if not bridge.connect():
                         # Fall back to TCP if hybrid mode
                         try:
                             from config.ROS import DEFAULT_CONTROL_MODE
+
                             if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning("ROS bridge unavailable, falling back to TCP")
+                                logger.warning(
+                                    "ROS bridge unavailable, falling back to TCP"
+                                )
                                 _use_ros = False
                             else:
                                 return OperationResult.error_result(
@@ -554,27 +581,37 @@ def move_from_a_to_b(
                     )
                     if result and result.get("success"):
                         logger.info(f"ROS waypoint motion completed for {robot_id}")
-                        return OperationResult.success_result({
-                            "robot_id": robot_id,
-                            "point_a": point_a,
-                            "point_b": point_b,
-                            "speed": speed,
-                            "status": "ros_executed",
-                            "planning_time": result.get("planning_time", 0),
-                            "timestamp": time.time(),
-                        })
+                        return OperationResult.success_result(
+                            {
+                                "robot_id": robot_id,
+                                "point_a": point_a,
+                                "point_b": point_b,
+                                "speed": speed,
+                                "status": "ros_executed",
+                                "planning_time": result.get("planning_time", 0),
+                                "timestamp": time.time(),
+                            }
+                        )
                     else:
-                        error_msg = result.get("error", "Unknown") if result else "No response"
+                        error_msg = (
+                            result.get("error", "Unknown") if result else "No response"
+                        )
                         try:
                             from config.ROS import DEFAULT_CONTROL_MODE
+
                             if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning(f"ROS planning failed ({error_msg}), falling back to TCP")
+                                logger.warning(
+                                    f"ROS planning failed ({error_msg}), falling back to TCP"
+                                )
                                 _use_ros = False
                             else:
                                 return OperationResult.error_result(
                                     "ROS_PLANNING_FAILED",
                                     f"MoveIt planning failed: {error_msg}",
-                                    ["Check MoveIt logs", "Verify waypoints are reachable"],
+                                    [
+                                        "Check MoveIt logs",
+                                        "Verify waypoints are reachable",
+                                    ],
                                 )
                         except ImportError:
                             _use_ros = False
@@ -606,7 +643,10 @@ def move_from_a_to_b(
             return OperationResult.error_result(
                 "COMMUNICATION_FAILED",
                 "Failed to send command to Unity - no clients connected",
-                ["Ensure Unity is running", "Verify CommandServer is running (port 5010)"],
+                [
+                    "Ensure Unity is running",
+                    "Verify CommandServer is running (port 5010)",
+                ],
             )
 
         logger.info(f"Successfully sent move_from_a_to_b command to {robot_id}")
@@ -760,6 +800,7 @@ def adjust_end_effector_orientation(
         if _use_ros is None:
             try:
                 from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+
                 _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
             except ImportError:
                 _use_ros = False
@@ -768,14 +809,18 @@ def adjust_end_effector_orientation(
         if _use_ros:
             try:
                 from ros2.ROSBridge import ROSBridge
+
                 bridge = ROSBridge.get_instance()
                 if not bridge.is_connected:
                     if not bridge.connect():
                         # Fall back to TCP if hybrid mode
                         try:
                             from config.ROS import DEFAULT_CONTROL_MODE
+
                             if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning("ROS bridge unavailable, falling back to TCP")
+                                logger.warning(
+                                    "ROS bridge unavailable, falling back to TCP"
+                                )
                                 _use_ros = False
                             else:
                                 return OperationResult.error_result(
@@ -793,26 +838,42 @@ def adjust_end_effector_orientation(
                         robot_id=robot_id,
                     )
                     if result and result.get("success"):
-                        logger.info(f"ROS orientation adjustment completed for {robot_id}")
-                        return OperationResult.success_result({
-                            "robot_id": robot_id,
-                            "orientation": {"roll": roll, "pitch": pitch, "yaw": yaw},
-                            "status": "ros_executed",
-                            "planning_time": result.get("planning_time", 0),
-                            "timestamp": time.time(),
-                        })
+                        logger.info(
+                            f"ROS orientation adjustment completed for {robot_id}"
+                        )
+                        return OperationResult.success_result(
+                            {
+                                "robot_id": robot_id,
+                                "orientation": {
+                                    "roll": roll,
+                                    "pitch": pitch,
+                                    "yaw": yaw,
+                                },
+                                "status": "ros_executed",
+                                "planning_time": result.get("planning_time", 0),
+                                "timestamp": time.time(),
+                            }
+                        )
                     else:
-                        error_msg = result.get("error", "Unknown") if result else "No response"
+                        error_msg = (
+                            result.get("error", "Unknown") if result else "No response"
+                        )
                         try:
                             from config.ROS import DEFAULT_CONTROL_MODE
+
                             if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning(f"ROS planning failed ({error_msg}), falling back to TCP")
+                                logger.warning(
+                                    f"ROS planning failed ({error_msg}), falling back to TCP"
+                                )
                                 _use_ros = False
                             else:
                                 return OperationResult.error_result(
                                     "ROS_PLANNING_FAILED",
                                     f"MoveIt planning failed: {error_msg}",
-                                    ["Check MoveIt logs", "Verify orientation is reachable"],
+                                    [
+                                        "Check MoveIt logs",
+                                        "Verify orientation is reachable",
+                                    ],
                                 )
                         except ImportError:
                             _use_ros = False
@@ -933,4 +994,6 @@ def create_adjust_end_effector_orientation_operation() -> BasicOperation:
     )
 
 
-ADJUST_END_EFFECTOR_ORIENTATION_OPERATION = create_adjust_end_effector_orientation_operation()
+ADJUST_END_EFFECTOR_ORIENTATION_OPERATION = (
+    create_adjust_end_effector_orientation_operation()
+)

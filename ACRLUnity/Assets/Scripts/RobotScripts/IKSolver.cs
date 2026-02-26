@@ -18,6 +18,11 @@ namespace Robotics
         private Vector<double> _errorVector;
         private Vector<double> _jointDelta;
 
+        // Pre-allocated intermediates for ComputePseudoInverse (avoids 3 heap allocs/frame)
+        private Matrix<double> _jacobianTranspose;
+        private Matrix<double> _jacobianJacobianTranspose;
+        private Matrix<double> _regularizedMatrix;
+
         // Iteration tracking
         private int _iterationCount;
         public int IterationCount => _iterationCount;
@@ -51,6 +56,10 @@ namespace Robotics
             _errorVector = Vector<double>.Build.Dense(6);
             _jointDelta = Vector<double>.Build.Dense(jointCount);
             _cachedIdentity = DenseMatrix.Build.DenseIdentity(6);
+
+            _jacobianTranspose = DenseMatrix.Build.Dense(jointCount, 6);
+            _jacobianJacobianTranspose = DenseMatrix.Build.Dense(6, 6);
+            _regularizedMatrix = DenseMatrix.Build.Dense(6, 6);
         }
 
         /// <summary>
@@ -218,6 +227,9 @@ namespace Robotics
             {
                 _jacobianMatrix = DenseMatrix.Build.Dense(6, joints.Length);
                 _jointDelta = Vector<double>.Build.Dense(joints.Length);
+                _jacobianTranspose = DenseMatrix.Build.Dense(joints.Length, 6);
+                _jacobianJacobianTranspose = DenseMatrix.Build.Dense(6, 6);
+                _regularizedMatrix = DenseMatrix.Build.Dense(6, 6);
             }
 
             for (int i = 0; i < joints.Length; i++)
@@ -245,16 +257,21 @@ namespace Robotics
         /// <param name="overrideDamping">Optional damping override (null uses default)</param>
         private void ComputePseudoInverse(float? overrideDamping = null)
         {
-            var jacobianTranspose = _jacobianMatrix.Transpose();
-            var jacobianJacobianTranspose = _jacobianMatrix * jacobianTranspose;
+            // Use pre-allocated fields to avoid per-frame heap allocations
+            _jacobianMatrix.Transpose(_jacobianTranspose);
+            _jacobianMatrix.Multiply(_jacobianTranspose, _jacobianJacobianTranspose);
 
             float damping = overrideDamping ?? _dampingFactor;
 
-            var regularized = jacobianJacobianTranspose + damping * damping * _cachedIdentity;
+            // regularizedMatrix = JJ^T + λ²I  (in-place: write into _regularizedMatrix)
+            _cachedIdentity.Multiply(damping * damping, _regularizedMatrix);
+            _jacobianJacobianTranspose.Add(_regularizedMatrix, _regularizedMatrix);
 
-            var y = regularized.LU().Solve(_errorVector);
+            // LU decomp still allocates internally (unavoidable with MathNet)
+            var y = _regularizedMatrix.LU().Solve(_errorVector);
 
-            _jointDelta = jacobianTranspose * y;
+            // Write result directly into pre-allocated _jointDelta
+            _jacobianTranspose.Multiply(y, _jointDelta);
         }
     }
 

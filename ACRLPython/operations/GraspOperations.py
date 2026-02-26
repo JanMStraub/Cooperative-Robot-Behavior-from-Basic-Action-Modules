@@ -21,6 +21,7 @@ from .Base import (
 
 # Configure logging
 from core.LoggingSetup import setup_logging
+
 setup_logging(__name__)
 logger = logging.getLogger(__name__)
 
@@ -38,13 +39,13 @@ except ImportError:
 
 # Hover height above object centre used for the pre-grasp approach move.
 # Must be high enough that the arm clears the object when it swings in.
-PRE_GRASP_HOVER_OFFSET: float = 0.15   # 15 cm above object centre
+PRE_GRASP_HOVER_OFFSET: float = 0.15  # 15 cm above object centre
 
 # TCP offset at the final grasp position.
 # Placing ee_link this far above the object centre lets the fingers (which
 # extend ~5 cm beyond ee_link) wrap around the object rather than collide
 # with its top surface.  Lower values = fingers engage more of the object.
-GRASP_TCP_OFFSET: float = 0.03         # 3 cm above object centre
+GRASP_TCP_OFFSET: float = 0.03  # 3 cm above object centre
 
 
 # ============================================================================
@@ -107,7 +108,9 @@ def _execute_grasp_with_follow_target(
         for correction in range(FOLLOW_TARGET_MAX_CORRECTIONS):
             live_pos = world_state.get_object_position(object_id)
             if live_pos is None:
-                logger.debug(f"[follow_target] {robot_id}: object '{object_id}' not in WorldState, skipping correction")
+                logger.debug(
+                    f"[follow_target] {robot_id}: object '{object_id}' not in WorldState, skipping correction"
+                )
                 break
 
             # Compute drift distance in XZ plane (Y is vertical, cube stays on table)
@@ -147,12 +150,16 @@ def _execute_grasp_with_follow_target(
                 break
     else:
         if not FOLLOW_TARGET_ENABLED:
-            logger.debug(f"[follow_target] disabled — closing gripper at planned position")
+            logger.debug(
+                f"[follow_target] disabled — closing gripper at planned position"
+            )
 
     # Arm is at (corrected) grasp position.
     # Wait for the ArticulationBody PD controller to settle before closing so the
     # gripper doesn't fire while the arm is still oscillating at the target pose.
-    logger.info(f"[follow_target] {robot_id}: waiting for arm to settle before closing gripper")
+    logger.info(
+        f"[follow_target] {robot_id}: waiting for arm to settle before closing gripper"
+    )
     time.sleep(0.5)
 
     # Close gripper
@@ -200,6 +207,7 @@ def _get_control_mode() -> str:
     """
     try:
         from config.ROS import DEFAULT_CONTROL_MODE
+
         return DEFAULT_CONTROL_MODE
     except ImportError:
         return "ros"
@@ -280,7 +288,9 @@ def _grasp_via_ros_planned(
             gripper_position=robot_state.position,
             gripper_rotation=None,
             use_moveit_ik=True,
-            preferred_approach=preferred_approach if preferred_approach != "auto" else None,
+            preferred_approach=(
+                preferred_approach if preferred_approach != "auto" else None
+            ),
             min_score=0.3,
         )
     except Exception as e:
@@ -293,7 +303,9 @@ def _grasp_via_ros_planned(
         return err, False
 
     if best_grasp is None:
-        logger.warning("Grasp planning found no valid candidates, falling back to position-only")
+        logger.warning(
+            "Grasp planning found no valid candidates, falling back to position-only"
+        )
         return None, True  # caller tries position-only
 
     logger.info(
@@ -359,23 +371,34 @@ def _grasp_via_ros_planned(
         world_state=world_state,
     )
     if not gripper_ok:
-        return OperationResult.error_result(
-            "GRIPPER_CLOSE_FAILED",
-            f"Arm reached grasp position but gripper close command failed for {robot_id}",
-            ["Check gripper hardware/simulation state", "Verify GripperContactSensor is active"],
-        ), False
+        return (
+            OperationResult.error_result(
+                "GRIPPER_CLOSE_FAILED",
+                f"Arm reached grasp position but gripper close command failed for {robot_id}",
+                [
+                    "Check gripper hardware/simulation state",
+                    "Verify GripperContactSensor is active",
+                ],
+            ),
+            False,
+        )
 
-    return OperationResult.success_result({
-        "robot_id": robot_id,
-        "object_id": object_id,
-        "position": object_position,
-        "grasp_approach": best_grasp.approach_type,
-        "grasp_score": best_grasp.total_score,
-        "request_id": request_id,
-        "status": "ros_executed_with_grasp_planning",
-        "planning_time": result.get("planning_time", 0),
-        "timestamp": time.time(),
-    }), False
+    return (
+        OperationResult.success_result(
+            {
+                "robot_id": robot_id,
+                "object_id": object_id,
+                "position": object_position,
+                "grasp_approach": best_grasp.approach_type,
+                "grasp_score": best_grasp.total_score,
+                "request_id": request_id,
+                "status": "ros_executed_with_grasp_planning",
+                "planning_time": result.get("planning_time", 0),
+                "timestamp": time.time(),
+            }
+        ),
+        False,
+    )
 
 
 def _grasp_via_ros_position_only(
@@ -423,7 +446,8 @@ def _grasp_via_ros_position_only(
         error_msg = pre_result.get("error", "Unknown") if pre_result else "No response"
         logger.warning(f"Pre-grasp move failed ({error_msg})")
         fallback, err = _handle_ros_failure(
-            f"MoveIt pre-grasp planning failed: {error_msg}", "_grasp_via_ros_position_only"
+            f"MoveIt pre-grasp planning failed: {error_msg}",
+            "_grasp_via_ros_position_only",
         )
         if fallback:
             return None, True
@@ -445,7 +469,8 @@ def _grasp_via_ros_position_only(
     if not result or not result.get("success"):
         error_msg = result.get("error", "Unknown") if result else "No response"
         fallback, err = _handle_ros_failure(
-            f"MoveIt motion planning failed: {error_msg}", "_grasp_via_ros_position_only"
+            f"MoveIt motion planning failed: {error_msg}",
+            "_grasp_via_ros_position_only",
         )
         if fallback:
             return None, True
@@ -463,21 +488,32 @@ def _grasp_via_ros_position_only(
         world_state=world_state,
     )
     if not gripper_ok:
-        return OperationResult.error_result(
-            "GRIPPER_CLOSE_FAILED",
-            f"Arm reached grasp position but gripper close command failed for {robot_id}",
-            ["Check gripper hardware/simulation state", "Verify GripperContactSensor is active"],
-        ), False
+        return (
+            OperationResult.error_result(
+                "GRIPPER_CLOSE_FAILED",
+                f"Arm reached grasp position but gripper close command failed for {robot_id}",
+                [
+                    "Check gripper hardware/simulation state",
+                    "Verify GripperContactSensor is active",
+                ],
+            ),
+            False,
+        )
 
-    return OperationResult.success_result({
-        "robot_id": robot_id,
-        "object_id": object_id,
-        "position": object_position,
-        "request_id": request_id,
-        "status": "ros_executed",
-        "planning_time": result.get("planning_time", 0),
-        "timestamp": time.time(),
-    }), False
+    return (
+        OperationResult.success_result(
+            {
+                "robot_id": robot_id,
+                "object_id": object_id,
+                "position": object_position,
+                "request_id": request_id,
+                "status": "ros_executed",
+                "planning_time": result.get("planning_time", 0),
+                "timestamp": time.time(),
+            }
+        ),
+        False,
+    )
 
 
 # ============================================================================
@@ -490,9 +526,9 @@ def grasp_object(
     object_id: str,
     use_advanced_planning: bool = True,
     preferred_approach: str = "auto",  # "top", "front", "side", "auto"
-    pre_grasp_distance: float = 0.0,   # 0 = use config default
+    pre_grasp_distance: float = 0.0,  # 0 = use config default
     enable_retreat: bool = True,
-    retreat_distance: float = 0.0,     # 0 = use config default
+    retreat_distance: float = 0.0,  # 0 = use config default
     custom_approach_vector: Optional[List[float]] = None,  # [x, y, z] or None
     request_id: int = 0,
     use_ros: Optional[bool] = None,
@@ -605,7 +641,10 @@ def grasp_object(
             )
 
         if custom_approach_vector is not None:
-            if not isinstance(custom_approach_vector, (list, tuple)) or len(custom_approach_vector) != 3:
+            if (
+                not isinstance(custom_approach_vector, (list, tuple))
+                or len(custom_approach_vector) != 3
+            ):
                 return OperationResult.error_result(
                     "INVALID_APPROACH_VECTOR",
                     f"Custom approach vector must be a 3-element list [x, y, z], got: {custom_approach_vector}",
@@ -620,20 +659,24 @@ def grasp_object(
         if _use_ros is None:
             try:
                 from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+
                 _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
             except ImportError:
                 _use_ros = False
 
         # --- ROS path ---
+        bridge = None
         if _use_ros:
             try:
                 from ros2.ROSBridge import ROSBridge
+
                 bridge = ROSBridge.get_instance()
                 if not bridge.is_connected and not bridge.connect():
                     should_fallback, err = _handle_ros_failure(
                         "Failed to connect to ROS bridge (port 5020)", "grasp_object"
                     )
                     if not should_fallback:
+                        assert err is not None
                         return err
                     _use_ros = False
 
@@ -644,10 +687,13 @@ def grasp_object(
         if _use_ros:
             try:
                 from core.Imports import get_world_state
+
                 world_state = get_world_state()
                 object_position = world_state.get_object_position(object_id)
 
-                logger.info(f"[GRASP_DEBUG] {object_id} WorldState position: {object_position}")
+                logger.info(
+                    f"[GRASP_DEBUG] {object_id} WorldState position: {object_position}"
+                )
 
                 if object_position is None:
                     # WorldState is empty — detection either wasn't run or failed silently.
@@ -661,16 +707,19 @@ def grasp_object(
 
                     # Inline detection: derive color from object_id (e.g. "red_cube" → "red").
                     # This makes grasp_object self-healing when the LLM omits the detection step.
-                    color_hint = object_id.split("_")[0] if "_" in object_id else object_id
+                    color_hint = (
+                        object_id.split("_")[0] if "_" in object_id else object_id
+                    )
                     try:
                         from operations.VisionOperations import detect_object_stereo
+
                         det_result = detect_object_stereo(
                             robot_id=robot_id,
                             color=color_hint,
                             camera_id="stereo",
                             request_id=request_id,
                         )
-                        if det_result and det_result.get("success"):
+                        if det_result and det_result["success"]:
                             # Re-query WorldState — detection should have written the position
                             object_position = world_state.get_object_position(object_id)
                             if object_position is not None:
@@ -683,10 +732,14 @@ def grasp_object(
                                     f"not in WorldState (stored: {list(world_state._objects.keys())})"
                                 )
                         else:
-                            err_msg = det_result.get("error", {}) if det_result else "no response"
+                            err_msg = (
+                                det_result["error"] if det_result else "no response"
+                            )
                             logger.warning(f"Inline detection failed: {err_msg}")
                     except Exception as det_err:
-                        logger.error(f"Inline detection raised: {det_err}", exc_info=True)
+                        logger.error(
+                            f"Inline detection raised: {det_err}", exc_info=True
+                        )
 
                 if object_position is None:
                     should_fallback, err = _handle_ros_failure(
@@ -695,10 +748,13 @@ def grasp_object(
                         "grasp_object",
                     )
                     if not should_fallback:
+                        assert err is not None
                         return err
                     _use_ros = False
                 else:
-                    logger.info(f"Resolved {object_id} to position {object_position}, planning with ROS")
+                    logger.info(
+                        f"Resolved {object_id} to position {object_position}, planning with ROS"
+                    )
 
                     object_dimensions = world_state.get_object_dimensions(object_id)
                     robot_state = world_state.get_robot_state(robot_id)
@@ -710,6 +766,7 @@ def grasp_object(
                         and robot_state.position is not None
                     ):
                         logger.info(f"Using grasp planning pipeline for {object_id}")
+                        assert bridge is not None
                         ros_result, fallback = _grasp_via_ros_planned(
                             bridge=bridge,
                             robot_id=robot_id,
@@ -722,11 +779,13 @@ def grasp_object(
                             world_state=world_state,
                         )
                         if not fallback:
+                            assert ros_result is not None
                             return ros_result
                         # fallback=True: fall through to position-only ROS
 
                     # Position-only ROS path (no dimensions or GraspPlanner fallback)
                     logger.info(f"Using position-only planning for {object_id}")
+                    assert bridge is not None
                     ros_result, fallback = _grasp_via_ros_position_only(
                         bridge=bridge,
                         robot_id=robot_id,
@@ -736,6 +795,7 @@ def grasp_object(
                         world_state=world_state,
                     )
                     if not fallback:
+                        assert ros_result is not None
                         return ros_result
                     _use_ros = False  # TCP fallback
 
@@ -745,6 +805,7 @@ def grasp_object(
                     f"Error preparing ROS grasp: {str(e)}", "grasp_object"
                 )
                 if not should_fallback:
+                    assert err is not None
                     return err
                 _use_ros = False
 
@@ -793,12 +854,14 @@ def grasp_object(
         if success:
             # Return success immediately - SequenceExecutor will wait for Unity completion
             logger.debug(f"Grasp command sent successfully, request_id={request_id}")
-            return OperationResult.success_result({
-                "command_sent": True,
-                "robot_id": robot_id,
-                "object_id": object_id,
-                "request_id": request_id,
-            })
+            return OperationResult.success_result(
+                {
+                    "command_sent": True,
+                    "robot_id": robot_id,
+                    "object_id": object_id,
+                    "request_id": request_id,
+                }
+            )
         else:
             logger.error(f"Failed to send grasp command")
             return OperationResult.error_result(
@@ -957,11 +1020,16 @@ def grasp_object_for_handoff(
         # Retrieve spatial data from WorldState.
         try:
             from core.Imports import get_world_state
+
             world_state = get_world_state()
         except ImportError:
             logger.warning("WorldState unavailable, falling back to centre grasp")
-            return grasp_object(robot_id=robot_id, object_id=object_id,
-                                request_id=request_id, use_ros=use_ros)
+            return grasp_object(
+                robot_id=robot_id,
+                object_id=object_id,
+                request_id=request_id,
+                use_ros=use_ros,
+            )
 
         object_position = world_state.get_object_position(object_id)
         object_dimensions = world_state.get_object_dimensions(object_id)
@@ -972,18 +1040,29 @@ def grasp_object_for_handoff(
                 f"grasp_object_for_handoff: '{object_id}' not in WorldState, "
                 f"falling back to standard grasp"
             )
-            return grasp_object(robot_id=robot_id, object_id=object_id,
-                                request_id=request_id, use_ros=use_ros)
+            return grasp_object(
+                robot_id=robot_id,
+                object_id=object_id,
+                request_id=request_id,
+                use_ros=use_ros,
+            )
 
-        if object_dimensions is None or receiving_robot_state is None or \
-                receiving_robot_state.position is None:
+        if (
+            object_dimensions is None
+            or receiving_robot_state is None
+            or receiving_robot_state.position is None
+        ):
             logger.warning(
                 f"grasp_object_for_handoff: missing dimensions or receiving robot "
                 f"position for '{object_id}' / '{receiving_robot_id}', "
                 f"falling back to standard grasp"
             )
-            return grasp_object(robot_id=robot_id, object_id=object_id,
-                                request_id=request_id, use_ros=use_ros)
+            return grasp_object(
+                robot_id=robot_id,
+                object_id=object_id,
+                request_id=request_id,
+                use_ros=use_ros,
+            )
 
         approach_vector = _compute_handoff_approach_vector(
             object_position=object_position,
@@ -1070,7 +1149,7 @@ GRASP_OBJECT_FOR_HANDOFF_OPERATION = BasicOperation(
             name="receiving_robot_id",
             type="str",
             description="ID of the robot that will receive the object; "
-                        "determines which end to grasp from",
+            "determines which end to grasp from",
             required=True,
         ),
         OperationParameter(
@@ -1098,6 +1177,40 @@ GRASP_OBJECT_FOR_HANDOFF_OPERATION = BasicOperation(
         "IK infeasible for computed approach vector",
         "Object outside grasping robot's workspace",
     ],
+    relationships=OperationRelationship(
+        operation_id="coordination_grasp_object_for_handoff_001",
+        required_operations=[
+            "perception_stereo_detect_001",
+            "status_check_robot_001",
+            "coordination_detect_robot_001",
+        ],
+        required_reasons={
+            "perception_stereo_detect_001": "Object must be detected with 3D coordinates and dimensions for handoff-aware grasp planning",
+            "status_check_robot_001": "Grasping robot must be ready before executing complex grasp sequence",
+            "coordination_detect_robot_001": "Receiving robot position must be known to determine which object end to grasp from",
+        },
+        commonly_paired_with=[
+            "sync_signal_001",
+            "sync_wait_for_signal_001",
+            "manipulation_control_gripper_001",
+        ],
+        pairing_reasons={
+            "sync_signal_001": "Signal to receiving robot that object is grasped and ready for handoff",
+            "sync_wait_for_signal_001": "Wait for receiving robot to confirm readiness before initiating handoff",
+            "manipulation_control_gripper_001": "Open gripper when receiving robot has secured the object",
+        },
+        typical_after=[
+            "coordination_detect_robot_001",
+            "perception_stereo_detect_001",
+            "sync_wait_for_signal_001",
+        ],
+        typical_before=["sync_signal_001", "manipulation_control_gripper_001"],
+        coordination_requirements={
+            "requires_peer_robot": True,
+            "peer_robot_param": "receiving_robot_id",
+            "coordination_pattern": "handoff",
+        },
+    ),
     implementation=grasp_object_for_handoff,
 )
 
@@ -1215,5 +1328,36 @@ GRASP_OBJECT_OPERATION = BasicOperation(
         "Object not found in scene",
         "Object outside robot reach",
     ],
+    relationships=OperationRelationship(
+        operation_id="manipulation_grasp_object_001",
+        required_operations=[
+            "perception_stereo_detect_001",
+            "status_check_robot_001",
+        ],
+        required_reasons={
+            "perception_stereo_detect_001": "Object must be detected with 3D world coordinates before grasp planning can begin",
+            "status_check_robot_001": "Robot must be initialized and responsive before executing complex grasp pipeline",
+        },
+        commonly_paired_with=[
+            "manipulation_control_gripper_001",
+            "motion_move_to_coord_001",
+            "motion_return_to_start_001",
+        ],
+        pairing_reasons={
+            "manipulation_control_gripper_001": "Open gripper before approach, close after grasping for controlled pickup",
+            "motion_move_to_coord_001": "Move to pre-grasp position before executing final grasp",
+            "motion_return_to_start_001": "Return to safe position after successful grasp with object in hand",
+        },
+        typical_after=[
+            "perception_stereo_detect_001",
+            "status_check_robot_001",
+            "motion_move_to_coord_001",
+        ],
+        typical_before=[
+            "motion_move_to_coord_001",
+            "manipulation_control_gripper_001",
+            "motion_return_to_start_001",
+        ],
+    ),
     implementation=grasp_object,
 )

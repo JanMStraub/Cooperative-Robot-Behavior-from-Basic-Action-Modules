@@ -54,12 +54,11 @@ from .IntermediateOperations import (
 from .CoordinationOperations import (
     DETECT_OTHER_ROBOT_OPERATION,
     MIRROR_MOVEMENT_OPERATION,
-    # HAND_OVER_OBJECT_OPERATION removed - non-atomic (see WorkflowPatterns.py)
 )
 from .CollaborativeOperations import (
     STABILIZE_OBJECT_OPERATION,
-    # STABILIZE_AND_MANIPULATE_OPERATION removed - non-atomic (see WorkflowPatterns.py)
 )
+
 
 class OperationRegistry:
     """
@@ -83,78 +82,73 @@ class OperationRegistry:
             # ============================================================================
             # LEVEL 1-2: BASIC OPERATIONS (Atomic actions)
             # ============================================================================
-
             # Navigation & Motion
             MOVE_TO_COORDINATE_OPERATION,
             MOVE_FROM_A_TO_B_OPERATION,
             ADJUST_END_EFFECTOR_ORIENTATION_OPERATION,
             RETURN_TO_START_POSITION_OPERATION,
-
             # Gripper Control
             CONTROL_GRIPPER_OPERATION,
             RELEASE_OBJECT_OPERATION,
-
             # Perception & Detection
             DETECT_OBJECTS_OPERATION,
             DETECT_OBJECT_STEREO_OPERATION,
             ANALYZE_SCENE_OPERATION,
             ESTIMATE_DISTANCE_TO_OBJECT_OPERATION,
             ESTIMATE_DISTANCE_BETWEEN_OBJECTS_OPERATION,
-
             # Field Detection (YOLO-based)
             DETECT_FIELD_OPERATION,
             GET_FIELD_CENTER_OPERATION,
             DETECT_ALL_FIELDS_OPERATION,
-
             # Status
             CHECK_ROBOT_STATUS_OPERATION,
-
             # Synchronization Primitives
             SIGNAL_OPERATION,
             WAIT_FOR_SIGNAL_OPERATION,
             WAIT_OPERATION,
-
             # ============================================================================
             # LEVEL 3: INTERMEDIATE OPERATIONS (Complex single-robot tasks)
             # ============================================================================
-
             # Advanced Manipulation
             GRASP_OBJECT_OPERATION,
             GRIP_OBJECT_OPERATION,
             ALIGN_OBJECT_OPERATION,
             DRAW_WITH_PEN_OPERATION,
-
             # Spatial Reasoning & Navigation
             MOVE_RELATIVE_TO_OBJECT_OPERATION,
             MOVE_BETWEEN_OBJECTS_OPERATION,
             MOVE_TO_REGION_OPERATION,
             FOLLOW_PATH_OPERATION,
-
             # ============================================================================
             # LEVEL 4: MULTI-ROBOT COORDINATION (Inter-robot operations)
             # ============================================================================
-
             DETECT_OTHER_ROBOT_OPERATION,
             MIRROR_MOVEMENT_OPERATION,
             GRASP_OBJECT_FOR_HANDOFF_OPERATION,
-            # HAND_OVER_OBJECT_OPERATION removed - use WorkflowPatterns.HANDOFF_PATTERN
-
             # ============================================================================
             # LEVEL 5: COLLABORATIVE MANIPULATION (Advanced coordination)
             # ============================================================================
-
             STABILIZE_OBJECT_OPERATION,
-            # STABILIZE_AND_MANIPULATE_OPERATION removed - use WorkflowPatterns.STABILIZE_MANIPULATE_PATTERN
         ]
 
         for op in operations:
             self.operations[op.operation_id] = op
 
-        # Backward compatibility aliases - map old operation IDs to unified operation
-        # This allows old code to continue working without changes
-        self.operations["perception_detect_object_001"] = DETECT_OBJECT_STEREO_OPERATION
-        self.operations["perception_detect_depth_001"] = DETECT_OBJECT_STEREO_OPERATION
-        self.operations["perception_depth_detect_001"] = DETECT_OBJECT_STEREO_OPERATION
+    def register_operation(self, operation: BasicOperation) -> None:
+        """
+        Register a new operation at runtime (thread-safe).
+
+        Intended for the dynamic operation loader (operations/generated/) which
+        appends approved generated operations after the registry is initialized.
+        Acquiring _registry_lock prevents data races when multiple threads
+        (e.g., Generator + CommandServer handler) register concurrently.
+
+        Args:
+            operation: The BasicOperation instance to register.
+                       Overwrites any existing operation with the same operation_id.
+        """
+        with _registry_lock:
+            self.operations[operation.operation_id] = operation
 
     def get_operation(self, operation_id: str) -> Optional[BasicOperation]:
         """
@@ -187,7 +181,9 @@ class OperationRegistry:
         """Get all available operations"""
         return list(self.operations.values())
 
-    def get_operations_by_category(self, category: OperationCategory) -> List[BasicOperation]:
+    def get_operations_by_category(
+        self, category: OperationCategory
+    ) -> List[BasicOperation]:
         """
         Get operations in a specific category.
 
@@ -199,7 +195,9 @@ class OperationRegistry:
         """
         return [op for op in self.operations.values() if op.category == category]
 
-    def get_operations_by_complexity(self, complexity: OperationComplexity) -> List[BasicOperation]:
+    def get_operations_by_complexity(
+        self, complexity: OperationComplexity
+    ) -> List[BasicOperation]:
         """
         Get operations at a specific complexity level.
 
@@ -235,14 +233,15 @@ class OperationRegistry:
         operation = self.get_operation(operation_id)
         if operation is None:
             from .Base import OperationResult
+
             return OperationResult.error_result(
                 error_code="OPERATION_NOT_FOUND",
                 message=f"Operation '{operation_id}' not found in registry",
                 recovery_suggestions=[
                     "Check operation ID spelling",
                     "List available operations with get_all_operations()",
-                    "Verify operation has been added to registry"
-                ]
+                    "Verify operation has been added to registry",
+                ],
             )
 
         return operation.execute(**kwargs)
@@ -261,14 +260,15 @@ class OperationRegistry:
         operation = self.get_operation_by_name(name)
         if operation is None:
             from .Base import OperationResult
+
             return OperationResult.error_result(
                 error_code="OPERATION_NOT_FOUND",
                 message=f"Operation '{name}' not found in registry",
                 recovery_suggestions=[
                     "Check operation name spelling",
                     "List available operations with get_all_operations()",
-                    "Verify operation has been added to registry"
-                ]
+                    "Verify operation has been added to registry",
+                ],
             )
 
         return operation.execute(**kwargs)
@@ -293,17 +293,17 @@ class OperationRegistry:
         # Export each operation as a text document
         for op in self.operations.values():
             filename = f"{output_dir}/{op.operation_id}.txt"
-            with open(filename, 'w') as f:
+            with open(filename, "w") as f:
                 f.write(op.to_rag_document())
 
         # Create a master index for quick reference
-        with open(f"{output_dir}/operations_index.json", 'w') as f:
+        with open(f"{output_dir}/operations_index.json", "w") as f:
             index = {
                 op_id: {
                     "name": op.name,
                     "category": op.category.value,
                     "complexity": op.complexity.value,
-                    "description": op.description
+                    "description": op.description,
                 }
                 for op_id, op in self.operations.items()
             }

@@ -39,6 +39,20 @@ namespace PythonCommunication.Core
 
         private const string _logPrefix = "[UNITY_PROTOCOL]";
 
+        /// <summary>
+        /// Write a 4-byte little-endian integer directly into <paramref name="buffer"/> at
+        /// <paramref name="offset"/>, then advance offset by 4.
+        /// Zero-allocation alternative to BitConverter.GetBytes(int).
+        /// </summary>
+        private static void WriteInt32LE(byte[] buffer, ref int offset, int value)
+        {
+            buffer[offset]     = (byte)(value);
+            buffer[offset + 1] = (byte)(value >> 8);
+            buffer[offset + 2] = (byte)(value >> 16);
+            buffer[offset + 3] = (byte)(value >> 24);
+            offset += INT_SIZE;
+        }
+
         #region Header Encoding/Decoding
 
         /// <summary>
@@ -51,7 +65,11 @@ namespace PythonCommunication.Core
         {
             byte[] header = new byte[HEADER_SIZE];
             header[0] = (byte)messageType;
-            Buffer.BlockCopy(BitConverter.GetBytes(requestId), 0, header, TYPE_SIZE, INT_SIZE);
+            // Direct byte writes — zero allocation, avoids BitConverter.GetBytes heap alloc
+            header[1] = (byte)(requestId);
+            header[2] = (byte)(requestId >> 8);
+            header[3] = (byte)(requestId >> 16);
+            header[4] = (byte)(requestId >> 24);
             return header;
         }
 
@@ -150,36 +168,15 @@ namespace PythonCommunication.Core
             Buffer.BlockCopy(header, 0, message, offset, HEADER_SIZE);
             offset += HEADER_SIZE;
 
-            Buffer.BlockCopy(
-                BitConverter.GetBytes(cameraIdBytes.Length),
-                0,
-                message,
-                offset,
-                INT_SIZE
-            );
-            offset += INT_SIZE;
+            WriteInt32LE(message, ref offset, cameraIdBytes.Length);
             Buffer.BlockCopy(cameraIdBytes, 0, message, offset, cameraIdBytes.Length);
             offset += cameraIdBytes.Length;
 
-            Buffer.BlockCopy(
-                BitConverter.GetBytes(promptBytes.Length),
-                0,
-                message,
-                offset,
-                INT_SIZE
-            );
-            offset += INT_SIZE;
+            WriteInt32LE(message, ref offset, promptBytes.Length);
             Buffer.BlockCopy(promptBytes, 0, message, offset, promptBytes.Length);
             offset += promptBytes.Length;
 
-            Buffer.BlockCopy(
-                BitConverter.GetBytes(imageBytes.Length),
-                0,
-                message,
-                offset,
-                INT_SIZE
-            );
-            offset += INT_SIZE;
+            WriteInt32LE(message, ref offset, imageBytes.Length);
             Buffer.BlockCopy(imageBytes, 0, message, offset, imageBytes.Length);
 
             return message;
@@ -280,69 +277,27 @@ namespace PythonCommunication.Core
             Buffer.BlockCopy(header, 0, message, offset, HEADER_SIZE);
             offset += HEADER_SIZE;
 
-            Buffer.BlockCopy(
-                BitConverter.GetBytes(pairIdBytes.Length),
-                0,
-                message,
-                offset,
-                INT_SIZE
-            );
-            offset += INT_SIZE;
+            WriteInt32LE(message, ref offset, pairIdBytes.Length);
             Buffer.BlockCopy(pairIdBytes, 0, message, offset, pairIdBytes.Length);
             offset += pairIdBytes.Length;
 
-            Buffer.BlockCopy(
-                BitConverter.GetBytes(leftIdBytes.Length),
-                0,
-                message,
-                offset,
-                INT_SIZE
-            );
-            offset += INT_SIZE;
+            WriteInt32LE(message, ref offset, leftIdBytes.Length);
             Buffer.BlockCopy(leftIdBytes, 0, message, offset, leftIdBytes.Length);
             offset += leftIdBytes.Length;
 
-            Buffer.BlockCopy(
-                BitConverter.GetBytes(rightIdBytes.Length),
-                0,
-                message,
-                offset,
-                INT_SIZE
-            );
-            offset += INT_SIZE;
+            WriteInt32LE(message, ref offset, rightIdBytes.Length);
             Buffer.BlockCopy(rightIdBytes, 0, message, offset, rightIdBytes.Length);
             offset += rightIdBytes.Length;
 
-            Buffer.BlockCopy(
-                BitConverter.GetBytes(promptBytes.Length),
-                0,
-                message,
-                offset,
-                INT_SIZE
-            );
-            offset += INT_SIZE;
+            WriteInt32LE(message, ref offset, promptBytes.Length);
             Buffer.BlockCopy(promptBytes, 0, message, offset, promptBytes.Length);
             offset += promptBytes.Length;
 
-            Buffer.BlockCopy(
-                BitConverter.GetBytes(leftImageBytes.Length),
-                0,
-                message,
-                offset,
-                INT_SIZE
-            );
-            offset += INT_SIZE;
+            WriteInt32LE(message, ref offset, leftImageBytes.Length);
             Buffer.BlockCopy(leftImageBytes, 0, message, offset, leftImageBytes.Length);
             offset += leftImageBytes.Length;
 
-            Buffer.BlockCopy(
-                BitConverter.GetBytes(rightImageBytes.Length),
-                0,
-                message,
-                offset,
-                INT_SIZE
-            );
-            offset += INT_SIZE;
+            WriteInt32LE(message, ref offset, rightImageBytes.Length);
             Buffer.BlockCopy(rightImageBytes, 0, message, offset, rightImageBytes.Length);
 
             return message;
@@ -465,8 +420,7 @@ namespace PythonCommunication.Core
             Buffer.BlockCopy(header, 0, message, offset, HEADER_SIZE);
             offset += HEADER_SIZE;
 
-            Buffer.BlockCopy(BitConverter.GetBytes(jsonBytes.Length), 0, message, offset, INT_SIZE);
-            offset += INT_SIZE;
+            WriteInt32LE(message, ref offset, jsonBytes.Length);
 
             Buffer.BlockCopy(jsonBytes, 0, message, offset, jsonBytes.Length);
 
@@ -523,28 +477,13 @@ namespace PythonCommunication.Core
             Buffer.BlockCopy(header, 0, message, offset, HEADER_SIZE);
             offset += HEADER_SIZE;
 
-            Buffer.BlockCopy(
-                BitConverter.GetBytes(queryBytes.Length),
-                0,
-                message,
-                offset,
-                INT_SIZE
-            );
-            offset += INT_SIZE;
+            WriteInt32LE(message, ref offset, queryBytes.Length);
             Buffer.BlockCopy(queryBytes, 0, message, offset, queryBytes.Length);
             offset += queryBytes.Length;
 
-            Buffer.BlockCopy(BitConverter.GetBytes(topK), 0, message, offset, INT_SIZE);
-            offset += INT_SIZE;
+            WriteInt32LE(message, ref offset, topK);
 
-            Buffer.BlockCopy(
-                BitConverter.GetBytes(filtersBytes.Length),
-                0,
-                message,
-                offset,
-                INT_SIZE
-            );
-            offset += INT_SIZE;
+            WriteInt32LE(message, ref offset, filtersBytes.Length);
             Buffer.BlockCopy(filtersBytes, 0, message, offset, filtersBytes.Length);
 
             return message;
@@ -647,8 +586,7 @@ namespace PythonCommunication.Core
             Buffer.BlockCopy(header, 0, message, offset, HEADER_SIZE);
             offset += HEADER_SIZE;
 
-            Buffer.BlockCopy(BitConverter.GetBytes(jsonBytes.Length), 0, message, offset, INT_SIZE);
-            offset += INT_SIZE;
+            WriteInt32LE(message, ref offset, jsonBytes.Length);
             Buffer.BlockCopy(jsonBytes, 0, message, offset, jsonBytes.Length);
 
             return message;
@@ -688,14 +626,7 @@ namespace PythonCommunication.Core
             Buffer.BlockCopy(header, 0, message, offset, HEADER_SIZE);
             offset += HEADER_SIZE;
 
-            Buffer.BlockCopy(
-                BitConverter.GetBytes(robotIdBytes.Length),
-                0,
-                message,
-                offset,
-                INT_SIZE
-            );
-            offset += INT_SIZE;
+            WriteInt32LE(message, ref offset, robotIdBytes.Length);
             Buffer.BlockCopy(robotIdBytes, 0, message, offset, robotIdBytes.Length);
             offset += robotIdBytes.Length;
 
@@ -797,8 +728,7 @@ namespace PythonCommunication.Core
             Buffer.BlockCopy(header, 0, message, offset, HEADER_SIZE);
             offset += HEADER_SIZE;
 
-            Buffer.BlockCopy(BitConverter.GetBytes(jsonBytes.Length), 0, message, offset, INT_SIZE);
-            offset += INT_SIZE;
+            WriteInt32LE(message, ref offset, jsonBytes.Length);
 
             Buffer.BlockCopy(jsonBytes, 0, message, offset, jsonBytes.Length);
 

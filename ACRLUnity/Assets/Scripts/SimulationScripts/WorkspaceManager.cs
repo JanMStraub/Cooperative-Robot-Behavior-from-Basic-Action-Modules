@@ -124,6 +124,9 @@ namespace Simulation
         private const float VALIDATION_INTERVAL = 5f;
         private const string LOG_PREFIX = "[WORKSPACE_MANAGER]";
 
+        // Pre-allocated buffer for the diagnostic out-overload of IsPositionAllowedForRobot
+        private readonly List<WorkspaceRegion> _regionQueryBuffer = new List<WorkspaceRegion>();
+
         /// <summary>
         /// Initialize singleton instance.
         /// </summary>
@@ -441,12 +444,18 @@ namespace Simulation
 
         /// <summary>
         /// Get a workspace region by name.
+        /// Uses manual iteration instead of List.Find to avoid delegate allocation on each call.
         /// </summary>
         /// <param name="regionName">Name of region</param>
         /// <returns>WorkspaceRegion or null</returns>
         public WorkspaceRegion GetRegion(string regionName)
         {
-            return _workspaceRegions.Find(r => r.regionName == regionName);
+            foreach (var region in _workspaceRegions)
+            {
+                if (region.regionName == regionName)
+                    return region;
+            }
+            return null;
         }
 
         /// <summary>
@@ -499,15 +508,18 @@ namespace Simulation
             out List<WorkspaceRegion> violatedRegions
         )
         {
-            violatedRegions = new List<WorkspaceRegion>();
-            List<WorkspaceRegion> overlappingRegions = GetRegionsAtPosition(position);
+            // Use class-level buffer to avoid allocating a temporary list for the region query
+            GetRegionsAtPosition(position, _regionQueryBuffer);
 
-            if (overlappingRegions.Count == 0)
+            if (_regionQueryBuffer.Count == 0)
             {
+                violatedRegions = new List<WorkspaceRegion>();
                 return _allowMovementInVoid;
             }
 
-            foreach (var region in overlappingRegions)
+            // Allocate the output list only when there are regions to inspect (diagnostic path)
+            violatedRegions = new List<WorkspaceRegion>();
+            foreach (var region in _regionQueryBuffer)
             {
                 if (region.IsAllocated() && region.allocatedRobotId != robotId)
                 {

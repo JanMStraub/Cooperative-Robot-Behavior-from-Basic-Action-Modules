@@ -24,24 +24,29 @@ from typing import Optional
 # Check if Unity is available
 def is_unity_available() -> bool:
     """
-    Check if Unity backend servers are available.
+    Check if the Python backend CommandServer is listening and a Unity client
+    is connected (i.e. CommandBroadcaster has an active server with clients).
+
+    Port 5010 is the Python CommandServer — Unity connects to it as a client.
+    A reachable port only means the Python server is up; we also need at least
+    one connected Unity client before commands can be sent.
 
     Returns:
-        True if Unity is likely running, False otherwise
+        True if backend is running and Unity client is connected, False otherwise
     """
     try:
-        # Try to connect to CommandServer (port 5010)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1.0)
-        result = sock.connect_ex(('localhost', 5010))
-        sock.close()
-        return result == 0
+        from servers.CommandServer import CommandBroadcaster
+        broadcaster = CommandBroadcaster()
+        if broadcaster._server is None:
+            return False
+        # Check if there is at least one connected client
+        return broadcaster._server.get_client_count() > 0
     except Exception:
         return False
 
 
 UNITY_AVAILABLE = is_unity_available()
-SKIP_REASON = "Unity not running. Start Unity and backend servers to run these tests."
+SKIP_REASON = "Unity not running or not connected to backend. Start Unity and backend servers to run these tests."
 
 
 @pytest.mark.requires_unity
