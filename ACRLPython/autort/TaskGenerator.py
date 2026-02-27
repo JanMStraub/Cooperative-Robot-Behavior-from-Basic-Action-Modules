@@ -387,6 +387,11 @@ Generate tasks now:
             logger.error(f"JSON parsing failed. Response preview: {raw_response[:200]}")
             raise
 
+        # Unwrap {"tasks": [...]} envelope that some LLMs produce
+        if isinstance(data, dict) and "tasks" in data:
+            logger.debug("Unwrapping {'tasks': [...]} envelope from LLM response")
+            data = data["tasks"]
+
         # Fix missing robot_ids before validation
         if isinstance(data, list):
             fixed_data = [self._fix_missing_robot_ids(task) for task in data]

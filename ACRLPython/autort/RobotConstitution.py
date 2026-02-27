@@ -218,8 +218,8 @@ Respond in JSON format ONLY:
             if op.type == "control_gripper":
                 force = op.parameters.get("force", 0.0)
                 if force > self.max_gripper_force:
-                    warnings.append(
-                        f"Op {i}: High gripper force ({force}N > {self.max_gripper_force}N limit)"
+                    violations.append(
+                        f"Op {i}: Gripper force {force}N exceeds limit {self.max_gripper_force}N"
                     )
 
         # Robot collision check: planned targets + live positions

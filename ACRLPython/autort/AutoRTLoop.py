@@ -65,6 +65,10 @@ class AutoRTOrchestrator:
         self.constitution = RobotConstitution(config)
         self.task_selector = TaskSelector()
 
+        # Import once at construction time rather than on every _execute_task call
+        from orchestrators.SequenceExecutor import SequenceExecutor
+        self._executor = SequenceExecutor()
+
         self._running = False
 
     def start(self):
@@ -259,13 +263,9 @@ class AutoRTOrchestrator:
         Execute task via existing SequenceExecutor.
 
         Converts ProposedTask operations to SequenceExecutor format.
+        Uses self._executor (created once in __init__) to avoid per-call import overhead.
         """
         try:
-            # Import lazily to avoid circular dependencies
-            from orchestrators.SequenceExecutor import SequenceExecutor
-
-            executor = SequenceExecutor()
-
             # Convert operations to executor format
             # SequenceExecutor expects: {"operation": "...", "params": {"robot_id": "...", ...}}
             commands = []
@@ -274,7 +274,7 @@ class AutoRTOrchestrator:
                 params = {"robot_id": op.robot_id, **op.parameters}
                 commands.append({"operation": op.type, "params": params})
 
-            result = executor.execute_sequence(commands)
+            result = self._executor.execute_sequence(commands)
             return {
                 "success": (
                     result.get("success", False) if isinstance(result, dict) else False

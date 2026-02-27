@@ -22,6 +22,7 @@ import logging
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 
@@ -87,6 +88,11 @@ class AutoRTHandler:
 
         # Callback for sending tasks to Unity (set by SequenceServer)
         self._task_callback = None
+
+        # Bounded thread pool for async task execution (one slot per robot arm)
+        self._exec_pool = ThreadPoolExecutor(
+            max_workers=2, thread_name_prefix="AutoRT-Execute"
+        )
 
         logger.info("AutoRTHandler initialized")
 
@@ -276,16 +282,18 @@ class AutoRTHandler:
                 logger.warning("Safety validation DISABLED - accepting all tasks")
                 validated_tasks = candidates
 
-            # Select tasks using TaskSelector
+            # Select tasks using TaskSelector — while loop ensures we fill the
+            # requested count even when the selector filters some candidates.
             selected_tasks = []
-            for _ in range(min(num_tasks, len(validated_tasks))):
+            while len(selected_tasks) < num_tasks and validated_tasks:
                 selected = self._orchestrator.task_selector.select_task(
                     validated_tasks, strategy=strategy
                 )
                 if selected:
                     selected_tasks.append(selected)
-                    # Remove from pool to avoid duplicates
-                    validated_tasks.remove(selected)
+                    validated_tasks = [t for t in validated_tasks if t != selected]
+                else:
+                    break
 
             # Cache tasks and serialize for Unity
             serialized_tasks = []
@@ -458,17 +466,11 @@ class AutoRTHandler:
                 except Exception as e:
                     logger.error(f"Async task execution failed: {e}", exc_info=True)
 
-            # Start background execution
-            import threading
-            exec_thread = threading.Thread(
-                target=execute_async,
-                name=f"AutoRT-Execute-{task_id}",
-                daemon=True
-            )
-            exec_thread.start()
+            # Submit to bounded pool (max_workers=2) to cap concurrency
+            self._exec_pool.submit(execute_async)
 
             # Return immediately with acknowledgment
-            logger.info(f"Task {task_id} started in background thread, returning immediate response")
+            logger.info(f"Task {task_id} submitted to executor pool, returning immediate response")
             return {
                 "success": True,
                 "result": {"task_id": task_id, "status": "executing"},

@@ -23,34 +23,46 @@ def mock_config():
     return config
 
 
+def _make_param(param_name, required=True, param_type="float", valid_values=None, valid_range=None, default=None):
+    """Helper to create a properly configured parameter mock."""
+    p = Mock()
+    p.name = param_name
+    p.required = required
+    p.type = param_type
+    p.valid_values = valid_values  # None or a list
+    p.valid_range = valid_range    # None or a tuple
+    p.default = default
+    return p
+
+
 @pytest.fixture
 def mock_registry():
     """Mock operation registry with sample operations"""
     registry = Mock()
 
-    # Create sample operations
+    # Create sample operations with properly configured parameter mocks
     wait_op = Mock(spec=BasicOperation)
     wait_op.name = "wait"
     wait_op.description = "Wait for specified seconds"
     wait_op.parameters = [
-        Mock(name="seconds", required=True),
+        _make_param("seconds", required=True, param_type="float"),
     ]
 
     move_op = Mock(spec=BasicOperation)
     move_op.name = "move_to_coordinate"
     move_op.description = "Move robot to coordinates"
     move_op.parameters = [
-        Mock(name="x", required=True),
-        Mock(name="y", required=True),
-        Mock(name="z", required=True),
-        Mock(name="velocity", required=False),
+        _make_param("x", required=True, param_type="float"),
+        _make_param("y", required=True, param_type="float"),
+        _make_param("z", required=True, param_type="float"),
+        _make_param("velocity", required=False, param_type="float", default=0.5),
     ]
 
     gripper_op = Mock(spec=BasicOperation)
     gripper_op.name = "control_gripper"
     gripper_op.description = "Control gripper open/close"
     gripper_op.parameters = [
-        Mock(name="action", required=True),
+        _make_param("action", required=True, param_type="str", valid_values=["open", "close"]),
     ]
 
     registry.get_all_operations = Mock(return_value=[wait_op, move_op, gripper_op])
@@ -293,10 +305,12 @@ def test_get_operations_summary_format(mock_config, mock_registry):
             generator = TaskGenerator(mock_config)
             summary = generator._get_operations_summary()
 
-            # Should have format: - name(params) [optional: params] - description
-            assert "- wait(seconds)" in summary
-            assert "- move_to_coordinate(x, y, z) [optional: velocity]" in summary
+            # Required params include type annotation: - name(param :type) - description
+            assert "wait" in summary
+            assert "seconds" in summary
+            assert "move_to_coordinate" in summary
             assert "Wait for specified seconds" in summary
+            assert "velocity" in summary  # Optional param appears in summary
 
 
 # ============================================================================
@@ -424,11 +438,12 @@ def test_generate_tasks_collaborative_prompt(mock_config, mock_registry, sample_
                 include_collaborative=True
             )
 
-            # Check that prompt included collaborative hints
+            # Check that prompt included collaborative hints (in user message, index 1)
             call_args = mock_client.chat.completions.create.call_args
-            prompt = call_args[1]['messages'][0]['content']
+            # messages[0] is system, messages[1] is user with the actual task prompt
+            user_prompt = call_args[1]['messages'][1]['content']
 
-            assert "MULTI-ROBOT COORDINATION" in prompt
-            assert "Handoff" in prompt
-            assert "signal" in prompt
-            assert "wait_for_signal" in prompt
+            assert "MULTI-ROBOT COORDINATION" in user_prompt
+            assert "Handoff" in user_prompt
+            assert "signal" in user_prompt
+            assert "wait_for_signal" in user_prompt

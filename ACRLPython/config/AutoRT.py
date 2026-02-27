@@ -19,7 +19,7 @@ HUMAN_IN_LOOP_DEFAULT = os.environ.get("AUTORT_HUMAN_IN_LOOP", "true").lower() =
 USE_VLM_REASONING = os.environ.get("AUTORT_USE_VLM", "true").lower() == "true"
 
 # Safety settings
-ENABLE_SAFETY_VALIDATION = os.environ.get("AUTORT_ENABLE_SAFETY", "true").lower() == "false"
+ENABLE_SAFETY_VALIDATION = os.environ.get("AUTORT_ENABLE_SAFETY", "true").lower() == "true"
 WORKSPACE_BOUNDS = {
     'min_corner': (-0.6, 0.0, -0.6),
     'max_corner': (0.6, 0.6, 0.6),

@@ -91,6 +91,20 @@ namespace PythonCommunication
             }
         }
 
+        /// <summary>
+        /// Called just before TCP disconnect. Clears stale pending tasks whose
+        /// task_id values will be invalid after Python restarts.
+        /// </summary>
+        protected override void OnDisconnecting()
+        {
+            base.OnDisconnecting();
+            int staleCount = _pendingTasks.Count;
+            _pendingTasks.Clear();
+            _loopRunning = false;
+            _statusMessage = "Disconnected";
+            Debug.Log($"{LogPrefix} Cleared {staleCount} stale pending tasks on disconnect");
+        }
+
         #endregion
 
         #region Public API - Task Generation
@@ -503,9 +517,10 @@ namespace PythonCommunication
                     Debug.Log($"{LogPrefix} Received {response.tasks.Count} tasks");
 
                     // Add to pending list (limit max tasks)
+                    int maxTasks = _config != null ? _config.maxDisplayTasks : 10;
                     foreach (var task in response.tasks)
                     {
-                        if (_pendingTasks.Count < _config.maxDisplayTasks)
+                        if (_pendingTasks.Count < maxTasks)
                         {
                             _pendingTasks.Add(task);
                         }
