@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.TestTools;
 using Robotics;
@@ -14,9 +15,10 @@ namespace Tests.PlayMode
     {
         private GameObject _managerObject;
         private RobotManager _manager;
+        private readonly List<GameObject> _tempObjects = new List<GameObject>();
 
-        [SetUp]
-        public void Setup()
+        [UnitySetUp]
+        public IEnumerator Setup()
         {
             // Clean up any existing instance
             if (RobotManager.Instance != null)
@@ -26,6 +28,8 @@ namespace Tests.PlayMode
 
             _managerObject = new GameObject("TestRobotManager");
             _manager = _managerObject.AddComponent<RobotManager>();
+
+            yield return null; // Allow Awake/Start to run and singleton to be set
         }
 
         [TearDown]
@@ -35,6 +39,12 @@ namespace Tests.PlayMode
             {
                 UnityEngine.Object.DestroyImmediate(_managerObject);
             }
+
+            foreach (var obj in _tempObjects)
+            {
+                if (obj != null) UnityEngine.Object.DestroyImmediate(obj);
+            }
+            _tempObjects.Clear();
         }
 
         #region Singleton Tests
@@ -98,11 +108,10 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator RobotManager_RegisterRobot_AddsToInstances()
         {
-            yield return null; // Allow Start() to complete
-
             int countBeforeRegistration = _manager.AllRobotIds.Count;
 
             var robotObject = new GameObject("TestRobot");
+            _tempObjects.Add(robotObject);
             robotObject.AddComponent<RobotController>();
 
             // RegisterRobot takes (robotId, robotGameObject, targetGameObject, profile)
@@ -111,17 +120,16 @@ namespace Tests.PlayMode
             Assert.IsTrue(_manager.RobotInstances.ContainsKey("TestRobot"));
             Assert.AreEqual(countBeforeRegistration + 1, _manager.AllRobotIds.Count);
 
-            UnityEngine.Object.DestroyImmediate(robotObject);
+            yield return null;
         }
 
         [UnityTest]
         public IEnumerator RobotManager_RegisterRobot_WithAutoId_GeneratesId()
         {
-            yield return null;
-
             int countBefore = _manager.AllRobotIds.Count;
 
             var robotObject = new GameObject("CustomRobot");
+            _tempObjects.Add(robotObject);
             robotObject.AddComponent<RobotController>();
 
             // Pass null/empty robotId to auto-generate
@@ -131,16 +139,16 @@ namespace Tests.PlayMode
             Assert.AreEqual(countBefore + 1, _manager.AllRobotIds.Count);
             Assert.IsTrue(_manager.RobotInstances.ContainsKey("CustomRobot"));
 
-            UnityEngine.Object.DestroyImmediate(robotObject);
+            yield return null;
         }
 
         [UnityTest]
         public IEnumerator RobotManager_RegisterRobot_WithTarget_SetsTarget()
         {
-            yield return null;
-
             var robotObject = new GameObject("TestRobot");
             var targetObject = new GameObject("Target");
+            _tempObjects.Add(robotObject);
+            _tempObjects.Add(targetObject);
             robotObject.AddComponent<RobotController>();
 
             _manager.RegisterRobot("TestRobot", robotObject, targetObject, null);
@@ -149,8 +157,7 @@ namespace Tests.PlayMode
             var instance = _manager.RobotInstances["TestRobot"];
             Assert.AreEqual(targetObject, instance.targetGameObject);
 
-            UnityEngine.Object.DestroyImmediate(robotObject);
-            UnityEngine.Object.DestroyImmediate(targetObject);
+            yield return null;
         }
 
         #endregion
@@ -160,9 +167,8 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator RobotManager_RobotInstances_ReturnsRegisteredRobot()
         {
-            yield return null;
-
             var robotObject = new GameObject("TestRobot");
+            _tempObjects.Add(robotObject);
             robotObject.AddComponent<RobotController>();
 
             _manager.RegisterRobot("TestRobot", robotObject, null, null);
@@ -171,7 +177,7 @@ namespace Tests.PlayMode
             var instance = _manager.RobotInstances["TestRobot"];
             Assert.AreEqual("TestRobot", instance.robotId);
 
-            UnityEngine.Object.DestroyImmediate(robotObject);
+            yield return null;
         }
 
         #endregion
@@ -179,15 +185,18 @@ namespace Tests.PlayMode
         #region Event Tests
 
         [UnityTest]
-        public IEnumerator RobotManager_OnTargetChanged_EventExists()
+        public IEnumerator RobotManager_OnTargetChanged_EventFires()
         {
-            yield return null;
-
             var robotObject = new GameObject("TestRobot");
             var targetObject = new GameObject("Target");
+            _tempObjects.Add(robotObject);
+            _tempObjects.Add(targetObject);
             robotObject.AddComponent<RobotController>();
 
             _manager.RegisterRobot("TestRobot", robotObject, targetObject, null);
+
+            // Mark the robot active so CheckForTargetChanges processes it
+            _manager.RobotInstances["TestRobot"].isActive = true;
 
             string changedRobotId = null;
             _manager.OnTargetChanged += (id, target) =>
@@ -195,11 +204,44 @@ namespace Tests.PlayMode
                 changedRobotId = id;
             };
 
-            // Event mechanism exists
-            Assert.IsNotNull(_manager);
+            // Move the target beyond the 0.001m threshold to trigger the event
+            // OnTargetChanged fires from CheckForTargetChanges() in Update when
+            // the target position changes by more than 0.001m.
+            targetObject.transform.position = new Vector3(1f, 0f, 0f);
 
-            UnityEngine.Object.DestroyImmediate(robotObject);
-            UnityEngine.Object.DestroyImmediate(targetObject);
+            // Wait until the event fires (driven by Update)
+            yield return new WaitUntil(() => changedRobotId != null);
+
+            Assert.AreEqual("TestRobot", changedRobotId,
+                "OnTargetChanged should fire with correct robot ID when target moves");
+        }
+
+        #endregion
+
+        #region Duplicate Registration Tests
+
+        [UnityTest]
+        public IEnumerator RobotManager_RegisterRobot_DuplicateId_LogsWarningAndUpdates()
+        {
+            var robotObject = new GameObject("TestRobot");
+            _tempObjects.Add(robotObject);
+            robotObject.AddComponent<RobotController>();
+
+            _manager.RegisterRobot("TestRobot", robotObject, null, null);
+            Assert.AreEqual(1, _manager.AllRobotIds.Count, "Should have one robot after first registration");
+
+            // Second registration with same ID should log a warning
+            LogAssert.Expect(
+                LogType.Warning,
+                new System.Text.RegularExpressions.Regex("Robot TestRobot already registered")
+            );
+            _manager.RegisterRobot("TestRobot", robotObject, null, null);
+
+            // Count should remain 1 — duplicate overwrites, not appends
+            Assert.AreEqual(1, _manager.AllRobotIds.Count,
+                "Duplicate registration should not increase the robot count");
+
+            yield return null;
         }
 
         #endregion
@@ -209,10 +251,10 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator RobotManager_MultipleRobots_TracksAll()
         {
-            yield return null;
-
             var robot1 = new GameObject("Robot1");
             var robot2 = new GameObject("Robot2");
+            _tempObjects.Add(robot1);
+            _tempObjects.Add(robot2);
             robot1.AddComponent<RobotController>();
             robot2.AddComponent<RobotController>();
 
@@ -223,8 +265,7 @@ namespace Tests.PlayMode
             Assert.IsTrue(_manager.RobotInstances.ContainsKey("Robot1"));
             Assert.IsTrue(_manager.RobotInstances.ContainsKey("Robot2"));
 
-            UnityEngine.Object.DestroyImmediate(robot1);
-            UnityEngine.Object.DestroyImmediate(robot2);
+            yield return null;
         }
 
         #endregion
@@ -234,9 +275,8 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator RobotManager_ActiveRobotCount_TracksActiveRobots()
         {
-            yield return null;
-
             var robot1 = new GameObject("Robot1");
+            _tempObjects.Add(robot1);
             robot1.AddComponent<RobotController>();
 
             _manager.RegisterRobot("Robot1", robot1, null, null);
@@ -248,7 +288,7 @@ namespace Tests.PlayMode
             instance.isActive = false;
             Assert.AreEqual(0, _manager.ActiveRobotCount);
 
-            UnityEngine.Object.DestroyImmediate(robot1);
+            yield return null;
         }
 
         #endregion

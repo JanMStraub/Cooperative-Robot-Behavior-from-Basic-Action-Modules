@@ -5,6 +5,7 @@ using Configuration;
 using PythonCommunication;
 using System.Net.Sockets;
 using System;
+using System.Collections;
 using Tests.EditMode;
 
 namespace Tests.PlayMode
@@ -311,6 +312,32 @@ namespace Tests.PlayMode
             var clientObject = new GameObject("MockSequenceClient");
             var client = clientObject.AddComponent<SequenceClient>();
             return client;
+        }
+
+        #endregion
+
+        #region Coroutine Helpers
+
+        /// <summary>
+        /// Waits until a condition is true, or fails the test after the given timeout.
+        /// Drop-in replacement for new WaitUntil(condition, timeout) which requires additional
+        /// parameters in Unity 6's test framework.
+        /// </summary>
+        /// <param name="condition">Predicate to poll each frame</param>
+        /// <param name="timeoutSeconds">Maximum time to wait before failing</param>
+        /// <param name="failureMessage">Message shown when the timeout is exceeded</param>
+        public static IEnumerator WaitUntil(Func<bool> condition, float timeoutSeconds, string failureMessage = "WaitUntil timed out")
+        {
+            float deadline = UnityEngine.Time.time + timeoutSeconds;
+            while (!condition())
+            {
+                if (UnityEngine.Time.time > deadline)
+                {
+                    NUnit.Framework.Assert.Fail(failureMessage);
+                    yield break;
+                }
+                yield return null;
+            }
         }
 
         #endregion

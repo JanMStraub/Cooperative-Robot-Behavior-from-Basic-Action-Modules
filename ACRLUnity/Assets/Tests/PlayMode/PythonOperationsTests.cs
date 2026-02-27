@@ -81,6 +81,7 @@ namespace Tests.PlayMode
         [Test]
         public void ExecuteSequence_WithNullCommand_ReturnsFalse()
         {
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"));
             bool result = _sequenceClient.ExecuteSequence(null);
             Assert.IsFalse(result, "ExecuteSequence should return false for null command");
         }
@@ -88,6 +89,7 @@ namespace Tests.PlayMode
         [Test]
         public void ExecuteSequence_WithEmptyCommand_ReturnsFalse()
         {
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"));
             bool result = _sequenceClient.ExecuteSequence("");
             Assert.IsFalse(result, "ExecuteSequence should return false for empty command");
         }

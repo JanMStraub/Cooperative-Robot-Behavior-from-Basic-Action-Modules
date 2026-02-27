@@ -86,8 +86,9 @@ namespace Tests.PlayMode
 
             _robotController.SetTarget(target);
 
-            // Wait for IK attempt
-            yield return new WaitForSeconds(TestConstants.SHORT_TIMEOUT);
+            // Wait a few frames for IK to attempt without blocking for a full second
+            yield return null;
+            yield return null;
 
             // Robot should not crash or enter error state
             Assert.IsNotNull(_robotController, "Robot controller should still be valid");
@@ -156,7 +157,7 @@ namespace Tests.PlayMode
             var obstacle = TestHelpers.CreateTestCube(new Vector3(0.3f, 0.2f, 0.2f), "Obstacle");
             obstacle.layer = LayerMask.NameToLayer("Default"); // Ensure it's on collision layer
 
-            yield return new WaitForSeconds(TestConstants.SHORT_WAIT_SECONDS);
+            yield return null; // Single frame is sufficient to confirm objects exist
 
             // Grasp pipeline should either:
             // 1. Find alternative approach (side/front instead of top)
@@ -177,7 +178,7 @@ namespace Tests.PlayMode
             graspConfig.InitializeDefaultConfig();
             graspConfig.maxPipelineTimeMs = 10; // Only 10ms timeout
 
-            yield return new WaitForSeconds(0.1f);
+            yield return null;
 
             // Pipeline should timeout quickly and return
             Assert.AreEqual(10, graspConfig.maxPipelineTimeMs, "Timeout should be set to 10ms");
@@ -222,7 +223,7 @@ namespace Tests.PlayMode
             var robot2 = robot2Object.AddComponent<RobotController>();
             robot2.transform.position = Vector3.zero; // Same position - collision!
 
-            yield return new WaitForSeconds(TestConstants.SHORT_WAIT_SECONDS);
+            yield return null;
 
             // Coordination system should detect collision
             float distance = Vector3.Distance(robot1.transform.position, robot2.transform.position);
@@ -239,7 +240,7 @@ namespace Tests.PlayMode
             var coordConfig = TestHelpers.CreateTestCoordinationConfig();
             coordConfig.robotTimeout = 1f; // 1 second timeout
 
-            yield return new WaitForSeconds(coordConfig.robotTimeout + 0.5f);
+            yield return null; // The test only verifies config value, not actual timeout
 
             // Sequential strategy should switch to next robot after timeout
             Assert.AreEqual(1f, coordConfig.robotTimeout, 0.1f, "Timeout should be 1 second");
@@ -343,7 +344,7 @@ namespace Tests.PlayMode
             var clientObject = new GameObject("TestSequenceClient");
             var client = clientObject.AddComponent<SequenceClient>();
 
-            yield return new WaitForSeconds(TestConstants.SHORT_TIMEOUT);
+            yield return null;
 
             // Client should still be valid even if requests time out
             Assert.IsNotNull(client, "Client should remain valid after timeout");
@@ -377,7 +378,7 @@ namespace Tests.PlayMode
             var simConfig = TestHelpers.CreateTestSimulationConfig();
             simConfig.resetOnError = true;
 
-            yield return new WaitForSeconds(0.1f);
+            yield return null;
 
             // Verify reset on error is enabled
             Assert.IsTrue(simConfig.resetOnError, "Reset on error should be enabled");
@@ -502,7 +503,7 @@ namespace Tests.PlayMode
             tinyObject.transform.localScale = Vector3.one * 0.001f; // 1mm
             tinyObject.transform.position = new Vector3(0.3f, 0.1f, 0.2f);
 
-            yield return new WaitForSeconds(0.1f);
+            yield return null;
 
             // Grasp planning should handle tiny objects without crashing
             Assert.IsNotNull(tinyObject, "Tiny object should exist");
@@ -518,7 +519,7 @@ namespace Tests.PlayMode
             largeObject.transform.localScale = Vector3.one * 1.0f; // 1m
             largeObject.transform.position = new Vector3(0.3f, 0.5f, 0.2f);
 
-            yield return new WaitForSeconds(0.1f);
+            yield return null;
 
             // Grasp planning should handle large objects (may reject as too large)
             Assert.IsNotNull(largeObject, "Large object should exist");

@@ -27,8 +27,6 @@ namespace Tests.PlayMode
         [UnitySetUp]
         public IEnumerator Setup()
         {
-            LogAssert.ignoreFailingMessages = true; // Ignore expected warnings from missing dependencies
-
             // Clean up existing instances
             if (PythonCommandHandler.Instance != null)
             {
@@ -55,9 +53,10 @@ namespace Tests.PlayMode
             _handlerObject = new GameObject("TestPythonCommandHandler");
             _handler = _handlerObject.AddComponent<PythonCommandHandler>();
 
-            yield return null; // Wait for Start() to complete
+            // Expect warning from PythonCommandHandler when CoordinationConfig is not assigned
+            LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex(".*CoordinationConfig.*|.*[Cc]oordination.*[Cc]onfig.*"));
 
-            LogAssert.ignoreFailingMessages = false;
+            yield return null; // Wait for Start() to complete
         }
 
         [TearDown]

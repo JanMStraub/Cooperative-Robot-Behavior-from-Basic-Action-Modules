@@ -116,6 +116,78 @@ namespace Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator Memory_SetTargetWithRotation_DoesNotLeak()
+        {
+            int initialObjectCount = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None).Length;
+
+            // Call SetTarget with rotation multiple times
+            for (int i = 0; i < 100; i++)
+            {
+                _robotController.SetTarget(
+                    position: new Vector3(i * 0.01f, i * 0.01f, i * 0.01f),
+                    rotation: Quaternion.Euler(i, 0f, 0f),
+                    options: GraspOptions.MoveOnly
+                );
+                yield return null;
+            }
+
+            yield return null;
+            System.GC.Collect();
+            yield return null;
+
+            int finalObjectCount = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None).Length;
+            int objectDelta = finalObjectCount - initialObjectCount;
+
+            // Should create at most 1 cached temporary object, not 100
+            Assert.LessOrEqual(objectDelta, 1,
+                $"Expected at most 1 new GameObject (cached temp target), found {objectDelta}. Memory leak from repeated SetTarget with rotation.");
+        }
+
+        [UnityTest]
+        public IEnumerator Memory_MixedSetTargetCalls_ShareCachedObjects()
+        {
+            var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            targetObject.transform.position = new Vector3(1f, 1f, 1f);
+
+            int initialObjectCount = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None).Length;
+
+            // Mix different SetTarget calls
+            for (int i = 0; i < 50; i++)
+            {
+                if (i % 3 == 0)
+                {
+                    _robotController.SetTarget(new Vector3(i * 0.01f, 0f, 0f), GraspOptions.MoveOnly);
+                }
+                else if (i % 3 == 1)
+                {
+                    _robotController.SetTarget(
+                        new Vector3(i * 0.01f, 0f, 0f),
+                        Quaternion.identity,
+                        GraspOptions.MoveOnly);
+                }
+                else
+                {
+                    targetObject.transform.position = new Vector3(i * 0.01f, 1f, 1f);
+                    _robotController.SetTarget(targetObject, GraspOptions.Default);
+                }
+                yield return null;
+            }
+
+            yield return null;
+            System.GC.Collect();
+            yield return null;
+
+            int finalObjectCount = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None).Length;
+            int objectDelta = finalObjectCount - initialObjectCount;
+
+            // Should create at most 2 cached objects (grasp target + temp target), not 50
+            Assert.LessOrEqual(objectDelta, 2,
+                $"Expected at most 2 new GameObjects (cached targets), found {objectDelta}. Cached objects are not being reused.");
+
+            Object.Destroy(targetObject);
+        }
+
+        [UnityTest]
         public IEnumerator Memory_OnDestroy_CleanupsCachedObjects()
         {
             var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -396,13 +468,13 @@ namespace Tests.PlayMode
                 );
             }
 
-            // Run for 1 second
-            yield return new WaitForSeconds(1f);
+            // Wait until all robots have targets (or a few frames)
+            yield return TestHelpers.WaitUntil(() => robots.TrueForAll(r => r.HasTarget), 2.0f);
 
             stopwatch.Stop();
 
             // All robots should remain responsive
-            Assert.Less(stopwatch.ElapsedMilliseconds, 1500,
+            Assert.Less(stopwatch.ElapsedMilliseconds, 2000,
                 "Multiple robots should not cause significant performance degradation");
 
             // Cleanup

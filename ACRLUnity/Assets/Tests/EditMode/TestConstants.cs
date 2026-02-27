@@ -1,19 +1,60 @@
 using UnityEngine;
+using Configuration;
 
 namespace Tests.EditMode
 {
     /// <summary>
     /// Centralized test constants that reference production constants.
     /// NOTE: Many constants have been moved to ScriptableObject configs (IKConfig, GripperConfig, TrajectoryConfig).
-    /// Test constants now use hardcoded default values matching the config defaults.
+    /// Config-derived defaults are read live from ScriptableObject.CreateInstance so that test values
+    /// stay in sync with config field initializers automatically. Pure test-infrastructure constants
+    /// (EPSILON, STRESS_TEST_ITERATIONS, etc.) remain as const.
     ///
     /// Usage:
     /// - Import production constants from Core.RobotConstants (for infrastructure constants)
-    /// - Use hardcoded defaults for robot-specific parameters (now in configs)
+    /// - Call GetIKConfigDefault() / GetGripperConfigDefault() helpers for config-derived values
     /// - Add test-specific values (iterations, tolerance factors, timeouts)
     /// </summary>
     public static class TestConstants
     {
+        #region Config-Default Helper Methods
+
+        /// <summary>
+        /// Read the IK convergence threshold from IKConfig field initializers.
+        /// Creates and immediately destroys a transient ScriptableObject instance.
+        /// </summary>
+        public static float GetDefaultConvergenceThreshold()
+        {
+            var cfg = ScriptableObject.CreateInstance<IKConfig>();
+            float value = cfg.convergenceThreshold;
+            Object.DestroyImmediate(cfg);
+            return value;
+        }
+
+        /// <summary>
+        /// Read the IK damping factor from IKConfig field initializers.
+        /// </summary>
+        public static float GetDefaultDampingFactor()
+        {
+            var cfg = ScriptableObject.CreateInstance<IKConfig>();
+            float value = cfg.dampingFactor;
+            Object.DestroyImmediate(cfg);
+            return value;
+        }
+
+        /// <summary>
+        /// Read the grasp convergence multiplier from IKConfig field initializers.
+        /// </summary>
+        public static float GetGraspConvergenceMultiplier()
+        {
+            var cfg = ScriptableObject.CreateInstance<IKConfig>();
+            float value = cfg.graspConvergenceMultiplier;
+            Object.DestroyImmediate(cfg);
+            return value;
+        }
+
+        #endregion
+
         #region Production Constants (from Core.RobotConstants - Infrastructure Only)
 
         // Communication Ports
@@ -314,12 +355,12 @@ namespace Tests.EditMode
         #region Helper Methods
 
         /// <summary>
-        /// Calculate expected grasp convergence threshold
-        /// (DEFAULT_CONVERGENCE_THRESHOLD * GRASP_CONVERGENCE_MULTIPLIER)
+        /// Calculate expected grasp convergence threshold using live config defaults.
+        /// (IKConfig.convergenceThreshold * IKConfig.graspConvergenceMultiplier)
         /// </summary>
         public static float GetGraspConvergenceThreshold()
         {
-            return DEFAULT_CONVERGENCE_THRESHOLD * GRASP_CONVERGENCE_MULTIPLIER; // ~0.005m (5mm)
+            return GetDefaultConvergenceThreshold() * GetGraspConvergenceMultiplier();
         }
 
         /// <summary>
@@ -356,11 +397,13 @@ namespace Tests.EditMode
         }
 
         /// <summary>
-        /// Get a random test robot ID from the predefined list.
+        /// Get a test robot ID by index. Use [TestCase] attributes in tests instead of
+        /// calling this randomly to ensure deterministic, reproducible coverage.
+        /// Index wraps around if out of range.
         /// </summary>
-        public static string GetRandomTestRobotId()
+        public static string GetTestRobotId(int index)
         {
-            return TEST_ROBOT_IDS[Random.Range(0, TEST_ROBOT_IDS.Length)];
+            return TEST_ROBOT_IDS[index % TEST_ROBOT_IDS.Length];
         }
 
         /// <summary>

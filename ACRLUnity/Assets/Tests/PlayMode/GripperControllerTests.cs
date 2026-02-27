@@ -205,7 +205,7 @@ namespace Tests.PlayMode
         {
             // Close grippers first
             _gripperController.CloseGrippers();
-            yield return new WaitForSeconds(0.5f);
+            yield return TestHelpers.WaitUntil(() => !_gripperController.IsMoving, 2.0f);
 
             // Reset should open them
             _gripperController.ResetGrippers();
@@ -244,7 +244,7 @@ namespace Tests.PlayMode
         public IEnumerator GripSpeed_ConvergesToTarget()
         {
             _gripperController.targetPosition = 0.0f;
-            yield return new WaitForSeconds(0.5f); // Wait for initial state
+            yield return TestHelpers.WaitUntil(() => !_gripperController.IsMoving, 2.0f); // Wait for initial state to settle
 
             // Set new target
             _gripperController.SetGripperPosition(1.0f);
@@ -272,31 +272,37 @@ namespace Tests.PlayMode
             // Reset gripper to known state (fully closed)
             _gripperController.ResetGrippers();
             _gripperController.SetGripperPosition(0.0f);
-            yield return new WaitForSeconds(1.0f); // Ensure fully closed
+            yield return TestHelpers.WaitUntil(() => !_gripperController.IsMoving, 3.0f); // Ensure fully closed
+
+            // Record baseline (closed) target before fast run
+            float baselineTarget = _leftGripper.xDrive.target;
 
             // Test 1: Fast grip speed - open from closed
             _gripperController.gripSpeed = 1.0f; // Very fast
             _gripperController.SetGripperPosition(1.0f);
-            yield return new WaitForSeconds(0.05f); // Short time interval
+            yield return null; // One render frame = one Update() call with consistent Time.deltaTime
 
             float fastDriveTarget = _leftGripper.xDrive.target;
+            float fastDisplacement = Mathf.Abs(fastDriveTarget - baselineTarget);
 
             // Reset gripper to closed again
             _gripperController.ResetGrippers();
             _gripperController.SetGripperPosition(0.0f);
-            yield return new WaitForSeconds(1.0f); // Ensure fully closed
+            yield return TestHelpers.WaitUntil(() => !_gripperController.IsMoving, 3.0f); // Ensure fully closed
+
+            float baselineTarget2 = _leftGripper.xDrive.target;
 
             // Test 2: Slow grip speed - open from closed
             _gripperController.gripSpeed = 0.01f; // Very slow
             _gripperController.SetGripperPosition(1.0f);
-            yield return new WaitForSeconds(0.05f); // Same time interval
+            yield return null; // Same: one render frame for fair comparison
 
             float slowDriveTarget = _leftGripper.xDrive.target;
+            float slowDisplacement = Mathf.Abs(slowDriveTarget - baselineTarget2);
 
-            // Fast grip speed should result in larger movement in same time
-            // Debug info for troubleshooting
-            Debug.Log($"Fast drive target: {fastDriveTarget}, Slow drive target: {slowDriveTarget}");
-            Assert.Greater(fastDriveTarget, slowDriveTarget, "Faster gripSpeed should result in faster convergence");
+            // Fast grip speed should result in larger displacement in same number of frames
+            Debug.Log($"Fast drive target: {fastDriveTarget} (displacement: {fastDisplacement}), Slow drive target: {slowDriveTarget} (displacement: {slowDisplacement})");
+            Assert.Greater(fastDisplacement, slowDisplacement, "Faster gripSpeed should result in faster convergence");
         }
 
         #endregion
@@ -315,14 +321,8 @@ namespace Tests.PlayMode
             _gripperController.gripSpeed = 0.5f; // Fast convergence for testing
             _gripperController.OpenGrippers();
 
-            // Wait for convergence
-            float timeout = 2.0f;
-            float elapsed = 0f;
-            while (!eventFired && elapsed < timeout)
-            {
-                yield return new WaitForSeconds(0.1f);
-                elapsed += 0.1f;
-            }
+            // Wait until event fires or 2s timeout
+            yield return TestHelpers.WaitUntil(() => eventFired, 2.0f);
 
             Assert.IsTrue(eventFired, "OnGripperActionComplete should fire when gripper reaches target");
         }
@@ -358,14 +358,8 @@ namespace Tests.PlayMode
 
             Assert.IsTrue(_gripperController.IsMoving, "IsMoving should be true initially");
 
-            // Wait for convergence
-            float timeout = 2.0f;
-            float elapsed = 0f;
-            while (_gripperController.IsMoving && elapsed < timeout)
-            {
-                yield return new WaitForSeconds(0.1f);
-                elapsed += 0.1f;
-            }
+            // Wait until convergence (or 2s timeout)
+            yield return TestHelpers.WaitUntil(() => !_gripperController.IsMoving, 2.0f);
 
             Assert.IsFalse(_gripperController.IsMoving, "IsMoving should become false after convergence");
         }
@@ -379,8 +373,9 @@ namespace Tests.PlayMode
             _gripperController.gripSpeed = 0.05f; // Slower for longer interpolation
             _gripperController.OpenGrippers();
 
-            // Wait a short time (not enough to converge)
-            yield return new WaitForSeconds(0.1f);
+            // Wait a short time (not enough to converge) — a few frames only
+            yield return null;
+            yield return null;
 
             Assert.IsTrue(_gripperController.IsMoving, "IsMoving should stay true during interpolation");
         }

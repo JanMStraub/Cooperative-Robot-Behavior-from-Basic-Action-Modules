@@ -23,13 +23,9 @@ namespace Tests.PlayMode
         private RobotController _controller2;
         private RobotController _controller3;
 
-        [SetUp]
-        public void SetUp()
+        [UnitySetUp]
+        public IEnumerator SetUp()
         {
-            // Suppress log assertions for missing components in test environment
-            // RobotControllers will log warnings/errors about missing ArticulationBodies
-            LogAssert.ignoreFailingMessages = true;
-
             // Create test robot 1
             _testRobot1 = new GameObject("TestRobot1");
             _controller1 = _testRobot1.AddComponent<RobotController>();
@@ -44,22 +40,16 @@ namespace Tests.PlayMode
             _testRobot3 = new GameObject("TestRobot3");
             _controller3 = _testRobot3.AddComponent<RobotController>();
             _controller3.robotId = "Robot3";
-        }
 
-        /// <summary>
-        /// Helper method to expect initialization logs from test robots.
-        /// Call this at the start of UnityTest coroutines before any yield statements.
-        /// </summary>
-        private void ExpectRobotInitializationLogs()
-        {
-            // All three robots log warnings about missing components during Start()
-            // Note: The logs use robotId (Robot1, Robot2, Robot3), not gameObject.name (TestRobot1, etc.)
+            // Expect initialization warnings from all three controllers during Start()
             LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
             LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
             LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot2");
             LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
             LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot3");
             LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+
+            yield return null; // Allow Start() to fire and consume the expected logs
         }
 
         [TearDown]
@@ -68,9 +58,6 @@ namespace Tests.PlayMode
             Object.DestroyImmediate(_testRobot1);
             Object.DestroyImmediate(_testRobot2);
             Object.DestroyImmediate(_testRobot3);
-
-            // Reset log assertion behavior after each test
-            LogAssert.ignoreFailingMessages = false;
         }
 
         #region Coordination Mode Switching Tests
@@ -131,8 +118,6 @@ namespace Tests.PlayMode
         public IEnumerator Sequential_ThreeRobots_CyclesCorrectly()
         {
             // Arrange
-            ExpectRobotInitializationLogs();
-
             var strategy = new SequentialStrategy(robotTimeout: 1f);
             var controllers = new[] { _controller1, _controller2, _controller3 };
             var targetReached = new Dictionary<string, bool>
@@ -170,8 +155,6 @@ namespace Tests.PlayMode
         public IEnumerator Sequential_TimeoutAndCompletion_BothWork()
         {
             // Arrange
-            ExpectRobotInitializationLogs();
-
             var strategy = new SequentialStrategy(robotTimeout: 0.5f);
             var controllers = new[] { _controller1, _controller2 };
             var targetReached = new Dictionary<string, bool>
@@ -184,9 +167,12 @@ namespace Tests.PlayMode
             strategy.Update(controllers, targetReached);
             Assert.AreEqual("Robot1", strategy.GetActiveRobotId());
 
-            // Wait for timeout
-            yield return new WaitForSeconds(0.6f);
-            strategy.Update(controllers, targetReached);
+            // Wait for timeout by polling until strategy switches (0.5s timeout configured)
+            yield return TestHelpers.WaitUntil(() =>
+            {
+                strategy.Update(controllers, targetReached);
+                return strategy.GetActiveRobotId() == "Robot2";
+            }, 2.0f);
 
             // Assert - Should switch to Robot2 due to timeout
             Assert.AreEqual("Robot2", strategy.GetActiveRobotId());
@@ -485,12 +471,7 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator MultipleUpdates_CompletesWithoutCrash()
         {
-            // Arrange
-            ExpectRobotInitializationLogs();
-
-            // Yield to allow Start() to be called on the robot controllers
-            yield return null;
-
+            // Arrange: [UnitySetUp] already consumed Start() warnings and yielded one frame.
             var strategy = new CollaborativeStrategy();
             var controllers = new[] { _controller1, _controller2 };
             var targetReached = new Dictionary<string, bool>
