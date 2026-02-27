@@ -20,6 +20,7 @@ Usage:
 """
 
 import json
+import socket
 import threading
 from typing import Dict, List, Optional
 
@@ -64,7 +65,7 @@ class WorldStateServer(TCPServerBase):
         self._updates_received = 0
         self._last_update_time = None
 
-    def handle_client_connection(self, client, address: tuple) -> None:
+    def handle_client_connection(self, client: socket.socket, address: tuple) -> None:
         """
         Handle incoming world state update from Unity.
         Runs in dedicated client thread.
@@ -80,7 +81,7 @@ class WorldStateServer(TCPServerBase):
                 if not header:
                     break  # Connection closed
 
-                msg_type, request_id = UnityProtocol.decode_header(header)
+                msg_type, request_id, _ = UnityProtocol._decode_header(header)
 
                 # Expect STATUS_RESPONSE with requestId=0 (broadcast)
                 if msg_type != MessageType.STATUS_RESPONSE:

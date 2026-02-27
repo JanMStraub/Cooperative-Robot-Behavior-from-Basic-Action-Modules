@@ -193,6 +193,9 @@ namespace PythonCommunication.Core
                     return;
                 }
 
+                // Ensure socket is blocking (fixes "non-blocking socket would block" error)
+                tempClient.Client.Blocking = true;
+
                 tempStream = tempClient.GetStream();
                 tempStream.ReadTimeout = 30000; // 30 seconds
 

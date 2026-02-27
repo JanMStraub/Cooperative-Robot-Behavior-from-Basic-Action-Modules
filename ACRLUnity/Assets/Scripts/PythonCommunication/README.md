@@ -19,7 +19,7 @@ Connects to **4 active Python servers** running in the unified backend (`ACRLPyt
 
 - **ImageServer** (ports 5005/5006) - Image streaming
 - **CommandServer** (port 5010) - Bidirectional commands & results
-- **SequenceServer** (port 5013) - Multi-command sequences with LLM parsing
+- **SequenceServer** (port 5013) - Multi-command sequences with LLM parsing + **AutoRT integration**
 - **WorldStateServer** (port 5014) - Robot/object state streaming
 
 #### Layer 2: ROS 2 Integration (Optional)
@@ -45,10 +45,17 @@ PythonCommunication/
 │
 ├── High-Level Clients (This Directory)
 │   ├── SequenceClient.cs          # Multi-command sequence client (port 5013)
+│   ├── AutoRTManager.cs           # Autonomous task generation client (port 5013)
 │   ├── ResultsClient.cs           # Bidirectional results receiver (port 5010)
 │   ├── UnifiedPythonReceiver.cs   # Result routing manager
 │   ├── WorldStateClient.cs        # World state streaming client (port 5014)
 │   └── WorldStatePublisher.cs     # Publish Unity state to Python
+│
+├── DataModels/
+│   ├── SequenceDataModels.cs      # SequenceResult, Operation
+│   ├── AutoRTDataModels.cs        # ProposedTask, TaskSelectionStrategy
+│   ├── DetectionDataModels.cs     # DetectionResult, DetectedObject
+│   └── RAGDataModels.cs           # OperationContext
 │
 ├── Command Handling
 │   └── PythonCommandHandler.cs    # Execute Python commands on Unity robots
@@ -168,7 +175,384 @@ The component includes a **custom inspector** (`SequenceClientEditor.cs`) with:
 
 ---
 
-### 2. ResultsClient.cs
+### 2. AutoRTManager.cs
+
+**Purpose**: Autonomous Robot Task generation client that connects to Python's SequenceServer (port 5013) for LLM-powered task proposal generation with human-in-the-loop approval.
+
+**Inheritance**: `BidirectionalClientBase<AutoRTResponse>` → `TCPClientBase` → `MonoBehaviour`
+
+#### Key Features
+
+**Autonomous Task Generation** (`AutoRTManager.cs:98-153`):
+- Sends task generation requests to Python LLM backend
+- Receives structured task proposals with operations lists
+- Tasks validated against 30 registered operations in Registry
+- Support for multi-robot collaborative tasks
+
+**Human-in-the-Loop Workflow** (`AutoRTManager.cs:273-349`):
+- Tasks appear in custom inspector UI for approval
+- User can execute (approve) or reject each task
+- Prevents accidental execution of unsafe/unwanted tasks
+- Task queue management with configurable limits
+
+**Continuous Loop Mode** (`AutoRTManager.cs:158-269`):
+- Optional autonomous mode for continuous task generation
+- Configurable delay between generations
+- Can be started/stopped at runtime
+- Loop status synchronized with Python backend
+
+**Singleton Pattern** (`AutoRTManager.cs:76-93`):
+```csharp
+public static AutoRTManager Instance { get; private set; }
+
+protected override void Awake()
+{
+    if (Instance == null)
+    {
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
+        base.Awake();
+        _serverPort = CommunicationConstants.SEQUENCE_SERVER_PORT; // 5013
+    }
+    else { Destroy(gameObject); }
+}
+```
+
+**Task Generation** (`AutoRTManager.cs:104-153`):
+```csharp
+public bool GenerateTasks(int? numTasks = null)
+{
+    if (!IsConnected || _config == null)
+        return false;
+
+    int taskCount = numTasks ?? _config.maxTaskCandidates;
+    uint requestId = GenerateRequestId();
+
+    // Build params JSON
+    string robotIdsJson = "[" + string.Join(",",
+        Array.ConvertAll(_config.robotIds, r => $"\"{r}\"")) + "]";
+    string paramsJson = $"{{\"num_tasks\":{taskCount}," +
+                        $"\"robot_ids\":{robotIdsJson}," +
+                        $"\"strategy\":\"{_config.strategy.ToString().ToLower()}\"}}";
+
+    // Encode AUTORT_COMMAND message
+    byte[] message = UnityProtocol.EncodeAutoRTCommand(
+        "generate", paramsJson, requestId
+    );
+
+    return WriteToStream(message);
+}
+```
+
+**Loop Control** (`AutoRTManager.cs:165-220`):
+```csharp
+public bool StartLoop(float? loopDelay = null)
+{
+    if (!IsConnected || _loopRunning)
+        return false;
+
+    float delay = loopDelay ?? _config.loopDelaySeconds;
+    uint requestId = GenerateRequestId();
+
+    string paramsJson = $"{{\"loop_delay\":{delay}," +
+                        $"\"robot_ids\":{robotIdsJson}," +
+                        $"\"strategy\":\"{_config.strategy}\"}}";
+
+    byte[] message = UnityProtocol.EncodeAutoRTCommand(
+        "start_loop", paramsJson, requestId
+    );
+
+    return WriteToStream(message);
+}
+
+public bool StopLoop()
+{
+    if (!IsConnected || !_loopRunning)
+        return false;
+
+    byte[] message = UnityProtocol.EncodeAutoRTCommand(
+        "stop_loop", "{}", GenerateRequestId()
+    );
+
+    return WriteToStream(message);
+}
+```
+
+**Task Execution** (`AutoRTManager.cs:280-326`):
+```csharp
+public bool ExecuteTask(ProposedTask task)
+{
+    if (!IsConnected || task == null)
+        return false;
+
+    string paramsJson = $"{{\"task_id\":\"{task.task_id}\"}}";
+    byte[] message = UnityProtocol.EncodeAutoRTCommand(
+        "execute_task", paramsJson, GenerateRequestId()
+    );
+
+    return WriteToStream(message);
+}
+
+public void RejectTask(ProposedTask task)
+{
+    if (task != null)
+    {
+        _pendingTasks.Remove(task);
+        Debug.Log($"Rejected task: {task.task_id}");
+    }
+}
+```
+
+**Protocol V2 Compliance** (`AutoRTManager.cs:360-406`):
+```csharp
+protected override AutoRTResponse ReceiveResponse()
+{
+    // Read header (5 bytes: type + request_id)
+    byte[] headerBuffer = new byte[UnityProtocol.HEADER_SIZE];
+    ReadExactly(_stream, headerBuffer, UnityProtocol.HEADER_SIZE);
+
+    // Decode header
+    UnityProtocol.DecodeHeader(headerBuffer, 0,
+        out MessageType type, out uint requestId);
+
+    if (type != MessageType.AUTORT_RESPONSE)
+    {
+        throw new IOException($"Expected AUTORT_RESPONSE, got {type}");
+    }
+
+    // Read JSON payload
+    byte[] lenBuffer = new byte[4];
+    ReadExactly(_stream, lenBuffer, 4);
+    int jsonLen = BitConverter.ToInt32(lenBuffer, 0);
+
+    byte[] jsonBytes = new byte[jsonLen];
+    ReadExactly(_stream, jsonBytes, jsonLen);
+    string json = Encoding.UTF8.GetString(jsonBytes);
+
+    // Parse to AutoRTResponse
+    if (JsonParser.TryParseWithLogging<AutoRTResponse>(
+        json, out AutoRTResponse response, LogPrefix))
+    {
+        response.request_id = requestId;
+        return response;
+    }
+
+    return null;
+}
+```
+
+**Response Handling** (`AutoRTManager.cs:420-475`):
+```csharp
+protected override void OnResponseReceived(AutoRTResponse response)
+{
+    if (response == null)
+        return;
+
+    // Update loop status
+    if (response.loop_running != _loopRunning)
+    {
+        _loopRunning = response.loop_running;
+        OnLoopStatusChanged?.Invoke(_loopRunning);
+    }
+
+    // Handle errors
+    if (response.HasError)
+    {
+        Debug.LogWarning($"Response error: {response.error}");
+        _statusMessage = $"Error: {response.error}";
+        return;
+    }
+
+    // Handle received tasks
+    if (response.tasks != null && response.tasks.Count > 0)
+    {
+        foreach (var task in response.tasks)
+        {
+            if (_pendingTasks.Count < _config.maxDisplayTasks)
+                _pendingTasks.Add(task);
+        }
+
+        _statusMessage = $"Received {response.tasks.Count} tasks";
+        OnTasksReceived?.Invoke(response.tasks);
+    }
+}
+```
+
+#### Configuration
+
+AutoRTManager requires an `AutoRTConfig` ScriptableObject asset:
+
+```csharp
+[Header("Configuration")]
+[SerializeField]
+private AutoRTConfig _config;
+```
+
+**AutoRTConfig Settings** (see `ConfigScripts/AutoRTConfig.cs`):
+- `maxTaskCandidates` (1-5) - Number of tasks to generate per request
+- `strategy` - Task selection strategy (Balanced/Simple/Complex/Random)
+- `enableContinuousLoop` - Toggle continuous loop mode
+- `loopDelaySeconds` (1-60) - Delay between generations
+- `robotIds` - Robot IDs for task generation
+- `enableCollaborativeTasks` - Allow multi-robot tasks
+- `maxDisplayTasks` (5-20) - Maximum tasks in inspector UI
+- `autoRefresh` - Auto-refresh UI in play mode
+- `uiRefreshRate` (0.1-2) - UI update frequency
+
+#### Custom Inspector
+
+**AutoRTManagerEditor.cs** provides a rich UI for task management:
+
+**Features**:
+- **Generate Tasks** button - Manual one-shot task generation
+- **Start/Stop Loop** buttons - Control continuous mode
+- **Task List Display** - Scrollable list of pending tasks
+- **Per-Task Actions** - Execute/Reject buttons for each task
+- **Status Display** - Current loop status and message
+- **Real-Time Updates** - Auto-refreshes in play mode
+
+**Inspector Layout**:
+```
+┌─ AutoRT Manager ──────────────────────────┐
+│ Config: DefaultAutoRTConfig               │
+│ Status: Idle                              │
+│                                           │
+│ [ Generate Tasks ]  [ Start Loop ]       │
+│                                           │
+│ Pending Tasks (3):                        │
+│ ┌─────────────────────────────────────┐  │
+│ │ task_001: Pick up red cube          │  │
+│ │   3 operations, complexity: 3        │  │
+│ │   [ Execute ] [ Reject ]             │  │
+│ ├─────────────────────────────────────┤  │
+│ │ task_002: Handoff blue cube         │  │
+│ │   5 operations, complexity: 5        │  │
+│ │   Requires: Robot1, Robot2           │  │
+│ │   [ Execute ] [ Reject ]             │  │
+│ └─────────────────────────────────────┘  │
+│                                           │
+│ [ Clear All Tasks ]                       │
+└───────────────────────────────────────────┘
+```
+
+#### Events
+
+```csharp
+// Fired when tasks received from Python
+public event Action<List<ProposedTask>> OnTasksReceived;
+
+// Fired when loop status changes
+public event Action<bool> OnLoopStatusChanged;
+```
+
+#### Usage Example
+
+```csharp
+using PythonCommunication;
+
+public class AutoRTController : MonoBehaviour
+{
+    void Start()
+    {
+        // Subscribe to task events
+        AutoRTManager.Instance.OnTasksReceived += tasks => {
+            Debug.Log($"Received {tasks.Count} task proposals");
+            foreach (var task in tasks)
+            {
+                Debug.Log($"  - {task.task_id}: {task.description}");
+            }
+        };
+
+        AutoRTManager.Instance.OnLoopStatusChanged += isRunning => {
+            Debug.Log($"Loop status: {(isRunning ? "RUNNING" : "STOPPED")}");
+        };
+    }
+
+    // Manual task generation
+    public void GenerateTasksManually()
+    {
+        AutoRTManager.Instance.GenerateTasks(numTasks: 3);
+    }
+
+    // Start continuous autonomous mode
+    public void StartAutonomousMode()
+    {
+        AutoRTManager.Instance.StartLoop(loopDelay: 5f);
+    }
+
+    // Programmatic task approval
+    public void ApproveTask(ProposedTask task)
+    {
+        if (IsTaskSafe(task))
+        {
+            AutoRTManager.Instance.ExecuteTask(task);
+        }
+        else
+        {
+            AutoRTManager.Instance.RejectTask(task);
+        }
+    }
+
+    bool IsTaskSafe(ProposedTask task)
+    {
+        // Custom safety validation logic
+        return task.estimated_complexity < 7;
+    }
+}
+```
+
+#### Python Backend Integration
+
+AutoRT messages share port 5013 with SequenceServer but use distinct message types:
+
+**Message Types**:
+- `AUTORT_COMMAND` (Unity → Python) - Task generation/loop control
+- `AUTORT_RESPONSE` (Python → Unity) - Task proposals/status updates
+
+**Python Handler** (`ACRLPython/servers/SequenceServer.py`):
+```python
+def handle_autort_command(self, command: str, params: dict, request_id: int):
+    if command == "generate":
+        tasks = self.task_generator.generate_tasks(
+            scene=self.get_current_scene(),
+            robot_ids=params.get("robot_ids", ["Robot1"]),
+            num_tasks=params.get("num_tasks", 3),
+            strategy=params.get("strategy", "balanced")
+        )
+        return AutoRTResponse(tasks=tasks, request_id=request_id)
+
+    elif command == "start_loop":
+        self.start_generation_loop(params)
+        return AutoRTResponse(loop_running=True, request_id=request_id)
+
+    elif command == "stop_loop":
+        self.stop_generation_loop()
+        return AutoRTResponse(loop_running=False, request_id=request_id)
+
+    elif command == "execute_task":
+        task_id = params["task_id"]
+        result = self.execute_approved_task(task_id)
+        return AutoRTResponse(success=result, request_id=request_id)
+```
+
+**Task Generation Pipeline** (`ACRLPython/autort/TaskGenerator.py`):
+1. Query world state for scene description
+2. Build LLM prompt with detected objects + operations
+3. Generate task proposals via LM Studio
+4. Validate operations against Registry
+5. Apply Pydantic schema validation
+6. Return structured ProposedTask list
+
+**Safety Validation** (Python-side):
+- Workspace bounds checking
+- Max velocity/force limits
+- Minimum robot separation (0.2m)
+- Operation type validation
+- JSON schema enforcement
+
+---
+
+### 3. ResultsClient.cs
 
 **Purpose**: Receives bidirectional command results from Python's CommandServer (port 5010).
 
@@ -763,6 +1147,54 @@ public class OperationContext
 }
 ```
 
+### AutoRTDataModels.cs
+
+**ProposedTask** - Task proposal from AutoRT:
+```csharp
+[System.Serializable]
+public class ProposedTask
+{
+    public string task_id;               // Unique identifier (e.g., "task_001")
+    public string description;           // Human-readable task description
+    public List<TaskOperation> operations; // Operations to execute
+    public List<string> required_robots; // Robot IDs needed
+    public int estimated_complexity;     // 1-10 complexity score
+}
+
+[System.Serializable]
+public class TaskOperation
+{
+    public string type;                  // Operation name from Registry
+    public string robot_id;              // Target robot
+    public Dictionary<string, object> parameters; // Operation parameters
+}
+```
+
+**AutoRTResponse** - Response from Python AutoRT:
+```csharp
+[System.Serializable]
+public class AutoRTResponse
+{
+    public List<ProposedTask> tasks;     // Generated task proposals
+    public bool loop_running;            // Current loop status
+    public string error;                 // Error message if failed
+    public uint request_id;              // Protocol V2 correlation
+
+    public bool HasError => !string.IsNullOrEmpty(error);
+}
+```
+
+**TaskSelectionStrategy** - Strategy enum:
+```csharp
+public enum TaskSelectionStrategy
+{
+    Balanced,   // Mix of simple and complex tasks
+    Simple,     // Prioritize low-complexity tasks
+    Complex,    // Prioritize challenging tasks
+    Random      // Random sampling
+}
+```
+
 ---
 
 ## Communication Flow Examples
@@ -878,6 +1310,99 @@ ROSJointStatePublisher ───> /joint_states ───> MoveIt state sync
 
 **Key Difference**: ROS integration bypasses Protocol V2 for trajectory execution, using ROS message serialization instead. Commands still originate from Python backend via Protocol V2, but execution routing depends on control mode (Unity/ROS/Hybrid).
 
+### Example 5: Autonomous Task Generation (AutoRT)
+
+```
+Unity Inspector                 Python AutoRT                    Unity Execution
+───────────────                 ─────────────                    ───────────────
+
+User clicks "Generate Tasks"
+  │
+  ├─> AutoRTManager.GenerateTasks(3)
+  │       │
+  │       └──────────────────────> SequenceServer (port 5013)
+  │                                ├─ Query WorldStateServer for scene
+  │                                │   └─ Returns: 2 red cubes, 1 blue cube
+  │                                │
+  │                                ├─ TaskGenerator builds LLM prompt:
+  │                                │   • Scene: red cubes at [0.3,0.2,0.1], [0.5,0.2,0.1]
+  │                                │   • Available: 30 operations from Registry
+  │                                │   • Robots: Robot1, Robot2
+  │                                │   • Strategy: Balanced
+  │                                │
+  │                                ├─ Query LM Studio LLM
+  │                                │   └─ Generates 3 task proposals
+  │                                │
+  │                                ├─ Validate operations (Registry check)
+  │                                ├─ Apply Pydantic schema validation
+  │                                └─ Returns: AutoRTResponse with tasks
+  │       <──────────────────────┘
+  │
+  ├─> AutoRTManager.OnResponseReceived()
+  │   └─ Adds tasks to _pendingTasks list
+  │
+  ├─> Inspector UI updates (custom editor)
+  │   Shows 3 pending tasks:
+  │   ┌─────────────────────────────────┐
+  │   │ task_001: Pick up first red cube │
+  │   │   [ Execute ] [ Reject ]          │
+  │   ├─────────────────────────────────┤
+  │   │ task_002: Handoff to Robot2      │
+  │   │   [ Execute ] [ Reject ]          │
+  │   └─────────────────────────────────┘
+  │
+User clicks "Execute" on task_001
+  │
+  ├─> AutoRTManager.ExecuteTask(task_001)
+  │       │
+  │       └──────────────────────> SequenceServer
+  │                                └─ Executes task operations:
+  │                                    1. detect_object_stereo(color="red")
+  │                                    2. move_to_coordinate([0.3,0.2,0.1])
+  │                                    3. control_gripper(action="close")
+  │                                <──────────────────────┘
+  │                                                        │
+  │                                                        └──────> PythonCommandHandler
+  │                                                                ├─ Detect red cube
+  │                                                                ├─ Move to position
+  │                                                                └─ Close gripper
+  │
+Task executed successfully!
+```
+
+**Continuous Loop Mode**:
+
+```
+Unity Inspector                 Python AutoRT (Loop Thread)      Unity Execution
+───────────────                 ───────────────────────────      ───────────────
+
+User clicks "Start Loop"
+  │
+  ├─> AutoRTManager.StartLoop(delay=5.0)
+  │       │
+  │       └──────────────────────> SequenceServer
+  │                                └─ Starts background loop thread
+  │                                    while loop_running:
+  │                                        ├─ Generate tasks (3 candidates)
+  │                                        ├─ Send to Unity (AUTORT_RESPONSE)
+  │       <──────────────────────────────┤
+  │                                        ├─ Wait for approval/rejection
+  │                                        └─ sleep(5.0 seconds)
+  │
+  ├─> Tasks appear in inspector UI
+  │   User reviews and clicks "Execute" or "Reject"
+  │
+  └─> Loop continues every 5 seconds...
+
+User clicks "Stop Loop"
+  │
+  └─> AutoRTManager.StopLoop()
+          │
+          └──────────────────────> SequenceServer
+                                   └─ Sets loop_running = False
+                                       (loop thread exits)
+```
+
 ---
 
 ## Configuration and Constants
@@ -893,7 +1418,7 @@ public static class CommunicationConstants
     public const int IMAGE_SERVER_PORT = 5005;           // Single image streaming
     public const int STEREO_DETECTION_PORT = 5006;       // Stereo image pairs
     public const int LLM_RESULTS_PORT = 5010;            // CommandServer (bidirectional)
-    public const int SEQUENCE_SERVER_PORT = 5013;        // Multi-command sequences
+    public const int SEQUENCE_SERVER_PORT = 5013;        // Multi-command sequences + AutoRT
     public const int WORLD_STATE_PORT = 5014;            // World state streaming
 
     // ROS Integration Ports (handled by RobotScripts/Ros/ and SimulationScripts/)
@@ -914,7 +1439,7 @@ public static class CommunicationConstants
 | 5005  | Unity → Python    | Protocol V2 | ImageSender              | Single camera images             |
 | 5006  | Unity → Python    | Protocol V2 | StereoCameraController   | Stereo image pairs               |
 | 5010  | Bidirectional     | Protocol V2 | ResultsClient            | Commands & results               |
-| 5013  | Bidirectional     | Protocol V2 | SequenceClient           | Multi-command sequences          |
+| 5013  | Bidirectional     | Protocol V2 | SequenceClient           | Multi-command sequences + AutoRT |
 | 5014  | Unity → Python    | Protocol V2 | WorldStateClient         | Robot/object state streaming     |
 | 5020  | Python → Docker   | TCP         | ROSBridge (Python)       | Motion planning requests         |
 | 10000 | Unity ↔ Docker    | ROS Messages| ROS Components           | ROS topic bridge                 |
@@ -923,6 +1448,63 @@ public static class CommunicationConstants
 - Port 10000: `SimulationScripts/ROSConnectionInitializer.cs`
 - Port 5020: `ACRLPython/ros2/ROSBridge.py`
 - ROS Unity components: `RobotScripts/Ros/`
+
+**AutoRT Configuration** (`ConfigScripts/AutoRTConfig.cs`):
+
+```csharp
+[CreateAssetMenu(fileName = "AutoRTConfig", menuName = "Robotics/AutoRT Config")]
+public class AutoRTConfig : ScriptableObject
+{
+    [Header("Task Generation")]
+    [Range(1, 5)]
+    public int maxTaskCandidates = 3;
+    public TaskSelectionStrategy strategy = TaskSelectionStrategy.Balanced;
+
+    [Header("Continuous Loop")]
+    public bool enableContinuousLoop = false;
+    [Range(1f, 60f)]
+    public float loopDelaySeconds = 5f;
+
+    [Header("Robot Assignment")]
+    public string[] robotIds = new[] { "Robot1", "Robot2" };
+    public bool enableCollaborativeTasks = true;
+
+    [Header("UI Settings")]
+    [Range(5, 20)]
+    public int maxDisplayTasks = 10;
+    public bool autoRefresh = true;
+    [Range(0.1f, 2f)]
+    public float uiRefreshRate = 0.5f;
+}
+```
+
+**Python AutoRT Configuration** (`ACRLPython/config/AutoRT.py`):
+
+```python
+# LLM configuration
+LM_STUDIO_URL = "http://localhost:1234/v1"
+TASK_GENERATION_MODEL = "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF"
+SAFETY_VALIDATION_MODEL = "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF"
+
+# AutoRT loop settings
+MAX_TASK_CANDIDATES = 3
+LOOP_DELAY_SECONDS = 5.0
+HUMAN_IN_LOOP_DEFAULT = True
+USE_VLM_REASONING = False
+
+# Safety settings
+WORKSPACE_BOUNDS = {
+    'min_corner': (-1.0, -1.0, 0.0),
+    'max_corner': (1.0, 1.0, 1.5),
+}
+MAX_VELOCITY = 2.0  # m/s
+MIN_ROBOT_SEPARATION = 0.2  # meters
+MAX_GRIPPER_FORCE = 50.0  # Newtons
+
+# Multi-robot settings
+DEFAULT_ROBOTS = ["Robot1", "Robot2"]
+ENABLE_COLLABORATIVE_TASKS = True
+```
 
 ---
 
@@ -1237,10 +1819,28 @@ Scene
 ├── RobotManager
 ├── PythonCommunication (Empty GameObject)
 │   ├── SequenceClient (Component)
+│   ├── AutoRTManager (Component)           # ✅ NEW: Autonomous task generation
 │   ├── UnifiedPythonReceiver (Component)
 │   ├── WorldStatePublisher (Component)
 │   ├── WorldStateClient (Component)
 │   └── PythonCommandHandler (Component)
+└── Robots (AR4 prefabs)
+```
+
+**Optional Setup** (with AutoRT):
+
+```
+Scene
+├── SimulationManager
+├── RobotManager
+├── PythonCommunication (Empty GameObject)
+│   ├── SequenceClient
+│   ├── AutoRTManager                       # Autonomous task generation
+│   │   └── Config: DefaultAutoRTConfig.asset
+│   ├── UnifiedPythonReceiver
+│   ├── WorldStatePublisher
+│   ├── WorldStateClient
+│   └── PythonCommandHandler
 └── Robots (AR4 prefabs)
 ```
 
@@ -1386,6 +1986,180 @@ public class ObjectTracker : MonoBehaviour
 }
 ```
 
+### Example 5: Autonomous Task Generation with AutoRT
+
+```csharp
+using PythonCommunication;
+using PythonCommunication.DataModels;
+
+public class AutoRTController : MonoBehaviour
+{
+    [SerializeField] private AutoRTConfig _config;
+    private bool _autonomousModeActive = false;
+
+    void Start()
+    {
+        // Subscribe to AutoRT events
+        AutoRTManager.Instance.OnTasksReceived += HandleTasksReceived;
+        AutoRTManager.Instance.OnLoopStatusChanged += HandleLoopStatusChanged;
+
+        Debug.Log("AutoRT Controller initialized");
+    }
+
+    // Manual task generation (one-shot)
+    public void GenerateTasksOnce()
+    {
+        if (AutoRTManager.Instance.GenerateTasks(numTasks: 3))
+        {
+            Debug.Log("Task generation request sent");
+        }
+    }
+
+    // Start continuous autonomous mode
+    public void StartAutonomousMode()
+    {
+        if (AutoRTManager.Instance.StartLoop(loopDelay: 5f))
+        {
+            _autonomousModeActive = true;
+            Debug.Log("Autonomous mode started - tasks will generate every 5 seconds");
+        }
+    }
+
+    // Stop continuous mode
+    public void StopAutonomousMode()
+    {
+        if (AutoRTManager.Instance.StopLoop())
+        {
+            _autonomousModeActive = false;
+            Debug.Log("Autonomous mode stopped");
+        }
+    }
+
+    // Handle task proposals
+    void HandleTasksReceived(List<ProposedTask> tasks)
+    {
+        Debug.Log($"Received {tasks.Count} task proposals:");
+
+        foreach (var task in tasks)
+        {
+            Debug.Log($"\n[{task.task_id}] {task.description}");
+            Debug.Log($"  Complexity: {task.estimated_complexity}/10");
+            Debug.Log($"  Robots: {string.Join(", ", task.required_robots)}");
+            Debug.Log($"  Operations: {task.operations.Count}");
+
+            // Automatic approval based on complexity
+            if (task.estimated_complexity <= 5)
+            {
+                Debug.Log($"  → Auto-approving (complexity <= 5)");
+                AutoRTManager.Instance.ExecuteTask(task);
+            }
+            else
+            {
+                Debug.Log($"  → Requires manual approval (complexity > 5)");
+                // Task will appear in inspector UI for manual review
+            }
+        }
+    }
+
+    // Handle loop status changes
+    void HandleLoopStatusChanged(bool isRunning)
+    {
+        Debug.Log($"Loop status changed: {(isRunning ? "RUNNING" : "STOPPED")}");
+        _autonomousModeActive = isRunning;
+    }
+
+    // Custom safety validation
+    bool IsTaskSafe(ProposedTask task)
+    {
+        // Check complexity
+        if (task.estimated_complexity > 8)
+        {
+            Debug.LogWarning($"Task too complex: {task.estimated_complexity}");
+            return false;
+        }
+
+        // Check operation types
+        foreach (var op in task.operations)
+        {
+            // Disallow certain high-risk operations
+            if (op.type == "force_control" || op.type == "emergency_stop")
+            {
+                Debug.LogWarning($"Unsafe operation detected: {op.type}");
+                return false;
+            }
+        }
+
+        // Check robot availability
+        foreach (var robotId in task.required_robots)
+        {
+            var robot = RobotManager.Instance?.GetRobot(robotId);
+            if (robot == null || !robot.IsInitialized)
+            {
+                Debug.LogWarning($"Robot not available: {robotId}");
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // Approve task with custom validation
+    public void ApproveTaskWithValidation(ProposedTask task)
+    {
+        if (IsTaskSafe(task))
+        {
+            AutoRTManager.Instance.ExecuteTask(task);
+            Debug.Log($"Approved and executing: {task.task_id}");
+        }
+        else
+        {
+            AutoRTManager.Instance.RejectTask(task);
+            Debug.LogWarning($"Rejected unsafe task: {task.task_id}");
+        }
+    }
+
+    void OnDestroy()
+    {
+        // Clean up event subscriptions
+        if (AutoRTManager.Instance != null)
+        {
+            AutoRTManager.Instance.OnTasksReceived -= HandleTasksReceived;
+            AutoRTManager.Instance.OnLoopStatusChanged -= HandleLoopStatusChanged;
+        }
+
+        // Stop autonomous mode if active
+        if (_autonomousModeActive)
+        {
+            StopAutonomousMode();
+        }
+    }
+}
+```
+
+**Using the Custom Inspector**:
+
+1. Add `AutoRTManager` component to a GameObject
+2. Assign `AutoRTConfig` asset to the Config field
+3. Enter play mode
+4. Use inspector buttons:
+   - **Generate Tasks** - Request task proposals from Python
+   - **Start Loop** - Begin continuous autonomous generation
+   - **Execute** - Approve and run a specific task
+   - **Reject** - Discard a task without running it
+   - **Clear All Tasks** - Remove all pending tasks
+
+**Programmatic Control**:
+
+```csharp
+// From code
+AutoRTManager.Instance.GenerateTasks(3);
+
+// Wait for tasks to arrive via OnTasksReceived event
+// Then approve/reject programmatically
+AutoRTManager.Instance.ExecuteTask(selectedTask);
+AutoRTManager.Instance.RejectTask(unwantedTask);
+```
+
 ---
 
 ## Troubleshooting
@@ -1505,6 +2279,7 @@ SequenceClient.Instance.ExecuteSequence("detect and move to cube");
 The **PythonCommunication** system provides a production-ready, high-level interface for Unity-Python robot control:
 
 - **SequenceClient**: Natural language command parsing and execution
+- **AutoRTManager**: Autonomous task generation with LLM planning and human-in-the-loop approval (February 2026)
 - **ResultsClient**: Bidirectional command results
 - **UnifiedPythonReceiver**: Unified result routing and event dispatch
 - **WorldStatePublisher/Client**: Real-time state streaming for spatial reasoning
@@ -1542,3 +2317,27 @@ For complete ROS integration details, see:
 - `ACRLUnity/Assets/Scripts/SimulationScripts/ROSConnectionInitializer.cs` (ROS connection setup)
 - `ACRLPython/ros2/ROSBridge.py` (Python-Docker bridge)
 - `Core/README.md` (Complete communication architecture diagram)
+
+### Key Features (February 2026 Update)
+
+**AutoRT System**:
+- LLM-powered autonomous task generation via LM Studio
+- Human-in-the-loop approval workflow with custom inspector UI
+- Continuous loop mode for fully autonomous operation
+- Multi-robot collaborative task support
+- Task validation against 30 registered operations
+- Configurable task selection strategies (Balanced/Simple/Complex/Random)
+- Safety constraints (workspace bounds, velocity limits, robot separation)
+- Pydantic schema validation for type safety
+
+**Protocol V2**:
+- Request ID correlation for reliable multi-robot communication
+- Dedicated message types (AUTORT_COMMAND, AUTORT_RESPONSE)
+- Thread-safe request/response matching
+- Shared port architecture (SequenceServer + AutoRT on port 5013)
+
+**30 Operations System**:
+- Organized by complexity levels (1-5)
+- Validated operation types in task generation
+- Registry integration for semantic matching
+- Variable passing between operations

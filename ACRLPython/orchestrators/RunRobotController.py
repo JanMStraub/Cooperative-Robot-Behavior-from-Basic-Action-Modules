@@ -7,6 +7,7 @@ Starts all required servers in a single process:
 - CommandServer (port 5010) - sends commands, receives completions
 - SequenceServer (port 5013) - processes command sequences
 - WorldStateServer (port 5014) - receives robot/object state updates
+- AutoRTServer (port 5015) - autonomous task generation
 
 Usage:
     python -m orchestrators.RunRobotController
@@ -29,6 +30,7 @@ try:
         LLM_RESULTS_PORT,
         SEQUENCE_SERVER_PORT,
         WORLD_STATE_PORT,
+        AUTORT_SERVER_PORT,
         DEFAULT_LMSTUDIO_MODEL,
         LMSTUDIO_BASE_URL,
     )
@@ -49,6 +51,7 @@ except ImportError:
         LLM_RESULTS_PORT,
         SEQUENCE_SERVER_PORT,
         WORLD_STATE_PORT,
+        AUTORT_SERVER_PORT,
         DEFAULT_LMSTUDIO_MODEL,
         LMSTUDIO_BASE_URL,
     )
@@ -71,6 +74,7 @@ try:
     )
     from ..servers.SequenceServer import run_sequence_server_background
     from ..servers.WorldStateServer import WorldStateServer
+    from ..servers.AutoRTServer import AutoRTServer
 except ImportError:
     # Running as python -m orchestrators.RunRobotController
     from servers.ImageServer import run_image_server_background
@@ -80,6 +84,7 @@ except ImportError:
     )
     from servers.SequenceServer import run_sequence_server_background
     from servers.WorldStateServer import WorldStateServer
+    from servers.AutoRTServer import AutoRTServer
 
 # Setup centralized logging (do this early before any logging calls)
 logger = setup_logging(__name__)
@@ -100,6 +105,7 @@ class RobotController:
         command_port: int = LLM_RESULTS_PORT,
         sequence_port: int = SEQUENCE_SERVER_PORT,
         world_state_port: int = WORLD_STATE_PORT,
+        autort_port: int = AUTORT_SERVER_PORT,
         model: str = DEFAULT_LMSTUDIO_MODEL,
         check_completion: bool = True,
     ):
@@ -113,6 +119,7 @@ class RobotController:
             command_port: Port for commands/results (bidirectional)
             sequence_port: Port for sequence execution
             world_state_port: Port for world state streaming
+            autort_port: Port for AutoRT task generation
             model: LLM model for parsing
             check_completion: Whether to wait for Unity completion signals
         """
@@ -122,6 +129,7 @@ class RobotController:
         self._command_port = command_port
         self._sequence_port = sequence_port
         self._world_state_port = world_state_port
+        self._autort_port = autort_port
         self._model = model
         self._check_completion = check_completion
 
@@ -129,6 +137,7 @@ class RobotController:
         self._command_server = None
         self._sequence_server = None
         self._world_state_server = None
+        self._autort_server = None
         self._vision_processor = None
         self._running = False
         self._stop_event = threading.Event()
@@ -174,6 +183,12 @@ class RobotController:
         world_state_config = ServerConfig(host=self._host, port=self._world_state_port)
         self._world_state_server = WorldStateServer(config=world_state_config)
         self._world_state_server.start()
+
+        # Start AutoRTServer (port 5015) - autonomous task generation
+        logger.info(f"Starting AutoRTServer (port: {self._autort_port})")
+        autort_config = ServerConfig(host=self._host, port=self._autort_port)
+        self._autort_server = AutoRTServer(config=autort_config)
+        self._autort_server.start()
 
         # Share resources between servers
         broadcaster = get_command_broadcaster()
@@ -248,6 +263,8 @@ class RobotController:
         logger.info(f"  Image Server (stereo):  {self._host}:{self._stereo_port}")
         logger.info(f"  Command Server:         {self._host}:{self._command_port}")
         logger.info(f"  Sequence Server:        {self._host}:{self._sequence_port}")
+        logger.info(f"  World State Server:     {self._host}:{self._world_state_port}")
+        logger.info(f"  AutoRT Server:          {self._host}:{self._autort_port}")
         logger.info(f"  LLM Model:              {self._model}")
         if ENABLE_VISION_STREAMING and self._vision_processor:
             logger.info(f"  Vision Streaming:       Enabled ({VISION_STREAM_FPS} FPS)")
@@ -298,6 +315,13 @@ class RobotController:
                 logger.info("WorldStateServer stopped")
         except Exception as e:
             logger.error(f"Error stopping WorldStateServer: {e}")
+
+        try:
+            if self._autort_server:
+                self._autort_server.stop()
+                logger.info("AutoRTServer stopped")
+        except Exception as e:
+            logger.error(f"Error stopping AutoRTServer: {e}")
 
         logger.info("RobotController stopped")
 
