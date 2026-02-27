@@ -333,19 +333,23 @@ def test_balanced_novelty_decay(task_selector, sample_tasks):
 
 def test_balanced_weights_success_and_novelty(task_selector, sample_tasks):
     """Balanced strategy weights success (60%) and novelty (40%)"""
+    # Use task[0] (wait) and task[2] (move_to_coordinate) — they have different operation keys
+    task_practiced = sample_tasks[0]   # key: ("wait",)
+    task_novel = sample_tasks[2]       # key: ("move_to_coordinate",)
+
     # First task: high success, many attempts
     for _ in range(5):
-        task_selector.update_history(sample_tasks[0], {"success": True})
+        task_selector.update_history(task_practiced, {"success": True})
 
     # Second task: untried (high novelty)
 
     # Calculate expected scores
-    # task1: success_rate=1.0, novelty=1/(1+5)=0.167
+    # task_practiced: success_rate=1.0, novelty=1/(1+5)=0.167
     #        score = 1.0 * 0.6 + 0.167 * 0.4 = 0.667
-    # task2: neutral_success=0.5, novelty=1.0
+    # task_novel: neutral_success=0.5, novelty=1.0
     #        score = 0.5 * 0.6 + 1.0 * 0.4 = 0.7
 
-    selected = task_selector.select_task(sample_tasks[:2], strategy="balanced")
+    selected = task_selector.select_task([task_practiced, task_novel], strategy="balanced")
 
-    # Second task should win (higher balanced score)
-    assert selected == sample_tasks[1]
+    # Novel task should win (higher balanced score)
+    assert selected == task_novel

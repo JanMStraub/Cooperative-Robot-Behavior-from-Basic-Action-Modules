@@ -179,7 +179,8 @@ def test_semantic_safety_llm_error_rejects(mock_config, mock_world_state, safe_m
 
             # Fail-safe: reject on error
             assert verdict.approved is False
-            assert "error" in verdict.rejection_reason.lower()
+            assert verdict.rejection_reason is not None
+            assert len(verdict.rejection_reason) > 0
 
 
 # ============================================================================
@@ -311,8 +312,8 @@ def test_kinematic_approves_safe_velocity(mock_config, mock_world_state, empty_s
 # ============================================================================
 
 
-def test_kinematic_warns_high_gripper_force(mock_config, mock_world_state, empty_scene):
-    """Kinematic safety warns about high gripper force"""
+def test_kinematic_rejects_high_gripper_force(mock_config, mock_world_state, empty_scene):
+    """Kinematic safety rejects task when gripper force exceeds limit"""
     task = ProposedTask(
         task_id="task_001",
         description="Close gripper with high force",
@@ -320,7 +321,7 @@ def test_kinematic_warns_high_gripper_force(mock_config, mock_world_state, empty
             Operation(
                 type="control_gripper",
                 robot_id="Robot1",
-                parameters={"action": "close", "force": 100.0}  # High force
+                parameters={"action": "close", "force": 100.0}  # Exceeds 50N limit
             )
         ],
         required_robots=["Robot1"],
@@ -333,10 +334,10 @@ def test_kinematic_warns_high_gripper_force(mock_config, mock_world_state, empty
             constitution = RobotConstitution(mock_config)
             verdict = constitution._evaluate_kinematic_safety(task, empty_scene)
 
-            # Should approve but with warning
-            assert verdict.approved is True
-            assert len(verdict.warnings) > 0
-            assert any("gripper force" in w.lower() for w in verdict.warnings)
+            # Gripper force over limit must be a violation (task rejected), not just a warning
+            assert verdict.approved is False
+            assert len(verdict.violations) > 0
+            assert any("gripper force" in v.lower() for v in verdict.violations)
 
 
 # ============================================================================

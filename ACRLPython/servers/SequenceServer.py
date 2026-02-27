@@ -400,6 +400,9 @@ class SequenceServer(TCPServerBase):
             client: Client socket
             header_bytes: Already-read header (5 bytes: type + request_id)
         """
+        # Extract request_id from the already-read header so it is always
+        # bound, even if decode_autort_command() raises before assigning it.
+        request_id = struct.unpack("<I", header_bytes[1:5])[0]
         try:
             # Import AutoRT handler lazily
             try:

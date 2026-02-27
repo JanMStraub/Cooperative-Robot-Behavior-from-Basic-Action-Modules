@@ -461,7 +461,6 @@ GameObject:
   - component: {fileID: 1595579018}
   - component: {fileID: 1595579019}
   - component: {fileID: 1595579027}
-  - component: {fileID: 1595579029}
   - component: {fileID: 1595579028}
   - component: {fileID: 1595579026}
   - component: {fileID: 1595579030}
@@ -576,7 +575,10 @@ MonoBehaviour:
   _autoReconnect: 1
   _serverPort: 0
   _serverHost: 127.0.0.1
-  _verboseLogging: 0
+  _config: {fileID: 11400000, guid: 498c5e5e7e75949a9aca473a092b3afa, type: 2}
+  _pendingTasks: []
+  _loopRunning: 0
+  _statusMessage: Idle
 --- !u!1 &1800216808
 GameObject:
   m_ObjectHideFlags: 0
@@ -605,7 +607,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a79441f348de89743a2939f4d699eac1, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalCameraData
   m_RenderShadows: 1
   m_RequiresDepthTextureOption: 2

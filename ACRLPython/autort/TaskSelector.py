@@ -6,6 +6,7 @@ Task selection with exploration/exploitation balance.
 
 import logging
 import random
+import threading
 import time
 from typing import List, Optional, Dict, Any
 from collections import defaultdict
@@ -26,6 +27,8 @@ class TaskSelector:
     def __init__(self):
         # History: task description hash → list of outcomes
         self.history: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        # Lock protecting all reads and writes to self.history across threads
+        self._history_lock = threading.Lock()
 
     def select_task(
         self, candidates: List[ProposedTask], strategy: str = "balanced"
@@ -62,11 +65,12 @@ class TaskSelector:
     def _select_explore(self, candidates: List[ProposedTask]) -> ProposedTask:
         """Prioritize tasks with fewer past attempts"""
         scored = []
-        for task in candidates:
-            key = self._task_key(task)
-            attempt_count = len(self.history[key])
-            # Lower count = higher priority (less explored)
-            scored.append((task, -attempt_count))
+        with self._history_lock:
+            for task in candidates:
+                key = self._task_key(task)
+                attempt_count = len(self.history[key])
+                # Lower count = higher priority (less explored)
+                scored.append((task, -attempt_count))
 
         scored.sort(key=lambda x: x[1], reverse=True)
         return scored[0][0]
@@ -74,17 +78,18 @@ class TaskSelector:
     def _select_exploit(self, candidates: List[ProposedTask]) -> ProposedTask:
         """Prioritize tasks with highest success rate"""
         scored = []
-        for task in candidates:
-            key = self._task_key(task)
-            outcomes = self.history[key]
-            if not outcomes:
-                # Unknown tasks get neutral score
-                scored.append((task, 0.5))
-            else:
-                success_rate = sum(1 for o in outcomes if o.get("success")) / len(
-                    outcomes
-                )
-                scored.append((task, success_rate))
+        with self._history_lock:
+            for task in candidates:
+                key = self._task_key(task)
+                outcomes = self.history[key]
+                if not outcomes:
+                    # Unknown tasks get neutral score
+                    scored.append((task, 0.5))
+                else:
+                    success_rate = sum(1 for o in outcomes if o.get("success")) / len(
+                        outcomes
+                    )
+                    scored.append((task, success_rate))
 
         scored.sort(key=lambda x: x[1], reverse=True)
         return scored[0][0]
@@ -97,21 +102,22 @@ class TaskSelector:
         Novelty = 1.0 for untried tasks, decays with attempts.
         """
         scored = []
-        for task in candidates:
-            key = self._task_key(task)
-            outcomes = self.history[key]
+        with self._history_lock:
+            for task in candidates:
+                key = self._task_key(task)
+                outcomes = self.history[key]
 
-            if not outcomes:
-                # Untried tasks get high novelty bonus
-                score = 0.5 * 0.6 + 1.0 * 0.4  # 0.7
-            else:
-                success_rate = sum(1 for o in outcomes if o.get("success")) / len(
-                    outcomes
-                )
-                novelty = 1.0 / (1.0 + len(outcomes))  # Decays with attempts
-                score = success_rate * 0.6 + novelty * 0.4
+                if not outcomes:
+                    # Untried tasks get high novelty bonus
+                    score = 0.5 * 0.6 + 1.0 * 0.4  # 0.7
+                else:
+                    success_rate = sum(1 for o in outcomes if o.get("success")) / len(
+                        outcomes
+                    )
+                    novelty = 1.0 / (1.0 + len(outcomes))  # Decays with attempts
+                    score = success_rate * 0.6 + novelty * 0.4
 
-            scored.append((task, score))
+                scored.append((task, score))
 
         scored.sort(key=lambda x: x[1], reverse=True)
         return scored[0][0]
@@ -125,13 +131,14 @@ class TaskSelector:
             result: Execution result with at least 'success' key
         """
         key = self._task_key(task)
-        self.history[key].append(
-            {
-                "success": result.get("success", False),
-                "timestamp": time.time(),
-                "task_id": task.task_id,
-            }
-        )
+        with self._history_lock:
+            self.history[key].append(
+                {
+                    "success": result.get("success", False),
+                    "timestamp": time.time(),
+                    "task_id": task.task_id,
+                }
+            )
 
     def _task_key(self, task: ProposedTask) -> str:
         """
