@@ -89,14 +89,23 @@ class GraspPlanner:
             f"size={object_size}, robot={robot_id}"
         )
 
-        # Filter config if preferred approach is specified
+        # Filter config if preferred approach is specified.
+        # State is saved before and restored after generation so reusing this
+        # planner instance on a subsequent call without preferred_approach still
+        # sees all approaches enabled.
+        saved_state = None
         if preferred_approach is not None:
+            saved_state = self._save_approach_state()
             self._filter_approaches(preferred_approach)
 
         # Step 1: Generate candidates
-        candidates = self.generator.generate_candidates(
-            object_position, object_rotation, object_size, gripper_position
-        )
+        try:
+            candidates = self.generator.generate_candidates(
+                object_position, object_rotation, object_size, gripper_position
+            )
+        finally:
+            if saved_state is not None:
+                self._restore_approach_state(saved_state)
 
         if not candidates:
             logger.warning("No grasp candidates generated")
@@ -230,17 +239,56 @@ class GraspPlanner:
         """
         Filter configuration to only use preferred approach.
 
-        Temporarily modifies config to enable only the specified approach.
+        Saves original enabled/preference_weight state, disables all approaches
+        except the preferred one, generates candidates, then restores state so
+        subsequent calls on the same planner instance are unaffected.
+
+        The actual save/restore lifecycle is managed by plan_grasp via
+        _save_approach_state and _restore_approach_state; this method only
+        applies the filter.
 
         Args:
-            preferred_approach: Approach type to prefer
+            preferred_approach: Approach type to prefer ("top", "front", "side")
         """
+        matched = False
         for approach_settings in self.config.enabled_approaches:
             if approach_settings.approach_type == preferred_approach:
                 approach_settings.enabled = True
                 approach_settings.preference_weight = 2.0  # Max weight
+                matched = True
             else:
                 approach_settings.enabled = False
+
+        if not matched:
+            logger.warning(
+                f"preferred_approach='{preferred_approach}' matched no enabled approach; "
+                f"all approaches have been disabled and no candidates will be generated."
+            )
+
+    def _save_approach_state(self) -> list:
+        """
+        Save current enabled/preference_weight state of all approach settings.
+
+        Returns:
+            List of (enabled, preference_weight) tuples in config order
+        """
+        return [
+            (s.enabled, s.preference_weight)
+            for s in self.config.enabled_approaches
+        ]
+
+    def _restore_approach_state(self, saved_state: list) -> None:
+        """
+        Restore enabled/preference_weight state saved by _save_approach_state.
+
+        Args:
+            saved_state: List of (enabled, preference_weight) tuples
+        """
+        for approach_settings, (enabled, weight) in zip(
+            self.config.enabled_approaches, saved_state
+        ):
+            approach_settings.enabled = enabled
+            approach_settings.preference_weight = weight
 
     def plan_multi_grasp(
         self,

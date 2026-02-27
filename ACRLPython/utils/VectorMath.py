@@ -87,6 +87,10 @@ def vector_angle(v1: np.ndarray, v2: np.ndarray) -> float:
     v1_norm = vector_normalize(v1)
     v2_norm = vector_normalize(v2)
 
+    # Early exit for zero-length inputs — angle is undefined, return 0.0
+    if np.linalg.norm(v1_norm) < 1e-8 or np.linalg.norm(v2_norm) < 1e-8:
+        return 0.0
+
     # Calculate dot product
     dot = np.dot(v1_norm, v2_norm)
 
@@ -174,9 +178,19 @@ def vector_slerp(v1: np.ndarray, v2: np.ndarray, t: float) -> np.ndarray:
     dot = np.clip(dot, -1.0, 1.0)
     theta = np.arccos(dot)
 
-    # Handle near-parallel case
+    # Handle near-parallel case (theta ≈ 0)
     if abs(theta) < 1e-6:
         return vector_lerp(v1, v2, t)
+
+    # Handle anti-parallel case (theta ≈ π): sin(π) ≈ 1.2e-16 causes divide-by-zero
+    # Choose an arbitrary perpendicular axis and slerp through it
+    if abs(theta - np.pi) < 1e-6:
+        _, perp, _ = vectors_orthonormal_basis(v1_norm)
+        # Rotate v1 toward v2 via the perpendicular axis
+        half_theta = t * np.pi
+        result_norm = (np.cos(half_theta) * v1_norm + np.sin(half_theta) * perp)
+        magnitude = np.linalg.norm(v1) * (1.0 - t) + np.linalg.norm(v2) * t
+        return result_norm * magnitude
 
     # Slerp formula
     sin_theta = np.sin(theta)

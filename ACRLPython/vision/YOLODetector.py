@@ -46,6 +46,7 @@ Usage:
 """
 
 import logging
+import math
 from typing import List, Optional, Tuple, Any
 from pathlib import Path
 from datetime import datetime
@@ -684,8 +685,6 @@ class YOLODetector:
         for det in detection_result.detections:
             # Bbox-guided depth sampling (NEW - more accurate than center point)
             if use_bbox_sampling:
-                import math
-
                 focal_length_px = get_focal_length_pixels(camera_config, w, h)
 
                 bbox = (det.bbox_x, det.bbox_y, det.bbox_w, det.bbox_h)
@@ -727,8 +726,6 @@ class YOLODetector:
                 if (
                     disp_value is not None and disp_value > 1.0
                 ):  # Valid disparity threshold
-                    import math
-
                     # focal_length = (image_width / 2) / tan(FOV / 2)
                     focal_length = (w / 2.0) / math.tan(
                         math.radians(camera_config.fov / 2.0)

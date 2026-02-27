@@ -280,5 +280,121 @@ class TestGraspConfigIntegration:
         assert all(approach == "top" for approach in approach_types)
 
 
+class TestApproachDirectionDiversity:
+    """
+    Tests for Bug 2 fix: side/front approach diversity.
+
+    Before the fix, _get_approach_basis was called once per approach batch, so
+    side_sign/front_sign were drawn once and all 8 candidates used the same
+    direction (all +X or all -X for side; all +Z or all -Z for front).
+
+    After the fix, _get_approach_basis is called per candidate, so each
+    candidate independently samples its sign — giving mix of +X/-X and +Z/-Z.
+    """
+
+    def test_side_approach_has_both_positive_and_negative_x_directions(self):
+        """
+        Side approach candidates must include both +X and -X approach directions
+        across enough trials (multiple seeds) to confirm independence.
+
+        We run several seeded generators and check that at least one produces
+        a mix — if all seeds produce only one direction, the bug has returned.
+        """
+        config = GraspConfig.create_default()
+        # Keep only side approach so we only look at side candidates
+        config.enabled_approaches = [
+            a for a in config.enabled_approaches if a.approach_type == "side"
+        ]
+        # Use more candidates to increase probability of observing both signs
+        config.candidates_per_approach = 16
+
+        object_position = (0.0, 0.0, 0.0)
+        object_rotation = (0.0, 0.0, 0.0, 1.0)
+        object_size = (0.05, 0.05, 0.05)
+        gripper_position = (0.3, 0.15, 0.0)
+
+        found_mix_in_any_seed = False
+        for seed in range(20):
+            gen = GraspCandidateGenerator(config, seed=seed)
+            candidates = gen.generate_candidates(
+                object_position, object_rotation, object_size, gripper_position
+            )
+
+            # Extract the X component of each approach direction
+            x_directions = [c.approach_direction[0] for c in candidates]
+            has_positive_x = any(x > 0.5 for x in x_directions)
+            has_negative_x = any(x < -0.5 for x in x_directions)
+
+            if has_positive_x and has_negative_x:
+                found_mix_in_any_seed = True
+                break
+
+        assert found_mix_in_any_seed, (
+            "No seed produced a mix of +X and -X side approach directions across "
+            "20 seeds with 16 candidates each. This indicates all candidates within "
+            "a batch share the same direction (Bug 2 has returned)."
+        )
+
+    def test_front_approach_has_both_positive_and_negative_z_directions(self):
+        """
+        Front approach candidates must include both +Z and -Z approach directions
+        across enough trials to confirm independence.
+        """
+        config = GraspConfig.create_default()
+        config.enabled_approaches = [
+            a for a in config.enabled_approaches if a.approach_type == "front"
+        ]
+        config.candidates_per_approach = 16
+
+        object_position = (0.0, 0.0, 0.0)
+        object_rotation = (0.0, 0.0, 0.0, 1.0)
+        object_size = (0.05, 0.05, 0.05)
+        gripper_position = (0.3, 0.15, 0.0)
+
+        found_mix_in_any_seed = False
+        for seed in range(20):
+            gen = GraspCandidateGenerator(config, seed=seed)
+            candidates = gen.generate_candidates(
+                object_position, object_rotation, object_size, gripper_position
+            )
+
+            z_directions = [c.approach_direction[2] for c in candidates]
+            has_positive_z = any(z > 0.5 for z in z_directions)
+            has_negative_z = any(z < -0.5 for z in z_directions)
+
+            if has_positive_z and has_negative_z:
+                found_mix_in_any_seed = True
+                break
+
+        assert found_mix_in_any_seed, (
+            "No seed produced a mix of +Z and -Z front approach directions across "
+            "20 seeds with 16 candidates each. This indicates all candidates within "
+            "a batch share the same direction (Bug 2 has returned)."
+        )
+
+    def test_side_approach_both_directions_in_large_sample(self):
+        """
+        With a fixed seed and enough candidates, we must see both +X and -X
+        directions, since each candidate independently draws its sign.
+
+        Expected number of +X candidates ~ Binomial(n=32, p=0.5) — probability
+        of all-same sign is (0.5)^31 ≈ 5e-10, so this test is essentially deterministic.
+        """
+        config = GraspConfig.create_default()
+        config.enabled_approaches = [
+            a for a in config.enabled_approaches if a.approach_type == "side"
+        ]
+        config.candidates_per_approach = 32
+
+        gen = GraspCandidateGenerator(config, seed=0)
+        candidates = gen.generate_candidates(
+            (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0), (0.05, 0.05, 0.05), (0.3, 0.15, 0.0)
+        )
+
+        x_directions = [c.approach_direction[0] for c in candidates]
+        assert any(x > 0.5 for x in x_directions), "No +X side approach candidate found"
+        assert any(x < -0.5 for x in x_directions), "No -X side approach candidate found"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

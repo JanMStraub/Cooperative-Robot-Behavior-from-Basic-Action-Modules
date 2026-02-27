@@ -32,6 +32,7 @@ Usage:
 """
 
 import logging
+import numpy as np
 from typing import List, Optional, Tuple
 from dataclasses import dataclass, field
 
@@ -265,8 +266,6 @@ class ObjectTracker:
             return ([], [], [])
 
         # Build IOU matrix (tracks x detections)
-        import numpy as np
-
         iou_matrix = np.zeros((len(self.tracks), len(detections)))
 
         for t_idx, track in enumerate(self.tracks):

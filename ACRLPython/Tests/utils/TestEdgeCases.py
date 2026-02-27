@@ -58,9 +58,9 @@ class TestExtremeCoordinateValues:
              patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
             result = move_to_coordinate(
                 robot_id="Robot1",
-                x=1.0,   # Maximum X
-                y=1.0,   # Maximum Y
-                z=0.6    # Maximum Z
+                x=0.65,  # Maximum X (workspace bound: [-0.65, 0.65])
+                y=0.7,   # Maximum Y (workspace bound: [0.0, 0.7])
+                z=0.5    # Maximum Z (workspace bound: [-0.5, 0.5])
             )
 
             assert result["success"] is True
@@ -71,9 +71,9 @@ class TestExtremeCoordinateValues:
              patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
             result = move_to_coordinate(
                 robot_id="Robot1",
-                x=-1.0,  # Minimum X
-                y=-1.0,  # Minimum Y
-                z=-0.5   # Minimum Z
+                x=-0.65,  # Minimum X (workspace bound: [-0.65, 0.65])
+                y=0.0,    # Minimum Y (workspace bound: [0.0, 0.7])
+                z=-0.5    # Minimum Z (workspace bound: [-0.5, 0.5])
             )
 
             assert result["success"] is True

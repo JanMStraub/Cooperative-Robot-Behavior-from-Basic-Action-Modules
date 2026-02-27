@@ -162,16 +162,21 @@ class GraspCandidateGenerator:
         """
         candidates = []
 
-        # Get approach axis and tangent in world space
-        approach_axis_world, approach_tangent_world = self._get_approach_basis(
-            approach, obj_rot
-        )
-
-        # Get dimension along approach axis
+        # Get dimension along approach axis (constant per approach type)
         dimension_on_axis = self._get_dimension_on_axis(approach, obj_size)
 
-        # Generate N candidates with variations
+        # Generate N candidates with variations.
+        # _get_approach_basis is called inside the loop so that side_sign and
+        # front_sign are re-sampled per candidate, giving each candidate an
+        # independent chance of coming from either side (±X) or either end
+        # (±Z). Calling it once outside the loop would lock all candidates for
+        # this approach batch to the same side, halving effective diversity.
         for i in range(self.config.candidates_per_approach):
+            # Re-sample approach basis per candidate for directional diversity
+            approach_axis_world, approach_tangent_world = self._get_approach_basis(
+                approach, obj_rot
+            )
+
             # Sample variations
             dist_var = self._sample_distance_variation(base_pre_grasp_dist)
             angle_var = self._sample_angle_variation()

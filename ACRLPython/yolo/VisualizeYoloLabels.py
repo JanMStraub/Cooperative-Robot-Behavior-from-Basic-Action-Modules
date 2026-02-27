@@ -25,14 +25,9 @@ COLORS = [
 ]
 
 
-def select_file(title, file_types):
-    """Open file dialog to select a file"""
-    root = Tk()
-    root.withdraw()  # Hide the main window
-    root.attributes("-topmost", True)  # Bring dialog to front
-
+def select_file(title, file_types, root):
+    """Open file dialog to select a file using a shared Tk root to avoid macOS NSApplication corruption."""
     file_path = filedialog.askopenfilename(title=title, filetypes=file_types)
-    root.destroy()
     return file_path
 
 
@@ -56,11 +51,15 @@ def parse_yolo_label(label_path):
 
             parts = line.split()
             if len(parts) >= 5:
-                class_id = int(parts[0])
-                x_center = float(parts[1])
-                y_center = float(parts[2])
-                width = float(parts[3])
-                height = float(parts[4])
+                try:
+                    class_id = int(parts[0])
+                    x_center = float(parts[1])
+                    y_center = float(parts[2])
+                    width = float(parts[3])
+                    height = float(parts[4])
+                except ValueError:
+                    print(f"Warning: skipping malformed line: {line!r}")
+                    continue
 
                 boxes.append((class_id, x_center, y_center, width, height))
 
@@ -110,19 +109,24 @@ def draw_bounding_boxes(image, boxes, class_names=None):
         else:
             label = f"Class {class_id}"
 
-        # Draw label background
+        # Draw label background — clamp to image top to avoid rendering off-screen
         (text_width, text_height), baseline = cv2.getTextSize(
             label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1
         )
+        if y1 - text_height - 10 >= 0:
+            label_y = y1
+        else:
+            label_y = y2 + text_height + 10
+
         cv2.rectangle(
-            result_image, (x1, y1 - text_height - 10), (x1 + text_width, y1), color, -1
+            result_image, (x1, label_y - text_height - 10), (x1 + text_width, label_y), color, -1
         )
 
         # Draw label text
         cv2.putText(
             result_image,
             label,
-            (x1, y1 - 5),
+            (x1, label_y - 5),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.5,
             (255, 255, 255),
@@ -160,24 +164,38 @@ def main():
     print("YOLO Label Visualizer")
     print("=" * 60)
 
+    # Initialize a single Tk root for all dialogs (prevents macOS NSApplication corruption)
+    root = Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+
     # Select image file
     print("\n1. Select an image file...")
     image_path = select_file(
         "Select Image File",
         [("Image files", "*.jpg *.jpeg *.png *.bmp"), ("All files", "*.*")],
+        root,
     )
 
     if not image_path:
+        root.destroy()
         print("No image selected. Exiting.")
         return
 
     print(f"Selected image: {image_path}")
 
-    # Select label file
-    print("\n2. Select corresponding label file...")
-    label_path = select_file(
-        "Select YOLO Label File", [("Text files", "*.txt"), ("All files", "*.*")]
-    )
+    # Auto-detect label file from image stem; fall back to dialog if not found
+    auto_label = os.path.splitext(image_path)[0] + ".txt"
+    if os.path.exists(auto_label):
+        label_path = auto_label
+        print(f"Auto-detected label: {os.path.basename(auto_label)}")
+    else:
+        print("\n2. Select corresponding label file...")
+        label_path = select_file(
+            "Select YOLO Label File", [("Text files", "*.txt"), ("All files", "*.*")], root
+        )
+
+    root.destroy()
 
     if not label_path:
         print("No label file selected. Exiting.")

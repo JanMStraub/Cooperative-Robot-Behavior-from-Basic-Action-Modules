@@ -1315,8 +1315,14 @@ class ROSMotionServer:
             logger.error(f"IK service not available for {robot_id}")
             return [(False, 0.0)] * len(candidates)
 
-        results = []
-
+        # --- Loop 1: fire all IK requests without waiting ---
+        # Because the _ros_spin thread continuously spins the node, all
+        # outstanding futures are serviced concurrently.  Firing every request
+        # before we start polling converts O(N × 500ms) serial latency into
+        # O(batch_timeout) parallel latency.
+        # NOTE: Do NOT call rclpy.spin_once() in the polling loop below — the
+        # _ros_spin thread already owns the node's executor (see _call_move_group_plan).
+        futures = []
         for i, candidate in enumerate(candidates):
             try:
                 # Extract grasp position and rotation
@@ -1365,40 +1371,49 @@ class ROSMotionServer:
 
                     ik_request.ik_request.robot_state.joint_state = filtered_js
 
-                # Call IK service (synchronous)
-                future = ik_client.call_async(ik_request)
-
-                # Wait for response with timeout.
-                # NOTE: Do NOT call rclpy.spin_once() here — the _ros_spin
-                # thread is already spinning the node. Two threads spinning
-                # the same node is not thread-safe in rclpy (see comment in
-                # _call_move_group_plan). Poll the future instead.
-                timeout_duration = 0.5  # 500ms max per candidate
-                start_time = time.time()
-                while not future.done():
-                    time.sleep(0.01)
-                    if time.time() - start_time > timeout_duration:
-                        logger.warning(f"IK validation timeout for candidate {i}")
-                        results.append((False, 0.0))
-                        break
-                else:
-                    # Future completed
-                    response = future.result()
-
-                    if response.error_code.val == 1:  # SUCCESS
-                        # IK solution found - compute quality score
-                        # Quality based on error code (1 = perfect)
-                        quality_score = 1.0
-                        results.append((True, quality_score))
-                        logger.debug(f"Candidate {i}: IK valid (score={quality_score:.2f})")
-                    else:
-                        # IK failed
-                        results.append((False, 0.0))
-                        logger.debug(f"Candidate {i}: IK failed (error={response.error_code.val})")
+                futures.append((i, ik_client.call_async(ik_request)))
 
             except Exception as e:
-                logger.error(f"Error validating candidate {i}: {e}")
-                results.append((False, 0.0))
+                logger.error(f"Error building IK request for candidate {i}: {e}")
+                futures.append((i, None))
+
+        # --- Loop 2: collect results with a shared batch-wide deadline ---
+        # Each future gets up to 500ms, but the whole batch shares a single
+        # generous deadline so a few slow candidates don't starve the rest.
+        batch_timeout = 0.5 + len(candidates) * 0.1
+        batch_deadline = time.time() + batch_timeout
+        results = [None] * len(candidates)
+
+        for i, future in futures:
+            if future is None:
+                results[i] = (False, 0.0)
+                continue
+
+            per_candidate_timeout = 0.5
+            start_time = time.time()
+            while not future.done():
+                time.sleep(0.01)
+                elapsed = time.time() - start_time
+                remaining = batch_deadline - time.time()
+                if elapsed > per_candidate_timeout or remaining <= 0:
+                    logger.warning(f"IK validation timeout for candidate {i}")
+                    results[i] = (False, 0.0)
+                    break
+            else:
+                try:
+                    response = future.result()
+                    if response.error_code.val == 1:  # SUCCESS
+                        results[i] = (True, 1.0)
+                        logger.debug(f"Candidate {i}: IK valid")
+                    else:
+                        results[i] = (False, 0.0)
+                        logger.debug(f"Candidate {i}: IK failed (error={response.error_code.val})")
+                except Exception as e:
+                    logger.error(f"Error reading IK result for candidate {i}: {e}")
+                    results[i] = (False, 0.0)
+
+        # Fill any slots that were never written (shouldn't happen, but defensive)
+        results = [(False, 0.0) if r is None else r for r in results]
 
         valid_count = sum(1 for is_valid, _ in results if is_valid)
         logger.info(
