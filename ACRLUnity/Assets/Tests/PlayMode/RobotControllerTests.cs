@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -14,10 +15,15 @@ namespace Tests.PlayMode
         private GameObject _testRobotObject;
         private RobotController _robotController;
         private GameObject _endEffectorObject;
+        private readonly List<GameObject> _tempObjects = new List<GameObject>();
 
         [UnitySetUp]
         public IEnumerator SetUp()
         {
+            // Clean up any singleton instances left over from other test classes
+            if (RobotManager.Instance != null)
+                Object.DestroyImmediate(RobotManager.Instance.gameObject);
+
             // Create minimal robot setup for testing
             _testRobotObject = new GameObject("TestRobot");
             _robotController = _testRobotObject.AddComponent<RobotController>();
@@ -28,6 +34,11 @@ namespace Tests.PlayMode
             _endEffectorObject.transform.SetParent(_testRobotObject.transform);
             _endEffectorObject.transform.position = Vector3.zero;
             _robotController.endEffectorBase = _endEffectorObject.transform;
+
+            // Add a root ArticulationBody so child joints form a valid articulation chain.
+            // Without this, accessing .xDrive on child ArticulationBodies throws internally.
+            var rootBody = _testRobotObject.AddComponent<ArticulationBody>();
+            rootBody.immovable = true;
 
             // Create mock ArticulationBody joints to prevent initialization errors
             _robotController.robotJoints = new ArticulationBody[6];
@@ -54,6 +65,12 @@ namespace Tests.PlayMode
             {
                 Object.Destroy(_testRobotObject);
             }
+
+            foreach (var obj in _tempObjects)
+            {
+                if (obj != null) Object.Destroy(obj);
+            }
+            _tempObjects.Clear();
         }
 
         [UnityTest]
@@ -70,6 +87,7 @@ namespace Tests.PlayMode
         {
             // Arrange
             var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _tempObjects.Add(targetObject);
             targetObject.transform.position = new Vector3(1f, 1f, 1f);
 
             // Expect GripperController error since we're not setting up gripper references
@@ -86,9 +104,6 @@ namespace Tests.PlayMode
             // Assert
             Assert.IsTrue(_robotController.HasTarget,
                 "HasTarget should be true after setting target");
-
-            // Cleanup
-            Object.Destroy(targetObject);
         }
 
         [UnityTest]
@@ -164,6 +179,7 @@ namespace Tests.PlayMode
         {
             // Arrange
             var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _tempObjects.Add(targetObject);
             targetObject.name = "TestCube";
             targetObject.transform.position = new Vector3(1f, 1f, 1f);
 
@@ -177,9 +193,6 @@ namespace Tests.PlayMode
             Assert.IsNotNull(retrievedObject, "GetTargetObject should return non-null");
             Assert.AreEqual(targetObject, retrievedObject,
                 "GetTargetObject should return the original target object");
-
-            // Cleanup
-            Object.Destroy(targetObject);
         }
 
         [UnityTest]
@@ -236,6 +249,7 @@ namespace Tests.PlayMode
         {
             // Arrange
             var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _tempObjects.Add(targetObject);
             targetObject.transform.position = new Vector3(1f, 1f, 1f);
 
             var customOptions = new GraspOptions
@@ -255,9 +269,6 @@ namespace Tests.PlayMode
             // With useGraspPlanning = false, target should be the object itself
             var currentTarget = _robotController.GetCurrentTarget();
             Assert.IsNotNull(currentTarget);
-
-            // Cleanup
-            Object.Destroy(targetObject);
         }
 
         [UnityTest]
@@ -310,6 +321,7 @@ namespace Tests.PlayMode
         {
             // Arrange
             var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _tempObjects.Add(targetObject);
             targetObject.transform.position = new Vector3(0.5f, 0.3f, 0.5f);
 
             var topApproachOptions = new GraspOptions
@@ -326,9 +338,6 @@ namespace Tests.PlayMode
 
             // Assert
             Assert.IsTrue(_robotController.HasTarget, "Should have target with top approach");
-
-            // Cleanup
-            Object.Destroy(targetObject);
         }
 
         [UnityTest]
@@ -336,6 +345,7 @@ namespace Tests.PlayMode
         {
             // Arrange
             var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _tempObjects.Add(targetObject);
             targetObject.transform.position = new Vector3(0.5f, 0.3f, 0.5f);
 
             var frontApproachOptions = new GraspOptions
@@ -352,9 +362,6 @@ namespace Tests.PlayMode
 
             // Assert
             Assert.IsTrue(_robotController.HasTarget, "Should have target with front approach");
-
-            // Cleanup
-            Object.Destroy(targetObject);
         }
 
         [UnityTest]
@@ -362,6 +369,7 @@ namespace Tests.PlayMode
         {
             // Arrange
             var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _tempObjects.Add(targetObject);
             targetObject.transform.position = new Vector3(0.5f, 0.3f, 0.5f);
 
             var sideApproachOptions = new GraspOptions
@@ -378,9 +386,6 @@ namespace Tests.PlayMode
 
             // Assert
             Assert.IsTrue(_robotController.HasTarget, "Should have target with side approach");
-
-            // Cleanup
-            Object.Destroy(targetObject);
         }
 
         [UnityTest]
@@ -388,6 +393,7 @@ namespace Tests.PlayMode
         {
             // Arrange
             var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _tempObjects.Add(targetObject);
             targetObject.transform.position = new Vector3(0.5f, 0.3f, 0.5f);
 
             var graspOptions = new GraspOptions
@@ -405,9 +411,6 @@ namespace Tests.PlayMode
             // Assert - target should be set (waypoint planning happens internally)
             Assert.IsTrue(_robotController.HasTarget,
                 "Target should be set with grasp planning enabled");
-
-            // Cleanup
-            Object.Destroy(targetObject);
         }
 
         [UnityTest]
@@ -415,6 +418,7 @@ namespace Tests.PlayMode
         {
             // Arrange
             var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _tempObjects.Add(targetObject);
             targetObject.transform.position = new Vector3(0.5f, 0.3f, 0.5f);
 
             var nullApproachOptions = new GraspOptions
@@ -432,9 +436,6 @@ namespace Tests.PlayMode
             // Assert - should still work with default behavior
             Assert.IsTrue(_robotController.HasTarget,
                 "Target should be set even with null approach");
-
-            // Cleanup
-            Object.Destroy(targetObject);
         }
 
         [UnityTest]
@@ -450,6 +451,7 @@ namespace Tests.PlayMode
 
             // Act - Create a new RobotController to trigger Start() and auto-discovery
             var newRobotObject = new GameObject("NewTestRobot");
+            _tempObjects.Add(newRobotObject);
             var newRobotController = newRobotObject.AddComponent<RobotController>();
             newRobotController.robotId = "NewTestRobot";
             newRobotController.endEffectorBase = _endEffectorObject.transform;
@@ -463,10 +465,6 @@ namespace Tests.PlayMode
             // Assert - GripperController should be found
             // Note: We can't directly access the private field, but we can verify
             // that no warning is logged about missing gripper
-
-            // Cleanup
-            Object.Destroy(newRobotObject);
-            Object.Destroy(gripperObject);
         }
 
         [UnityTest]
@@ -474,6 +472,7 @@ namespace Tests.PlayMode
         {
             // Test that all approach types can be set without errors
             var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _tempObjects.Add(targetObject);
             targetObject.transform.position = new Vector3(0.5f, 0.3f, 0.5f);
 
             var approaches = new Robotics.Grasp.GraspApproach?[]
@@ -500,9 +499,6 @@ namespace Tests.PlayMode
                 Assert.IsTrue(_robotController.HasTarget,
                     $"Target should be set with approach: {approach?.ToString() ?? "null"}");
             }
-
-            // Cleanup
-            Object.Destroy(targetObject);
         }
 
         [UnityTest]
@@ -537,6 +533,7 @@ namespace Tests.PlayMode
 
             // Arrange
             var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _tempObjects.Add(targetObject);
             targetObject.transform.position = new Vector3(0.5f, 0.3f, 0.5f);
             targetObject.transform.localScale = Vector3.one * 0.05f; // 5cm cube
 
@@ -549,14 +546,11 @@ namespace Tests.PlayMode
 
             // Act
             _robotController.SetTarget(targetObject, graspOptions);
-            yield return new WaitForSeconds(0.5f);
+            yield return TestHelpers.WaitUntil(() => _robotController.GetCurrentTarget() != null, 1.0f);
 
             // Assert - Verify robot attempted grasp (target set)
             Assert.IsNotNull(_robotController.GetCurrentTarget(),
                 "Robot should have target set for grasp");
-
-            // Cleanup
-            Object.Destroy(targetObject);
         }
 
         [UnityTest]
@@ -568,10 +562,11 @@ namespace Tests.PlayMode
             // Arrange
             Vector3 nearPosition = new Vector3(0.25f, 0.2f, 0.3f); // < 30cm from origin
             var targetObject = TestHelpers.CreateTestTarget(nearPosition);
+            _tempObjects.Add(targetObject);
 
             // Act
             _robotController.SetTarget(targetObject);
-            yield return new WaitForSeconds(0.1f);
+            yield return TestHelpers.WaitUntil(() => _robotController.HasTarget, 0.5f);
 
             // Assert - Target should be set and ramping should be considered
             float distance = Vector3.Distance(_robotController.transform.position, nearPosition);
@@ -582,9 +577,6 @@ namespace Tests.PlayMode
                 Assert.IsNotNull(_robotController.GetCurrentTarget(),
                     "Robot should accept target within ramping range");
             }
-
-            // Cleanup
-            Object.Destroy(targetObject);
         }
 
         [UnityTest]
@@ -595,6 +587,7 @@ namespace Tests.PlayMode
 
             // Arrange
             var unreachableTarget = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _tempObjects.Add(unreachableTarget);
             unreachableTarget.transform.position = new Vector3(10f, 10f, 10f); // Far away
 
             var graspOptions = new GraspOptions
@@ -607,42 +600,38 @@ namespace Tests.PlayMode
             // Act
             _robotController.SetTarget(unreachableTarget, graspOptions);
 
-            // Wait a short time (not full 30s for test efficiency)
-            yield return new WaitForSeconds(1f);
+            // Wait briefly to confirm target remains set (not timed out yet)
+            // Using WaitUntil with a short ceiling instead of fixed WaitForSeconds
+            yield return TestHelpers.WaitUntil(() => _robotController.GetCurrentTarget() != null, 0.5f);
 
             // Assert - Robot should still be attempting (hasn't timed out yet)
             // (Full timeout test would take 30s, impractical for unit tests)
             Assert.IsNotNull(_robotController.GetCurrentTarget(),
                 "Robot should maintain target before timeout");
-
-            // Cleanup
-            Object.Destroy(unreachableTarget);
         }
 
         [UnityTest]
-        public IEnumerator MovementBehavior_CompletesWithinTimeout()
+        public IEnumerator MovementBehavior_AcceptsTargetAndBecomesActive()
         {
-            // Test that normal movement completes well before timeout (15s)
-            // (Behavior test validating timeout is reasonable)
+            // Test that SetTarget is accepted and the controller transitions to active tracking.
+            // Full IK convergence requires a real physics chain and is covered by IKSolverTests.
 
             // Arrange
             Vector3 reachablePosition = new Vector3(0.3f, 0.2f, 0.3f);
             var targetObject = TestHelpers.CreateTestTarget(reachablePosition);
-
-            float startTime = Time.time;
+            _tempObjects.Add(targetObject);
 
             // Act
             _robotController.SetTarget(targetObject);
-            yield return new WaitForSeconds(2f); // Allow movement time
+            yield return null; // One frame for state to propagate
 
-            float elapsedTime = Time.time - startTime;
-
-            // Assert - Movement should complete in reasonable time (< 15s timeout)
-            Assert.Less(elapsedTime, 15f,
-                "Normal movement should complete well before timeout");
-
-            // Cleanup
-            Object.Destroy(targetObject);
+            // Assert - Target should be accepted and controller should be tracking
+            Assert.IsTrue(_robotController.HasTarget,
+                "SetTarget should immediately set HasTarget = true");
+            Assert.IsNotNull(_robotController.GetCurrentTarget(),
+                "GetCurrentTarget should return a position after SetTarget");
+            Assert.IsFalse(_robotController.TargetReached,
+                "TargetReached should be false immediately after SetTarget (movement just started)");
         }
 
         [UnityTest]
@@ -653,6 +642,7 @@ namespace Tests.PlayMode
 
             // Arrange
             var targetObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _tempObjects.Add(targetObject);
             targetObject.transform.position = new Vector3(0.4f, 0.3f, 0.4f);
             targetObject.transform.localScale = Vector3.one * 0.05f;
 
@@ -665,15 +655,12 @@ namespace Tests.PlayMode
 
             // Act
             _robotController.SetTarget(targetObject, graspOptions);
-            yield return new WaitForSeconds(0.3f);
+            yield return TestHelpers.WaitUntil(() => _robotController.HasTarget, 0.5f);
 
             // Assert - Pre-grasp phase should accept looser tolerance
             // (Actual convergence behavior depends on IK solver implementation)
             Assert.IsNotNull(_robotController.GetCurrentTarget(),
                 "Robot should accept target with pre-grasp tolerance");
-
-            // Cleanup
-            Object.Destroy(targetObject);
         }
 
         #endregion

@@ -171,7 +171,7 @@ namespace Tests.PlayMode
             GameObject target = TestHelpers.CreateTestTarget(targetPosition);
 
             _testRobot.SetTarget(target);
-            yield return new WaitForSeconds(0.1f);
+            yield return TestHelpers.WaitUntil(() => _testRobot.HasTarget, 1.0f);
 
             // Publisher should track if robot is moving
             // (Movement tracking depends on RobotController.TargetReached)
@@ -261,9 +261,9 @@ namespace Tests.PlayMode
         public IEnumerator Publisher_UpdateRate_PublishesAtConfiguredFrequency()
         {
             // Publisher defaults to 2Hz (every 0.5s)
-            // float expectedInterval = 0.5f; // 1.0 / 2.0 Hz
-
-            yield return new WaitForSeconds(1.0f);
+            // Yield a few frames to confirm publisher is active without waiting 1 full second
+            yield return null;
+            yield return null;
 
             // Should have published approximately 2 updates in 1 second
             // (Actual verification would require access to _updatesSent private field)
@@ -282,7 +282,8 @@ namespace Tests.PlayMode
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             enableField?.SetValue(disabledPublisher, false);
 
-            yield return new WaitForSeconds(1.0f);
+            yield return null; // Single frame sufficient to confirm no crash
+            yield return null;
 
             // Publisher should not publish updates
             Assert.Pass("Disabled publisher runs without attempting to publish");
@@ -507,7 +508,8 @@ namespace Tests.PlayMode
         public IEnumerator Publisher_EmptyRobotList_DoesNotCrash()
         {
             // With no robots registered, publisher should not crash
-            yield return new WaitForSeconds(1f);
+            yield return null;
+            yield return null;
 
             // Should continue running without errors
             Assert.Pass("Publisher handles empty robot list gracefully");
@@ -517,7 +519,8 @@ namespace Tests.PlayMode
         public IEnumerator Publisher_EmptyObjectList_DoesNotCrash()
         {
             // With no tracked objects, publisher should not crash
-            yield return new WaitForSeconds(1f);
+            yield return null;
+            yield return null;
 
             // Should continue running without errors
             Assert.Pass("Publisher handles empty object list gracefully");
@@ -535,7 +538,8 @@ namespace Tests.PlayMode
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             updateRateField?.SetValue(fastPublisher, 10f); // 10Hz
 
-            yield return new WaitForSeconds(2f);
+            // A few frames is sufficient to confirm rapid updates don't crash
+            for (int i = 0; i < 10; i++) yield return null;
 
             // Should handle rapid updates without crashing
             Assert.Pass("Publisher handles rapid update rate");
@@ -594,7 +598,8 @@ namespace Tests.PlayMode
                 robots.Add(controller);
             }
 
-            yield return new WaitForSeconds(2f);
+            // A few frames is sufficient to confirm multi-robot publishing doesn't crash
+            for (int i = 0; i < 10; i++) yield return null;
 
             // Publisher should handle multiple robots efficiently
             Assert.Pass("Publisher scales with multiple robots");

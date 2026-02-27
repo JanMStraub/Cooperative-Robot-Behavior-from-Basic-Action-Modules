@@ -19,22 +19,8 @@ namespace Tests.PlayMode
         private RobotController _controller1;
         private RobotController _controller2;
 
-        [OneTimeSetUp]
-        public void OneTimeSetUp()
-        {
-            // Ignore log failures globally for all tests (both regular and UnityTests)
-            LogAssert.ignoreFailingMessages = true;
-        }
-
-        [OneTimeTearDown]
-        public void OneTimeTearDown()
-        {
-            // Re-enable log assertions after all tests complete
-            LogAssert.ignoreFailingMessages = false;
-        }
-
-        [SetUp]
-        public void SetUp()
+        [UnitySetUp]
+        public IEnumerator SetUp()
         {
             // Create test robot 1
             _testRobot1 = new GameObject("TestRobot1");
@@ -45,6 +31,14 @@ namespace Tests.PlayMode
             _testRobot2 = new GameObject("TestRobot2");
             _controller2 = _testRobot2.AddComponent<RobotController>();
             _controller2.robotId = "Robot2";
+
+            // Expect initialization warnings from both controllers during Start()
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot2");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+
+            yield return null; // Allow Start() to fire and consume the expected logs
         }
 
         [TearDown]
@@ -101,11 +95,12 @@ namespace Tests.PlayMode
             strategy.Update(controllers, targetReached);
             Assert.AreEqual("Robot1", strategy.GetActiveRobotId(), "Initial robot should be Robot1");
 
-            // Wait for timeout (2 seconds + small buffer)
-            yield return new WaitForSeconds(2.2f);
-
-            // Update after timeout
-            strategy.Update(controllers, targetReached);
+            // Wait for timeout + a buffer frame by polling until the strategy switches
+            yield return TestHelpers.WaitUntil(() =>
+            {
+                strategy.Update(controllers, targetReached);
+                return strategy.GetActiveRobotId() == "Robot2";
+            }, 3.0f);
 
             // Assert - Should have switched to Robot2 due to timeout
             Assert.AreEqual("Robot2", strategy.GetActiveRobotId(),

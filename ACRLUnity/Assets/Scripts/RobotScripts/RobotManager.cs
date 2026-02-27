@@ -109,8 +109,13 @@ namespace Robotics
                     robotProfile = ScriptableObject.CreateInstance<RobotConfig>();
                 }
 
-                // Ensure default profile is properly initialized
-                if (robotProfile.joints == null || robotProfile.joints.Length == 0)
+                // Ensure default profile is properly initialized.
+                // Note: RobotConfig field initializer creates a 6-element array of nulls,
+                // so we must also check for null entries, not just an empty/null array.
+                bool hasNullJoints = robotProfile.joints == null
+                    || robotProfile.joints.Length == 0
+                    || System.Array.Exists(robotProfile.joints, j => j == null);
+                if (hasNullJoints)
                 {
                     robotProfile.InitializeDefaultAR4Profile();
                 }
@@ -459,6 +464,14 @@ namespace Robotics
                     }
 
                     var config = robot.profile.joints[i];
+                    if (config == null)
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} Joint config at index {i} is null for robot {robotId}. Skipping."
+                        );
+                        continue;
+                    }
+
                     var drive = joint.xDrive;
 
                     drive.stiffness = config.stiffness;

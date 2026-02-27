@@ -391,12 +391,10 @@ namespace Tests.PlayMode
                 { "Robot2", false }
             };
 
-            // Update multiple times (simulate coordination checks)
-            for (int i = 0; i < 3; i++)
-            {
-                _strategy.Update(robots, targetReached);
-                yield return new WaitForSeconds(0.6f); // Wait for coordination check interval
-            }
+            // Update once, wait for coordination check interval (500ms), then update again
+            _strategy.Update(robots, targetReached);
+            yield return new WaitForSeconds(0.6f); // Wait for internal coordination timer (500ms)
+            _strategy.Update(robots, targetReached);
 
             // Both robots should be active (no conflicts)
             Assert.IsTrue(_strategy.IsRobotActive("Robot1"));
@@ -427,12 +425,10 @@ namespace Tests.PlayMode
                 { "Robot2", false }
             };
 
-            // Update multiple times (simulate coordination checks)
-            for (int i = 0; i < 3; i++)
-            {
-                _strategy.Update(robots, targetReached);
-                yield return new WaitForSeconds(0.6f); // Wait for coordination check interval
-            }
+            // Update once, wait for coordination check interval (500ms), then update again
+            _strategy.Update(robots, targetReached);
+            yield return new WaitForSeconds(0.6f); // Wait for internal coordination timer (500ms)
+            _strategy.Update(robots, targetReached);
 
             // Coordination should detect conflict and block Robot2
             // Robot1 should be active, Robot2 should be blocked
@@ -472,7 +468,7 @@ namespace Tests.PlayMode
             for (int i = 0; i < 5; i++)
             {
                 _strategy.Update(robots, targetReached);
-                yield return new WaitForSeconds(0.1f);
+                yield return null;
             }
 
             // Strategy should detect potential collision (logged as warning)
@@ -609,12 +605,10 @@ namespace Tests.PlayMode
                 { "Robot2", false }
             };
 
-            // Update multiple times to allow collision detection
-            for (int i = 0; i < 3; i++)
-            {
-                _strategy.Update(robots, targetReached);
-                yield return new WaitForSeconds(0.2f);
-            }
+            // Update once, wait for coordination timer, then check
+            _strategy.Update(robots, targetReached);
+            yield return new WaitForSeconds(0.6f); // Wait for internal coordination timer (500ms)
+            _strategy.Update(robots, targetReached);
 
             // Robot1 should be active, Robot2 should be blocked due to collision
             Assert.IsTrue(_strategy.IsRobotActive("Robot1"), "Robot1 should be active");

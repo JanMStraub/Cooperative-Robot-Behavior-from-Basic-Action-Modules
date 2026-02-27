@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -19,6 +20,7 @@ namespace Tests.PlayMode
         private ArticulationBody _leftFinger;
         private ArticulationBody _rightFinger;
         private GameObject _targetObject;
+        private readonly List<GameObject> _tempObjects = new List<GameObject>();
 
         [UnitySetUp]
         public IEnumerator SetUp()
@@ -120,6 +122,12 @@ namespace Tests.PlayMode
                 Object.Destroy(_gripperObject);
             if (_targetObject != null)
                 Object.Destroy(_targetObject);
+
+            foreach (var obj in _tempObjects)
+            {
+                if (obj != null) Object.Destroy(obj);
+            }
+            _tempObjects.Clear();
         }
 
         /// <summary>
@@ -304,6 +312,7 @@ namespace Tests.PlayMode
 
             // Arrange - Create sensor without fingers
             var testObject = new GameObject("TestSensor");
+            _tempObjects.Add(testObject);
             var collider = testObject.AddComponent<BoxCollider>(); // Add collider FIRST
             var sensor = testObject.AddComponent<GripperContactSensor>();
 
@@ -314,9 +323,6 @@ namespace Tests.PlayMode
 
             // Assert
             Assert.AreEqual(0f, force, "Should return zero force when fingers not assigned");
-
-            // Cleanup
-            Object.Destroy(testObject);
         }
 
         [UnityTest]

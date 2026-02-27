@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -96,6 +97,20 @@ namespace RobotScripts
             float acceleration
         )
         {
+            if (acceleration <= 0f)
+            {
+                throw new ArgumentException(
+                    $"[VelocityProfile] acceleration must be positive, got {acceleration}"
+                );
+            }
+
+            if (maxVelocity <= 0f)
+            {
+                throw new ArgumentException(
+                    $"[VelocityProfile] maxVelocity must be positive, got {maxVelocity}"
+                );
+            }
+
             float accelTime = maxVelocity / acceleration;
             float accelDistance = 0.5f * acceleration * accelTime * accelTime;
 

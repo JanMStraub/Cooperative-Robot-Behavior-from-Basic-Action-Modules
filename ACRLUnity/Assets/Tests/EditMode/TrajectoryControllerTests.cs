@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 using UnityEngine;
 using Robotics;
@@ -19,13 +20,22 @@ namespace Tests.EditMode
     {
         private const float EPSILON = TestConstants.EPSILON;
 
+        // Default controller used by the majority of tests (Kp=10, Kd=2)
+        private TrajectoryController _controller;
+
+        [SetUp]
+        public void SetUp()
+        {
+            _controller = new TrajectoryController();
+        }
+
         #region PD Control Tests
 
         [Test]
         public void Constructor_UsesDefaultGains_WhenNotSpecified()
         {
-            // Arrange & Act
-            var controller = new TrajectoryController();
+            // Arrange & Act — use shared instance for default-gains test
+            var controller = _controller;
 
             // Compute correction to verify gains are applied
             Vector3 posError = new Vector3(0.1f, 0f, 0f);
@@ -72,10 +82,8 @@ namespace Tests.EditMode
         {
             // Test that SetGains updates the controller's gains
 
-            // Arrange
-            var controller = new TrajectoryController();
-
-            // Act - Set new gains
+            // Arrange & Act - Set new gains on shared controller
+            var controller = _controller;
             controller.SetGains(
                 positionGains: new Vector3(20f, 20f, 20f),
                 velocityGains: new Vector3(4f, 4f, 4f)
@@ -227,7 +235,7 @@ namespace Tests.EditMode
             // Test that GetTrajectoryState returns all three trajectory components
 
             // Arrange
-            var controller = new TrajectoryController();
+            var controller = _controller;
             var path = CreateSimplePath();
             var profile = VelocityProfile.CreateTrapezoidal(
                 totalDistance: path.totalDistance,
@@ -255,7 +263,7 @@ namespace Tests.EditMode
             // This prevents Update/FixedUpdate jitter
 
             // Arrange
-            var controller = new TrajectoryController();
+            var controller = _controller;
             var path = CreateSimplePath();
             var profile = VelocityProfile.CreateTrapezoidal(path.totalDistance, 0.5f, 1.0f);
 
@@ -275,7 +283,7 @@ namespace Tests.EditMode
             // Test that cache is invalidated when time changes
 
             // Arrange
-            var controller = new TrajectoryController();
+            var controller = _controller;
             var path = CreateSimplePath();
             var profile = VelocityProfile.CreateTrapezoidal(path.totalDistance, 0.5f, 1.0f);
 
@@ -295,7 +303,7 @@ namespace Tests.EditMode
             // Note: Testing at a reasonable time within the trajectory rather than far past end
 
             // Arrange
-            var controller = new TrajectoryController();
+            var controller = _controller;
             var path = CreateSimplePath(); // 1m total
             var profile = VelocityProfile.CreateTrapezoidal(path.totalDistance, 0.5f, 1.0f);
 
@@ -332,7 +340,7 @@ namespace Tests.EditMode
             // Test that velocity is clamped to MAX_VELOCITY (0.5 m/s safety limit)
 
             // Arrange
-            var controller = new TrajectoryController();
+            var controller = _controller;
             var path = CreateSimplePath();
             var profile = VelocityProfile.CreateTrapezoidal(
                 totalDistance: path.totalDistance,
@@ -358,7 +366,7 @@ namespace Tests.EditMode
             // Test that velocity increases during acceleration phase
 
             // Arrange
-            var controller = new TrajectoryController();
+            var controller = _controller;
             var path = CreateSimplePath();
             var profile = VelocityProfile.CreateTrapezoidal(path.totalDistance, 0.5f, 1.0f);
 
@@ -380,7 +388,7 @@ namespace Tests.EditMode
             // Test that velocity is constant during cruise phase
 
             // Arrange
-            var controller = new TrajectoryController();
+            var controller = _controller;
             var path = CreateLongPath(); // Long path to ensure cruise phase exists
             var profile = VelocityProfile.CreateTrapezoidal(path.totalDistance, 0.3f, 1.0f);
 
@@ -400,7 +408,7 @@ namespace Tests.EditMode
             // Test triangular profile (short distance, no cruise phase)
 
             // Arrange
-            var controller = new TrajectoryController();
+            var controller = _controller;
             var path = CreateShortPath(); // Very short path (0.1m)
             var profile = VelocityProfile.CreateTrapezoidal(
                 totalDistance: path.totalDistance,
@@ -423,7 +431,7 @@ namespace Tests.EditMode
             // Test that trajectory provides target velocity for feedforward control
 
             // Arrange
-            var controller = new TrajectoryController();
+            var controller = _controller;
             var path = CreateSimplePath();
             var profile = VelocityProfile.CreateTrapezoidal(path.totalDistance, 0.5f, 1.0f);
 
@@ -441,7 +449,7 @@ namespace Tests.EditMode
             // Test external access to cached target velocity
 
             // Arrange
-            var controller = new TrajectoryController();
+            var controller = _controller;
             var path = CreateSimplePath();
             var profile = VelocityProfile.CreateTrapezoidal(path.totalDistance, 0.5f, 1.0f);
 
@@ -464,7 +472,7 @@ namespace Tests.EditMode
             // Test that Reset clears the cached trajectory state
 
             // Arrange
-            var controller = new TrajectoryController();
+            var controller = _controller;
             var path = CreateSimplePath();
             var profile = VelocityProfile.CreateTrapezoidal(path.totalDistance, 0.5f, 1.0f);
 
@@ -488,7 +496,7 @@ namespace Tests.EditMode
             // Test that Reset invalidates cache and forces recomputation
 
             // Arrange
-            var controller = new TrajectoryController();
+            var controller = _controller;
             var path = CreateSimplePath();
             var profile = VelocityProfile.CreateTrapezoidal(path.totalDistance, 0.5f, 1.0f);
 
@@ -502,6 +510,68 @@ namespace Tests.EditMode
             // Assert - Should recompute (positions should match since same time/path)
             Assert.AreEqual(pos1.x, pos2.x, EPSILON,
                 "Should recompute same position after reset");
+        }
+
+        #endregion
+
+        #region Edge Case Tests
+
+        [Test]
+        public void GetTrajectoryState_ZeroDistancePath_ReturnsStartPosition()
+        {
+            // A path with totalDistance == 0 should return the start position without
+            // division-by-zero. The velocity and acceleration should be zero.
+
+            // Arrange
+            var controller = _controller;
+            var path = new CartesianPath
+            {
+                waypoints = new System.Collections.Generic.List<CartesianWaypoint>
+                {
+                    new CartesianWaypoint
+                    {
+                        position = new Vector3(0.5f, 0.2f, 0.1f),
+                        rotation = Quaternion.identity,
+                        distanceFromStart = 0f
+                    }
+                },
+                totalDistance = 0f,
+                maxVelocity = 0.5f,
+                acceleration = 1.0f
+            };
+            var profile = VelocityProfile.CreateTrapezoidal(0f, 0.5f, 1.0f);
+
+            // Act — should not throw
+            var (targetPos, targetVel, _) = controller.GetTrajectoryState(0f, path, profile);
+
+            // Assert — position should be the single waypoint; velocity should be zero
+            Assert.AreEqual(path.waypoints[0].position, targetPos,
+                "Zero-distance path should return the only waypoint position");
+            Assert.AreEqual(0f, targetVel.magnitude, EPSILON,
+                "Zero-distance path should have zero target velocity");
+        }
+
+        [Test]
+        public void VelocityProfile_ZeroAcceleration_DoesNotDivideByZero()
+        {
+            // VelocityProfile.CreateTrapezoidal with acceleration == 0 should either throw a
+            // clear ArgumentException or produce a valid (non-NaN) profile.
+            // This test documents the expected behavior.
+
+            // Act & Assert — document that zero acceleration is caught early
+            Assert.Throws<ArgumentException>(() =>
+                VelocityProfile.CreateTrapezoidal(totalDistance: 1f, maxVelocity: 0.5f, acceleration: 0f),
+                "Zero acceleration should throw ArgumentException (would cause division by zero internally)");
+        }
+
+        [Test]
+        public void VelocityProfile_ZeroMaxVelocity_DoesNotDivideByZero()
+        {
+            // VelocityProfile.CreateTrapezoidal with maxVelocity == 0 should throw.
+
+            Assert.Throws<ArgumentException>(() =>
+                VelocityProfile.CreateTrapezoidal(totalDistance: 1f, maxVelocity: 0f, acceleration: 1.0f),
+                "Zero maxVelocity should throw ArgumentException");
         }
 
         #endregion

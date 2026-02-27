@@ -208,7 +208,7 @@ namespace Tests.PlayMode
         {
             // With Python backend unavailable, client should handle connection failure gracefully
             // (Auto-reconnect is implemented in TCPClientBase)
-
+            // NOTE: WaitForSeconds is intentional here — TCP connection attempts take real time to fail
             yield return new WaitForSeconds(TestConstants.SHORT_TIMEOUT);
 
             // Client should still be valid even if connection failed
@@ -422,7 +422,7 @@ namespace Tests.PlayMode
                 new SequenceResult { request_id = 3, success = true }
             };
 
-            yield return new WaitForSeconds(0.1f);
+            yield return null;
 
             // Verify queue can handle multiple responses
             Assert.AreEqual(3, responses.Count, "Should create 3 test responses");

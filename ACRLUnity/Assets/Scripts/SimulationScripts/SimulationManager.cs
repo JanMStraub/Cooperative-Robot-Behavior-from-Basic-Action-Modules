@@ -257,8 +257,14 @@ namespace Simulation
                 RobotCoordinationMode.Collaborative => new CollaborativeStrategy(
                     _coordinationConfig
                 ),
-                RobotCoordinationMode.MasterSlave => new IndependentStrategy(),
-                RobotCoordinationMode.Distributed => new IndependentStrategy(),
+                RobotCoordinationMode.MasterSlave => LogFallbackAndReturn(
+                    "MasterSlave coordination mode is not implemented. Falling back to Independent.",
+                    new IndependentStrategy()
+                ),
+                RobotCoordinationMode.Distributed => LogFallbackAndReturn(
+                    "Distributed coordination mode is not implemented. Falling back to Independent.",
+                    new IndependentStrategy()
+                ),
                 _ => new IndependentStrategy(),
             };
 
@@ -279,6 +285,16 @@ namespace Simulation
                     );
                 }
             }
+        }
+
+        /// <summary>
+        /// Emits a warning log and returns the given strategy. Used in switch expressions
+        /// where unimplemented modes fall back to IndependentStrategy.
+        /// </summary>
+        private ICoordinationStrategy LogFallbackAndReturn(string message, ICoordinationStrategy fallback)
+        {
+            Debug.LogWarning($"{_logPrefix} {message}");
+            return fallback;
         }
 
         /// <summary>
@@ -342,6 +358,9 @@ namespace Simulation
                 );
                 return;
             }
+
+            // Re-initialize coordination strategy in case the mode was changed after Initialize()
+            InitializeCoordinationStrategy();
 
             ChangeState(SimulationState.Running);
         }

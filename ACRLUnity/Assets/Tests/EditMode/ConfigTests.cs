@@ -64,14 +64,14 @@ namespace Tests.EditMode
         [Test]
         public void RobotConfig_JointConfigurations_DecreasingStiffness()
         {
-            // AR4 profile has decreasing stiffness from base to wrist
-            // Base: 5000, Shoulder: 4000, Elbow: 3000, Wrist1: 2500, Wrist2: 2000, Wrist3: 1500
-            Assert.AreEqual(5000f, _robotConfig.joints[0].stiffness, "Base stiffness should be 5000");
-            Assert.AreEqual(4000f, _robotConfig.joints[1].stiffness, "Shoulder stiffness should be 4000");
-            Assert.AreEqual(3000f, _robotConfig.joints[2].stiffness, "Elbow stiffness should be 3000");
-            Assert.AreEqual(2500f, _robotConfig.joints[3].stiffness, "Wrist1 stiffness should be 2500");
-            Assert.AreEqual(2000f, _robotConfig.joints[4].stiffness, "Wrist2 stiffness should be 2000");
-            Assert.AreEqual(1500f, _robotConfig.joints[5].stiffness, "Wrist3 stiffness should be 1500");
+            // AR4 profile has strictly decreasing stiffness from base to wrist.
+            // This test uses relational assertions so it stays valid when stiffness values are tuned.
+            var joints = _robotConfig.joints;
+            for (int i = 0; i < joints.Length - 1; i++)
+            {
+                Assert.Greater(joints[i].stiffness, joints[i + 1].stiffness,
+                    $"Joint {i} stiffness ({joints[i].stiffness}) should exceed joint {i + 1} stiffness ({joints[i + 1].stiffness})");
+            }
         }
 
         [Test]

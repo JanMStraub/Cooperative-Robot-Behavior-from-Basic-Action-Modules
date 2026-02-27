@@ -398,6 +398,81 @@ namespace Tests.EditMode
             Assert.AreEqual(7, newOffset);
         }
 
+        [Test]
+        public void DecodeHeader_NullData_ThrowsArgumentException()
+        {
+            // DecodeHeader must explicitly reject null input.
+            Assert.Throws<ArgumentException>(() =>
+                UnityProtocol.DecodeHeader(null, 0, out _, out _));
+        }
+
+        [Test]
+        public void EncodeHeader_RequestId999_HasExpectedLittleEndianBytes()
+        {
+            // Verify EncodeHeader writes request_id 999 as little-endian bytes 0xE7, 0x03, 0x00, 0x00.
+            // EncodeHeader uses explicit bit-shifts (always LE); this test pins the byte layout
+            // and acts as a regression guard against accidental endianness changes.
+            //
+            // 999 decimal = 0x000003E7
+            //   LE byte 0: 0xE7
+            //   LE byte 1: 0x03
+            //   LE byte 2: 0x00
+            //   LE byte 3: 0x00
+
+            byte[] message = UnityProtocol.EncodeResultMessage("{}", requestId: 999);
+
+            // Bytes 1-4 (after the 1-byte type) are the request_id
+            Assert.AreEqual(0xE7, message[1], "request_id byte 0 should be 0xE7 (LSB of 999)");
+            Assert.AreEqual(0x03, message[2], "request_id byte 1 should be 0x03");
+            Assert.AreEqual(0x00, message[3], "request_id byte 2 should be 0x00");
+            Assert.AreEqual(0x00, message[4], "request_id byte 3 should be 0x00 (MSB)");
+        }
+
+        [Test]
+        public void EncodeDecodeHeader_RoundTrip_RequestId999()
+        {
+            // End-to-end: encode with requestId=999, decode and verify.
+            // This test would catch any encode/decode endianness mismatch.
+            byte[] message = UnityProtocol.EncodeResultMessage("{}", requestId: 999);
+            UnityProtocol.DecodeHeader(message, 0, out _, out uint decodedId);
+            Assert.AreEqual(999u, decodedId, "Round-trip encode/decode should preserve requestId=999");
+        }
+
+        #endregion
+
+        #region Null and Partial Buffer Safety Tests
+
+        [Test]
+        public void DecodeImageMessage_EmptyArray_ThrowsArgumentException()
+        {
+            // An empty byte array has no header, so DecodeHeader should throw before
+            // any field parsing begins.
+            Assert.Throws<ArgumentException>(() =>
+                UnityProtocol.DecodeImageMessage(new byte[0], out _, out _, out _, out _));
+        }
+
+        [Test]
+        public void DecodeImageMessage_OnlyHeader_ThrowsArgumentException()
+        {
+            // A 5-byte message has a valid header but no payload length fields.
+            // Parsing the camera_id_len field should either throw or be caught by bounds.
+            byte[] headerOnly = new byte[UnityProtocol.HEADER_SIZE];
+            headerOnly[0] = (byte)MessageType.IMAGE;
+            // request_id bytes left as 0
+
+            // BitConverter.ToInt32 at offset 5 would read out of bounds — expect any exception subclass
+            Assert.That(() =>
+                UnityProtocol.DecodeImageMessage(headerOnly, out _, out _, out _, out _),
+                Throws.InstanceOf<Exception>());
+        }
+
+        [Test]
+        public void DecodeResultMessage_NullData_ThrowsArgumentException()
+        {
+            Assert.Throws<ArgumentException>(() =>
+                UnityProtocol.DecodeResultMessage(null, out _));
+        }
+
         #endregion
 
         #region UTF-8 Encoding Tests

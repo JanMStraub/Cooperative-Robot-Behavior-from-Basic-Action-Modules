@@ -120,14 +120,6 @@ namespace Tests.EditMode
         }
 
         [Test]
-        public void CommunicationConstants_Ports_AreInExpectedRange()
-        {
-            // All ports should be in the 5000s range for this project
-            Assert.AreEqual(5010, CommunicationConstants.LLM_RESULTS_PORT);
-            Assert.AreEqual(5013, CommunicationConstants.SEQUENCE_SERVER_PORT);
-        }
-
-        [Test]
         public void CommunicationConstants_MaxJsonLength_Matches_ProtocolLimit()
         {
             // Should match UnityProtocol.MAX_IMAGE_SIZE

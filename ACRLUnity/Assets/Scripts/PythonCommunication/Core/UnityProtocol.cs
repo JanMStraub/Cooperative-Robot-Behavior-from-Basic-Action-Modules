@@ -103,7 +103,12 @@ namespace PythonCommunication.Core
             messageType = (MessageType)data[offset];
             offset += TYPE_SIZE;
 
-            requestId = BitConverter.ToUInt32(data, offset);
+            // Explicit little-endian decode — matches EncodeHeader's bit-shift writes
+            // and avoids BitConverter's platform-endian dependency.
+            requestId = (uint)data[offset]
+                      | ((uint)data[offset + 1] << 8)
+                      | ((uint)data[offset + 2] << 16)
+                      | ((uint)data[offset + 3] << 24);
             offset += INT_SIZE;
 
             return offset;

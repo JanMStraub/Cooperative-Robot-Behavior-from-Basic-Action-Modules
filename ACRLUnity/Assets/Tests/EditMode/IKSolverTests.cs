@@ -1,3 +1,4 @@
+using MathNet.Numerics.LinearAlgebra;
 using NUnit.Framework;
 using Robotics;
 using UnityEngine;
@@ -11,10 +12,41 @@ namespace Tests.EditMode
     {
         private const float EPSILON = 0.001f;
 
+        // Shared default solver and joint array (2-joint, Z-axis rotation for X-Y plane movement)
+        private IKSolver _solver;
+        private JointInfo[] _defaultJoints;
+
+        [SetUp]
+        public void SetUp()
+        {
+            _solver = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
+            _defaultJoints = new[]
+            {
+                new JointInfo(Vector3.zero, Vector3.forward),
+                new JointInfo(new Vector3(0.5f, 0f, 0f), Vector3.forward)
+            };
+        }
+
+        /// <summary>
+        /// Assert that all values in a delta vector are finite (no NaN or Infinity).
+        /// Singularity-driven or low-damping scenarios can produce degenerate values;
+        /// the joint velocity clamp in production code should prevent this.
+        /// </summary>
+        private static void AssertDeltasAreFinite(MathNet.Numerics.LinearAlgebra.Vector<double> deltas, string context = "")
+        {
+            for (int i = 0; i < deltas.Count; i++)
+            {
+                Assert.IsFalse(double.IsNaN(deltas[i]),
+                    $"Joint {i} delta is NaN{(context.Length > 0 ? $" ({context})" : "")}");
+                Assert.IsFalse(double.IsInfinity(deltas[i]),
+                    $"Joint {i} delta is Infinity{(context.Length > 0 ? $" ({context})" : "")}");
+            }
+        }
+
         [Test]
         public void ComputeJointDeltas_Returns_Null_When_Converged()
         {
-            // Arrange
+            // Arrange — use Vector3.up axis (no X-Y plane movement needed; convergence test only)
             var solver = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
             var currentState = new IKState(
                 position: new Vector3(1f, 0f, 0f),
@@ -274,12 +306,6 @@ namespace Tests.EditMode
             Vector3 currentVelocity = new Vector3(0f, 0.1f, 0f); // Moving in +Y at 10cm/s
             Vector3 targetVelocity = new Vector3(0f, 0.2f, 0f);  // Should be 20cm/s
 
-            var joints = new[]
-            {
-                new JointInfo(Vector3.zero, Vector3.forward),
-                new JointInfo(new Vector3(0.5f, 0f, 0f), Vector3.forward)
-            };
-
             float Kp = 10.0f;
             float Kd = 2.0f;
 
@@ -287,7 +313,7 @@ namespace Tests.EditMode
             var deltas = solver.ComputeJointDeltasWithVelocity(
                 currentState, targetState,
                 currentVelocity, targetVelocity,
-                joints,
+                _defaultJoints,
                 convergenceThreshold: 0.01f,
                 Kp: Kp,
                 Kd: Kd
@@ -296,6 +322,7 @@ namespace Tests.EditMode
             // Assert
             Assert.IsNotNull(deltas, "Should return deltas when not converged");
             Assert.AreEqual(2, deltas.Count, "Should return deltas for all joints");
+            AssertDeltasAreFinite(deltas, "position+velocity combined error");
 
             // Verify non-zero movement
             bool hasMovement = false;
@@ -417,17 +444,11 @@ namespace Tests.EditMode
             Vector3 currentVelocity = Vector3.zero;
             Vector3 targetVelocity = new Vector3(0f, 5f, 0f); // Fast target velocity
 
-            var joints = new[]
-            {
-                new JointInfo(Vector3.zero, Vector3.forward),
-                new JointInfo(new Vector3(0.5f, 0f, 0f), Vector3.forward)
-            };
-
             // Act
             var deltas = solver.ComputeJointDeltasWithVelocity(
                 currentState, targetState,
                 currentVelocity, targetVelocity,
-                joints,
+                _defaultJoints,
                 convergenceThreshold: 0.01f,
                 Kp: 100.0f, // Very high gain to trigger large deltas
                 Kd: 50.0f
@@ -435,6 +456,7 @@ namespace Tests.EditMode
 
             // Assert
             Assert.IsNotNull(deltas);
+            AssertDeltasAreFinite(deltas, "high-gain far-target scenario");
 
             // Verify all joint velocities are clamped to ±5.0 rad/sec
             const float maxJointVelocity = 5.0f;
@@ -453,8 +475,9 @@ namespace Tests.EditMode
             // High Kp = aggressive position correction
             // High Kd = more damping (smoother motion)
 
-            // Arrange
-            var solver = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
+            // Arrange - use separate solver instances so each has its own pre-allocated _jointDelta buffer
+            var solverLowKp = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
+            var solverHighKp = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
 
             var currentState = new IKState(
                 position: new Vector3(1f, 0f, 0f),
@@ -475,7 +498,7 @@ namespace Tests.EditMode
             };
 
             // Act - Low Kp (gentle position correction)
-            var deltasLowKp = solver.ComputeJointDeltasWithVelocity(
+            var deltasLowKp = solverLowKp.ComputeJointDeltasWithVelocity(
                 currentState, targetState,
                 currentVelocity, targetVelocity,
                 joints,
@@ -485,7 +508,7 @@ namespace Tests.EditMode
             );
 
             // Act - High Kp (aggressive position correction)
-            var deltasHighKp = solver.ComputeJointDeltasWithVelocity(
+            var deltasHighKp = solverHighKp.ComputeJointDeltasWithVelocity(
                 currentState, targetState,
                 currentVelocity, targetVelocity,
                 joints,
@@ -511,8 +534,9 @@ namespace Tests.EditMode
             // Test that high Kd provides more velocity damping
             // NOTE: Use smaller errors to avoid error magnitude clamping at 1.0 m/s
 
-            // Arrange
-            var solver = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
+            // Arrange - use separate solver instances so each has its own pre-allocated _jointDelta buffer
+            var solverLowKd = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
+            var solverHighKd = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
 
             var currentState = new IKState(
                 position: new Vector3(1f, 0f, 0f),
@@ -534,7 +558,7 @@ namespace Tests.EditMode
             };
 
             // Act - Low Kd (less velocity damping)
-            var deltasLowKd = solver.ComputeJointDeltasWithVelocity(
+            var deltasLowKd = solverLowKd.ComputeJointDeltasWithVelocity(
                 currentState, targetState,
                 currentVelocity, targetVelocity,
                 joints,
@@ -544,7 +568,7 @@ namespace Tests.EditMode
             );
 
             // Act - High Kd (more velocity damping)
-            var deltasHighKd = solver.ComputeJointDeltasWithVelocity(
+            var deltasHighKd = solverHighKd.ComputeJointDeltasWithVelocity(
                 currentState, targetState,
                 currentVelocity, targetVelocity,
                 joints,
@@ -568,14 +592,53 @@ namespace Tests.EditMode
         }
 
         [Test]
+        public void ComputeJointDeltas_NearSingularity_ReturnsFiniteValues()
+        {
+            // Test numerical stability with very low damping and a degenerate joint configuration.
+            // Production code clamps joint velocities at ±5 rad/sec; this test verifies that
+            // the clamp prevents NaN/Infinity from propagating to callers.
+
+            // Arrange — very low damping factor approaches pseudo-inverse singularity
+            var solver = new IKSolver(jointCount: 2, dampingFactor: 0.01f);
+
+            var currentState = new IKState(
+                position: new Vector3(0f, 0f, 0f),
+                rotation: Quaternion.identity
+            );
+            var targetState = new IKState(
+                position: new Vector3(0.001f, 0f, 0f), // Tiny position error (near zero)
+                rotation: Quaternion.identity
+            );
+
+            // Degenerate configuration: both joint axes are parallel (near-singular Jacobian)
+            var singularJoints = new[]
+            {
+                new JointInfo(Vector3.zero, Vector3.up),
+                new JointInfo(new Vector3(0.1f, 0f, 0f), Vector3.up) // Same axis = linearly dependent columns
+            };
+
+            // Act
+            var deltas = solver.ComputeJointDeltas(
+                currentState, targetState, singularJoints,
+                convergenceThreshold: 0.001f);
+
+            // Assert — deltas may be null (converged) or non-null, but must never be NaN/Infinity
+            if (deltas != null)
+            {
+                AssertDeltasAreFinite(deltas, "near-singular Jacobian");
+            }
+        }
+
+        [Test]
         public void ComputeJointDeltasWithVelocity_AlwaysReturnsDeltas_RegardlessOfVelocity()
         {
             // NOTE: Convergence checking is now handled by RobotController with adaptive thresholds.
             // IKSolver always returns joint deltas regardless of velocity.
             // This test verifies that IKSolver returns deltas for both high and low velocities.
 
-            // Arrange
-            var solver = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
+            // Arrange - use separate solver instances so each has its own pre-allocated _jointDelta buffer
+            var solverAbove = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
+            var solverBelow = new IKSolver(jointCount: 2, dampingFactor: 0.1f);
 
             var currentState = new IKState(
                 position: new Vector3(1f, 0f, 0f),
@@ -594,7 +657,7 @@ namespace Tests.EditMode
 
             // Act - Just above velocity threshold (should not converge)
             Vector3 velocityJustAbove = new Vector3(0f, 0.051f, 0f); // 5.1 cm/s
-            var deltasAbove = solver.ComputeJointDeltasWithVelocity(
+            var deltasAbove = solverAbove.ComputeJointDeltasWithVelocity(
                 currentState, targetState,
                 velocityJustAbove, Vector3.zero,
                 joints,
@@ -605,7 +668,7 @@ namespace Tests.EditMode
 
             // Act - Just below velocity threshold (should converge)
             Vector3 velocityJustBelow = new Vector3(0f, 0.049f, 0f); // 4.9 cm/s
-            var deltasBelow = solver.ComputeJointDeltasWithVelocity(
+            var deltasBelow = solverBelow.ComputeJointDeltasWithVelocity(
                 currentState, targetState,
                 velocityJustBelow, Vector3.zero,
                 joints,
