@@ -185,3 +185,6 @@ CLAUDE.md
 ACRLPython/llm_responses
 ACRLPython/logs/
 documents/
+# Unity Test Results
+ACRLUnity/TestResults-*.xml
+ACRLUnity/unity-*-test.log

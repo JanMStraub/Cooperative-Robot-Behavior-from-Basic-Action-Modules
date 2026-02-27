@@ -26,19 +26,26 @@ LLM_RESULTS_PORT = int(
 )  # Sends LLM analysis results
 DEPTH_RESULTS_PORT = int(
     os.environ.get("DEPTH_RESULTS_PORT", "5007")
-)  # TODO: implement depth results server (currently unused)
+)  # Sends depth detection results
 RAG_SERVER_PORT = int(
     os.environ.get("RAG_SERVER_PORT", "5011")
-)  # TODO: implement RAG semantic search server (currently unused)
+)  # RAG semantic search server
 STATUS_SERVER_PORT = int(
     os.environ.get("STATUS_SERVER_PORT", "5012")
-)  # TODO: implement status query server (currently unused)
+)  # Status query server
 SEQUENCE_SERVER_PORT = int(
     os.environ.get("SEQUENCE_SERVER_PORT", "5013")
 )  # Sequence server
 WORLD_STATE_PORT = int(
     os.environ.get("WORLD_STATE_PORT", "5014")
 )  # World state streaming (Unity → Python)
+AUTORT_SERVER_PORT = int(
+    os.environ.get("AUTORT_SERVER_PORT", "5015")
+)  # AutoRT task generation server
+
+# Legacy port names for backward compatibility
+RESULTS_SERVER_PORT = LLM_RESULTS_PORT
+DETECTION_SERVER_PORT = DEPTH_RESULTS_PORT
 
 # ============================================================================
 # Connection Limits
@@ -89,7 +96,6 @@ DEFAULT_TEMPERATURE = float(os.environ.get("DEFAULT_TEMPERATURE", "0.1"))
 VISION_MODELS = [
     "gemma-3-12b",
     "llama-3.2-vision",
-    "llava",
     "qwen3-vl-8b",
     "mistral-3-3b",
     "ministral-3-14b-reasoning",

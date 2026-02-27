@@ -464,6 +464,7 @@ GameObject:
   - component: {fileID: 1595579029}
   - component: {fileID: 1595579028}
   - component: {fileID: 1595579026}
+  - component: {fileID: 1595579030}
   m_Layer: 0
   m_Name: PythonManager
   m_TagString: Untagged
@@ -559,7 +560,7 @@ MonoBehaviour:
   _trackedObjects: []
   _updatesSent: 0
   _lastUpdateTime: 0
---- !u!114 &1595579029
+--- !u!114 &1595579030
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -568,9 +569,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 1595579014}
   m_Enabled: 0
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: bc45f76cfcc164c7084a73abcff1f976, type: 3}
+  m_Script: {fileID: 11500000, guid: 67dd424ae24944e7fa5f23fbedd3f946, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-ACRL::PythonCommunication.ResultsClient
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::PythonCommunication.AutoRTManager
   _autoConnect: 1
   _autoReconnect: 1
   _serverPort: 0
@@ -604,7 +605,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a79441f348de89743a2939f4d699eac1, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalCameraData
   m_RenderShadows: 1
   m_RequiresDepthTextureOption: 2

@@ -11,7 +11,8 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
 - Damped least-squares inverse kinematics (6-DOF control)
 - Multiple coordination modes: Independent (✅), Sequential (✅), Collaborative (⚠️ partial), Master-Slave (❌), Distributed (❌)
 - **Unified Python Backend**: Single entry point (RunRobotController) orchestrates all servers
-- **Operations System**: 17 registered operations including atomic actions, perception, and sync primitives
+- **Operations System**: 30 registered operations including atomic actions, perception, and sync primitives
+- **AutoRT System**: Autonomous task generation with LLM-based planning and human-in-the-loop approval
 - **Protocol V2**: Request ID correlation for reliable multi-robot communication
 - **Grasp Planning**: Approach-aware motion (Top/Front/Side) with automatic gripper control
 - LLM vision integration (Ollama) for scene understanding and natural language commands
@@ -123,7 +124,53 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
 - Select platform (PC, Mac & Linux Standalone recommended)
 - Click "Build" or "Build and Run"
 
-## Recent Major Updates (December 2025)
+## Recent Major Updates
+
+### AutoRT System (February 2026)
+
+**Autonomous Robot Task generation** - LLM-powered task planning with human oversight:
+
+**Core Features**:
+- **Autonomous Task Generation**: LLM generates diverse task proposals based on detected scene objects
+- **Human-in-the-Loop**: Unity custom inspector UI for task approval/rejection before execution
+- **Continuous Loop Mode**: Optional autonomous mode with configurable delay between generations
+- **Multi-Robot Coordination**: Supports collaborative tasks using signal/wait primitives
+- **Registry Integration**: Tasks validated against 30 registered operations
+- **Pydantic Validation**: Type-safe task structures with automatic JSON schema enforcement
+
+**Architecture**:
+- **Unity Side**: `AutoRTManager` (singleton, shares port 5013 with SequenceServer)
+- **Python Side**: `TaskGenerator` (LLM querying) + integration in `SequenceServer`
+- **Configuration**: `AutoRTConfig.asset` (Unity) + `config/AutoRT.py` (Python)
+- **Custom Editor**: Inspector UI with task list, approve/reject buttons, loop controls
+
+**Task Selection Strategies** (configurable in `AutoRTConfig`):
+- **Balanced**: Mix of simple and complex tasks
+- **Simple**: Prioritize low-complexity tasks (good for testing)
+- **Complex**: Prioritize challenging multi-robot coordination
+- **Random**: Diverse task sampling
+
+**Usage**:
+```csharp
+// In Unity Inspector (AutoRTManager component):
+// 1. Click "Generate Tasks" - tasks appear in inspector UI
+// 2. Review task descriptions and operations
+// 3. Click "Execute" to approve and run, or "Reject" to discard
+// 4. Optional: Enable "Continuous Loop" for autonomous generation
+
+// Or programmatically:
+AutoRTManager.Instance.GenerateTasks(numTasks: 3);
+AutoRTManager.Instance.StartLoop(loopDelay: 5f);
+AutoRTManager.Instance.ExecuteTask(selectedTask);
+```
+
+**Safety Features**:
+- Workspace bounds validation
+- Max velocity/force limits
+- Minimum robot separation (0.2m)
+- Operation type validation against Registry
+
+### Unified Python Backend (December 2025)
 
 ### Unified Python Backend
 
@@ -175,10 +222,11 @@ New approach-aware grasping:
 
 ### Core Systems
 
-**Three Singleton Managers**:
+**Four Singleton Managers**:
 - **SimulationManager**: Top-level orchestrator controlling simulation state and coordination modes
 - **RobotManager**: Robot lifecycle management, configuration loading, target assignment
 - **MainLogger**: Unified logging system for LLM training data with action tracking and trajectories
+- **AutoRTManager**: Autonomous task generation client with human-in-the-loop approval UI (port 5013)
 
 **Robot Control Layers**:
 1. **RobotController**: Inverse kinematics computation using damped least-squares method
@@ -191,25 +239,26 @@ New approach-aware grasping:
 - **Stereo Depth**: 3D localization using stereo disparity estimation
 - **UnifiedImageStorage**: Thread-safe singleton for centralized image access
 
-**Python Backend Architecture (December 2025)**:
+**Python Backend Architecture (February 2026)**:
 
 - **Unified Entry Point**: `RunRobotController` orchestrates all servers
 - **3 Consolidated Servers** (replaces 6+ legacy servers):
   - **ImageServer** (ports 5005/5006): Unified single and stereo image receiver
   - **CommandServer** (port 5010): Bidirectional commands and completions
-  - **SequenceServer** (port 5013): Multi-command sequence orchestration
+  - **SequenceServer** (port 5013): Multi-command sequence orchestration + AutoRT integration
+- **AutoRT Module**: LLM-based autonomous task generation with Pydantic validation
 - **Protocol V2**: Request ID correlation prevents race conditions in multi-robot scenarios
 - **Persistent Connections**: TCP keepalive with health checks and automatic recovery
 
 **LLM-Driven Control Systems**:
 
-- **Operations System**: 17 registered operations (atomic actions, perception, sync primitives)
-  - Detection: `detect_object`, `detect_objects`
-  - Vision: `analyze_scene`
-  - Movement: `move_to_coordinate`, `move_relative_to_object`
-  - Manipulation: `control_gripper`, grasp operations with approach planning
-  - Synchronization: `signal`, `wait_for_signal`, `wait`
+- **Operations System**: 30 registered operations organized by complexity (Levels 1-5)
+  - **Level 1-2 Basic** (18 ops): Navigation, gripper control, perception, field detection, sync primitives
+  - **Level 3 Intermediate** (7 ops): `grasp_object`, `align_object`, `draw_with_pen`, `follow_path`
+  - **Level 4 Multi-Robot** (2 ops): `detect_other_robot`, `mirror_movement`
+  - **Level 5 Collaborative** (1 op): `stabilize_object`
   - Variable passing: `detect -> $target`, then `move to $target`
+- **AutoRT System**: Autonomous task generation with LLM planning and human approval workflow
 - **Integrated RAG System**: Semantic search using LM Studio embeddings for natural language command parsing
 - **CommandParser**: LLM/regex hybrid parser with operation registry matching
 - **SequenceExecutor**: Sequential operation execution with state tracking
@@ -239,32 +288,42 @@ Auto-Cooperative-Robot-Learning/
 │   │   └── Prefabs/                     # Robot and environment prefabs
 │   ├── Packages/                        # Unity package dependencies
 │   └── ProjectSettings/                 # Unity project settings
-├── ACRLPython/                          # Python backend (December 2025)
+├── ACRLPython/                          # Python backend (February 2026)
 │   ├── core/                            # TCPServerBase, UnityProtocol V2
 │   ├── servers/                         # 3 active servers
 │   │   ├── ImageServer.py               # ✅ Unified image receiver
 │   │   ├── CommandServer.py             # ✅ Bidirectional commands
-│   │   └── SequenceServer.py            # ✅ Multi-command sequences
+│   │   └── SequenceServer.py            # ✅ Multi-command sequences + AutoRT integration
+│   ├── autort/                          # ✅ Autonomous task generation
+│   │   ├── TaskGenerator.py             # LLM-based task proposals
+│   │   └── DataModels.py                # Pydantic models (ProposedTask, SceneDescription)
 │   ├── vision/                          # Object detection, depth estimation
 │   ├── orchestrators/                   # Unified backend orchestrator
 │   │   ├── RunRobotController.py        # ✅ PRIMARY entry point
 │   │   ├── CommandParser.py             # LLM/regex command parser
 │   │   └── SequenceExecutor.py          # Sequential operation executor
-│   ├── operations/                      # 17 registered operations
+│   ├── operations/                      # 30 registered operations (Levels 1-5)
 │   │   ├── Base.py                      # Core operation classes
-│   │   ├── DetectionOperations.py       # detect_object, detect_objects
-│   │   ├── VisionOperations.py          # analyze_scene
-│   │   ├── MoveOperations.py            # move_to_coordinate
-│   │   ├── GripperOperations.py         # control_gripper
-│   │   ├── SpatialOperations.py         # move_relative_to_object
-│   │   ├── WorldState.py                # Shared world state tracking
-│   │   └── Registry.py                  # Operation registry
+│   │   ├── Registry.py                  # Operation registry (30 ops)
+│   │   ├── MoveOperations.py            # Navigation primitives
+│   │   ├── GripperOperations.py         # Gripper control
+│   │   ├── DetectionOperations.py       # Object detection
+│   │   ├── VisionOperations.py          # Scene analysis
+│   │   ├── GraspOperations.py           # Grasp planning
+│   │   ├── IntermediateOperations.py    # Complex single-robot tasks
+│   │   ├── CoordinationOperations.py    # Multi-robot primitives
+│   │   ├── CollaborativeOperations.py   # Collaborative tasks
+│   │   └── WorldState.py                # Shared world state tracking
 │   ├── rag/                             # Integrated RAG system
 │   │   ├── Embeddings.py                # LM Studio embeddings
 │   │   ├── VectorStore.py               # Numpy vector storage
 │   │   ├── QueryEngine.py               # Semantic search
 │   │   └── .rag_index.pkl               # Cached index
-│   ├── Tests/                           # Comprehensive test suite
+│   ├── config/                          # Configuration modules
+│   │   └── AutoRT.py                    # ✅ AutoRT settings (LLM, safety, multi-robot)
+│   ├── tests/                           # Comprehensive test suite
+│   │   ├── TestAutoRTIntegration.py     # ✅ AutoRT tests
+│   │   └── TestAutoRTSequenceServer.py  # ✅ Server integration tests
 │   ├── LLMConfig.py                     # Centralized configuration
 │   └── acrl/                            # Python virtual environment
 └── README.md
@@ -294,6 +353,26 @@ Options:
 - Coordination mode (Independent/Collaborative/Master-Slave/etc.)
 - Performance settings (target FPS, vSync)
 
+### AutoRT Configuration
+Configure autonomous task generation:
+```
+ACRLUnity/Assets/Configuration/DefaultAutoRTConfig.asset  (Unity)
+ACRLPython/config/AutoRT.py                               (Python)
+```
+
+Unity Options:
+- Max task candidates (1-5)
+- Task selection strategy (Balanced/Simple/Complex/Random)
+- Continuous loop settings (enable, delay)
+- Robot assignment and collaborative tasks
+- UI settings (max display tasks, refresh rate)
+
+Python Options:
+- LLM settings (LM Studio URL, models for generation/safety)
+- Loop settings (max tasks, delay, human-in-the-loop default)
+- Safety constraints (workspace bounds, velocity limits, separation)
+- Multi-robot configuration (default robots, collaborative tasks)
+
 ### ML Training Configuration
 PPO hyperparameters in:
 ```
@@ -310,7 +389,8 @@ Default settings:
 ## Development Branches
 
 - `main` - Stable release branch
-- `feature_streaming` - **CURRENT**: YOLO streaming, unified backend, Protocol V2
+- `feature_autort` - **CURRENT**: AutoRT autonomous task generation system
+- `feature_streaming` - YOLO streaming, unified backend, Protocol V2
 - `feature_robot_cooperation` - Multi-robot coordination strategies
 - `feature_rag` - RAG system integration (merged into feature_streaming)
 - `feature_detect_object` - Object detection and stereo vision systems
@@ -361,14 +441,41 @@ Default settings:
    );
    ```
 
-**Available Operations** (17 total):
+**For Autonomous Task Generation (AutoRT)**:
 
-- Detection: `detect_object`, `detect_objects`
-- Vision: `analyze_scene`
-- Movement: `move_to_coordinate`, `move_relative_to_object`, `move_to_region`
-- Manipulation: `control_gripper`, `grasp_object`, `place_object`
-- Synchronization: `signal`, `wait_for_signal`, `wait`
-- Status: `check_robot_status`, `verify_position`
+1. Ensure Python backend is running (see step 2 above)
+2. In Unity scene, add AutoRTManager GameObject:
+   - Create empty GameObject named "AutoRTManager"
+   - Add `AutoRTManager` component
+   - Assign `AutoRTConfig` asset from Configuration folder
+3. Use custom inspector UI:
+   - Click "Generate Tasks" button
+   - Review proposed tasks in inspector
+   - Click "Execute" to approve or "Reject" to discard
+   - Optional: Enable "Start Loop" for continuous autonomous operation
+
+**Available Operations** (30 total, organized by complexity):
+
+**Level 1-2 Basic Operations** (18):
+
+- Navigation: `move_to_coordinate`, `move_from_a_to_b`, `adjust_end_effector_orientation`, `return_to_start`
+- Gripper: `control_gripper`, `release_object`
+- Perception: `detect_objects`, `detect_object_stereo`, `analyze_scene`, `estimate_distance_to_object`, `estimate_distance_between_objects`
+- Field Detection: `detect_field`, `get_field_center`, `detect_all_fields`
+- Status: `check_robot_status`
+- Sync: `signal`, `wait_for_signal`, `wait`
+
+**Level 3 Intermediate** (7):
+
+- `grasp_object`, `grip_object`, `align_object`, `draw_with_pen`, `move_relative_to_object`, `move_between_objects`, `follow_path`
+
+**Level 4 Multi-Robot** (2):
+
+- `detect_other_robot`, `mirror_movement`
+
+**Level 5 Collaborative** (1):
+
+- `stabilize_object`
 
 ## License
 
@@ -384,7 +491,7 @@ This project is licensed under the MIT License.
 
 If you use this work in your research, please cite:
 
-```
+```bibtex
 @mastersthesis{straub2025acrl,
   author = {Jan M. Straub},
   title = {Auto-Cooperative Robot Learning},
@@ -396,5 +503,6 @@ If you use this work in your research, please cite:
 ## Contact
 
 For questions or collaboration:
+
 - GitHub: [@JanMStraub](https://github.com/JanMStraub)
 - Repository: [Auto-Cooperative-Robot-Learning](https://github.com/JanMStraub/Auto-Cooperative-Robot-Learning)
