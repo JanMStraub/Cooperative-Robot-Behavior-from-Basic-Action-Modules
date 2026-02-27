@@ -337,5 +337,127 @@ class TestGraspPlannerEdgeCases:
         assert best_grasp is not None
 
 
+class TestGraspPlannerConfigMutationRegression:
+    """
+    Regression tests for Bug 1: config mutation in _filter_approaches.
+
+    GraspPlanner instances are reused (e.g. as singletons in GraspOperations).
+    A call with preferred_approach must not permanently disable other approaches
+    for subsequent calls on the same instance.
+    """
+
+    def test_preferred_approach_does_not_persist_across_calls(self):
+        """
+        Calling plan_grasp with preferred_approach='top' must not disable
+        side and front approaches for a subsequent call without preferred_approach.
+        """
+        planner = GraspPlanner()
+        common_kwargs = dict(
+            object_position=(0.0, 0.05, 0.0),
+            object_rotation=(0.0, 0.0, 0.0, 1.0),
+            object_size=(0.05, 0.05, 0.05),
+            robot_id="Robot1",
+            gripper_position=(0.0, 0.15, 0.0),
+            use_moveit_ik=False,
+            min_score=-1.0,  # accept any candidate
+        )
+
+        # First call: restrict to top only
+        planner.plan_grasp(preferred_approach="top", **common_kwargs)
+
+        # Second call: no preference — all approaches must be available
+        # Collect all candidates directly from the generator to verify approach mix
+        candidates = planner.generator.generate_candidates(
+            object_position=(0.0, 0.05, 0.0),
+            object_rotation=(0.0, 0.0, 0.0, 1.0),
+            object_size=(0.05, 0.05, 0.05),
+            gripper_position=(0.0, 0.15, 0.0),
+        )
+
+        approach_types = {c.approach_type for c in candidates}
+        assert "top" in approach_types, "top approach missing after preferred_approach call"
+        assert "side" in approach_types, "side approach was permanently disabled"
+        assert "front" in approach_types, "front approach was permanently disabled"
+
+    def test_preferred_approach_preference_weight_restored(self):
+        """
+        The preference_weight boosted to 2.0 for preferred_approach must be
+        restored to its original value after plan_grasp returns.
+        """
+        planner = GraspPlanner()
+
+        # Capture original weights
+        original_weights = {
+            s.approach_type: s.preference_weight
+            for s in planner.config.enabled_approaches
+        }
+
+        planner.plan_grasp(
+            object_position=(0.0, 0.05, 0.0),
+            object_rotation=(0.0, 0.0, 0.0, 1.0),
+            object_size=(0.05, 0.05, 0.05),
+            robot_id="Robot1",
+            gripper_position=(0.0, 0.15, 0.0),
+            use_moveit_ik=False,
+            min_score=-1.0,
+            preferred_approach="side",
+        )
+
+        for s in planner.config.enabled_approaches:
+            assert s.preference_weight == original_weights[s.approach_type], (
+                f"preference_weight for '{s.approach_type}' was not restored"
+            )
+
+    def test_unknown_preferred_approach_logs_warning_and_returns_none(self):
+        """
+        When preferred_approach matches no approach name, all approaches are
+        disabled so no candidates are generated and plan_grasp returns None.
+        """
+        planner = GraspPlanner()
+
+        result = planner.plan_grasp(
+            object_position=(0.0, 0.05, 0.0),
+            object_rotation=(0.0, 0.0, 0.0, 1.0),
+            object_size=(0.05, 0.05, 0.05),
+            robot_id="Robot1",
+            gripper_position=(0.0, 0.15, 0.0),
+            use_moveit_ik=False,
+            preferred_approach="nonexistent_approach",
+        )
+
+        # All approaches disabled → no candidates → None
+        assert result is None
+
+    def test_config_restored_even_when_generation_raises(self):
+        """
+        Config state must be restored even if candidate generation fails.
+
+        Simulates an error during generate_candidates and verifies that
+        subsequent calls on the same instance still have all approaches enabled.
+        """
+        import unittest.mock as mock
+
+        planner = GraspPlanner()
+        original_enabled = [s.enabled for s in planner.config.enabled_approaches]
+
+        with mock.patch.object(
+            planner.generator, "generate_candidates", side_effect=RuntimeError("test error")
+        ):
+            with pytest.raises(RuntimeError):
+                planner.plan_grasp(
+                    object_position=(0.0, 0.05, 0.0),
+                    object_rotation=(0.0, 0.0, 0.0, 1.0),
+                    object_size=(0.05, 0.05, 0.05),
+                    robot_id="Robot1",
+                    gripper_position=(0.0, 0.15, 0.0),
+                    use_moveit_ik=False,
+                    preferred_approach="top",
+                )
+
+        # Config must be restored despite the exception
+        for s, orig in zip(planner.config.enabled_approaches, original_enabled):
+            assert s.enabled == orig, f"enabled state for '{s.approach_type}' not restored after exception"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

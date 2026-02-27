@@ -37,19 +37,28 @@ Usage:
 """
 
 import logging
+import platform
 import time
 import threading
 from typing import Optional, Callable, List, Any
+
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
 
 # Import detection components
 try:
     from .YOLODetector import YOLODetector
     from .ObjectTracker import ObjectTracker
     from .DetectionDataModels import DetectionObject, DetectionResult
+    from .StereoConfig import CameraConfig
 except ImportError:
     from vision.YOLODetector import YOLODetector
     from vision.ObjectTracker import ObjectTracker
     from vision.DetectionDataModels import DetectionObject, DetectionResult
+    from vision.StereoConfig import CameraConfig
 
 # Import from centralized lazy import system (prevents circular dependencies)
 try:
@@ -176,9 +185,6 @@ class VisionProcessor:
         # Check if OpenCV is available for visualization
         if self.enable_visualization:
             try:
-                import cv2  # noqa: F401 - Just checking availability
-                import platform
-
                 # Warn about macOS threading limitations
                 if platform.system() == "Darwin" and not use_main_thread:
                     logging.warning(
@@ -261,8 +267,6 @@ class VisionProcessor:
         # Close visualization window if enabled
         if self.enable_visualization:
             try:
-                import cv2
-
                 cv2.destroyWindow(self.viz_window_name)
             except:
                 pass
@@ -300,7 +304,6 @@ class VisionProcessor:
 
             try:
                 # Get latest stereo images from UnifiedImageStorage
-                storage = _get_storage()
                 stereo_data = storage.get_latest_stereo_image()
 
                 if stereo_data is None:
@@ -332,8 +335,6 @@ class VisionProcessor:
                 camera_rotation = None
 
                 if metadata:
-                    from vision.StereoConfig import CameraConfig
-
                     baseline = metadata.get("baseline", DEFAULT_STEREO_BASELINE)
                     fov = metadata.get("fov", DEFAULT_STEREO_FOV)
                     camera_config = CameraConfig(fov=fov, baseline=baseline)
@@ -385,9 +386,6 @@ class VisionProcessor:
                 # Display visualization if enabled
                 if self.enable_visualization:
                     try:
-                        import cv2
-                        import platform
-
                         # Initialize window on first use (must be in same thread as imshow)
                         if (
                             not hasattr(self, "_viz_initialized")
@@ -473,8 +471,6 @@ class VisionProcessor:
             Image with detections drawn
         """
         try:
-            import cv2
-
             # Make a copy to avoid modifying original
             vis_image = image.copy()
 

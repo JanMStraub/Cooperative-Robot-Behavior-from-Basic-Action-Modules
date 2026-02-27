@@ -28,9 +28,13 @@ import sys
 import time
 import logging
 import base64
+import traceback
 from datetime import datetime
 from typing import List, Dict, Optional
 from pathlib import Path
+
+# Allow running as a daemon script from within the vision/ directory
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
     import openai
@@ -298,13 +302,9 @@ def save_response(result: Dict, output_path: Optional[str] = None):
         output_path: Optional custom output path (without extension)
     """
     if output_path:
-        from pathlib import Path
-
         base_path = Path(output_path)
     else:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        from pathlib import Path
-
         base_path = Path(f"llm_response_{timestamp}")
 
     # Save full JSON result
@@ -527,8 +527,6 @@ Note: StreamingServer.py must be running for this script to work.
 
             except Exception as e:
                 logging.error(f"Error in processing loop: {e}")
-                import traceback
-
                 traceback.print_exc()
 
             # Wait before next check
@@ -539,8 +537,6 @@ Note: StreamingServer.py must be running for this script to work.
         sys.exit(0)
     except Exception as e:
         logging.error(f"\nFatal error: {e}")
-        import traceback
-
         traceback.print_exc()
         sys.exit(1)
 

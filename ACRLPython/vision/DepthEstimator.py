@@ -30,8 +30,7 @@ try:
         SGBM_FAR,
     )
 except ImportError as e:
-    import sys
-    print("FIRST IMPORT ERROR:", e, file=sys.stderr)
+    logging.warning(f"StereoConfig relative import failed, trying absolute: {e}")
     from vision.StereoConfig import (
         CameraConfig,
         ReconstructionConfig,

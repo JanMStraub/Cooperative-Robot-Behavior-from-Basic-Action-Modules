@@ -226,8 +226,11 @@ def quaternion_from_axis_angle(axis: np.ndarray, angle_rad: float) -> Tuple[floa
     Returns:
         Quaternion (x, y, z, w)
     """
-    # Normalize axis
-    axis_norm = axis / np.linalg.norm(axis)
+    # Normalize axis — guard against zero-length axis
+    norm = np.linalg.norm(axis)
+    if norm < 1e-8:
+        return (0.0, 0.0, 0.0, 1.0)
+    axis_norm = axis / norm
 
     half_angle = angle_rad * 0.5
     sin_half = np.sin(half_angle)

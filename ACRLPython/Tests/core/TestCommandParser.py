@@ -215,7 +215,8 @@ class TestCommandParserLLM:
             }]
         })
 
-        with patch('requests.post', return_value=llm_response):
+        # Patch the session's post method (CommandParser uses requests.Session, not bare requests.post)
+        with patch.object(command_parser._session, 'post', return_value=llm_response):
             with patch.object(command_parser, 'registry', mock_registry):
                 result = command_parser.parse("detect red cube and move to it", robot_id="Robot1")
 

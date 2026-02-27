@@ -15,9 +15,12 @@ The real _transform_world_to_local performs three steps:
 import sys
 import os
 import math
+import numpy as np
 
 # Add parent directory to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
+
+from utils.CoordinateTransforms import world_to_robot_frame_np, robot_to_world_frame_np
 
 
 class MockROSMotionServer:
@@ -158,12 +161,130 @@ def test_lateral_offset_axis_conversion():
     print("  ✅ Unity X → ROS -Y correct")
 
 
+# ---------------------------------------------------------------------------
+# Direct tests of world_to_robot_frame_np / robot_to_world_frame_np
+# These exercise the actual CoordinateTransforms module (not the mock).
+# ---------------------------------------------------------------------------
+
+def test_np_robot1_axis_conversion():
+    """NumPy wrapper: Robot1 world pos → ROS frame matches mock behavior."""
+    world_pos = np.array([-0.475, 0.05, 0.3])
+    ros_pos = world_to_robot_frame_np(world_pos, "Robot1")
+
+    # Same expected values as test_robot1_axis_conversion
+    assert abs(ros_pos[0] - 0.3) < 0.001, f"ROS X wrong: {ros_pos[0]}"
+    assert abs(ros_pos[1] - 0.0) < 0.001, f"ROS Y wrong: {ros_pos[1]}"
+    assert abs(ros_pos[2] - 0.05) < 0.001, f"ROS Z wrong: {ros_pos[2]}"
+
+    print("\nNumPy Robot1 axis conversion:")
+    print(f"  world_pos={world_pos} → ros_pos={ros_pos}")
+    print("  ✅ matches mock")
+
+
+def test_np_robot2_axis_conversion():
+    """NumPy wrapper: Robot2 world pos → ROS frame matches mock behavior."""
+    world_pos = np.array([0.475, 0.05, -0.3])
+    ros_pos = world_to_robot_frame_np(world_pos, "Robot2")
+
+    assert abs(ros_pos[0] - 0.3) < 0.001, f"ROS X wrong: {ros_pos[0]}"
+    assert abs(ros_pos[1] - 0.0) < 0.001, f"ROS Y wrong: {ros_pos[1]}"
+    assert abs(ros_pos[2] - 0.05) < 0.001, f"ROS Z wrong: {ros_pos[2]}"
+
+    print("\nNumPy Robot2 axis conversion:")
+    print(f"  world_pos={world_pos} → ros_pos={ros_pos}")
+    print("  ✅ matches mock")
+
+
+def test_np_lateral_offset():
+    """NumPy wrapper: lateral Unity X offset maps to ROS -Y."""
+    world_pos = np.array([-0.475 + 0.1, 0.05, 0.3])
+    ros_pos = world_to_robot_frame_np(world_pos, "Robot1")
+
+    assert abs(ros_pos[0] - 0.3) < 0.001, f"ROS X: {ros_pos[0]}"
+    assert abs(ros_pos[1] - (-0.1)) < 0.001, f"ROS Y (expect -0.1): {ros_pos[1]}"
+    assert abs(ros_pos[2] - 0.05) < 0.001, f"ROS Z: {ros_pos[2]}"
+
+    print("\nNumPy lateral offset test:")
+    print(f"  0.1m right of Robot1 → ROS Y={ros_pos[1]:.3f} (expect -0.1)")
+    print("  ✅ correct")
+
+
+def test_np_roundtrip_robot1():
+    """world → robot → world roundtrip for Robot1 should recover original position."""
+    original = np.array([-0.3, 0.15, 0.25])
+    ros = world_to_robot_frame_np(original, "Robot1")
+    recovered = robot_to_world_frame_np(ros, "Robot1")
+    assert np.allclose(recovered, original, atol=1e-10), (
+        f"Roundtrip Robot1 failed: {original} → {ros} → {recovered}"
+    )
+    print("\nNumPy roundtrip Robot1:")
+    print(f"  {original} → ros {ros} → {recovered}")
+    print("  ✅ roundtrip exact")
+
+
+def test_np_roundtrip_robot2():
+    """world → robot → world roundtrip for Robot2 should recover original position."""
+    original = np.array([0.6, 0.1, -0.2])
+    ros = world_to_robot_frame_np(original, "Robot2")
+    recovered = robot_to_world_frame_np(ros, "Robot2")
+    assert np.allclose(recovered, original, atol=1e-10), (
+        f"Roundtrip Robot2 failed: {original} → {ros} → {recovered}"
+    )
+    print("\nNumPy roundtrip Robot2:")
+    print(f"  {original} → ros {ros} → {recovered}")
+    print("  ✅ roundtrip exact")
+
+
+def test_np_matches_dict_robot1():
+    """NumPy result should be numerically identical to dict-based world_to_robot_frame."""
+    server = MockROSMotionServer()
+    world_dict = {"x": -0.2, "y": 0.08, "z": 0.35}
+    world_np = np.array([world_dict["x"], world_dict["y"], world_dict["z"]])
+
+    ros_dict = server._transform_world_to_local(world_dict, "Robot1")
+    ros_np = world_to_robot_frame_np(world_np, "Robot1")
+
+    assert abs(ros_np[0] - ros_dict["x"]) < 1e-10, f"X mismatch: {ros_np[0]} vs {ros_dict['x']}"
+    assert abs(ros_np[1] - ros_dict["y"]) < 1e-10, f"Y mismatch: {ros_np[1]} vs {ros_dict['y']}"
+    assert abs(ros_np[2] - ros_dict["z"]) < 1e-10, f"Z mismatch: {ros_np[2]} vs {ros_dict['z']}"
+
+    print("\nNumPy vs dict equivalence (Robot1):")
+    print(f"  dict: {ros_dict}, np: {ros_np}")
+    print("  ✅ identical")
+
+
+def test_np_matches_dict_robot2():
+    """NumPy result should be numerically identical to dict-based world_to_robot_frame for Robot2."""
+    server = MockROSMotionServer()
+    world_dict = {"x": 0.6, "y": 0.12, "z": -0.4}
+    world_np = np.array([world_dict["x"], world_dict["y"], world_dict["z"]])
+
+    ros_dict = server._transform_world_to_local(world_dict, "Robot2")
+    ros_np = world_to_robot_frame_np(world_np, "Robot2")
+
+    assert abs(ros_np[0] - ros_dict["x"]) < 1e-10, f"X mismatch: {ros_np[0]} vs {ros_dict['x']}"
+    assert abs(ros_np[1] - ros_dict["y"]) < 1e-10, f"Y mismatch: {ros_np[1]} vs {ros_dict['y']}"
+    assert abs(ros_np[2] - ros_dict["z"]) < 1e-10, f"Z mismatch: {ros_np[2]} vs {ros_dict['z']}"
+
+    print("\nNumPy vs dict equivalence (Robot2):")
+    print(f"  dict: {ros_dict}, np: {ros_np}")
+    print("  ✅ identical")
+
+
 if __name__ == "__main__":
     try:
         test_robot1_axis_conversion()
         test_robot2_axis_conversion()
         test_symmetric_world_positions_give_same_ros_coords()
         test_lateral_offset_axis_conversion()
+
+        test_np_robot1_axis_conversion()
+        test_np_robot2_axis_conversion()
+        test_np_lateral_offset()
+        test_np_roundtrip_robot1()
+        test_np_roundtrip_robot2()
+        test_np_matches_dict_robot1()
+        test_np_matches_dict_robot2()
 
         print("\n" + "=" * 60)
         print("ALL COORDINATE TRANSFORMATION TESTS PASSED")

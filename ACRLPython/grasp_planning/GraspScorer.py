@@ -62,6 +62,9 @@ class GraspScorer:
         """
         Score all candidates and return sorted list (best first).
 
+        Pre-computes object_size array and ideal pre-grasp distance once to
+        avoid redundant conversions and calculations inside _score_candidate.
+
         Args:
             candidates: List of candidates to score
             object_size: Size of target object (width, height, depth) in meters
@@ -71,10 +74,15 @@ class GraspScorer:
         Returns:
             Sorted list of candidates (highest score first)
         """
+        # Pre-compute shared values used by every candidate scoring call
+        obj_size_array = np.array(object_size)
+        ideal_distance = self._calculate_pre_grasp_distance(obj_size_array)
+
         # Score each candidate
         for candidate in candidates:
             self._score_candidate(
-                candidate, object_size, gripper_position, gripper_rotation
+                candidate, object_size, gripper_position, gripper_rotation,
+                obj_size_array=obj_size_array, ideal_distance=ideal_distance,
             )
 
         # Sort by total score (descending)
@@ -95,6 +103,8 @@ class GraspScorer:
         object_size: Tuple[float, float, float],
         gripper_position: Tuple[float, float, float],
         gripper_rotation: Optional[Tuple[float, float, float, float]] = None,
+        obj_size_array: Optional[np.ndarray] = None,
+        ideal_distance: Optional[float] = None,
     ) -> None:
         """
         Compute scores for a single candidate.
@@ -106,12 +116,21 @@ class GraspScorer:
             object_size: Size of target object
             gripper_position: Current gripper position
             gripper_rotation: Current gripper rotation (optional)
+            obj_size_array: Pre-computed np.array(object_size) to avoid redundant
+                conversion per candidate (computed here if not provided)
+            ideal_distance: Pre-computed ideal pre-grasp distance to avoid redundant
+                calculation per candidate (computed here if not provided)
         """
+        if obj_size_array is None:
+            obj_size_array = np.array(object_size)
+        if ideal_distance is None:
+            ideal_distance = self._calculate_pre_grasp_distance(obj_size_array)
+
         # Compute individual scores
         candidate.ik_score = self._compute_ik_score(candidate, gripper_position)
         approach_score = self._compute_approach_score(candidate)
-        depth_score = self._compute_depth_score(candidate, object_size)
-        stability_score = self._compute_stability_score(candidate, object_size)
+        depth_score = self._compute_depth_score(candidate, obj_size_array)
+        stability_score = self._compute_stability_score(candidate, obj_size_array, ideal_distance)
 
         # Compute orientation consistency (default to 1.0 if no current rotation)
         if gripper_rotation is not None:
@@ -180,7 +199,7 @@ class GraspScorer:
         return np.clip(weight / 2.0, 0.0, 1.0)
 
     def _compute_depth_score(
-        self, candidate: GraspCandidate, object_size: Tuple[float, float, float]
+        self, candidate: GraspCandidate, object_size: np.ndarray
     ) -> float:
         """
         Compute grasp depth score.
@@ -190,7 +209,7 @@ class GraspScorer:
 
         Args:
             candidate: Candidate to evaluate
-            object_size: Size of target object
+            object_size: Object size as np.ndarray (pre-computed by caller)
 
         Returns:
             Normalized score [0, 1]
@@ -208,7 +227,10 @@ class GraspScorer:
         return float(score)
 
     def _compute_stability_score(
-        self, candidate: GraspCandidate, object_size: Tuple[float, float, float]
+        self,
+        candidate: GraspCandidate,
+        object_size: np.ndarray,
+        ideal_distance: float,
     ) -> float:
         """
         Compute stability score based on grasp geometry.
@@ -218,7 +240,9 @@ class GraspScorer:
 
         Args:
             candidate: Candidate to evaluate
-            object_size: Size of target object
+            object_size: Object size as np.ndarray (pre-computed by caller)
+            ideal_distance: Pre-computed ideal pre-grasp distance (avoids
+                redundant _calculate_pre_grasp_distance call per candidate)
 
         Returns:
             Normalized score [0, 1]
@@ -235,7 +259,6 @@ class GraspScorer:
             score *= 0.5
 
         # Distance ratio: prefer distances close to ideal
-        ideal_distance = self._calculate_pre_grasp_distance(np.array(object_size))
         if ideal_distance > 1e-6:
             distance_ratio = abs(candidate.approach_distance - ideal_distance) / ideal_distance
             score *= np.clip(1.0 - distance_ratio, 0.0, 1.0)
@@ -261,7 +284,7 @@ class GraspScorer:
         return float(np.clip(score, 0.0, 1.0))
 
     def _estimate_contact_area(
-        self, candidate: GraspCandidate, object_size: Tuple[float, float, float]
+        self, candidate: GraspCandidate, object_size: np.ndarray
     ) -> float:
         """
         Estimate contact area between gripper and object.
@@ -298,7 +321,7 @@ class GraspScorer:
         return float(area_ratio)
 
     def _compute_edge_avoidance_score(
-        self, candidate: GraspCandidate, object_size: Tuple[float, float, float]
+        self, candidate: GraspCandidate, object_size: np.ndarray
     ) -> float:
         """
         Compute edge avoidance score.
@@ -307,7 +330,7 @@ class GraspScorer:
 
         Args:
             candidate: Candidate to evaluate
-            object_size: Size of target object
+            object_size: Object size as np.ndarray (pre-computed by caller)
 
         Returns:
             Edge avoidance score [0, 1] (higher = farther from edges)
@@ -317,8 +340,7 @@ class GraspScorer:
         relative_pos = grasp_pos - contact_pos
 
         # Normalize position relative to object half-extents
-        obj_size = np.array(object_size)
-        normalized_pos = np.abs(relative_pos) / (obj_size * 0.5)
+        normalized_pos = np.abs(relative_pos) / (object_size * 0.5)
 
         # Find minimum distance to any edge
         min_dist_to_edge = np.min(normalized_pos)

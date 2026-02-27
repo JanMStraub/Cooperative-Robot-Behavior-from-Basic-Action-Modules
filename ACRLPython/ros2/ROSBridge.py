@@ -62,6 +62,7 @@ class ROSBridge:
         self._socket = None
         self._connected = False
         self._lock = threading.Lock()
+        self._recv_buffer = ""  # Persistent buffer; accessed only under self._lock
 
     @property
     def is_connected(self):
@@ -160,18 +161,19 @@ class ROSBridge:
                 msg = json.dumps(command) + "\n"
                 self._socket.sendall(msg.encode("utf-8"))
 
-                # Receive response
+                # Receive response.
+                # Use a persistent buffer so bytes from a second response that
+                # arrived in the same recv() call are not silently discarded.
                 self._socket.settimeout(timeout)
-                buffer = ""
-                while "\n" not in buffer:
+                while "\n" not in self._recv_buffer:
                     data = self._socket.recv(4096)
                     if not data:
                         logger.error("Connection closed by server")
                         self._connected = False
                         return None
-                    buffer += data.decode("utf-8")
+                    self._recv_buffer += data.decode("utf-8")
 
-                line = buffer.split("\n")[0]
+                line, self._recv_buffer = self._recv_buffer.split("\n", 1)
                 return json.loads(line)
 
             except socket.timeout:

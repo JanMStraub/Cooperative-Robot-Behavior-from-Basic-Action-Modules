@@ -137,22 +137,83 @@ def robot_to_world_frame(local_pos: Dict[str, float], robot_id: str) -> Dict[str
     return {"x": world_x, "y": world_y, "z": world_z}
 
 
+def _build_np_transform_cache() -> Dict[str, Dict]:
+    """
+    Pre-compute NumPy transform matrices for each robot at module load time.
+
+    For each robot the combined rotation+axis-conversion matrix maps Unity-local
+    coordinates directly to ROS coordinates (and its transpose maps back).
+
+    The full forward pipeline is:
+        translate → Y-rotate (Unity local) → axis-permute to ROS
+    Rotation matrix (Y-axis, angle θ):
+        [[cos θ,  0, sin θ],
+         [0,      1, 0    ],
+         [-sin θ, 0, cos θ]]
+    Axis permutation (Unity XYZ → ROS ZYX with sign flip on Y):
+        ros_x = rotated_z
+        ros_y = -rotated_x
+        ros_z = rotated_y
+    Combined into a 3×3 matrix applied after translation.
+
+    Returns:
+        Dict mapping robot_id to {'base': np.ndarray, 'fwd': np.ndarray, 'inv': np.ndarray}
+    """
+    cache = {}
+    for robot_id, transform in ROBOT_BASE_TRANSFORMS.items():
+        base = np.array(transform["position"], dtype=float)
+        theta = math.radians(transform["y_rotation"])
+        c, s = math.cos(theta), math.sin(theta)
+
+        # Y-rotation then axis-permute, composed into one matrix.
+        # Row i of fwd gives the ROS axis-i expression in Unity-local coords.
+        # ros_x = rotated_z = -s*ux + c*uz
+        # ros_y = -rotated_x = -(c*ux + s*uz) = -c*ux - s*uz
+        # ros_z = rotated_y = uy
+        fwd = np.array([
+            [-s,  0.0,  c],   # ros_x row
+            [-c,  0.0, -s],   # ros_y row
+            [0.0, 1.0,  0.0], # ros_z row
+        ], dtype=float)
+
+        cache[robot_id] = {
+            "base": base,
+            "fwd": fwd,
+            "inv": fwd.T,  # Orthogonal matrix: inverse == transpose
+        }
+    return cache
+
+
+_NP_TRANSFORM_CACHE: Dict[str, Dict] = _build_np_transform_cache()
+
+
 def world_to_robot_frame_np(
     world_pos: np.ndarray, robot_id: str
 ) -> np.ndarray:
     """
     Transform a position from Unity world to robot ROS frame (NumPy version).
 
+    Uses pre-computed matrices to avoid dict round-trips. Numerically equivalent
+    to world_to_robot_frame() but operates entirely on NumPy arrays.
+
     Args:
-        world_pos: Position as [x, y, z] NumPy array
-        robot_id: Robot identifier
+        world_pos: Position as [x, y, z] NumPy array in Unity world frame
+        robot_id: Robot identifier ('Robot1' or 'Robot2')
 
     Returns:
         Position in robot-local ROS frame as [x, y, z] NumPy array
+
+    Raises:
+        ValueError: If robot_id is not configured
     """
-    world_dict = {"x": world_pos[0], "y": world_pos[1], "z": world_pos[2]}
-    local_dict = world_to_robot_frame(world_dict, robot_id)
-    return np.array([local_dict["x"], local_dict["y"], local_dict["z"]])
+    if robot_id not in _NP_TRANSFORM_CACHE:
+        raise ValueError(
+            f"Unknown robot '{robot_id}'. "
+            f"Available: {list(_NP_TRANSFORM_CACHE.keys())}"
+        )
+    entry = _NP_TRANSFORM_CACHE[robot_id]
+    unity_local = world_pos - entry["base"]
+    return entry["fwd"] @ unity_local
 
 
 def robot_to_world_frame_np(
@@ -161,16 +222,27 @@ def robot_to_world_frame_np(
     """
     Transform a position from robot ROS frame to Unity world (NumPy version).
 
+    Inverse of world_to_robot_frame_np. Uses the transpose of the forward
+    matrix (valid because fwd is orthogonal) plus translation.
+
     Args:
-        local_pos: Position as [x, y, z] NumPy array
-        robot_id: Robot identifier
+        local_pos: Position as [x, y, z] NumPy array in robot-local ROS frame
+        robot_id: Robot identifier ('Robot1' or 'Robot2')
 
     Returns:
         Position in Unity world frame as [x, y, z] NumPy array
+
+    Raises:
+        ValueError: If robot_id is not configured
     """
-    local_dict = {"x": local_pos[0], "y": local_pos[1], "z": local_pos[2]}
-    world_dict = robot_to_world_frame(local_dict, robot_id)
-    return np.array([world_dict["x"], world_dict["y"], world_dict["z"]])
+    if robot_id not in _NP_TRANSFORM_CACHE:
+        raise ValueError(
+            f"Unknown robot '{robot_id}'. "
+            f"Available: {list(_NP_TRANSFORM_CACHE.keys())}"
+        )
+    entry = _NP_TRANSFORM_CACHE[robot_id]
+    unity_local = entry["inv"] @ local_pos
+    return unity_local + entry["base"]
 
 
 def get_robot_base_position(robot_id: str) -> Tuple[float, float, float]:
