@@ -22,7 +22,7 @@ import threading
 import logging
 
 # Import config
-try: 
+try:
     from config.Servers import (
         DEFAULT_HOST,
         STREAMING_SERVER_PORT,
@@ -42,6 +42,7 @@ try:
         ENABLE_OBJECT_TRACKING,
         SHARED_VISION_STATE_ENABLED,
     )
+    from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
     from core.LoggingSetup import setup_logging
 except ImportError:
     from ..config.Servers import (
@@ -63,6 +64,7 @@ except ImportError:
         ENABLE_OBJECT_TRACKING,
         SHARED_VISION_STATE_ENABLED,
     )
+    from ..config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
     from ..core.LoggingSetup import setup_logging
 
 # Import servers - handle both direct execution and package import
@@ -139,6 +141,7 @@ class RobotController:
         self._world_state_server = None
         self._autort_server = None
         self._vision_processor = None
+        self._graph_builder = None
         self._running = False
         self._stop_event = threading.Event()
 
@@ -223,6 +226,41 @@ class RobotController:
             logger.warning(f"Failed to wire WorldStateServer callbacks: {e}")
             logger.debug("This is non-critical - confidence decay will not be automatic")
 
+    def _wire_knowledge_graph(self):
+        """
+        Wire GraphBuilder into WorldStateServer as an update callback.
+
+        Creates KnowledgeGraph and GraphBuilder singletons, then registers
+        GraphBuilder.on_state_update as a WorldStateServer callback so the
+        graph stays synchronized with every Unity state push.
+
+        Only runs if KNOWLEDGE_GRAPH_ENABLED is True.
+        """
+        if not KNOWLEDGE_GRAPH_ENABLED:
+            logger.debug("Knowledge graph disabled (KNOWLEDGE_GRAPH_ENABLED=false)")
+            return
+
+        try:
+            from knowledge_graph._singleton import get_knowledge_graph
+            from knowledge_graph.GraphBuilder import GraphBuilder
+            from operations.WorldState import get_world_state
+
+            kg = get_knowledge_graph()
+            world_state = get_world_state()
+            self._graph_builder = GraphBuilder(kg, world_state)
+
+            if self._world_state_server:
+                self._world_state_server.register_update_callback(
+                    self._graph_builder.on_state_update
+                )
+                logger.info("✓ KnowledgeGraph wired — graph updates on every world state push")
+            else:
+                logger.debug("WorldStateServer not available, skipping KnowledgeGraph wiring")
+
+        except Exception as e:
+            logger.warning(f"Failed to wire KnowledgeGraph: {e}")
+            logger.debug("Non-critical — knowledge graph will not be updated automatically")
+
     def start(self):
         """Start all servers."""
         if self._running:
@@ -280,6 +318,9 @@ class RobotController:
 
         # Wire WorldStateServer callbacks for confidence decay
         self._wire_world_state_callbacks()
+
+        # Wire KnowledgeGraph builder (if enabled)
+        self._wire_knowledge_graph()
 
         self._running = True
 
@@ -357,6 +398,10 @@ class RobotController:
             logger.info(f"  Vision Streaming:       Enabled ({VISION_STREAM_FPS} FPS)")
             if ENABLE_VISION_VISUALIZATION:
                 logger.info(f"  Visualization:          Enabled (press 'q' to close)")
+        if KNOWLEDGE_GRAPH_ENABLED:
+            logger.info(f"  Knowledge Graph:        Enabled")
+        else:
+            logger.info(f"  Knowledge Graph:        Disabled (set KNOWLEDGE_GRAPH_ENABLED=true to enable)")
         logger.info("=" * 60)
 
     def stop(self):

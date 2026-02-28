@@ -210,3 +210,34 @@ def get_sequence_executor(**kwargs):
         return SequenceExecutor(**kwargs)
     except ImportError as e:
         raise ImportError(f"Failed to import SequenceExecutor. Error: {e}")
+
+
+# ============================================================================
+# Knowledge Graph Components
+# ============================================================================
+
+
+def get_graph_query_engine():
+    """
+    Get the GraphQueryEngine singleton instance (if knowledge graph is enabled).
+
+    The underlying KnowledgeGraph and GraphQueryEngine are created lazily on
+    first access and live for the entire process lifetime via module-level
+    singletons in knowledge_graph._singleton.
+
+    Returns:
+        GraphQueryEngine instance, or None if KG is disabled
+
+    Raises:
+        ImportError: If the knowledge_graph package cannot be imported
+
+    Used by:
+        - Any operation or orchestrator needing spatial graph queries
+        - orchestrators/RunRobotController.py (wiring only)
+    """
+    try:
+        from knowledge_graph._singleton import get_query_engine
+
+        return get_query_engine()
+    except ImportError as e:
+        raise ImportError(f"Failed to import GraphQueryEngine. Error: {e}")

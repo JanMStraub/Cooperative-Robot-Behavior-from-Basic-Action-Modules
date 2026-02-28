@@ -19,7 +19,8 @@ Edge Types:
 
 import threading
 import logging
-from typing import Optional, List, Dict, Any
+from collections import defaultdict
+from typing import Optional, List, Dict, Any, Set
 
 try:
     import networkx as nx
@@ -51,6 +52,8 @@ class KnowledgeGraph:
         """
         self._graph = nx.MultiDiGraph()
         self._lock = threading.RLock()
+        # Secondary index: node_type -> set of node IDs for O(1) typed lookups.
+        self._nodes_by_type: defaultdict = defaultdict(set)
         logger.info("KnowledgeGraph initialized (empty)")
 
     def add_node(self, node_id: str, **attrs):
@@ -66,7 +69,15 @@ class KnowledgeGraph:
             >>> kg.add_node("Robot1", node_type="robot", position=(-0.3, 0.2, 0.1))
         """
         with self._lock:
+            # If the node already exists with a different type, remove old index entry
+            if node_id in self._graph:
+                old_type = self._graph.nodes[node_id].get("node_type")
+                if old_type and old_type != attrs.get("node_type"):
+                    self._nodes_by_type[old_type].discard(node_id)
             self._graph.add_node(node_id, **attrs)
+            node_type = attrs.get("node_type")
+            if node_type:
+                self._nodes_by_type[node_type].add(node_id)
             logger.debug(f"Added node: {node_id} ({attrs.get('node_type', 'unknown')})")
 
     def remove_node(self, node_id: str):
@@ -81,6 +92,9 @@ class KnowledgeGraph:
         """
         with self._lock:
             if node_id in self._graph:
+                node_type = self._graph.nodes[node_id].get("node_type")
+                if node_type:
+                    self._nodes_by_type[node_type].discard(node_id)
                 self._graph.remove_node(node_id)
                 logger.debug(f"Removed node: {node_id}")
                 return True
@@ -171,6 +185,35 @@ class KnowledgeGraph:
 
             return removed_count
 
+    def remove_edges_by_type(self, nodes: List[str], edge_types: Set[str]) -> int:
+        """
+        Batch-remove all edges of the given types incident to any of the given nodes.
+
+        More efficient than calling remove_edge for every possible (src, dst) pair
+        because it collects existing edges first and removes them in one locked pass.
+
+        Args:
+            nodes: List of node IDs whose outgoing edges should be scanned.
+            edge_types: Set of edge type strings to remove (e.g. {"CAN_REACH", "NEAR"}).
+
+        Returns:
+            Number of edges removed.
+        """
+        with self._lock:
+            edges_to_remove = [
+                (u, v, key)
+                for u in nodes
+                if u in self._graph
+                for v, edge_dict in self._graph[u].items()
+                for key, data in edge_dict.items()
+                if data.get("edge_type") in edge_types
+            ]
+            for u, v, key in edges_to_remove:
+                self._graph.remove_edge(u, v, key)
+            if edges_to_remove:
+                logger.debug(f"Batch removed {len(edges_to_remove)} spatial edge(s)")
+            return len(edges_to_remove)
+
     def get_neighbors(self, node_id: str, edge_type: Optional[str] = None) -> List[str]:
         """
         Get neighbors of a node, optionally filtered by edge type.
@@ -249,11 +292,8 @@ class KnowledgeGraph:
             if node_type is None:
                 return list(self._graph.nodes())
 
-            return [
-                node_id
-                for node_id, attrs in self._graph.nodes(data=True)
-                if attrs.get("node_type") == node_type
-            ]
+            # O(1) index lookup instead of O(N) list comprehension
+            return list(self._nodes_by_type.get(node_type, set()))
 
     def node_count(self) -> int:
         """Get total number of nodes."""
@@ -269,6 +309,7 @@ class KnowledgeGraph:
         """Remove all nodes and edges from the graph."""
         with self._lock:
             self._graph.clear()
+            self._nodes_by_type.clear()
             logger.info("KnowledgeGraph cleared")
 
     def save_graphml(self, path: str):
@@ -284,24 +325,26 @@ class KnowledgeGraph:
             >>> kg.save_graphml("session_graph.graphml")
             # Can be opened in Gephi, Cytoscape, or other graph tools
         """
+        # Copy inside lock, then write outside lock to avoid holding the lock
+        # during slow file I/O.
         with self._lock:
-            # Create a copy with tuple->string conversion for GraphML
             graph_copy = self._graph.copy()
+            node_count = self._graph.number_of_nodes()
+            edge_count = self._graph.number_of_edges()
 
-            # Convert tuple attributes to strings for nodes
-            for node_id, attrs in graph_copy.nodes(data=True):
-                for key, value in list(attrs.items()):
-                    if isinstance(value, tuple):
-                        attrs[key] = str(value)
+        # Convert tuple attributes to strings for GraphML compatibility (no lock needed)
+        for node_id, attrs in graph_copy.nodes(data=True):
+            for key, value in list(attrs.items()):
+                if isinstance(value, tuple):
+                    attrs[key] = str(value)
 
-            # Convert tuple attributes to strings for edges
-            for u, v, key, attrs in graph_copy.edges(data=True, keys=True):
-                for attr_key, value in list(attrs.items()):
-                    if isinstance(value, tuple):
-                        attrs[attr_key] = str(value)
+        for u, v, key, attrs in graph_copy.edges(data=True, keys=True):
+            for attr_key, value in list(attrs.items()):
+                if isinstance(value, tuple):
+                    attrs[attr_key] = str(value)
 
-            nx.write_graphml(graph_copy, path)
-            logger.info(f"Saved graph to {path} ({self.node_count()} nodes, {self.edge_count()} edges)")
+        nx.write_graphml(graph_copy, path)
+        logger.info(f"Saved graph to {path} ({node_count} nodes, {edge_count} edges)")
 
     def load_graphml(self, path: str):
         """
@@ -312,7 +355,13 @@ class KnowledgeGraph:
         """
         with self._lock:
             self._graph = nx.read_graphml(path, node_type=str)
-            logger.info(f"Loaded graph from {path} ({self.node_count()} nodes, {self.edge_count()} edges)")
+            # Rebuild _nodes_by_type index from the newly loaded graph
+            self._nodes_by_type.clear()
+            for node_id, attrs in self._graph.nodes(data=True):
+                node_type = attrs.get("node_type")
+                if node_type:
+                    self._nodes_by_type[node_type].add(node_id)
+            logger.info(f"Loaded graph from {path} ({self._graph.number_of_nodes()} nodes, {self._graph.number_of_edges()} edges)")
 
     def get_stats(self) -> Dict[str, Any]:
         """
@@ -322,14 +371,15 @@ class KnowledgeGraph:
             Dictionary with node counts, edge counts, and node type breakdown
         """
         with self._lock:
-            # Count nodes by type
-            node_type_counts = {}
-            for _, attrs in self._graph.nodes(data=True):
-                node_type = attrs.get("node_type", "unknown")
-                node_type_counts[node_type] = node_type_counts.get(node_type, 0) + 1
+            # Build type counts from the O(1) index
+            node_type_counts = {
+                node_type: len(node_ids)
+                for node_type, node_ids in self._nodes_by_type.items()
+                if node_ids  # skip empty sets from discard operations
+            }
 
             return {
-                "total_nodes": self.node_count(),
-                "total_edges": self.edge_count(),
+                "total_nodes": self._graph.number_of_nodes(),
+                "total_edges": self._graph.number_of_edges(),
                 "node_types": node_type_counts,
             }
