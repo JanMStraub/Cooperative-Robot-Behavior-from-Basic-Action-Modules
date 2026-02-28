@@ -83,3 +83,11 @@ ROBOT_STATUS_CACHE_TTL = float(os.environ.get("ROBOT_STATUS_CACHE_TTL", "0.5")) 
 # TODO: use WORLD_STATE_UPDATE_INTERVAL in WorldStatePublisher polling rate
 WORLD_STATE_UPDATE_INTERVAL = float(os.environ.get("WORLD_STATE_UPDATE_INTERVAL", "0.1"))  # seconds
 WORKSPACE_ALLOCATION_TIMEOUT = float(os.environ.get("WORKSPACE_ALLOCATION_TIMEOUT", "60.0"))  # seconds
+
+# ============================================================================
+# Object Liveness Tracking Configuration
+# ============================================================================
+
+CONFIDENCE_DECAY_PER_FRAME = float(os.environ.get("CONFIDENCE_DECAY_PER_FRAME", "0.1"))  # Confidence drops 0.1 per missed detection
+STALE_CONFIDENCE_THRESHOLD = float(os.environ.get("STALE_CONFIDENCE_THRESHOLD", "0.3"))  # Mark stale when confidence < 0.3
+OBJECT_TTL_SECONDS = float(os.environ.get("OBJECT_TTL_SECONDS", "2.0"))  # Delete object if not seen for 2s

@@ -179,6 +179,9 @@ summaries/
 *.jpg
 *.txt
 
+# Git worktrees
+.worktrees/
+
 # Other
 CLAUDE.md
 .ml-agents/
