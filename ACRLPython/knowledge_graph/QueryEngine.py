@@ -198,7 +198,12 @@ class GraphQueryEngine:
         """
         Check if a straight-line path from robot to target is blocked by objects.
 
-        Uses NEAR edges to identify objects along the path.
+        Uses NEAR edges of the robot (and object nodes near the target) as
+        candidates, then applies the point-to-line-segment formula to determine
+        whether any candidate lies within 5cm of the path.
+
+        The segment formula is used instead of a midpoint check to avoid false
+        negatives for objects near the start or end of long paths.
 
         Args:
             robot_id: Robot identifier
@@ -217,11 +222,24 @@ class GraphQueryEngine:
         if not robot_pos:
             return False
 
-        # Get objects near the robot
-        near_objects = self._graph.get_neighbors(robot_id, edge_type="NEAR")
+        # Collect candidate obstacle nodes: NEAR neighbors of the robot plus all
+        # object nodes (to catch obstacles near the far end of a long path that
+        # may not be NEAR the robot start position).
+        near_objects = set(self._graph.get_neighbors(robot_id, edge_type="NEAR"))
+        all_objects = set(self._graph.get_all_nodes(node_type="object"))
+        candidates = near_objects | all_objects
 
-        # For each nearby object, check if it's between robot and target
-        for obj_id in near_objects:
+        # Precompute segment vector for point-to-segment projection
+        ax, ay, az = robot_pos
+        bx, by, bz = target
+        dx, dy, dz = bx - ax, by - ay, bz - az
+        seg_len_sq = dx * dx + dy * dy + dz * dz
+
+        blocking_threshold = 0.05  # 5cm
+
+        for obj_id in candidates:
+            if obj_id == robot_id:
+                continue
             obj_node = self._graph.get_node(obj_id)
             if not obj_node:
                 continue
@@ -229,12 +247,21 @@ class GraphQueryEngine:
             if not obj_pos:
                 continue
 
-            # Simple blocking check: object is closer to midpoint than threshold
-            midpoint = tuple((r + t) / 2 for r, t in zip(robot_pos, target))
-            dist_to_midpoint = math.dist(obj_pos, midpoint)
+            # Point-to-line-segment distance:
+            # Project obj_pos onto the segment [robot_pos, target], clamp t to [0,1],
+            # compute the closest point on the segment, measure distance.
+            if seg_len_sq == 0.0:
+                # Degenerate segment: robot is at target
+                dist = math.dist(obj_pos, robot_pos)
+            else:
+                px, py, pz = obj_pos
+                t = ((px - ax) * dx + (py - ay) * dy + (pz - az) * dz) / seg_len_sq
+                t = max(0.0, min(1.0, t))
+                closest = (ax + t * dx, ay + t * dy, az + t * dz)
+                dist = math.dist(obj_pos, closest)
 
-            if dist_to_midpoint < 0.05:  # 5cm threshold
-                logger.debug(f"Path blocked by {obj_id}")
+            if dist < blocking_threshold:
+                logger.debug(f"Path blocked by {obj_id} (dist={dist:.4f}m)")
                 return True
 
         return False

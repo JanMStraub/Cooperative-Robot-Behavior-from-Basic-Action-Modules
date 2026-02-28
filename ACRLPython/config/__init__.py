@@ -18,6 +18,7 @@ from .Servers import *
 from .Vision import *
 from .Rag import *
 from .Robot import *
+from .KnowledgeGraph import *
 from .Validation import validate_config
 
 __all__ = [

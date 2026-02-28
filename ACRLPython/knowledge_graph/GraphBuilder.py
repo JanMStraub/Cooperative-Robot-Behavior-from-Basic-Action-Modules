@@ -14,6 +14,7 @@ Key Responsibilities:
 
 import logging
 import math
+import time
 from typing import Dict, Any
 from operations.WorldState import WorldState
 from operations.SpatialPredicates import object_accessible_by_robot
@@ -196,18 +197,11 @@ class GraphBuilder:
         robots = self._graph.get_all_nodes(node_type="robot")
         objects = self._graph.get_all_nodes(node_type="object")
 
-        # Remove old spatial edges
-        for robot_id in robots:
-            for obj_id in objects:
-                self._graph.remove_edge(robot_id, obj_id, edge_type="CAN_REACH")
-                self._graph.remove_edge(robot_id, obj_id, edge_type="NEAR")
-                self._graph.remove_edge(obj_id, robot_id, edge_type="NEAR")
-
-        for obj1_id in objects:
-            for obj2_id in objects:
-                if obj1_id < obj2_id:  # Avoid duplicates
-                    self._graph.remove_edge(obj1_id, obj2_id, edge_type="NEAR")
-                    self._graph.remove_edge(obj2_id, obj1_id, edge_type="NEAR")
+        # Remove old spatial edges in a single locked batch operation to avoid
+        # the O(N²) overhead of per-pair remove_edge calls.
+        self._graph.remove_edges_by_type(
+            nodes=robots + objects, edge_types={"CAN_REACH", "NEAR"}
+        )
 
         # Recompute CAN_REACH edges (Robot -> Object)
         for robot_id in robots:
@@ -337,7 +331,6 @@ class GraphBuilder:
             grasped_by = obj_node.get("grasped_by")
 
             if grasped_by:
-                import time
                 self._graph.add_edge(
                     grasped_by, obj_id, "GRASPING",
                     grasp_time=time.time()
@@ -361,7 +354,6 @@ class GraphBuilder:
         for region in regions:
             owner = self._world_state.get_workspace_owner(region)
             if owner:
-                import time
                 self._graph.add_edge(
                     region, owner, "ALLOCATED",
                     allocated_at=time.time()

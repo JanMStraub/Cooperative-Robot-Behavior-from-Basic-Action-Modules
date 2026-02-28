@@ -8,6 +8,7 @@ Tests the WorldState confidence decay mechanism, including:
 - Staleness threshold marking
 """
 
+import math
 import unittest
 import time
 from operations.WorldState import WorldState, get_world_state
@@ -16,6 +17,11 @@ from config.Robot import (
     STALE_CONFIDENCE_THRESHOLD,
     OBJECT_TTL_SECONDS,
 )
+
+# Tolerance for float confidence comparisons. Accumulated IEEE-754 rounding over
+# many repeated subtractions can produce errors in the range of 1e-15 to 1e-12,
+# so 1e-9 gives a safe margin while keeping tests strict enough to catch real bugs.
+_CONFIDENCE_TOL = 1e-9
 
 
 class TestConfidenceDecay(unittest.TestCase):
@@ -53,7 +59,7 @@ class TestConfidenceDecay(unittest.TestCase):
         # Verify confidence decayed by 5 * CONFIDENCE_DECAY_PER_FRAME
         obj = self.world_state._objects["obj1"]
         expected_confidence = 1.0 - (5 * CONFIDENCE_DECAY_PER_FRAME)
-        self.assertAlmostEqual(obj.confidence, expected_confidence, places=5)
+        self.assertAlmostEqual(obj.confidence, expected_confidence, delta=_CONFIDENCE_TOL)
 
     def test_confidence_cannot_go_negative(self):
         """Test that confidence is clamped to 0.0."""
@@ -83,19 +89,19 @@ class TestConfidenceDecay(unittest.TestCase):
             self.world_state.decay_object_confidence(set())
 
         obj = self.world_state._objects["obj1"]
-        self.assertAlmostEqual(obj.confidence, 0.4, places=5)
+        self.assertAlmostEqual(obj.confidence, 0.4, delta=_CONFIDENCE_TOL)
         self.assertFalse(obj.stale, "Should not be stale above threshold")
 
         # One more frame brings us to threshold (7 frames total)
         self.world_state.decay_object_confidence(set())
         obj = self.world_state._objects["obj1"]
-        self.assertAlmostEqual(obj.confidence, STALE_CONFIDENCE_THRESHOLD, places=5)
+        self.assertAlmostEqual(obj.confidence, STALE_CONFIDENCE_THRESHOLD, delta=_CONFIDENCE_TOL)
         self.assertFalse(obj.stale, "Should not be stale at threshold (< not <=)")
 
         # One more frame makes it stale (8 frames total)
         self.world_state.decay_object_confidence(set())
         obj = self.world_state._objects["obj1"]
-        self.assertAlmostEqual(obj.confidence, 0.2, places=5)
+        self.assertAlmostEqual(obj.confidence, 0.2, delta=_CONFIDENCE_TOL)
         self.assertTrue(obj.stale, "Should be stale below threshold")
 
     def test_ttl_based_deletion(self):

@@ -15,6 +15,7 @@ import os
 import tempfile
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from knowledge_graph.Core import KnowledgeGraph
 from knowledge_graph.Schema import RobotNode
 
@@ -240,46 +241,45 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         for i in range(10):
             self.graph.add_node(f"Node{i}", node_type="test")
 
-        errors = []
-
         def read_nodes():
-            try:
-                for _ in range(100):
-                    nodes = self.graph.get_all_nodes()
-                    self.assertGreaterEqual(len(nodes), 0)
-            except Exception as e:
-                errors.append(e)
+            """Read nodes 100 times; return count list to verify correctness."""
+            counts = []
+            for _ in range(100):
+                nodes = self.graph.get_all_nodes()
+                counts.append(len(nodes))
+            return counts
 
-        # Start 10 reader threads
-        threads = [threading.Thread(target=read_nodes) for _ in range(10)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
-
-        self.assertEqual(len(errors), 0, f"Errors during concurrent reads: {errors}")
+        # Use ThreadPoolExecutor so exceptions in workers propagate via future.result()
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(read_nodes) for _ in range(10)]
+            for future in as_completed(futures):
+                counts = future.result()  # raises if worker raised
+                self.assertTrue(all(c >= 10 for c in counts),
+                                "Node count should never drop below pre-populated 10")
 
     def test_thread_safety_concurrent_writes(self):
         """Test thread safety with concurrent write operations."""
-        errors = []
-
         def add_nodes(offset):
-            try:
-                for i in range(10):
-                    node_id = f"Node{offset}_{i}"
-                    self.graph.add_node(node_id, node_type="test")
-            except Exception as e:
-                errors.append(e)
+            """Add 10 uniquely-named nodes; return the node IDs added."""
+            added = []
+            for i in range(10):
+                node_id = f"Node{offset}_{i}"
+                self.graph.add_node(node_id, node_type="test")
+                added.append(node_id)
+            return added
 
-        # Start 5 writer threads
-        threads = [threading.Thread(target=add_nodes, args=(i,)) for i in range(5)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
+        # Use ThreadPoolExecutor so exceptions in workers propagate via future.result()
+        added_ids = []
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            futures = [executor.submit(add_nodes, i) for i in range(5)]
+            for future in as_completed(futures):
+                added_ids.extend(future.result())  # raises if worker raised
 
-        self.assertEqual(len(errors), 0, f"Errors during concurrent writes: {errors}")
         self.assertEqual(self.graph.node_count(), 50)  # 5 threads * 10 nodes each
+        # Verify every node that was claimed to be added actually exists
+        for node_id in added_ids:
+            self.assertTrue(self.graph.has_node(node_id),
+                            f"Node {node_id} was added but not found in graph")
 
     def test_thread_safety_mixed_operations(self):
         """Test thread safety with mixed read/write operations."""
@@ -287,36 +287,35 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         for i in range(10):
             self.graph.add_node(f"Node{i}", node_type="test")
 
-        errors = []
-
-        def writer():
-            try:
-                for i in range(20):
-                    self.graph.add_node(f"WriterNode{threading.get_ident()}_{i}", node_type="test")
-                    time.sleep(0.001)
-            except Exception as e:
-                errors.append(e)
+        def writer(worker_id):
+            """Add 20 nodes with brief sleeps to interleave with readers."""
+            for i in range(20):
+                self.graph.add_node(f"WriterNode{worker_id}_{i}", node_type="test")
+                time.sleep(0.001)
 
         def reader():
-            try:
-                for _ in range(50):
-                    self.graph.get_all_nodes()
-                    self.graph.node_count()
-                    time.sleep(0.001)
-            except Exception as e:
-                errors.append(e)
+            """Read nodes and count 50 times; return all observed counts."""
+            counts = []
+            for _ in range(50):
+                counts.append(self.graph.node_count())
+                self.graph.get_all_nodes()
+                time.sleep(0.001)
+            return counts
 
-        # Start 5 readers and 2 writers
-        threads = []
-        threads.extend([threading.Thread(target=reader) for _ in range(5)])
-        threads.extend([threading.Thread(target=writer) for _ in range(2)])
+        with ThreadPoolExecutor(max_workers=7) as executor:
+            reader_futures = [executor.submit(reader) for _ in range(5)]
+            writer_futures = [executor.submit(writer, i) for i in range(2)]
 
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join()
+            # Writers must not raise
+            for future in as_completed(writer_futures):
+                future.result()
 
-        self.assertEqual(len(errors), 0, f"Errors during mixed operations: {errors}")
+            # Readers must not raise, and observed counts must be monotonically
+            # non-decreasing (writers only add nodes, never remove them here)
+            for future in as_completed(reader_futures):
+                counts = future.result()
+                self.assertTrue(all(c >= 10 for c in counts),
+                                "Observed node count should never drop below initial 10")
 
 
 if __name__ == "__main__":

@@ -209,6 +209,9 @@ class WorldState:
 
             # Object tracking
             self._objects: Dict[str, ObjectState] = {}
+            # Cache of {normalized_key: original_key} for O(1) partial-match
+            # lookups. Invalidated whenever _objects changes.
+            self._normalized_object_keys: Optional[Dict[str, str]] = None
 
             # Workspace allocation with timeout tracking
             self._workspace_allocations: Dict[str, Optional[WorkspaceAllocation]] = {
@@ -473,6 +476,24 @@ class WorldState:
                 obj.timestamp = time.time()
 
             logger.debug(f"Updated object {object_id} at {position}")
+            # Invalidate normalized key cache on any structural change
+            self._normalized_object_keys = None
+
+    def _get_normalized_keys(self) -> Dict[str, str]:
+        """
+        Return (building if necessary) the normalized-key-to-original-key cache.
+
+        Must be called under self._lock.
+
+        Returns:
+            Dict mapping normalized key strings to their original _objects keys.
+        """
+        if self._normalized_object_keys is None:
+            self._normalized_object_keys = {
+                k.lower().replace(" ", "_").replace("-", "_"): k
+                for k in self._objects
+            }
+        return self._normalized_object_keys
 
     def get_object_state(self, object_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -491,11 +512,16 @@ class WorldState:
             obj = self._objects.get(object_id)
             if obj is None:
                 normalised = object_id.lower().replace(" ", "_").replace("-", "_")
-                for key, candidate in self._objects.items():
-                    key_norm = key.lower().replace(" ", "_").replace("-", "_")
-                    if key_norm in normalised or normalised in key_norm:
-                        obj = candidate
-                        break
+                norm_cache = self._get_normalized_keys()
+                # Exact normalized match first, then substring fallback
+                original_key = norm_cache.get(normalised)
+                if original_key is None:
+                    for key_norm, orig in norm_cache.items():
+                        if key_norm in normalised or normalised in key_norm:
+                            original_key = orig
+                            break
+                if original_key is not None:
+                    obj = self._objects.get(original_key)
             if obj is None:
                 return None
             return {
@@ -537,14 +563,20 @@ class WorldState:
             # 2. Normalise: replace spaces/hyphens with underscores, lowercase
             normalised = object_id.lower().replace(" ", "_").replace("-", "_")
 
-            # 3. Try each stored key: match if either string contains the other
-            for key, candidate in self._objects.items():
-                key_norm = key.lower().replace(" ", "_").replace("-", "_")
-                if key_norm in normalised or normalised in key_norm:
-                    logger.debug(
-                        f"get_object_position: resolved '{object_id}' → '{key}' via partial match"
-                    )
-                    return candidate.position
+            # 3. Use cached normalized keys for O(1) exact then substring match
+            norm_cache = self._get_normalized_keys()
+            original_key = norm_cache.get(normalised)
+            if original_key is None:
+                for key_norm, orig in norm_cache.items():
+                    if key_norm in normalised or normalised in key_norm:
+                        original_key = orig
+                        break
+
+            if original_key is not None:
+                logger.debug(
+                    f"get_object_position: resolved '{object_id}' → '{original_key}' via partial match"
+                )
+                return self._objects[original_key].position
 
             return None
 
@@ -569,10 +601,16 @@ class WorldState:
                 return obj.dimensions
 
             normalised = object_id.lower().replace(" ", "_").replace("-", "_")
-            for key, candidate in self._objects.items():
-                key_norm = key.lower().replace(" ", "_").replace("-", "_")
-                if key_norm in normalised or normalised in key_norm:
-                    return candidate.dimensions
+            norm_cache = self._get_normalized_keys()
+            original_key = norm_cache.get(normalised)
+            if original_key is None:
+                for key_norm, orig in norm_cache.items():
+                    if key_norm in normalised or normalised in key_norm:
+                        original_key = orig
+                        break
+
+            if original_key is not None:
+                return self._objects[original_key].dimensions
 
             return None
 
@@ -669,8 +707,12 @@ class WorldState:
                     obj.stale = False
                     obj.timestamp = now
                 else:
-                    # Object not seen - decay confidence
-                    obj.confidence = max(0.0, obj.confidence - CONFIDENCE_DECAY_PER_FRAME)
+                    # Object not seen - decay confidence.
+                    # Round to 10 decimal places to prevent floating-point
+                    # accumulation errors from repeated subtraction.
+                    obj.confidence = round(
+                        max(0.0, obj.confidence - CONFIDENCE_DECAY_PER_FRAME), 10
+                    )
                     obj.stale = obj.confidence < STALE_CONFIDENCE_THRESHOLD
 
                     # Mark for deletion if TTL exceeded
@@ -683,6 +725,7 @@ class WorldState:
                 del self._objects[obj_id]
 
             if to_delete:
+                self._normalized_object_keys = None
                 logger.info(f"Removed {len(to_delete)} stale objects from world state")
 
     def find_objects_near(
@@ -1123,6 +1166,7 @@ class WorldState:
             self._robot_cache.clear()
             self._robot_states.clear()
             self._objects.clear()
+            self._normalized_object_keys = None
 
             # Reinitialize workspace allocations
             self._workspace_allocations = {
