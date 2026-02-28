@@ -265,6 +265,7 @@ namespace Simulation
                     "Distributed coordination mode is not implemented. Falling back to Independent.",
                     new IndependentStrategy()
                 ),
+                RobotCoordinationMode.Negotiated => new NegotiatedStrategy(),
                 _ => new IndependentStrategy(),
             };
 

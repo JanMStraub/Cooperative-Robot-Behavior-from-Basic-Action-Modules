@@ -152,6 +152,17 @@ class SequenceQueryHandler:
         if not self._parser or not self._executor:
             return {"success": False, "error": "SequenceQueryHandler not initialized"}
 
+        # Check if negotiation is needed (before parsing)
+        if self._executor and auto_execute:
+            negotiated = self._executor.negotiate_if_needed(command_text, robot_id)
+            if negotiated is not None:
+                exec_result = self._executor.execute_sequence(
+                    negotiated, timeout_per_command=timeout
+                )
+                exec_result["negotiated"] = True
+                exec_result["original_command"] = command_text
+                return exec_result
+
         # Parse the command
         parse_result = self._parser.parse(command_text, robot_id)
 
