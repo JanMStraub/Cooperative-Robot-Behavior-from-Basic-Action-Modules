@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PYTHON_EXEC="$SCRIPT_DIR/acrl/bin/python"
 CONTROLLER_PATTERN="orchestrators.RunRobotController"
 SEQUENCE_SERVER_PATTERN="orchestrators.RunSequenceServer"
-ROS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/ros_unity_integration"
+ROS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/rosUnityIntegration"
 CONTROLLER_PID=""
 ROS_INTEGRATION=false
 

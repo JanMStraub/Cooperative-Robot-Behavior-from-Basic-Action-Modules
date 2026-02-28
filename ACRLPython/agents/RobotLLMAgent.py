@@ -20,7 +20,7 @@ from typing import Dict, Any, List, Optional
 import requests
 
 from config.Servers import LMSTUDIO_BASE_URL, DEFAULT_LMSTUDIO_MODEL
-from config.Negotiation import AGENT_LLM_TIMEOUT, NEGOTIATION_TEMPERATURE
+from config.Negotiation import AGENT_LLM_TIMEOUT, NEGOTIATION_TEMPERATURE, USE_STRUCTURED_OUTPUT
 from config.Robot import (
     ROBOT_BASE_POSITIONS,
     ROBOT_WORKSPACE_ASSIGNMENTS,
@@ -416,17 +416,24 @@ Max reach: {self.max_reach}m"""
             LLM response text or None if failed
         """
         try:
+            payload: dict = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "temperature": self.temperature,
+                "max_tokens": 3000,
+            }
+            # Structured output forces the model to emit valid JSON directly,
+            # eliminating prose wrapping and Markdown fences.  Kept as opt-in
+            # so callers can disable it for models that don't support the flag.
+            if USE_STRUCTURED_OUTPUT:
+                payload["response_format"] = {"type": "json_object"}
+
             response = requests.post(
                 f"{self.lm_studio_url}/chat/completions",
-                json={
-                    "model": self.model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    "temperature": self.temperature,
-                    "max_tokens": 3000,
-                },
+                json=payload,
                 timeout=AGENT_LLM_TIMEOUT,
             )
 

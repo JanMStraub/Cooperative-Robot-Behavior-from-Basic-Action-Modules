@@ -7,89 +7,33 @@ and config with mocked LLM calls.
 """
 
 import pytest
-import sys
 import os
 import json
 import time
+import importlib
+import requests as req
 from unittest.mock import patch, MagicMock
-from dataclasses import asdict
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-
-# ============================================================================
-# Config Tests
-# ============================================================================
-
-
-class TestNegotiationConfig:
-    """Tests for config/Negotiation.py defaults and env overrides."""
-
-    def test_default_values(self):
-        """Test default config values are set correctly."""
-        from config.Negotiation import (
-            NEGOTIATION_ENABLED,
-            MAX_NEGOTIATION_ROUNDS,
-            AGENT_LLM_TIMEOUT,
-            NEGOTIATION_TIMEOUT,
-            NEGOTIATION_TEMPERATURE,
-            COLLABORATION_KEYWORDS,
-            VERIFY_NEGOTIATED_PLANS,
-            MAX_PLAN_LENGTH,
-        )
-
-        assert NEGOTIATION_ENABLED is True
-        assert MAX_NEGOTIATION_ROUNDS == 3
-        assert AGENT_LLM_TIMEOUT == 30.0
-        assert NEGOTIATION_TIMEOUT == 120.0
-        assert NEGOTIATION_TEMPERATURE == 0.3
-        assert isinstance(COLLABORATION_KEYWORDS, list)
-        assert "both" in COLLABORATION_KEYWORDS
-        assert "together" in COLLABORATION_KEYWORDS
-        assert VERIFY_NEGOTIATED_PLANS is True
-        assert MAX_PLAN_LENGTH == 50
-
-    def test_collaboration_keywords_coverage(self):
-        """Test that collaboration keywords cover common phrases."""
-        from config.Negotiation import COLLABORATION_KEYWORDS
-
-        expected_keywords = [
-            "both", "together", "cooperate", "collaborate",
-            "coordinate", "simultaneously", "handoff",
-        ]
-        for kw in expected_keywords:
-            assert kw in COLLABORATION_KEYWORDS, f"Missing keyword: {kw}"
-
-    @patch.dict(os.environ, {"NEGOTIATION_ENABLED": "false"})
-    def test_env_override_disabled(self):
-        """Test that NEGOTIATION_ENABLED can be disabled via env var."""
-        # Need to reimport to pick up env var
-        import importlib
-        import config.Negotiation as neg_config
-        importlib.reload(neg_config)
-
-        assert neg_config.NEGOTIATION_ENABLED is False
-
-        # Restore
-        os.environ.pop("NEGOTIATION_ENABLED", None)
-        importlib.reload(neg_config)
-
-    @patch.dict(os.environ, {"MAX_NEGOTIATION_ROUNDS": "5"})
-    def test_env_override_rounds(self):
-        """Test that MAX_NEGOTIATION_ROUNDS can be overridden via env var."""
-        import importlib
-        import config.Negotiation as neg_config
-        importlib.reload(neg_config)
-
-        assert neg_config.MAX_NEGOTIATION_ROUNDS == 5
-
-        os.environ.pop("MAX_NEGOTIATION_ROUNDS", None)
-        importlib.reload(neg_config)
+from config.Negotiation import (
+    NEGOTIATION_ENABLED,
+    MAX_NEGOTIATION_ROUNDS,
+    AGENT_LLM_TIMEOUT,
+    NEGOTIATION_TIMEOUT,
+    NEGOTIATION_TEMPERATURE,
+    COLLABORATION_KEYWORDS,
+    VERIFY_NEGOTIATED_PLANS,
+    MAX_PLAN_LENGTH,
+)
+from agents.RobotLLMAgent import RobotLLMAgent, TaskAnalysis, PlanProposal
+from servers.NegotiationHub import NegotiationHub, NegotiationSession, NegotiationState
+from operations.NegotiationVerifier import NegotiationVerifier
+from orchestrators.SequenceExecutor import SequenceExecutor
+from core.Imports import get_negotiation_hub
+import config.Negotiation as neg_config
 
 
 # ============================================================================
-# Robot LLM Agent Tests
+# Helpers
 # ============================================================================
 
 
@@ -103,13 +47,68 @@ def _mock_llm_response(content):
     return mock_resp
 
 
+# ============================================================================
+# Config Tests
+# ============================================================================
+
+
+class TestNegotiationConfig:
+    """Tests for config/Negotiation.py defaults and env overrides."""
+
+    def test_default_values(self):
+        """Test default config values are set correctly."""
+        assert NEGOTIATION_ENABLED is True
+        assert MAX_NEGOTIATION_ROUNDS == 3
+        assert AGENT_LLM_TIMEOUT == 30.0
+        assert NEGOTIATION_TIMEOUT == 120.0
+        assert NEGOTIATION_TEMPERATURE == 0.3
+        assert isinstance(COLLABORATION_KEYWORDS, list)
+        assert "both" in COLLABORATION_KEYWORDS
+        assert "together" in COLLABORATION_KEYWORDS
+        assert VERIFY_NEGOTIATED_PLANS is True
+        assert MAX_PLAN_LENGTH == 50
+
+    def test_collaboration_keywords_coverage(self):
+        """Test that collaboration keywords cover common phrases."""
+        expected_keywords = [
+            "both", "together", "cooperate", "collaborate",
+            "coordinate", "simultaneously", "handoff",
+        ]
+        for kw in expected_keywords:
+            assert kw in COLLABORATION_KEYWORDS, f"Missing keyword: {kw}"
+
+    @patch.dict(os.environ, {"NEGOTIATION_ENABLED": "false"})
+    def test_env_override_disabled(self):
+        """Test that NEGOTIATION_ENABLED can be disabled via env var."""
+        importlib.reload(neg_config)
+
+        assert neg_config.NEGOTIATION_ENABLED is False
+
+        # Restore
+        os.environ.pop("NEGOTIATION_ENABLED", None)
+        importlib.reload(neg_config)
+
+    @patch.dict(os.environ, {"MAX_NEGOTIATION_ROUNDS": "5"})
+    def test_env_override_rounds(self):
+        """Test that MAX_NEGOTIATION_ROUNDS can be overridden via env var."""
+        importlib.reload(neg_config)
+
+        assert neg_config.MAX_NEGOTIATION_ROUNDS == 5
+
+        os.environ.pop("MAX_NEGOTIATION_ROUNDS", None)
+        importlib.reload(neg_config)
+
+
+# ============================================================================
+# Robot LLM Agent Tests
+# ============================================================================
+
+
 class TestRobotLLMAgent:
     """Tests for agents/RobotLLMAgent.py."""
 
     def test_agent_creation(self):
         """Test agent initialization with robot config."""
-        from agents.RobotLLMAgent import RobotLLMAgent
-
         agent = RobotLLMAgent("Robot1")
         assert agent.robot_id == "Robot1"
         assert agent.base_position == (-0.475, 0.0, 0.0)
@@ -117,8 +116,6 @@ class TestRobotLLMAgent:
 
     def test_agent_creation_robot2(self):
         """Test agent initialization for Robot2."""
-        from agents.RobotLLMAgent import RobotLLMAgent
-
         agent = RobotLLMAgent("Robot2")
         assert agent.robot_id == "Robot2"
         assert agent.base_position == (0.475, 0.0, 0.0)
@@ -126,8 +123,6 @@ class TestRobotLLMAgent:
 
     def test_build_agent_context(self):
         """Test context string includes robot identity and world state."""
-        from agents.RobotLLMAgent import RobotLLMAgent
-
         agent = RobotLLMAgent("Robot1")
         world_state = {
             "robots": {
@@ -154,8 +149,6 @@ class TestRobotLLMAgent:
     @patch("agents.RobotLLMAgent.requests.post")
     def test_analyze_task(self, mock_post):
         """Test task analysis with mocked LLM."""
-        from agents.RobotLLMAgent import RobotLLMAgent
-
         mock_post.return_value = _mock_llm_response(json.dumps({
             "can_contribute": True,
             "capabilities": ["move to object", "grasp object"],
@@ -182,8 +175,6 @@ class TestRobotLLMAgent:
     @patch("agents.RobotLLMAgent.requests.post")
     def test_propose_plan(self, mock_post):
         """Test plan proposal with mocked LLM."""
-        from agents.RobotLLMAgent import RobotLLMAgent, TaskAnalysis
-
         mock_post.return_value = _mock_llm_response(json.dumps({
             "reasoning": "Robot1 detects, Robot2 waits then both move",
             "commands": [
@@ -229,8 +220,6 @@ class TestRobotLLMAgent:
     @patch("agents.RobotLLMAgent.requests.post")
     def test_evaluate_proposal_accept(self, mock_post):
         """Test proposal evaluation (accept)."""
-        from agents.RobotLLMAgent import RobotLLMAgent, PlanProposal
-
         mock_post.return_value = _mock_llm_response(json.dumps({
             "accept": True,
             "concerns": [],
@@ -253,8 +242,6 @@ class TestRobotLLMAgent:
     @patch("agents.RobotLLMAgent.requests.post")
     def test_evaluate_proposal_reject(self, mock_post):
         """Test proposal evaluation (reject with concerns)."""
-        from agents.RobotLLMAgent import RobotLLMAgent, PlanProposal
-
         mock_post.return_value = _mock_llm_response(json.dumps({
             "accept": False,
             "concerns": ["target is out of my workspace"],
@@ -277,10 +264,7 @@ class TestRobotLLMAgent:
     @patch("agents.RobotLLMAgent.requests.post")
     def test_llm_timeout_fallback(self, mock_post):
         """Test graceful handling of LLM timeout."""
-        import requests as req
         mock_post.side_effect = req.exceptions.Timeout()
-
-        from agents.RobotLLMAgent import RobotLLMAgent
 
         agent = RobotLLMAgent("Robot1")
         analysis = agent.analyze_task("test task", {"robots": {}, "objects": {}}, [])
@@ -292,10 +276,7 @@ class TestRobotLLMAgent:
     @patch("agents.RobotLLMAgent.requests.post")
     def test_llm_connection_error_fallback(self, mock_post):
         """Test graceful handling of LLM connection error."""
-        import requests as req
         mock_post.side_effect = req.exceptions.ConnectionError()
-
-        from agents.RobotLLMAgent import RobotLLMAgent
 
         agent = RobotLLMAgent("Robot1")
         analysis = agent.analyze_task("test task", {"robots": {}, "objects": {}}, [])
@@ -304,8 +285,6 @@ class TestRobotLLMAgent:
     @patch("agents.RobotLLMAgent.requests.post")
     def test_json_extraction_from_markdown(self, mock_post):
         """Test JSON extraction from markdown code block."""
-        from agents.RobotLLMAgent import RobotLLMAgent
-
         mock_post.return_value = _mock_llm_response(
             "Here is the analysis:\n```json\n"
             '{"can_contribute": true, "capabilities": ["test"], '
@@ -329,21 +308,16 @@ class TestNegotiationHub:
 
     def setup_method(self):
         """Reset singleton between tests."""
-        from servers.NegotiationHub import NegotiationHub
         NegotiationHub._instance = None
 
     def test_singleton(self):
         """Test NegotiationHub is a singleton."""
-        from servers.NegotiationHub import NegotiationHub
-
         hub1 = NegotiationHub()
         hub2 = NegotiationHub()
         assert hub1 is hub2
 
     def test_needs_negotiation_keyword(self):
         """Test collaboration keyword detection."""
-        from servers.NegotiationHub import NegotiationHub
-
         hub = NegotiationHub()
         assert hub.needs_negotiation("Both robots lift the cube together") is True
         assert hub.needs_negotiation("Cooperate to move the object") is True
@@ -351,15 +325,11 @@ class TestNegotiationHub:
 
     def test_needs_negotiation_multi_robot_ref(self):
         """Test multi-robot reference detection."""
-        from servers.NegotiationHub import NegotiationHub
-
         hub = NegotiationHub()
         assert hub.needs_negotiation("Robot1 detects and Robot2 grasps") is True
 
     def test_needs_negotiation_single_robot(self):
         """Test single-robot commands don't trigger negotiation."""
-        from servers.NegotiationHub import NegotiationHub
-
         hub = NegotiationHub()
         assert hub.needs_negotiation("Move to (0.3, 0.2, 0.1)") is False
         assert hub.needs_negotiation("Robot1 close the gripper") is False
@@ -368,11 +338,8 @@ class TestNegotiationHub:
     @patch.dict(os.environ, {"NEGOTIATION_ENABLED": "false"})
     def test_needs_negotiation_disabled(self):
         """Test negotiation disabled via config."""
-        import importlib
-        import config.Negotiation as neg_config
         importlib.reload(neg_config)
 
-        from servers.NegotiationHub import NegotiationHub
         NegotiationHub._instance = None
         hub = NegotiationHub()
 
@@ -382,11 +349,19 @@ class TestNegotiationHub:
         os.environ.pop("NEGOTIATION_ENABLED", None)
         importlib.reload(neg_config)
 
+    def test_needs_negotiation_word_boundaries(self):
+        """Test that 'robot10' does NOT trigger negotiation for Robot1 match."""
+        hub = NegotiationHub()
+        # "robot10" must not be counted as a reference to "Robot1"
+        assert hub.needs_negotiation("Check robot10 status") is False
+        # But an exact "robot1" mention should still count (only one robot -> no trigger)
+        assert hub.needs_negotiation("Robot1 grasp the cube") is False
+        # Two distinct robots (robot1 and robot2) should trigger
+        assert hub.needs_negotiation("Robot1 detects then Robot2 grasps") is True
+
     @patch("agents.RobotLLMAgent.requests.post")
     def test_negotiate_success(self, mock_post):
         """Test successful negotiation with mocked LLM."""
-        from servers.NegotiationHub import NegotiationHub, NegotiationState
-
         # Set up LLM responses for analysis, proposal, and evaluation
         responses = [
             # Robot1 analysis
@@ -456,8 +431,6 @@ class TestNegotiationHub:
     @patch("agents.RobotLLMAgent.requests.post")
     def test_negotiate_no_consensus(self, mock_post):
         """Test negotiation failure when robots reject proposals."""
-        from servers.NegotiationHub import NegotiationHub, NegotiationState
-
         # Analysis responses (both can contribute)
         analysis_response = _mock_llm_response(json.dumps({
             "can_contribute": True,
@@ -490,10 +463,36 @@ class TestNegotiationHub:
         assert result.state == NegotiationState.FAILED
 
     @patch("agents.RobotLLMAgent.requests.post")
+    def test_evaluation_skips_non_contributors(self, mock_post):
+        """Test that robots with can_contribute=False are not called during evaluation."""
+        NegotiationHub._instance = None
+        hub = NegotiationHub()
+
+        # Manually set up a session where Robot2 cannot contribute
+        session = NegotiationSession(
+            session_id="test_skip",
+            task="test task",
+            robot_ids=["Robot1", "Robot2"],
+        )
+        session.analyses["Robot1"] = TaskAnalysis(robot_id="Robot1", can_contribute=True)
+        session.analyses["Robot2"] = TaskAnalysis(robot_id="Robot2", can_contribute=False)
+
+        proposal = PlanProposal(
+            proposer_id="Robot1",
+            reasoning="test proposal",
+            commands=[{"operation": "move_to_coordinate", "params": {"robot_id": "Robot1", "x": 0, "y": 0.3, "z": 0}}],
+        )
+
+        # Run evaluation — Robot2 has can_contribute=False, so its LLM should never be called
+        hub._run_evaluation_phase(session, proposal, {})
+
+        # mock_post should never be called because Robot2 is filtered out,
+        # and Robot1 is the proposer (also excluded)
+        mock_post.assert_not_called()
+
+    @patch("agents.RobotLLMAgent.requests.post")
     def test_negotiate_timeout(self, mock_post):
         """Test negotiation timeout."""
-        from servers.NegotiationHub import NegotiationHub, NegotiationState
-
         # Make LLM calls very slow
         def slow_response(*args, **kwargs):
             time.sleep(0.5)
@@ -527,8 +526,6 @@ class TestNegotiationVerifier:
 
     def test_empty_plan(self):
         """Test empty plan is invalid."""
-        from operations.NegotiationVerifier import NegotiationVerifier
-
         verifier = NegotiationVerifier()
         result = verifier.verify_plan([])
         assert result.valid is False
@@ -536,8 +533,6 @@ class TestNegotiationVerifier:
 
     def test_valid_plan(self):
         """Test a valid simple plan passes verification."""
-        from operations.NegotiationVerifier import NegotiationVerifier
-
         commands = [
             {
                 "operation": "move_to_coordinate",
@@ -558,8 +553,6 @@ class TestNegotiationVerifier:
 
     def test_unmatched_wait_for_signal(self):
         """Test unmatched wait_for_signal is detected."""
-        from operations.NegotiationVerifier import NegotiationVerifier
-
         commands = [
             {
                 "operation": "wait_for_signal",
@@ -575,8 +568,6 @@ class TestNegotiationVerifier:
 
     def test_matched_signal_wait_pair(self):
         """Test matched signal/wait pair passes."""
-        from operations.NegotiationVerifier import NegotiationVerifier
-
         commands = [
             {
                 "operation": "signal",
@@ -598,8 +589,6 @@ class TestNegotiationVerifier:
 
     def test_variable_used_before_definition(self):
         """Test variable usage before definition is detected."""
-        from operations.NegotiationVerifier import NegotiationVerifier
-
         commands = [
             {
                 "operation": "move_to_coordinate",
@@ -621,8 +610,6 @@ class TestNegotiationVerifier:
 
     def test_variable_defined_then_used(self):
         """Test variable defined before usage passes."""
-        from operations.NegotiationVerifier import NegotiationVerifier
-
         commands = [
             {
                 "operation": "detect_object_stereo",
@@ -645,8 +632,6 @@ class TestNegotiationVerifier:
 
     def test_parallel_group_collision_check(self):
         """Test spatial safety detects close concurrent targets."""
-        from operations.NegotiationVerifier import NegotiationVerifier
-
         commands = [
             {
                 "operation": "move_to_coordinate",
@@ -668,8 +653,6 @@ class TestNegotiationVerifier:
 
     def test_safe_parallel_targets(self):
         """Test safe concurrent targets pass spatial check."""
-        from operations.NegotiationVerifier import NegotiationVerifier
-
         commands = [
             {
                 "operation": "move_to_coordinate",
@@ -691,8 +674,6 @@ class TestNegotiationVerifier:
 
     def test_invalid_parallel_group_type(self):
         """Test non-integer parallel_group is detected."""
-        from operations.NegotiationVerifier import NegotiationVerifier
-
         commands = [
             {
                 "operation": "move_to_coordinate",
@@ -706,6 +687,48 @@ class TestNegotiationVerifier:
         assert result.valid is False
         assert any("integer" in e for e in result.errors)
 
+    def test_safe_parallel_targets_with_position_tuple(self):
+        """Test safe concurrent targets expressed as position list pass spatial check."""
+        commands = [
+            {
+                "operation": "move_to_coordinate",
+                "params": {"robot_id": "Robot1", "position": [-0.3, 0.2, 0.0]},
+                "parallel_group": 1,
+            },
+            {
+                "operation": "move_to_coordinate",
+                "params": {"robot_id": "Robot2", "position": [0.3, 0.2, 0.0]},
+                "parallel_group": 1,
+            },
+        ]
+
+        verifier = NegotiationVerifier()
+        result = verifier.verify_plan(commands)
+        # Targets are 0.6m apart — should be safe; no spatial errors
+        spatial_errors = [e for e in result.errors if "apart" in e]
+        assert len(spatial_errors) == 0
+
+    def test_collision_parallel_targets_with_position_tuple(self):
+        """Test collision is still caught when targets are expressed as position lists."""
+        commands = [
+            {
+                "operation": "move_to_coordinate",
+                "params": {"robot_id": "Robot1", "position": [0.0, 0.2, 0.0]},
+                "parallel_group": 1,
+            },
+            {
+                "operation": "move_to_coordinate",
+                "params": {"robot_id": "Robot2", "position": [0.05, 0.2, 0.0]},
+                "parallel_group": 1,
+            },
+        ]
+
+        verifier = NegotiationVerifier()
+        result = verifier.verify_plan(commands)
+        # 0.05m separation is below MIN_ROBOT_SEPARATION (0.2m)
+        assert result.valid is False
+        assert result.safety_check is False
+
 
 # ============================================================================
 # Integration Tests
@@ -717,13 +740,10 @@ class TestSequenceExecutorNegotiation:
 
     def setup_method(self):
         """Reset singleton between tests."""
-        from servers.NegotiationHub import NegotiationHub
         NegotiationHub._instance = None
 
     def test_negotiate_if_needed_returns_none_for_simple_command(self):
         """Test that simple commands bypass negotiation."""
-        from orchestrators.SequenceExecutor import SequenceExecutor
-
         executor = SequenceExecutor(check_completion=False, enable_verification=False)
         result = executor.negotiate_if_needed("Move to (0.3, 0.2, 0.1)", "Robot1")
         assert result is None
@@ -731,8 +751,6 @@ class TestSequenceExecutorNegotiation:
     @patch("agents.RobotLLMAgent.requests.post")
     def test_negotiate_if_needed_triggers_for_collaboration(self, mock_post):
         """Test that collaboration commands trigger negotiation."""
-        from orchestrators.SequenceExecutor import SequenceExecutor
-
         # Mock LLM responses for full negotiation
         responses = [
             # Robot1 analysis
@@ -766,8 +784,6 @@ class TestSequenceExecutorNegotiation:
         ]
         mock_post.side_effect = responses
 
-        # Reset hub singleton
-        from servers.NegotiationHub import NegotiationHub
         NegotiationHub._instance = None
 
         executor = SequenceExecutor(check_completion=False, enable_verification=False)
@@ -781,8 +797,6 @@ class TestSequenceExecutorNegotiation:
 
     def test_negotiate_if_needed_handles_import_error(self):
         """Test graceful handling when negotiation module unavailable."""
-        from orchestrators.SequenceExecutor import SequenceExecutor
-
         executor = SequenceExecutor(check_completion=False, enable_verification=False)
 
         # Even if import fails internally, should return None gracefully
@@ -801,14 +815,10 @@ class TestCoreImportsNegotiation:
 
     def setup_method(self):
         """Reset singleton between tests."""
-        from servers.NegotiationHub import NegotiationHub
         NegotiationHub._instance = None
 
     def test_get_negotiation_hub_returns_hub(self):
         """Test get_negotiation_hub returns a NegotiationHub instance."""
-        from core.Imports import get_negotiation_hub
-        from servers.NegotiationHub import NegotiationHub
-
         hub = get_negotiation_hub()
         assert hub is not None
         assert isinstance(hub, NegotiationHub)
@@ -816,14 +826,14 @@ class TestCoreImportsNegotiation:
     @patch.dict(os.environ, {"NEGOTIATION_ENABLED": "false"})
     def test_get_negotiation_hub_disabled(self):
         """Test get_negotiation_hub returns None when disabled."""
-        import importlib
-        import config.Negotiation as neg_config
         importlib.reload(neg_config)
-
-        from core.Imports import get_negotiation_hub
 
         hub = get_negotiation_hub()
         assert hub is None
 
         os.environ.pop("NEGOTIATION_ENABLED", None)
         importlib.reload(neg_config)
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

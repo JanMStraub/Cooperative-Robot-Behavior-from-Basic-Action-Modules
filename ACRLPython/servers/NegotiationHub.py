@@ -16,6 +16,7 @@ Output format matches CommandParser.parse() output, directly consumable
 by SequenceExecutor.execute_sequence().
 """
 
+import re
 import time
 import logging
 import threading
@@ -183,8 +184,12 @@ class NegotiationHub:
                 logger.info(f"Negotiation triggered by keyword: '{keyword}'")
                 return True
 
-        # Check for explicit multi-robot references
-        robot_refs = sum(1 for rid in ROBOT_BASE_POSITIONS if rid.lower() in text_lower)
+        # Check for explicit multi-robot references (word-boundary match prevents
+        # "Robot1" from matching inside "Robot10", "Robot1x", etc.)
+        robot_refs = sum(
+            1 for rid in ROBOT_BASE_POSITIONS
+            if re.search(r"\b" + re.escape(rid.lower()) + r"\b", text_lower)
+        )
         if robot_refs >= 2:
             logger.info(f"Negotiation triggered: {robot_refs} robot references found")
             return True
@@ -427,7 +432,12 @@ class NegotiationHub:
         Returns:
             True if all robots accept the proposal
         """
-        evaluator_ids = [rid for rid in session.robot_ids if rid != proposal.proposer_id]
+        # Only ask robots that can contribute — robots that set can_contribute=False
+        # during analysis have nothing useful to evaluate, and querying them wastes LLM tokens.
+        evaluator_ids = [
+            rid for rid, analysis in session.analyses.items()
+            if rid != proposal.proposer_id and analysis.can_contribute
+        ]
 
         if not evaluator_ids:
             # Only one robot, auto-accept
