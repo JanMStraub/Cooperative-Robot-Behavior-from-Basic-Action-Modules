@@ -61,6 +61,9 @@ class WorldStateServer(TCPServerBase):
         self._latest_state: Optional[Dict] = None
         self._state_lock = threading.Lock()
 
+        # State update callbacks
+        self._on_state_update_callbacks: List = []
+
         # Statistics
         self._updates_received = 0
         self._last_update_time = None
@@ -136,9 +139,29 @@ class WorldStateServer(TCPServerBase):
         finally:
             self._logger.info(f"Client {address} disconnected")
 
+    def register_update_callback(self, callback) -> None:
+        """
+        Register a callback to be invoked on each state update.
+
+        The callback will be called with the state update dictionary as argument.
+        Multiple callbacks can be registered.
+
+        Args:
+            callback: Callable that accepts a Dict parameter (state_update)
+
+        Example:
+            >>> def on_update(state):
+            >>>     print(f"Robots: {len(state.get('robots', []))}")
+            >>> server.register_update_callback(on_update)
+        """
+        self._on_state_update_callbacks.append(callback)
+        self._logger.info(f"Registered state update callback: {callback.__name__ if hasattr(callback, '__name__') else repr(callback)}")
+
     def _update_world_state(self, state_update: Dict) -> None:
         """
         Update latest world state snapshot (thread-safe).
+
+        Invokes all registered callbacks after updating state.
 
         Args:
             state_update: World state update dictionary from Unity
@@ -149,6 +172,13 @@ class WorldStateServer(TCPServerBase):
             self._latest_state = state_update
             self._updates_received += 1
             self._last_update_time = time.time()
+
+        # Invoke callbacks (outside lock to avoid deadlock)
+        for callback in self._on_state_update_callbacks:
+            try:
+                callback(state_update)
+            except Exception as e:
+                self._logger.error(f"State update callback error: {e}", exc_info=True)
 
     def get_latest_state(self) -> Optional[Dict]:
         """

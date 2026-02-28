@@ -142,6 +142,87 @@ class RobotController:
         self._running = False
         self._stop_event = threading.Event()
 
+    def _wire_world_state_to_rag(self):
+        """
+        Wire WorldState into RAG QueryEngine for context-aware operation selection.
+
+        This enables the RAG system to:
+        - Filter operations based on reachability
+        - Boost operations targeting reachable objects
+        - Downrank operations for stale objects or objects grasped by other robots
+        - Include world state context in LLM prompts
+        """
+        try:
+            from operations.WorldState import get_world_state
+
+            # Import SequenceQueryHandler to access the singleton
+            try:
+                from servers.SequenceServer import SequenceQueryHandler
+            except ImportError:
+                from ..servers.SequenceServer import SequenceQueryHandler
+
+            world_state = get_world_state()
+
+            # Get the command parser from SequenceQueryHandler singleton
+            # The parser is created by SequenceQueryHandler, not SequenceServer
+            if self._sequence_server is not None:
+                handler = SequenceQueryHandler()
+                if handler.is_ready() and handler._parser is not None:
+                    command_parser = handler._parser
+                    if hasattr(command_parser, 'rag') and command_parser.rag is not None:
+                        if hasattr(command_parser.rag, 'query_engine') and command_parser.rag.query_engine is not None:
+                            command_parser.rag.query_engine.set_world_state(world_state)
+                            logger.info("✓ WorldState wired into RAG QueryEngine for context-aware search")
+                        else:
+                            logger.debug("RAG query_engine not available, skipping WorldState wiring")
+                    else:
+                        logger.debug("RAG system not initialized in CommandParser, skipping WorldState wiring")
+                else:
+                    logger.debug("SequenceQueryHandler not ready, skipping WorldState wiring")
+            else:
+                logger.debug("SequenceServer not initialized, skipping WorldState wiring")
+
+        except Exception as e:
+            logger.warning(f"Failed to wire WorldState into RAG: {e}")
+            logger.debug("This is non-critical - RAG will work without world state context")
+
+    def _wire_world_state_callbacks(self):
+        """
+        Wire WorldStateServer callbacks to trigger confidence decay on state updates.
+
+        Registers a callback that updates object confidence based on which objects
+        are currently detected in each frame.
+        """
+        try:
+            from operations.WorldState import get_world_state
+
+            world_state = get_world_state()
+
+            # Define callback to trigger confidence decay
+            def on_state_update(state_data):
+                """Called on each world state update from Unity."""
+                try:
+                    # Extract object IDs from state update
+                    objects = state_data.get("objects", [])
+                    seen_object_ids = {obj.get("object_id") for obj in objects if obj.get("object_id")}
+
+                    # Trigger confidence decay
+                    world_state.decay_object_confidence(seen_object_ids)
+
+                except Exception as e:
+                    logger.error(f"Error in state update callback: {e}")
+
+            # Register callback with WorldStateServer
+            if self._world_state_server:
+                self._world_state_server.register_update_callback(on_state_update)
+                logger.info("✓ WorldStateServer callback registered for confidence decay")
+            else:
+                logger.debug("WorldStateServer not available, skipping callback registration")
+
+        except Exception as e:
+            logger.warning(f"Failed to wire WorldStateServer callbacks: {e}")
+            logger.debug("This is non-critical - confidence decay will not be automatic")
+
     def start(self):
         """Start all servers."""
         if self._running:
@@ -193,6 +274,12 @@ class RobotController:
         # Share resources between servers
         broadcaster = get_command_broadcaster()
         # SequenceExecutor will use this for sending commands
+
+        # Wire WorldState into RAG for context-aware operation selection
+        self._wire_world_state_to_rag()
+
+        # Wire WorldStateServer callbacks for confidence decay
+        self._wire_world_state_callbacks()
 
         self._running = True
 
