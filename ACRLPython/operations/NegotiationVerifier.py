@@ -304,6 +304,12 @@ class NegotiationVerifier:
                 y = params.get("y")
                 z = params.get("z")
 
+                # Also handle position as a list/tuple (e.g. "position": [x, y, z])
+                if x is None or y is None or z is None:
+                    pos_param = params.get("position")
+                    if pos_param is not None and len(pos_param) >= 3:
+                        x, y, z = pos_param[0], pos_param[1], pos_param[2]
+
                 if x is not None and y is not None and z is not None:
                     # Skip variable references
                     if any(isinstance(v, str) and v.startswith("$") for v in [x, y, z]):

@@ -215,7 +215,7 @@ def move_to_coordinate(
                                     "ROS_CONNECTION_FAILED",
                                     "Failed to connect to ROS bridge (port 5020)",
                                     [
-                                        "Ensure Docker ROS services are running: cd ros_unity_integration && ./start_ros_endpoint.sh",
+                                        "Ensure Docker ROS services are running: cd rosUnityIntegration && ./start_ros_endpoint.sh",
                                         "Set DEFAULT_CONTROL_MODE='hybrid' in config/ROS.py for automatic fallback",
                                     ],
                                 )
@@ -566,7 +566,7 @@ def move_from_a_to_b(
                                     "ROS_CONNECTION_FAILED",
                                     "Failed to connect to ROS bridge (port 5020)",
                                     [
-                                        "Ensure Docker ROS services are running: cd ros_unity_integration && ./start_ros_endpoint.sh",
+                                        "Ensure Docker ROS services are running: cd rosUnityIntegration && ./start_ros_endpoint.sh",
                                         "Set DEFAULT_CONTROL_MODE='hybrid' in config/ROS.py for automatic fallback",
                                     ],
                                 )

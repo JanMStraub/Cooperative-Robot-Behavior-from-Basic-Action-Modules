@@ -40,6 +40,15 @@ COLLABORATION_KEYWORDS = [
 ]
 
 # ============================================================================
+# LLM Structured Output
+# ============================================================================
+
+# When True, passes response_format={"type": "json_object"} to LM Studio, which
+# forces the model to emit valid JSON directly (no prose or Markdown wrapping).
+# Set to False for models that don't support the structured output API.
+USE_STRUCTURED_OUTPUT = os.environ.get("USE_STRUCTURED_OUTPUT", "true").lower() in ("true", "1", "yes")
+
+# ============================================================================
 # Plan Validation
 # ============================================================================
 
