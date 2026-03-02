@@ -14,8 +14,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 # Import config
 try:
-    from config.Servers import LMSTUDIO_BASE_URL
     from config.Rag import (
+        RAG_LM_STUDIO_URL,
         RAG_LM_STUDIO_API_KEY,
         RAG_LM_STUDIO_MODEL,
         RAG_EMBEDDING_TIMEOUT,
@@ -25,8 +25,8 @@ try:
         RAG_TFIDF_MAX_FEATURES,
     )
 except ImportError:
-    from ..config.Servers import LMSTUDIO_BASE_URL
     from ..config.Rag import (
+        RAG_LM_STUDIO_URL,
         RAG_LM_STUDIO_API_KEY,
         RAG_LM_STUDIO_MODEL,
         RAG_EMBEDDING_TIMEOUT,
@@ -63,7 +63,7 @@ class EmbeddingGenerator:
             api_key: API key (default from config, LM Studio doesn't need real key)
             model: Embedding model name (default from config)
         """
-        self.base_url = base_url or LMSTUDIO_BASE_URL
+        self.base_url = base_url or RAG_LM_STUDIO_URL
         self.api_key = api_key or RAG_LM_STUDIO_API_KEY
         self.model = model or RAG_LM_STUDIO_MODEL
 

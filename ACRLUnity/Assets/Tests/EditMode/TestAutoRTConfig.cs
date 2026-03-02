@@ -33,7 +33,7 @@ namespace Tests.EditMode
         public void TestDefaultValues()
         {
             // Assert - Verify default values match plan specification
-            Assert.AreEqual(5, _config.maxTaskCandidates, "Default max task candidates should be 5");
+            Assert.AreEqual(3, _config.maxTaskCandidates, "Default max task candidates should be 3");
             Assert.AreEqual(TaskSelectionStrategy.Balanced, _config.strategy, "Default strategy should be Balanced");
             Assert.AreEqual(false, _config.enableContinuousLoop, "Continuous loop should be disabled by default");
             Assert.AreEqual(5f, _config.loopDelaySeconds, "Default loop delay should be 5 seconds");

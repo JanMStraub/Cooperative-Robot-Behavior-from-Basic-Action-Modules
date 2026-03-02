@@ -9,6 +9,8 @@ Tests configuration constants from the modular config system:
 - config/Robot.py - Multi-robot coordination
 """
 
+import os
+
 from config.Servers import (
     DEFAULT_HOST,
     STREAMING_SERVER_PORT,
@@ -103,6 +105,28 @@ class TestConfigConstants:
         assert LMSTUDIO_BASE_URL is not None
         assert isinstance(LMSTUDIO_BASE_URL, str)
         assert LMSTUDIO_BASE_URL.startswith("http")
+
+    def test_lmstudio_url_default_is_localhost(self):
+        """Default LMStudio URL must point to localhost, not a hardcoded remote IP.
+
+        When no LMSTUDIO_BASE_URL env var is set the fallback should be
+        localhost so the system works out-of-the-box on any machine.
+        """
+        import importlib
+        import sys
+        from unittest.mock import patch
+
+        with patch.dict("os.environ", {}, clear=True):
+            # Remove LMSTUDIO_BASE_URL from env so the module uses the default
+            os.environ.pop("LMSTUDIO_BASE_URL", None)
+            # Reload the module to re-evaluate the module-level constant
+            import config.Servers as servers_mod
+            importlib.reload(servers_mod)
+            url = servers_mod.LMSTUDIO_BASE_URL
+
+        assert "localhost" in url or "127.0.0.1" in url, (
+            f"Default LMSTUDIO_BASE_URL must be localhost, got: {url!r}"
+        )
 
     def test_queue_config(self):
         """Test queue configuration"""

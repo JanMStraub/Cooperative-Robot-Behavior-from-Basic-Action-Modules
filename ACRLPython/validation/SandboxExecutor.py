@@ -71,10 +71,11 @@ def validate_in_sandbox(code: str, timeout: float = None) -> Tuple[bool, str]:
     """
     timeout = timeout or SANDBOX_TIMEOUT
 
-    # Use "fork" context: safe here because the child immediately exec's untrusted
-    # code and never returns to modify shared parent state. Avoids pickling issues
-    # with Mock objects that would occur with the default "spawn" context on macOS.
-    ctx = mp.get_context("fork")
+    # Use "spawn" context: avoids deadlocks caused by forking a multi-threaded
+    # process (Python 3.12+ DeprecationWarning on fork). All args passed to
+    # _sandbox_worker (code str + Queue) are picklable; Mock objects are built
+    # inside the worker itself so no pickling issues arise.
+    ctx = mp.get_context("spawn")
     result_queue = ctx.Queue()
     process = ctx.Process(target=_sandbox_worker, args=(code, result_queue), daemon=True)
     process.start()

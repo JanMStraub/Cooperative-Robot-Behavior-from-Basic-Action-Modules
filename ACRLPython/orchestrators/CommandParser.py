@@ -870,16 +870,20 @@ Examples:
 
             # Parse move commands with explicit coordinates
             move_match = re.search(
-                r"move\s+(?:to\s+)?(?:\(?\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)?|"
-                r"x\s*=?\s*(-?[\d.]+).*?y\s*=?\s*(-?[\d.]+).*?z\s*=?\s*(-?[\d.]+))",
+                r"move\s+(?:\w+\s+)?(?:to\s+)?(?:"
+                r"\(?\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\)?|"
+                r"x\s*=?\s*(-?[\d.]+).*?y\s*=?\s*(-?[\d.]+).*?z\s*=?\s*(-?[\d.]+)|"
+                r"(?:to\s+)?coordinates?\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+))",
                 part,
             )
             if move_match:
                 groups = move_match.groups()
                 if groups[0] is not None:
                     x, y, z = float(groups[0]), float(groups[1]), float(groups[2])
-                else:
+                elif groups[3] is not None:
                     x, y, z = float(groups[3]), float(groups[4]), float(groups[5])
+                else:
+                    x, y, z = float(groups[6]), float(groups[7]), float(groups[8])
 
                 commands.append(
                     {
