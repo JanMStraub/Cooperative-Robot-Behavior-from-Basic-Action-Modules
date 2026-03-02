@@ -10,6 +10,7 @@ Structure:
 - rag.py: RAG system configuration
 - robot.py: Multi-robot workspace and coordination configuration
 - negotiation.py: Multi-robot negotiation system configuration
+- DynamicOperations.py: Dynamic operation generation configuration
 - validation.py: Configuration validation utilities
 
 All configs are aggregated in LLMConfig.py for backward compatibility.

@@ -145,7 +145,16 @@ class CommandParser:
             )
 
         # Fallback to regex parsing
-        return self._parse_with_regex(command_text, robot_id)
+        regex_result = self._parse_with_regex(command_text, robot_id)
+        if regex_result["success"]:
+            return regex_result
+
+        # If both LLM and regex failed, try generating a new operation
+        generated = self._try_generate_operation(command_text, robot_id)
+        if generated:
+            return generated
+
+        return regex_result
 
     def _parse_with_llm(self, command_text: str, robot_id: str) -> Dict[str, Any]:
         """
@@ -689,6 +698,118 @@ Examples:
             )
 
         return len(errors) == 0, errors
+
+    def _check_generation_needed(self, rag_results: List[Dict]) -> Tuple[bool, str]:
+        """
+        Check if RAG scores are too low, indicating no good operation match exists.
+
+        Args:
+            rag_results: Results from RAG search
+
+        Returns:
+            Tuple of (should_generate, reason)
+        """
+        try:
+            from config.DynamicOperations import (
+                ENABLE_DYNAMIC_OPERATIONS,
+                GENERATION_TRIGGER_THRESHOLD,
+            )
+        except ImportError:
+            return False, "Dynamic operations config not available"
+
+        if not ENABLE_DYNAMIC_OPERATIONS:
+            return False, "Dynamic operations disabled"
+
+        if not rag_results:
+            return True, "No RAG results found"
+
+        # Check best score
+        best_score = max(
+            r.get("similarity_score", r.get("score", 0)) for r in rag_results
+        )
+
+        if best_score < GENERATION_TRIGGER_THRESHOLD:
+            return True, f"Best RAG score {best_score:.2f} below threshold {GENERATION_TRIGGER_THRESHOLD}"
+
+        return False, ""
+
+    def _try_generate_operation(
+        self, command_text: str, robot_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Attempt to generate a new operation when no existing operation matches.
+
+        Args:
+            command_text: The command that could not be parsed
+            robot_id: Default robot ID
+
+        Returns:
+            Parsed command structure if generation succeeded and retry worked, None otherwise
+        """
+        # Check if RAG scores warrant generation
+        if self.rag:
+            try:
+                rag_results = self.rag.search(command_text, top_k=3)
+                should_generate, reason = self._check_generation_needed(rag_results)
+                if not should_generate:
+                    return None
+                logger.info(f"Dynamic operation generation triggered: {reason}")
+            except Exception as e:
+                logger.warning(f"RAG check for generation failed: {e}")
+                return None
+        else:
+            return None
+
+        # Generate the operation
+        try:
+            from operations.Generator import OperationGenerator
+
+            generator = OperationGenerator()
+            success, message, file_path = generator.generate_operation(
+                command_text,
+                context={"robot_id": robot_id},
+            )
+
+            if not success:
+                logger.warning(f"Operation generation failed: {message}")
+                return None
+
+            logger.info(f"Operation generated: {message}")
+
+            # When review is required the operation is PENDING — it is not registered
+            # yet, so retrying the LLM parse would fail or match the wrong operation.
+            # Return a structured pending-review payload instead.
+            try:
+                from config.DynamicOperations import REQUIRE_USER_REVIEW
+            except ImportError:
+                REQUIRE_USER_REVIEW = True
+
+            if REQUIRE_USER_REVIEW:
+                logger.info(
+                    f"Operation pending human review before activation: {file_path}"
+                )
+                return {
+                    "success": False,
+                    "pending_review": True,
+                    "file_path": file_path,
+                    "message": (
+                        "A new operation was generated but requires human review "
+                        "before it can be used. Approve it with: "
+                        "python -m tools.ReviewOperations approve <id>"
+                    ),
+                }
+
+            # Retry parsing with the new operation now registered and active
+            result = self._parse_with_llm(command_text, robot_id)
+            if result["success"]:
+                result["generated_operation"] = file_path
+                return result
+
+            return None
+
+        except Exception as e:
+            logger.warning(f"Dynamic operation generation error: {e}")
+            return None
 
     def _parse_with_regex(self, command_text: str, robot_id: str) -> Dict[str, Any]:
         """

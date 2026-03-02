@@ -75,6 +75,8 @@ class OperationRegistry:
         """Initialize the registry with all available operations"""
         self.operations: Dict[str, BasicOperation] = {}
         self._initialize_operations()
+        # Load generated operations once after bulk init completes
+        self._load_generated_operations()
 
     def _initialize_operations(self):
         """Load all available operations into the registry"""
@@ -149,6 +151,24 @@ class OperationRegistry:
         """
         with _registry_lock:
             self.operations[operation.operation_id] = operation
+
+    def _load_generated_operations(self):
+        """Load dynamically generated operations into the registry."""
+        try:
+            from operations.generated import load_generated_operations
+
+            loaded = load_generated_operations()
+            for op_name, file_path in loaded:
+                # The operation is loaded by the loader; register it here
+                from operations.generated import _load_operation_from_file
+                from pathlib import Path
+
+                operation = _load_operation_from_file(Path(file_path))
+                if operation and operation.operation_id not in self.operations:
+                    self.operations[operation.operation_id] = operation
+        except Exception:
+            # Silently skip if dynamic operations not available
+            pass
 
     def get_operation(self, operation_id: str) -> Optional[BasicOperation]:
         """
