@@ -182,6 +182,9 @@ summaries/
 # Git worktrees
 .worktrees/
 
+# Claude Code
+.claude/
+
 # Other
 CLAUDE.md
 .ml-agents/
