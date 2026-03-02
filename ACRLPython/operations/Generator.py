@@ -378,6 +378,9 @@ Start directly with the module docstring."""
             file_path.write_text(header + code)
             logger.info(f"Saved generated operation to {file_path}")
 
+            # Auto-generate a pytest skeleton alongside the operation file
+            self._generate_test_file(file_path, op_name, command_text)
+
             # Register if auto-approved
             if not REQUIRE_USER_REVIEW:
                 self._register_operation(file_path)
@@ -387,6 +390,119 @@ Start directly with the module docstring."""
         except Exception as e:
             logger.error(f"Failed to save generated operation: {e}")
             return None
+
+    def _generate_test_file(self, operation_file: Path, op_name: str, command_text: str) -> None:
+        """
+        Generate a pytest skeleton file alongside a newly created operation.
+
+        The test file is saved next to the operation file with a ``Test_`` prefix
+        and ``REVIEW_STATUS: PENDING`` header so the human reviewer can see it in
+        the same review workflow as the operation itself.
+
+        The generated skeleton covers three baseline scenarios:
+        - Happy path: valid parameters should return a successful OperationResult.
+        - Missing required parameter: should return an error OperationResult.
+        - Invalid parameter type: should return an error OperationResult.
+
+        Args:
+            operation_file: Path to the already-written operation ``.py`` file.
+            op_name: Snake-case name extracted from the generated code (e.g. ``rotate_gripper``).
+            command_text: The original natural-language command that triggered generation,
+                included as a comment so reviewers have context.
+        """
+        test_path = operation_file.parent / f"Test_{op_name}_{operation_file.stem.split('_')[-1]}.py"
+        module_stem = operation_file.stem  # e.g. rotate_gripper_1700000000
+        fn_name = op_name  # e.g. rotate_gripper
+        class_name = "".join(part.capitalize() for part in op_name.split("_"))
+
+        test_code = f'''"""
+Auto-generated pytest skeleton for operation: {op_name}
+Original command: {command_text}
+
+IMPORTANT: This file was generated automatically. Review and expand tests before approving.
+"""
+# REVIEW_STATUS: PENDING
+# GENERATED_AT: {time.strftime('%Y-%m-%d %H:%M:%S')}
+# AUTO_GENERATED: True
+
+import pytest
+from unittest.mock import Mock, patch
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def mock_broadcaster():
+    """Provide a mock CommandBroadcaster that returns a success response."""
+    broadcaster = Mock()
+    broadcaster.send_command = Mock(return_value=True)
+    broadcaster.wait_for_result = Mock(return_value={{
+        "success": True,
+        "result": {{"status": "completed"}},
+        "error": None,
+    }})
+    return broadcaster
+
+
+@pytest.fixture
+def operation_module(mock_broadcaster):
+    """Import the generated operation module with broadcaster patched."""
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location(
+        "{module_stem}",
+        Path(__file__).parent / "{operation_file.name}",
+    )
+    module = importlib.util.module_from_spec(spec)
+
+    with patch("core.Imports.get_command_broadcaster", return_value=mock_broadcaster):
+        spec.loader.exec_module(module)
+
+    return module
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+class Test{class_name}:
+    """Tests for the auto-generated {op_name} operation."""
+
+    def test_happy_path_returns_success(self, operation_module, mock_broadcaster):
+        """Valid parameters should produce a successful OperationResult."""
+        # TODO: Replace with actual valid parameters for this operation
+        result = operation_module.{fn_name}(robot_id="Robot1")
+
+        assert result is not None
+        assert result.success is True, f"Expected success but got error: {{result.error}}"
+
+    def test_missing_robot_id_returns_error(self, operation_module):
+        """Calling without robot_id should return an error OperationResult."""
+        result = operation_module.{fn_name}(robot_id=None)
+
+        assert result is not None
+        assert result.success is False, "Expected failure for missing robot_id"
+
+    def test_returns_operation_result_type(self, operation_module, mock_broadcaster):
+        """Return type must always be OperationResult, never raise."""
+        from operations.Base import OperationResult
+
+        result = operation_module.{fn_name}(robot_id="Robot1")
+        assert isinstance(result, OperationResult), (
+            f"Expected OperationResult, got {{type(result).__name__}}"
+        )
+'''
+
+        try:
+            test_path.write_text(test_code)
+            logger.info(f"Generated test skeleton at {test_path}")
+        except Exception as e:
+            # Test file generation is best-effort; don't fail the whole operation save
+            logger.warning(f"Could not write test skeleton: {e}")
 
     def _extract_operation_name(self, code: str) -> Optional[str]:
         """

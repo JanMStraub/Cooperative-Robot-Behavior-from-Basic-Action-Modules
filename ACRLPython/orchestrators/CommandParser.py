@@ -282,10 +282,37 @@ class CommandParser:
         except Exception as e:
             raise
 
+    def _get_anti_pattern_warnings(self, command_text: str) -> str:
+        """
+        Retrieve formatted anti-pattern warnings from FeedbackCollector.
+
+        Returns an empty string when FeedbackCollector is unavailable or no
+        high-failure patterns exist so the prompt remains clean by default.
+
+        Args:
+            command_text: The command being parsed (passed through for future
+                context-sensitive filtering).
+
+        Returns:
+            Formatted warning block string, or empty string if no warnings.
+        """
+        try:
+            from agents.FeedbackCollector import get_feedback_collector
+            return get_feedback_collector().get_anti_pattern_warnings(command_text)
+        except Exception as e:
+            logger.debug(f"FeedbackCollector unavailable: {e}")
+            return ""
+
     def _build_parsing_prompt(
         self, command_text: str, robot_id: str, available_ops: str
     ) -> str:
         """Build the prompt for LLM command parsing with multi-robot support."""
+        anti_pattern_section = self._get_anti_pattern_warnings(command_text)
+        if anti_pattern_section:
+            anti_pattern_block = f"\n        {anti_pattern_section}\n"
+        else:
+            anti_pattern_block = ""
+
         return f"""You are a robot coordinator planning tasks for multiple robots.
 
         Available Robots:
@@ -410,7 +437,7 @@ class CommandParser:
         ]
         }}
 
-        Output only valid JSON, no explanation."""
+        {anti_pattern_block}Output only valid JSON, no explanation."""
 
     def _get_available_operations_summary(self, command_text: str = "") -> str:
         """

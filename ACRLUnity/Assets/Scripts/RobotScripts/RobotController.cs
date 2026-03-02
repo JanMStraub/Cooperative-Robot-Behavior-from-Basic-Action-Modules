@@ -52,6 +52,11 @@ namespace Robotics
         private Vector3 _targetLocalPosition;
         private Quaternion _targetLocalRotation;
 
+        // Cached inverse of _ikFrame.rotation to avoid redundant Quaternion.Inverse calls
+        // in UpdateJointInfoCache() and UpdateEndEffectorState() every FixedUpdate.
+        private Quaternion _cachedIKFrameInverseRot = Quaternion.identity;
+        private Quaternion _lastIKFrameRot = Quaternion.identity;
+
         private GameObject _targetObject;
         public GameObject debugTarget;
         private GameObject _cachedTempTargetMove;
@@ -318,8 +323,6 @@ namespace Robotics
             if (robotJoints == null || _cachedJointInfos == null || _ikFrame == null)
                 return;
 
-            Quaternion ikFrameInverseRot = Quaternion.Inverse(_ikFrame.rotation);
-
             for (int i = 0; i < robotJoints.Length; i++)
             {
                 var joint = robotJoints[i];
@@ -328,7 +331,8 @@ namespace Robotics
 
                 Vector3 jointLocalPos = _ikFrame.InverseTransformPoint(joint.transform.position);
                 Vector3 axisWorld = joint.transform.rotation * joint.anchorRotation * Vector3.right;
-                Vector3 axisLocal = ikFrameInverseRot * axisWorld;
+                // Use pre-computed inverse rotation (refreshed once per IK step by RefreshIKFrameCache)
+                Vector3 axisLocal = _cachedIKFrameInverseRot * axisWorld;
                 _cachedJointInfos[i] = new JointInfo(jointLocalPos, axisLocal.normalized);
             }
         }
@@ -356,7 +360,8 @@ namespace Robotics
                 endEffectorWorldVelocity += velContribution;
             }
 
-            return Quaternion.Inverse(_ikFrame.rotation) * endEffectorWorldVelocity;
+            // Use pre-computed inverse rotation (refreshed once per IK step by RefreshIKFrameCache)
+            return _cachedIKFrameInverseRot * endEffectorWorldVelocity;
         }
 
         private void UpdateEndEffectorState()
@@ -403,13 +408,31 @@ namespace Robotics
             _endEffectorLocalPosition = _ikFrame.InverseTransformPoint(endEffectorBase.position);
             _targetLocalPosition = _ikFrame.InverseTransformPoint(_targetTransform.position);
 
-            Quaternion invFrameRot = Quaternion.Inverse(_ikFrame.rotation);
-            _endEffectorLocalRotation = invFrameRot * endEffectorBase.rotation;
-            _targetLocalRotation = invFrameRot * _targetTransform.rotation;
+            // Use pre-computed inverse rotation (refreshed once per IK step by RefreshIKFrameCache)
+            _endEffectorLocalRotation = _cachedIKFrameInverseRot * endEffectorBase.rotation;
+            _targetLocalRotation = _cachedIKFrameInverseRot * _targetTransform.rotation;
 
             Vector3 distVec = _targetLocalPosition - _endEffectorLocalPosition;
             _sqrDistanceToTarget = distVec.sqrMagnitude;
             _distanceToTarget = Mathf.Sqrt(_sqrDistanceToTarget);
+        }
+
+        /// <summary>
+        /// Refresh the cached IK frame inverse rotation if the frame has rotated since
+        /// the last call. Called once per PerformInverseKinematicsStep() so that
+        /// UpdateJointInfoCache() and UpdateEndEffectorState() can use the cached value
+        /// instead of each computing Quaternion.Inverse(_ikFrame.rotation) independently.
+        /// </summary>
+        private void RefreshIKFrameCache()
+        {
+            if (_ikFrame == null)
+                return;
+            // Quaternion equality is approximate, so compare against last known value
+            if (_ikFrame.rotation != _lastIKFrameRot)
+            {
+                _lastIKFrameRot = _ikFrame.rotation;
+                _cachedIKFrameInverseRot = Quaternion.Inverse(_ikFrame.rotation);
+            }
         }
 
         public void PerformInverseKinematicsStep()
@@ -417,6 +440,7 @@ namespace Robotics
             if (robotJoints == null || robotJoints.Length == 0 || endEffectorBase == null || _targetTransform == null)
                 return;
 
+            RefreshIKFrameCache();
             UpdateEndEffectorState();
 
             float posThreshold = _isGraspingTarget

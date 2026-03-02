@@ -435,7 +435,15 @@ class ROSMotionServer:
             rclpy.spin_once(self._node, timeout_sec=0.1)
 
     def _handle_client(self, client_socket):
-        """Handle a single client connection."""
+        """Handle a single TCP client connection for the lifetime of that connection.
+
+        Reads newline-delimited JSON requests, routes each through
+        _process_request(), and sends the JSON response back. Runs in its own
+        daemon thread so multiple clients can be served concurrently.
+
+        Args:
+            client_socket: The accepted socket returned by server.accept().
+        """
         buffer = ""
         try:
             while self._running:
@@ -794,7 +802,23 @@ class ROSMotionServer:
             return None, 0, error_msg
 
     def _trajectory_to_dict(self, trajectory):
-        """Convert a JointTrajectory message to a JSON-serializable dict."""
+        """Convert a JointTrajectory ROS message to a JSON-serializable dict.
+
+        Extracts positions, velocities, accelerations, and time stamps from
+        each trajectory point so the result can be sent over the TCP wire to
+        the Python backend or logged.
+
+        Args:
+            trajectory: JointTrajectory message (from MoveIt plan result or
+                        GetCartesianPath response).
+
+        Returns:
+            Dict with keys:
+                - joint_names (List[str]): Ordered list of joint name strings.
+                - points (List[Dict]): One dict per waypoint with keys
+                  'positions', 'velocities', 'accelerations' (all List[float])
+                  and 'time_from_start' (float, seconds).
+        """
         points = []
         for pt in trajectory.points:
             point_dict = {
@@ -1423,7 +1447,12 @@ class ROSMotionServer:
         return results
 
     def shutdown(self):
-        """Clean shutdown."""
+        """Cleanly stop the TCP server and shut down the ROS 2 node.
+
+        Sets the running flag to False (stops the accept loop and the ROS spin
+        thread), destroys the ROS node, and calls rclpy.shutdown() so resources
+        are released before the process exits.
+        """
         self._running = False
         if HAS_ROS and self._node:
             self._node.destroy_node()

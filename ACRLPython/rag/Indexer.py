@@ -394,6 +394,115 @@ class OperationIndexer:
 
         return store
 
+    def refresh_index(self, existing_store: VectorStore, save: bool = True) -> VectorStore:
+        """
+        Incrementally add new operations and workflows to an existing index.
+
+        Unlike build_index() (full rebuild) or update_index() (alias for rebuild),
+        this method only embeds and adds documents that are not already present in
+        existing_store, making it suitable for the self-improvement loop where new
+        generated operations are approved and need to be indexed without discarding
+        accumulated outcome metadata on existing entries.
+
+        Args:
+            existing_store: The currently active VectorStore to extend.
+            save: Whether to persist the updated store to disk (default True).
+
+        Returns:
+            The same existing_store with new entries appended.
+
+        Example:
+            >>> indexer = OperationIndexer()
+            >>> store = VectorStore.load()
+            >>> store = indexer.refresh_index(store)
+            Refreshing index: checking 5 operations, 2 workflows, 4 context docs...
+            ✓ Added 1 new document(s); 11 documents already indexed
+        """
+        operations = self.registry.get_all_operations()
+        workflows = self.workflow_registry.get_all_patterns()
+        context_docs = self._get_multi_robot_context_documents()
+
+        existing_ids = set(existing_store.operation_ids)
+
+        # Collect texts and metadata for documents not yet indexed
+        texts_to_embed = []
+        operation_data = []
+
+        for op in operations:
+            if op.operation_id in existing_ids:
+                continue
+            texts_to_embed.append(op.to_rag_document())
+            operation_data.append({
+                "operation_id": op.operation_id,
+                "metadata": {
+                    "name": op.name,
+                    "category": op.category.value,
+                    "complexity": op.complexity.value,
+                    "description": op.description,
+                    "average_duration_ms": op.average_duration_ms,
+                    "success_rate": op.success_rate,
+                    "parameters": [p.name for p in op.parameters],
+                    "type": "operation",
+                },
+            })
+
+        for workflow in workflows:
+            if workflow.pattern_id in existing_ids:
+                continue
+            texts_to_embed.append(workflow.to_rag_document())
+            operation_data.append({
+                "operation_id": workflow.pattern_id,
+                "metadata": {
+                    "name": workflow.name,
+                    "category": workflow.category.value,
+                    "complexity": "workflow",
+                    "description": workflow.description,
+                    "average_duration_ms": 0,
+                    "success_rate": 1.0,
+                    "parameters": [],
+                    "type": "workflow",
+                    "step_count": len(workflow.steps),
+                },
+            })
+
+        for ctx in context_docs:
+            if ctx["metadata"]["operation_id"] in existing_ids:
+                continue
+            texts_to_embed.append(ctx["text"])
+            operation_data.append({
+                "operation_id": ctx["metadata"]["operation_id"],
+                "metadata": ctx["metadata"],
+            })
+
+        total_checked = len(operations) + len(workflows) + len(context_docs)
+        logger.info(
+            f"Refreshing index: checking {total_checked} documents "
+            f"({len(existing_ids)} already indexed, {len(texts_to_embed)} new)..."
+        )
+
+        if not texts_to_embed:
+            logger.info("✓ Index already up-to-date; nothing new to add")
+            return existing_store
+
+        embeddings = self.embedding_generator.generate_embeddings(texts_to_embed)
+
+        for data, embedding in zip(operation_data, embeddings):
+            existing_store.add_operation(
+                operation_id=data["operation_id"],
+                embedding=embedding,
+                metadata=data["metadata"],
+            )
+
+        logger.info(
+            f"✓ Added {len(texts_to_embed)} new document(s); "
+            f"{len(existing_ids)} documents already indexed"
+        )
+
+        if save and RAG_AUTO_SAVE_INDEX:
+            existing_store.save()
+
+        return existing_store
+
     def rebuild_index(self) -> VectorStore:
         """
         Rebuild index from scratch (clears existing index).

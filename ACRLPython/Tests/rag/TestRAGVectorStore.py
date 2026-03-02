@@ -39,7 +39,12 @@ class TestVectorStore:
         assert store.metadata[0] == metadata
 
     def test_add_multiple_operations(self):
-        """Test adding multiple operations"""
+        """Test adding multiple operations.
+
+        store.vectors is flushed lazily, so shape is only guaranteed after a
+        flush-triggering call (search, get_operation, save). Use len(store)
+        for size and trigger a flush via save before checking shape.
+        """
         store = VectorStore()
 
         for i in range(5):
@@ -48,6 +53,9 @@ class TestVectorStore:
             store.add_operation(f"op_00{i}", embedding, metadata)
 
         assert len(store) == 5
+        # Trigger flush by calling _flush_pending_vectors directly
+        with store._lock:
+            store._flush_pending_vectors()
         assert store.vectors.shape == (5, 3)
 
     def test_embedding_dimension_mismatch(self):

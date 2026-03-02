@@ -47,6 +47,10 @@ class VectorStore:
         self.metadata: List[Dict[str, Any]] = []
         self.embedding_dimension: Optional[int] = None
         self._lock = threading.RLock()  # Thread safety for concurrent access
+        # Staging list for deferred vstack: embeddings are appended here and
+        # flushed into self.vectors via _flush_pending_vectors() to avoid O(n²)
+        # repeated vstack calls during bulk add_operation() sequences.
+        self._pending_vectors: List[np.ndarray] = []
 
     def add_operation(
         self, operation_id: str, embedding: np.ndarray, metadata: Dict[str, Any]
@@ -81,13 +85,30 @@ class VectorStore:
             self.operation_ids.append(operation_id)
             self.metadata.append(metadata)
 
-            # Add to vectors array
-            if len(self.vectors) == 0:
-                self.vectors = embedding.reshape(1, -1)
-            else:
-                self.vectors = np.vstack([self.vectors, embedding.reshape(1, -1)])
+            # Stage the embedding for deferred vstack; call _flush_pending_vectors()
+            # when done with a bulk insert to materialize self.vectors in one pass.
+            self._pending_vectors.append(embedding.reshape(1, -1))
 
             logger.debug(f"Added operation '{operation_id}' to vector store")
+
+    def _flush_pending_vectors(self):
+        """
+        Materialize staged embeddings into self.vectors.
+
+        Collects all embeddings appended since the last flush and builds the
+        final matrix with a single np.vstack() call, avoiding the O(n²)
+        cost of stacking inside add_operation() for bulk inserts.
+
+        Must be called with self._lock already held.
+        """
+        if not self._pending_vectors:
+            return
+
+        if len(self.vectors) == 0:
+            self.vectors = np.vstack(self._pending_vectors)
+        else:
+            self.vectors = np.vstack([self.vectors] + self._pending_vectors)
+        self._pending_vectors = []
 
     def search(
         self,
@@ -123,6 +144,8 @@ class VectorStore:
             'op_001'
         """
         with self._lock:
+            self._flush_pending_vectors()
+
             if len(self.vectors) == 0:
                 logger.warning("Vector store is empty")
                 return []
@@ -196,6 +219,7 @@ class VectorStore:
             Dict with operation_id, embedding, metadata or None if not found
         """
         with self._lock:
+            self._flush_pending_vectors()
             try:
                 idx = self.operation_ids.index(operation_id)
                 return {
@@ -222,6 +246,7 @@ class VectorStore:
         path = file_path or RAG_VECTOR_STORE_PATH
 
         with self._lock:
+            self._flush_pending_vectors()
             data = {
                 "vectors": self.vectors,
                 "operation_ids": self.operation_ids,
@@ -273,6 +298,28 @@ class VectorStore:
             logger.error(f"Failed to load vector store: {e}")
             raise
 
+    def update_operation_metadata(self, operation_id: str, metadata_update: Dict[str, Any]) -> bool:
+        """
+        Merge new fields into the metadata of an existing operation.
+
+        Used by OutcomeTracker to record success/failure counts without
+        re-embedding the operation.
+
+        Args:
+            operation_id: Operation identifier to update
+            metadata_update: Dict of fields to merge into the existing metadata
+
+        Returns:
+            True if the operation was found and updated, False otherwise
+        """
+        with self._lock:
+            try:
+                idx = self.operation_ids.index(operation_id)
+                self.metadata[idx].update(metadata_update)
+                return True
+            except ValueError:
+                return False
+
     def get_stats(self) -> Dict[str, Any]:
         """
         Get statistics about the vector store.
@@ -306,6 +353,7 @@ class VectorStore:
             self.operation_ids = []
             self.metadata = []
             self.embedding_dimension = None
+            self._pending_vectors = []
             logger.info("Cleared vector store")
 
     def __len__(self) -> int:

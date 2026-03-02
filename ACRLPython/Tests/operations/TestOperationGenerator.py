@@ -536,3 +536,103 @@ class TestCommandParserGeneration:
             parser = CommandParser(use_rag=False)
             should_generate, reason = parser._check_generation_needed([])
             assert should_generate is True
+
+
+# ============================================================================
+# Test Class: _generate_test_file
+# ============================================================================
+
+class TestGenerateTestFile:
+    """Tests for the auto-generated pytest skeleton writer."""
+
+    def _make_generator(self):
+        """Return an OperationGenerator with default config."""
+        from operations.Generator import OperationGenerator
+        return OperationGenerator()
+
+    def test_creates_test_file_alongside_operation(self, tmp_path):
+        """_generate_test_file writes a Test_*.py next to the operation file."""
+        generator = self._make_generator()
+        op_file = tmp_path / "rotate_gripper_1700000000.py"
+        op_file.write_text("# placeholder operation")
+
+        generator._generate_test_file(op_file, "rotate_gripper", "rotate gripper 45 degrees")
+
+        # File should exist adjacent to the operation file
+        test_files = list(tmp_path.glob("Test_rotate_gripper_*.py"))
+        assert len(test_files) == 1
+
+    def test_generated_file_contains_pending_header(self, tmp_path):
+        """Test file must include the REVIEW_STATUS: PENDING header."""
+        generator = self._make_generator()
+        op_file = tmp_path / "rotate_gripper_1700000000.py"
+        op_file.write_text("# placeholder")
+
+        generator._generate_test_file(op_file, "rotate_gripper", "rotate 45 degrees")
+
+        test_file = next(tmp_path.glob("Test_rotate_gripper_*.py"))
+        content = test_file.read_text()
+        assert "REVIEW_STATUS: PENDING" in content
+
+    def test_generated_file_contains_original_command(self, tmp_path):
+        """The original command text is embedded as a comment for reviewers."""
+        generator = self._make_generator()
+        op_file = tmp_path / "rotate_gripper_1700000000.py"
+        op_file.write_text("# placeholder")
+
+        generator._generate_test_file(op_file, "rotate_gripper", "rotate gripper 45 degrees")
+
+        test_file = next(tmp_path.glob("Test_rotate_gripper_*.py"))
+        content = test_file.read_text()
+        assert "rotate gripper 45 degrees" in content
+
+    def test_generated_file_contains_three_test_methods(self, tmp_path):
+        """Skeleton must include the three baseline test scenarios."""
+        generator = self._make_generator()
+        op_file = tmp_path / "rotate_gripper_1700000000.py"
+        op_file.write_text("# placeholder")
+
+        generator._generate_test_file(op_file, "rotate_gripper", "rotate gripper")
+
+        test_file = next(tmp_path.glob("Test_rotate_gripper_*.py"))
+        content = test_file.read_text()
+        assert "test_happy_path_returns_success" in content
+        assert "test_missing_robot_id_returns_error" in content
+        assert "test_returns_operation_result_type" in content
+
+    def test_generated_file_contains_class_name_derived_from_op(self, tmp_path):
+        """Test class name is CamelCase form of the operation name."""
+        generator = self._make_generator()
+        op_file = tmp_path / "rotate_gripper_1700000000.py"
+        op_file.write_text("# placeholder")
+
+        generator._generate_test_file(op_file, "rotate_gripper", "rotate")
+
+        test_file = next(tmp_path.glob("Test_rotate_gripper_*.py"))
+        content = test_file.read_text()
+        # rotate_gripper → RotateGripper
+        assert "class TestRotateGripper" in content
+
+    def test_generate_test_file_does_not_raise_on_write_error(self, tmp_path):
+        """If the test file cannot be written, _generate_test_file silently continues."""
+        generator = self._make_generator()
+        # Point op_file at a non-existent subdirectory so the write will fail
+        op_file = tmp_path / "nonexistent_dir" / "rotate_gripper_1700000000.py"
+
+        # Must not raise — failures are logged as warnings
+        generator._generate_test_file(op_file, "rotate_gripper", "rotate gripper")
+
+    def test_save_and_register_creates_test_file_too(self, tmp_path):
+        """_save_and_register calls _generate_test_file, so a Test_*.py appears on disk."""
+        with patch("operations.Generator.GENERATED_OPERATIONS_DIR", str(tmp_path)), \
+             patch("operations.Generator.REQUIRE_USER_REVIEW", True):
+
+            generator = self._make_generator()
+            file_path = generator._save_and_register(
+                VALID_OPERATION_CODE, "rotate end effector 45 degrees"
+            )
+
+        assert file_path is not None
+        # At least one Test_*.py sibling should have been created
+        test_files = list(tmp_path.glob("Test_*.py"))
+        assert len(test_files) >= 1
