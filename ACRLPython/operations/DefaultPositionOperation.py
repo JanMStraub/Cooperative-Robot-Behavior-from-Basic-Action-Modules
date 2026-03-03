@@ -7,7 +7,6 @@ by restoring the start joint targets saved when the robot was registered.
 """
 
 import time
-import logging
 from typing import Optional
 
 # Lazy import to avoid circular dependency with servers module
@@ -21,8 +20,8 @@ from .Base import (
 )
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 # Import from centralized lazy import system (prevents circular dependencies)
@@ -296,19 +295,9 @@ def create_return_to_start_position_operation() -> BasicOperation:
             ),
         ],
         preconditions=[
-            "Robot arm is initialized and registered with RobotManager",
-            "Start joint targets were saved during robot registration",
-            "Robot is not currently executing another motion command",
-            "Unity is running with UnifiedPythonReceiver active",
-            "CommandServer is running on port 5010",
+            "robot_is_initialized(robot_id)",
         ],
-        postconditions=[
-            "Command has been sent to Unity via TCP",
-            "Unity RobotController will move joints to start configuration",
-            "Robot joints will reach saved start targets",
-            "Robot arm will be stable and holding position",
-            "Ready to execute next operation",
-        ],
+        postconditions=[],
         average_duration_ms=1500.0,
         success_rate=0.98,
         failure_modes=[

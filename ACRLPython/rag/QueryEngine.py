@@ -6,7 +6,6 @@ Semantic search and retrieval over operations.
 """
 
 from typing import List, Dict, Any, Optional
-import logging
 
 from .Embeddings import EmbeddingGenerator
 from .VectorStore import VectorStore
@@ -18,8 +17,8 @@ except ImportError:
     from ..config.Rag import RAG_DEFAULT_TOP_K
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 class QueryEngine:

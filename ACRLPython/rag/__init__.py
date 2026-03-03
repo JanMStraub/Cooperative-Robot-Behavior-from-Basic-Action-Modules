@@ -26,7 +26,6 @@ Usage:
 
 from typing import Optional, List, Dict, Any
 import os
-import logging
 
 
 def _get_registry():
@@ -54,8 +53,8 @@ from .ConfidenceScorer import (
 )
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 class RAGSystem:

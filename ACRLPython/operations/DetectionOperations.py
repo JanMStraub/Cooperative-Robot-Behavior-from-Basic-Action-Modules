@@ -162,14 +162,8 @@ def create_detect_objects_operation() -> BasicOperation:
                 default="main",
             ),
         ],
-        preconditions=[
-            "Camera image available in ImageStorage",
-            "StreamingServer is running and receiving images",
-        ],
-        postconditions=[
-            "Detection results returned with pixel coordinates",
-            "Each detection includes color, bounding box, and confidence",
-        ],
+        preconditions=[],
+        postconditions=[],
         average_duration_ms=50,
         success_rate=0.95,
         failure_modes=[
@@ -428,14 +422,8 @@ def create_estimate_distance_to_object_operation() -> BasicOperation:
                 required=True,
             ),
         ],
-        preconditions=[
-            "Object detected with 3D coordinates",
-            "Robot position available in WorldState",
-        ],
-        postconditions=[
-            "Distance calculated and returned",
-            "Robot and object positions logged",
-        ],
+        preconditions=[],
+        postconditions=[],
         average_duration_ms=10,
         success_rate=0.99,
         failure_modes=[
@@ -499,14 +487,8 @@ def create_estimate_distance_between_objects_operation() -> BasicOperation:
                 required=True,
             ),
         ],
-        preconditions=[
-            "Both objects detected with 3D coordinates",
-            "Objects in WorldState",
-        ],
-        postconditions=[
-            "Distance calculated and returned",
-            "Object positions logged",
-        ],
+        preconditions=[],
+        postconditions=[],
         average_duration_ms=10,
         success_rate=0.99,
         failure_modes=[

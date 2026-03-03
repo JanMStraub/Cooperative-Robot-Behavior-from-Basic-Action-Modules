@@ -1161,14 +1161,9 @@ GRASP_OBJECT_FOR_HANDOFF_OPERATION = BasicOperation(
         ),
     ],
     preconditions=[
-        "Object must be detected and in WorldState with dimensions",
-        "Receiving robot must be in WorldState with a known position",
-        "Grasping robot must be within reach of the object",
+        "robot_is_initialized(robot_id)",
     ],
-    postconditions=[
-        "Grasping robot holds object at the end furthest from receiving robot",
-        "Near end of object is unobstructed for receiving robot approach",
-    ],
+    postconditions=[],
     average_duration_ms=200.0,
     success_rate=0.88,
     failure_modes=[
@@ -1310,15 +1305,9 @@ GRASP_OBJECT_OPERATION = BasicOperation(
         ),
     ],
     preconditions=[
-        "Object must be detected and tracked in the scene",
-        "Robot must be initialized and responsive",
-        "Target object must be within robot's workspace",
+        "robot_is_initialized(robot_id)",
     ],
-    postconditions=[
-        "Robot gripper positioned at grasp location with object grasped",
-        "If retreat enabled: robot lifted object to safe height",
-        "Grasp quality score available for verification",
-    ],
+    postconditions=[],
     average_duration_ms=150.0,
     success_rate=0.92,
     failure_modes=[

@@ -13,7 +13,6 @@ Key Components:
 """
 
 import re
-import logging
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
 from .SpatialPredicates import evaluate_predicate
@@ -21,8 +20,8 @@ from .WorldState import get_world_state
 from .Base import BasicOperation, OperationResult
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 # ============================================================================

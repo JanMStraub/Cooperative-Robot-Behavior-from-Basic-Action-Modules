@@ -13,14 +13,13 @@ Provides semantic queries that leverage graph structure:
 - Operation history (what did Robot1 do recently?)
 """
 
-import logging
 import math
 from typing import List, Dict, Any, Optional, Tuple
 from .Core import KnowledgeGraph
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 class GraphQueryEngine:

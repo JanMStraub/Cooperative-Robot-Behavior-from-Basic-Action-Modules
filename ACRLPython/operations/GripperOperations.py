@@ -302,21 +302,9 @@ def create_control_gripper_operation() -> BasicOperation:
             ),
         ],
         preconditions=[
-            "Robot arm is initialized and calibrated",
-            "Robot is not currently executing another gripper command",
-            "Robot exists in Unity's RobotManager",
-            "GripperController component is attached to robot",
-            "Unity is running with UnifiedPythonReceiver active",
-            "CommandServer is running on port 5010",
+            "robot_is_initialized(robot_id)",
         ],
-        postconditions=[
-            "Command has been sent to Unity via TCP",
-            "Unity GripperController will open or close the gripper",
-            "Gripper will reach target state (open or closed) within 500ms",
-            "Ready to execute next operation",
-            "If closing: object between jaws will be grasped (if present)",
-            "If opening: previously held object will be released (if present)",
-        ],
+        postconditions=[],
         average_duration_ms=500,  # Time for gripper to fully open or close
         success_rate=0.98,
         failure_modes=[
@@ -545,14 +533,9 @@ def create_release_object_operation() -> BasicOperation:
             ),
         ],
         preconditions=[
-            "Robot gripper is closed (holding object or empty)",
-            "Unity connected",
+            "robot_is_initialized(robot_id)",
         ],
-        postconditions=[
-            "Gripper opened",
-            "Any held object released from gripper",
-            "Ready for next operation",
-        ],
+        postconditions=[],
         average_duration_ms=500.0,
         success_rate=0.98,
         failure_modes=[

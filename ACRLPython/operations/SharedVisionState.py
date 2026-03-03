@@ -35,7 +35,6 @@ Usage:
 
 import threading
 import time
-import logging
 from typing import List, Optional, Dict, Tuple
 from dataclasses import dataclass
 import math
@@ -63,9 +62,8 @@ except ImportError:
         OBJECT_CLAIM_TIMEOUT,
     )
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
-)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -138,7 +136,7 @@ class SharedVisionState:
         self.claim_timeout = claim_timeout
         self.conflict_strategy = CONFLICT_RESOLUTION_STRATEGY
 
-        logging.info(
+        logger.info(
             f"SharedVisionState initialized: timeout={claim_timeout}s, "
             f"strategy={self.conflict_strategy}"
         )
@@ -198,7 +196,7 @@ class SharedVisionState:
                         )
                         self.detections[object_id] = claimed_obj
 
-            logging.debug(f"Updated vision state: {len(self.detections)} objects")
+            logger.debug(f"Updated vision state: {len(self.detections)} objects")
 
     def claim_object(self, object_id: str, robot_id: str) -> bool:
         """
@@ -213,7 +211,7 @@ class SharedVisionState:
         """
         with self.lock:
             if object_id not in self.detections:
-                logging.warning(f"Cannot claim unknown object: {object_id}")
+                logger.warning(f"Cannot claim unknown object: {object_id}")
                 return False
 
             obj = self.detections[object_id]
@@ -225,7 +223,7 @@ class SharedVisionState:
                     obj.claim_timestamp = time.time()
                     return True
                 else:
-                    logging.debug(
+                    logger.debug(
                         f"Object {object_id} already claimed by {obj.claimed_by}"
                     )
                     return False
@@ -233,7 +231,7 @@ class SharedVisionState:
             # Claim object
             obj.claimed_by = robot_id
             obj.claim_timestamp = time.time()
-            logging.info(f"Robot {robot_id} claimed object {object_id}")
+            logger.info(f"Robot {robot_id} claimed object {object_id}")
             return True
 
     def release_object(self, object_id: str, robot_id: str) -> bool:
@@ -249,14 +247,14 @@ class SharedVisionState:
         """
         with self.lock:
             if object_id not in self.detections:
-                logging.warning(f"Cannot release unknown object: {object_id}")
+                logger.warning(f"Cannot release unknown object: {object_id}")
                 return False
 
             obj = self.detections[object_id]
 
             # Verify robot owns the claim
             if obj.claimed_by != robot_id:
-                logging.warning(
+                logger.warning(
                     f"Robot {robot_id} cannot release object {object_id} "
                     f"(claimed by {obj.claimed_by})"
                 )
@@ -265,7 +263,7 @@ class SharedVisionState:
             # Release claim
             obj.claimed_by = None
             obj.claim_timestamp = 0.0
-            logging.info(f"Robot {robot_id} released object {object_id}")
+            logger.info(f"Robot {robot_id} released object {object_id}")
             return True
 
     def get_available_objects(self, color: Optional[str] = None) -> List[ClaimedObject]:
@@ -341,7 +339,7 @@ class SharedVisionState:
         """
         with self.lock:
             if object_id not in self.detections:
-                logging.warning(
+                logger.warning(
                     f"Cannot resolve conflict for unknown object: {object_id}"
                 )
                 return robot1_id  # Default to first robot
@@ -350,7 +348,7 @@ class SharedVisionState:
 
             # Check existing claim
             if obj.claimed_by is not None:
-                logging.debug(f"Conflict resolved by existing claim: {obj.claimed_by}")
+                logger.debug(f"Conflict resolved by existing claim: {obj.claimed_by}")
                 return obj.claimed_by
 
             # Apply conflict resolution strategy
@@ -364,7 +362,7 @@ class SharedVisionState:
                 if abs(dist1 - dist2) > min_diff:
                     # Clear winner: assign to closer robot
                     winner = robot1_id if dist1 < dist2 else robot2_id
-                    logging.info(
+                    logger.info(
                         f"Conflict resolved by distance: {winner} "
                         f"(d1={dist1:.3f}m, d2={dist2:.3f}m)"
                     )
@@ -372,11 +370,11 @@ class SharedVisionState:
                 else:
                     # Too close to call, use tie-breaker (alphabetical)
                     winner = robot1_id if robot1_id < robot2_id else robot2_id
-                    logging.info(f"Conflict tie-breaker (distances equal): {winner}")
+                    logger.info(f"Conflict tie-breaker (distances equal): {winner}")
                     return winner
             else:
                 # "first_claim" strategy: first robot wins
-                logging.info(f"Conflict resolved by first claim: {robot1_id}")
+                logger.info(f"Conflict resolved by first claim: {robot1_id}")
                 return robot1_id
 
     def _calculate_distance(
@@ -409,7 +407,7 @@ class SharedVisionState:
             if obj.claimed_by is not None:
                 age = current_time - obj.claim_timestamp
                 if age > self.claim_timeout:
-                    logging.info(
+                    logger.info(
                         f"Auto-releasing stale claim: {obj.object_id} "
                         f"(claimed by {obj.claimed_by}, age={age:.1f}s)"
                     )
@@ -444,7 +442,7 @@ class SharedVisionState:
         """
         with self.lock:
             self.detections.clear()
-            logging.info("SharedVisionState cleared")
+            logger.info("SharedVisionState cleared")
 
 
 # ===========================

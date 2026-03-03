@@ -34,15 +34,21 @@ Supported commands:
 """
 
 import json
+import signal
 import socket
 import threading
-import logging
 import time
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [ROSMotionClient] %(message)s"
-)
-logger = logging.getLogger(__name__)
+try:
+    from core.LoggingSetup import get_logger
+    logger = get_logger(__name__)
+except ImportError:
+    import logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+    logger = logging.getLogger(__name__)
 
 # ROS 2 imports - only available inside Docker
 try:
@@ -1450,10 +1456,20 @@ class ROSMotionServer:
         """Cleanly stop the TCP server and shut down the ROS 2 node.
 
         Sets the running flag to False (stops the accept loop and the ROS spin
-        thread), destroys the ROS node, and calls rclpy.shutdown() so resources
+        thread), waits for the spin thread to exit, then destroys the ROS node
+        and calls rclpy.shutdown() so all publishers/subscribers/action clients
         are released before the process exits.
         """
         self._running = False
+
+        # Wait for the ROS spin thread to exit before destroying the node.
+        # Without this join, the daemon thread may still be inside spin_once()
+        # when destroy_node() is called, leaving stale ROS graph registrations.
+        if hasattr(self, "_ros_thread") and self._ros_thread is not None:
+            self._ros_thread.join(timeout=5.0)
+            if self._ros_thread.is_alive():
+                logger.warning("ROS spin thread did not exit within 5s")
+
         if HAS_ROS and self._node:
             self._node.destroy_node()
             rclpy.shutdown()
@@ -1462,6 +1478,15 @@ class ROSMotionServer:
 def main():
     """Entry point when running inside Docker."""
     server = ROSMotionServer(host="0.0.0.0", port=5020)
+
+    def _signal_handler(sig, frame):
+        """Handle SIGINT and SIGTERM for graceful shutdown inside Docker."""
+        logger.info(f"Received signal {sig}, shutting down...")
+        server.shutdown()
+
+    signal.signal(signal.SIGINT, _signal_handler)
+    signal.signal(signal.SIGTERM, _signal_handler)
+
     try:
         server.start()
     except KeyboardInterrupt:

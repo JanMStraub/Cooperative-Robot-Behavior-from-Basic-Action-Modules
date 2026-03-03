@@ -26,7 +26,6 @@ import argparse
 import json
 import sys
 import time
-import logging
 import base64
 import traceback
 from datetime import datetime
@@ -40,14 +39,14 @@ try:
     import openai
     from openai import OpenAI
 except ImportError:
-    logging.info("Error: 'openai' package not found. Install with: pip install openai")
+    logger.info("Error: 'openai' package not found. Install with: pip install openai")
     sys.exit(1)
 
 try:
     import cv2
     import numpy as np
 except ImportError:
-    logging.info(
+    logger.info(
         "Error: 'opencv-python' and 'numpy' required. Install with: pip install opencv-python numpy"
     )
     sys.exit(1)
@@ -55,8 +54,6 @@ except ImportError:
 # Import config
 try:
     from config.Servers import (
-        LOG_LEVEL,
-        LOG_FORMAT,
         VISION_MODELS,
         DEFAULT_LMSTUDIO_MODEL,
         LMSTUDIO_BASE_URL,
@@ -70,8 +67,6 @@ try:
     )
 except ImportError:
     from ..config.Servers import (
-        LOG_LEVEL,
-        LOG_FORMAT,
         VISION_MODELS,
         DEFAULT_LMSTUDIO_MODEL,
         LMSTUDIO_BASE_URL,
@@ -91,7 +86,8 @@ except ImportError:
     from core.Imports import get_unified_image_storage
 
 # Configure logging
-logging.basicConfig(level=getattr(logging, LOG_LEVEL), format=LOG_FORMAT)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 class LMStudioVisionProcessor:
@@ -117,7 +113,7 @@ class LMStudioVisionProcessor:
         # Test connection
         try:
             self._client.models.list()
-            logging.info(
+            logger.info(
                 f"Connected to LM Studio at {self._base_url}, using model: {self._model}"
             )
         except Exception as e:
@@ -166,7 +162,7 @@ class LMStudioVisionProcessor:
         if temperature is None:
             temperature = DEFAULT_TEMPERATURE
 
-        logging.info(f"Processing {len(images)} image(s) with LM Studio...")
+        logger.info(f"Processing {len(images)} image(s) with LM Studio...")
 
         # Prepare images as base64 encoded data URLs for OpenAI API
         image_content = []
@@ -180,11 +176,11 @@ class LMStudioVisionProcessor:
                         "image_url": {"url": f"data:image/png;base64,{img_base64}"},
                     }
                 )
-                logging.info(
+                logger.info(
                     f"  [{i+1}/{len(images)}] Encoded: {cam_id} ({image.shape[1]}x{image.shape[0]})"
                 )
             except Exception as e:
-                logging.error(f"  Error encoding image from {cam_id}: {e}")
+                logger.error(f"  Error encoding image from {cam_id}: {e}")
                 raise
 
         # Build prompt with camera context if multiple cameras
@@ -199,7 +195,7 @@ class LMStudioVisionProcessor:
         message_content = [{"type": "text", "text": full_prompt}] + image_content
 
         # Make request to LM Studio
-        logging.info(f"Sending request to LM Studio ({self._model})...")
+        logger.info(f"Sending request to LM Studio ({self._model})...")
         start_time = datetime.now()
 
         try:
@@ -216,7 +212,7 @@ class LMStudioVisionProcessor:
                 max_tokens=1000,
             )
         except Exception as e:
-            logging.error(f"LM Studio error: {e}")
+            logger.error(f"LM Studio error: {e}")
             raise
 
         end_time = datetime.now()
@@ -240,7 +236,7 @@ class LMStudioVisionProcessor:
             },
         }
 
-        logging.info(f"✓ Response received in {duration:.2f}s")
+        logger.info(f"✓ Response received in {duration:.2f}s")
 
         return result
 
@@ -278,14 +274,14 @@ def get_images_from_server(
             age = storage.get_single_age(cam_id)
             prompt = storage.get_single_prompt(cam_id) or ""
             prompt_info = f", prompt: '{prompt}'" if prompt else ""
-            logging.info(
+            logger.info(
                 f"  ✓ {cam_id}: {image.shape[1]}x{image.shape[0]}, {age:.1f}s ago{prompt_info}"
             )
             images.append(image)
             valid_camera_ids.append(cam_id)
             prompts.append(prompt)
         else:
-            logging.info(f"  ✗ {cam_id}: No image available")
+            logger.info(f"  ✗ {cam_id}: No image available")
 
     if not images:
         raise ValueError(f"No images available from cameras: {camera_ids}")
@@ -311,7 +307,7 @@ def save_response(result: Dict, output_path: Optional[str] = None):
     json_path = base_path.with_suffix(".json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2, ensure_ascii=False)
-    logging.info(f"\n✓ Saved full response to: {json_path}")
+    logger.info(f"\n✓ Saved full response to: {json_path}")
 
 
 def main():
@@ -416,27 +412,27 @@ Note: StreamingServer.py must be running for this script to work.
             storage = get_unified_image_storage()
             camera_ids = storage.get_all_camera_ids()
             if camera_ids:
-                logging.info("Available cameras:")
+                logger.info("Available cameras:")
                 for cam_id in camera_ids:
                     # Skip stereo camera entries (they have "(stereo)" suffix)
                     if "(stereo)" in cam_id:
                         continue
                     age = storage.get_single_age(cam_id)
                     prompt = storage.get_single_prompt(cam_id) or "(no prompt)"
-                    logging.info(f"  • {cam_id} - age: {age:.1f}s, prompt: {prompt}")
+                    logger.info(f"  • {cam_id} - age: {age:.1f}s, prompt: {prompt}")
             else:
-                logging.info("No cameras available. Is ImageServer running?")
+                logger.info("No cameras available. Is ImageServer running?")
             sys.exit(0)
 
         # Initialize LM Studio processor
-        logging.info("Initializing LM Studio vision processor...")
+        logger.info("Initializing LM Studio vision processor...")
         processor = LMStudioVisionProcessor(model=args.model, base_url=args.base_url)
 
         # Create output directory if needed
         output_dir = Path(args.output_dir)
         if not args.no_save:
             output_dir.mkdir(parents=True, exist_ok=True)
-            logging.info(f"Saving responses to: {output_dir}")
+            logger.info(f"Saving responses to: {output_dir}")
 
         # Track processed images to avoid reprocessing
         processed_timestamps: Dict[str, float] = {}
@@ -444,13 +440,13 @@ Note: StreamingServer.py must be running for this script to work.
         # Determine which cameras to monitor
         monitor_cameras = args.camera  # None = all cameras
 
-        logging.info("Starting continuous monitoring mode...")
-        logging.info(f"Check interval: {args.interval}s")
-        logging.info(f"Image age window: {args.min_age}s - {args.max_age}s")
+        logger.info("Starting continuous monitoring mode...")
+        logger.info(f"Check interval: {args.interval}s")
+        logger.info(f"Image age window: {args.min_age}s - {args.max_age}s")
         if monitor_cameras:
-            logging.info(f"Monitoring cameras: {', '.join(monitor_cameras)}")
+            logger.info(f"Monitoring cameras: {', '.join(monitor_cameras)}")
         else:
-            logging.info("Monitoring all available cameras")
+            logger.info("Monitoring all available cameras")
 
         # Main processing loop
         while True:
@@ -498,9 +494,9 @@ Note: StreamingServer.py must be running for this script to work.
                         continue  # Already processed
                     else:
                         # Process the image
-                        logging.info(f"\n{'='*80}")
-                        logging.info(f"Processing image from: {cam_id}")
-                        logging.info(f"Age: {age:.2f}s, Prompt: '{prompt}'")
+                        logger.info(f"\n{'='*80}")
+                        logger.info(f"Processing image from: {cam_id}")
+                        logger.info(f"Age: {age:.2f}s, Prompt: '{prompt}'")
 
                         result = processor.send_images(
                             images=[image],
@@ -510,11 +506,11 @@ Note: StreamingServer.py must be running for this script to work.
                         )
 
                     # Display response
-                    logging.info("\n" + "=" * 80)
-                    logging.info(f"RESPONSE FOR {cam_id}:")
-                    logging.info("=" * 80)
-                    logging.info(result["response"])
-                    logging.info("=" * 80 + "\n")
+                    logger.info("\n" + "=" * 80)
+                    logger.info(f"RESPONSE FOR {cam_id}:")
+                    logger.info("=" * 80)
+                    logger.info(result["response"])
+                    logger.info("=" * 80 + "\n")
 
                     # Save response
                     if not args.no_save:
@@ -526,17 +522,17 @@ Note: StreamingServer.py must be running for this script to work.
                     processed_timestamps[cam_id] = current_timestamp
 
             except Exception as e:
-                logging.error(f"Error in processing loop: {e}")
+                logger.error(f"Error in processing loop: {e}")
                 traceback.print_exc()
 
             # Wait before next check
             time.sleep(args.interval)
 
     except KeyboardInterrupt:
-        logging.info("\n\nShutting down (interrupted by user)")
+        logger.info("\n\nShutting down (interrupted by user)")
         sys.exit(0)
     except Exception as e:
-        logging.error(f"\nFatal error: {e}")
+        logger.error(f"\nFatal error: {e}")
         traceback.print_exc()
         sys.exit(1)
 

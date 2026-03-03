@@ -133,15 +133,15 @@ namespace PythonCommunication
         /// <returns>True if command was sent successfully</returns>
         public bool ExecuteSequence(string command, string robotId = null)
         {
-            if (!IsConnected)
-            {
-                Debug.LogWarning($"{LogPrefix} Cannot execute - not connected to server");
-                return false;
-            }
-
             if (string.IsNullOrEmpty(command))
             {
                 Debug.LogError($"{LogPrefix} Command cannot be null or empty");
+                return false;
+            }
+
+            if (!IsConnected)
+            {
+                Debug.LogWarning($"{LogPrefix} Cannot execute - not connected to server");
                 return false;
             }
 

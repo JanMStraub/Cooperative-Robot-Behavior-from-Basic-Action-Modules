@@ -18,7 +18,6 @@ Edge Types:
 """
 
 import threading
-import logging
 from collections import defaultdict
 from typing import Optional, List, Dict, Any, Set
 
@@ -30,8 +29,8 @@ except ImportError:
     )
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 class KnowledgeGraph:

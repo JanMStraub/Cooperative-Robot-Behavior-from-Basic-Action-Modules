@@ -12,7 +12,6 @@ Checks performed:
 - Deadlock prevention
 """
 
-import logging
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, field
 
@@ -35,8 +34,8 @@ from .SpatialPredicates import robots_will_collide, is_in_shared_zone
 from .Base import OperationCategory
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 # ============================================================================

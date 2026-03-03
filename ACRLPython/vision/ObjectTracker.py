@@ -31,7 +31,6 @@ Usage:
             print(f"Track {det.track_id}: {det.color} at ({det.center_x}, {det.center_y})")
 """
 
-import logging
 import numpy as np
 from typing import List, Optional, Tuple
 from dataclasses import dataclass, field
@@ -42,9 +41,8 @@ try:
 except ImportError:
     from vision.DetectionDataModels import DetectionObject
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
-)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -167,7 +165,7 @@ class ObjectTracker:
         self.tracks: List[Track] = []
         self.next_id = 1
 
-        logging.info(f"ObjectTracker initialized: max_age={max_age}, min_iou={min_iou}")
+        logger.info(f"ObjectTracker initialized: max_age={max_age}, min_iou={min_iou}")
 
     def update(self, detections: List[DetectionObject]) -> List[DetectionObject]:
         """
@@ -236,7 +234,7 @@ class ObjectTracker:
             )
             tracked_detections.append(tracked_det)
 
-        logging.debug(
+        logger.debug(
             f"Tracking: {len(detections)} detections → {len(self.tracks)} active tracks"
         )
 
@@ -360,7 +358,7 @@ class ObjectTracker:
         self.tracks.append(track)
         self.next_id += 1
 
-        logging.debug(f"Created new track {track.track_id} for {detection.color}")
+        logger.debug(f"Created new track {track.track_id} for {detection.color}")
 
     def _age_tracks(self):
         """
@@ -376,7 +374,7 @@ class ObjectTracker:
         removed_count = before_count - len(self.tracks)
 
         if removed_count > 0:
-            logging.debug(
+            logger.debug(
                 f"Removed {removed_count} stale tracks (age > {self.max_age})"
             )
 
@@ -395,7 +393,7 @@ class ObjectTracker:
         """
         self.tracks.clear()
         self.next_id = 1
-        logging.info("ObjectTracker reset")
+        logger.info("ObjectTracker reset")
 
 
 # ===========================

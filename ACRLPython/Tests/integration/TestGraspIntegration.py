@@ -247,60 +247,123 @@ class TestGraspEndToEnd:
         assert avg_time < 50, f"Average Python overhead should be <50ms, got {avg_time:.2f}ms"
 
 
+def _is_sequence_server_available() -> bool:
+    """Check if the SequenceServer (port 5013) is reachable."""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1.0)
+        result = sock.connect_ex(('localhost', 5013))
+        sock.close()
+        return result == 0
+    except Exception:
+        return False
+
+
+_SEQUENCE_AVAILABLE = _is_sequence_server_available()
+_SKIP_REASON_SEQ = "SequenceServer not running on port 5013. Start backend servers to run these tests."
+
+
+class _BackendClient:
+    """
+    Minimal Protocol V2 TCP client for the SequenceServer (port 5013).
+
+    Routes commands through the live backend process so the CommandBroadcaster
+    singleton is the one initialized in the server, not in the test process.
+    """
+
+    SEQUENCE_QUERY = 0x08
+    RESULT = 0x02
+    PORT = 5013
+
+    def __init__(self, timeout: float = 60.0):
+        """Connect to the SequenceServer."""
+        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._sock.settimeout(timeout)
+        self._sock.connect(("localhost", self.PORT))
+
+    def close(self):
+        """Close the TCP connection."""
+        try:
+            self._sock.close()
+        except Exception:
+            pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close()
+
+    def send_command(self, command: str, robot_id: str = "Robot1",
+                     camera_id: str = "TableStereoCamera",
+                     auto_execute: bool = True, request_id: int = 1) -> dict:
+        """Send a natural-language command and return the JSON response dict."""
+        encoded_cmd = command.encode("utf-8")
+        encoded_rid = robot_id.encode("utf-8")
+        encoded_cam = camera_id.encode("utf-8")
+        import struct
+        header = struct.pack("B", self.SEQUENCE_QUERY) + struct.pack("<I", request_id)
+        body = (struct.pack("<I", len(encoded_cmd)) + encoded_cmd
+                + struct.pack("<I", len(encoded_rid)) + encoded_rid
+                + struct.pack("<I", len(encoded_cam)) + encoded_cam
+                + struct.pack("B", 1 if auto_execute else 0))
+        self._sock.sendall(header + body)
+        return self._recv(request_id)
+
+    def _recv_exact(self, n: int) -> bytes:
+        data = b""
+        while len(data) < n:
+            chunk = self._sock.recv(n - len(data))
+            if not chunk:
+                raise ConnectionError("Connection closed by backend")
+            data += chunk
+        return data
+
+    def _recv(self, expected_request_id: int) -> dict:
+        import struct, json
+        header = self._recv_exact(5)
+        msg_type = header[0]
+        if msg_type != self.RESULT:
+            raise ValueError(f"Unexpected response type: {msg_type:#04x}")
+        json_len = struct.unpack("<I", self._recv_exact(4))[0]
+        return json.loads(self._recv_exact(json_len).decode("utf-8"))
+
+
 @pytest.mark.integration
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not _UNITY_AVAILABLE, reason=_SKIP_REASON)
-@pytest.mark.skipif(not _ROS_AVAILABLE, reason=_SKIP_REASON_ROS)
+@pytest.mark.skipif(not _SEQUENCE_AVAILABLE, reason=_SKIP_REASON_SEQ)
 class TestGraspWithRealUnity:
     """
-    Integration tests that require a running Unity instance.
-    These tests are skipped by default unless --unity flag is provided.
+    Integration tests that require a running Unity instance and backend servers.
+
+    Commands are sent through the SequenceServer TCP interface so they run in
+    the backend process (where CommandBroadcaster is properly initialized),
+    not directly in the test process.
     """
 
-    @pytest.fixture(scope="class")
-    def unity_connection(self):
-        """Real connection to Unity (requires Unity to be running)."""
-        import socket
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(1.0)
-            result = sock.connect_ex(('localhost', 5010))
-            sock.close()
-            if result != 0:
-                pytest.skip("Unity backend not reachable on port 5010")
-        except Exception:
-            pytest.skip("Unity backend not reachable on port 5010")
+    def test_real_grasp_execution(self):
+        """Test grasp command reaches Unity via the live SequenceServer."""
+        with _BackendClient(timeout=60.0) as client:
+            result = client.send_command(
+                command="grasp redCube with Robot1",
+                robot_id="Robot1",
+                request_id=10,
+            )
 
-    def test_real_grasp_execution(self, unity_connection):
-        """Test grasp execution with real Unity instance."""
-        from core.Imports import get_world_state
+        assert result.get("success") is True, f"Grasp failed: {result.get('error')}"
 
-        # Populate WorldState with redCube position so ROS planning can proceed.
-        # In a real run detect_object_stereo would do this; here we seed it directly.
-        # Robot1 is at Unity world (-0.475, 0, 0). This position is 0.3m in front of
-        # it at table height, mapping to ROS base_link (0.3, 0.0, 0.08) — reachable.
-        world_state = get_world_state()
-        world_state.update_object_position("redCube", [-0.475, 0.08, 0.3])
+    def test_real_collision_avoidance(self):
+        """Test that grasping an unknown object fails gracefully via backend."""
+        with _BackendClient(timeout=30.0) as client:
+            result = client.send_command(
+                command="grasp blueCube with Robot1",
+                robot_id="Robot1",
+                request_id=11,
+            )
 
-        result = grasp_object(
-            robot_id="Robot1",
-            object_id="redCube",
-            use_advanced_planning=True,
-            preferred_approach="top"
-        )
-
-        assert result.success is True, f"Grasp failed: {result.error}"
-
-    def test_real_collision_avoidance(self, unity_connection):
-        """Test that grasp of an unknown object fails gracefully."""
-        result = grasp_object(
-            robot_id="Robot1",
-            object_id="blueCube",
-            use_advanced_planning=True
-        )
-
-        # Should either succeed or fail with a meaningful error (not crash)
-        assert result.success is True or result.error is not None
+        # Should either succeed or return a structured error (not crash)
+        assert result.get("success") is True or result.get("error") is not None
 
 
 # Performance benchmark configuration

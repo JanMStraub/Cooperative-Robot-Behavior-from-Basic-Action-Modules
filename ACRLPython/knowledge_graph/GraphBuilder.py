@@ -12,7 +12,6 @@ Key Responsibilities:
 - Recompute edges when entities move
 """
 
-import logging
 import math
 import time
 from typing import Dict, Any
@@ -23,8 +22,8 @@ from .Core import KnowledgeGraph
 from .Schema import RobotNode, ObjectNode, RegionNode
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 # Configuration constants
 NEAR_THRESHOLD = 0.1  # meters - objects closer than this are considered "NEAR"

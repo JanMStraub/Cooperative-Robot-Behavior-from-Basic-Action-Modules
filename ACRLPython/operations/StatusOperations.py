@@ -7,7 +7,6 @@ robot state without causing any movement or changes.
 """
 
 import time
-import logging
 
 # Lazy import to avoid circular dependency with servers module
 from .Base import (
@@ -20,8 +19,8 @@ from .Base import (
 )
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 # Import from centralized lazy import system (prevents circular dependencies)
@@ -222,14 +221,9 @@ def create_check_robot_status_operation() -> BasicOperation:
         ],
         # Conditions
         preconditions=[
-            "Robot exists in Unity's RobotManager",
-            "Unity is running with UnifiedPythonReceiver active",
-            "CommandServer is running on port 5010",
+            "robot_is_initialized(robot_id)",
         ],
         postconditions=[
-            "Status query command has been sent to Unity",
-            "Unity will respond with robot status information",
-            "No robot state has been modified (read-only operation)",
         ],
         # Performance
         average_duration_ms=50.0,  # Very fast - just a query

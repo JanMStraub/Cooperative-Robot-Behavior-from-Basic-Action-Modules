@@ -19,7 +19,6 @@ Test flow:
 import sys
 import os
 import time
-import logging
 import pytest
 
 # Add parent directory to path for imports
@@ -28,10 +27,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from ros2.ROSBridge import ROSBridge
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
-)
-logger = logging.getLogger(__name__)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 def _ros_bridge_available() -> bool:

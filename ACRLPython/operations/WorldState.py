@@ -14,7 +14,6 @@ Features:
 """
 
 import time
-import logging
 import threading
 import math
 from typing import Dict, Optional, Tuple, Any, Set
@@ -41,8 +40,8 @@ except ImportError:
 from .StatusOperations import check_robot_status
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 # ============================================================================

@@ -7,7 +7,6 @@ In-memory vector storage with pickle-based persistence and cosine similarity sea
 
 from typing import List, Dict, Any, Optional
 import pickle
-import logging
 import threading
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
@@ -28,8 +27,8 @@ except ImportError:
     )
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 class VectorStore:

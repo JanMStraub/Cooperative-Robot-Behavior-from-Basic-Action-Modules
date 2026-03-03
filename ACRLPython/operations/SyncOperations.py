@@ -255,8 +255,8 @@ SIGNAL_OPERATION = BasicOperation(
             required=True,
         ),
     ],
-    preconditions=["Event name is valid string"],
-    postconditions=["Event is set", "All waiters are notified"],
+    preconditions=[],
+    postconditions=[],
     average_duration_ms=1,
     success_rate=99.9,
     failure_modes=["Invalid event name"],
@@ -354,8 +354,8 @@ WAIT_FOR_SIGNAL_OPERATION = BasicOperation(
             valid_range=(100, 300000),  # 100ms to 5 minutes
         ),
     ],
-    preconditions=["Event name is valid string", "Timeout is positive"],
-    postconditions=["Event has been received OR timeout reached"],
+    preconditions=[],
+    postconditions=[],
     average_duration_ms=5000,  # Depends on when signal is sent
     success_rate=95.0,
     failure_modes=["Timeout reached", "Signal never sent", "Event name mismatch"],
@@ -434,8 +434,8 @@ WAIT_OPERATION = BasicOperation(
             valid_range=(0, 60000),  # 0 to 60 seconds
         ),
     ],
-    preconditions=["Duration is non-negative"],
-    postconditions=["Specified time has elapsed"],
+    preconditions=[],
+    postconditions=[],
     average_duration_ms=1000,  # Depends on parameter
     success_rate=99.9,
     failure_modes=["Invalid duration"],

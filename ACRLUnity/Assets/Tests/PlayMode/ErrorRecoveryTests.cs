@@ -314,6 +314,7 @@ namespace Tests.PlayMode
             var client = clientObject.AddComponent<SequenceClient>();
 
             // Send null command
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"));
             bool sent = client.ExecuteSequence(null, "TestRobot");
 
             Assert.IsFalse(sent, "Should reject null command");
@@ -328,6 +329,7 @@ namespace Tests.PlayMode
             var client = clientObject.AddComponent<SequenceClient>();
 
             // Send empty command
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"));
             bool sent = client.ExecuteSequence("", "TestRobot");
 
             Assert.IsFalse(sent, "Should reject empty command");

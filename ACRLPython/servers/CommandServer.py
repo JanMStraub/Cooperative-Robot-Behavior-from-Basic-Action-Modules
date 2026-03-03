@@ -161,7 +161,7 @@ class CommandBroadcaster:
                 self._completion_queues[request_id].put(completion)
                 logger.debug(f"Completion queued for request {request_id}")
             else:
-                logger.warning(f"No queue for request {request_id}")
+                logger.warning(f"No queue for request {request_id} (late arrival or Unity-initiated)")
 
     def get_completion(
         self, request_id: int, timeout: float = 5.0

@@ -217,13 +217,8 @@ def create_analyze_scene_operation() -> BasicOperation:
                 default=DEFAULT_LMSTUDIO_MODEL,
             ),
         ],
-        preconditions=[
-            "Camera must be connected",
-            "LM Studio must be running with vision model loaded",
-        ],
-        postconditions=[
-            "Returns LLM's analysis of the scene as text",
-        ],
+        preconditions=[],
+        postconditions=[],
         average_duration_ms=3000.0,
         success_rate=0.95,
         failure_modes=[
@@ -786,15 +781,8 @@ def create_detect_object_stereo_operation() -> BasicOperation:
                 valid_values=["left", "right", "closest", "first", "all"],
             ),
         ],
-        preconditions=[
-            "Stereo camera must be connected and configured",
-            "Objects must be visible to both cameras",
-            "Unity is running with stereo camera system",
-        ],
-        postconditions=[
-            "Returns 3D world coordinates (x, y, z) of detected object(s)",
-            "Coordinates can be used by move_to_coordinate operation",
-        ],
+        preconditions=[],
+        postconditions=[],
         average_duration_ms=200.0,
         success_rate=0.9,
         failure_modes=[

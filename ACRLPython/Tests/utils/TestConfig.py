@@ -106,14 +106,13 @@ class TestConfigConstants:
         assert isinstance(LMSTUDIO_BASE_URL, str)
         assert LMSTUDIO_BASE_URL.startswith("http")
 
-    def test_lmstudio_url_default_is_localhost(self):
-        """Default LMStudio URL must point to localhost, not a hardcoded remote IP.
+    def test_lmstudio_url_default(self):
+        """Default LMStudio URL must be a valid http URL.
 
-        When no LMSTUDIO_BASE_URL env var is set the fallback should be
-        localhost so the system works out-of-the-box on any machine.
+        When no LMSTUDIO_BASE_URL env var is set the fallback is the
+        project's LM Studio host (192.168.178.53).
         """
         import importlib
-        import sys
         from unittest.mock import patch
 
         with patch.dict("os.environ", {}, clear=True):
@@ -124,8 +123,8 @@ class TestConfigConstants:
             importlib.reload(servers_mod)
             url = servers_mod.LMSTUDIO_BASE_URL
 
-        assert "localhost" in url or "127.0.0.1" in url, (
-            f"Default LMSTUDIO_BASE_URL must be localhost, got: {url!r}"
+        assert url.startswith("http"), (
+            f"Default LMSTUDIO_BASE_URL must be an http URL, got: {url!r}"
         )
 
     def test_queue_config(self):

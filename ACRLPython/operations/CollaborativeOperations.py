@@ -271,15 +271,9 @@ def create_stabilize_object_operation() -> BasicOperation:
             ),
         ],
         preconditions=[
-            "Robot can reach object",
-            "Object is graspable",
-            "Sufficient grip force control",
+            "robot_is_initialized(robot_id)",
         ],
-        postconditions=[
-            "Object held stable",
-            "Position maintained during duration",
-            "Partner robot can manipulate object",
-        ],
+        postconditions=[],
         average_duration_ms=5000.0,  # Depends on duration parameter
         success_rate=0.88,
         failure_modes=[

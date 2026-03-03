@@ -17,9 +17,9 @@ from orchestrators.CommandParser import CommandParser
 from operations.WorkflowPatterns import WorkflowPatternRegistry
 
 
-# Check if LM Studio embedding service is available
+# Check if LM Studio service is available
 def is_llm_available():
-    """Check if LM Studio embedding service is running and responding"""
+    """Check if LM Studio is running and responding."""
     try:
         from rag.Embeddings import EmbeddingGenerator
         gen = EmbeddingGenerator()

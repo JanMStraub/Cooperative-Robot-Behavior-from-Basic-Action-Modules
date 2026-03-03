@@ -19,7 +19,6 @@ RECENT ENHANCEMENTS (December 2025):
 
 from typing import Dict, Any
 import time
-import logging
 
 # Import from centralized lazy import system (prevents circular dependencies)
 try:
@@ -50,8 +49,8 @@ except ImportError:
     )
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 # ============================================================================

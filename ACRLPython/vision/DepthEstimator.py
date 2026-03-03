@@ -10,7 +10,6 @@ Features:
 5. Integrated disparity calculation using OpenCV's StereoSGBM (no external dependencies)
 """
 
-import logging
 import math
 from typing import Tuple, Optional, List
 from pathlib import Path
@@ -30,7 +29,7 @@ try:
         SGBM_FAR,
     )
 except ImportError as e:
-    logging.warning(f"StereoConfig relative import failed, trying absolute: {e}")
+    logger.warning(f"StereoConfig relative import failed, trying absolute: {e}")
     from vision.StereoConfig import (
         CameraConfig,
         ReconstructionConfig,
@@ -48,9 +47,8 @@ try:
 except ImportError:
     from ..config.Vision import SAVE_DEBUG_DISPARITY_MAPS, DEBUG_DISPARITY_DIR
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
-)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 # ===========================
@@ -87,14 +85,14 @@ def calc_disparity(
     if max_disp is None:
         # Use image-width-based heuristic: max_disparity = width / 8
         max_disp = imgL.shape[1] // 8
-        logging.debug(f"Estimated maximum disparity: {max_disp}")
+        logger.debug(f"Estimated maximum disparity: {max_disp}")
 
     # Ensure max_disp is a multiple of 16 (required by SGBM)
     max_disp = ((max_disp + 15) // 16) * 16
 
     # Cap max_disparity for performance (larger values are very slow)
     if max_disp > 256:
-        logging.debug(f"Capping max_disparity from {max_disp} to 256 for performance")
+        logger.debug(f"Capping max_disparity from {max_disp} to 256 for performance")
         max_disp = 256
 
     # Create SGBM matcher
@@ -137,13 +135,13 @@ def select_sgbm_preset(estimated_distance: Optional[float] = None) -> SGBMPreset
         return SGBM_MEDIUM
 
     if estimated_distance < 1.0:
-        logging.debug(f"Selected CLOSE preset for distance {estimated_distance:.2f}m")
+        logger.debug(f"Selected CLOSE preset for distance {estimated_distance:.2f}m")
         return SGBM_CLOSE
     elif estimated_distance < 2.0:
-        logging.debug(f"Selected MEDIUM preset for distance {estimated_distance:.2f}m")
+        logger.debug(f"Selected MEDIUM preset for distance {estimated_distance:.2f}m")
         return SGBM_MEDIUM
     else:
-        logging.debug(f"Selected FAR preset for distance {estimated_distance:.2f}m")
+        logger.debug(f"Selected FAR preset for distance {estimated_distance:.2f}m")
         return SGBM_FAR
 
 
@@ -209,7 +207,7 @@ def calculate_focal_length_from_fov(
     horizontal_fov_rad = 2 * math.atan(math.tan(vertical_fov_rad / 2) * aspect_ratio)
     focal_length_px = (image_width / 2.0) / math.tan(horizontal_fov_rad / 2)
 
-    logging.debug(
+    logger.debug(
         f"FOV conversion: vertical={fov_vertical_deg}° → "
         f"horizontal={math.degrees(horizontal_fov_rad):.1f}° → "
         f"focal_length={focal_length_px:.1f}px"
@@ -278,9 +276,9 @@ def save_disparity_map_debug(disparity: np.ndarray, output_path: Optional[Path] 
         )
         disp_colored = cv2.applyColorMap(disp_normalized, cv2.COLORMAP_JET)
         cv2.imwrite(str(output_path), disp_colored)
-        logging.debug(f"Saved disparity map to {output_path}")
+        logger.debug(f"Saved disparity map to {output_path}")
     except Exception as e:
-        logging.debug(f"Could not save disparity map: {e}")
+        logger.debug(f"Could not save disparity map: {e}")
 
 
 # ===========================
@@ -324,7 +322,7 @@ def estimate_depth_from_disparity(
 
     # Validate pixel coordinates
     if not (0 <= pixel_x < w and 0 <= pixel_y < h):
-        logging.error(f"Pixel ({pixel_x}, {pixel_y}) out of bounds ({w}, {h})")
+        logger.error(f"Pixel ({pixel_x}, {pixel_y}) out of bounds ({w}, {h})")
         return None
 
     try:
@@ -348,14 +346,14 @@ def estimate_depth_from_disparity(
 
             if len(valid_disparities) > 0:
                 if attempt > 1:
-                    logging.debug(
+                    logger.debug(
                         f"Found {len(valid_disparities)} valid disparities on attempt {attempt} "
                         f"(window={search_window}px)"
                     )
                 break
         else:
             # Still no valid disparities - try one last time with very relaxed threshold (0.1px)
-            logging.debug("Trying with very low threshold (0.1px) in large window")
+            logger.debug("Trying with very low threshold (0.1px) in large window")
             half_window = window_size * 15  # Very large window
             y_min = max(0, pixel_y - half_window)
             y_max = min(h, pixel_y + half_window + 1)
@@ -367,7 +365,7 @@ def estimate_depth_from_disparity(
             valid_disparities = valid_disparities[valid_disparities >= 0.1]
 
             if len(valid_disparities) > 0:
-                logging.debug(
+                logger.debug(
                     f"Found {len(valid_disparities)} valid disparities with relaxed threshold "
                     f"(window={window_size * 15}px)"
                 )
@@ -376,12 +374,12 @@ def estimate_depth_from_disparity(
                 all_disp = disparity.flatten()
                 all_valid = all_disp[~np.isnan(all_disp) & (all_disp > 0)]
                 if len(all_valid) > 0:
-                    logging.debug(
+                    logger.debug(
                         f"No valid disparity at ({pixel_x}, {pixel_y}). "
                         f"Map has {len(all_valid)} values (range: {all_valid.min():.1f}-{all_valid.max():.1f}px)"
                     )
                 else:
-                    logging.debug(
+                    logger.debug(
                         "Entire disparity map is invalid - stereo matching failed"
                     )
                 return None
@@ -391,7 +389,7 @@ def estimate_depth_from_disparity(
 
         # Final validation
         if np.isnan(disparity_value) or disparity_value < min_disparity_threshold:
-            logging.debug(
+            logger.debug(
                 f"Median disparity {disparity_value:.1f}px below threshold {min_disparity_threshold}px"
             )
             return None
@@ -406,20 +404,20 @@ def estimate_depth_from_disparity(
 
         # Sanity check depth
         if depth > max_depth_threshold:
-            logging.debug(
+            logger.debug(
                 f"Calculated depth {depth:.2f}m exceeds threshold {max_depth_threshold}m "
                 f"(disparity={disparity_value:.1f}px) - rejecting"
             )
             return None
 
-        logging.debug(
+        logger.debug(
             f"Depth at ({pixel_x}, {pixel_y}): {depth:.3f}m (disparity: {disparity_value:.1f}px)"
         )
 
         return float(depth)
 
     except Exception as e:
-        logging.error(f"Failed to estimate depth from disparity: {e}")
+        logger.error(f"Failed to estimate depth from disparity: {e}")
         return None
 
 
@@ -474,7 +472,7 @@ def estimate_depth_from_bbox(
 
     # Validate ROI
     if roi_x2 <= roi_x1 or roi_y2 <= roi_y1:
-        logging.debug(
+        logger.debug(
             f"ROI too small after margin: bbox=({x},{y},{w},{h}), "
             f"roi=({roi_x1},{roi_y1},{roi_x2},{roi_y2})"
         )
@@ -488,7 +486,7 @@ def estimate_depth_from_bbox(
     valid_disparities = roi_disparity[valid_mask]
 
     if len(valid_disparities) == 0:
-        logging.debug(
+        logger.debug(
             f"No valid disparities in bbox ROI ({roi_x1},{roi_y1},{roi_x2},{roi_y2})"
         )
         return None
@@ -501,7 +499,7 @@ def estimate_depth_from_bbox(
     elif strategy == "max_disparity":
         disparity = np.max(valid_disparities)  # Closest point in bbox
     else:
-        logging.warning(f"Unknown strategy '{strategy}', using median")
+        logger.warning(f"Unknown strategy '{strategy}', using median")
         disparity = np.median(valid_disparities)
 
     # Calculate depth
@@ -509,13 +507,13 @@ def estimate_depth_from_bbox(
 
     # Validate depth
     if depth_m > max_depth_threshold:
-        logging.debug(
+        logger.debug(
             f"Depth {depth_m:.2f}m exceeds threshold {max_depth_threshold}m "
             f"(disparity={disparity:.1f}px)"
         )
         return None
 
-    logging.debug(
+    logger.debug(
         f"Bbox depth: {depth_m:.3f}m (disparity: {disparity:.1f}px, "
         f"valid_pixels: {len(valid_disparities)}, strategy: {strategy})"
     )
@@ -574,12 +572,12 @@ def estimate_depth_at_point(
     # Validate pixel coordinates
     h, w = imgL_gray.shape
     if not (0 <= pixel_x < w and 0 <= pixel_y < h):
-        logging.error(f"Pixel ({pixel_x}, {pixel_y}) out of bounds ({w}, {h})")
+        logger.error(f"Pixel ({pixel_x}, {pixel_y}) out of bounds ({w}, {h})")
         return None
 
     try:
         # Compute disparity map
-        logging.debug(f"Computing disparity for depth at ({pixel_x}, {pixel_y})")
+        logger.debug(f"Computing disparity for depth at ({pixel_x}, {pixel_y})")
         disparity = calc_disparity(imgL_gray, imgR_gray, recon_config)
 
         # Save disparity map for debugging (if enabled in config)
@@ -599,7 +597,7 @@ def estimate_depth_at_point(
         )
 
     except Exception as e:
-        logging.error(f"Failed to estimate depth: {e}")
+        logger.error(f"Failed to estimate depth: {e}")
         return None
 
 
@@ -686,7 +684,7 @@ def pixel_to_world_coords(
         z_rotated = z2
 
         x_cam, y_cam, z_cam = x_rotated, y_rotated, z_rotated
-        logging.debug(
+        logger.debug(
             f"Pixel ({pixel_x}, {pixel_y}) depth {depth:.3f}m → "
             f"Rotated by (pitch={pitch:.1f}°, yaw={yaw:.1f}°, roll={roll:.1f}°) → "
             f"({x_cam:.3f}, {y_cam:.3f}, {z_cam:.3f})m in world orientation"
@@ -698,14 +696,14 @@ def pixel_to_world_coords(
         world_y = y_cam + camera_position[1]
         world_z = z_cam + camera_position[2]
 
-        logging.debug(
+        logger.debug(
             f"Camera-relative ({x_cam:.3f}, {y_cam:.3f}, {z_cam:.3f}) + "
             f"Camera position ({camera_position[0]:.3f}, {camera_position[1]:.3f}, {camera_position[2]:.3f}) → "
             f"World ({world_x:.3f}, {world_y:.3f}, {world_z:.3f})m"
         )
         return (world_x, world_y, world_z)
     else:
-        logging.debug(
+        logger.debug(
             f"Pixel ({pixel_x}, {pixel_y}) depth {depth:.3f}m → "
             f"Camera-relative ({x_cam:.3f}, {y_cam:.3f}, {z_cam:.3f})m"
         )

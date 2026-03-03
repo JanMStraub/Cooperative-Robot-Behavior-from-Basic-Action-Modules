@@ -6,7 +6,6 @@ Build searchable index from operations registry.
 """
 
 from typing import Optional, List, Dict, Any
-import logging
 
 # Lazy imports to avoid circular dependency
 # from operations.Registry import OperationRegistry, get_global_registry
@@ -22,8 +21,8 @@ except ImportError:
     from ..config.Rag import RAG_AUTO_SAVE_INDEX
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 class OperationIndexer:

@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using Configuration;
 using Core;
@@ -65,6 +66,7 @@ namespace Robotics
         private GameObject _cachedTempTargetRetreat;
 
         private Coroutine _activeGraspCoroutine;
+        private GraspExecutor _graspExecutor;
 
         [Header("Robot Components")]
         public ArticulationBody[] robotJoints;
@@ -163,6 +165,7 @@ namespace Robotics
 
             InitializeRobot();
             InitializeGraspPipeline();
+            InitializeGraspExecutor();
 
             if (debugTarget != null)
                 SetTarget(debugTarget, GraspOptions.Advanced);
@@ -237,6 +240,30 @@ namespace Robotics
             }
         }
 
+        private void InitializeGraspExecutor()
+        {
+            _graspExecutor = new GraspExecutor(
+                owner: this,
+                gripperController: _gripperController,
+                ikConfig: _ikConfig,
+                simpleRobotController: _simpleRobotController,
+                robotId: robotId,
+                logPrefix: _logPrefix,
+                setTargetInternal: SetTargetInternal,
+                getEndEffectorVelocityMagnitude: () => GetEndEffectorVelocity().magnitude,
+                getCachedTempObject: suffix => suffix switch
+                {
+                    "_pre" => GetCachedTempObject(ref _cachedTempTargetPre, suffix),
+                    "_retreat" => GetCachedTempObject(ref _cachedTempTargetRetreat, suffix),
+                    "_handoff" => GetCachedTempObject(ref _cachedTempTargetGrasp, suffix),
+                    _ => GetCachedTempObject(ref _cachedTempTargetGrasp, suffix),
+                },
+                setIsGraspingTarget: value => _isGraspingTarget = value,
+                fireOnTargetReached: () => OnTargetReached?.Invoke(),
+                setActiveCoroutine: c => _activeGraspCoroutine = c
+            );
+        }
+
         private GameObject GetCachedTempObject(ref GameObject cacheField, string suffix)
         {
             if (cacheField == null)
@@ -264,7 +291,11 @@ namespace Robotics
                 {
                     if (_closeGripperAfterReach && _gripperController != null)
                     {
-                        StartCoroutine(CloseGripperAfterDelay());
+                        StartCoroutine(_graspExecutor.CloseGripperAfterDelay(
+                            _targetObject,
+                            _gripperCloseDelay,
+                            _attachObjectOnGrasp
+                        ));
                     }
                     else
                     {
@@ -272,32 +303,6 @@ namespace Robotics
                     }
                 }
             }
-        }
-
-        private IEnumerator CloseGripperAfterDelay()
-        {
-            float delayStartTime = Time.time;
-
-            yield return new WaitUntil(
-                () =>
-                    Time.time - delayStartTime >= _gripperCloseDelay
-                    && GetEndEffectorVelocity().magnitude < 0.005f
-            );
-
-            if (_attachObjectOnGrasp && _targetObject != null)
-            {
-                _gripperController.SetTargetObject(_targetObject);
-            }
-
-            _gripperController.CloseGrippers();
-            yield return new WaitWhile(() => _gripperController.IsMoving);
-
-            float graspStartTime = Time.time;
-            yield return new WaitUntil(
-                () => Time.time - graspStartTime > 0.2f && !_gripperController.IsMoving
-            );
-
-            OnTargetReached?.Invoke();
         }
 
         private void FixedUpdate()
@@ -614,7 +619,7 @@ namespace Robotics
                     $"{_logPrefix} {robotId} detected handoff scenario - object '{target.name}' held by another gripper"
                 );
                 _activeGraspCoroutine = StartCoroutine(
-                    ExecuteHandoffGrasp(target, options)
+                    _graspExecutor.ExecuteHandoffGrasp(target, options, () => _hasReachedTarget)
                 );
                 return;
             }
@@ -632,13 +637,13 @@ namespace Robotics
                         if (candidate.useSimplifiedExecution)
                         {
                             _activeGraspCoroutine = StartCoroutine(
-                                ExecuteSimplifiedGrasp(candidate, target, options)
+                                _graspExecutor.ExecuteSimplifiedGrasp(candidate, target, options, () => _hasReachedTarget)
                             );
                         }
                         else
                         {
                             _activeGraspCoroutine = StartCoroutine(
-                                ExecuteThreeWaypointGrasp(candidate, target, options)
+                                _graspExecutor.ExecuteThreeWaypointGrasp(candidate, target, options, () => _hasReachedTarget)
                             );
                         }
                         return;
@@ -662,13 +667,13 @@ namespace Robotics
                         if (candidate.useSimplifiedExecution)
                         {
                             _activeGraspCoroutine = StartCoroutine(
-                                ExecuteSimplifiedGrasp(candidate, target, options)
+                                _graspExecutor.ExecuteSimplifiedGrasp(candidate, target, options, () => _hasReachedTarget)
                             );
                         }
                         else
                         {
                             _activeGraspCoroutine = StartCoroutine(
-                                ExecuteTwoWaypointGrasp(candidate, target, options)
+                                _graspExecutor.ExecuteTwoWaypointGrasp(candidate, target, options, () => _hasReachedTarget)
                             );
                         }
                         return;
@@ -739,331 +744,6 @@ namespace Robotics
                 _gripperController?.OpenGrippers();
             _isGraspingTarget = false;
             SetTargetInternal(temp.transform, null, options);
-        }
-
-        private IEnumerator WaitForTargetWithTimeout(float timeoutSeconds)
-        {
-            float startTime = Time.time;
-            while (!_hasReachedTarget)
-            {
-                if (Time.time - startTime > timeoutSeconds)
-                {
-                    Debug.LogWarning($"{_logPrefix} {robotId} timeout after {timeoutSeconds}s");
-                    yield break;
-                }
-                yield return null;
-            }
-        }
-
-        private IEnumerator ExecuteTwoWaypointGrasp(
-            GraspCandidate candidate,
-            GameObject targetObject,
-            GraspOptions options
-        )
-        {
-            float graspTimeout = _ikConfig != null ? _ikConfig.graspTimeoutSeconds : 30f;
-
-            _gripperController?.SetGripperPosition(candidate.preGraspGripperWidth);
-
-            // 1. Pre-Grasp
-            GameObject pre = GetCachedTempObject(ref _cachedTempTargetPre, "_pre");
-            pre.transform.SetPositionAndRotation(
-                candidate.preGraspPosition,
-                candidate.preGraspRotation
-            );
-
-            _isGraspingTarget = false;
-            SetTargetInternal(
-                pre.transform,
-                targetObject,
-                new GraspOptions { closeGripperOnReach = false }
-            );
-            yield return StartCoroutine(
-                WaitForTargetWithTimeout(graspTimeout)
-            );
-
-            if (!_hasReachedTarget)
-                yield break;
-
-            // Robust Wait (Dynamic)
-            yield return new WaitUntil(() => GetEndEffectorVelocity().magnitude < 0.01f);
-
-            // 2. Grasp
-            GameObject main = GetCachedTempObject(
-                ref _cachedTempTargetGrasp,
-                RobotConstants.GRASP_TARGET_SUFFIX
-            );
-            main.transform.SetPositionAndRotation(candidate.graspPosition, candidate.graspRotation);
-
-            _isGraspingTarget = true;
-            SetTargetInternal(
-                main.transform,
-                targetObject,
-                new GraspOptions { closeGripperOnReach = false }
-            );
-            yield return StartCoroutine(
-                WaitForTargetWithTimeout(graspTimeout)
-            );
-
-            if (!_hasReachedTarget)
-                yield break;
-
-            if (options.closeGripperOnReach && _gripperController != null)
-            {
-                yield return new WaitUntil(() => GetEndEffectorVelocity().magnitude < 0.005f);
-                _gripperController.SetTargetObject(targetObject);
-                _gripperController.SetGripperPosition(candidate.graspGripperWidth);
-                // Wait for gripper to finish closing and attachment to complete before signalling
-                // grasp success. Without this wait, a fast follow-up open command arrives while
-                // _isHoldingObject is still false (attachment pending in FixedUpdate), causing the
-                // object to be attached AFTER the open command — leaving it permanently stuck.
-                yield return new WaitWhile(() => _gripperController.IsMoving);
-
-                float graspStartTime = Time.time;
-                yield return new WaitUntil(
-                    () => Time.time - graspStartTime > 0.3f && !_gripperController.IsMoving
-                );
-            }
-
-            _activeGraspCoroutine = null;
-            OnTargetReached?.Invoke();
-        }
-
-        private IEnumerator ExecuteThreeWaypointGrasp(
-            GraspCandidate candidate,
-            GameObject targetObject,
-            GraspOptions options
-        )
-        {
-            float graspTimeout = _ikConfig != null ? _ikConfig.graspTimeoutSeconds : 30f;
-
-            _gripperController?.SetGripperPosition(candidate.preGraspGripperWidth);
-
-            // 1. Pre
-            GameObject pre = GetCachedTempObject(ref _cachedTempTargetPre, "_pre");
-            pre.transform.SetPositionAndRotation(
-                candidate.preGraspPosition,
-                candidate.preGraspRotation
-            );
-
-            _isGraspingTarget = false;
-            SetTargetInternal(
-                pre.transform,
-                targetObject,
-                new GraspOptions { closeGripperOnReach = false }
-            );
-            yield return StartCoroutine(
-                WaitForTargetWithTimeout(graspTimeout)
-            );
-
-            if (!_hasReachedTarget)
-                yield break;
-            yield return new WaitUntil(() => GetEndEffectorVelocity().magnitude < 0.01f);
-
-            // 2. Grasp
-            GameObject main = GetCachedTempObject(
-                ref _cachedTempTargetGrasp,
-                RobotConstants.GRASP_TARGET_SUFFIX
-            );
-            main.transform.SetPositionAndRotation(candidate.graspPosition, candidate.graspRotation);
-
-            _isGraspingTarget = true;
-            SetTargetInternal(
-                main.transform,
-                targetObject,
-                new GraspOptions { closeGripperOnReach = false }
-            );
-            yield return StartCoroutine(
-                WaitForTargetWithTimeout(graspTimeout)
-            );
-
-            if (!_hasReachedTarget)
-                yield break;
-
-            if (options.closeGripperOnReach && _gripperController != null)
-            {
-                yield return new WaitUntil(() => GetEndEffectorVelocity().magnitude < 0.005f);
-                _gripperController.SetTargetObject(targetObject);
-                _gripperController.SetGripperPosition(candidate.graspGripperWidth);
-                yield return new WaitWhile(() => _gripperController.IsMoving);
-
-                float graspStartTime = Time.time;
-                yield return new WaitUntil(
-                    () => Time.time - graspStartTime > 0.3f && !_gripperController.IsMoving
-                );
-            }
-
-            // 3. Retreat
-            if (options.graspConfig != null && options.graspConfig.enableRetreat)
-            {
-                GameObject retreat = GetCachedTempObject(ref _cachedTempTargetRetreat, "_retreat");
-                retreat.transform.SetPositionAndRotation(
-                    candidate.retreatPosition,
-                    candidate.retreatRotation
-                );
-
-                _isGraspingTarget = false;
-                SetTargetInternal(
-                    retreat.transform,
-                    targetObject,
-                    new GraspOptions { closeGripperOnReach = false }
-                );
-                yield return StartCoroutine(
-                    WaitForTargetWithTimeout(graspTimeout)
-                );
-            }
-
-            _activeGraspCoroutine = null;
-            OnTargetReached?.Invoke();
-        }
-
-        private IEnumerator ExecuteHandoffGrasp(
-            GameObject targetObject,
-            GraspOptions options
-        )
-        {
-            Debug.Log($"{_logPrefix} {robotId} executing handoff for '{targetObject.name}'");
-
-            if (options.openGripperOnSet && _gripperController != null)
-            {
-                _gripperController.OpenGrippers();
-                yield return new WaitWhile(() => _gripperController.IsMoving);
-            }
-
-            Vector3 objectPosition = targetObject.transform.position;
-            GameObject handoffTarget = GetCachedTempObject(ref _cachedTempTargetGrasp, "_handoff");
-            handoffTarget.transform.position = objectPosition;
-            handoffTarget.transform.rotation = targetObject.transform.rotation;
-
-            _isGraspingTarget = true;
-            // This will generate a trajectory to the handoff point!
-            SetTargetInternal(
-                handoffTarget.transform,
-                targetObject,
-                new GraspOptions { closeGripperOnReach = false }
-            );
-
-            float graspTimeout = _ikConfig != null ? _ikConfig.graspTimeoutSeconds : 30f;
-            yield return StartCoroutine(
-                WaitForTargetWithTimeout(graspTimeout)
-            );
-            if (!_hasReachedTarget)
-            {
-                Debug.LogWarning($"{_logPrefix} {robotId} failed to reach handoff position");
-                _activeGraspCoroutine = null;
-                yield break;
-            }
-
-            yield return new WaitUntil(() => GetEndEffectorVelocity().magnitude < 0.005f);
-
-            if (options.closeGripperOnReach && _gripperController != null)
-            {
-                _gripperController.SetTargetObject(targetObject);
-                _gripperController.CloseGrippers();
-                yield return new WaitWhile(() => _gripperController.IsMoving);
-
-                float graspStartTime = Time.time;
-                yield return new WaitUntil(
-                    () => Time.time - graspStartTime > 0.3f && !_gripperController.IsMoving
-                );
-            }
-
-            _activeGraspCoroutine = null;
-            OnTargetReached?.Invoke();
-        }
-
-        /// <summary>
-        /// Execute grasp using SimpleRobotController's IK algorithm as fallback.
-        /// RobotController drives the SimpleRobotController manually (not autonomous).
-        /// Used when advanced grasp planning fails and a simpler approach is needed.
-        /// </summary>
-        /// <param name="candidate">Grasp candidate from fallback planner</param>
-        /// <param name="targetObject">Object to grasp</param>
-        /// <param name="options">Grasp options</param>
-        private IEnumerator ExecuteSimplifiedGrasp(
-            GraspCandidate candidate,
-            GameObject targetObject,
-            GraspOptions options
-        )
-        {
-            Debug.Log(
-                $"{_logPrefix} {robotId} executing SIMPLIFIED grasp using SimpleRobotController backup IK (fallback mode)"
-            );
-
-            // Ensure SimpleRobotController is available
-            if (_simpleRobotController == null)
-            {
-                Debug.LogWarning(
-                    $"{_logPrefix} {robotId} SimpleRobotController not assigned! Falling back to standard execution."
-                );
-                // Fall back to two-waypoint grasp if SimpleRobotController is missing
-                yield return StartCoroutine(
-                    ExecuteTwoWaypointGrasp(candidate, targetObject, options)
-                );
-                yield break;
-            }
-
-            // Open gripper
-            if (options.openGripperOnSet && _gripperController != null)
-            {
-                _gripperController.OpenGrippers();
-                yield return new WaitWhile(() => _gripperController.IsMoving);
-            }
-
-            // Set target in SimpleRobotController (SimpleRobotController won't run its own FixedUpdate)
-            // We'll manually call its IK step method each frame
-            _simpleRobotController.SetTarget(candidate.graspPosition, candidate.graspRotation);
-
-            // Manually drive SimpleRobotController's IK until target is reached
-            // This gives us control over when IK steps happen (in this coroutine)
-            float timeout = _ikConfig != null ? _ikConfig.graspTimeoutSeconds : 30f;
-            float startTime = Time.time;
-
-            while (!_simpleRobotController.HasReachedTarget)
-            {
-                // Check timeout
-                if (Time.time - startTime > timeout)
-                {
-                    Debug.LogWarning(
-                        $"{_logPrefix} {robotId} simplified grasp timed out after {timeout}s"
-                    );
-                    _activeGraspCoroutine = null;
-                    yield break;
-                }
-
-                // Manually perform one IK step using SimpleRobotController's algorithm
-                _simpleRobotController.PerformInverseKinematicsStep();
-
-                // Wait for next physics frame
-                yield return new WaitForFixedUpdate();
-            }
-
-            Debug.Log(
-                $"{_logPrefix} {robotId} simplified grasp reached target position. Distance: {_simpleRobotController.DistanceToTarget:F4}m"
-            );
-
-            // Wait for robot to settle
-            yield return new WaitForSeconds(0.2f);
-
-            // Close gripper
-            if (options.closeGripperOnReach && _gripperController != null)
-            {
-                _gripperController.SetTargetObject(targetObject);
-                _gripperController.CloseGrippers();
-                yield return new WaitWhile(() => _gripperController.IsMoving);
-
-                float graspStartTime = Time.time;
-                yield return new WaitUntil(
-                    () => Time.time - graspStartTime > 0.3f && !_gripperController.IsMoving
-                );
-
-                Debug.Log(
-                    $"{_logPrefix} {robotId} simplified grasp complete. Object held: {_gripperController.IsHoldingObject}"
-                );
-            }
-
-            _activeGraspCoroutine = null;
-            OnTargetReached?.Invoke();
         }
 
         private static GripperController FindGripperHoldingObject(GameObject obj)

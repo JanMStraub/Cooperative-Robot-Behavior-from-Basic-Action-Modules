@@ -15,7 +15,9 @@ _CONFIG_DIR = Path(__file__).parent.parent.absolute()
 # LM Studio Connection for RAG
 # ============================================================================
 
-RAG_LM_STUDIO_URL = os.environ.get("RAG_LM_STUDIO_URL", os.environ.get("LMSTUDIO_BASE_URL", "http://192.168.178.53:1234/v1"))
+from config.Servers import LMSTUDIO_BASE_URL as _LMSTUDIO_BASE_URL
+
+RAG_LM_STUDIO_URL = os.environ.get("RAG_LM_STUDIO_URL", _LMSTUDIO_BASE_URL)
 RAG_LM_STUDIO_MODEL = os.environ.get("RAG_LM_STUDIO_MODEL", "nomic-embed-text")
 RAG_LM_STUDIO_API_KEY = os.environ.get("RAG_LM_STUDIO_API_KEY", "lm-studio")
 

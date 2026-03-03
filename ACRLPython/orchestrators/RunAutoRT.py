@@ -16,7 +16,6 @@ Usage:
 """
 
 import argparse
-import logging
 import sys
 
 
@@ -39,12 +38,11 @@ def main():
     args = parser.parse_args()
 
     # Configure logging
-    level = logging.DEBUG if args.verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
-        datefmt="%H:%M:%S"
-    )
+    from core.LoggingSetup import setup_logging
+    setup_logging()
+    if args.verbose:
+        import logging as _logging
+        _logging.getLogger().setLevel(_logging.DEBUG)
 
     # Override config if --num-tasks specified
     if args.num_tasks:

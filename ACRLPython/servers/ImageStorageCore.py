@@ -35,7 +35,6 @@ Consolidation:
 
 import threading
 import time
-import logging
 from collections import OrderedDict
 from typing import Optional, Tuple, List, Dict
 import numpy as np
@@ -53,8 +52,8 @@ try:
 except ImportError:
     from ..config.Vision import ENABLE_VISION_STREAMING
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 class UnifiedImageStorage:

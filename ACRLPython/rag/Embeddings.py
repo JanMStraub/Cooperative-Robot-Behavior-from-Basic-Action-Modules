@@ -7,7 +7,6 @@ Falls back to TF-IDF if LM Studio is unavailable.
 """
 
 from typing import List, Optional
-import logging
 import numpy as np
 from openai import OpenAI
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -37,8 +36,8 @@ except ImportError:
     )
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 class EmbeddingGenerator:

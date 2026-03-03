@@ -12,7 +12,6 @@ Operations:
 """
 
 import time
-import logging
 from typing import Tuple, Union, Optional
 
 # Import from centralized lazy import system (prevents circular dependencies)
@@ -33,8 +32,8 @@ from .Base import (
 )
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from core.LoggingSetup import get_logger
+logger = get_logger(__name__)
 
 
 # ============================================================================
@@ -492,12 +491,8 @@ def create_move_relative_to_object_operation() -> BasicOperation:
         ],
         preconditions=[
             "robot_is_initialized(robot_id)",
-            "Object exists if object_id provided",
         ],
-        postconditions=[
-            "Robot moves to calculated relative position",
-            "Movement command sent to Unity",
-        ],
+        postconditions=[],
         average_duration_ms=2000.0,
         success_rate=0.95,
         failure_modes=["Object not found", "Target out of reach", "Invalid relation"],
@@ -579,12 +574,8 @@ def create_move_between_objects_operation() -> BasicOperation:
         ],
         preconditions=[
             "robot_is_initialized(robot_id)",
-            "Both objects exist if object_ids provided",
         ],
-        postconditions=[
-            "Robot moves to interpolated position",
-            "Movement command sent to Unity",
-        ],
+        postconditions=[],
         average_duration_ms=2000.0,
         success_rate=0.95,
         failure_modes=["Objects not found", "Target out of reach"],
@@ -653,9 +644,8 @@ def create_move_to_region_operation() -> BasicOperation:
         ],
         preconditions=[
             "robot_is_initialized(robot_id)",
-            "Region exists in WORKSPACE_REGIONS",
         ],
-        postconditions=["Robot moves to region", "Movement command sent to Unity"],
+        postconditions=[],
         average_duration_ms=2000.0,
         success_rate=0.98,
         failure_modes=["Invalid region name", "Target out of reach"],
