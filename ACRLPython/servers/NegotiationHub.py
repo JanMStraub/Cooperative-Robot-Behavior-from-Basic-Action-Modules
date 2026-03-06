@@ -201,7 +201,8 @@ class NegotiationHub:
         task_description: str,
         robot_ids: Optional[List[str]] = None,
         timeout: Optional[float] = None,
-    ) -> NegotiationResult:
+        spatial_context: Optional[Dict[str, Any]] = None,
+    ) -> "NegotiationResult":
         """
         Run the full negotiation protocol.
 
@@ -209,6 +210,8 @@ class NegotiationHub:
             task_description: Natural language task
             robot_ids: Participating robots (default: all known robots)
             timeout: Negotiation timeout in seconds
+            spatial_context: Optional KG-derived spatial context dict (e.g. handoff
+                candidates) logged for future agent prompt injection.
 
         Returns:
             NegotiationResult with agreed plan or failure info
@@ -229,6 +232,8 @@ class NegotiationHub:
             f"Starting negotiation {session_id}: task='{task_description[:80]}', "
             f"robots={robot_ids}"
         )
+        if spatial_context:
+            logger.debug(f"Negotiation spatial context: {spatial_context}")
 
         start_time = time.time()
         result = NegotiationResult()

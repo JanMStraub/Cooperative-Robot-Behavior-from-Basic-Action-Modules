@@ -48,6 +48,50 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================================
+# Knowledge Graph helpers
+# ============================================================================
+
+
+def _kg_both_robots_can_reach(object_id: str, robot_id: str) -> Optional[str]:
+    """
+    Check whether the KG reports that at least two robots can reach the object.
+
+    Returns a warning string if the reachable set is populated but contains
+    fewer than two robots (suggesting the stabilizing robot's partner cannot
+    reach). Returns None when the check passes or the KG is unavailable/empty
+    (empty list = KG not yet populated = no false negatives at startup).
+
+    Args:
+        object_id: The object to check reachability for.
+        robot_id: The robot requesting the check (for log context).
+
+    Returns:
+        Warning string if fewer than 2 robots can reach the object, else None.
+    """
+    try:
+        from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
+        if not KNOWLEDGE_GRAPH_ENABLED:
+            return None
+
+        from core.Imports import get_graph_query_engine
+        qe = get_graph_query_engine()
+        if qe is None:
+            return None
+
+        reachable = qe.find_reachable_robots(object_id)
+        if reachable and len(reachable) < 2:
+            return (
+                f"KG: only {len(reachable)} robot(s) can reach '{object_id}' "
+                f"(reachable: {reachable}); stabilize_object requires both arms"
+            )
+        return None
+
+    except Exception as e:
+        logger.debug(f"KG reachability check skipped: {e}")
+        return None
+
+
+# ============================================================================
 # Implementation: stabilize_object - Object stabilization
 # ============================================================================
 
@@ -117,6 +161,11 @@ def stabilize_object(
                 f"Force limit must be in range [1.0, 50.0]N, got: {force_limit}",
                 ["Use force limit between 1N and 50N"],
             )
+
+        # KG reachability advisory (non-blocking — graph may be stale at startup)
+        kg_warning = _kg_both_robots_can_reach(object_id, robot_id)
+        if kg_warning:
+            logger.warning(kg_warning)
 
         # Determine whether to use ROS or TCP path
         _use_ros = use_ros

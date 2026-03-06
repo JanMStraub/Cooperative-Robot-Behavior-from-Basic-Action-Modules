@@ -164,17 +164,34 @@ def detect_other_robot(
             f"Robot {robot_id} detected {target_robot_id} at distance {distance:.3f}m"
         )
 
-        return OperationResult.success_result(
-            {
-                "robot_id": robot_id,
-                "target_robot_id": target_robot_id,
-                "position": target_pos,
-                "distance": distance,
-                "detected": True,
-                "camera_id": camera_id,
-                "timestamp": time.time(),
-            }
-        )
+        # Enrich with KG proximity data (additive — callers unaffected if absent)
+        kg_proximity = None
+        try:
+            from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
+            if KNOWLEDGE_GRAPH_ENABLED:
+                from core.Imports import get_graph_query_engine
+                qe = get_graph_query_engine()
+                if qe is not None:
+                    nearby = qe.find_robots_near(robot_id, max_distance=distance + 0.05)
+                    kg_proximity = [
+                        r for r in nearby if r["robot_id"] == target_robot_id
+                    ]
+        except Exception as e:
+            logger.debug(f"KG proximity enrichment skipped: {e}")
+
+        result_data = {
+            "robot_id": robot_id,
+            "target_robot_id": target_robot_id,
+            "position": target_pos,
+            "distance": distance,
+            "detected": True,
+            "camera_id": camera_id,
+            "timestamp": time.time(),
+        }
+        if kg_proximity is not None:
+            result_data["kg_proximity"] = kg_proximity
+
+        return OperationResult.success_result(result_data)
 
     except Exception as e:
         logger.error(f"Error in detect_other_robot: {e}", exc_info=True)

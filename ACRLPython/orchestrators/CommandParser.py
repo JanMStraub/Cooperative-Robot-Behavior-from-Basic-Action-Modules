@@ -303,6 +303,57 @@ class CommandParser:
             logger.debug(f"FeedbackCollector unavailable: {e}")
             return ""
 
+    def _get_spatial_context(self, robot_id: str) -> str:
+        """
+        Retrieve formatted spatial context from the Knowledge Graph for the given robot.
+
+        Queries reachable objects and nearby robots to enrich the LLM prompt with
+        live spatial awareness. Returns an empty string if the KG is disabled,
+        unavailable, or raises any exception (graceful degrade).
+
+        Args:
+            robot_id: The robot whose spatial context to retrieve.
+
+        Returns:
+            A formatted spatial context block string, or empty string if unavailable.
+        """
+        try:
+            from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
+            if not KNOWLEDGE_GRAPH_ENABLED:
+                return ""
+
+            from core.Imports import get_graph_query_engine
+            qe = get_graph_query_engine()
+            if qe is None:
+                return ""
+
+            lines = ["=== SPATIAL CONTEXT (Knowledge Graph) ==="]
+
+            # Reachable objects (top 5 by distance)
+            reachable = qe.get_objects_in_reach(robot_id)[:5]
+            if reachable:
+                lines.append("Reachable objects:")
+                for obj in reachable:
+                    dist_str = f"{obj['distance']:.2f}m" if obj["distance"] is not None else "?"
+                    held_str = f" [held by {obj['grasped_by']}]" if obj.get("grasped_by") else ""
+                    lines.append(f"  - {obj['object_id']} ({obj['color']}, {dist_str}){held_str}")
+
+            # Nearby robots
+            nearby = qe.find_robots_near(robot_id)
+            if nearby:
+                lines.append("Nearby robots:")
+                for r in nearby:
+                    lines.append(f"  - {r['robot_id']} ({r['distance']:.2f}m)")
+
+            if len(lines) == 1:
+                return ""  # Only header, no data
+
+            return "\n        ".join(lines)
+
+        except Exception as e:
+            logger.debug(f"KG spatial context unavailable: {e}")
+            return ""
+
     def _build_parsing_prompt(
         self, command_text: str, robot_id: str, available_ops: str
     ) -> str:
@@ -312,6 +363,9 @@ class CommandParser:
             anti_pattern_block = f"\n        {anti_pattern_section}\n"
         else:
             anti_pattern_block = ""
+
+        spatial_section = self._get_spatial_context(robot_id)
+        spatial_block = f"\n        {spatial_section}\n" if spatial_section else ""
 
         return f"""You are a robot coordinator planning tasks for multiple robots.
 
@@ -437,7 +491,7 @@ class CommandParser:
         ]
         }}
 
-        {anti_pattern_block}Output only valid JSON, no explanation."""
+        {spatial_block}{anti_pattern_block}Output only valid JSON, no explanation."""
 
     def _get_available_operations_summary(self, command_text: str = "") -> str:
         """

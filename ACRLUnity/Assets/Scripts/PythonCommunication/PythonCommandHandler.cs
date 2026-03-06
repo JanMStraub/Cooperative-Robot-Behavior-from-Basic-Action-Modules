@@ -357,9 +357,6 @@ namespace PythonCommunication
                     ExecuteAdjustOrientation(command);
                     break;
 
-                case "grip_object":
-                    ExecuteGripObject(command);
-                    break;
 
                 case "align_object":
                     ExecuteAlignObject(command);
@@ -1385,27 +1382,6 @@ namespace PythonCommunication
         }
 
         /// <summary>
-        /// Execute grip_object command - simplified grasp operation (wrapper around grasp_object).
-        /// </summary>
-        private void ExecuteGripObject(RobotCommand command)
-        {
-            // grip_object is essentially the same as grasp_object but simplified
-            // Reuse ExecuteGraspObject implementation
-            if (_verboseLogging)
-            {
-                Debug.Log($"{_logPrefix} grip_object -> delegating to grasp_object (simplified)");
-            }
-
-            // Set use_advanced_planning to false for simplified grasping
-            if (command.parameters != null)
-            {
-                command.parameters.use_advanced_planning = false;
-            }
-
-            ExecuteGraspObject(command);
-        }
-
-        /// <summary>
         /// Execute align_object command - align held object to target orientation.
         /// </summary>
         private void ExecuteAlignObject(RobotCommand command)
@@ -2298,12 +2274,10 @@ namespace PythonCommunication
                         i++
                     )
                     {
-                        // Target joints are in radians, drive targets are in degrees
-                        float startDeg = startJoints[i];
-                        float targetDeg = targetJoints[i] * Mathf.Rad2Deg;
-                        float currentTarget = Mathf.Lerp(startDeg, targetDeg, smoothT);
+                        // startJointTargets are cloned from jointDriveTargets which stores degrees
+                        float currentTarget = Mathf.Lerp(startJoints[i], targetJoints[i], smoothT);
 
-                        controller.jointDriveTargets[i] = currentTarget * Mathf.Deg2Rad;
+                        controller.jointDriveTargets[i] = currentTarget;
 
                         var joint = controller.robotJoints[i];
                         if (joint != null)
@@ -2326,7 +2300,7 @@ namespace PythonCommunication
                     if (joint != null)
                     {
                         var drive = joint.xDrive;
-                        drive.target = targetJoints[i] * Mathf.Rad2Deg;
+                        drive.target = targetJoints[i];
                         joint.xDrive = drive;
                     }
                 }

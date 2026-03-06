@@ -46,7 +46,6 @@ from .FieldOperations import (
     DETECT_ALL_FIELDS_OPERATION,
 )
 from .IntermediateOperations import (
-    GRIP_OBJECT_OPERATION,
     ALIGN_OBJECT_OPERATION,
     FOLLOW_PATH_OPERATION,
     DRAW_WITH_PEN_OPERATION,
@@ -113,7 +112,6 @@ class OperationRegistry:
             # ============================================================================
             # Advanced Manipulation
             GRASP_OBJECT_OPERATION,
-            GRIP_OBJECT_OPERATION,
             ALIGN_OBJECT_OPERATION,
             DRAW_WITH_PEN_OPERATION,
             # Spatial Reasoning & Navigation

@@ -690,6 +690,29 @@ def detect_object_stereo(
                 f"Failed to update WorldState after detection: {e}", exc_info=True
             )
 
+        # Sync detected object into KG immediately (don't wait for WorldStatePublisher 10Hz cycle)
+        try:
+            from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
+            if KNOWLEDGE_GRAPH_ENABLED:
+                from core.Imports import get_graph_query_engine
+                qe = get_graph_query_engine()
+                if qe is not None:
+                    kg_object_id = best.color if best.color else "unknown_object"
+                    pos = (best.world_position[0], best.world_position[1], best.world_position[2])
+                    qe._graph.add_node(
+                        kg_object_id,
+                        node_type="object",
+                        position=pos,
+                        color=best.color or "unknown",
+                        object_type="cube",
+                        confidence=best.confidence,
+                        stale=False,
+                        grasped_by=None,
+                    )
+                    logger.debug(f"KG updated: object node '{kg_object_id}' at {pos}")
+        except Exception as e:
+            logger.debug(f"KG object sync skipped: {e}")
+
         return OperationResult.success_result(result)
 
     except Exception as e:

@@ -74,6 +74,7 @@ try:
     from moveit_msgs.msg import (
         MotionPlanRequest,
         Constraints,
+        JointConstraint,
         PositionConstraint,
         OrientationConstraint,
         BoundingVolume,
@@ -108,6 +109,7 @@ except ImportError:
     RobotState = None  # type: ignore[assignment,misc]
     PlanningScene = None  # type: ignore[assignment,misc]
     CollisionObject = None  # type: ignore[assignment,misc]
+    JointConstraint = None  # type: ignore[assignment,misc]
     GetPositionIK = None  # type: ignore[assignment,misc]
     GetCartesianPath = None  # type: ignore[assignment,misc]
     PoseStamped = None  # type: ignore[assignment,misc]
@@ -1302,8 +1304,9 @@ class ROSMotionServer:
     def _plan_return_to_start(self, request, robot_id):
         """Plan and publish a trajectory to return to the start/home configuration.
 
-        Uses joint-space planning to move to the robot's home position,
-        which is typically all joints at 0.
+        Uses joint-space planning with JointConstraints targeting all 6 arm
+        joints at 0 rad (the URDF home pose), which is exact and avoids the
+        IK ambiguity of a Cartesian position approximation.
 
         Args:
             request: Request dict with planning_time.
@@ -1314,12 +1317,84 @@ class ROSMotionServer:
         """
         planning_time = request.get("planning_time", MOVEIT_PLANNING_TIME)
 
-        # Plan to home position (all joints at 0, which is the default start config)
-        home_request = {
-            "position": {"x": 0.0, "y": 0.0, "z": 0.3},  # Approximate home end-effector position
-            "planning_time": planning_time,
+        goal = MoveGroup.Goal()
+        goal.request = MotionPlanRequest()
+        goal.request.group_name = "arm"
+        goal.request.num_planning_attempts = MOVEIT_PLANNING_ATTEMPTS
+        goal.request.allowed_planning_time = planning_time
+        goal.planning_options.plan_only = True
+
+        # Set workspace bounds
+        goal.request.workspace_parameters.header.frame_id = "base_link"
+        goal.request.workspace_parameters.min_corner = Vector3(x=-1.0, y=-1.0, z=-1.0)
+        goal.request.workspace_parameters.max_corner = Vector3(x=1.0, y=1.0, z=1.0)
+
+        # Set start state from cached joint states (same clamping logic as _build_move_group_goal)
+        _ARM_JOINT_LIMITS = {
+            "joint_1": (-2.9670597283903604, 2.9670597283903604),
+            "joint_2": (-0.7330382858376184, 1.5707963267948966),
+            "joint_3": (-1.5533430342749532, 0.9075712110370514),
+            "joint_4": (-3.141592653589793, 3.141592653589793),
+            "joint_5": (-1.8325957145940461, 1.8325957145940461),
+            "joint_6": (-3.141592653589793, 3.141592653589793),
         }
-        return self._plan_and_publish(home_request, robot_id)
+        joint_state = self._current_joint_states.get(robot_id)
+        if joint_state is not None:
+            filtered_js = JointState()
+            filtered_js.header = joint_state.header
+            for name, (lower, upper) in _ARM_JOINT_LIMITS.items():
+                if name in joint_state.name:
+                    idx = list(joint_state.name).index(name)
+                    raw = joint_state.position[idx]
+                    clamped = max(lower, min(upper, raw))
+                    filtered_js.name.append(name)
+                    filtered_js.position.append(clamped)
+                    if joint_state.velocity:
+                        filtered_js.velocity.append(0.0)
+            start_state = RobotState()
+            start_state.is_diff = True
+            start_state.joint_state = filtered_js
+            goal.request.start_state = start_state
+
+        # Joint-space goal: all 6 arm joints at 0 rad (URDF home pose)
+        constraints = Constraints()
+        for joint_name in _ARM_JOINT_LIMITS:
+            jc = JointConstraint()
+            jc.joint_name = joint_name
+            jc.position = 0.0
+            jc.tolerance_above = 0.01
+            jc.tolerance_below = 0.01
+            jc.weight = 1.0
+            constraints.joint_constraints.append(jc)
+        goal.request.goal_constraints.append(constraints)
+
+        logger.info(f"Planning return-to-start for {robot_id} (joint-space, all joints→0)")
+        trajectory, plan_time, error = self._call_move_group_plan(goal, robot_id, planning_time)
+
+        if trajectory is None:
+            return {"success": False, "error": error, "robot_id": robot_id}
+
+        # Publish trajectory to Unity and wait for completion (same as _plan_and_publish)
+        trajectory_pub = self._trajectory_pubs[robot_id]
+        self._trajectory_feedback_event[robot_id].clear()
+        self._trajectory_feedback[robot_id] = None
+        trajectory_pub.publish(trajectory)
+
+        if trajectory.points:
+            last_pt = trajectory.points[-1]
+            traj_duration = last_pt.time_from_start.sec + last_pt.time_from_start.nanosec * 1e-9
+        else:
+            traj_duration = 5.0
+        execution_timeout = max(15.0, traj_duration * 2.5 + 10.0)
+
+        completed = self._wait_for_trajectory_completion(robot_id, timeout=execution_timeout)
+        return {
+            "success": completed,
+            "robot_id": robot_id,
+            "trajectory_points": len(trajectory.points),
+            "planning_time": plan_time,
+            "status": "completed" if completed else "timeout",
+        }
 
     def _validate_grasp_candidates(self, request, robot_id):
         """
