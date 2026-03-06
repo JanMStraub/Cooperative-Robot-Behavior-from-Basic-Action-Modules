@@ -12,9 +12,9 @@ from .VectorStore import VectorStore
 
 # Import config
 try:
-    from config.Rag import RAG_DEFAULT_TOP_K
+    from config.Rag import RAG_DEFAULT_TOP_K, RAG_CONFIDENCE_TIERS
 except ImportError:
-    from ..config.Rag import RAG_DEFAULT_TOP_K
+    from ..config.Rag import RAG_DEFAULT_TOP_K, RAG_CONFIDENCE_TIERS
 
 # Configure logging
 from core.LoggingSetup import get_logger
@@ -151,6 +151,7 @@ class QueryEngine:
         Returns:
             Filtered and re-ranked results
         """
+        assert self._world_state is not None
         if not results:
             return results
 
@@ -181,20 +182,20 @@ class QueryEngine:
                 if obj_name_lower in query_lower:
                     affected_by_constraints = True
 
-                    # Downrank if object is stale
+                    # Downrank if object is stale (cap score at medium confidence tier)
                     if obj.stale:
-                        score *= 0.7
+                        score *= RAG_CONFIDENCE_TIERS["medium"]
                         logger.debug(
                             f"Downranked {op_name} (target object {obj.object_id} is stale)"
                         )
 
-                    # Downrank if object grasped by another robot
+                    # Downrank if object grasped by another robot (cap at low confidence tier)
                     if (
                         obj.grasped_by is not None
                         and obj.grasped_by != robot_id
                         and "grasp" in op_name.lower()
                     ):
-                        score *= 0.5
+                        score *= RAG_CONFIDENCE_TIERS["low"]
                         logger.debug(
                             f"Downranked {op_name} (object {obj.object_id} grasped by {obj.grasped_by})"
                         )
@@ -214,9 +215,9 @@ class QueryEngine:
                     affected_by_constraints = True
                     region_owner = self._world_state.get_workspace_owner(region)
 
-                    # Downrank if region allocated to another robot
+                    # Downrank if region allocated to another robot (cap at low confidence tier)
                     if region_owner is not None and region_owner != robot_id:
-                        score *= 0.6
+                        score *= RAG_CONFIDENCE_TIERS["low"]
                         logger.debug(
                             f"Downranked {op_name} (region {region} allocated to {region_owner})"
                         )

@@ -20,6 +20,7 @@ Usage:
 """
 
 import threading
+from typing import Optional
 import pytest
 
 
@@ -46,14 +47,14 @@ class SingletonTestMixin:
         """
         raise NotImplementedError("Subclass must implement get_singleton_instance()")
 
-    def get_cleanup_fixture_name(self):
+    def get_cleanup_fixture_name(self) -> Optional[str]:
         """
         Get the name of the cleanup fixture.
 
         Optional - only needed if cleanup fixture exists.
 
         Returns:
-            str: Name of cleanup fixture, or None if no cleanup needed
+            Optional[str]: Name of cleanup fixture, or None if no cleanup needed
         """
         return None
 

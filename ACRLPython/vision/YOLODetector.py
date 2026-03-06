@@ -452,11 +452,27 @@ class YOLODetector:
                     continue
 
                 # Create detection object
+                # Extract segmentation mask if available (task=segment)
+                mask = None
+                if (
+                    results[0].masks is not None
+                    and hasattr(results[0].masks, "data")
+                ):
+                    try:
+                        masks_array = results[0].masks.data.cpu().numpy()  # type: ignore[union-attr]
+                        if object_id < masks_array.shape[0]:
+                            mask = masks_array[object_id]  # shape (H, W)
+                    except Exception as mask_err:
+                        logging.debug(
+                            f"Could not extract mask for detection {object_id}: {mask_err}"
+                        )
+
                 det = DetectionObject(
                     object_id=object_id,
                     color=class_name,  # Use full class name (e.g., "red_cube", "robot", "base")
                     bbox=(x, y, w, h),
                     confidence=confidence,
+                    mask=mask,
                 )
 
                 detections.append(det)

@@ -498,15 +498,6 @@ class TestGraspTrajectoryValidation:
 class TestGraspForceEstimation:
     """Test grasp force estimation and verification."""
 
-    @pytest.fixture
-    def mock_broadcaster(self):
-        """Mock CommandBroadcaster for testing."""
-        with patch('operations.GraspOperations._get_command_broadcaster') as mock, \
-             patch('config.ROS.ROS_ENABLED', False):
-            broadcaster = MagicMock()
-            mock.return_value = broadcaster
-            yield broadcaster
-
     def test_grasp_force_estimation(self, mock_broadcaster):
         """Test grasp command sent (force estimation done by Unity GripperContactSensor)."""
         mock_broadcaster.send_command.return_value = True

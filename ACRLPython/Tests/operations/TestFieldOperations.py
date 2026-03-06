@@ -95,6 +95,7 @@ class TestDetectField:
             result = detect_field("Robot1", "A")
 
             assert result.success is True
+            assert result.result is not None
             assert result.result["field_label"] == "A"
             assert "center" in result.result
             assert result.result["center"] == {"x": 0.3, "y": 0.0, "z": 0.1}
@@ -118,6 +119,7 @@ class TestDetectField:
             result = detect_field("Robot1", "a")  # Lowercase
 
             assert result.success is True
+            assert result.result is not None
             assert result.result["field_label"] == "A"  # Should be uppercase in result
 
     def test_detect_field_all_labels(
@@ -149,6 +151,7 @@ class TestDetectField:
                 result = detect_field("Robot1", letter)
 
                 assert result.success is True
+                assert result.result is not None
                 assert result.result["field_label"] == letter
 
     def test_detect_field_invalid_robot_id(self):
@@ -156,6 +159,7 @@ class TestDetectField:
         result = detect_field("", "A")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_detect_field_invalid_label_too_long(self):
@@ -163,6 +167,7 @@ class TestDetectField:
         result = detect_field("Robot1", "AB")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_FIELD_LABEL"
 
     def test_detect_field_invalid_label_not_letter(self):
@@ -170,6 +175,7 @@ class TestDetectField:
         result = detect_field("Robot1", "1")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_FIELD_LABEL"
 
     def test_detect_field_no_stereo_images(self, monkeypatch):
@@ -184,6 +190,7 @@ class TestDetectField:
         result = detect_field("Robot1", "A")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "NO_STEREO_IMAGES"
 
     def test_detect_field_incomplete_stereo_pair(self, monkeypatch):
@@ -200,6 +207,7 @@ class TestDetectField:
         result = detect_field("Robot1", "A")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INCOMPLETE_STEREO_PAIR"
 
     def test_detect_field_not_detected(
@@ -223,6 +231,7 @@ class TestDetectField:
             result = detect_field("Robot1", "D")
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "FIELD_NOT_DETECTED"
 
     def test_detect_field_with_confidence_threshold(
@@ -273,6 +282,7 @@ class TestDetectField:
             result = detect_field("Robot1", "A")
 
             assert result.success is False
+            assert result.error is not None
             assert result.error["code"] == "NO_3D_COORDINATES"
 
     def test_detect_field_world_position_as_dict(
@@ -303,6 +313,7 @@ class TestDetectField:
             result = detect_field("Robot1", "B")
 
             assert result.success is True
+            assert result.result is not None
             assert result.result["center"] == {"x": 0.4, "y": 0.1, "z": 0.0}
 
 
@@ -331,6 +342,7 @@ class TestGetFieldCenter:
             result = get_field_center("Robot1", "E")
 
             assert result.success is True
+            assert result.result is not None
             assert result.result["field_label"] == "E"
             assert "center" in result.result
             assert result.result["center"]["x"] == 0.3
@@ -349,6 +361,7 @@ class TestGetFieldCenter:
         result = get_field_center("Robot1", "C")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "NO_STEREO_IMAGES"
 
 
@@ -395,6 +408,7 @@ class TestDetectAllFields:
             result = detect_all_fields("Robot1")
 
             assert result.success is True
+            assert result.result is not None
             assert result.result["count"] == 2
             assert len(result.result["fields"]) == 2
 
@@ -424,6 +438,7 @@ class TestDetectAllFields:
             result = detect_all_fields("Robot1")
 
             assert result.success is True
+            assert result.result is not None
             assert result.result["count"] == 0
             assert result.result["fields"] == []
 
@@ -432,6 +447,7 @@ class TestDetectAllFields:
         result = detect_all_fields("")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_detect_all_fields_filters_correct_classes(
@@ -547,6 +563,7 @@ class TestFieldOperationsEdgeCases:
             result = detect_field("Robot1", " A ")
 
             assert result.success is True
+            assert result.result is not None
             assert result.result["field_label"] == "A"
 
     def test_detect_all_fields_all_nine_fields(
@@ -580,6 +597,7 @@ class TestFieldOperationsEdgeCases:
             result = detect_all_fields("Robot1")
 
             assert result.success is True
+            assert result.result is not None
             assert result.result["count"] == 9
             labels = [f["label"] for f in result.result["fields"]]
             assert len(set(labels)) == 9  # All unique
@@ -604,5 +622,7 @@ class TestFieldOperationsEdgeCases:
 
             assert result_upper.success is True
             assert result_lower.success is True
+            assert result_upper.result is not None
+            assert result_lower.result is not None
             assert result_upper.result["field_label"] == "A"
             assert result_lower.result["field_label"] == "A"

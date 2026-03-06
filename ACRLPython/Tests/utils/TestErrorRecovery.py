@@ -413,7 +413,7 @@ class TestStateRecovery:
             corrupted = True
 
         # Restore state
-        storage._single_images = original_dict or {}
+        storage._single_images = original_dict or {}  # type: ignore[assignment]
 
         # Should work again
         restored_image = storage.get_single_image("test_cam")

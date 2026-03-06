@@ -318,6 +318,7 @@ class TestRefreshIndexMetadataPreservation:
 
         # The original operation's metadata must be untouched
         op_entry = store.get_operation("op_001")
+        assert op_entry is not None
         assert op_entry["metadata"]["execution_count"] == 42
         assert op_entry["metadata"]["last_outcome"] == "success"
 
@@ -338,6 +339,7 @@ class TestRefreshIndexMetadataPreservation:
         indexer.refresh_index(store, save=False)
 
         op_entry = store.get_operation("op_001")
+        assert op_entry is not None
         assert op_entry["metadata"]["execution_count"] == 7
 
 

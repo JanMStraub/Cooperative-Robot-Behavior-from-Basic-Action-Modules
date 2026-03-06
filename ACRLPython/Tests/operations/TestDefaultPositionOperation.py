@@ -75,7 +75,7 @@ class TestReturnToStartPosition:
 
     def test_return_to_start_position_invalid_robot_id_none(self):
         """Test return with None robot ID."""
-        result = return_to_start_position(None)
+        result = return_to_start_position(None)  # type: ignore[arg-type]
 
         assert result.success is False
         assert result.error is not None
@@ -83,7 +83,7 @@ class TestReturnToStartPosition:
 
     def test_return_to_start_position_invalid_robot_id_number(self):
         """Test return with numeric robot ID."""
-        result = return_to_start_position(123)
+        result = return_to_start_position(123)  # type: ignore[arg-type]
 
         assert result.success is False
         assert result.error is not None

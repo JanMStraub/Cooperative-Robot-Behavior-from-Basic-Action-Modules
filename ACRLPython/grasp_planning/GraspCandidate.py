@@ -7,7 +7,7 @@ grasp candidate poses and gripper geometry specifications.
 Matches Unity's GraspCandidate.cs for compatibility.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Tuple, Optional
 import numpy as np
 

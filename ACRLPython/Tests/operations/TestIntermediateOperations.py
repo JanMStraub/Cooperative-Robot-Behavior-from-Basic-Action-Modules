@@ -68,7 +68,7 @@ class TestGripObject:
 
     def test_grip_object_invalid_position_not_dict(self):
         """Test grip with non-dictionary position."""
-        result = grip_object("Robot1", "invalid_position")
+        result = grip_object("Robot1", "invalid_position")  # type: ignore[arg-type]
 
         assert result.success is False
         assert result.error is not None
@@ -133,7 +133,7 @@ class TestAlignObject:
     def test_align_object_success(self, patch_command_broadcaster):
         """Test successful alignment operation."""
         orientation = {"roll": 0, "pitch": -90, "yaw": 0}
-        result = align_object("Robot1", orientation)
+        result = align_object("Robot1", orientation)  # type: ignore[arg-type]
 
         assert result.success is True
         assert result.result is not None
@@ -148,7 +148,7 @@ class TestAlignObject:
         orientation = {"roll": 0, "pitch": 0, "yaw": 90}
 
         for align_type in ["gripper", "object"]:
-            result = align_object("Robot1", orientation, alignment_type=align_type)
+            result = align_object("Robot1", orientation, alignment_type=align_type)  # type: ignore[arg-type]
             assert result.success is True
             assert result.result is not None
             assert result.result["alignment_type"] == align_type
@@ -156,7 +156,7 @@ class TestAlignObject:
     def test_align_object_invalid_robot_id(self):
         """Test alignment with invalid robot ID."""
         orientation = {"roll": 0, "pitch": -90, "yaw": 0}
-        result = align_object("", orientation)
+        result = align_object("", orientation)  # type: ignore[arg-type]
 
         assert result.success is False
         assert result.error is not None
@@ -164,7 +164,7 @@ class TestAlignObject:
 
     def test_align_object_invalid_orientation_not_dict(self):
         """Test alignment with non-dictionary orientation."""
-        result = align_object("Robot1", "invalid_orientation")
+        result = align_object("Robot1", "invalid_orientation")  # type: ignore[arg-type]
 
         assert result.success is False
         assert result.error is not None
@@ -173,7 +173,7 @@ class TestAlignObject:
     def test_align_object_invalid_orientation_missing_keys(self):
         """Test alignment with orientation missing required keys."""
         # Missing 'yaw'
-        result = align_object("Robot1", {"roll": 0, "pitch": -90})
+        result = align_object("Robot1", {"roll": 0, "pitch": -90})  # type: ignore[arg-type]
 
         assert result.success is False
         assert result.error is not None
@@ -182,7 +182,7 @@ class TestAlignObject:
     def test_align_object_invalid_alignment_type(self):
         """Test alignment with invalid alignment type."""
         orientation = {"roll": 0, "pitch": -90, "yaw": 0}
-        result = align_object("Robot1", orientation, alignment_type="invalid")
+        result = align_object("Robot1", orientation, alignment_type="invalid")  # type: ignore[arg-type]
 
         assert result.success is False
         assert result.error is not None
@@ -191,7 +191,7 @@ class TestAlignObject:
     def test_align_object_command_structure(self, patch_command_broadcaster):
         """Test that align command has correct structure."""
         orientation = {"roll": 45, "pitch": -45, "yaw": 90}
-        result = align_object("Robot1", orientation, alignment_type="object", request_id=222)
+        result = align_object("Robot1", orientation, alignment_type="object", request_id=222)  # type: ignore[arg-type]
 
         patch_command_broadcaster.send_command.assert_called_once()
         call_args = patch_command_broadcaster.send_command.call_args
@@ -211,7 +211,7 @@ class TestAlignObject:
         patch_command_broadcaster.send_command = Mock(return_value=False)
         orientation = {"roll": 0, "pitch": -90, "yaw": 0}
 
-        result = align_object("Robot1", orientation)
+        result = align_object("Robot1", orientation)  # type: ignore[arg-type]
 
         assert result.success is False
         assert result.error is not None
@@ -291,7 +291,7 @@ class TestFollowPath:
 
     def test_follow_path_not_a_list(self):
         """Test path following with non-list waypoints."""
-        result = follow_path("Robot1", "invalid_waypoints")
+        result = follow_path("Robot1", "invalid_waypoints")  # type: ignore[arg-type]
 
         assert result.success is False
         assert result.error is not None

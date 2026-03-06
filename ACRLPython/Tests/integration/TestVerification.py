@@ -572,6 +572,7 @@ class TestSpatialPredicateAccuracy:
         # Test case 2: Diagonal in XY plane
         world_state.update_object_position("Obj2", (1.0, 1.0, 0.0), "blue")
         obj_pos = world_state.get_object_position("Obj2")
+        assert obj_pos is not None
         if not isinstance(obj_pos, tuple):
             obj_pos = tuple(obj_pos)
         distance = math.sqrt(sum((a-b)**2 for a, b in zip(obj_pos, robot_pos)))
@@ -582,6 +583,7 @@ class TestSpatialPredicateAccuracy:
         # Test case 3: 3D diagonal
         world_state.update_object_position("Obj3", (1.0, 1.0, 1.0), "green")
         obj_pos = world_state.get_object_position("Obj3")
+        assert obj_pos is not None
         if not isinstance(obj_pos, tuple):
             obj_pos = tuple(obj_pos)
         distance = math.sqrt(sum((a-b)**2 for a, b in zip(obj_pos, robot_pos)))

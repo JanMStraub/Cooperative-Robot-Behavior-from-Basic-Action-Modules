@@ -456,11 +456,11 @@ class GraspCandidateGenerator:
         """
         avg_size = np.mean(obj_size)
         distance = avg_size * self.config.pre_grasp_distance_factor
-        return np.clip(
+        return float(np.clip(
             distance,
             self.config.min_pre_grasp_distance,
             self.config.max_pre_grasp_distance,
-        )
+        ))
 
     def _calculate_retreat_distance(self, obj_size: np.ndarray) -> float:
         """
@@ -473,7 +473,7 @@ class GraspCandidateGenerator:
             Retreat distance in meters
         """
         avg_size = np.mean(obj_size)
-        return avg_size * self.config.retreat_distance_factor
+        return float(avg_size * self.config.retreat_distance_factor)
 
     def _sample_distance_variation(self, base_dist: float) -> float:
         """
@@ -515,4 +515,4 @@ class GraspCandidateGenerator:
         avg_size = np.mean(obj_size)
         base_depth = self.config.target_grasp_depth * avg_size
         variation = avg_size * self.config.depth_variation_range
-        return base_depth + (self.random.rand() * variation * 2.0 - variation)
+        return float(base_depth + (self.random.rand() * variation * 2.0 - variation))

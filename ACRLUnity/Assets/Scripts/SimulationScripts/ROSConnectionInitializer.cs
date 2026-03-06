@@ -24,7 +24,7 @@ namespace Simulation
         private int _rosPort = CommunicationConstants.ROS_TCP_ENDPOINT_PORT;
 
         [Header("Connection Management")]
-        [Tooltip("Attempt to connect on start")]
+        [Tooltip("Attempt to connect on start. Mirrors AUTO_CONNECT_ROS in ACRLPython/config/ROS.py (default: true)")]
         [SerializeField]
         private bool _connectOnStart = true;
 

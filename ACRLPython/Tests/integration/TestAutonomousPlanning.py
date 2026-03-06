@@ -67,6 +67,7 @@ class TestAutonomousPlanning(unittest.TestCase):
         # Verify handoff pattern exists
         handoff = self.workflow_registry.get_pattern_by_name("handoff")
         self.assertIsNotNone(handoff, "Handoff pattern should exist")
+        assert handoff is not None
         self.assertEqual(handoff.name, "handoff")
         self.assertGreater(len(handoff.steps), 0)
 
@@ -84,6 +85,7 @@ class TestAutonomousPlanning(unittest.TestCase):
         self.assertTrue(result["success"], f"Parse failed: {result.get('error')}")
 
         commands = result.get("plan") or result.get("commands")
+        assert commands is not None
         self.assertIsInstance(commands, list)
         self.assertGreater(len(commands), 0, "Should generate at least one command")
 
@@ -191,6 +193,7 @@ class TestAutonomousPlanning(unittest.TestCase):
 
         self.assertTrue(result["success"])
         commands = result.get("plan") or result.get("commands")
+        assert commands is not None
         self.assertIsInstance(commands, list)
 
         # Should have at least 2 move commands
@@ -208,6 +211,7 @@ class TestAutonomousPlanning(unittest.TestCase):
 
         self.assertTrue(result["success"])
         commands = result.get("plan") or result.get("commands")
+        assert commands is not None
         self.assertIsInstance(commands, list)
 
         print(f"✓ Collaborative task generated {len(commands)} commands")
@@ -230,6 +234,7 @@ class TestWorkflowPatternFormatting(unittest.TestCase):
         """Test workflow pattern formatting"""
         handoff = self.workflow_registry.get_pattern_by_name("handoff")
         self.assertIsNotNone(handoff)
+        assert handoff is not None
 
         formatted = self.parser._format_workflow_pattern(handoff)
 

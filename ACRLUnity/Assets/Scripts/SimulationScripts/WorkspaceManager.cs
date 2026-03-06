@@ -103,9 +103,22 @@ namespace Simulation
         private List<WorkspaceRegion> _workspaceRegions = new List<WorkspaceRegion>();
 
         [Header("Safety Parameters")]
-        [Tooltip("Minimum distance to maintain between robot end effectors (meters)")]
+        [Tooltip("Minimum distance to maintain between robot end effectors (meters). Mirrors MIN_ROBOT_SEPARATION in config/Robot.py.")]
         [SerializeField]
         private float _minRobotSeparation = 0.2f;
+
+        [Tooltip("Additional safety margin added to collision geometry (meters). Mirrors COLLISION_SAFETY_MARGIN in config/Robot.py.")]
+        [SerializeField]
+        private float _collisionSafetyMargin = 0.01f;
+
+        [Header("Robot Base Positions")]
+        [Tooltip("Base position of Robot1 in world coordinates. Mirrors ROBOT_BASE_POSITIONS[Robot1] in config/Robot.py.")]
+        [SerializeField]
+        private Vector3 _robot1BasePosition = new Vector3(-0.475f, 0f, 0f);
+
+        [Tooltip("Base position of Robot2 in world coordinates. Mirrors ROBOT_BASE_POSITIONS[Robot2] in config/Robot.py.")]
+        [SerializeField]
+        private Vector3 _robot2BasePosition = new Vector3(0.475f, 0f, 0f);
 
         [Tooltip(
             "Allow robot movement outside defined regions (void space). "
@@ -244,6 +257,11 @@ namespace Simulation
                 Debug.Log(
                     $"{LOG_PREFIX} Created {_workspaceRegions.Count} default workspace regions"
                 );
+
+                // Apply default robot-to-workspace assignments (mirrors ROBOT_WORKSPACE_ASSIGNMENTS
+                // in ACRLPython/config/Robot.py: Robot1 -> left_workspace, Robot2 -> right_workspace)
+                AllocateRegion("Robot1", "left_workspace");
+                AllocateRegion("Robot2", "right_workspace");
             }
 
             // Sync allocation dictionary from any pre-allocated regions (serialized in scene)
@@ -749,6 +767,26 @@ namespace Simulation
 
             return isConsistent;
         }
+
+        /// <summary>
+        /// Get the base position of a robot by ID.
+        /// Mirrors ROBOT_BASE_POSITIONS in ACRLPython/config/Robot.py.
+        /// </summary>
+        /// <param name="robotId">Robot identifier ("Robot1" or "Robot2")</param>
+        /// <returns>Base position in world coordinates, or Vector3.zero if unknown</returns>
+        public Vector3 GetRobotBasePosition(string robotId)
+        {
+            if (robotId == "Robot1") return _robot1BasePosition;
+            if (robotId == "Robot2") return _robot2BasePosition;
+            Debug.LogWarning($"{LOG_PREFIX} Unknown robotId '{robotId}' in GetRobotBasePosition");
+            return Vector3.zero;
+        }
+
+        /// <summary>
+        /// Get the collision safety margin (additional clearance on top of robot geometry).
+        /// Mirrors COLLISION_SAFETY_MARGIN in ACRLPython/config/Robot.py.
+        /// </summary>
+        public float CollisionSafetyMargin => _collisionSafetyMargin;
 
         /// <summary>
         /// Draw workspace regions in Scene view for visual debugging.

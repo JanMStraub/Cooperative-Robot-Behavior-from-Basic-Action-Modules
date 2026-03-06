@@ -97,10 +97,10 @@ namespace PythonCommunication
         [SerializeField]
         private bool _enablePublishing = true;
 
-        [Tooltip("Update rate in Hz (updates per second)")]
+        [Tooltip("Update rate in Hz (updates per second). Mirrors 1.0/WORLD_STATE_UPDATE_INTERVAL in ACRLPython/config/Robot.py (default: 10 Hz = 0.1s interval).")]
         [SerializeField]
         [Range(0.1f, 10f)]
-        private float _updateRate = 2.0f;
+        private float _updateRate = 10.0f;
 
         [Tooltip("Publish robot states")]
         [SerializeField]

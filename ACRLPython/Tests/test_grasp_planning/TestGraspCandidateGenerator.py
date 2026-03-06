@@ -321,7 +321,7 @@ class TestApproachDirectionDiversity:
             )
 
             # Extract the X component of each approach direction
-            x_directions = [c.approach_direction[0] for c in candidates]
+            x_directions = [c.approach_direction[0] for c in candidates]  # type: ignore[index]
             has_positive_x = any(x > 0.5 for x in x_directions)
             has_negative_x = any(x < -0.5 for x in x_directions)
 
@@ -358,7 +358,7 @@ class TestApproachDirectionDiversity:
                 object_position, object_rotation, object_size, gripper_position
             )
 
-            z_directions = [c.approach_direction[2] for c in candidates]
+            z_directions = [c.approach_direction[2] for c in candidates]  # type: ignore[index]
             has_positive_z = any(z > 0.5 for z in z_directions)
             has_negative_z = any(z < -0.5 for z in z_directions)
 
@@ -391,7 +391,7 @@ class TestApproachDirectionDiversity:
             (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0), (0.05, 0.05, 0.05), (0.3, 0.15, 0.0)
         )
 
-        x_directions = [c.approach_direction[0] for c in candidates]
+        x_directions = [c.approach_direction[0] for c in candidates]  # type: ignore[index]
         assert any(x > 0.5 for x in x_directions), "No +X side approach candidate found"
         assert any(x < -0.5 for x in x_directions), "No -X side approach candidate found"
 

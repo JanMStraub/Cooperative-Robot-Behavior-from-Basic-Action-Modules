@@ -24,6 +24,7 @@ Requirements:
 
 import argparse
 import json
+import logging
 import sys
 import time
 import base64
@@ -34,6 +35,8 @@ from pathlib import Path
 
 # Allow running as a daemon script from within the vision/ directory
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+logger = logging.getLogger(__name__)
 
 try:
     import openai

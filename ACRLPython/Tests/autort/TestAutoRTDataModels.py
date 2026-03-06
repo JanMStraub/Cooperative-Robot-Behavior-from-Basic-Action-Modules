@@ -63,7 +63,7 @@ def test_grounded_object_forbids_extra_fields():
             color="red",
             position=(0.3, 0.2, 0.1),
             confidence=0.95,
-            extra_field="should_fail",  # Extra field
+            extra_field="should_fail",  # type: ignore[call-arg]  # Extra field
         )
 
 
@@ -272,7 +272,7 @@ def test_proposed_task_forbids_extra_fields():
             required_robots=["Robot1"],
             estimated_complexity=3,
             reasoning="test",
-            extra_field="should_fail",  # Extra field
+            extra_field="should_fail",  # type: ignore[call-arg]  # Extra field
         )
 
 

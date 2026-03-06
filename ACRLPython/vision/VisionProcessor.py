@@ -41,6 +41,7 @@ import time
 import threading
 from typing import Optional, Callable, List, Any
 
+cv2: Any = None
 try:
     import cv2
     CV2_AVAILABLE = True

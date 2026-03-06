@@ -255,7 +255,7 @@ class GraspScorer:
         score *= 0.65 + 0.35 * gravity_alignment
 
         # Gripper compatibility: can gripper grasp this object?
-        if not self.config.gripper_geometry.can_grasp(object_size):
+        if not self.config.gripper_geometry.can_grasp(tuple(object_size.tolist())):
             score *= 0.5
 
         # Distance ratio: prefer distances close to ideal
@@ -348,7 +348,7 @@ class GraspScorer:
         # Penalize if very close to edge (> 80% of half-extent)
         if min_dist_to_edge > 0.8:
             edge_penalty = (min_dist_to_edge - 0.8) / 0.2
-            return 1.0 - edge_penalty * 0.3
+            return float(1.0 - edge_penalty * 0.3)
 
         return 1.0
 

@@ -28,6 +28,8 @@ try:
     from config.Vision import (
         USE_YOLO,
         YOLO_MODEL_PATH,
+        YOLO_TASK,
+        YOLO_SEGMENTATION_MODEL,
         RED_HSV_LOWER_1,
         RED_HSV_UPPER_1,
         RED_HSV_LOWER_2,
@@ -47,6 +49,8 @@ except ImportError:
     from ..config.Vision import (
         USE_YOLO,
         YOLO_MODEL_PATH,
+        YOLO_TASK,
+        YOLO_SEGMENTATION_MODEL,
         RED_HSV_LOWER_1,
         RED_HSV_UPPER_1,
         RED_HSV_LOWER_2,
@@ -197,12 +201,15 @@ class CubeDetector:
             use_yolo_config = USE_YOLO
         self.use_yolo = YOLO_AVAILABLE and use_yolo_config
 
+        self._segmentation_model = None
+
         if self.use_yolo and YOLO_AVAILABLE:
-            # Initialize YOLO detector (only if import succeeded)
+            # Initialize detection model
             try:
-                self.yolo_detector = YOLODetector(model_path=YOLO_MODEL_PATH)  # type: ignore[name-defined]
+                model_path = YOLO_SEGMENTATION_MODEL if YOLO_TASK == "segment" else YOLO_MODEL_PATH
+                self.yolo_detector = YOLODetector(model_path=model_path)  # type: ignore[name-defined]
                 logging.info(
-                    f"CubeDetector initialized with YOLO (model: {YOLO_MODEL_PATH})"
+                    f"CubeDetector initialized with YOLO task='{YOLO_TASK}' (model: {model_path})"
                 )
             except Exception as e:
                 logging.error(f"Failed to initialize YOLO detector: {e}")
@@ -462,6 +469,42 @@ class CubeDetector:
             detection_result.image_height,
             detections_with_depth,
         )
+
+    def detect_objects_segmented(
+        self, image: np.ndarray, camera_id: str = "unknown"
+    ) -> DetectionResult:
+        """
+        Detect objects using YOLO segmentation model (returns masks alongside bboxes).
+
+        Only available when YOLO_TASK='segment' is configured in config/Vision.py.
+        Falls back to standard detection when segmentation is not enabled.
+
+        Args:
+            image: OpenCV image (BGR format)
+            camera_id: ID of the camera for metadata
+
+        Returns:
+            DetectionResult where each DetectionObject.mask contains the segmentation mask
+            (None if segmentation not available or not enabled)
+        """
+        if not self.use_yolo or not YOLO_AVAILABLE:
+            logging.warning("YOLO not available; falling back to bbox-only detect_objects")
+            return self.detect_objects(image, camera_id)
+
+        if YOLO_TASK != "segment":
+            logging.debug(
+                f"YOLO_TASK='{YOLO_TASK}' is not 'segment'; returning bbox-only result"
+            )
+            return self.detect_objects(image, camera_id)
+
+        try:
+            # Delegate to YOLO detector with task=segment
+            result = self.yolo_detector.detect_objects(image, camera_id)  # type: ignore[name-defined]
+            # Masks are populated by YOLODetector when task='segment'
+            return result
+        except Exception as e:
+            logging.error(f"Segmentation detection failed: {e}; falling back to detect_objects")
+            return self.detect_objects(image, camera_id)
 
     def _detect_all_objects(self, image: np.ndarray) -> List[Dict]:
         """

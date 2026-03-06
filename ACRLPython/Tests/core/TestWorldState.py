@@ -330,7 +330,7 @@ class TestWorkspaceAllocation:
         def allocate_workspace(robot_id, workspace_id):
             try:
                 result = world_state.allocate_workspace(workspace_id, robot_id)
-                results[robot_id] = result
+                results[robot_id] = result  # type: ignore[assignment]
             except Exception as e:
                 errors.append((robot_id, str(e)))
 

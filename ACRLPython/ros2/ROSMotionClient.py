@@ -50,6 +50,21 @@ except ImportError:
     )
     logger = logging.getLogger(__name__)
 
+try:
+    from config.ROS import MOVEIT_PLANNING_TIME, MOVEIT_PLANNING_ATTEMPTS, MOVEIT_GOAL_TOLERANCE
+except ImportError:
+    MOVEIT_PLANNING_TIME = 5.0
+    MOVEIT_PLANNING_ATTEMPTS = 10
+    MOVEIT_GOAL_TOLERANCE = 0.01
+
+try:
+    from config.Robot import ROBOT_BASE_POSITIONS
+except ImportError:
+    ROBOT_BASE_POSITIONS = {
+        "Robot1": (-0.475, 0.0, 0.0),
+        "Robot2": (0.475, 0.0, 0.0),
+    }
+
 # ROS 2 imports - only available inside Docker
 try:
     import rclpy
@@ -116,13 +131,13 @@ class ROSMotionServer:
     and publishers for each robot namespace.
     """
 
-    # Robot base positions and rotations in Unity world coordinates
-    # These match the positions in Unity Environment.prefab
+    # Robot base positions and rotations in Unity world coordinates.
+    # Positions sourced from ROBOT_BASE_POSITIONS in config/Robot.py.
     # Robot1: Unity rotation (0, 0, 0, -1) = 360° = 0° effective rotation - facing forward (+Z in Unity)
     # Robot2: Unity rotation (0, 1, 0, 0) = 180° around Y - facing backward (-Z in Unity)
     ROBOT_BASE_TRANSFORMS = {
-        "Robot1": {"position": (-0.475, 0.0, 0.0), "y_rotation": 0.0},
-        "Robot2": {"position": (0.475, 0.0, 0.0), "y_rotation": 180.0},
+        robot_id: {"position": pos, "y_rotation": 0.0 if robot_id == "Robot1" else 180.0}
+        for robot_id, pos in ROBOT_BASE_POSITIONS.items()
     }
 
     def __init__(self, host="0.0.0.0", port=5020):
@@ -548,7 +563,7 @@ class ROSMotionServer:
         """
         position = request.get("position", {})
         orientation = request.get("orientation")
-        planning_time = request.get("planning_time", 5.0)
+        planning_time = request.get("planning_time", MOVEIT_PLANNING_TIME)
 
         # Log incoming world position for debugging coordinate transform issues
         logger.info(
@@ -567,7 +582,7 @@ class ROSMotionServer:
         goal = MoveGroup.Goal()
         goal.request = MotionPlanRequest()
         goal.request.group_name = "arm"
-        goal.request.num_planning_attempts = 10
+        goal.request.num_planning_attempts = MOVEIT_PLANNING_ATTEMPTS
         goal.request.allowed_planning_time = planning_time
 
         # Optional velocity/acceleration scaling (0.0 = MoveIt default = no scaling).
@@ -629,6 +644,10 @@ class ROSMotionServer:
                         filtered_js.velocity.append(0.0)  # zero velocity at start
 
             start_state = RobotState()
+            start_state.is_diff = True  # Differential update: only override listed joints,
+            # keep remaining joints from MoveIt's current state.  Without is_diff=True,
+            # unlisted joints default to 0 which can put the robot in collision with
+            # itself or the ground plane — triggering UNKNOWN_ERROR_99999.
             start_state.joint_state = filtered_js
             goal.request.start_state = start_state
 
@@ -661,7 +680,7 @@ class ROSMotionServer:
         bounding_vol = BoundingVolume()
         primitive = SolidPrimitive()
         primitive.type = SolidPrimitive.SPHERE
-        primitive.dimensions = [0.02]  # 2cm tolerance
+        primitive.dimensions = [MOVEIT_GOAL_TOLERANCE]  # position goal tolerance (from config.ROS)
         bounding_vol.primitives.append(primitive)
         bounding_vol.primitive_poses.append(pose_goal.pose)
         pos_constraint.constraint_region = bounding_vol
@@ -851,7 +870,7 @@ class ROSMotionServer:
         Returns:
             Dict with success status and trajectory info.
         """
-        planning_time = request.get("planning_time", 5.0)
+        planning_time = request.get("planning_time", MOVEIT_PLANNING_TIME)
         goal = self._build_move_group_goal(request, robot_id)
 
         trajectory, plan_time, error = self._call_move_group_plan(
@@ -885,7 +904,7 @@ class ROSMotionServer:
         Returns:
             Dict with success status and execution info.
         """
-        planning_time = request.get("planning_time", 5.0)
+        planning_time = request.get("planning_time", MOVEIT_PLANNING_TIME)
         goal = self._build_move_group_goal(request, robot_id)
 
         trajectory, plan_time, error = self._call_move_group_plan(
@@ -1017,7 +1036,7 @@ class ROSMotionServer:
             Dict with success status and total planning time.
         """
         waypoints = request.get("waypoints", [])
-        planning_time = request.get("planning_time", 5.0)
+        planning_time = request.get("planning_time", MOVEIT_PLANNING_TIME)
 
         if len(waypoints) < 1:
             return {"success": False, "error": "At least one waypoint required", "robot_id": robot_id}
@@ -1069,7 +1088,7 @@ class ROSMotionServer:
         import math
 
         orientation = request.get("orientation", {})
-        planning_time = request.get("planning_time", 5.0)
+        planning_time = request.get("planning_time", MOVEIT_PLANNING_TIME)
 
         # Convert RPY degrees to quaternion
         roll = math.radians(orientation.get("roll", 0.0))
@@ -1184,18 +1203,33 @@ class ROSMotionServer:
                 "running Cartesian descent at default MoveIt speed"
             )
 
-        # Set current joint state as start
+        # Set current joint state as start (clamped to URDF bounds, is_diff=True)
         joint_state = self._current_joint_states.get(robot_id)
         if joint_state is not None:
-            arm_joint_names = ["joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6"]
+            _ARM_JOINT_LIMITS_CART = {
+                "joint_1": (-2.9670597283903604, 2.9670597283903604),
+                "joint_2": (-0.7330382858376184, 1.5707963267948966),
+                "joint_3": (-1.5533430342749532, 0.9075712110370514),
+                "joint_4": (-3.141592653589793, 3.141592653589793),
+                "joint_5": (-1.8325957145940461, 1.8325957145940461),
+                "joint_6": (-3.141592653589793, 3.141592653589793),
+            }
             filtered_js = JointState()
             filtered_js.header = joint_state.header
-            for name in arm_joint_names:
+            for name, (lower, upper) in _ARM_JOINT_LIMITS_CART.items():
                 if name in joint_state.name:
                     idx = list(joint_state.name).index(name)
+                    raw = joint_state.position[idx]
+                    clamped = max(lower, min(upper, raw))
+                    if abs(clamped - raw) > 1e-6:
+                        logger.warning(
+                            f"{robot_id} {name} position {raw:.6f} rad out of bounds "
+                            f"[{lower:.4f}, {upper:.4f}] — clamped for Cartesian start state"
+                        )
                     filtered_js.name.append(name)
-                    filtered_js.position.append(joint_state.position[idx])
+                    filtered_js.position.append(clamped)
             start_state = RobotState()
+            start_state.is_diff = True  # Differential update: only override listed joints
             start_state.joint_state = filtered_js
             req.start_state = start_state
 
@@ -1278,7 +1312,7 @@ class ROSMotionServer:
         Returns:
             Dict with success status and planning time.
         """
-        planning_time = request.get("planning_time", 5.0)
+        planning_time = request.get("planning_time", MOVEIT_PLANNING_TIME)
 
         # Plan to home position (all joints at 0, which is the default start config)
         home_request = {

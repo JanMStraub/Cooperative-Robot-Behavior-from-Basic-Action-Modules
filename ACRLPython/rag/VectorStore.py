@@ -18,12 +18,14 @@ try:
         RAG_MIN_SIMILARITY_SCORE,
         RAG_ENABLE_CONFIDENCE_SCORING,
         RAG_VECTOR_STORE_PATH,
+        RAG_EMBEDDING_DIMENSION,
     )
 except ImportError:
     from ..config.Rag import (
         RAG_MIN_SIMILARITY_SCORE,
         RAG_ENABLE_CONFIDENCE_SCORING,
         RAG_VECTOR_STORE_PATH,
+        RAG_EMBEDDING_DIMENSION,
     )
 
 # Configure logging
@@ -72,9 +74,15 @@ class VectorStore:
             ... )
         """
         with self._lock:
-            # Set embedding dimension on first add
+            # Set embedding dimension on first add; validate against config
             if self.embedding_dimension is None:
                 self.embedding_dimension = len(embedding)
+                if RAG_EMBEDDING_DIMENSION and self.embedding_dimension != RAG_EMBEDDING_DIMENSION:
+                    logger.warning(
+                        f"Embedding dimension {self.embedding_dimension} != configured "
+                        f"RAG_EMBEDDING_DIMENSION={RAG_EMBEDDING_DIMENSION}. "
+                        "Check that the embedding model matches the config."
+                    )
             elif len(embedding) != self.embedding_dimension:
                 raise ValueError(
                     f"Embedding dimension mismatch: expected {self.embedding_dimension}, got {len(embedding)}"

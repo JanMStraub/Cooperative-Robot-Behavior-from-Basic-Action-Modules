@@ -48,16 +48,24 @@ class ROSBridge:
             port: ROS bridge server port (default from config)
         """
         try:
-            from config.ROS import ROS_BRIDGE_HOST, ROS_BRIDGE_PORT, ROS_TIMEOUT_BASE, ROS_TIMEOUT_PER_CANDIDATE
+            from config.ROS import (
+                ROS_BRIDGE_HOST,
+                ROS_BRIDGE_PORT,
+                ROS_TIMEOUT_BASE,
+                ROS_TIMEOUT_PER_CANDIDATE,
+                ROS_EXECUTION_TIMEOUT,
+            )
             self._host = host or ROS_BRIDGE_HOST
             self._port = port or ROS_BRIDGE_PORT
             self._timeout_base = ROS_TIMEOUT_BASE
             self._timeout_per_candidate = ROS_TIMEOUT_PER_CANDIDATE
+            self._execution_timeout = ROS_EXECUTION_TIMEOUT
         except ImportError:
             self._host = host or "127.0.0.1"
             self._port = port or 5020
             self._timeout_base = 5.0
             self._timeout_per_candidate = 0.5
+            self._execution_timeout = 30.0
 
         self._socket = None
         self._connected = False
@@ -222,7 +230,7 @@ class ROSBridge:
         if max_acceleration_scaling > 0.0:
             cmd["max_acceleration_scaling"] = max_acceleration_scaling
 
-        return self._send_command(cmd)
+        return self._send_command(cmd, timeout=self._execution_timeout)
 
     def plan_cartesian_descent(
         self,
@@ -263,7 +271,7 @@ class ROSBridge:
         if orientation is not None:
             cmd["orientation"] = orientation
 
-        return self._send_command(cmd)
+        return self._send_command(cmd, timeout=self._execution_timeout)
 
     def plan_to_pose(self, position, orientation=None, planning_time=5.0, robot_id="Robot1"):
         """
@@ -288,7 +296,7 @@ class ROSBridge:
         if orientation is not None:
             cmd["orientation"] = orientation
 
-        return self._send_command(cmd)
+        return self._send_command(cmd, timeout=self._execution_timeout)
 
     def get_current_pose(self, robot_id="Robot1"):
         """
@@ -364,7 +372,7 @@ class ROSBridge:
             "orientation": orientation,
             "planning_time": planning_time,
         }
-        return self._send_command(cmd)
+        return self._send_command(cmd, timeout=self._execution_timeout)
 
     def plan_grasp(self, object_id, robot_id="Robot1", approach="auto", planning_time=10.0):
         """
@@ -407,7 +415,7 @@ class ROSBridge:
             "robot_id": robot_id,
             "planning_time": planning_time,
         }
-        return self._send_command(cmd)
+        return self._send_command(cmd, timeout=self._execution_timeout)
 
     def ping(self):
         """

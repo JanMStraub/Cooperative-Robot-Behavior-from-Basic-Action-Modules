@@ -10,11 +10,13 @@ Usage:
     from knowledge_graph._singleton import get_query_engine, get_knowledge_graph
 """
 
+from typing import Optional
+
 from .Core import KnowledgeGraph
 from .QueryEngine import GraphQueryEngine
 
-_kg: KnowledgeGraph = None
-_query_engine: GraphQueryEngine = None
+_kg: Optional[KnowledgeGraph] = None
+_query_engine: Optional[GraphQueryEngine] = None
 
 
 def get_query_engine() -> GraphQueryEngine:
@@ -41,4 +43,5 @@ def get_knowledge_graph() -> KnowledgeGraph:
         KnowledgeGraph instance used by the singleton query engine
     """
     get_query_engine()  # ensures _kg is initialised
+    assert _kg is not None
     return _kg

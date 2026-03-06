@@ -118,6 +118,7 @@ class TestFieldPickAndPlace(unittest.TestCase):
         result_field_d = detect_field("stereo", "D")
 
         self.assertTrue(result_field_d.success, "Field D detection failed")
+        assert result_field_d.result is not None
         self.assertEqual(result_field_d.result["field_label"], "D")
         self.assertEqual(result_field_d.result["center"], {"x": 0.2, "y": -0.1, "z": 0.0})
         print(f"✓ Step 1: Detected field D at {result_field_d.result['center']}")
@@ -135,6 +136,7 @@ class TestFieldPickAndPlace(unittest.TestCase):
         result_grasp = GraspOperations.grasp_object("Robot1", "cube_on_field_d")
 
         self.assertTrue(result_grasp.success, "Grasp operation failed")
+        assert result_grasp.result is not None
         self.assertEqual(result_grasp.result["robot_id"], "Robot1")
         print(f"✓ Step 2: Grasped cube at field D")
 
@@ -145,6 +147,7 @@ class TestFieldPickAndPlace(unittest.TestCase):
         result_field_e = detect_field("stereo", "E")
 
         self.assertTrue(result_field_e.success, "Field E detection failed")
+        assert result_field_e.result is not None
         self.assertEqual(result_field_e.result["field_label"], "E")
         self.assertEqual(result_field_e.result["center"], {"x": 0.3, "y": 0.1, "z": 0.0})
         print(f"✓ Step 3: Detected field E at {result_field_e.result['center']}")
@@ -173,6 +176,7 @@ class TestFieldPickAndPlace(unittest.TestCase):
         result_release = release_object("Robot1")
 
         self.assertTrue(result_release.success, "Release operation failed")
+        assert result_release.result is not None
         # Atomic operation - no place_position in result
         self.assertNotIn("place_position", result_release.result)
         print(f"✓ Step 5: Released cube (atomic gripper operation)")
@@ -216,6 +220,7 @@ class TestFieldPickAndPlace(unittest.TestCase):
         result = detect_field("stereo", "D")
 
         self.assertFalse(result.success)
+        assert result.error is not None
         self.assertEqual(result.error["code"], "FIELD_NOT_DETECTED")
         print("✓ Error handling test PASSED: Correctly handles missing field")
 
@@ -238,6 +243,7 @@ class TestFieldPickAndPlace(unittest.TestCase):
             result = get_field_center("Robot1", "A")
 
             self.assertTrue(result.success)
+            assert result.result is not None
             self.assertEqual(result.result["center"], {"x": 0.1, "y": 0.1, "z": 0.0})
             mock_detect.assert_called_once_with("Robot1", "A", "stereo", request_id=0)
             print("✓ Convenience wrapper test PASSED")

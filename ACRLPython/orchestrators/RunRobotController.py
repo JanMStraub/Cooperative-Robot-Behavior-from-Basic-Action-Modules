@@ -44,6 +44,14 @@ try:
     )
     from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
     from core.LoggingSetup import setup_logging
+
+    try:
+        from config.ROS import ROS_ENABLED, AUTO_CONNECT_ROS
+        from ros2.ROSBridge import ROSBridge
+    except ImportError:
+        ROS_ENABLED = False
+        AUTO_CONNECT_ROS = False
+        ROSBridge = None  # type: ignore
 except ImportError:
     from ..config.Servers import (
         DEFAULT_HOST,
@@ -66,6 +74,14 @@ except ImportError:
     )
     from ..config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
     from ..core.LoggingSetup import setup_logging
+
+    try:
+        from ..config.ROS import ROS_ENABLED, AUTO_CONNECT_ROS
+        from ..ros2.ROSBridge import ROSBridge
+    except ImportError:
+        ROS_ENABLED = False
+        AUTO_CONNECT_ROS = False
+        ROSBridge = None  # type: ignore
 
 # Import servers - handle both direct execution and package import
 try:
@@ -172,22 +188,40 @@ class RobotController:
                 handler = SequenceQueryHandler()
                 if handler.is_ready() and handler._parser is not None:
                     command_parser = handler._parser
-                    if hasattr(command_parser, 'rag') and command_parser.rag is not None:
-                        if hasattr(command_parser.rag, 'query_engine') and command_parser.rag.query_engine is not None:
+                    if (
+                        hasattr(command_parser, "rag")
+                        and command_parser.rag is not None
+                    ):
+                        if (
+                            hasattr(command_parser.rag, "query_engine")
+                            and command_parser.rag.query_engine is not None
+                        ):
                             command_parser.rag.query_engine.set_world_state(world_state)
-                            logger.info("✓ WorldState wired into RAG QueryEngine for context-aware search")
+                            logger.info(
+                                "✓ WorldState wired into RAG QueryEngine for context-aware search"
+                            )
                         else:
-                            logger.debug("RAG query_engine not available, skipping WorldState wiring")
+                            logger.debug(
+                                "RAG query_engine not available, skipping WorldState wiring"
+                            )
                     else:
-                        logger.debug("RAG system not initialized in CommandParser, skipping WorldState wiring")
+                        logger.debug(
+                            "RAG system not initialized in CommandParser, skipping WorldState wiring"
+                        )
                 else:
-                    logger.debug("SequenceQueryHandler not ready, skipping WorldState wiring")
+                    logger.debug(
+                        "SequenceQueryHandler not ready, skipping WorldState wiring"
+                    )
             else:
-                logger.debug("SequenceServer not initialized, skipping WorldState wiring")
+                logger.debug(
+                    "SequenceServer not initialized, skipping WorldState wiring"
+                )
 
         except Exception as e:
             logger.warning(f"Failed to wire WorldState into RAG: {e}")
-            logger.debug("This is non-critical - RAG will work without world state context")
+            logger.debug(
+                "This is non-critical - RAG will work without world state context"
+            )
 
     def _wire_world_state_callbacks(self):
         """
@@ -207,7 +241,9 @@ class RobotController:
                 try:
                     # Extract object IDs from state update
                     objects = state_data.get("objects", [])
-                    seen_object_ids = {obj.get("object_id") for obj in objects if obj.get("object_id")}
+                    seen_object_ids = {
+                        obj.get("object_id") for obj in objects if obj.get("object_id")
+                    }
 
                     # Trigger confidence decay
                     world_state.decay_object_confidence(seen_object_ids)
@@ -218,13 +254,19 @@ class RobotController:
             # Register callback with WorldStateServer
             if self._world_state_server:
                 self._world_state_server.register_update_callback(on_state_update)
-                logger.info("✓ WorldStateServer callback registered for confidence decay")
+                logger.info(
+                    "✓ WorldStateServer callback registered for confidence decay"
+                )
             else:
-                logger.debug("WorldStateServer not available, skipping callback registration")
+                logger.debug(
+                    "WorldStateServer not available, skipping callback registration"
+                )
 
         except Exception as e:
             logger.warning(f"Failed to wire WorldStateServer callbacks: {e}")
-            logger.debug("This is non-critical - confidence decay will not be automatic")
+            logger.debug(
+                "This is non-critical - confidence decay will not be automatic"
+            )
 
     def _wire_knowledge_graph(self):
         """
@@ -253,13 +295,47 @@ class RobotController:
                 self._world_state_server.register_update_callback(
                     self._graph_builder.on_state_update
                 )
-                logger.info("✓ KnowledgeGraph wired — graph updates on every world state push")
+                logger.info(
+                    "✓ KnowledgeGraph wired — graph updates on every world state push"
+                )
             else:
-                logger.debug("WorldStateServer not available, skipping KnowledgeGraph wiring")
+                logger.debug(
+                    "WorldStateServer not available, skipping KnowledgeGraph wiring"
+                )
 
         except Exception as e:
             logger.warning(f"Failed to wire KnowledgeGraph: {e}")
-            logger.debug("Non-critical — knowledge graph will not be updated automatically")
+            logger.debug(
+                "Non-critical — knowledge graph will not be updated automatically"
+            )
+
+    def _auto_connect_ros(self):
+        """
+        Connect to ROS bridge on startup if AUTO_CONNECT_ROS is enabled.
+
+        Runs in a background thread so a missing Docker container does not
+        block the Python backend from starting.
+        """
+        if not ROS_ENABLED or not AUTO_CONNECT_ROS:
+            return
+
+        if ROSBridge is None:
+            logger.warning("AUTO_CONNECT_ROS=True but ROSBridge could not be imported")
+            return
+
+        def _connect():
+            bridge = ROSBridge.get_instance()  # type: ignore
+            success = bridge.connect()
+            if success:
+                logger.info("✓ ROS bridge connected (AUTO_CONNECT_ROS)")
+            else:
+                logger.warning(
+                    "ROS bridge auto-connect failed — Docker may not be running. "
+                    "Motion commands will fall back to Unity IK."
+                )
+
+        thread = threading.Thread(target=_connect, name="ros-auto-connect", daemon=True)
+        thread.start()
 
     def start(self):
         """Start all servers."""
@@ -321,6 +397,9 @@ class RobotController:
 
         # Wire KnowledgeGraph builder (if enabled)
         self._wire_knowledge_graph()
+
+        # Auto-connect to ROS bridge if enabled
+        self._auto_connect_ros()
 
         self._running = True
 
@@ -401,7 +480,9 @@ class RobotController:
         if KNOWLEDGE_GRAPH_ENABLED:
             logger.info(f"  Knowledge Graph:        Enabled")
         else:
-            logger.info(f"  Knowledge Graph:        Disabled (set KNOWLEDGE_GRAPH_ENABLED=true to enable)")
+            logger.info(
+                f"  Knowledge Graph:        Disabled (set KNOWLEDGE_GRAPH_ENABLED=true to enable)"
+            )
         logger.info("=" * 60)
 
     def stop(self):

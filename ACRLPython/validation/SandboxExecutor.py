@@ -10,7 +10,7 @@ Executes generated operations in a restricted environment with:
 
 import logging
 import multiprocessing as mp
-from typing import Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from unittest.mock import Mock
 
 from core.LoggingSetup import setup_logging
@@ -48,7 +48,7 @@ def _sandbox_worker(code: str, result_queue: "mp.Queue"):
         result_queue.put((False, f"{type(e).__name__}: {str(e)}"))
 
 
-def validate_in_sandbox(code: str, timeout: float = None) -> Tuple[bool, str]:
+def validate_in_sandbox(code: str, timeout: Optional[float] = None) -> Tuple[bool, str]:
     """
     Execute generated code in a sandboxed environment.
 
@@ -164,7 +164,7 @@ def _build_sandbox_namespace(safe_builtins: dict) -> dict:
     mock_storage.get_single_image = Mock(return_value=None)
     mock_storage.get_stereo_pair = Mock(return_value=(None, None))
 
-    namespace = {
+    namespace: Dict[str, Any] = {
         "__builtins__": safe_builtins,
     }
 
@@ -173,7 +173,6 @@ def _build_sandbox_namespace(safe_builtins: dict) -> dict:
     import time
     import logging as _logging
     import json
-    from typing import Any, Dict, Optional, List
     from operations.Base import (
         BasicOperation,
         OperationCategory,

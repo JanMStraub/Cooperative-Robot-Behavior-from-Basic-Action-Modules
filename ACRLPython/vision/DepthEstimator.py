@@ -10,11 +10,14 @@ Features:
 5. Integrated disparity calculation using OpenCV's StereoSGBM (no external dependencies)
 """
 
+import logging
 import math
 from typing import Tuple, Optional, List
 from pathlib import Path
 import numpy as np
 import cv2
+
+logger = logging.getLogger(__name__)
 
 # Import configuration - support both direct script and module execution
 try:
@@ -43,12 +46,56 @@ except ImportError as e:
 
 # Import config
 try:
-    from config.Vision import SAVE_DEBUG_DISPARITY_MAPS, DEBUG_DISPARITY_DIR
+    from config.Vision import (
+        SAVE_DEBUG_DISPARITY_MAPS,
+        DEBUG_DISPARITY_DIR,
+        DEFAULT_SGBM_PRESET,
+        DEPTH_SAMPLE_INNER_PERCENT,
+        DEPTH_SAMPLING_STRATEGY,
+        ENABLE_DISPARITY_CACHE,
+        DISPARITY_CACHE_TTL,
+    )
 except ImportError:
-    from ..config.Vision import SAVE_DEBUG_DISPARITY_MAPS, DEBUG_DISPARITY_DIR
+    from ..config.Vision import (
+        SAVE_DEBUG_DISPARITY_MAPS,
+        DEBUG_DISPARITY_DIR,
+        DEFAULT_SGBM_PRESET,
+        DEPTH_SAMPLE_INNER_PERCENT,
+        DEPTH_SAMPLING_STRATEGY,
+        ENABLE_DISPARITY_CACHE,
+        DISPARITY_CACHE_TTL,
+    )
 
 from core.LoggingSetup import get_logger
 logger = get_logger(__name__)
+
+import time as _time
+
+# Module-level disparity cache: maps lightweight key -> (disparity_array, timestamp)
+# Key uses first 64 bytes of each image + shape to avoid hashing full image buffers
+# (hashing megabytes per frame would cost more than SGBM itself).
+_disparity_cache: dict = {}
+
+
+def _make_cache_key(imgL: np.ndarray, imgR: np.ndarray) -> tuple:
+    """
+    Build a lightweight cache key from image shape + first 64 bytes.
+
+    Avoids full-image hashing for performance. Collision probability is
+    extremely low for real stereo pairs from the same camera session.
+
+    Args:
+        imgL: Left grayscale image
+        imgR: Right grayscale image
+
+    Returns:
+        Tuple usable as dict key
+    """
+    def _head(img: np.ndarray) -> bytes:
+        flat = img.flat
+        return bytes(int(next(flat)) for _ in range(min(64, img.size)))
+
+    return (imgL.shape, imgR.shape, _head(imgL), _head(imgR))
 
 
 # ===========================
@@ -79,6 +126,17 @@ def calc_disparity(
         raise ValueError(
             f"Image shape mismatch: left {imgL.shape} vs right {imgR.shape}"
         )
+
+    # Check disparity cache (TTL-based)
+    if ENABLE_DISPARITY_CACHE:
+        cache_key = _make_cache_key(imgL, imgR)
+        now = _time.time()
+        cached = _disparity_cache.get(cache_key)
+        if cached is not None:
+            disp, ts = cached
+            if now - ts < DISPARITY_CACHE_TTL:
+                logger.debug("Returning cached disparity map")
+                return disp
 
     # Estimate max disparity if not provided
     max_disp = config.max_disparity
@@ -113,7 +171,13 @@ def calc_disparity(
     disp = stereo.compute(imgL, imgR).astype(np.float32) / 16.0
 
     # Replace negative disparities with NaN
-    return np.where(disp >= 0.0, disp, np.nan)
+    result = np.where(disp >= 0.0, disp, np.nan)
+
+    # Store in cache (cache_key was computed above when ENABLE_DISPARITY_CACHE is True)
+    if ENABLE_DISPARITY_CACHE:
+        _disparity_cache[_make_cache_key(imgL, imgR)] = (result, _time.time())
+
+    return result
 
 
 def select_sgbm_preset(estimated_distance: Optional[float] = None) -> SGBMPreset:
@@ -132,7 +196,9 @@ def select_sgbm_preset(estimated_distance: Optional[float] = None) -> SGBMPreset
         SGBMPreset optimized for the distance range
     """
     if estimated_distance is None:
-        return SGBM_MEDIUM
+        # Use config-specified default preset
+        preset_map = {"close": SGBM_CLOSE, "medium": SGBM_MEDIUM, "far": SGBM_FAR}
+        return preset_map.get(DEFAULT_SGBM_PRESET, SGBM_MEDIUM)
 
     if estimated_distance < 1.0:
         logger.debug(f"Selected CLOSE preset for distance {estimated_distance:.2f}m")
@@ -258,24 +324,28 @@ def save_disparity_map_debug(disparity: np.ndarray, output_path: Optional[Path] 
 
     Args:
         disparity: Disparity map to save
-        output_path: Optional custom output path
+        output_path: Optional custom output path (auto-generates timestamped name if None)
     """
     if not SAVE_DEBUG_DISPARITY_MAPS:
         return
 
     try:
+        import time as _time
         if output_path is None:
             output_dir = Path(DEBUG_DISPARITY_DIR)
             output_dir.mkdir(parents=True, exist_ok=True)
-            output_path = output_dir / "disparity_map.jpg"
+            timestamp = int(_time.time() * 1000)
+            output_path = output_dir / f"disparity_{timestamp}.png"
 
-        # Normalize disparity to 0-255 range for visualization
-        disp_normalized = np.zeros_like(disparity, dtype=np.uint8)
-        cv2.normalize(
-            disparity, disp_normalized, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U
-        )
+        # Save as 16-bit PNG for full disparity precision; also save colorized JPG for easy viewing
+        disp_valid = np.nan_to_num(disparity, nan=0.0)
+        cv2.imwrite(str(output_path), (disp_valid * 16).astype(np.uint16))
+        # Also save a colorized visualization
+        disp_normalized = np.zeros_like(disp_valid, dtype=np.uint8)
+        cv2.normalize(disp_valid, disp_normalized, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
         disp_colored = cv2.applyColorMap(disp_normalized, cv2.COLORMAP_JET)
-        cv2.imwrite(str(output_path), disp_colored)
+        color_path = str(output_path).replace(".png", "_color.jpg")
+        cv2.imwrite(color_path, disp_colored)
         logger.debug(f"Saved disparity map to {output_path}")
     except Exception as e:
         logger.debug(f"Could not save disparity map: {e}")
@@ -426,10 +496,10 @@ def estimate_depth_from_bbox(
     bbox: Tuple[int, int, int, int],
     focal_length_px: float,
     baseline: float,
-    strategy: str = "median_inner_50pct",
+    strategy: str = DEPTH_SAMPLING_STRATEGY,
     min_disparity_threshold: float = 5.0,
     max_depth_threshold: float = 10.0,
-    inner_percent: int = 50,
+    inner_percent: int = DEPTH_SAMPLE_INNER_PERCENT,
 ) -> Optional[Tuple[float, float, int]]:
     """
     Estimate depth by sampling within YOLO bounding box (more robust than single point).

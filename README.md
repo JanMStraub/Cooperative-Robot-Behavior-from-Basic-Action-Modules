@@ -13,12 +13,15 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
 - **Unified Python Backend**: Single entry point (RunRobotController) orchestrates all servers
 - **Operations System**: 30 registered operations including atomic actions, perception, and sync primitives
 - **AutoRT System**: Autonomous task generation with LLM-based planning and human-in-the-loop approval
-- **Protocol V2**: Request ID correlation for reliable multi-robot communication
-- **Grasp Planning**: Approach-aware motion (Top/Front/Side) with automatic gripper control
+- **Self-Improvement Loop**: Dynamic runtime code generation, structure/syntax validation, sandbox execution, and success/failure outcome tracking
+- **Knowledge Graph**: Dynamic relation tracking for tracking complex topological environment states
+- **ROS 2 & Docker Integration**: Physical robot control capabilities via `ROSMotionClient` and containerized ROS deployments
+- **Advanced Python Grasp Planning**: Approach-aware motion (Top/Front/Side) generation and scoring via Python backend
 - LLM vision integration (Ollama) for scene understanding and natural language commands
 - Object detection with YOLO streaming support
-- Stereo vision depth estimation for 3D object localization
+- **Stereo Vision & GraspNet**: 3D object localization, stereo depth map reconstruction, and native physical robot execution
 - **Consolidated Servers**: 3 active servers replace 6+ legacy servers
+- **Protocol V2**: Request ID correlation for reliable multi-robot communication
 - **RAG System**: Integrated semantic search for operation matching in natural language commands
 - JSONL logging system for LLM training data generation
 - Python-Unity TCP communication with persistent connections and health checks
@@ -125,6 +128,26 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
 - Click "Build" or "Build and Run"
 
 ## Recent Major Updates
+
+### Self-Improvement Loop & Dynamic Operations (March 2026)
+
+**Autonomous Code Generation & Validation** - System that dynamically generates, validates, and incorporates new operations:
+
+**Core Features**:
+- **Dynamic Operation Generation**: LLM generates new operations on-the-fly when existing ones lack required capabilities.
+- **Validation Pipeline**: `SyntaxValidator`, `StructureValidator`, and `SandboxExecutor` ensure generated code is safe and structurally sound.
+- **Review System**: CLI tool (`ReviewOperations.py`) for human review and approval of generated operations.
+- **Execution Feedback**: `OutcomeTracker` and `FeedbackCollector` monitor success/failure rates of operations.
+- **RAG Indexing**: Failed operations preserve metadata to inform future LLM generation and avoid repeating mistakes.
+
+### GraspNet & Stereo Vision Integration (March 2026)
+
+Advanced 3D perception pipeline for physical robot integration:
+
+- **Stereo Reconstruction**: Ported robust stereo matching system for accurate 3D point cloud generation.
+- **YOLO Pipeline Updates**: Real-time object detection stream integration.
+- **Conflict Resolution**: `ConflictResolver.py` handles ambiguous detections in crowded scenes.
+- **Physical Robot Ready**: Outputs are formatted to be directly compatible with downstream systems like GraspNet for real-world grasping.
 
 ### AutoRT System (February 2026)
 
@@ -389,7 +412,8 @@ Default settings:
 ## Development Branches
 
 - `main` - Stable release branch
-- `feature_autort` - **CURRENT**: AutoRT autonomous task generation system
+- `feature_self_improvement` - **CURRENT**: Dynamic operations, outcome tracking, and Sandbox execution
+- `feature_autort` - AutoRT autonomous task generation system
 - `feature_streaming` - YOLO streaming, unified backend, Protocol V2
 - `feature_robot_cooperation` - Multi-robot coordination strategies
 - `feature_rag` - RAG system integration (merged into feature_streaming)

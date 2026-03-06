@@ -416,18 +416,18 @@ class TestStabilizationParameterValidation:
 
     def test_robot_id_type_validation(self):
         """Test robot_id must be a string."""
-        result = stabilize_object(None, "Cube01")
+        result = stabilize_object(None, "Cube01")  # type: ignore[arg-type]
         assert result.success is False
 
-        result = stabilize_object(123, "Cube01")
+        result = stabilize_object(123, "Cube01")  # type: ignore[arg-type]
         assert result.success is False
 
     def test_object_id_type_validation(self):
         """Test object_id must be a string."""
-        result = stabilize_object("Robot1", None)
+        result = stabilize_object("Robot1", None)  # type: ignore[arg-type]
         assert result.success is False
 
-        result = stabilize_object("Robot1", 456)
+        result = stabilize_object("Robot1", 456)  # type: ignore[arg-type]
         assert result.success is False
 
     def test_duration_type_validation(self, patch_command_broadcaster):

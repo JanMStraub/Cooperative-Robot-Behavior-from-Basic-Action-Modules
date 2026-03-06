@@ -363,7 +363,7 @@ class TestGraspPlannerConfigMutationRegression:
         )
 
         # First call: restrict to top only
-        planner.plan_grasp(preferred_approach="top", **common_kwargs)
+        planner.plan_grasp(preferred_approach="top", **common_kwargs)  # type: ignore[arg-type]
 
         # Second call: no preference — all approaches must be available
         # Collect all candidates directly from the generator to verify approach mix

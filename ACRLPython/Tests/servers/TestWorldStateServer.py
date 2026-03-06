@@ -106,6 +106,7 @@ class TestWorldStateServer(unittest.TestCase):
         # Verify server received and stored the state
         latest_state = self.server.get_latest_state()
         self.assertIsNotNone(latest_state)
+        assert latest_state is not None
         self.assertEqual(latest_state["type"], "world_state_update")
         self.assertEqual(len(latest_state["robots"]), 1)
         self.assertEqual(len(latest_state["objects"]), 1)
@@ -144,12 +145,14 @@ class TestWorldStateServer(unittest.TestCase):
         # Get specific robot state
         robot1 = self.server.get_robot_state("Robot1")
         self.assertIsNotNone(robot1)
+        assert robot1 is not None
         self.assertEqual(robot1["robot_id"], "Robot1")
         self.assertEqual(robot1["gripper_state"], "closed")
         self.assertFalse(robot1["is_moving"])
 
         robot2 = self.server.get_robot_state("Robot2")
         self.assertIsNotNone(robot2)
+        assert robot2 is not None
         self.assertEqual(robot2["robot_id"], "Robot2")
         self.assertTrue(robot2["is_moving"])
 
@@ -188,11 +191,13 @@ class TestWorldStateServer(unittest.TestCase):
         # Get specific object state
         red_cube = self.server.get_object_state("RedCube")
         self.assertIsNotNone(red_cube)
+        assert red_cube is not None
         self.assertEqual(red_cube["object_id"], "RedCube")
         self.assertEqual(red_cube["color"], "red")
 
         blue_sphere = self.server.get_object_state("BlueSphere")
         self.assertIsNotNone(blue_sphere)
+        assert blue_sphere is not None
         self.assertEqual(blue_sphere["color"], "blue")
 
         # Non-existent object

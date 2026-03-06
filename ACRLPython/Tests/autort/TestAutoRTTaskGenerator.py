@@ -240,7 +240,7 @@ def test_validate_operations_valid(mock_config, mock_registry):
         operations=[
             {"type": "wait", "robot_id": "Robot1", "parameters": {"seconds": 1}},
             {"type": "move_to_coordinate", "robot_id": "Robot1", "parameters": {"x": 0.3, "y": 0.2, "z": 0.1}},
-        ],
+        ],  # type: ignore[arg-type]
         required_robots=["Robot1"],
         estimated_complexity=2,
         reasoning="test"
@@ -259,7 +259,7 @@ def test_validate_operations_invalid(mock_config, mock_registry):
         description="test",
         operations=[
             {"type": "nonexistent_operation", "robot_id": "Robot1", "parameters": {}},
-        ],
+        ],  # type: ignore[arg-type]
         required_robots=["Robot1"],
         estimated_complexity=1,
         reasoning="test"

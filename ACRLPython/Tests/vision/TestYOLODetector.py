@@ -251,3 +251,80 @@ class TestYOLOIntegration:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+
+
+class TestYOLODetectorSegmentation:
+    """Test mask population when YOLO task=segment."""
+
+    @pytest.mark.skipif(not YOLO_AVAILABLE, reason="YOLO not available")
+    @patch("vision.YOLODetector.YOLO")
+    def test_mask_populated_when_segment_result(self, mock_yolo_class):
+        """DetectionObject.mask is populated when results[0].masks is present."""
+        import numpy as np
+
+        mock_model = MagicMock()
+        mock_model.names = {0: "red_cube"}
+        mock_yolo_class.return_value = mock_model
+
+        fake_mask = np.ones((480, 640), dtype=np.uint8)
+
+        mock_box = MagicMock()
+        mock_box.__len__ = MagicMock(return_value=1)
+        mock_box.xyxy = [MagicMock()]
+        mock_box.xyxy[0].cpu.return_value.numpy.return_value = [10, 10, 100, 100]
+        mock_box.cls = [MagicMock()]
+        mock_box.cls[0].cpu.return_value.numpy.return_value = 0
+        mock_box.conf = [MagicMock()]
+        mock_box.conf[0].cpu.return_value.numpy.return_value = 0.9
+
+        mock_masks = MagicMock()
+        mock_masks.data = MagicMock()
+        mock_masks.data.cpu.return_value.numpy.return_value = fake_mask[np.newaxis, :]
+
+        mock_result = MagicMock()
+        mock_result.boxes = mock_box
+        mock_result.masks = mock_masks
+        mock_model.predict.return_value = [mock_result]
+
+        detector = YOLODetector(model_path="fake.pt", task="segment")
+        image = np.zeros((480, 640, 3), dtype=np.uint8)
+        result = detector.detect_objects(image, camera_id="test")
+
+        assert len(result.detections) == 1
+        det = result.detections[0]
+        assert det.mask is not None
+        assert det.mask.shape == (480, 640)
+
+    @pytest.mark.skipif(not YOLO_AVAILABLE, reason="YOLO not available")
+    @patch("vision.YOLODetector.YOLO")
+    def test_mask_is_none_when_no_masks(self, mock_yolo_class):
+        """DetectionObject.mask is None when results[0].masks is None (detect mode)."""
+        import numpy as np
+
+        mock_model = MagicMock()
+        mock_model.names = {0: "red_cube"}
+        mock_yolo_class.return_value = mock_model
+
+        mock_box = MagicMock()
+        mock_box.__len__ = MagicMock(return_value=1)
+        mock_box.xyxy = [MagicMock()]
+        mock_box.xyxy[0].cpu.return_value.numpy.return_value = [10, 10, 100, 100]
+        mock_box.cls = [MagicMock()]
+        mock_box.cls[0].cpu.return_value.numpy.return_value = 0
+        mock_box.conf = [MagicMock()]
+        mock_box.conf[0].cpu.return_value.numpy.return_value = 0.9
+
+        mock_result = MagicMock()
+        mock_result.boxes = mock_box
+        mock_result.masks = None
+
+        mock_model.predict.return_value = [mock_result]
+
+        detector = YOLODetector(model_path="fake.pt", task="detect")
+        image = np.zeros((480, 640, 3), dtype=np.uint8)
+        result = detector.detect_objects(image, camera_id="test")
+
+        assert len(result.detections) == 1
+        assert result.detections[0].mask is None

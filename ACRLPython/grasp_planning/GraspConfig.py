@@ -8,7 +8,7 @@ Matches Unity's GraspConfig.cs for compatibility.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 from .GraspCandidate import GripperGeometry
 
 

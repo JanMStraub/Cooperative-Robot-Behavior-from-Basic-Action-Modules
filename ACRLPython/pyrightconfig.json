@@ -7,5 +7,9 @@
   "ignore": [
     "ros2/**",
     "ros_unity_integration/**"
+  ],
+  "exclude": [
+    "ros2/**",
+    "ros_unity_integration/**"
   ]
 }

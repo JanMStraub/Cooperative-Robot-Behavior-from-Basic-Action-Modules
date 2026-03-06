@@ -34,9 +34,9 @@ namespace Vision
         private int _imageHeight = 1080;
 
         [SerializeField]
-        [Tooltip("JPEG compression quality (1-100)")]
+        [Tooltip("JPEG compression quality (1-100). Mirrors STEREO_JPEG_QUALITY in ACRLPython/config/Vision.py (default: 75).")]
         [Range(1, 100)]
-        private int _JPEGQuality = 85;
+        private int _JPEGQuality = 75;
 
         [Header("Streaming Mode")]
         [SerializeField]

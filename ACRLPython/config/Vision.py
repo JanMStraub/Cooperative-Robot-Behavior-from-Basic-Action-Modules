@@ -21,7 +21,7 @@ MAX_IMAGE_AGE = float(os.environ.get("MAX_IMAGE_AGE", "30.0"))
 
 # Monitoring intervals (seconds)
 IMAGE_CHECK_INTERVAL = float(os.environ.get("IMAGE_CHECK_INTERVAL", "1.0"))
-# TODO: wire DETECTION_CHECK_INTERVAL / STEREO_CHECK_INTERVAL into image processing loops
+# Not used for polling (detections are on-demand); retained for future rate-limiting hooks
 DETECTION_CHECK_INTERVAL = float(os.environ.get("DETECTION_CHECK_INTERVAL", "1.0"))
 STEREO_CHECK_INTERVAL = float(os.environ.get("STEREO_CHECK_INTERVAL", "0.5"))
 
@@ -72,7 +72,7 @@ MIN_CONFIDENCE = float(os.environ.get("MIN_CONFIDENCE", "0.3"))
 
 ENABLE_DEBUG_IMAGES = os.environ.get("ENABLE_DEBUG_IMAGES", "false").lower() in ("true", "1", "yes")
 DEBUG_IMAGES_DIR = os.environ.get("DEBUG_IMAGES_DIR", str(_CONFIG_DIR / "debug_detections"))
-# TODO: implement disparity map saving (SAVE_DEBUG_DISPARITY_MAPS flag not yet wired in)
+# Used in vision/DepthEstimator.py: save_disparity_map_debug() checks this flag
 SAVE_DEBUG_DISPARITY_MAPS = os.environ.get("SAVE_DEBUG_DISPARITY_MAPS", "false").lower() in ("true", "1", "yes")
 DEBUG_DISPARITY_DIR = os.environ.get("DEBUG_DISPARITY_DIR", str(_CONFIG_DIR / "debug_detections"))
 
@@ -93,14 +93,14 @@ DEFAULT_STEREO_CAMERA_ROTATION = [20.0, 0.0, 0.0]  # Pitch, yaw, roll
 
 ENABLE_VISION_STREAMING = os.environ.get("ENABLE_VISION_STREAMING", "false").lower() in ("true", "1", "yes")
 VISION_STREAM_FPS = float(os.environ.get("VISION_STREAM_FPS", "5.0"))
-# TODO: use STEREO_JPEG_QUALITY in stereo image encoding pipeline
+# JPEG quality for any Python-side stereo image re-encoding (e.g. debug saves)
 STEREO_JPEG_QUALITY = int(os.environ.get("STEREO_JPEG_QUALITY", "75"))
 
 # ============================================================================
 # Depth Estimation
 # ============================================================================
 
-# TODO: use DEFAULT_SGBM_PRESET / DEPTH_SAMPLE_INNER_PERCENT in depth estimation pipeline
+# Used in vision/DepthEstimator.py: select_sgbm_preset() and estimate_depth_from_bbox()
 DEFAULT_SGBM_PRESET = os.environ.get("SGBM_PRESET", "medium")  # close, medium, far, auto
 ENABLE_ADAPTIVE_SGBM = os.environ.get("ENABLE_ADAPTIVE_SGBM", "false").lower() in ("true", "1", "yes")
 DEPTH_SAMPLING_STRATEGY = os.environ.get("DEPTH_SAMPLING_STRATEGY", "median_inner_50pct")

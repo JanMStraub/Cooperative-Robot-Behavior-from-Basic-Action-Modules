@@ -26,6 +26,7 @@ class DetectionObject:
         disparity: Optional[float] = None,
         track_id: Optional[int] = None,
         dimensions: Optional[Tuple[float, float, float]] = None,
+        mask=None,  # Optional[np.ndarray]: segmentation mask (H x W), task=segment only
     ):
         """
         Initialize a detected object
@@ -50,6 +51,7 @@ class DetectionObject:
         self.disparity = disparity
         self.track_id = track_id
         self.dimensions = dimensions
+        self.mask = mask
 
         # Calculate center point
         self.center_x = int(self.bbox_x + self.bbox_w / 2)

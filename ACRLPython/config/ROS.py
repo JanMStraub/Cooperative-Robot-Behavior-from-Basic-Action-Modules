@@ -14,8 +14,7 @@ ROS_ENABLED = True
 ROS_BRIDGE_HOST = "127.0.0.1"
 ROS_BRIDGE_PORT = 5020
 
-# MoveIt planning settings
-# TODO: wire these into ROSMotionClient planning requests
+# MoveIt planning settings — used in ros2/ROSMotionClient.py planning requests
 MOVEIT_PLANNING_TIME = 5.0          # Max planning time in seconds
 MOVEIT_PLANNING_ATTEMPTS = 10       # Number of planning attempts
 MOVEIT_GOAL_TOLERANCE = 0.01        # Position goal tolerance in meters
@@ -26,12 +25,10 @@ MOVEIT_GOAL_TOLERANCE = 0.01        # Position goal tolerance in meters
 # - "hybrid": Try ROS first, fall back to Unity on failure
 DEFAULT_CONTROL_MODE = "ros"
 
-# Auto-connect to ROS bridge on startup
-# TODO: wire AUTO_CONNECT_ROS into ROSConnectionInitializer startup logic
+# Auto-connect to ROS bridge on startup (wired into RunRobotController._auto_connect_ros)
 AUTO_CONNECT_ROS = True
 
-# Timeout for waiting on ROS motion execution (seconds)
-# TODO: wire ROS_EXECUTION_TIMEOUT into motion execution wait loop
+# Timeout for waiting on ROS motion execution — used in ros2/ROSBridge.py
 ROS_EXECUTION_TIMEOUT = 30.0
 
 # Grasp validation timeout: base + per-candidate increment
