@@ -135,9 +135,39 @@ def get_logger(module_name: str) -> logging.Logger:
         logger = get_logger(__name__)
         logger.info("Processing request...")
     """
-    global _logging_configured
-
     if not _logging_configured:
         setup_logging()
 
     return logging.getLogger(module_name)
+
+class WebSocketLogHandler(logging.Handler):
+    """
+    A custom logging handler that broadcasts log records to a generic callback.
+    Used by WebUIServer to stream live logs to the frontend UI.
+    """
+    def __init__(self, callback):
+        super().__init__()
+        self.callback = callback
+        self.setFormatter(logging.Formatter('%(levelname)s: %(message)s'))
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            level = record.levelname.lower()
+            if level == 'warning': level = 'warning'
+            elif level in ['error', 'critical']: level = 'error'
+            else: level = 'info'
+            
+            # Non-blocking callback
+            self.callback(msg, level)
+        except Exception:
+            self.handleError(record)
+
+def add_websocket_handler(callback):
+    """Adds the websocket broadcast handler to the root logger."""
+    root_logger = logging.getLogger()
+    handler = WebSocketLogHandler(callback)
+    # Only send INFO and above to the UI to avoid flooding
+    handler.setLevel(logging.INFO)
+    root_logger.addHandler(handler)
+    return handler

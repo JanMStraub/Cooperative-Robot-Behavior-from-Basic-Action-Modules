@@ -62,7 +62,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 
-def color_matches(detection_color: str | None, query_color: str | None) -> bool:
+def color_matches(detection_color: Optional[str], query_color: Optional[str]) -> bool:
     """
     Flexible color matching for both legacy and YOLO detectors.
 

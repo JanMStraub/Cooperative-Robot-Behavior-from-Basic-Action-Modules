@@ -25,7 +25,6 @@ RAG_LM_STUDIO_API_KEY = os.environ.get("RAG_LM_STUDIO_API_KEY", "lm-studio")
 # Embedding Settings
 # ============================================================================
 
-# TODO: use RAG_EMBEDDING_DIMENSION in vector store validation
 RAG_EMBEDDING_DIMENSION = int(os.environ.get("RAG_EMBEDDING_DIMENSION", "768"))
 RAG_EMBEDDING_BATCH_SIZE = int(os.environ.get("RAG_EMBEDDING_BATCH_SIZE", "10"))
 RAG_EMBEDDING_TIMEOUT = int(os.environ.get("RAG_EMBEDDING_TIMEOUT", "30"))
@@ -53,7 +52,6 @@ RAG_MIN_SIMILARITY_SCORE = float(os.environ.get("RAG_MIN_SIMILARITY_SCORE", "0.5
 
 RAG_CONFIDENCE_STRATEGY = os.environ.get("RAG_CONFIDENCE_STRATEGY", "balanced")  # strict, balanced, permissive
 RAG_ENABLE_CONFIDENCE_SCORING = os.environ.get("RAG_ENABLE_CONFIDENCE_SCORING", "true").lower() in ("true", "1", "yes")
-# TODO: use RAG_CONFIDENCE_TIERS in RAG query engine confidence scoring
 RAG_CONFIDENCE_TIERS = {
     "high": 0.75,
     "medium": 0.5,
