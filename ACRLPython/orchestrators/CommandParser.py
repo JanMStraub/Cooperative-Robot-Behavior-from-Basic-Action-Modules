@@ -491,7 +491,7 @@ class CommandParser:
         ]
         }}
 
-        {spatial_block}{anti_pattern_block}Output only valid JSON, no explanation."""
+        {spatial_block}{anti_pattern_block}Output only valid JSON, no explanation, no comments."""
 
     def _get_available_operations_summary(self, command_text: str = "") -> str:
         """
@@ -654,6 +654,12 @@ Examples:
                 logger.warning(
                     f"Markdown JSON parse failed: {e}. Content length: {len(json_str)}, preview: {json_str[:200]}"
                 )
+            # Retry after stripping JS-style // comments (LLMs often emit these)
+            json_str_clean = re.sub(r"//[^\n]*", "", json_str)
+            try:
+                return json.loads(json_str_clean)
+            except json.JSONDecodeError:
+                pass
 
         # Try to find JSON object in text
         json_match = re.search(r"\{.*?\}", content, re.DOTALL)
@@ -665,6 +671,12 @@ Examples:
                 logger.warning(
                     f"Regex JSON parse failed: {e}. Content length: {len(json_str)}"
                 )
+            # Retry after stripping JS-style // comments
+            json_str_clean = re.sub(r"//[^\n]*", "", json_str)
+            try:
+                return json.loads(json_str_clean)
+            except json.JSONDecodeError:
+                pass
 
         logger.error(
             f"All JSON extraction methods failed. Response length: {len(content)}, preview: {content[:500]}"

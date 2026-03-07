@@ -17,12 +17,10 @@ To skip these tests in CI:
 """
 
 import pytest
-import socket
-import struct
-import json
 import time
-import numpy as np
-from typing import Optional, Dict, Any
+from typing import Optional
+
+from backend_client import BackendClient, backend_available, port_open
 
 
 # ---------------------------------------------------------------------------
@@ -31,14 +29,7 @@ from typing import Optional, Dict, Any
 
 def _port_open(port: int, timeout: float = 2.0) -> bool:
     """Return True if a TCP server is accepting connections on *port*."""
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
-        result = sock.connect_ex(("localhost", port))
-        sock.close()
-        return result == 0
-    except Exception:
-        return False
+    return port_open(port, timeout)
 
 
 def is_unity_available() -> bool:
@@ -52,7 +43,7 @@ def is_unity_available() -> bool:
     Returns:
         True if both backend ports are reachable, False otherwise.
     """
-    return _port_open(5010) and _port_open(5013)
+    return backend_available()
 
 
 UNITY_AVAILABLE = is_unity_available()
@@ -60,147 +51,6 @@ SKIP_REASON = (
     "Unity not running or not connected to backend. "
     "Start Unity and backend servers to run these tests."
 )
-
-
-# ---------------------------------------------------------------------------
-# Protocol V2 client helper
-# ---------------------------------------------------------------------------
-
-class BackendClient:
-    """
-    Minimal Protocol V2 TCP client that talks to the SequenceServer (port 5013).
-
-    The SequenceServer receives natural-language commands, executes them through
-    the full operations pipeline (CommandParser → SequenceExecutor → Operations
-    → CommandBroadcaster → Unity), and returns a JSON result.
-
-    This is the correct cross-process testing pattern: rather than importing
-    Python operations directly (which would create an uninitialized
-    CommandBroadcaster singleton in the test process), we send commands over
-    the network to the already-running backend process.
-
-    Protocol (little-endian):
-        Request:  [type:1 = 0x08][request_id:4][cmd_len:4][cmd:N]
-                  [robot_id_len:4][robot_id:N][camera_id_len:4][camera_id:N]
-                  [auto_execute:1]
-        Response: [type:1 = 0x02][request_id:4][json_len:4][json:N]
-    """
-
-    SEQUENCE_QUERY = 0x08
-    RESULT = 0x02
-    PORT = 5013
-
-    def __init__(self, timeout: float = 30.0):
-        """
-        Connect to the SequenceServer.
-
-        Args:
-            timeout: Socket timeout in seconds (default 30 s for slow ops).
-        """
-        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._sock.settimeout(timeout)
-        self._sock.connect(("localhost", self.PORT))
-
-    def close(self):
-        """Close the TCP connection."""
-        try:
-            self._sock.close()
-        except Exception:
-            pass
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_):
-        self.close()
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
-    def send_command(
-        self,
-        command: str,
-        robot_id: str = "Robot1",
-        camera_id: str = "TableStereoCamera",
-        auto_execute: bool = True,
-        request_id: int = 1,
-    ) -> Dict[str, Any]:
-        """
-        Send a natural-language command to the backend SequenceServer and
-        return the parsed JSON response.
-
-        Args:
-            command: Natural-language command string (e.g. "check robot status").
-            robot_id: Target robot identifier.
-            camera_id: Camera identifier for vision operations.
-            auto_execute: Whether the backend should execute the parsed ops.
-            request_id: Correlation ID for Protocol V2.
-
-        Returns:
-            Response dict from the backend (includes "success" key).
-        """
-        self._send(command, robot_id, camera_id, auto_execute, request_id)
-        return self._recv(request_id)
-
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
-
-    def _encode_str(self, s: str) -> bytes:
-        """Encode a string as [len:4 LE][utf-8 bytes]."""
-        encoded = s.encode("utf-8")
-        return struct.pack("<I", len(encoded)) + encoded
-
-    def _send(
-        self,
-        command: str,
-        robot_id: str,
-        camera_id: str,
-        auto_execute: bool,
-        request_id: int,
-    ) -> None:
-        """Build and send a SEQUENCE_QUERY message."""
-        header = struct.pack("B", self.SEQUENCE_QUERY)           # type (1 byte)
-        header += struct.pack("<I", request_id)                  # request_id (4 bytes)
-        body = (
-            self._encode_str(command)
-            + self._encode_str(robot_id)
-            + self._encode_str(camera_id)
-            + struct.pack("B", 1 if auto_execute else 0)         # auto_execute (1 byte)
-        )
-        self._sock.sendall(header + body)
-
-    def _recv_exact(self, n: int) -> bytes:
-        """Receive exactly *n* bytes from the socket."""
-        data = b""
-        while len(data) < n:
-            chunk = self._sock.recv(n - len(data))
-            if not chunk:
-                raise ConnectionError("Connection closed by backend")
-            data += chunk
-        return data
-
-    def _recv(self, expected_request_id: int) -> Dict[str, Any]:
-        """
-        Read a RESULT response message and return the decoded JSON dict.
-
-        Raises:
-            ValueError: If the response message type is unexpected.
-            ConnectionError: If the connection drops mid-read.
-        """
-        # Header: [type:1][request_id:4]
-        header = self._recv_exact(5)
-        msg_type = header[0]
-        resp_id = struct.unpack("<I", header[1:5])[0]
-
-        if msg_type != self.RESULT:
-            raise ValueError(f"Unexpected response type: {msg_type:#04x}")
-
-        # JSON payload: [json_len:4][json:N]
-        json_len = struct.unpack("<I", self._recv_exact(4))[0]
-        json_bytes = self._recv_exact(json_len)
-        return json.loads(json_bytes.decode("utf-8"))
 
 
 # ---------------------------------------------------------------------------

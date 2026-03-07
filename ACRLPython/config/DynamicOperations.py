@@ -14,7 +14,7 @@ import os
 # ============================================================================
 
 ENABLE_DYNAMIC_OPERATIONS = os.environ.get(
-    "ENABLE_DYNAMIC_OPERATIONS", "false"
+    "ENABLE_DYNAMIC_OPERATIONS", "true"
 ).lower() in ("true", "1", "yes")
 
 # ============================================================================

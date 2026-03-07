@@ -48,7 +48,6 @@ from .FieldOperations import (
 from .IntermediateOperations import (
     ALIGN_OBJECT_OPERATION,
     FOLLOW_PATH_OPERATION,
-    DRAW_WITH_PEN_OPERATION,
 )
 from .CoordinationOperations import (
     DETECT_OTHER_ROBOT_OPERATION,
@@ -113,7 +112,6 @@ class OperationRegistry:
             # Advanced Manipulation
             GRASP_OBJECT_OPERATION,
             ALIGN_OBJECT_OPERATION,
-            DRAW_WITH_PEN_OPERATION,
             # Spatial Reasoning & Navigation
             MOVE_RELATIVE_TO_OBJECT_OPERATION,
             MOVE_BETWEEN_OBJECTS_OPERATION,
