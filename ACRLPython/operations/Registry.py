@@ -30,6 +30,7 @@ from .DetectionOperations import (
     ESTIMATE_DISTANCE_BETWEEN_OBJECTS_OPERATION,
 )
 from .VisionOperations import ANALYZE_SCENE_OPERATION, DETECT_OBJECT_STEREO_OPERATION
+from .PointCloudOperations import GENERATE_POINT_CLOUD_OPERATION
 from .SpatialOperations import (
     MOVE_RELATIVE_TO_OBJECT_OPERATION,
     MOVE_BETWEEN_OBJECTS_OPERATION,
@@ -93,6 +94,7 @@ class OperationRegistry:
             # Perception & Detection
             DETECT_OBJECTS_OPERATION,
             DETECT_OBJECT_STEREO_OPERATION,
+            GENERATE_POINT_CLOUD_OPERATION,
             ANALYZE_SCENE_OPERATION,
             ESTIMATE_DISTANCE_TO_OBJECT_OPERATION,
             ESTIMATE_DISTANCE_BETWEEN_OBJECTS_OPERATION,

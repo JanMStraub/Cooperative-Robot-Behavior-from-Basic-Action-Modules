@@ -517,6 +517,278 @@ def _grasp_via_ros_position_only(
 
 
 # ============================================================================
+# GraspNet helpers
+# ============================================================================
+
+
+def _build_segmentation_mask(
+    points_camera: "np.ndarray",
+    yolo_bbox: tuple,
+    image_width: int,
+    image_height: int,
+    fov: float,
+    preferred_approach: str,
+) -> "np.ndarray":
+    """Project 3D camera-frame points to 2D and build a boolean mask from a YOLO bbox.
+
+    Projects each point back to pixel coordinates using the pinhole camera
+    model (inverse of DepthEstimator.pixel_to_world_coords).  Returns a
+    bool mask that is True for points falling inside the bounding box.
+
+    When ``preferred_approach`` is "side" the mask is additionally restricted
+    to the lateral halves of the object (left/right).  When it is "top" only
+    the top third of the bounding box is kept.
+
+    Args:
+        points_camera:   (N, 3) float32 array in Unity camera frame (X-negated).
+        yolo_bbox:       (x, y, w, h) pixel bounding box from detect_objects().
+        image_width:     Width of the stereo image in pixels.
+        image_height:    Height of the stereo image in pixels.
+        fov:             Horizontal field-of-view in degrees.
+        preferred_approach: "auto", "top", "front", or "side".
+
+    Returns:
+        Boolean ndarray of shape (N,) — True for points to include.
+    """
+    import numpy as np
+    import math
+
+    N = points_camera.shape[0]
+    if N == 0:
+        return np.zeros(N, dtype=bool)
+
+    bx, by, bw, bh = yolo_bbox
+    if bw <= 0 or bh <= 0:
+        # Degenerate bbox — return all points
+        return np.ones(N, dtype=bool)
+
+    # Pinhole focal length in pixels from horizontal FOV
+    f_px = (image_width / 2.0) / math.tan(math.radians(fov / 2.0))
+
+    cx = image_width / 2.0
+    cy = image_height / 2.0
+
+    # Project: u = cx + f*X/Z,  v = cy + f*Y/Z  (camera-frame Z = depth)
+    X = points_camera[:, 0]
+    Y = points_camera[:, 1]
+    Z = points_camera[:, 2]
+
+    # Avoid division by zero for points behind camera
+    valid_z = Z > 1e-3
+    u = np.where(valid_z, cx + f_px * X / np.where(valid_z, Z, 1.0), -1.0)
+    v = np.where(valid_z, cy + f_px * Y / np.where(valid_z, Z, 1.0), -1.0)
+
+    # Basic YOLO bounding-box mask
+    x0, y0 = float(bx), float(by)
+    x1, y1 = x0 + float(bw), y0 + float(bh)
+    mask = valid_z & (u >= x0) & (u <= x1) & (v >= y0) & (v <= y1)
+
+    approach = preferred_approach.lower()
+    if approach == "side":
+        # Keep only left/right halves — exclude centre 50 % of bbox width
+        obj_cx = (x0 + x1) / 2.0
+        half_w = float(bw) * 0.25  # 25 % from each edge
+        side_mask = (u <= (obj_cx - half_w)) | (u >= (obj_cx + half_w))
+        mask = mask & side_mask
+    elif approach == "top":
+        # Keep only top third of bbox
+        y_thresh = y0 + float(bh) / 3.0
+        mask = mask & (v <= y_thresh)
+
+    return mask
+
+
+def _grasp_via_graspnet(
+    robot_id: str,
+    object_id: str,
+    preferred_approach: str,
+    use_advanced_planning: bool,
+    pre_grasp_distance: float,
+    enable_retreat: bool,
+    retreat_distance: float,
+    request_id: int,
+) -> "Optional[OperationResult]":
+    """Attempt to grasp using Contact-GraspNet neural grasp prediction.
+
+    This is the GraspNet fast-path inside ``grasp_object``.  It:
+
+    1. Generates a fresh point cloud via ``generate_point_cloud``.
+    2. Detects the target object bounding box with ``detect_objects``.
+    3. Builds a segmentation mask respecting ``preferred_approach``.
+    4. Queries the GraspNet service for ranked 6-DOF grasp poses.
+    5. Transforms poses from camera frame to Unity world frame.
+    6. Computes pre-grasp positions (approach hover).
+    7. Sends the ``grasp_object`` command with ``precomputed_candidates`` to Unity.
+
+    Returns:
+        OperationResult on success or definitive failure; None if GraspNet is
+        unavailable or produced no candidates (triggers geometric fallback).
+    """
+    import numpy as np
+
+    # Lazy imports to respect layered architecture
+    try:
+        from config.Servers import GRASPNET_TOP_K
+    except ImportError:
+        GRASPNET_TOP_K = 20
+
+    from operations.PointCloudOperations import generate_point_cloud
+    from operations.GraspNetClient import GraspNetClient
+    from operations.GraspFrameTransform import transform_graspnet_poses_to_unity
+
+    client = GraspNetClient()
+    if not client.is_available():
+        logger.info("GraspNet service unavailable — will use geometric fallback")
+        return None
+
+    # 1. Generate point cloud
+    pc_result = generate_point_cloud(robot_id=robot_id, request_id=request_id)
+    if not pc_result.success:
+        logger.warning(
+            f"generate_point_cloud failed ({pc_result.error}), using geometric fallback"
+        )
+        return None
+
+    pc = pc_result.result
+    points_list = pc["points"]
+    colors_list = pc["colors"]
+    cam_pos = pc["camera_position"]
+    cam_rot = pc["camera_rotation"]
+    fov = pc["fov"]
+
+    points_np = np.array(points_list, dtype=np.float32)
+    colors_np = np.array(colors_list, dtype=np.uint8) if colors_list else None
+
+    # 2. Detect target object to get YOLO bounding box for segmentation
+    seg_mask: Optional["np.ndarray"] = None
+    try:
+        from operations.DetectionOperations import detect_objects
+
+        det_result = detect_objects(robot_id=robot_id, camera_id="main")
+        if det_result.success and det_result.result:
+            detections = det_result.result.get("detections", [])
+            # Find first detection whose label matches object_id (case-insensitive)
+            obj_id_lower = object_id.lower().replace("_", " ")
+            for det in detections:
+                label = det.get("label", "").lower()
+                if obj_id_lower in label or label in obj_id_lower:
+                    bbox = det.get("bbox")  # [x, y, w, h] or similar
+                    if bbox and len(bbox) == 4:
+                        img_w = det_result.result.get("image_width", 640)
+                        img_h = det_result.result.get("image_height", 480)
+                        seg_mask = _build_segmentation_mask(
+                            points_np,
+                            tuple(int(v) for v in bbox),
+                            img_w,
+                            img_h,
+                            fov,
+                            preferred_approach,
+                        )
+                        logger.debug(
+                            f"Segmentation mask: {seg_mask.sum()} / {len(seg_mask)} points"
+                        )
+                    break
+    except Exception as exc:
+        logger.debug(f"Could not build segmentation mask (non-fatal): {exc}")
+
+    # 3. Query GraspNet
+    grasps = client.predict_grasps(
+        points=points_np,
+        colors=colors_np,
+        segmentation_mask=seg_mask,
+        top_k=GRASPNET_TOP_K,
+    )
+    if not grasps:
+        logger.info("GraspNet returned no candidates — using geometric fallback")
+        return None
+
+    logger.info(f"GraspNet candidates received: {len(grasps)}")
+
+    # 4. Transform to Unity world frame
+    world_grasps = transform_graspnet_poses_to_unity(grasps, cam_pos, cam_rot)
+    if not world_grasps:
+        logger.warning("Frame transform produced no valid poses — using geometric fallback")
+        return None
+
+    # 5. Build precomputed_candidates list for Unity PlanGraspWithExternalCandidates
+    hover = pre_grasp_distance if pre_grasp_distance > 0 else PRE_GRASP_HOVER_OFFSET
+    candidates = []
+    for g in world_grasps:
+        pos = g["position"]
+        rot = g["rotation"]
+        approach = g["approach_direction"]
+
+        # Pre-grasp: step back along approach direction by hover distance
+        pre_pos = [
+            pos[0] + approach[0] * hover,
+            pos[1] + approach[1] * hover,
+            pos[2] + approach[2] * hover,
+        ]
+
+        candidates.append(
+            {
+                "pre_grasp_position": {"x": pre_pos[0], "y": pre_pos[1], "z": pre_pos[2]},
+                "pre_grasp_rotation": {"x": rot[0], "y": rot[1], "z": rot[2], "w": rot[3]},
+                "grasp_position": {"x": pos[0], "y": pos[1], "z": pos[2]},
+                "grasp_rotation": {"x": rot[0], "y": rot[1], "z": rot[2], "w": rot[3]},
+                "approach_direction": {"x": approach[0], "y": approach[1], "z": approach[2]},
+                "grasp_depth": 0.5,
+                "antipodal_score": g.get("score", 0.0),
+                "graspnet_score": g.get("score", 0.0),
+                "approach_type": preferred_approach,
+            }
+        )
+
+    # 6. Build and send grasp command with precomputed_candidates
+    parameters = {
+        "object_id": object_id,
+        "use_advanced_planning": use_advanced_planning,
+        "preferred_approach": preferred_approach.lower(),
+        "pre_grasp_distance": pre_grasp_distance,
+        "enable_retreat": enable_retreat,
+        "retreat_distance": retreat_distance,
+        "precomputed_candidates": candidates,
+    }
+
+    command = {
+        "command_type": "grasp_object",
+        "target_type": "robot",
+        "robot_id": robot_id,
+        "parameters": parameters,
+        "request_id": request_id,
+    }
+
+    broadcaster = _get_command_broadcaster()
+    if broadcaster is None:
+        return OperationResult.error_result(
+            "COMMUNICATION_ERROR",
+            "CommandBroadcaster not available",
+            ["Ensure CommandServer is running"],
+        )
+
+    logger.info(
+        f"Sending GraspNet-informed grasp_object: {robot_id} -> {object_id} "
+        f"({len(candidates)} candidates)"
+    )
+    success = broadcaster.send_command(command, request_id)
+    if success:
+        return OperationResult.success_result(
+            {
+                "command_sent": True,
+                "robot_id": robot_id,
+                "object_id": object_id,
+                "request_id": request_id,
+                "graspnet_candidates": len(candidates),
+            }
+        )
+    return OperationResult.error_result(
+        "COMMUNICATION_ERROR",
+        "Failed to send GraspNet grasp command to Unity",
+        ["Check Unity is connected to CommandServer"],
+    )
+
+
+# ============================================================================
 # Implementation: Grasp Object Operation
 # ============================================================================
 
@@ -808,6 +1080,30 @@ def grasp_object(
                     assert err is not None
                     return err
                 _use_ros = False
+
+        # --- GraspNet neural path (optional, falls back to geometric on failure) ---
+        try:
+            from config.Servers import GRASPNET_ENABLED as _graspnet_enabled
+        except ImportError:
+            _graspnet_enabled = False
+
+        if _graspnet_enabled and not _use_ros:
+            graspnet_result = _grasp_via_graspnet(
+                robot_id=robot_id,
+                object_id=object_id,
+                preferred_approach=preferred_approach,
+                use_advanced_planning=use_advanced_planning,
+                pre_grasp_distance=pre_grasp_distance,
+                enable_retreat=enable_retreat,
+                retreat_distance=retreat_distance,
+                request_id=request_id,
+            )
+            if graspnet_result is not None:
+                return graspnet_result
+            logger.info(
+                "GraspNet unavailable or returned no candidates — "
+                "falling back to geometric pipeline"
+            )
 
         # --- TCP path (Unity grasp pipeline) ---
         parameters = {

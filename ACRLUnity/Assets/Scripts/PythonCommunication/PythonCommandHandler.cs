@@ -61,6 +61,43 @@ namespace PythonCommunication
         public int duration_ms; // For stabilize_object
         public float force_limit; // For stabilize_object
         public TargetPosition place_position; // For release_object (deprecated - kept for backward compat)
+
+        // GraspNet: optional pre-computed neural grasp candidates.
+        // When non-empty, GraspPlanningPipeline skips geometric candidate generation
+        // and feeds these directly into IK/collision filtering.
+        public GraspCandidateData[] precomputed_candidates;
+    }
+
+    /// <summary>
+    /// A single neural grasp candidate produced by Contact-GraspNet and
+    /// transformed into Unity world frame by the Python backend.
+    /// Consumed by GraspPlanningPipeline.PlanGraspWithExternalCandidates().
+    /// </summary>
+    [System.Serializable]
+    public class GraspCandidateData
+    {
+        public TargetPosition pre_grasp_position;
+        public TargetRotation pre_grasp_rotation;
+        public TargetPosition grasp_position;
+        public TargetRotation grasp_rotation;
+        public TargetPosition approach_direction;
+        public float grasp_depth;
+        public float antipodal_score;
+        public float graspnet_score;
+        public string approach_type;
+    }
+
+    /// <summary>
+    /// Quaternion (x, y, z, w) for grasp rotation data from Python.
+    /// A separate class is needed because TargetPosition only carries x/y/z.
+    /// </summary>
+    [System.Serializable]
+    public class TargetRotation
+    {
+        public float x;
+        public float y;
+        public float z;
+        public float w;
     }
 
     [System.Serializable]
@@ -899,14 +936,38 @@ namespace PythonCommunication
                     _activeGraspListeners[robotGraspKey] = onComplete;
                     controller.OnTargetReached += onComplete;
 
-                    controller.SetTarget(targetObject, options);
-
-                    if (_verboseLogging)
+                    // Branch: use GraspNet pre-computed candidates if provided,
+                    // otherwise run the standard geometric GraspCandidateGenerator.
+                    if (
+                        command.parameters.precomputed_candidates != null
+                        && command.parameters.precomputed_candidates.Length > 0
+                    )
                     {
-                        string planningMode = options.useAdvancedPlanning ? "Advanced" : "Standard";
-                        Debug.Log(
-                            $"{_logPrefix} {planningMode} grasp planning: {command.robot_id} -> {objectId}"
+                        var externalCandidates = ConvertExternalCandidates(
+                            command.parameters.precomputed_candidates
                         );
+                        controller.SetTargetWithExternalCandidates(
+                            targetObject,
+                            externalCandidates,
+                            options
+                        );
+                        if (_verboseLogging)
+                            Debug.Log(
+                                $"{_logPrefix} GraspNet grasp: {command.robot_id} -> {objectId} "
+                                    + $"({command.parameters.precomputed_candidates.Length} candidates)"
+                            );
+                    }
+                    else
+                    {
+                        controller.SetTarget(targetObject, options);
+                        if (_verboseLogging)
+                        {
+                            string planningMode =
+                                options.useAdvancedPlanning ? "Advanced" : "Standard";
+                            Debug.Log(
+                                $"{_logPrefix} {planningMode} grasp planning: {command.robot_id} -> {objectId}"
+                            );
+                        }
                     }
                 }
                 else if (robotInstance.simpleController != null)
@@ -990,6 +1051,77 @@ namespace PythonCommunication
                     );
                     return null;
             }
+        }
+
+        /// <summary>
+        /// Convert GraspCandidateData array from Python into GraspCandidate list for Unity pipeline.
+        /// Preserves all scoring metadata so GraspScorer can rank candidates correctly.
+        /// </summary>
+        /// <param name="data">Serialized candidate data from Python GraspNet backend</param>
+        /// <returns>List of GraspCandidate objects ready for GraspIKFilter</returns>
+        private System.Collections.Generic.List<Robotics.Grasp.GraspCandidate> ConvertExternalCandidates(
+            GraspCandidateData[] data
+        )
+        {
+            var result = new System.Collections.Generic.List<Robotics.Grasp.GraspCandidate>(
+                data.Length
+            );
+            foreach (var d in data)
+            {
+                if (d == null)
+                    continue;
+
+                Vector3 preGraspPos = new Vector3(
+                    d.pre_grasp_position?.x ?? 0f,
+                    d.pre_grasp_position?.y ?? 0f,
+                    d.pre_grasp_position?.z ?? 0f
+                );
+                Quaternion preGraspRot =
+                    d.pre_grasp_rotation != null
+                        ? new Quaternion(
+                            d.pre_grasp_rotation.x,
+                            d.pre_grasp_rotation.y,
+                            d.pre_grasp_rotation.z,
+                            d.pre_grasp_rotation.w
+                        )
+                        : Quaternion.identity;
+
+                Vector3 graspPos = new Vector3(
+                    d.grasp_position?.x ?? 0f,
+                    d.grasp_position?.y ?? 0f,
+                    d.grasp_position?.z ?? 0f
+                );
+                Quaternion graspRot =
+                    d.grasp_rotation != null
+                        ? new Quaternion(
+                            d.grasp_rotation.x,
+                            d.grasp_rotation.y,
+                            d.grasp_rotation.z,
+                            d.grasp_rotation.w
+                        )
+                        : Quaternion.identity;
+
+                Robotics.Grasp.GraspApproach approach = ParseApproachType(d.approach_type)
+                    ?? Robotics.Grasp.GraspApproach.Top;
+
+                var candidate = Robotics.Grasp.GraspCandidate.Create(
+                    preGraspPos,
+                    preGraspRot,
+                    graspPos,
+                    graspRot,
+                    approach
+                );
+
+                // Carry over GraspNet-specific scoring metadata
+                candidate.graspDepth = d.grasp_depth;
+                candidate.antipodalScore = d.antipodal_score;
+                // Store the raw GraspNet quality score in totalScore as initial estimate;
+                // GraspScorer will overwrite this with its weighted composite score.
+                candidate.totalScore = d.graspnet_score;
+
+                result.Add(candidate);
+            }
+            return result;
         }
 
         /// <summary>

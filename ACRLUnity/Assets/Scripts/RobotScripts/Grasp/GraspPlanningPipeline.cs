@@ -225,6 +225,90 @@ namespace Robotics.Grasp
         }
 
         /// <summary>
+        /// Run the IK filter, collision filter, and scorer on externally-supplied
+        /// grasp candidates (e.g., from Contact-GraspNet) instead of invoking
+        /// GraspCandidateGenerator.  Falls back to geometric generation if all
+        /// external candidates fail the IK or collision filters.
+        /// </summary>
+        /// <param name="externalCandidates">Pre-computed candidates in Unity world frame</param>
+        /// <param name="targetObject">Object being grasped (for collision filter)</param>
+        /// <param name="gripperPosition">Current end-effector position</param>
+        /// <param name="options">Grasp options (passed to FallbackToSimplePlanner if needed)</param>
+        /// <returns>Best grasp candidate, or null if all paths fail</returns>
+        public GraspCandidate PlanGraspWithExternalCandidates(
+            List<GraspCandidate> externalCandidates,
+            GameObject targetObject,
+            Vector3 gripperPosition,
+            GraspOptions? options = null
+        )
+        {
+            var stopwatch = Stopwatch.StartNew();
+
+            UnityEngine.Debug.Log(
+                $"{_logPrefix} GraspNet: planning with {externalCandidates.Count} external candidates"
+            );
+
+            // IK filter — same code path as the geometric pipeline
+            _ikValidCandidates.Clear();
+            _ikValidCandidates.AddRange(
+                _ikFilter.FilterCandidates(externalCandidates, gripperPosition)
+            );
+            UnityEngine.Debug.Log(
+                $"{_logPrefix} GraspNet: {_ikValidCandidates.Count}/{externalCandidates.Count} passed IK filter"
+            );
+
+            if (_ikValidCandidates.Count == 0)
+            {
+                UnityEngine.Debug.LogWarning(
+                    $"{_logPrefix} GraspNet: no IK-valid candidates — falling back to geometric pipeline"
+                );
+                return FallbackToSimplePlanner(targetObject, gripperPosition, options);
+            }
+
+            // Collision filter
+            _collisionFreeCandidates.Clear();
+            _collisionFreeCandidates.AddRange(
+                _collisionFilter.FilterCandidates(_ikValidCandidates, targetObject)
+            );
+            UnityEngine.Debug.Log(
+                $"{_logPrefix} GraspNet: {_collisionFreeCandidates.Count} collision-free candidates"
+            );
+
+            if (_collisionFreeCandidates.Count == 0)
+            {
+                UnityEngine.Debug.LogWarning(
+                    $"{_logPrefix} GraspNet: no collision-free candidates — falling back to geometric pipeline"
+                );
+                return FallbackToSimplePlanner(targetObject, gripperPosition, options);
+            }
+
+            // Score and rank
+            Vector3 objectSize = GraspUtilities.GetObjectSize(targetObject);
+            Quaternion currentGripperRotation =
+                _endEffector != null ? _endEffector.rotation : Quaternion.identity;
+            _rankedCandidates.Clear();
+            _rankedCandidates.AddRange(
+                _scorer.ScoreAndRank(
+                    _collisionFreeCandidates,
+                    objectSize,
+                    gripperPosition,
+                    currentGripperRotation
+                )
+            );
+
+            stopwatch.Stop();
+            float elapsedMs = (float)stopwatch.Elapsed.TotalMilliseconds;
+
+            var best = _rankedCandidates[0];
+            UnityEngine.Debug.Log(
+                $"{_logPrefix} GraspNet pipeline completed in {elapsedMs:F1}ms. "
+                    + $"Best score: {best.totalScore:F2}, approach: {best.approachType}, "
+                    + $"pos: {best.graspPosition}"
+            );
+            return best;
+        }
+
+        /// <summary>
         /// Plan grasp with detailed diagnostics (for debugging).
         /// </summary>
         /// <param name="targetObject">Object to grasp</param>

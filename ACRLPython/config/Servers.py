@@ -87,6 +87,29 @@ WORLDSTATE_CHECK_INTERVAL = float(os.environ.get("WORLDSTATE_CHECK_INTERVAL", "5
 # ============================================================================
 
 LMSTUDIO_BASE_URL = os.environ.get("LMSTUDIO_BASE_URL", "http://192.168.178.53:1234/v1")
+
+# ============================================================================
+# Contact-GraspNet Service Configuration
+# ============================================================================
+
+# Base URL for the Contact-GraspNet FastAPI inference service (GPU server).
+GRASPNET_URL = os.environ.get("GRASPNET_URL", "http://192.168.178.53:8766")
+
+# HTTP request timeout for GraspNet inference calls (seconds).
+GRASPNET_TIMEOUT = float(os.environ.get("GRASPNET_TIMEOUT", "10.0"))
+
+# Number of top-ranked grasp poses to request from GraspNet per call.
+GRASPNET_TOP_K = int(os.environ.get("GRASPNET_TOP_K", "20"))
+
+# Seconds between live /health checks (cached to avoid per-grasp HTTP overhead).
+GRASPNET_HEALTH_CACHE_TTL = float(os.environ.get("GRASPNET_HEALTH_CACHE_TTL", "30.0"))
+
+# Master toggle: set to "false" to skip GraspNet entirely and use geometric fallback.
+GRASPNET_ENABLED = os.environ.get("GRASPNET_ENABLED", "true").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 DEFAULT_LMSTUDIO_MODEL = os.environ.get(
     "DEFAULT_LMSTUDIO_MODEL", "ministral-3-14b-reasoning"
 )
