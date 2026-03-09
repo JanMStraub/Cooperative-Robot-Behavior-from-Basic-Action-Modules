@@ -2437,6 +2437,34 @@ namespace PythonCommunication
                     }
                 }
 
+                // Wait for joint velocities to fall below threshold before releasing
+                // manual drive. ArticulationBody joints carry inertia from the
+                // interpolation — releasing too early causes a sway/overshoot.
+                const float settleVelThreshold = 2.0f; // deg/s
+                const int maxSettleFrames = 60;         // ~1 s safety cap
+                int settleFrames = 0;
+                while (settleFrames < maxSettleFrames)
+                {
+                    bool allSettled = true;
+                    for (int i = 0; i < controller.robotJoints.Length; i++)
+                    {
+                        var joint = controller.robotJoints[i];
+                        if (joint != null && joint.jointVelocity.dofCount > 0)
+                        {
+                            float velDegPerSec = Mathf.Abs(joint.jointVelocity[0]) * Mathf.Rad2Deg;
+                            if (velDegPerSec > settleVelThreshold)
+                            {
+                                allSettled = false;
+                                break;
+                            }
+                        }
+                    }
+                    if (allSettled)
+                        break;
+                    settleFrames++;
+                    yield return new WaitForFixedUpdate();
+                }
+
                 // FIX #5: Clear the target and mark as reached to allow IK to run again
                 controller.ClearTarget(); // This resets _targetTransform and _hasReachedTarget
 

@@ -33,20 +33,20 @@ RUN git clone https://github.com/NVlabs/contact_graspnet.git .
 # Install Python deps matching NVlabs tested versions
 RUN python3.7 -m pip install --upgrade pip setuptools wheel && \
     python3.7 -m pip install --no-cache-dir \
-        tensorflow==2.2.0 \
-        numpy==1.19.5 \
-        scipy \
-        scikit-learn \
-        trimesh \
-        Pillow \
-        matplotlib \
-        tqdm \
-        "opencv-python-headless==4.8.1.78" \
-        "fastapi==0.103.2" \
-        "uvicorn==0.22.0" \
-        "pydantic==1.10.13" \
-        "protobuf==3.20.3" \
-        "pyyaml==5.4.1"
+    tensorflow==2.2.0 \
+    numpy==1.19.5 \
+    scipy \
+    scikit-learn \
+    trimesh \
+    Pillow \
+    matplotlib \
+    tqdm \
+    "opencv-python-headless==4.8.1.78" \
+    "fastapi==0.103.2" \
+    "uvicorn==0.22.0" \
+    "pydantic==1.10.13" \
+    "protobuf==3.20.3" \
+    "pyyaml==5.4.1"
 
 # Compile PointNet2 TF ops — required for inference
 RUN bash compile_pointnet_tfops.sh

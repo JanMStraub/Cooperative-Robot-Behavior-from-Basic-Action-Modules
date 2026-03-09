@@ -39,6 +39,11 @@ try:
 except ImportError:
     from ..vision.StereoReconstruction import stereo_reconstruct_stream
 
+try:
+    from config.Vision import SAVE_DEBUG_POINT_CLOUDS, DEBUG_POINT_CLOUD_DIR
+except ImportError:
+    from ..config.Vision import SAVE_DEBUG_POINT_CLOUDS, DEBUG_POINT_CLOUD_DIR
+
 
 # ============================================================================
 # Module-Level Constants
@@ -46,13 +51,91 @@ except ImportError:
 
 # Maximum age (seconds) of cached stereo images before rejecting.
 # If the images are older than this the scene may have changed significantly.
-_DEFAULT_MAX_AGE_SECONDS: float = 2.0
+# 30s allows for LLM parse latency (typically 3-5s) while still catching truly stale images.
+_DEFAULT_MAX_AGE_SECONDS: float = 30.0
 
 # Uniform random downsample target: avoids sending huge payloads to GraspNet.
 _DEFAULT_MAX_POINTS: int = 50_000
 
 # Default camera pair identifier stored in UnifiedImageStorage.
 _DEFAULT_CAMERA_PAIR_ID: str = "stereo"
+
+
+# ============================================================================
+# Debug Helpers
+# ============================================================================
+
+
+def _save_debug_point_cloud(
+    robot_id: str,
+    points: np.ndarray,
+    colors: np.ndarray,
+    camera_position: list,
+    camera_rotation: list,
+    timestamp: float,
+) -> None:
+    """Save a point cloud to disk as a binary PLY file for inspection in Blender.
+
+    PLY (Polygon File Format) is natively supported by Blender's built-in
+    "Import PLY" operator (File → Import → Stanford PLY).  Per-vertex RGB
+    colors are stored as uchar properties and displayed immediately when the
+    viewport shading is set to "Vertex Color".
+
+    The file is written to DEBUG_POINT_CLOUD_DIR and named using the robot ID
+    and a human-readable UTC timestamp so successive captures do not overwrite
+    each other.  Errors are logged but never propagated — debug saves must
+    never break the main operation flow.
+
+    Args:
+        robot_id: Robot whose camera produced this cloud.
+        points: Float32 array of shape (N, 3) in camera frame.
+        colors: Uint8 array of shape (N, 3) RGB colours.
+        camera_position: [x, y, z] world-space camera origin.
+        camera_rotation: [x, y, z, w] or Euler camera rotation.
+        timestamp: Unix epoch of the stereo capture.
+    """
+    import os
+    import struct
+    from datetime import datetime, timezone
+
+    try:
+        os.makedirs(DEBUG_POINT_CLOUD_DIR, exist_ok=True)
+        dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        fname = f"pc_{robot_id}_{dt.strftime('%Y%m%d_%H%M%S_%f')}.ply"
+        path = os.path.join(DEBUG_POINT_CLOUD_DIR, fname)
+
+        n = points.shape[0]
+        pts = points.astype(np.float32)
+        clrs = colors.astype(np.uint8)
+
+        # Build ASCII PLY header
+        header = (
+            "ply\n"
+            "format binary_little_endian 1.0\n"
+            f"comment robot_id {robot_id}\n"
+            f"comment camera_position {camera_position[0]:.6f} {camera_position[1]:.6f} {camera_position[2]:.6f}\n"
+            f"comment camera_rotation {' '.join(f'{v:.6f}' for v in camera_rotation)}\n"
+            f"comment timestamp {timestamp:.6f}\n"
+            f"element vertex {n}\n"
+            "property float x\n"
+            "property float y\n"
+            "property float z\n"
+            "property uchar red\n"
+            "property uchar green\n"
+            "property uchar blue\n"
+            "end_header\n"
+        )
+
+        with open(path, "wb") as f:
+            f.write(header.encode("ascii"))
+            # Interleave xyz (3×float32 = 12 bytes) + rgb (3×uint8 = 3 bytes) per vertex
+            for i in range(n):
+                f.write(struct.pack("<fff", pts[i, 0], pts[i, 1], pts[i, 2]))
+                f.write(struct.pack("BBB", clrs[i, 0], clrs[i, 1], clrs[i, 2]))
+
+        logger.debug(f"[{robot_id}] Debug point cloud saved to {path} ({n} points, PLY)")
+    except Exception as exc:
+        logger.warning(f"[{robot_id}] Failed to save debug point cloud: {exc}")
 
 
 # ============================================================================
@@ -85,7 +168,7 @@ def generate_point_cloud(
             Usually "stereo" (default).
         max_points: Maximum number of points to return.  A uniform random
             subsample is applied when the raw cloud exceeds this limit.
-        max_age_seconds: Reject images older than this many seconds.
+        max_age_seconds: Reject images older than this many seconds (default: 30.0).
         request_id: Protocol V2 request identifier (pass-through).
 
     Returns:
@@ -135,11 +218,16 @@ def generate_point_cloud(
             )
 
         # --- Staleness check ---
+        # Guard against callers (e.g. LLM) passing None, 0 or negative values.
+        effective_max_age = (
+            max_age_seconds if (max_age_seconds is not None and max_age_seconds > 0)
+            else _DEFAULT_MAX_AGE_SECONDS
+        )
         age = time.time() - timestamp
-        if age > max_age_seconds:
+        if age > effective_max_age:
             return OperationResult.error_result(
                 "STALE_IMAGE",
-                f"Stereo images are {age:.1f}s old (max {max_age_seconds}s). "
+                f"Stereo images are {age:.1f}s old (max {effective_max_age}s). "
                 "Capture fresh images before generating a point cloud.",
                 [
                     "Call 'capture_stereo_images' or wait for live streaming to update",
@@ -195,9 +283,14 @@ def generate_point_cloud(
             )
 
         # --- Uniform random downsample ---
+        # Guard against callers (e.g. LLM) passing None or non-positive values.
+        effective_max_points = (
+            max_points if (max_points is not None and max_points > 0)
+            else _DEFAULT_MAX_POINTS
+        )
         n_raw = raw_points.shape[0]
-        if n_raw > max_points:
-            idx = np.random.choice(n_raw, size=max_points, replace=False)
+        if n_raw > effective_max_points:
+            idx = np.random.choice(n_raw, size=effective_max_points, replace=False)
             raw_points = raw_points[idx]
             raw_colors = raw_colors[idx]
             logger.debug(
@@ -214,6 +307,12 @@ def generate_point_cloud(
             f"[{robot_id}] Point cloud ready: {point_count} points "
             f"(camera_position={camera_position})"
         )
+
+        # --- Optional debug save ---
+        if SAVE_DEBUG_POINT_CLOUDS:
+            _save_debug_point_cloud(
+                robot_id, raw_points, raw_colors, camera_position, camera_rotation, timestamp
+            )
 
         return OperationResult.success_result(
             {
@@ -263,7 +362,7 @@ GENERATE_POINT_CLOUD_OPERATION = BasicOperation(
     ),
     usage_examples=[
         "generate_point_cloud('Robot1')",
-        "generate_point_cloud('Robot1', max_points=30000, max_age_seconds=5.0)",
+        "generate_point_cloud('Robot1', max_points=30000, max_age_seconds=30.0)",
     ],
     parameters=[
         OperationParameter(
@@ -289,9 +388,9 @@ GENERATE_POINT_CLOUD_OPERATION = BasicOperation(
         OperationParameter(
             name="max_age_seconds",
             type="float",
-            description="Reject images older than this many seconds (default: 2.0)",
+            description="Reject images older than this many seconds (default: 30.0)",
             required=False,
-            default=2.0,
+            default=30.0,
         ),
     ],
     preconditions=[

@@ -75,6 +75,9 @@ DEBUG_IMAGES_DIR = os.environ.get("DEBUG_IMAGES_DIR", str(_CONFIG_DIR / "debug_d
 # Used in vision/DepthEstimator.py: save_disparity_map_debug() checks this flag
 SAVE_DEBUG_DISPARITY_MAPS = os.environ.get("SAVE_DEBUG_DISPARITY_MAPS", "false").lower() in ("true", "1", "yes")
 DEBUG_DISPARITY_DIR = os.environ.get("DEBUG_DISPARITY_DIR", str(_CONFIG_DIR / "debug_detections"))
+# Used in operations/PointCloudOperations.py: saves binary PLY files (Blender: File → Import → Stanford PLY)
+SAVE_DEBUG_POINT_CLOUDS = os.environ.get("SAVE_DEBUG_POINT_CLOUDS", "true").lower() in ("true", "1", "yes")
+DEBUG_POINT_CLOUD_DIR = os.environ.get("DEBUG_POINT_CLOUD_DIR", str(_CONFIG_DIR / "debug_point_clouds"))
 
 # ============================================================================
 # Stereo Camera Configuration

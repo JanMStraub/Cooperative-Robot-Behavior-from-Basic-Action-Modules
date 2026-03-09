@@ -28,7 +28,9 @@ import uvicorn
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Contact-GraspNet Inference Service", version="1.0.0")
@@ -44,7 +46,7 @@ _device_name = "cpu"
 # NVlabs inference uses a global_config dict and a persistent tf.Session
 _global_config = None
 _grasp_estimator = None
-_tf_sess = None          # kept alive for the process lifetime
+_tf_sess = None  # kept alive for the process lifetime
 
 
 def _load_model():
@@ -53,6 +55,7 @@ def _load_model():
 
     try:
         import tensorflow.compat.v1 as tf
+
         tf.disable_eager_execution()
 
         gpus = tf.config.experimental.list_physical_devices("GPU")
@@ -72,6 +75,7 @@ def _load_model():
         # pyrender → pyglet → GLX at class-definition time, which crashes in
         # a headless container. The inference path never uses SceneRenderer.
         import types
+
         _mock_scene_renderer = types.ModuleType("scene_renderer")
         _mock_scene_renderer.SceneRenderer = type("SceneRenderer", (), {})
         sys.modules.setdefault("scene_renderer", _mock_scene_renderer)
@@ -99,7 +103,9 @@ def _load_model():
         # Session is kept alive — weights live in GPU memory for all requests
         _tf_sess = tf.Session()
         _grasp_estimator.load_weights(_tf_sess, saver, checkpoint_dir)
-        logger.info(f"Contact-GraspNet loaded from '{checkpoint_dir}' on {_device_name}")
+        logger.info(
+            f"Contact-GraspNet loaded from '{checkpoint_dir}' on {_device_name}"
+        )
 
     except Exception as exc:
         logger.error(f"Failed to load Contact-GraspNet: {exc}", exc_info=True)
@@ -120,8 +126,8 @@ def startup_event():
 
 
 class GraspRequest(BaseModel):
-    points: List[List[float]]                       # (N, 3) camera frame
-    colors: Optional[List[List[int]]] = None        # (N, 3) uint8 RGB, optional
+    points: List[List[float]]  # (N, 3) camera frame
+    colors: Optional[List[List[int]]] = None  # (N, 3) uint8 RGB, optional
     segmentation_mask: Optional[List[bool]] = None  # (N,) bool, optional
     top_k: int = 20
 
@@ -139,7 +145,11 @@ class GraspRequest(BaseModel):
 def health():
     """Liveness check — returns 200 when model is loaded."""
     return {
-        "status": "ok" if (_grasp_estimator is not None and _tf_sess is not None) else "model_not_loaded",
+        "status": (
+            "ok"
+            if (_grasp_estimator is not None and _tf_sess is not None)
+            else "model_not_loaded"
+        ),
         "device": _device_name,
     }
 
@@ -205,26 +215,29 @@ def predict_grasps(req: GraspRequest):
     # Flatten all grasp proposals across segment keys
     all_grasps = []
     for key in pred_grasps_cam:
-        grasp_mats = pred_grasps_cam[key]   # (M, 4, 4) homogeneous transforms
-        grasp_scores = scores[key]           # (M,)
+        grasp_mats = pred_grasps_cam[key]  # (M, 4, 4) homogeneous transforms
+        grasp_scores = scores[key]  # (M,)
         for mat, score in zip(grasp_mats, grasp_scores):
             R = mat[:3, :3]
             t = mat[:3, 3]
 
             # Rotation matrix -> quaternion [x, y, z, w]
             from scipy.spatial.transform import Rotation
+
             quat = Rotation.from_matrix(R).as_quat().tolist()
 
             # Approach direction = -Z axis of the grasp frame
             approach = (-R[:, 2]).tolist()
 
-            all_grasps.append({
-                "position": t.tolist(),
-                "rotation": quat,
-                "score": float(score),
-                "width": 0.08,   # AR4 max gripper opening in metres
-                "approach_direction": approach,
-            })
+            all_grasps.append(
+                {
+                    "position": t.tolist(),
+                    "rotation": quat,
+                    "score": float(score),
+                    "width": 0.08,  # AR4 max gripper opening in metres
+                    "approach_direction": approach,
+                }
+            )
 
     all_grasps.sort(key=lambda g: g["score"], reverse=True)
     top_grasps = all_grasps[: req.top_k]

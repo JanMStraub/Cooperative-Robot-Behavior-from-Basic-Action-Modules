@@ -82,8 +82,10 @@ RESTRICTED_BUILTINS = [
 # Sandbox Settings
 # ============================================================================
 
-# Timeout for sandbox execution of generated operations (seconds)
-SANDBOX_TIMEOUT = float(os.environ.get("SANDBOX_TIMEOUT", "5.0"))
+# Timeout for sandbox execution of generated operations (seconds).
+# macOS "spawn" context takes 3-4s just to boot the child Python process,
+# so 30s is the minimum practical value on that platform.
+SANDBOX_TIMEOUT = float(os.environ.get("SANDBOX_TIMEOUT", "30.0"))
 
 # ============================================================================
 # Generated Operations Directory

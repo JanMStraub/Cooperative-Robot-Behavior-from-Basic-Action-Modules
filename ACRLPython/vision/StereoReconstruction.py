@@ -54,18 +54,21 @@ def calc_disparity(imgL, imgR, max_disp=None):
 
     print(f"Using maximum disparity: {max_disp}")
 
-    # Tuned parameters for standard robotic manipulation scenes
+    # Tuned parameters for robotic manipulation scenes, including low-texture
+    # synthetic (Unity) environments where strict uniqueness filtering would
+    # reject most matches on flat/uniform surfaces.
     stereo = cv2.StereoSGBM_create(  # type: ignore
         minDisparity=0,
         numDisparities=max_disp,
         blockSize=window_size,
-        P1=8 * 3 * window_size**2,  # OpenCV recommended formula
+        P1=8 * 3 * window_size**2,   # OpenCV recommended formula
         P2=32 * 3 * window_size**2,  # OpenCV recommended formula
-        disp12MaxDiff=1,
-        uniquenessRatio=10,  # Standard uniqueness (10-15)
-        speckleWindowSize=100,  # Filter out small noise
-        speckleRange=32,  # Standard speckle range
-        mode=cv2.STEREO_SGBM_MODE_SGBM_3WAY,  # Faster than full HH, better than standard
+        disp12MaxDiff=2,             # Relaxed L-R consistency check (was 1)
+        uniquenessRatio=0,           # Disabled; synthetic scenes have near-identical scores
+        speckleWindowSize=0,         # Disabled speckle filter; flat regions produce large coherent blobs
+        speckleRange=0,
+        preFilterCap=63,             # Reduce pre-filter aggressiveness for clean synthetic images
+        mode=cv2.STEREO_SGBM_MODE_HH,  # Full HH scan; better disparity coverage on flat surfaces
     )
     disp = (stereo.compute(imgL, imgR).astype(np.float32)) / 16.0
     return np.where(disp >= 0.0, disp, np.nan)

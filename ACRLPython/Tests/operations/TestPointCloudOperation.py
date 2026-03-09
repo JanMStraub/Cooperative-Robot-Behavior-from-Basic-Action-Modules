@@ -19,6 +19,46 @@ from operations.PointCloudOperations import generate_point_cloud, GENERATE_POINT
 from operations.Base import OperationResult
 
 
+def _load_backend_client():
+    """Load BackendClient using an absolute file path to avoid package import issues.
+
+    Test subdirectories have no __init__.py, so package-style imports like
+    'from tests.integration.helpers.backend_client import ...' fail.  We use
+    importlib to load the module directly from its file path instead.
+    """
+    import importlib.util
+    import os
+    helper_path = os.path.join(
+        os.path.dirname(__file__), "..", "integration", "helpers", "backend_client.py"
+    )
+    spec = importlib.util.spec_from_file_location("backend_client", helper_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.BackendClient
+
+
+def _backend_available() -> bool:
+    """Return True when the SequenceServer (port 5013) is reachable.
+
+    The SequenceServer is only active once the backend process has started
+    and Unity has connected.  Probing the port is sufficient to decide
+    whether integration tests should run.
+    """
+    try:
+        import socket as _socket
+        sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+        sock.settimeout(2.0)
+        result = sock.connect_ex(("localhost", 5013))
+        sock.close()
+        return result == 0
+    except Exception:
+        return False
+
+
+_STEREO_AVAILABLE = _backend_available()
+_STEREO_SKIP = "Backend not reachable on port 5013 — run Unity and start the backend servers"
+
+
 # ============================================================================
 # Helpers
 # ============================================================================
@@ -216,24 +256,79 @@ class TestGeneratePointCloud:
 
 
 @pytest.mark.integration
+@pytest.mark.requires_unity
+@pytest.mark.skipif(not _STEREO_AVAILABLE, reason=_STEREO_SKIP)
 class TestGeneratePointCloudIntegration:
-    """Integration tests that need a live Unity session with stereo cameras."""
+    """Integration tests that need a live Unity session with stereo cameras.
+
+    These tests send commands to the running backend over TCP (port 5013),
+    which ensures the correct process's UnifiedImageStorage is used.
+    The backend populates its storage from Unity's stereo camera stream;
+    we trigger a detect_object_stereo command to warm it up before the
+    point cloud tests run.
+    """
+
+    @pytest.fixture(autouse=True)
+    def warmup_stereo_storage(self):
+        """Trigger a stereo detection on the backend to populate UnifiedImageStorage.
+
+        generate_point_cloud reads from the backend server's UnifiedImageStorage,
+        so we send a detect_object_stereo command via the SequenceServer to ensure
+        at least one stereo frame has been captured before the test runs.
+        """
+        try:
+            BackendClient = _load_backend_client()
+            with BackendClient(timeout=15.0) as client:
+                client.send_command(
+                    command="detect object stereo for Robot1",
+                    robot_id="Robot1",
+                    camera_id="TableStereoCamera",
+                    request_id=9901,
+                )
+        except Exception:
+            pass  # If warmup fails the test itself will surface the real error
+
+    def _run_point_cloud(self, request_id: int) -> dict:
+        """Capture a fresh stereo frame then immediately generate a point cloud.
+
+        Sends both commands as a two-step sequence so the images are always
+        within max_age_seconds when generate_point_cloud runs.
+        """
+        BackendClient = _load_backend_client()
+        # Step 1: capture a fresh stereo frame into the backend's storage.
+        with BackendClient(timeout=15.0) as client:
+            client.send_command(
+                command="detect object stereo for Robot1",
+                robot_id="Robot1",
+                camera_id="TableStereoCamera",
+                request_id=request_id,
+            )
+        # Step 2: generate the point cloud immediately after (images are fresh).
+        with BackendClient(timeout=30.0) as client:
+            return client.send_command(
+                command="generate point cloud for Robot1",
+                robot_id="Robot1",
+                camera_id="TableStereoCamera",
+                request_id=request_id + 1,
+            )
 
     def test_live_point_cloud_has_valid_points(self):
         """Point count > 0 and all points are finite."""
-        result = generate_point_cloud("Robot1", max_age_seconds=10.0)
-        assert result.success, result.error
-        r = result.result
-        assert r["point_count"] > 0
+        result_dict = self._run_point_cloud(request_id=9902)
+        assert result_dict.get("success"), result_dict.get("error")
+        cmd_results = result_dict.get("results", [{}])
+        r = cmd_results[0].get("result", {}) if cmd_results else {}
+        assert r.get("point_count", 0) > 0
         pts = np.array(r["points"])
         assert np.isfinite(pts).all(), "Point cloud contains non-finite values"
 
     def test_live_camera_position_non_zero(self):
         """camera_position from Unity metadata should not be the origin."""
-        result = generate_point_cloud("Robot1", max_age_seconds=10.0)
-        assert result.success, result.error
-        cam_pos = result.result["camera_position"]
-        # At least one component should be non-zero if the camera is placed in the scene
+        result_dict = self._run_point_cloud(request_id=9904)
+        assert result_dict.get("success"), result_dict.get("error")
+        cmd_results = result_dict.get("results", [{}])
+        r = cmd_results[0].get("result", {}) if cmd_results else {}
+        cam_pos = r.get("camera_position", [0, 0, 0])
         assert any(abs(v) > 1e-3 for v in cam_pos), (
             "camera_position is all zeros — check Unity stereo camera metadata"
         )

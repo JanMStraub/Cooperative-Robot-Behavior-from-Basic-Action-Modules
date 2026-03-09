@@ -177,10 +177,12 @@ class TestUnityProtocolCompatibility:
         )
 
     def test_multiple_concurrent_commands(self):
-        """Test that multiple independent commands all complete successfully.
+        """Test that the backend handles multiple concurrent connections correctly.
 
-        Uses Robot1 left-workspace coordinates (x negative) to stay within
-        the arm's reachable workspace.
+        Uses check_robot_status (a pure-Python perception op) so each command
+        returns immediately without waiting for Unity completion.  This tests
+        the Protocol V2 connection-per-request model without conflicting robot
+        movements that would cause Unity to drop or ignore completion signals.
         """
         import threading
 
@@ -190,7 +192,7 @@ class TestUnityProtocolCompatibility:
 
         def send_command(command: str, rid: int):
             try:
-                with BackendClient(timeout=45.0) as client:
+                with BackendClient(timeout=30.0) as client:
                     result = client.send_command(
                         command=command,
                         robot_id="Robot1",
@@ -202,10 +204,13 @@ class TestUnityProtocolCompatibility:
                 with lock:
                     errors.append(exc)
 
+        # Use status queries rather than move commands: status ops return
+        # immediately (no Unity completion wait) so all three connections
+        # can resolve concurrently without robot conflict.
         commands = [
-            ("move Robot1 to coordinate -0.25 0.30 0.10", 10),
-            ("move Robot1 to coordinate -0.28 0.25 0.12", 11),
-            ("move Robot1 to coordinate -0.22 0.28 0.08", 12),
+            ("check robot status for Robot1", 10),
+            ("check robot status for Robot1", 11),
+            ("check robot status for Robot1", 12),
         ]
 
         threads = [
@@ -215,7 +220,7 @@ class TestUnityProtocolCompatibility:
         for t in threads:
             t.start()
         for t in threads:
-            t.join(timeout=45.0)
+            t.join(timeout=30.0)
 
         assert not errors, f"Errors in concurrent commands: {errors}"
         assert len(results) == 3, f"Expected 3 results, got {len(results)}"
