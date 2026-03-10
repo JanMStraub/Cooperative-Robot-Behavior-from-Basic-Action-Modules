@@ -17,6 +17,7 @@ All poses are returned in **camera frame** (right-handed, Z-forward).
 The caller (GraspOperations) is responsible for the Unity world-space transform.
 """
 
+import base64
 import logging
 import time
 from typing import List, Optional
@@ -122,7 +123,8 @@ class GraspNetClient:
             points:            Float32 array of shape (N, 3) in camera frame.
             colors:            Optional uint8 array of shape (N, 3) RGB.
             segmentation_mask: Optional bool array of shape (N,).  When provided
-                only the masked subset of ``points`` / ``colors`` is sent.
+                only the masked subset of ``points`` / ``colors`` is sent
+                (applied client-side before encoding; not transmitted to server).
             top_k:             Number of poses to request (default: ``_top_k_default``).
 
         Returns:
@@ -149,15 +151,36 @@ class GraspNetClient:
             logger.warning("predict_grasps: empty point cloud after masking, skipping")
             return None
 
+        # Convert from Unity left-handed frame (X-negated) to the right-handed
+        # OpenCV camera frame that Contact-GraspNet expects (X-right, Y-down, Z-fwd).
+        # StereoReconstruction bakes a sign-flip into its Q-matrix so every point
+        # arriving here has X already negated.  Un-negate before sending so the
+        # model sees the correct geometry.  GraspFrameTransform applies the
+        # inverse flip again after inference when transforming poses to Unity world.
+        pts_rh = pts.copy()
+        pts_rh[:, 0] *= -1.0
+
+        # The NVlabs server resamples to 20 000 points internally regardless of
+        # how many we send.  Pre-downsample client-side to avoid transmitting 3 MB
+        # of JSON over the LAN when 1.2 MB carries identical information.
+        # 4 decimal places = 0.1 mm precision — far more than grasp planning needs.
+        _SERVER_MAX_POINTS = 20_000
+        if pts_rh.shape[0] > _SERVER_MAX_POINTS:
+            idx = np.random.choice(pts_rh.shape[0], _SERVER_MAX_POINTS, replace=False)
+            pts_rh = pts_rh[idx]
+            if clr is not None:
+                clr = clr[idx]
+
+        pts_bytes = pts_rh.astype(np.float32).tobytes()
         payload: dict = {
-            "points": pts.tolist(),
+            "points": base64.b64encode(pts_bytes).decode("ascii"),
+            "points_shape": list(pts_rh.shape),  # [N, 3]
             "top_k": top_k,
         }
         if clr is not None:
-            payload["colors"] = clr.tolist()
-        if segmentation_mask is not None:
-            # Already applied above — no need to send mask separately
-            pass
+            clr_bytes = clr.astype(np.uint8).tobytes()
+            payload["colors"] = base64.b64encode(clr_bytes).decode("ascii")
+            payload["colors_shape"] = list(clr.shape)  # [N, 3]
 
         body = json.dumps(payload).encode("utf-8")
         url = f"{self._base_url}/predict_grasps"

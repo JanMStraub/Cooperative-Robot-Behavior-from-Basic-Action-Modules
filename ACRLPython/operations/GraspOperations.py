@@ -607,6 +607,7 @@ def _grasp_via_graspnet(
     enable_retreat: bool,
     retreat_distance: float,
     request_id: int,
+    custom_approach_vector: "Optional[List[float]]" = None,
 ) -> "Optional[OperationResult]":
     """Attempt to grasp using Contact-GraspNet neural grasp prediction.
 
@@ -710,6 +711,27 @@ def _grasp_via_graspnet(
         logger.warning("Frame transform produced no valid poses — using geometric fallback")
         return None
 
+    # 4b. Filter and re-rank by custom approach vector when provided
+    if custom_approach_vector is not None:
+        cav = np.array(custom_approach_vector, dtype=np.float64)
+        mag = np.linalg.norm(cav)
+        if mag > 1e-6:
+            cav_unit = cav / mag
+            aligned = [
+                g for g in world_grasps
+                if np.dot(np.array(g["approach_direction"]), cav_unit) > 0.0
+            ]
+            world_grasps = aligned if aligned else world_grasps
+            world_grasps.sort(
+                key=lambda g: g.get("score", 0.0)
+                * np.dot(np.array(g["approach_direction"]), cav_unit),
+                reverse=True,
+            )
+            logger.info(
+                f"custom_approach_vector filtered {len(world_grasps)} candidates "
+                f"(from {len(grasps)} raw)"
+            )
+
     # 5. Build precomputed_candidates list for Unity PlanGraspWithExternalCandidates
     hover = pre_grasp_distance if pre_grasp_distance > 0 else PRE_GRASP_HOVER_OFFSET
     candidates = []
@@ -785,6 +807,225 @@ def _grasp_via_graspnet(
         "COMMUNICATION_ERROR",
         "Failed to send GraspNet grasp command to Unity",
         ["Check Unity is connected to CommandServer"],
+    )
+
+
+def _grasp_via_graspnet_with_ros(
+    bridge,
+    robot_id: str,
+    object_id: str,
+    preferred_approach: str,
+    pre_grasp_distance: float,
+    request_id: int,
+    world_state,
+    custom_approach_vector: "Optional[List[float]]" = None,
+) -> "Optional[OperationResult]":
+    """Attempt grasp using GraspNet pose selection with MoveIt trajectory execution.
+
+    This is the highest-priority path when both GraspNet and ROS are enabled.
+    It combines Contact-GraspNet's 6-DOF pose quality with MoveIt's collision-
+    free trajectory planning.
+
+    Steps:
+    1. Health-check the GraspNet service; return None immediately if down.
+    2. Generate a fresh stereo point cloud.
+    3. Detect the target object for a segmentation mask.
+    4. Query GraspNet for ranked grasp poses.
+    5. Transform poses from camera frame to Unity world frame.
+    6. Pick the top-scoring candidate and compute its pre-grasp hover position.
+    7. Move to pre-grasp via MoveIt plan_and_execute.
+    8. Cartesian descent to the grasp position via plan_cartesian_descent.
+    9. Follow-target drift correction + gripper close.
+
+    Returns:
+        None — GraspNet unavailable OR MoveIt planning failed before arm moved
+               (arm has not moved; caller falls back to geometric ROS planning).
+        OperationResult (error) — Arm descended but gripper close failed.
+        OperationResult (success) — Full grasp executed successfully.
+    """
+    import numpy as np
+
+    # Lazy imports — respect layered architecture
+    try:
+        from config.Servers import GRASPNET_TOP_K
+    except ImportError:
+        GRASPNET_TOP_K = 20
+
+    from operations.PointCloudOperations import generate_point_cloud
+    from operations.GraspNetClient import GraspNetClient
+    from operations.GraspFrameTransform import transform_graspnet_poses_to_unity
+
+    # 1. Health check
+    client = GraspNetClient()
+    if not client.is_available():
+        logger.info("[GraspNet+ROS] Service unavailable — falling back to geometric ROS")
+        return None
+
+    # 2. Generate point cloud
+    pc_result = generate_point_cloud(robot_id=robot_id, request_id=request_id)
+    if not pc_result.success:
+        logger.warning(
+            f"[GraspNet+ROS] generate_point_cloud failed ({pc_result.error}), "
+            "falling back to geometric ROS"
+        )
+        return None
+
+    pc = pc_result.result
+    points_np = np.array(pc["points"], dtype=np.float32)
+    colors_np = np.array(pc["colors"], dtype=np.uint8) if pc.get("colors") else None
+    cam_pos = pc["camera_position"]
+    cam_rot = pc["camera_rotation"]
+    fov = pc["fov"]
+
+    # 3. Optional segmentation mask from YOLO detection
+    seg_mask: "Optional[np.ndarray]" = None
+    try:
+        from operations.DetectionOperations import detect_objects
+
+        det_result = detect_objects(robot_id=robot_id, camera_id="main")
+        if det_result.success and det_result.result:
+            detections = det_result.result.get("detections", [])
+            obj_id_lower = object_id.lower().replace("_", " ")
+            for det in detections:
+                label = det.get("label", "").lower()
+                if obj_id_lower in label or label in obj_id_lower:
+                    bbox = det.get("bbox")
+                    if bbox and len(bbox) == 4:
+                        img_w = det_result.result.get("image_width", 640)
+                        img_h = det_result.result.get("image_height", 480)
+                        seg_mask = _build_segmentation_mask(
+                            points_np,
+                            tuple(int(v) for v in bbox),
+                            img_w,
+                            img_h,
+                            fov,
+                            preferred_approach,
+                        )
+                    break
+    except Exception as exc:
+        logger.debug(f"[GraspNet+ROS] Segmentation mask failed (non-fatal): {exc}")
+
+    # 4. Query GraspNet
+    grasps = client.predict_grasps(
+        points=points_np,
+        colors=colors_np,
+        segmentation_mask=seg_mask,
+        top_k=GRASPNET_TOP_K,
+    )
+    if not grasps:
+        logger.info("[GraspNet+ROS] No candidates returned — falling back to geometric ROS")
+        return None
+
+    # 5. Transform to Unity world frame
+    world_grasps = transform_graspnet_poses_to_unity(grasps, cam_pos, cam_rot)
+    if not world_grasps:
+        logger.warning("[GraspNet+ROS] Frame transform produced no valid poses — falling back")
+        return None
+
+    # 5b. Filter and re-rank by custom approach vector when provided
+    if custom_approach_vector is not None:
+        cav = np.array(custom_approach_vector, dtype=np.float64)
+        mag = np.linalg.norm(cav)
+        if mag > 1e-6:
+            cav_unit = cav / mag
+            aligned = [
+                g for g in world_grasps
+                if np.dot(np.array(g["approach_direction"]), cav_unit) > 0.0
+            ]
+            world_grasps = aligned if aligned else world_grasps
+            world_grasps.sort(
+                key=lambda g: g.get("score", 0.0)
+                * np.dot(np.array(g["approach_direction"]), cav_unit),
+                reverse=True,
+            )
+            logger.info(
+                f"[GraspNet+ROS] custom_approach_vector filtered {len(world_grasps)} candidates "
+                f"(from {len(grasps)} raw)"
+            )
+
+    # 6. Pick top candidate by score
+    top = max(world_grasps, key=lambda g: g.get("score", 0.0))
+    pos = top["position"]
+    rot = top["rotation"]
+    approach = top["approach_direction"]
+
+    hover = pre_grasp_distance if pre_grasp_distance > 0 else PRE_GRASP_HOVER_OFFSET
+    pre_grasp_pos = {
+        "x": pos[0] + approach[0] * hover,
+        "y": pos[1] + approach[1] * hover,
+        "z": pos[2] + approach[2] * hover,
+    }
+    grasp_pos = {"x": pos[0], "y": pos[1], "z": pos[2]}
+    orientation = {"x": rot[0], "y": rot[1], "z": rot[2], "w": rot[3]}
+
+    # 7. MoveIt pre-grasp move
+    logger.info(f"[GraspNet+ROS] Moving to pre-grasp for {robot_id}: {pre_grasp_pos}")
+    pre_result = bridge.plan_and_execute(
+        position=pre_grasp_pos,
+        orientation=orientation,
+        planning_time=10.0,
+        robot_id=robot_id,
+    )
+    if not pre_result or not pre_result.get("success"):
+        pre_err = pre_result.get("error", "Unknown") if pre_result else "No response"
+        logger.warning(
+            f"[GraspNet+ROS] Pre-grasp planning failed ({pre_err}) — "
+            "falling back to geometric ROS"
+        )
+        return None
+
+    # 8. Settle pause (let /joint_states stabilise before MoveIt samples start state)
+    time.sleep(0.3)
+
+    # 9. Cartesian descent to grasp position
+    logger.info(f"[GraspNet+ROS] Cartesian descent for {robot_id}: {grasp_pos}")
+    descent_result = bridge.plan_cartesian_descent(
+        position=grasp_pos,
+        orientation=orientation,
+        robot_id=robot_id,
+        max_velocity_scaling=0.3,
+        max_acceleration_scaling=0.3,
+    )
+    if not descent_result or not descent_result.get("success"):
+        descent_err = (
+            descent_result.get("error", "Unknown") if descent_result else "No response"
+        )
+        logger.warning(
+            f"[GraspNet+ROS] Cartesian descent failed ({descent_err}) — "
+            "falling back to geometric ROS"
+        )
+        return None
+
+    # 10. Follow-target drift correction + gripper close
+    # Arm has descended — do NOT return None from here; return an error result.
+    gripper_ok = _execute_grasp_with_follow_target(
+        bridge=bridge,
+        robot_id=robot_id,
+        object_id=object_id,
+        planned_position=grasp_pos,
+        orientation=orientation,
+        tcp_y_offset=0.0,
+        world_state=world_state,
+    )
+    if not gripper_ok:
+        return OperationResult.error_result(
+            "GRIPPER_CLOSE_FAILED",
+            f"Arm reached GraspNet pose but gripper close failed for {robot_id}",
+            [
+                "Check gripper hardware/simulation state",
+                "Verify GripperContactSensor is active",
+            ],
+        )
+
+    return OperationResult.success_result(
+        {
+            "robot_id": robot_id,
+            "object_id": object_id,
+            "request_id": request_id,
+            "graspnet_candidates": len(world_grasps),
+            "status": "graspnet_ros_executed",
+            "timestamp": time.time(),
+        }
     )
 
 
@@ -936,6 +1177,11 @@ def grasp_object(
             except ImportError:
                 _use_ros = False
 
+        try:
+            from config.Servers import GRASPNET_ENABLED as _graspnet_enabled
+        except ImportError:
+            _graspnet_enabled = False
+
         # --- ROS path ---
         bridge = None
         if _use_ros:
@@ -1031,6 +1277,27 @@ def grasp_object(
                     object_dimensions = world_state.get_object_dimensions(object_id)
                     robot_state = world_state.get_robot_state(robot_id)
 
+                    # PATH 1: GraspNet pose + MoveIt execution (highest priority when both enabled)
+                    if _graspnet_enabled:
+                        assert bridge is not None
+                        result = _grasp_via_graspnet_with_ros(
+                            bridge=bridge,
+                            robot_id=robot_id,
+                            object_id=object_id,
+                            preferred_approach=preferred_approach,
+                            pre_grasp_distance=pre_grasp_distance,
+                            request_id=request_id,
+                            world_state=world_state,
+                            custom_approach_vector=custom_approach_vector,
+                        )
+                        if result is not None:
+                            return result
+                        logger.info(
+                            "GraspNet+ROS path unavailable or failed — "
+                            "falling back to geometric ROS planning"
+                        )
+
+                    # PATH 2: Geometric ROS planning (existing code, unchanged)
                     # Try full GraspPlanner pipeline when dimensions + robot pose are available
                     if (
                         object_dimensions is not None
@@ -1082,12 +1349,9 @@ def grasp_object(
                 _use_ros = False
 
         # --- GraspNet neural path (optional, falls back to geometric on failure) ---
-        try:
-            from config.Servers import GRASPNET_ENABLED as _graspnet_enabled
-        except ImportError:
-            _graspnet_enabled = False
-
-        if _graspnet_enabled and not _use_ros:
+        # At this point _use_ros is always False: either it was never set, or the
+        # ROS block cleared it.  No need to guard against _use_ros here.
+        if _graspnet_enabled:
             graspnet_result = _grasp_via_graspnet(
                 robot_id=robot_id,
                 object_id=object_id,
@@ -1097,6 +1361,7 @@ def grasp_object(
                 enable_retreat=enable_retreat,
                 retreat_distance=retreat_distance,
                 request_id=request_id,
+                custom_approach_vector=custom_approach_vector,
             )
             if graspnet_result is not None:
                 return graspnet_result

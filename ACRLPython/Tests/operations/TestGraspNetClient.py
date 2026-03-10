@@ -12,6 +12,7 @@ Coverage:
   network error, optional colors/mask handling, cache refresh on success
 """
 
+import base64
 import json
 import time
 import io
@@ -190,7 +191,11 @@ class TestPredictGrasps:
         mock_urlopen.assert_not_called()
 
     def test_segmentation_mask_filters_points(self):
-        """Points outside the mask are excluded from the payload."""
+        """Points outside the mask are excluded from the payload.
+
+        The client also un-negates X before sending (LH→RH frame conversion for
+        the GraspNet server), so the sent X values are -X of the input.
+        """
         client = self._client()
         pts = np.array([[1, 0, 0], [2, 0, 0], [3, 0, 0]], dtype=np.float32)
         mask = np.array([True, False, True])
@@ -205,10 +210,15 @@ class TestPredictGrasps:
         with patch("urllib.request.urlopen", side_effect=fake_urlopen):
             client.predict_grasps(pts, segmentation_mask=mask)
 
-        sent_pts = captured_payload["points"]
-        assert len(sent_pts) == 2                         # mask filtered one out
-        assert sent_pts[0] == pytest.approx([1, 0, 0])
-        assert sent_pts[1] == pytest.approx([3, 0, 0])
+        # Decode base64 points and reshape using points_shape
+        shape = captured_payload["points_shape"]
+        sent_pts = np.frombuffer(
+            base64.b64decode(captured_payload["points"]), dtype=np.float32
+        ).reshape(shape)
+        assert len(sent_pts) == 2                          # mask filtered one out
+        # X is negated (LH Unity → RH OpenCV) before sending
+        assert sent_pts[0].tolist() == pytest.approx([-1, 0, 0])
+        assert sent_pts[1].tolist() == pytest.approx([-3, 0, 0])
 
     def test_colors_included_in_payload_when_provided(self):
         """Colors array is serialized into the JSON payload."""
@@ -306,3 +316,86 @@ class TestPredictGrasps:
             result = client.predict_grasps(_sample_points())
         # Empty list is falsy; service returned success=true so result is []
         assert result == []
+
+    def test_x_axis_negated_before_sending(self):
+        """Points are sent with X negated to convert Unity LH frame to RH OpenCV frame.
+
+        StereoReconstruction bakes a -X flip into its Q-matrix so all incoming
+        points have X already negated (Unity LH convention).  The client must
+        un-negate X before sending so Contact-GraspNet receives the correct
+        right-handed geometry (X-right, Y-down, Z-forward).
+        """
+        client = self._client()
+        # Input: Unity LH frame, X negated (as produced by StereoReconstruction)
+        pts = np.array([[-1.0, 2.0, 3.0], [-4.0, 5.0, 6.0]], dtype=np.float32)
+        resp = _make_predict_response([_sample_grasp()])
+
+        captured_payload = {}
+
+        def fake_urlopen(req, timeout=None):
+            captured_payload.update(json.loads(req.data))
+            return resp
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            client.predict_grasps(pts)
+
+        # Decode base64 points and reshape using points_shape
+        shape = captured_payload["points_shape"]
+        sent_pts = np.frombuffer(
+            base64.b64decode(captured_payload["points"]), dtype=np.float32
+        ).reshape(shape)
+        # X should be un-negated (flipped back to RH positive)
+        assert sent_pts[0].tolist() == pytest.approx([1.0, 2.0, 3.0])
+        assert sent_pts[1].tolist() == pytest.approx([4.0, 5.0, 6.0])
+
+    def test_x_negation_does_not_mutate_input_array(self):
+        """The coordinate flip must not modify the caller's original numpy array."""
+        client = self._client()
+        pts = np.array([[-1.0, 2.0, 3.0]], dtype=np.float32)
+        original_x = pts[0, 0]
+        resp = _make_predict_response([])
+        with patch("urllib.request.urlopen", return_value=resp):
+            client.predict_grasps(pts)
+        assert pts[0, 0] == pytest.approx(original_x)  # unchanged
+
+    def test_points_encoded_as_base64_string(self):
+        """Payload 'points' field is a base64 string, not a list of lists."""
+        client = self._client()
+        resp = _make_predict_response([])
+
+        captured_payload = {}
+
+        def fake_urlopen(req, timeout=None):
+            captured_payload.update(json.loads(req.data))
+            return resp
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            client.predict_grasps(_sample_points())
+
+        assert isinstance(captured_payload["points"], str)
+        assert "points_shape" in captured_payload
+        # Must be valid base64 — decode should not raise
+        decoded = base64.b64decode(captured_payload["points"])
+        assert len(decoded) > 0
+
+    def test_points_shape_matches_actual_points(self):
+        """points_shape in payload matches the shape of the decoded points array."""
+        client = self._client()
+        n_pts = 50
+        pts = _sample_points(n_pts)
+        resp = _make_predict_response([])
+
+        captured_payload = {}
+
+        def fake_urlopen(req, timeout=None):
+            captured_payload.update(json.loads(req.data))
+            return resp
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            client.predict_grasps(pts)
+
+        shape = captured_payload["points_shape"]
+        decoded = np.frombuffer(
+            base64.b64decode(captured_payload["points"]), dtype=np.float32
+        ).reshape(shape)
+        assert decoded.shape == (n_pts, 3)

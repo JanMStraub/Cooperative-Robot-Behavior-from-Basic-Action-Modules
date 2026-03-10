@@ -136,15 +136,53 @@ def transform_graspnet_poses_to_unity(
         skipped; a warning is logged.
     """
     cam_pos = np.array(camera_position, dtype=np.float64)
-    cam_rot = _normalise_quat(np.array(camera_rotation, dtype=np.float64))
+    cam_rot_raw = np.array(camera_rotation, dtype=np.float64)
+    if cam_rot_raw.shape[0] == 3:
+        # Legacy path: Unity sent Euler angles (degrees) instead of a quaternion.
+        # Convert XYZ Euler (degrees) → quaternion [x, y, z, w].
+        import math
+        rx, ry, rz = [math.radians(a) for a in cam_rot_raw]
+        cx, sx = math.cos(rx / 2), math.sin(rx / 2)
+        cy, sy = math.cos(ry / 2), math.sin(ry / 2)
+        cz, sz = math.cos(rz / 2), math.sin(rz / 2)
+        cam_rot_raw = np.array([
+            sx * cy * cz + cx * sy * sz,
+            cx * sy * cz - sx * cy * sz,
+            cx * cy * sz + sx * sy * cz,
+            cx * cy * cz - sx * sy * sz,
+        ], dtype=np.float64)
+        logger.warning(
+            "camera_rotation had 3 components (Euler angles); converted to quaternion. "
+            "Update StereoCameraController to send rotation.xyzw instead of eulerAngles."
+        )
+    cam_rot = _normalise_quat(cam_rot_raw)
 
     transformed: List[dict] = []
 
     for i, grasp in enumerate(graspnet_grasps):
         try:
             pos_cam = np.array(grasp["position"], dtype=np.float64)
-            rot_cam = _normalise_quat(np.array(grasp["rotation"], dtype=np.float64))
-        except (KeyError, TypeError, ValueError) as exc:
+            rot_cam_raw = np.array(grasp["rotation"], dtype=np.float64)
+            if rot_cam_raw.shape[0] == 3:
+                # Grasp rotation arrived as 3-element Euler angles (degrees) instead of
+                # a quaternion [x, y, z, w].  Convert using the same path used for
+                # camera_rotation above.
+                import math
+                rx, ry, rz = [math.radians(a) for a in rot_cam_raw]
+                cx, sx = math.cos(rx / 2), math.sin(rx / 2)
+                cy, sy = math.cos(ry / 2), math.sin(ry / 2)
+                cz, sz = math.cos(rz / 2), math.sin(rz / 2)
+                rot_cam_raw = np.array([
+                    sx * cy * cz + cx * sy * sz,
+                    cx * sy * cz - sx * cy * sz,
+                    cx * cy * sz + sx * sy * cz,
+                    cx * cy * cz - sx * sy * sz,
+                ], dtype=np.float64)
+                logger.warning(
+                    f"Grasp #{i} rotation had 3 components (Euler angles); converted to quaternion."
+                )
+            rot_cam = _normalise_quat(rot_cam_raw)
+        except (KeyError, TypeError, ValueError, IndexError) as exc:
             logger.warning(f"Skipping malformed grasp #{i}: {exc}")
             continue
 

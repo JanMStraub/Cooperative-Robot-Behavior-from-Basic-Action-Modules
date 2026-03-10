@@ -242,3 +242,28 @@ class TestTransformGraspnetPosesToUnity:
         approach = result[0]["approach_direction"]
         # X is negated by handedness flip; identity camera rotation leaves the rest
         np.testing.assert_allclose(approach, [-1.0, 0.0, 0.0], atol=1e-6)
+
+    def test_grasp_with_3element_euler_rotation_is_accepted(self):
+        """A grasp whose 'rotation' is 3 Euler angles (degrees) must not crash and
+        must produce a valid transformed candidate (not an empty list)."""
+        cam_pos = [0.0, 0.0, 0.0]
+        cam_rot = [0.0, 0.0, 0.0, 1.0]  # identity
+
+        grasps = [
+            {
+                "position": [0.1, 0.2, 0.3],
+                "rotation": [10.0, 20.0, 30.0],  # 3-element Euler angles (degrees)
+                "score": 0.9,
+                "width": 0.05,
+            }
+        ]
+
+        result = transform_graspnet_poses_to_unity(grasps, cam_pos, cam_rot)
+
+        # Must not crash and must return exactly one candidate
+        assert len(result) == 1, "Euler-angle grasp must not be silently skipped"
+        candidate = result[0]
+        # The resulting quaternion must be normalised (unit length)
+        rot = candidate["rotation"]
+        norm = sum(v ** 2 for v in rot) ** 0.5
+        assert abs(norm - 1.0) < 1e-5, f"Output quaternion not normalised: {rot}"

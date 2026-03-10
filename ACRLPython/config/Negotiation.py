@@ -12,7 +12,7 @@ import os
 # Negotiation System Toggle
 # ============================================================================
 
-NEGOTIATION_ENABLED = os.environ.get("NEGOTIATION_ENABLED", "true").lower() in ("true", "1", "yes")
+NEGOTIATION_ENABLED = os.environ.get("NEGOTIATION_ENABLED", "false").lower() in ("true", "1", "yes")
 
 # ============================================================================
 # Negotiation Protocol Parameters

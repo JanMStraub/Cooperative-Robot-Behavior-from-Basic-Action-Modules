@@ -821,6 +821,14 @@ PrefabInstance:
       propertyPath: _controlModeManager
       value: 
       objectReference: {fileID: 2107300034}
+    - target: {fileID: 3861989622656847497, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _settleTimeoutSeconds
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 3861989622656847497, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _settleVelocityThresholdDegPerSec
+      value: 5
+      objectReference: {fileID: 0}
     - target: {fileID: 5271878870994714299, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
@@ -885,6 +893,14 @@ PrefabInstance:
       propertyPath: _controlModeManager
       value: 
       objectReference: {fileID: 2048469486}
+    - target: {fileID: 7753383895358973258, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _settleTimeoutSeconds
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 7753383895358973258, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _settleVelocityThresholdDegPerSec
+      value: 5
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []

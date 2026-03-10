@@ -96,7 +96,10 @@ LMSTUDIO_BASE_URL = os.environ.get("LMSTUDIO_BASE_URL", "http://192.168.178.53:1
 GRASPNET_URL = os.environ.get("GRASPNET_URL", "http://192.168.178.53:8766")
 
 # HTTP request timeout for GraspNet inference calls (seconds).
-GRASPNET_TIMEOUT = float(os.environ.get("GRASPNET_TIMEOUT", "10.0"))
+# GPU inference typically completes in 300-800ms after warm-up; the first call
+# after container start can take 120-300s due to TF1 CUDA kernel compilation.
+# Set to 300s to accommodate cold-start; override with GRASPNET_TIMEOUT env var.
+GRASPNET_TIMEOUT = float(os.environ.get("GRASPNET_TIMEOUT", "300.0"))
 
 # Number of top-ranked grasp poses to request from GraspNet per call.
 GRASPNET_TOP_K = int(os.environ.get("GRASPNET_TOP_K", "20"))

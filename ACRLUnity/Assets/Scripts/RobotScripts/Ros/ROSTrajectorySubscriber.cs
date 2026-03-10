@@ -45,11 +45,12 @@ namespace Robotics
         [Header("Settle Detection")]
         [Tooltip("Max joint velocity (deg/s) considered 'settled'. Feedback fires only after all joints drop below this.")]
         [SerializeField]
-        private float _settleVelocityThresholdDegPerSec = 2.0f;
+        private float _settleVelocityThresholdDegPerSec = 5.0f;
 
-        [Tooltip("Max time (seconds) to wait for joints to settle before firing 'completed' feedback anyway.")]
+        [Tooltip("Base time (seconds) to wait for joints to settle before firing 'completed' feedback anyway. "
+               + "Actual timeout = this value / _speedScaling so slower trajectories get proportionally more settle time.")]
         [SerializeField]
-        private float _settleTimeoutSeconds = 1.5f;
+        private float _settleTimeoutSeconds = 2.0f;
 
         [Header("References")]
         [SerializeField]
@@ -413,9 +414,12 @@ namespace Robotics
             // "Completed" feedback must NOT fire until the arm has actually stopped moving —
             // otherwise the Python side begins planning the next trajectory (grasp descent)
             // while the arm is still oscillating, causing a jerk at every waypoint handoff.
+            // Scale the timeout inversely with speed scaling: at 0.5x speed the arm covers
+            // the same distance more slowly and needs proportionally longer to damp out.
+            float effectiveSettleTimeout = _settleTimeoutSeconds / Mathf.Max(0.1f, _speedScaling);
             float settleStartTime = Time.time;
             bool settled = false;
-            while (Time.time - settleStartTime < _settleTimeoutSeconds)
+            while (Time.time - settleStartTime < effectiveSettleTimeout)
             {
                 settled = true;
                 for (int j = 0; j < _jointIndexMap.Length; j++)

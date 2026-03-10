@@ -472,3 +472,452 @@ class TestGraspObjectGraspNetRouting:
              patch("operations.GraspOperations._get_command_broadcaster", return_value=broadcaster):
             grasp_object(robot_id="Robot1", object_id="Cube_01")
         mock_gvg.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# _grasp_via_graspnet_with_ros helpers and tests
+# ---------------------------------------------------------------------------
+
+
+class _GraspNetROSPatch:
+    """Context manager that patches all collaborators of _grasp_via_graspnet_with_ros.
+
+    Mirrors _GraspNetPatch but additionally mocks the ROS bridge and the
+    follow-target helper so no live MoveIt or Unity connection is required.
+    """
+
+    def __init__(
+        self,
+        graspnet_available: bool = True,
+        pc_result=_UNSET,
+        raw_grasps=_UNSET,
+        world_grasps_result=_UNSET,
+        pre_grasp_success: bool = True,
+        descent_success: bool = True,
+        gripper_success: bool = True,
+    ):
+        self.graspnet_available = graspnet_available
+        self.pc_result = _pc_success() if pc_result is _UNSET else pc_result
+        self.raw_grasps = _sample_grasps() if raw_grasps is _UNSET else raw_grasps
+        self.world_grasps_result = _world_grasps() if world_grasps_result is _UNSET else world_grasps_result
+        self.pre_grasp_success = pre_grasp_success
+        self.descent_success = descent_success
+        self.gripper_success = gripper_success
+
+        self._patches = []
+        self.mock_client = None
+        self.mock_bridge = None
+
+    def __enter__(self):
+        # GraspNetClient mock
+        self.mock_client = MagicMock()
+        self.mock_client.is_available.return_value = self.graspnet_available
+        self.mock_client.predict_grasps.return_value = self.raw_grasps
+
+        client_cls = patch(
+            "operations.GraspNetClient.GraspNetClient",
+            return_value=self.mock_client,
+        )
+        self._patches.append(client_cls.start())
+
+        # generate_point_cloud mock
+        pc_patch = patch(
+            "operations.PointCloudOperations.generate_point_cloud",
+            return_value=self.pc_result,
+        )
+        self._patches.append(pc_patch.start())
+
+        # Frame transform mock
+        transform_patch = patch(
+            "operations.GraspFrameTransform.transform_graspnet_poses_to_unity",
+            return_value=self.world_grasps_result,
+        )
+        self._patches.append(transform_patch.start())
+
+        # ROSBridge mock
+        self.mock_bridge = MagicMock()
+        self.mock_bridge.plan_and_execute.return_value = {"success": self.pre_grasp_success}
+        self.mock_bridge.plan_cartesian_descent.return_value = {"success": self.descent_success}
+        bridge_patch = patch(
+            "ros2.ROSBridge.ROSBridge.get_instance",
+            return_value=self.mock_bridge,
+        )
+        self._patches.append(bridge_patch.start())
+
+        # Follow-target + gripper helper mock
+        follow_patch = patch(
+            "operations.GraspOperations._execute_grasp_with_follow_target",
+            return_value=self.gripper_success,
+        )
+        self._patches.append(follow_patch.start())
+
+        return self
+
+    def __exit__(self, *args):
+        import unittest.mock as _um
+        _um.patch.stopall()
+
+
+def _call_with_ros(world_grasps_result=_UNSET, **kwargs):
+    """Helper: import and call _grasp_via_graspnet_with_ros directly."""
+    from operations.GraspOperations import _grasp_via_graspnet_with_ros
+
+    bridge = MagicMock()
+    bridge.plan_and_execute.return_value = {"success": kwargs.pop("pre_grasp_success", True)}
+    bridge.plan_cartesian_descent.return_value = {"success": kwargs.pop("descent_success", True)}
+
+    wg = _world_grasps() if world_grasps_result is _UNSET else world_grasps_result
+    return _grasp_via_graspnet_with_ros(
+        bridge=bridge,
+        robot_id=kwargs.get("robot_id", "Robot1"),
+        object_id=kwargs.get("object_id", "Cube_01"),
+        preferred_approach=kwargs.get("preferred_approach", "top"),
+        pre_grasp_distance=kwargs.get("pre_grasp_distance", 0.0),
+        request_id=kwargs.get("request_id", 1),
+        world_state=kwargs.get("world_state", None),
+    ), bridge, wg
+
+
+# ---------------------------------------------------------------------------
+# Happy path
+# ---------------------------------------------------------------------------
+
+
+class TestGraspViaGraspnetWithROSHappyPath:
+    """Tests for the successful execution path of _grasp_via_graspnet_with_ros."""
+
+    def test_returns_success_result(self):
+        """Full pipeline succeeds → OperationResult with success=True."""
+        with _GraspNetROSPatch() as ctx:
+            from operations.GraspOperations import _grasp_via_graspnet_with_ros
+            result = _grasp_via_graspnet_with_ros(
+                bridge=ctx.mock_bridge,
+                robot_id="Robot1",
+                object_id="Cube_01",
+                preferred_approach="top",
+                pre_grasp_distance=0.0,
+                request_id=1,
+                world_state=None,
+            )
+        assert result is not None
+        assert result.success is True
+
+    def test_status_is_graspnet_ros_executed(self):
+        """Result status key equals 'graspnet_ros_executed'."""
+        with _GraspNetROSPatch() as ctx:
+            from operations.GraspOperations import _grasp_via_graspnet_with_ros
+            result = _grasp_via_graspnet_with_ros(
+                bridge=ctx.mock_bridge,
+                robot_id="Robot1",
+                object_id="Cube_01",
+                preferred_approach="top",
+                pre_grasp_distance=0.0,
+                request_id=2,
+                world_state=None,
+            )
+        assert result.result["status"] == "graspnet_ros_executed"
+
+    def test_graspnet_candidates_count_in_result(self):
+        """result['graspnet_candidates'] equals the number of world-frame poses."""
+        n = 4
+        with _GraspNetROSPatch(raw_grasps=_sample_grasps(n), world_grasps_result=_world_grasps(n)) as ctx:
+            from operations.GraspOperations import _grasp_via_graspnet_with_ros
+            result = _grasp_via_graspnet_with_ros(
+                bridge=ctx.mock_bridge,
+                robot_id="Robot1",
+                object_id="Cube_01",
+                preferred_approach="auto",
+                pre_grasp_distance=0.0,
+                request_id=3,
+                world_state=None,
+            )
+        assert result.result["graspnet_candidates"] == n
+
+    def test_plan_and_execute_called_with_graspnet_orientation(self):
+        """plan_and_execute receives the orientation from the top GraspNet candidate."""
+        world = [{
+            "position": [0.1, 0.2, 0.5],
+            "rotation": [0.1, 0.2, 0.3, 0.9],
+            "score": 0.95,
+            "width": 0.08,
+            "approach_direction": [0.0, -1.0, 0.0],
+        }]
+        with _GraspNetROSPatch(raw_grasps=_sample_grasps(1), world_grasps_result=world) as ctx:
+            from operations.GraspOperations import _grasp_via_graspnet_with_ros
+            _grasp_via_graspnet_with_ros(
+                bridge=ctx.mock_bridge,
+                robot_id="Robot1",
+                object_id="Cube_01",
+                preferred_approach="top",
+                pre_grasp_distance=0.0,
+                request_id=4,
+                world_state=None,
+            )
+        _, kwargs = ctx.mock_bridge.plan_and_execute.call_args
+        ori = kwargs.get("orientation") or ctx.mock_bridge.plan_and_execute.call_args[0][1] \
+            if ctx.mock_bridge.plan_and_execute.call_args[0] else kwargs["orientation"]
+        # Check using keyword call
+        call_kwargs = ctx.mock_bridge.plan_and_execute.call_args.kwargs
+        assert call_kwargs["orientation"] == {"x": 0.1, "y": 0.2, "z": 0.3, "w": 0.9}
+
+    def test_cartesian_descent_called_at_grasp_position(self):
+        """plan_cartesian_descent is called at grasp position (not pre-grasp)."""
+        world = [{
+            "position": [0.3, 0.4, 0.5],
+            "rotation": [0.0, 0.0, 0.0, 1.0],
+            "score": 0.9,
+            "width": 0.08,
+            "approach_direction": [0.0, 1.0, 0.0],
+        }]
+        with _GraspNetROSPatch(raw_grasps=_sample_grasps(1), world_grasps_result=world) as ctx:
+            from operations.GraspOperations import _grasp_via_graspnet_with_ros
+            _grasp_via_graspnet_with_ros(
+                bridge=ctx.mock_bridge,
+                robot_id="Robot1",
+                object_id="Cube_01",
+                preferred_approach="top",
+                pre_grasp_distance=0.1,
+                request_id=5,
+                world_state=None,
+            )
+        descent_kwargs = ctx.mock_bridge.plan_cartesian_descent.call_args.kwargs
+        assert descent_kwargs["position"] == {"x": 0.3, "y": 0.4, "z": 0.5}
+
+    def test_follow_target_called_after_descent(self):
+        """_execute_grasp_with_follow_target is called after Cartesian descent."""
+        with _GraspNetROSPatch() as ctx:
+            from operations.GraspOperations import _grasp_via_graspnet_with_ros
+            import operations.GraspOperations as go_module
+            with patch.object(go_module, "_execute_grasp_with_follow_target", return_value=True) as mock_follow:
+                _grasp_via_graspnet_with_ros(
+                    bridge=ctx.mock_bridge,
+                    robot_id="Robot1",
+                    object_id="Cube_01",
+                    preferred_approach="top",
+                    pre_grasp_distance=0.0,
+                    request_id=6,
+                    world_state=None,
+                )
+            mock_follow.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Fallback paths (return None)
+# ---------------------------------------------------------------------------
+
+
+class TestGraspViaGraspnetWithROSFallback:
+    """Tests for scenarios where _grasp_via_graspnet_with_ros returns None."""
+
+    def test_returns_none_when_graspnet_unavailable(self):
+        """GraspNet health check fails → None."""
+        with _GraspNetROSPatch(graspnet_available=False) as ctx:
+            from operations.GraspOperations import _grasp_via_graspnet_with_ros
+            result = _grasp_via_graspnet_with_ros(
+                bridge=ctx.mock_bridge,
+                robot_id="Robot1",
+                object_id="Cube_01",
+                preferred_approach="top",
+                pre_grasp_distance=0.0,
+                request_id=10,
+                world_state=None,
+            )
+        assert result is None
+
+    def test_returns_none_when_point_cloud_fails(self):
+        """Point cloud failure → None."""
+        with _GraspNetROSPatch(pc_result=_pc_failure()) as ctx:
+            from operations.GraspOperations import _grasp_via_graspnet_with_ros
+            result = _grasp_via_graspnet_with_ros(
+                bridge=ctx.mock_bridge,
+                robot_id="Robot1",
+                object_id="Cube_01",
+                preferred_approach="top",
+                pre_grasp_distance=0.0,
+                request_id=11,
+                world_state=None,
+            )
+        assert result is None
+
+    def test_returns_none_when_graspnet_returns_no_candidates(self):
+        """GraspNet returns empty list → None."""
+        with _GraspNetROSPatch(raw_grasps=[]) as ctx:
+            from operations.GraspOperations import _grasp_via_graspnet_with_ros
+            result = _grasp_via_graspnet_with_ros(
+                bridge=ctx.mock_bridge,
+                robot_id="Robot1",
+                object_id="Cube_01",
+                preferred_approach="top",
+                pre_grasp_distance=0.0,
+                request_id=12,
+                world_state=None,
+            )
+        assert result is None
+
+    def test_returns_none_when_frame_transform_empty(self):
+        """Frame transform produces no valid poses → None."""
+        with _GraspNetROSPatch(world_grasps_result=[]) as ctx:
+            from operations.GraspOperations import _grasp_via_graspnet_with_ros
+            result = _grasp_via_graspnet_with_ros(
+                bridge=ctx.mock_bridge,
+                robot_id="Robot1",
+                object_id="Cube_01",
+                preferred_approach="top",
+                pre_grasp_distance=0.0,
+                request_id=13,
+                world_state=None,
+            )
+        assert result is None
+
+    def test_returns_none_when_pre_grasp_move_fails(self):
+        """MoveIt pre-grasp planning failure → None (arm has not moved)."""
+        with _GraspNetROSPatch(pre_grasp_success=False) as ctx:
+            from operations.GraspOperations import _grasp_via_graspnet_with_ros
+            result = _grasp_via_graspnet_with_ros(
+                bridge=ctx.mock_bridge,
+                robot_id="Robot1",
+                object_id="Cube_01",
+                preferred_approach="top",
+                pre_grasp_distance=0.0,
+                request_id=14,
+                world_state=None,
+            )
+        assert result is None
+
+    def test_returns_none_when_descent_fails(self):
+        """MoveIt Cartesian descent failure → None (arm at pre-grasp, not target)."""
+        with _GraspNetROSPatch(descent_success=False) as ctx:
+            from operations.GraspOperations import _grasp_via_graspnet_with_ros
+            result = _grasp_via_graspnet_with_ros(
+                bridge=ctx.mock_bridge,
+                robot_id="Robot1",
+                object_id="Cube_01",
+                preferred_approach="top",
+                pre_grasp_distance=0.0,
+                request_id=15,
+                world_state=None,
+            )
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Error results (definitive failures after arm has moved)
+# ---------------------------------------------------------------------------
+
+
+class TestGraspViaGraspnetWithROSErrors:
+    """Tests for scenarios that return an error OperationResult (not None)."""
+
+    def test_error_when_gripper_close_fails(self):
+        """Arm descended but gripper close failed → GRIPPER_CLOSE_FAILED error result."""
+        with _GraspNetROSPatch(gripper_success=False) as ctx:
+            from operations.GraspOperations import _grasp_via_graspnet_with_ros
+            result = _grasp_via_graspnet_with_ros(
+                bridge=ctx.mock_bridge,
+                robot_id="Robot1",
+                object_id="Cube_01",
+                preferred_approach="top",
+                pre_grasp_distance=0.0,
+                request_id=20,
+                world_state=None,
+            )
+        assert result is not None
+        assert result.success is False
+        assert result.error["code"] == "GRIPPER_CLOSE_FAILED"
+
+
+# ---------------------------------------------------------------------------
+# Routing tests via grasp_object() with both ROS and GraspNet enabled
+# ---------------------------------------------------------------------------
+
+
+class TestGraspObjectRoutingWithBothEnabled:
+    """Tests that grasp_object routes correctly when both GRASPNET_ENABLED and ROS are on."""
+
+    def _make_world_state(self):
+        """Return a minimal WorldState mock that satisfies grasp_object's resolution logic."""
+        ws = MagicMock()
+        ws.get_object_position.return_value = (0.3, 0.1, 0.4)
+        ws.get_object_dimensions.return_value = None  # forces position-only ROS path
+        ws.get_robot_state.return_value = None
+        ws._objects = {"Cube_01": MagicMock()}
+        return ws
+
+    def _base_ros_patches(self, bridge):
+        """Return a list of context managers for the ROS connection plumbing."""
+        return [
+            patch("config.ROS.ROS_ENABLED", True),
+            patch("config.ROS.DEFAULT_CONTROL_MODE", "ros"),
+            patch("config.Servers.GRASPNET_ENABLED", True),
+            patch("ros2.ROSBridge.ROSBridge", autospec=False),
+        ]
+
+    def test_graspnet_ros_path_attempted_first(self):
+        """When both enabled, _grasp_via_graspnet_with_ros is called before geometric ROS."""
+        graspnet_ros_result = OperationResult.success_result({
+            "robot_id": "Robot1",
+            "object_id": "Cube_01",
+            "request_id": 0,
+            "graspnet_candidates": 3,
+            "status": "graspnet_ros_executed",
+        })
+        bridge_mock = MagicMock()
+        bridge_mock.is_connected = True
+        world_state = self._make_world_state()
+
+        with patch("config.ROS.ROS_ENABLED", True), \
+             patch("config.ROS.DEFAULT_CONTROL_MODE", "ros"), \
+             patch("config.Servers.GRASPNET_ENABLED", True), \
+             patch("ros2.ROSBridge.ROSBridge") as mock_ros_cls, \
+             patch("core.Imports.get_world_state", return_value=world_state), \
+             patch("operations.GraspOperations._grasp_via_graspnet_with_ros",
+                   return_value=graspnet_ros_result) as mock_gn_ros:
+            mock_ros_cls.get_instance.return_value = bridge_mock
+            result = grasp_object(robot_id="Robot1", object_id="Cube_01")
+
+        mock_gn_ros.assert_called_once()
+        assert result.result["status"] == "graspnet_ros_executed"
+
+    def test_falls_back_to_geometric_ros_when_graspnet_ros_returns_none(self):
+        """When _grasp_via_graspnet_with_ros returns None, geometric ROS is used."""
+        bridge_mock = MagicMock()
+        bridge_mock.is_connected = True
+        bridge_mock.plan_and_execute.return_value = {"success": True}
+        bridge_mock.plan_cartesian_descent.return_value = {"success": True}
+        bridge_mock.control_gripper.return_value = {"success": True}
+        world_state = self._make_world_state()
+
+        with patch("config.ROS.ROS_ENABLED", True), \
+             patch("config.ROS.DEFAULT_CONTROL_MODE", "ros"), \
+             patch("config.Servers.GRASPNET_ENABLED", True), \
+             patch("ros2.ROSBridge.ROSBridge") as mock_ros_cls, \
+             patch("core.Imports.get_world_state", return_value=world_state), \
+             patch("operations.GraspOperations._grasp_via_graspnet_with_ros",
+                   return_value=None), \
+             patch("operations.GraspOperations._grasp_via_ros_position_only",
+                   return_value=(OperationResult.success_result({"status": "ros_executed"}), False)) as mock_geo:
+            mock_ros_cls.get_instance.return_value = bridge_mock
+            result = grasp_object(robot_id="Robot1", object_id="Cube_01")
+
+        mock_geo.assert_called_once()
+        assert result.result["status"] == "ros_executed"
+
+    def test_graspnet_unity_path_when_ros_disabled(self):
+        """When ROS is off, _grasp_via_graspnet (not _with_ros) is called."""
+        graspnet_result = OperationResult.success_result({
+            "command_sent": True,
+            "robot_id": "Robot1",
+            "object_id": "Cube_01",
+            "request_id": 0,
+            "graspnet_candidates": 2,
+        })
+        with patch("config.ROS.ROS_ENABLED", False), \
+             patch("config.Servers.GRASPNET_ENABLED", True), \
+             patch("operations.GraspOperations._grasp_via_graspnet",
+                   return_value=graspnet_result) as mock_gvg, \
+             patch("operations.GraspOperations._grasp_via_graspnet_with_ros") as mock_gvg_ros:
+            result = grasp_object(robot_id="Robot1", object_id="Cube_01")
+
+        mock_gvg.assert_called_once()
+        mock_gvg_ros.assert_not_called()
+        assert result.success is True

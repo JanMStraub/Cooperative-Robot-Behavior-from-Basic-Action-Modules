@@ -17,6 +17,7 @@ GraspFrameTransform in the ACRL backend handles the Unity world-space conversion
 NVlabs tested stack: Python 3.7, TensorFlow 2.2, CUDA 11.1
 """
 
+import base64
 import sys
 import os
 import time
@@ -38,10 +39,6 @@ app = FastAPI(title="Contact-GraspNet Inference Service", version="1.0.0")
 # ---------------------------------------------------------------------------
 # Model loading (done once at startup)
 # ---------------------------------------------------------------------------
-
-_estimator = None
-_sess = None
-_device_name = "cpu"
 
 # NVlabs inference uses a global_config dict and a persistent tf.Session
 _global_config = None
@@ -100,12 +97,41 @@ def _load_model():
         # Saver must be created after build_network() so all TF variables exist
         saver = tf.train.Saver(save_relative_paths=True)
 
-        # Session is kept alive — weights live in GPU memory for all requests
-        _tf_sess = tf.Session()
+        # Build a ConfigProto that mirrors the memory-growth setting above so the
+        # session actually runs on the GPU.  A bare tf.Session() ignores the
+        # set_memory_growth call and may silently fall back to CPU.
+        session_config = tf.ConfigProto()
+        session_config.gpu_options.allow_growth = True
+        _tf_sess = tf.Session(config=session_config)
         _grasp_estimator.load_weights(_tf_sess, saver, checkpoint_dir)
         logger.info(
             f"Contact-GraspNet loaded from '{checkpoint_dir}' on {_device_name}"
         )
+
+        # --- Warm-up pass ---------------------------------------------------
+        # Run one dummy inference with a random 20k-point cloud so TF1 compiles
+        # all CUDA kernels at startup.  Without this, the first real request pays
+        # the 4-5 minute compilation cost (observed: 269 s on RTX-class GPU).
+        # Subsequent calls reuse compiled kernels and complete in ~800 ms.
+        logger.info("Running warm-up inference to compile CUDA kernels …")
+        t_wu = time.time()
+        dummy_pts = np.random.randn(20_000, 3).astype(np.float32) * 0.3
+        try:
+            _grasp_estimator.predict_scene_grasps(
+                _tf_sess,
+                dummy_pts,
+                pc_segments={},
+                local_regions=False,
+                filter_grasps=False,
+                forward_passes=1,
+            )
+            logger.info(
+                f"Warm-up complete in {(time.time() - t_wu):.1f}s — "
+                "first real request will be fast."
+            )
+        except Exception as wu_exc:
+            logger.warning(f"Warm-up inference failed (non-fatal): {wu_exc}")
+        # --------------------------------------------------------------------
 
     except Exception as exc:
         logger.error(f"Failed to load Contact-GraspNet: {exc}", exc_info=True)
@@ -126,9 +152,10 @@ def startup_event():
 
 
 class GraspRequest(BaseModel):
-    points: List[List[float]]  # (N, 3) camera frame
-    colors: Optional[List[List[int]]] = None  # (N, 3) uint8 RGB, optional
-    segmentation_mask: Optional[List[bool]] = None  # (N,) bool, optional
+    points: str              # base64-encoded float32 bytes, shape (N, 3)
+    points_shape: List[int]  # [N, 3]
+    colors: Optional[str] = None             # base64-encoded uint8 bytes, shape (N, 3)
+    colors_shape: Optional[List[int]] = None  # [N, 3]
     top_k: int = 20
 
     class Config:
@@ -158,9 +185,9 @@ def health():
 def predict_grasps(req: GraspRequest):
     """Run Contact-GraspNet inference on the provided point cloud.
 
-    Applies the optional segmentation mask before inference, then returns
-    up to top_k grasp poses sorted by descending quality score.
-    All poses are in camera frame (right-handed, Z-forward).
+    Decodes base64-encoded float32 points (and optional uint8 colors) before
+    inference, then returns up to top_k grasp poses sorted by descending
+    quality score.  All poses are in camera frame (right-handed, Z-forward).
     """
     if _grasp_estimator is None or _tf_sess is None:
         return {
@@ -172,13 +199,10 @@ def predict_grasps(req: GraspRequest):
 
     t0 = time.time()
 
-    pts = np.array(req.points, dtype=np.float32)
-
-    # Apply segmentation mask
-    if req.segmentation_mask is not None:
-        mask = np.array(req.segmentation_mask, dtype=bool)
-        if mask.shape[0] == pts.shape[0]:
-            pts = pts[mask]
+    pts = np.frombuffer(base64.b64decode(req.points), dtype=np.float32).reshape(req.points_shape)
+    clr = None
+    if req.colors is not None and req.colors_shape is not None:
+        clr = np.frombuffer(base64.b64decode(req.colors), dtype=np.uint8).reshape(req.colors_shape)
 
     if pts.shape[0] < 50:
         return {
@@ -198,14 +222,18 @@ def predict_grasps(req: GraspRequest):
         pts = np.tile(pts, (repeats, 1))[:target_n]
 
     try:
-        # NVlabs API: predict_scene_grasps returns dicts keyed by segment id
-        # -1 is the full-scene key when no segmentation is used
+        # NVlabs API full-scene mode: no pc_segments, local_regions=False.
+        # With local_regions=True the model crops boxes around pc_segments entries;
+        # passing an empty dict produces zero iterations and zero grasps.
+        # In full-scene mode results are keyed at -1.  filter_grasps must be False
+        # here — when True the NVlabs code deletes the -1 key before returning,
+        # discarding all predictions.
         pred_grasps_cam, scores, contact_pts, _ = _grasp_estimator.predict_scene_grasps(
             _tf_sess,
             pts,
             pc_segments={},
-            local_regions=True,
-            filter_grasps=True,
+            local_regions=False,
+            filter_grasps=False,
             forward_passes=1,
         )
     except Exception as exc:
