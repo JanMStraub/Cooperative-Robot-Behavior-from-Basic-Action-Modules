@@ -37,6 +37,11 @@ except ImportError:
     from operations.CoordinationVerifier import CoordinationVerifier
     from core.Imports import get_world_state
 
+try:
+    from config.Memory import MEMORY_ENABLED
+except ImportError:
+    MEMORY_ENABLED = False
+
 # Configure logging with safe handler for background threads
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -403,6 +408,23 @@ class SequenceExecutor:
             f"Sequence {self._current_sequence_id} finished: "
             f"{completed}/{len(commands)} commands in {total_duration:.0f}ms",
         )
+
+        if MEMORY_ENABLED:
+            try:
+                from core.MemoryManager import get_memory_manager
+                from orchestrators.OutcomeTracker import get_outcome_tracker
+                _mgr = get_memory_manager()
+                _tracker = get_outcome_tracker()
+                _robot_ids = {
+                    cmd.get("params", {}).get("robot_id")
+                    for cmd in commands
+                    if cmd.get("params", {}).get("robot_id")
+                }
+                for _rid in _robot_ids:
+                    _mgr.write_memory(_rid, _tracker)
+                    logger.debug(f"Memory written for {_rid} after sequence")
+            except Exception:
+                pass  # Never let memory persistence fail the sequence return
 
         return result
 
@@ -817,10 +839,24 @@ class SequenceExecutor:
             if self.check_completion:
                 self._get_command_broadcaster().remove_completion_queue(request_id)
                 logger.debug(f"Removed completion queue for request_id {request_id}")
+            _duration_ms = (time.time() - _cmd_start) * 1000
             self._record_metric(
                 success=_result.get("success", False),
-                duration_ms=(time.time() - _cmd_start) * 1000,
+                duration_ms=_duration_ms,
             )
+            if MEMORY_ENABLED:
+                try:
+                    from orchestrators.OutcomeTracker import get_outcome_tracker
+                    get_outcome_tracker().record(
+                        operation_name=operation,
+                        robot_id=params.get("robot_id", "unknown"),
+                        success=_result.get("success", False),
+                        error=_result.get("error"),
+                        duration_ms=_duration_ms,
+                        params=params,
+                    )
+                except Exception:
+                    pass  # Never let memory tracking fail the executor
 
     def _wait_for_completion(
         self, operation: str, request_id: int, timeout: float
@@ -1008,6 +1044,20 @@ class SequenceExecutor:
                 ]
             )
 
+        # === Step 1.5: Knowledge Graph spatial feasibility check ===
+        robot_id_for_kg = params.get("robot_id")
+        if robot_id_for_kg:
+            kg_result = self._check_spatial_feasibility(op_def, params, robot_id_for_kg)
+            if not kg_result["safe"]:
+                return {
+                    "safe": False,
+                    "error": f"Spatial feasibility: {kg_result['warning']}",
+                    "warnings": warnings,
+                    "details": details,
+                }
+            if kg_result.get("warning"):
+                warnings.append(f"KG spatial - {kg_result['warning']}")
+
         # === Step 2: Multi-robot coordination safety check ===
         robot_id = params.get("robot_id")
         if robot_id and self.coordination_verifier:
@@ -1041,6 +1091,89 @@ class SequenceExecutor:
         # === All checks passed ===
         logger.debug(f"Unified verification passed for {op_def.name}")
         return {"safe": True, "error": None, "warnings": warnings, "details": details}
+
+    def _check_spatial_feasibility(
+        self, op_def, params: Dict[str, Any], robot_id: str
+    ) -> Dict[str, Any]:
+        """
+        Check spatial feasibility of an operation using the Knowledge Graph.
+
+        For move operations, checks whether the target path is blocked.
+        For grasp/stabilize operations, checks whether the robot is in the
+        reachable set for the object (non-blocking when the list is empty, as
+        the KG may not be populated yet).
+
+        Args:
+            op_def: Operation definition from the registry.
+            params: Operation parameters.
+            robot_id: The robot executing the operation.
+
+        Returns:
+            Dict with "safe" (bool) and optional "warning" (str).
+            Always returns safe=True on any exception (graceful degrade).
+        """
+        try:
+            from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
+            if not KNOWLEDGE_GRAPH_ENABLED:
+                return {"safe": True}
+
+            from core.Imports import get_graph_query_engine
+            qe = get_graph_query_engine()
+            if qe is None:
+                return {"safe": True}
+
+            op_name = op_def.name
+
+            # --- Move operations: path-blocked check ---
+            MOVE_OPS = {
+                "move_to_coordinate",
+                "move_from_a_to_b",
+                "move_relative_to_object",
+                "move_between_objects",
+            }
+            if op_name in MOVE_OPS:
+                target = None
+                if "position" in params:
+                    pos = params["position"]
+                    if isinstance(pos, (list, tuple)) and len(pos) >= 3:
+                        target = tuple(pos[:3])
+                    elif isinstance(pos, dict):
+                        target = (
+                            float(pos.get("x", 0)),
+                            float(pos.get("y", 0)),
+                            float(pos.get("z", 0)),
+                        )
+                elif all(k in params for k in ("x", "y", "z")):
+                    target = (float(params["x"]), float(params["y"]), float(params["z"]))
+
+                if target is not None and qe.is_path_blocked(robot_id, target):
+                    return {
+                        "safe": False,
+                        "warning": f"Path to {target} appears blocked for {robot_id}",
+                    }
+
+            # --- Grasp/stabilize operations: reachability check ---
+            GRASP_OPS = {"grasp_object", "grip_object", "stabilize_object"}
+            if op_name in GRASP_OPS:
+                object_id = params.get("object_id")
+                if object_id:
+                    reachable_robots = qe.find_reachable_robots(object_id)
+                    # Only block when the list is populated AND robot is not in it.
+                    # Empty list = KG not yet populated = don't block.
+                    if reachable_robots and robot_id not in reachable_robots:
+                        return {
+                            "safe": False,
+                            "warning": (
+                                f"{robot_id} is not in the reachable set for '{object_id}' "
+                                f"(reachable: {reachable_robots})"
+                            ),
+                        }
+
+            return {"safe": True}
+
+        except Exception as e:
+            logger.debug(f"KG spatial feasibility check skipped: {e}")
+            return {"safe": True, "warning": f"KG check skipped: {e}"}
 
     def _auto_capture_outputs(self, operation_name: str, result: Dict[str, Any]):
         """
@@ -1367,7 +1500,8 @@ class SequenceExecutor:
                 return None
 
             logger.info(f"Negotiation triggered for: {command_text[:80]}")
-            result = hub.negotiate(command_text)
+            handoff_ctx = self._get_handoff_context(command_text, robot_id)
+            result = hub.negotiate(command_text, spatial_context=handoff_ctx)
 
             if result.success and result.commands:
                 logger.info(
@@ -1387,6 +1521,68 @@ class SequenceExecutor:
             return None
         except Exception as e:
             logger.error(f"Negotiation error: {e}. Falling back to normal parsing.")
+            return None
+
+    def _get_handoff_context(
+        self, command_text: str, robot_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build a handoff context dict from the Knowledge Graph when a handoff
+        keyword is detected in the command.
+
+        Scans all object nodes in the KG for a name match against the command
+        text, then queries get_handoff_candidates() for Robot1 <-> Robot2.
+        Returns None if KG is disabled, unavailable, no handoff keyword found,
+        or any exception occurs.
+
+        Args:
+            command_text: Natural language command being parsed.
+            robot_id: Robot that received the command.
+
+        Returns:
+            Dict with "handoff_candidates" and "handoff_object" keys, or None.
+        """
+        HANDOFF_KEYWORDS = {"hand", "pass", "give", "transfer", "handoff"}
+        try:
+            if not any(kw in command_text.lower() for kw in HANDOFF_KEYWORDS):
+                return None
+
+            from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
+            if not KNOWLEDGE_GRAPH_ENABLED:
+                return None
+
+            from core.Imports import get_graph_query_engine
+            qe = get_graph_query_engine()
+            if qe is None:
+                return None
+
+            # Get all object node IDs from the KG graph
+            from knowledge_graph._singleton import get_knowledge_graph
+            kg = get_knowledge_graph()
+            all_objects = kg.get_all_nodes(node_type="object")
+
+            # Naive match: first object whose ID appears in the command text
+            matched_object = None
+            for obj_id in all_objects:
+                if obj_id.lower() in command_text.lower():
+                    matched_object = obj_id
+                    break
+
+            if not matched_object:
+                return None
+
+            # Determine other robot (simple two-robot assumption)
+            other_robot = "Robot2" if robot_id == "Robot1" else "Robot1"
+
+            candidates = qe.get_handoff_candidates(robot_id, other_robot, matched_object)
+
+            return {
+                "handoff_candidates": candidates,
+                "handoff_object": matched_object,
+            }
+
+        except Exception as e:
+            logger.debug(f"KG handoff context unavailable: {e}")
             return None
 
     def get_variable(self, name: str) -> Optional[Any]:

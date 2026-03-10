@@ -15,7 +15,7 @@ CONTROLLER_PATTERN="orchestrators.RunRobotController"
 SEQUENCE_SERVER_PATTERN="orchestrators.RunSequenceServer"
 ROS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/rosUnityIntegration"
 CONTROLLER_PID=""
-ROS_INTEGRATION=false
+ROS_INTEGRATION=true
 
 # --- Functions ---
 
@@ -53,15 +53,38 @@ start_ros() {
     fi
 
     if [ -d "$ROS_DIR" ] && command -v docker &>/dev/null; then
+        # Check if containers are already up and the bridge is responsive
+        if echo '{"command":"ping"}' | nc -w 1 127.0.0.1 5020 2>/dev/null | grep -q '"success": true'; then
+            echo "ROS 2 Docker services already running — skipping startup."
+            echo ""
+            return
+        fi
+
         echo "Starting ROS 2 Docker services..."
         "$ROS_DIR/start_ros_endpoint.sh" up
         echo ""
 
-        # Wait for ros_tcp_endpoint to be ready
+        # Wait for ros_tcp_endpoint (port 10000) AND ros_bridge motion server (port 5020)
+        local timeout=60
+
         echo -n "Waiting for ROS TCP endpoint (port 10000)..."
-        local timeout=15
         for (( i=0; i<timeout; i++ )); do
             if nc -z 127.0.0.1 10000 2>/dev/null; then
+                echo " ready."
+                break
+            fi
+            printf "."
+            sleep 1
+            if (( i == timeout - 1 )); then
+                echo " FAILED."
+                echo "ERROR: ROS TCP endpoint did not become available in time." >&2
+                exit 1
+            fi
+        done
+
+        echo -n "Waiting for ROS bridge motion server (port 5020)..."
+        for (( i=0; i<timeout; i++ )); do
+            if echo '{"command":"ping"}' | nc -w 1 127.0.0.1 5020 2>/dev/null | grep -q '"success": true'; then
                 echo " ready."
                 echo ""
                 return
@@ -71,10 +94,10 @@ start_ros() {
         done
 
         echo " FAILED."
-        echo "ERROR: ROS TCP endpoint did not become available in time." >&2
+        echo "ERROR: ROS bridge motion server did not become available in time." >&2
         exit 1
     else
-        echo "WARNING: --with-ros specified but Docker or '$ROS_DIR' not found."
+        echo "WARNING: ROS enabled but Docker or '$ROS_DIR' not found."
         echo "         Continuing without ROS integration."
         echo ""
     fi
@@ -115,13 +138,7 @@ cleanup() {
         wait "$CONTROLLER_PID" 2>/dev/null || true
     fi
 
-    # Stop ROS services and wait for them to fully stop
-    if "$ROS_INTEGRATION" && [ -d "$ROS_DIR" ]; then
-        echo "Stopping ROS 2 Docker services..."
-        "$ROS_DIR/start_ros_endpoint.sh" down
-    fi
-
-    echo "Server stopped."
+    echo "Server stopped. (ROS Docker containers left running)"
     exit 0
 }
 
@@ -129,13 +146,13 @@ main() {
     # Parse command-line arguments
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --with-ros)
-                ROS_INTEGRATION=true
+            --without-ros)
+                ROS_INTEGRATION=false
                 shift
                 ;;
             *)
                 echo "Unknown option: $1" >&2
-                echo "Usage: $0 [--with-ros]" >&2
+                echo "Usage: $0 [--without-ros]" >&2
                 exit 1
                 ;;
         esac

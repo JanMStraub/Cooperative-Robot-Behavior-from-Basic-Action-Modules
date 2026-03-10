@@ -93,6 +93,10 @@ def target_within_reach(
         (is_valid, reason_if_invalid)
     """
     try:
+        # Guard against None coordinates (e.g. from LLM that omits values)
+        if x is None or y is None or z is None:
+            return False, f"Target coordinates contain None: ({x}, {y}, {z})"
+
         # Get robot base position
         base_pos = ROBOT_BASE_POSITIONS.get(robot_id)
         if base_pos is None:

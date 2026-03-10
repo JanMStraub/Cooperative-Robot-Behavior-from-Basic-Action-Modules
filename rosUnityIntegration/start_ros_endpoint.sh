@@ -44,7 +44,7 @@ case "$ACTION" in
             sleep 1
             printf "."
         done
-        
+
         # Wait for foxglove_bridge to be ready
         if docker compose ps | grep -q "acrl_foxglove"; then
              echo "  [OK] Foxglove Bridge is running on port 8765"

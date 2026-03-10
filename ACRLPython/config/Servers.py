@@ -87,6 +87,32 @@ WORLDSTATE_CHECK_INTERVAL = float(os.environ.get("WORLDSTATE_CHECK_INTERVAL", "5
 # ============================================================================
 
 LMSTUDIO_BASE_URL = os.environ.get("LMSTUDIO_BASE_URL", "http://192.168.178.53:1234/v1")
+
+# ============================================================================
+# VGN (Volumetric Grasp Network) — Local Mac Inference
+# ============================================================================
+
+# Path to the VGN checkpoint file (vgn_conv.pth).
+# Relative paths are resolved from the ACRLPython/ root directory.
+# Download from: https://github.com/ethz-asl/vgn (Google Drive link in README)
+VGN_MODEL_PATH = os.environ.get("VGN_MODEL_PATH", "checkpoints/vgn_conv.pth")
+
+# Number of top-ranked grasp poses to return per call.
+VGN_TOP_K = int(os.environ.get("VGN_TOP_K", "20"))
+
+# Master toggle: set to "false" to skip VGN entirely and use geometric fallback.
+VGN_ENABLED = os.environ.get("VGN_ENABLED", "false").lower() in ("true", "1", "yes")
+
+# When False (default), skip the LM Studio VLM bbox-refinement step inside
+# VGNClient.predict_grasps() and use the raw YOLO bbox directly.  Set to "true"
+# only when LM Studio is running; otherwise every grasp attempt will hang for
+# the HTTP client default timeout (~30 s) before falling back.
+VGN_USE_VLM_REFINEMENT = os.environ.get("VGN_USE_VLM_REFINEMENT", "false").lower() in (
+    "true",
+    "1",
+    "yes",
+)
+
 DEFAULT_LMSTUDIO_MODEL = os.environ.get(
     "DEFAULT_LMSTUDIO_MODEL", "ministral-3-14b-reasoning"
 )

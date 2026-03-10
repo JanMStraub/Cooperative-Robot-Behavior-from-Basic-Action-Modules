@@ -90,4 +90,4 @@ WORKSPACE_ALLOCATION_TIMEOUT = float(os.environ.get("WORKSPACE_ALLOCATION_TIMEOU
 
 CONFIDENCE_DECAY_PER_FRAME = float(os.environ.get("CONFIDENCE_DECAY_PER_FRAME", "0.1"))  # Confidence drops 0.1 per missed detection
 STALE_CONFIDENCE_THRESHOLD = float(os.environ.get("STALE_CONFIDENCE_THRESHOLD", "0.3"))  # Mark stale when confidence < 0.3
-OBJECT_TTL_SECONDS = float(os.environ.get("OBJECT_TTL_SECONDS", "2.0"))  # Delete object if not seen for 2s
+OBJECT_TTL_SECONDS = float(os.environ.get("OBJECT_TTL_SECONDS", "30.0"))  # Delete object if not seen for 2s

@@ -30,6 +30,7 @@ from .DetectionOperations import (
     ESTIMATE_DISTANCE_BETWEEN_OBJECTS_OPERATION,
 )
 from .VisionOperations import ANALYZE_SCENE_OPERATION, DETECT_OBJECT_STEREO_OPERATION
+from .PointCloudOperations import GENERATE_POINT_CLOUD_OPERATION
 from .SpatialOperations import (
     MOVE_RELATIVE_TO_OBJECT_OPERATION,
     MOVE_BETWEEN_OBJECTS_OPERATION,
@@ -46,10 +47,8 @@ from .FieldOperations import (
     DETECT_ALL_FIELDS_OPERATION,
 )
 from .IntermediateOperations import (
-    GRIP_OBJECT_OPERATION,
     ALIGN_OBJECT_OPERATION,
     FOLLOW_PATH_OPERATION,
-    DRAW_WITH_PEN_OPERATION,
 )
 from .CoordinationOperations import (
     DETECT_OTHER_ROBOT_OPERATION,
@@ -95,6 +94,7 @@ class OperationRegistry:
             # Perception & Detection
             DETECT_OBJECTS_OPERATION,
             DETECT_OBJECT_STEREO_OPERATION,
+            GENERATE_POINT_CLOUD_OPERATION,
             ANALYZE_SCENE_OPERATION,
             ESTIMATE_DISTANCE_TO_OBJECT_OPERATION,
             ESTIMATE_DISTANCE_BETWEEN_OBJECTS_OPERATION,
@@ -113,9 +113,7 @@ class OperationRegistry:
             # ============================================================================
             # Advanced Manipulation
             GRASP_OBJECT_OPERATION,
-            GRIP_OBJECT_OPERATION,
             ALIGN_OBJECT_OPERATION,
-            DRAW_WITH_PEN_OPERATION,
             # Spatial Reasoning & Navigation
             MOVE_RELATIVE_TO_OBJECT_OPERATION,
             MOVE_BETWEEN_OBJECTS_OPERATION,

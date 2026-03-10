@@ -103,17 +103,21 @@ def _calc_disparity(
 
     logger.debug(f"StereoSGBM: max_disp={max_disp}, window_size={window_size}")
 
-    stereo = cv2.StereoSGBM_create(  # type: ignore[attr-defined]
+    # Tuned parameters for robotic manipulation scenes, including low-texture
+    # synthetic (Unity) environments where strict uniqueness filtering would
+    # reject most matches on flat/uniform surfaces.
+    stereo = cv2.StereoSGBM_create(  # type: ignore
         minDisparity=0,
         numDisparities=max_disp,
         blockSize=window_size,
-        P1=8 * 3 * window_size**2,
-        P2=32 * 3 * window_size**2,
-        disp12MaxDiff=1,
-        uniquenessRatio=10,
-        speckleWindowSize=100,
-        speckleRange=32,
-        mode=cv2.STEREO_SGBM_MODE_SGBM_3WAY,
+        P1=8 * 3 * window_size**2,   # OpenCV recommended formula
+        P2=32 * 3 * window_size**2,  # OpenCV recommended formula
+        disp12MaxDiff=2,             # Relaxed L-R consistency check (was 1)
+        uniquenessRatio=0,           # Disabled; synthetic scenes have near-identical scores
+        speckleWindowSize=0,         # Disabled speckle filter; flat regions produce large coherent blobs
+        speckleRange=0,
+        preFilterCap=63,             # Reduce pre-filter aggressiveness for clean synthetic images
+        mode=cv2.STEREO_SGBM_MODE_HH,  # Full HH scan; better disparity coverage on flat surfaces
     )
     disp = stereo.compute(imgL, imgR).astype(np.float32) / 16.0
     return np.where(disp >= 0.0, disp, np.nan)

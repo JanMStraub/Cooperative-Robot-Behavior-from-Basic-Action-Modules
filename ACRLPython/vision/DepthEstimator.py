@@ -722,41 +722,59 @@ def pixel_to_world_coords(
 
     # Apply camera rotation to transform from camera space to world space
     if camera_rotation is not None and camera_rotation != [0, 0, 0]:
-        pitch, yaw, roll = camera_rotation
+        if len(camera_rotation) == 4:
+            # Quaternion [x, y, z, w] path — sent by StereoCameraController since Jan 2026.
+            # Rotate vector v by quaternion q using the sandwich product: q * (0,v) * q_conj.
+            qx, qy, qz, qw = camera_rotation
+            # Normalise to guard against floating-point drift
+            qnorm = math.sqrt(qx * qx + qy * qy + qz * qz + qw * qw)
+            if qnorm > 1e-9:
+                qx, qy, qz, qw = qx / qnorm, qy / qnorm, qz / qnorm, qw / qnorm
+            # t = 2 * cross(q.xyz, v)
+            tx = 2.0 * (qy * z_cam - qz * y_cam)
+            ty = 2.0 * (qz * x_cam - qx * z_cam)
+            tz = 2.0 * (qx * y_cam - qy * x_cam)
+            # v' = v + qw * t + cross(q.xyz, t)
+            x_rotated = x_cam + qw * tx + qy * tz - qz * ty
+            y_rotated = y_cam + qw * ty + qz * tx - qx * tz
+            z_rotated = z_cam + qw * tz + qx * ty - qy * tx
+        else:
+            # Legacy Euler angles [pitch, yaw, roll] in degrees.
+            pitch, yaw, roll = camera_rotation
 
-        # Convert to radians
-        pitch_rad = math.radians(pitch)
-        yaw_rad = math.radians(yaw)
-        roll_rad = math.radians(roll)
+            # Convert to radians
+            pitch_rad = math.radians(pitch)
+            yaw_rad = math.radians(yaw)
+            roll_rad = math.radians(roll)
 
-        # Apply full rotation matrix (Unity uses Euler Y->X->Z order)
-        # First yaw (around Y), then pitch (around X), then roll (around Z)
+            # Apply full rotation matrix (Unity uses Euler Y->X->Z order)
+            # First yaw (around Y), then pitch (around X), then roll (around Z)
 
-        # Yaw rotation (Y-axis)
-        cos_yaw = math.cos(yaw_rad)
-        sin_yaw = math.sin(yaw_rad)
-        x1 = cos_yaw * x_cam + sin_yaw * z_cam
-        y1 = y_cam
-        z1 = -sin_yaw * x_cam + cos_yaw * z_cam
+            # Yaw rotation (Y-axis)
+            cos_yaw = math.cos(yaw_rad)
+            sin_yaw = math.sin(yaw_rad)
+            x1 = cos_yaw * x_cam + sin_yaw * z_cam
+            y1 = y_cam
+            z1 = -sin_yaw * x_cam + cos_yaw * z_cam
 
-        # Pitch rotation (X-axis)
-        cos_pitch = math.cos(pitch_rad)
-        sin_pitch = math.sin(pitch_rad)
-        x2 = x1
-        y2 = cos_pitch * y1 - sin_pitch * z1
-        z2 = sin_pitch * y1 + cos_pitch * z1
+            # Pitch rotation (X-axis)
+            cos_pitch = math.cos(pitch_rad)
+            sin_pitch = math.sin(pitch_rad)
+            x2 = x1
+            y2 = cos_pitch * y1 - sin_pitch * z1
+            z2 = sin_pitch * y1 + cos_pitch * z1
 
-        # Roll rotation (Z-axis)
-        cos_roll = math.cos(roll_rad)
-        sin_roll = math.sin(roll_rad)
-        x_rotated = cos_roll * x2 - sin_roll * y2
-        y_rotated = sin_roll * x2 + cos_roll * y2
-        z_rotated = z2
+            # Roll rotation (Z-axis)
+            cos_roll = math.cos(roll_rad)
+            sin_roll = math.sin(roll_rad)
+            x_rotated = cos_roll * x2 - sin_roll * y2
+            y_rotated = sin_roll * x2 + cos_roll * y2
+            z_rotated = z2
 
         x_cam, y_cam, z_cam = x_rotated, y_rotated, z_rotated
         logger.debug(
             f"Pixel ({pixel_x}, {pixel_y}) depth {depth:.3f}m → "
-            f"Rotated by (pitch={pitch:.1f}°, yaw={yaw:.1f}°, roll={roll:.1f}°) → "
+            f"Rotated by {camera_rotation} → "
             f"({x_cam:.3f}, {y_cam:.3f}, {z_cam:.3f})m in world orientation"
         )
 

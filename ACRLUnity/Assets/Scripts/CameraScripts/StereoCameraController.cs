@@ -235,9 +235,10 @@ namespace Vision
                 },
                 camera_rotation = new float[]
                 {
-                    _leftCamera.transform.eulerAngles.x, // pitch
-                    _leftCamera.transform.eulerAngles.y, // yaw
-                    _leftCamera.transform.eulerAngles.z, // roll
+                    _leftCamera.transform.rotation.x,
+                    _leftCamera.transform.rotation.y,
+                    _leftCamera.transform.rotation.z,
+                    _leftCamera.transform.rotation.w,
                 },
             };
             string metadataJson = JsonUtility.ToJson(metadata);

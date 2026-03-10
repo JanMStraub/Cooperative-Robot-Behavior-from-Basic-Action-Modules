@@ -687,6 +687,81 @@ namespace Robotics
             SetTargetInternal(target.transform, target, options);
         }
 
+        /// <summary>
+        /// Set a grasp target using externally-computed candidates (e.g., from Contact-GraspNet).
+        /// Bypasses GraspCandidateGenerator and feeds candidates directly into
+        /// GraspIKFilter → GraspCollisionFilter → GraspScorer.
+        /// Falls back to GraspCandidateGenerator if all external candidates are rejected.
+        /// </summary>
+        /// <param name="target">GameObject to grasp</param>
+        /// <param name="externalCandidates">Pre-computed GraspNet candidates in Unity world frame</param>
+        /// <param name="options">Grasp options (approach, retreat, etc.)</param>
+        public void SetTargetWithExternalCandidates(
+            GameObject target,
+            System.Collections.Generic.List<Robotics.Grasp.GraspCandidate> externalCandidates,
+            GraspOptions options = default
+        )
+        {
+            if (target == null)
+                return;
+            StopActiveGraspCoroutine();
+
+            if (options.Equals(default(GraspOptions)))
+                options = GraspOptions.Default;
+
+            if (_graspPipeline == null)
+            {
+                // No pipeline — fall back to simple move-to-object
+                Debug.LogWarning(
+                    $"{_logPrefix} SetTargetWithExternalCandidates: no GraspPlanningPipeline, "
+                        + "using plain SetTarget"
+                );
+                SetTarget(target, options);
+                return;
+            }
+
+            GraspCandidate candidate = _graspPipeline.PlanGraspWithExternalCandidates(
+                externalCandidates,
+                target,
+                endEffectorBase.position,
+                options
+            );
+
+            if (candidate != null)
+            {
+                if (candidate.useSimplifiedExecution)
+                {
+                    _activeGraspCoroutine = StartCoroutine(
+                        _graspExecutor.ExecuteSimplifiedGrasp(
+                            candidate,
+                            target,
+                            options,
+                            () => _hasReachedTarget
+                        )
+                    );
+                }
+                else
+                {
+                    _activeGraspCoroutine = StartCoroutine(
+                        _graspExecutor.ExecuteThreeWaypointGrasp(
+                            candidate,
+                            target,
+                            options,
+                            () => _hasReachedTarget
+                        )
+                    );
+                }
+                return;
+            }
+
+            // All candidates rejected — plain SetTarget as last resort
+            Debug.LogWarning(
+                $"{_logPrefix} SetTargetWithExternalCandidates: all candidates failed, "
+                    + "falling back to SetTarget"
+            );
+            SetTarget(target, options);
+        }
+
         public void SetTarget(Vector3 position, GraspOptions options = default)
         {
             StopActiveGraspCoroutine();

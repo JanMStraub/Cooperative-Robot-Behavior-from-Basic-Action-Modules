@@ -354,6 +354,32 @@ class WorldState:
                 return robot_state.target_position
             return None
 
+    @staticmethod
+    def _to_position_tuple(value):
+        """
+        Normalize a position value to a (float, float, float) tuple.
+
+        Unity serializes Vector3 as {"x": ..., "y": ..., "z": ...}.  This
+        helper converts that dict form to the tuple form expected everywhere
+        else in the codebase.  Plain tuples/lists pass through unchanged.
+
+        Args:
+            value: Position as dict {"x","y","z"}, list, tuple, or None.
+
+        Returns:
+            (float, float, float) tuple, or the original value if conversion
+            is not possible (so existing None defaults are preserved).
+        """
+        if isinstance(value, dict):
+            return (
+                float(value.get("x", 0.0)),
+                float(value.get("y", 0.0)),
+                float(value.get("z", 0.0)),
+            )
+        if isinstance(value, (list, tuple)) and len(value) >= 3:
+            return (float(value[0]), float(value[1]), float(value[2]))
+        return value
+
     def update_robot_state(self, robot_id: str, state_data: Dict[str, Any]):
         """
         Update robot state from Unity response.
@@ -367,10 +393,12 @@ class WorldState:
                 self._robot_states[robot_id] = RobotState(robot_id=robot_id)
 
             state = self._robot_states[robot_id]
-            state.position = state_data.get("position", state.position)
+            state.position = self._to_position_tuple(
+                state_data.get("position", state.position)
+            )
             state.rotation = state_data.get("rotation", state.rotation)
-            state.target_position = state_data.get(
-                "target_position", state.target_position
+            state.target_position = self._to_position_tuple(
+                state_data.get("target_position", state.target_position)
             )
             state.target_rotation = state_data.get(
                 "target_rotation", state.target_rotation

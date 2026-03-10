@@ -235,17 +235,21 @@ class RobotController:
 
             world_state = get_world_state()
 
-            # Define callback to trigger confidence decay
+            # Define callback to sync Unity state into the operations WorldState singleton
             def on_state_update(state_data):
                 """Called on each world state update from Unity."""
                 try:
-                    # Extract object IDs from state update
+                    # Forward robot states into operations WorldState singleton
+                    for robot in state_data.get("robots", []):
+                        robot_id = robot.get("robot_id")
+                        if robot_id:
+                            world_state.update_robot_state(robot_id, robot)
+
+                    # Trigger confidence decay based on currently visible objects
                     objects = state_data.get("objects", [])
                     seen_object_ids = {
                         obj.get("object_id") for obj in objects if obj.get("object_id")
                     }
-
-                    # Trigger confidence decay
                     world_state.decay_object_confidence(seen_object_ids)
 
                 except Exception as e:

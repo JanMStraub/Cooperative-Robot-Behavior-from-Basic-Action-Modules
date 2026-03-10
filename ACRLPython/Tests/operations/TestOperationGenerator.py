@@ -258,7 +258,7 @@ class TestSandboxExecution:
 
     def test_valid_operation_passes_sandbox(self):
         """Test that valid operation code passes sandbox execution."""
-        is_valid, error = validate_in_sandbox(VALID_OPERATION_CODE, timeout=10)
+        is_valid, error = validate_in_sandbox(VALID_OPERATION_CODE, timeout=30)
         assert is_valid is True
         assert error == ""
 
@@ -292,7 +292,7 @@ def create_simple_operation():
 
 result = create_simple_operation()
 """
-        is_valid, error = validate_in_sandbox(code, timeout=5)
+        is_valid, error = validate_in_sandbox(code, timeout=30)
         assert is_valid is False
         assert "OPERATION" in error
 

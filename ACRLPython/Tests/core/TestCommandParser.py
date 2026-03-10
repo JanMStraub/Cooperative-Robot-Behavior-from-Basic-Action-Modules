@@ -697,6 +697,7 @@ class TestAntiPatternWarnings:
             return CommandParser(use_rag=False)
 
     FEEDBACK_TARGET = "agents.FeedbackCollector.get_feedback_collector"
+    MEMORY_TARGET = "config.Memory.MEMORY_ENABLED"
 
     def test_returns_empty_string_when_no_warnings(self, parser):
         """No failure patterns → empty string returned from _get_anti_pattern_warnings."""
@@ -715,7 +716,7 @@ class TestAntiPatternWarnings:
             "=== ANTI-PATTERN WARNINGS ===\n- grasp_object: 80% failure rate\n"
         )
 
-        with patch(self.FEEDBACK_TARGET, return_value=mock_collector):
+        with patch(self.MEMORY_TARGET, True), patch(self.FEEDBACK_TARGET, return_value=mock_collector):
             result = parser._get_anti_pattern_warnings("grasp the cube")
 
         assert "ANTI-PATTERN WARNINGS" in result
@@ -726,7 +727,7 @@ class TestAntiPatternWarnings:
         mock_collector = Mock()
         mock_collector.get_anti_pattern_warnings.return_value = ""
 
-        with patch(self.FEEDBACK_TARGET, return_value=mock_collector):
+        with patch(self.MEMORY_TARGET, True), patch(self.FEEDBACK_TARGET, return_value=mock_collector):
             parser._get_anti_pattern_warnings("move Robot1 to (0.3, 0.2, 0.1)")
 
         mock_collector.get_anti_pattern_warnings.assert_called_once_with(
@@ -747,7 +748,7 @@ class TestAntiPatternWarnings:
             "=== ANTI-PATTERN WARNINGS ===\n- grasp_object: 80% failure rate\n"
         )
 
-        with patch(self.FEEDBACK_TARGET, return_value=mock_collector):
+        with patch(self.MEMORY_TARGET, True), patch(self.FEEDBACK_TARGET, return_value=mock_collector):
             prompt = parser._build_parsing_prompt(
                 command_text="grasp the cube",
                 robot_id="Robot1",

@@ -1,0 +1,23 @@
+services:
+  graspnet:
+    build: .
+    image: graspnet-service:latest
+    runtime: nvidia            # requires nvidia-container-toolkit on the GPU PC
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    ports:
+      # Note: rosUnityIntegration uses 8765 for Foxglove — GraspNet uses 8766.
+      - "8766:8766"
+    volumes:
+      # Mount checkpoints from the host so they survive image rebuilds.
+      # Windows: place weights at C:\Users\youruser\graspnet_checkpoints\
+      # Linux:   place weights at ~/graspnet_checkpoints/
+      - ${CHECKPOINTS_PATH:-~/graspnet_checkpoints}:/app/checkpoints:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8766/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s        # model loading takes ~30s on first start

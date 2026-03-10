@@ -257,11 +257,6 @@ namespace Simulation
                 Debug.Log(
                     $"{LOG_PREFIX} Created {_workspaceRegions.Count} default workspace regions"
                 );
-
-                // Apply default robot-to-workspace assignments (mirrors ROBOT_WORKSPACE_ASSIGNMENTS
-                // in ACRLPython/config/Robot.py: Robot1 -> left_workspace, Robot2 -> right_workspace)
-                AllocateRegion("Robot1", "left_workspace");
-                AllocateRegion("Robot2", "right_workspace");
             }
 
             // Sync allocation dictionary from any pre-allocated regions (serialized in scene)
