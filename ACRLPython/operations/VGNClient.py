@@ -252,33 +252,43 @@ class VGNClient:
         bx, by, bw, bh = yolo_bbox
 
         # ----------------------------------------------------------------
-        # Step 1 — VLM bbox refinement
+        # Step 1 — VLM bbox refinement (opt-in, off by default)
         # ----------------------------------------------------------------
         refined_bbox = yolo_bbox  # default: use YOLO bbox unchanged
         try:
-            from vision.AnalyzeImage import LMStudioVisionProcessor
+            from config.Servers import VGN_USE_VLM_REFINEMENT
+        except ImportError:
+            VGN_USE_VLM_REFINEMENT = False
 
-            vlm = LMStudioVisionProcessor()
-            prompt = (
-                f"You see a {object_label}. Return ONLY a JSON object with the "
-                f"pixel bounding box of the best region to grasp it, within the "
-                f"region x={bx} y={by} w={bw} h={bh}. "
-                f'Format: {{"x": int, "y": int, "w": int, "h": int}}'
-            )
-            vlm_result = vlm.send_images([image], ["left"], prompt)
-            refined_bbox = _parse_bbox_from_vlm_response(
-                vlm_result.get("response", ""),
-                fallback=yolo_bbox,
-                image_width=image_width,
-                image_height=image_height,
-            )
-            logger.info(
-                f"[VGN] VLM refined bbox: {yolo_bbox} → {refined_bbox}"
-            )
-        except Exception as exc:
-            logger.warning(
-                f"[VGN] VLM bbox refinement failed ({exc}), "
-                "using YOLO bbox as fallback"
+        if VGN_USE_VLM_REFINEMENT:
+            try:
+                from vision.AnalyzeImage import LMStudioVisionProcessor
+
+                vlm = LMStudioVisionProcessor()
+                prompt = (
+                    f"You see a {object_label}. Return ONLY a JSON object with the "
+                    f"pixel bounding box of the best region to grasp it, within the "
+                    f"region x={bx} y={by} w={bw} h={bh}. "
+                    f'Format: {{"x": int, "y": int, "w": int, "h": int}}'
+                )
+                vlm_result = vlm.send_images([image], ["left"], prompt)
+                refined_bbox = _parse_bbox_from_vlm_response(
+                    vlm_result.get("response", ""),
+                    fallback=yolo_bbox,
+                    image_width=image_width,
+                    image_height=image_height,
+                )
+                logger.info(
+                    f"[VGN] VLM refined bbox: {yolo_bbox} → {refined_bbox}"
+                )
+            except Exception as exc:
+                logger.warning(
+                    f"[VGN] VLM bbox refinement failed ({exc}), "
+                    "using YOLO bbox as fallback"
+                )
+        else:
+            logger.debug(
+                "[VGN] VLM refinement skipped (VGN_USE_VLM_REFINEMENT=false)"
             )
 
         # ----------------------------------------------------------------
@@ -288,9 +298,10 @@ class VGNClient:
         pts_rh = points.copy()
         pts_rh[:, 0] *= -1.0
 
-        # Build segmentation mask using refined bbox
-        # Import here to respect layered architecture (operations → operations)
-        from operations.GraspOperations import _build_segmentation_mask
+        # Build segmentation mask using refined bbox.
+        # Import from GraspUtils (shared module) to avoid circular import with
+        # GraspOperations which imports VGNClient.
+        from operations.GraspUtils import _build_segmentation_mask
 
         mask = _build_segmentation_mask(
             pts_rh,
@@ -431,7 +442,6 @@ class VGNClient:
             # Instantiate 'conv' architecture
             net = get_network("conv")
             # Load checkpoint (weights_only=True for security)
-            instance = cls.__new__(cls)
             try:
                 from config.Servers import VGN_MODEL_PATH
             except ImportError:
@@ -455,3 +465,16 @@ class VGNClient:
         except Exception as exc:
             logger.warning(f"[VGN] Model load failed: {exc}")
             return None
+
+    @classmethod
+    def reset_cache(cls) -> None:
+        """Clear the class-level model cache.
+
+        Intended for test teardown: forces the next ``predict_grasps`` call to
+        reload the model rather than reusing a cached instance that may have
+        been set up under different configuration (e.g. a different model path
+        set via environment variable or mock).
+        """
+        cls._net = None
+        cls._device = None
+        logger.debug("[VGN] Model cache cleared")

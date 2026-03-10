@@ -37,6 +37,11 @@ except ImportError:
     from operations.CoordinationVerifier import CoordinationVerifier
     from core.Imports import get_world_state
 
+try:
+    from config.Memory import MEMORY_ENABLED
+except ImportError:
+    MEMORY_ENABLED = False
+
 # Configure logging with safe handler for background threads
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -403,6 +408,23 @@ class SequenceExecutor:
             f"Sequence {self._current_sequence_id} finished: "
             f"{completed}/{len(commands)} commands in {total_duration:.0f}ms",
         )
+
+        if MEMORY_ENABLED:
+            try:
+                from core.MemoryManager import get_memory_manager
+                from orchestrators.OutcomeTracker import get_outcome_tracker
+                _mgr = get_memory_manager()
+                _tracker = get_outcome_tracker()
+                _robot_ids = {
+                    cmd.get("params", {}).get("robot_id")
+                    for cmd in commands
+                    if cmd.get("params", {}).get("robot_id")
+                }
+                for _rid in _robot_ids:
+                    _mgr.write_memory(_rid, _tracker)
+                    logger.debug(f"Memory written for {_rid} after sequence")
+            except Exception:
+                pass  # Never let memory persistence fail the sequence return
 
         return result
 
@@ -817,10 +839,24 @@ class SequenceExecutor:
             if self.check_completion:
                 self._get_command_broadcaster().remove_completion_queue(request_id)
                 logger.debug(f"Removed completion queue for request_id {request_id}")
+            _duration_ms = (time.time() - _cmd_start) * 1000
             self._record_metric(
                 success=_result.get("success", False),
-                duration_ms=(time.time() - _cmd_start) * 1000,
+                duration_ms=_duration_ms,
             )
+            if MEMORY_ENABLED:
+                try:
+                    from orchestrators.OutcomeTracker import get_outcome_tracker
+                    get_outcome_tracker().record(
+                        operation_name=operation,
+                        robot_id=params.get("robot_id", "unknown"),
+                        success=_result.get("success", False),
+                        error=_result.get("error"),
+                        duration_ms=_duration_ms,
+                        params=params,
+                    )
+                except Exception:
+                    pass  # Never let memory tracking fail the executor
 
     def _wait_for_completion(
         self, operation: str, request_id: int, timeout: float

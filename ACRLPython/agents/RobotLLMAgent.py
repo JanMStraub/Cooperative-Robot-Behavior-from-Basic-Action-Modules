@@ -21,6 +21,7 @@ import requests
 
 from config.Servers import LMSTUDIO_BASE_URL, DEFAULT_LMSTUDIO_MODEL
 from config.Negotiation import AGENT_LLM_TIMEOUT, NEGOTIATION_TEMPERATURE, USE_STRUCTURED_OUTPUT
+from config.Memory import MEMORY_ENABLED
 from config.Robot import (
     ROBOT_BASE_POSITIONS,
     ROBOT_WORKSPACE_ASSIGNMENTS,
@@ -399,6 +400,16 @@ Max reach: {self.max_reach}m"""
                 pos = obj_data.get("position", "unknown")
                 color = obj_data.get("color", "unknown")
                 context += f"\n  - {obj_id}: color={color}, position={pos}"
+
+        # Cross-session memory (operation outcomes from past sessions)
+        if MEMORY_ENABLED:
+            try:
+                from core.MemoryManager import get_memory_manager
+                memory_text = get_memory_manager().read_memory(self.robot_id)
+                if memory_text:
+                    context += f"\n\n## Memory (past sessions)\n{memory_text}"
+            except Exception as e:
+                logger.debug(f"[{self.robot_id}] Could not load memory: {e}")
 
         return context
 

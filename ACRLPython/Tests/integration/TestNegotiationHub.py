@@ -57,7 +57,7 @@ class TestNegotiationConfig:
 
     def test_default_values(self):
         """Test default config values are set correctly."""
-        assert NEGOTIATION_ENABLED is True
+        assert NEGOTIATION_ENABLED is False
         assert MAX_NEGOTIATION_ROUNDS == 3
         assert AGENT_LLM_TIMEOUT == 30.0
         assert NEGOTIATION_TIMEOUT == 120.0
@@ -316,6 +316,7 @@ class TestNegotiationHub:
         hub2 = NegotiationHub()
         assert hub1 is hub2
 
+    @patch.object(neg_config, "NEGOTIATION_ENABLED", True)
     def test_needs_negotiation_keyword(self):
         """Test collaboration keyword detection."""
         hub = NegotiationHub()
@@ -323,6 +324,7 @@ class TestNegotiationHub:
         assert hub.needs_negotiation("Cooperate to move the object") is True
         assert hub.needs_negotiation("Simultaneously grasp the beam") is True
 
+    @patch.object(neg_config, "NEGOTIATION_ENABLED", True)
     def test_needs_negotiation_multi_robot_ref(self):
         """Test multi-robot reference detection."""
         hub = NegotiationHub()
@@ -349,6 +351,7 @@ class TestNegotiationHub:
         os.environ.pop("NEGOTIATION_ENABLED", None)
         importlib.reload(neg_config)
 
+    @patch.object(neg_config, "NEGOTIATION_ENABLED", True)
     def test_needs_negotiation_word_boundaries(self):
         """Test that 'robot10' does NOT trigger negotiation for Robot1 match."""
         hub = NegotiationHub()
@@ -748,6 +751,7 @@ class TestSequenceExecutorNegotiation:
         result = executor.negotiate_if_needed("Move to (0.3, 0.2, 0.1)", "Robot1")
         assert result is None
 
+    @patch.object(neg_config, "NEGOTIATION_ENABLED", True)
     @patch("agents.RobotLLMAgent.requests.post")
     def test_negotiate_if_needed_triggers_for_collaboration(self, mock_post):
         """Test that collaboration commands trigger negotiation."""
@@ -817,6 +821,7 @@ class TestCoreImportsNegotiation:
         """Reset singleton between tests."""
         NegotiationHub._instance = None
 
+    @patch.object(neg_config, "NEGOTIATION_ENABLED", True)
     def test_get_negotiation_hub_returns_hub(self):
         """Test get_negotiation_hub returns a NegotiationHub instance."""
         hub = get_negotiation_hub()

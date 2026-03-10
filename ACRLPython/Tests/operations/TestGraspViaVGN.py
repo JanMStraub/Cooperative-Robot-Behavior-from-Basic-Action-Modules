@@ -230,7 +230,13 @@ class TestGraspViaVGNHappyPath:
             assert len(call_args["parameters"]["precomputed_candidates"]) == n
 
     def test_pre_grasp_position_offset_along_approach(self):
-        """Pre-grasp position is grasp position + approach_direction * hover."""
+        """Pre-grasp position is grasp position - approach_direction * hover.
+
+        approach_direction points *toward* the object (VGN convention), so the
+        pre-grasp hover position must be placed *against* the approach direction
+        (i.e. subtract), not along it.  Adding would place the arm on the far
+        side of the object and cause a collision.
+        """
         world = [{
             "position": [0.0, 0.0, 0.5],
             "rotation": [0.0, 0.0, 0.0, 1.0],
@@ -252,9 +258,9 @@ class TestGraspViaVGNHappyPath:
             )
             call_args = ctx.mock_broadcaster.send_command.call_args[0][0]
             cand = call_args["parameters"]["precomputed_candidates"][0]
-            # pre_grasp = grasp + approach * hover
+            # pre_grasp = grasp - approach * hover  (step BACK from object)
             assert cand["pre_grasp_position"]["x"] == pytest.approx(0.0)
-            assert cand["pre_grasp_position"]["y"] == pytest.approx(0.1)
+            assert cand["pre_grasp_position"]["y"] == pytest.approx(-0.1)
             assert cand["pre_grasp_position"]["z"] == pytest.approx(0.5)
 
     def test_robot_id_and_object_id_in_command(self):

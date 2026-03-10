@@ -34,9 +34,17 @@ from unittest.mock import MagicMock, patch
 
 
 def _make_points(n: int = 200) -> np.ndarray:
-    """Return a small point cloud in Unity LH camera frame (X-negated)."""
+    """Return a small point cloud in Unity LH camera frame (X-negated).
+
+    Points are placed at a comfortable depth (Z ∈ [0.5, 1.0]) with small
+    lateral spread so they project well inside a 640×480 full-image bbox
+    under the corrected projection sign convention
+    (u = cx + f*(-X)/Z, v = cy - f*Y/Z).
+    """
     rng = np.random.default_rng(42)
-    pts = rng.uniform(-0.5, 0.5, (n, 3)).astype(np.float32)
+    pts = rng.uniform(-0.05, 0.05, (n, 3)).astype(np.float32)
+    # Ensure all points are in front of the camera with sufficient depth
+    pts[:, 2] = np.abs(pts[:, 2]) + 0.5
     return pts
 
 

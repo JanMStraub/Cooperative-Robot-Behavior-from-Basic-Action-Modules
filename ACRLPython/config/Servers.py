@@ -101,7 +101,17 @@ VGN_MODEL_PATH = os.environ.get("VGN_MODEL_PATH", "checkpoints/vgn_conv.pth")
 VGN_TOP_K = int(os.environ.get("VGN_TOP_K", "20"))
 
 # Master toggle: set to "false" to skip VGN entirely and use geometric fallback.
-VGN_ENABLED = os.environ.get("VGN_ENABLED", "true").lower() in ("true", "1", "yes")
+VGN_ENABLED = os.environ.get("VGN_ENABLED", "false").lower() in ("true", "1", "yes")
+
+# When False (default), skip the LM Studio VLM bbox-refinement step inside
+# VGNClient.predict_grasps() and use the raw YOLO bbox directly.  Set to "true"
+# only when LM Studio is running; otherwise every grasp attempt will hang for
+# the HTTP client default timeout (~30 s) before falling back.
+VGN_USE_VLM_REFINEMENT = os.environ.get("VGN_USE_VLM_REFINEMENT", "false").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 
 DEFAULT_LMSTUDIO_MODEL = os.environ.get(
     "DEFAULT_LMSTUDIO_MODEL", "ministral-3-14b-reasoning"

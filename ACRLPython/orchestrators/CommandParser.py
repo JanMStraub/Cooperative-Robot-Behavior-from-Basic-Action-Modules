@@ -297,6 +297,9 @@ class CommandParser:
             Formatted warning block string, or empty string if no warnings.
         """
         try:
+            from config.Memory import MEMORY_ENABLED
+            if not MEMORY_ENABLED:
+                return ""
             from agents.FeedbackCollector import get_feedback_collector
             return get_feedback_collector().get_anti_pattern_warnings(command_text)
         except Exception as e:
