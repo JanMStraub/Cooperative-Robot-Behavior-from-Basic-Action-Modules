@@ -126,6 +126,8 @@ class RobotController:
         autort_port: int = AUTORT_SERVER_PORT,
         model: str = DEFAULT_LMSTUDIO_MODEL,
         check_completion: bool = True,
+        env: str = "sim",
+        web_port: int = None,
     ):
         """
         Initialize the robot controller.
@@ -140,6 +142,8 @@ class RobotController:
             autort_port: Port for AutoRT task generation
             model: LLM model for parsing
             check_completion: Whether to wait for Unity completion signals
+            env: Execution environment — "sim" (Unity) or "real" (physical robot)
+            web_port: If set, start the Web UI server on this port
         """
         self._host = host
         self._single_port = single_port
@@ -150,6 +154,8 @@ class RobotController:
         self._autort_port = autort_port
         self._model = model
         self._check_completion = check_completion
+        self._env = env
+        self._web_port = web_port
 
         self._image_server = None
         self._command_server = None
@@ -158,6 +164,7 @@ class RobotController:
         self._autort_server = None
         self._vision_processor = None
         self._graph_builder = None
+        self._web_server_thread = None
         self._running = False
         self._stop_event = threading.Event()
 
@@ -375,13 +382,17 @@ class RobotController:
             check_completion=self._check_completion,
         )
 
-        # Start WorldStateServer (port 5014) - receives robot/object state updates
-        logger.info(f"Starting WorldStateServer (port: {self._world_state_port})")
+        # Start WorldStateServer (port 5014) only in sim mode.
+        # In real mode, world state is populated by perception operations only.
         from core.TCPServerBase import ServerConfig
 
-        world_state_config = ServerConfig(host=self._host, port=self._world_state_port)
-        self._world_state_server = WorldStateServer(config=world_state_config)
-        self._world_state_server.start()
+        if self._env == "sim":
+            logger.info(f"Starting WorldStateServer (port: {self._world_state_port})")
+            world_state_config = ServerConfig(host=self._host, port=self._world_state_port)
+            self._world_state_server = WorldStateServer(config=world_state_config)
+            self._world_state_server.start()
+        else:
+            logger.info("Real env: WorldStateServer disabled — WorldState populated by perception only")
 
         # Start AutoRTServer (port 5015) - autonomous task generation
         logger.info(f"Starting AutoRTServer (port: {self._autort_port})")
@@ -396,14 +407,31 @@ class RobotController:
         # Wire WorldState into RAG for context-aware operation selection
         self._wire_world_state_to_rag()
 
-        # Wire WorldStateServer callbacks for confidence decay
-        self._wire_world_state_callbacks()
+        # Wire WorldStateServer callbacks and knowledge graph only when the
+        # server is running (sim mode); in real mode there is no server to wire.
+        if self._env == "sim":
+            self._wire_world_state_callbacks()
+            self._wire_knowledge_graph()
 
-        # Wire KnowledgeGraph builder (if enabled)
-        self._wire_knowledge_graph()
+        # Initialize hardware and camera singletons for the selected environment.
+        # This call seeds the module-level cache so all subsequent lazy accessors
+        # via core.Imports return the correct adapter for --env sim or --env real.
+        from core.Imports import get_hardware_interface, get_camera_provider
+        hw = get_hardware_interface(env=self._env)
+        cam = get_camera_provider(env=self._env)
+        logger.info(f"✓ HardwareInterface: {type(hw).__name__}")
+        logger.info(f"✓ CameraProvider:    {type(cam).__name__}")
 
         # Auto-connect to ROS bridge if enabled
         self._auto_connect_ros()
+
+        # Start Web UI server if requested
+        if self._web_port:
+            from servers.WebUIServer import run_webui_server_background
+            self._web_server_thread = run_webui_server_background(
+                host=self._host, port=self._web_port
+            )
+            logger.info(f"  Web UI:                 http://{self._host}:{self._web_port}")
 
         self._running = True
 
@@ -470,13 +498,19 @@ class RobotController:
         logger.info("=" * 60)
         logger.info("RobotController started successfully!")
         logger.info("=" * 60)
+        logger.info(f"  Environment:            {self._env}")
         logger.info(f"  Image Server (single):  {self._host}:{self._single_port}")
         logger.info(f"  Image Server (stereo):  {self._host}:{self._stereo_port}")
         logger.info(f"  Command Server:         {self._host}:{self._command_port}")
         logger.info(f"  Sequence Server:        {self._host}:{self._sequence_port}")
-        logger.info(f"  World State Server:     {self._host}:{self._world_state_port}")
+        if self._env == "sim":
+            logger.info(f"  World State Server:     {self._host}:{self._world_state_port}")
+        else:
+            logger.info(f"  World State Server:     Disabled (real env)")
         logger.info(f"  AutoRT Server:          {self._host}:{self._autort_port}")
         logger.info(f"  LLM Model:              {self._model}")
+        if self._web_port:
+            logger.info(f"  Web UI:                 http://{self._host}:{self._web_port}")
         if ENABLE_VISION_STREAMING and self._vision_processor:
             logger.info(f"  Vision Streaming:       Enabled ({VISION_STREAM_FPS} FPS)")
             if ENABLE_VISION_VISUALIZATION:
@@ -593,6 +627,19 @@ def main():
         help="Don't wait for Unity completion signals",
     )
     parser.add_argument("--verbose", action="store_true", help="Enable debug logging")
+    parser.add_argument(
+        "--env",
+        choices=["sim", "real"],
+        default="sim",
+        help="Execution environment: sim (Unity) or real (physical robot)",
+    )
+    parser.add_argument(
+        "--web",
+        type=int,
+        default=None,
+        metavar="PORT",
+        help="Start Web UI on this port (e.g. --web 8000)",
+    )
 
     args = parser.parse_args()
 
@@ -601,7 +648,11 @@ def main():
 
     # Create controller
     controller = RobotController(
-        host=args.host, model=args.model, check_completion=not args.no_completion_check
+        host=args.host,
+        model=args.model,
+        check_completion=not args.no_completion_check,
+        env=args.env,
+        web_port=args.web,
     )
 
     # Handle shutdown signals

@@ -19,6 +19,11 @@
 
 <body class="dark-theme">
     <div class="app-container">
+        <!-- Disconnect Banner -->
+        <div id="disconnect-banner" class="disconnect-banner" style="display: none;">
+            <i class="fa-solid fa-triangle-exclamation"></i> WebSocket disconnected — attempting to reconnect...
+        </div>
+
         <!-- Header -->
         <header class="glass-header">
             <div class="logo">
@@ -30,20 +35,28 @@
             </div>
             <div class="system-status">
                 <div class="status-indicator">
-                    <span class="dot online"></span>
+                    <span class="dot badge-offline" id="badge-backend"></span>
                     <span class="label">Backend Gateway</span>
                 </div>
                 <div class="status-indicator">
-                    <span class="dot warning"></span>
+                    <span class="dot badge-offline" id="badge-ros"></span>
                     <span class="label">ROS Bridge</span>
                 </div>
                 <div class="status-indicator">
-                    <span class="dot offline"></span>
+                    <span class="dot badge-offline" id="badge-llm"></span>
                     <span class="label">LLM Studio</span>
                 </div>
-                <!-- E-STOP -->
+                <div class="status-indicator">
+                    <span class="dot badge-offline" id="badge-unity"></span>
+                    <span class="label">Unity</span>
+                </div>
+                <!-- Theme toggle -->
+                <button class="btn-icon" id="btn-theme" title="Toggle light/dark mode">
+                    <i class="fa-solid fa-circle-half-stroke"></i>
+                </button>
+                <!-- Stop button -->
                 <button class="btn btn-estop" id="btn-estop">
-                    <i class="fa-solid fa-skull-crossbones"></i> E-STOP
+                    <i class="fa-solid fa-stop"></i> Stop
                 </button>
             </div>
         </header>
@@ -69,6 +82,10 @@
                 <div class="command-input">
                     <textarea id="prompt-input" rows="3"
                         placeholder="Enter natural language sequence... (e.g. 'Robot1: Grab the red cube')"></textarea>
+                    <div id="thinking-indicator" class="thinking-indicator" style="display: none;">
+                        <span class="thinking-spinner"></span>
+                        <span>Processing...</span>
+                    </div>
                     <div class="input-actions">
                         <button class="btn btn-secondary" id="btn-clear"><i class="fa-solid fa-eraser"></i>
                             Clear</button>
@@ -173,7 +190,7 @@
                 <div class="logs-panel">
                     <div class="panel-header">
                         <h2><i class="fa-solid fa-align-left"></i> Server Logs</h2>
-                        <button class="btn-icon-small"><i class="fa-solid fa-download"></i></button>
+                        <button class="btn-icon-small" id="btn-download-logs" title="Download logs"><i class="fa-solid fa-download"></i></button>
                     </div>
                     <div class="console-output glass-box" id="console-output">
                         <div class="log-line info">[INFO] Backend Gateway Started on port 8000</div>

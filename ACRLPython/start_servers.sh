@@ -16,6 +16,8 @@ SEQUENCE_SERVER_PATTERN="orchestrators.RunSequenceServer"
 ROS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/rosUnityIntegration"
 CONTROLLER_PID=""
 ROS_INTEGRATION=true
+WEB_PORT="8000"
+ENV_FLAG="sim"
 
 # --- Functions ---
 
@@ -115,9 +117,17 @@ start_controller() {
     # - SequenceServer (port 5013) - sequence orchestration with RAG
     cd "$SCRIPT_DIR"
 
+    # Build optional extra arguments forwarded from the shell script flags
+    EXTRA_ARGS=()
+    EXTRA_ARGS+=("--env" "$ENV_FLAG")
+    if [ -n "$WEB_PORT" ]; then
+        EXTRA_ARGS+=("--web" "$WEB_PORT")
+        echo "  Web UI will be available at http://0.0.0.0:${WEB_PORT}"
+    fi
+
     # Enable job control to manage the background process group
     set -m
-    "$PYTHON_EXEC" -u -m orchestrators.RunRobotController &
+    "$PYTHON_EXEC" -u -m orchestrators.RunRobotController "${EXTRA_ARGS[@]}" &
     CONTROLLER_PID=$!
     set +m
 
@@ -150,9 +160,25 @@ main() {
                 ROS_INTEGRATION=false
                 shift
                 ;;
+            --web)
+                WEB_PORT="$2"
+                shift 2
+                ;;
+            --no-web)
+                WEB_PORT=""
+                shift
+                ;;
+            --env)
+                ENV_FLAG="$2"
+                if [[ "$ENV_FLAG" != "sim" && "$ENV_FLAG" != "real" ]]; then
+                    echo "ERROR: --env must be 'sim' or 'real'" >&2
+                    exit 1
+                fi
+                shift 2
+                ;;
             *)
                 echo "Unknown option: $1" >&2
-                echo "Usage: $0 [--without-ros]" >&2
+                echo "Usage: $0 [--without-ros] [--web PORT] [--no-web] [--env sim|real]" >&2
                 exit 1
                 ;;
         esac

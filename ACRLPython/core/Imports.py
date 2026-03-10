@@ -271,3 +271,67 @@ def get_graph_query_engine():
         return get_query_engine()
     except ImportError as e:
         raise ImportError(f"Failed to import GraphQueryEngine. Error: {e}")
+
+
+# ============================================================================
+# Hardware Interface
+# ============================================================================
+
+
+def get_hardware_interface(env: str = "sim"):
+    """
+    Get the RobotHardwareInterface singleton for the active execution environment.
+
+    On the first call (typically from RunRobotController) the env argument
+    determines which adapter is instantiated.  Subsequent calls ignore env
+    and return the cached singleton.
+
+    Args:
+        env: "sim" for Unity (default), "real" for ROS/MoveIt.
+
+    Returns:
+        Concrete RobotHardwareInterface adapter (UnityHardwareInterface or
+        ROSHardwareInterface).
+
+    Raises:
+        ImportError: If the hardware package cannot be imported.
+
+    Used by:
+        - orchestrators/RunRobotController.py (initialisation)
+        - Any operation that needs hardware-agnostic motion commands
+    """
+    try:
+        from hardware import get_hardware_interface as _get_hw
+
+        return _get_hw(env=env)
+    except ImportError as e:
+        raise ImportError(f"Failed to import hardware interface. Error: {e}")
+
+
+# ============================================================================
+# Camera Provider
+# ============================================================================
+
+
+def get_camera_provider(env: str = "sim"):
+    """
+    Get the CameraProvider singleton for the active execution environment.
+
+    Args:
+        env: "sim" for Unity image storage (default), "real" for local USB/RealSense.
+
+    Returns:
+        Concrete CameraProvider adapter.
+
+    Raises:
+        ImportError: If the camera package cannot be imported.
+
+    Used by:
+        - Any operation or vision component needing environment-agnostic camera access
+    """
+    try:
+        from camera import get_camera_provider as _get_cam
+
+        return _get_cam(env=env)
+    except ImportError as e:
+        raise ImportError(f"Failed to import camera provider. Error: {e}")

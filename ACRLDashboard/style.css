@@ -34,14 +34,18 @@
     padding: 0;
 }
 
+html {
+    height: 100%;
+}
+
 body.dark-theme {
     background-color: var(--bg-base);
     color: var(--text-main);
     font-family: var(--font-sans);
-    height: 100vh;
+    height: 100%;
     overflow: hidden;
     /* Subtle background grid */
-    background-image: 
+    background-image:
         linear-gradient(var(--glass-border) 1px, transparent 1px),
         linear-gradient(90deg, var(--glass-border) 1px, transparent 1px);
     background-size: 50px 50px;
@@ -50,8 +54,8 @@ body.dark-theme {
 /* Glassmorphism Utilities */
 .glass-box {
     background: var(--bg-panel);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-md);
     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
@@ -62,8 +66,10 @@ body.dark-theme {
     display: flex;
     flex-direction: column;
     height: 100vh;
-    padding: 1rem;
+    max-height: 100vh;
+    padding: 1rem 1.5rem 1rem 1rem;
     gap: 1rem;
+    overflow: hidden;
 }
 
 /* Header */
@@ -73,7 +79,7 @@ body.dark-theme {
     align-items: center;
     padding: 1rem 2rem;
     background: var(--bg-panel);
-    backdrop-filter: blur(12px);
+    backdrop-filter: blur(8px);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-lg);
 }
@@ -169,13 +175,6 @@ body.dark-theme {
     font-weight: 700;
     letter-spacing: 1px;
     box-shadow: 0 0 20px rgba(231, 29, 54, 0.6);
-    animation: estop-pulse 2s infinite;
-}
-
-@keyframes estop-pulse {
-    0% { box-shadow: 0 0 0 0 rgba(231, 29, 54, 0.7); }
-    70% { box-shadow: 0 0 0 15px rgba(231, 29, 54, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(231, 29, 54, 0); }
 }
 
 .btn-estop:hover {
@@ -211,10 +210,11 @@ body.dark-theme {
 /* Main Grid */
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 25% 50% 25%;
+    grid-template-columns: 1fr 2fr 1fr;
     gap: 1rem;
     flex: 1;
-    min-height: 0; /* Important for flex child scrolling */
+    min-height: 0; /* Required: lets flex child respect parent height */
+    overflow: hidden;
 }
 
 /* General Panels */
@@ -222,7 +222,8 @@ body.dark-theme {
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    height: 100%;
+    min-height: 0; /* Required: lets flex children shrink inside grid cell */
+    overflow: hidden;
 }
 
 .panel-header {
@@ -363,14 +364,36 @@ body.dark-theme {
 }
 
 /* Right Panel */
-.camera-grid {
+.right-panel {
     display: flex;
     flex-direction: column;
     gap: 1rem;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.perception-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    /* Take roughly half the right column height */
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.camera-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .camera-feed {
-    height: 200px;
+    flex: 1;
+    min-height: 80px;   /* never collapse to zero */
     position: relative;
     display: flex;
     justify-content: center;
@@ -404,8 +427,9 @@ body.dark-theme {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-    min-height: 200px;
+    gap: 0.5rem;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .console-output {
@@ -435,3 +459,114 @@ body.dark-theme {
 ::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
 ::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+/* Status badge classes driven by /api/status polling.
+   Use .dot.badge-* so specificity matches .dot.online/.dot.offline above. */
+.dot.badge-online  { color: var(--success); background: var(--success); box-shadow: 0 0 8px var(--success); }
+.dot.badge-offline { color: var(--danger);  background: var(--danger);  box-shadow: 0 0 8px var(--danger);  }
+
+/* Responsive — two columns on medium screens */
+@media (max-width: 1100px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto auto;
+    }
+    .visualization-panel {
+        grid-column: 1 / -1; /* span full width */
+        order: -1;
+    }
+}
+
+/* Responsive — single column on small screens */
+@media (max-width: 700px) {
+    body.dark-theme { overflow-y: auto; }
+    .app-container { height: auto; overflow: visible; }
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: none;
+    }
+    .visualization-panel { order: 0; }
+}
+
+/* Thinking / Processing indicator */
+@keyframes spin {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.thinking-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    padding: 0.3rem 0;
+}
+
+.thinking-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--glass-border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+/* Disconnect banner */
+.disconnect-banner {
+    background: rgba(255, 159, 28, 0.15);
+    border: 1px solid var(--warning);
+    border-radius: var(--radius-md);
+    color: var(--warning);
+    padding: 0.5rem 1rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+/* Light mode variables — two entry points:
+   1. Explicit toggle: JS sets data-theme="light" on <body>
+   2. OS auto-detect: @media fires when no explicit override is set (data-theme="dark" blocks it) */
+
+body[data-theme="light"] {
+    --bg-base: #f0f2f5;
+    --bg-panel: rgba(255, 255, 255, 0.85);
+    --bg-glass: rgba(0, 0, 0, 0.03);
+    --glass-border: rgba(0, 0, 0, 0.1);
+    --text-main: #1a1d24;
+    --text-muted: #6c757d;
+    background-color: var(--bg-base);
+}
+
+body[data-theme="light"] .glass-box {
+    box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.08);
+}
+body[data-theme="light"] .console-output {
+    background: rgba(0, 0, 0, 0.05);
+}
+body[data-theme="light"] ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.05); }
+body[data-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.15); }
+body[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.25); }
+
+/* OS-level auto light mode — only applies when user hasn't manually picked a theme */
+@media (prefers-color-scheme: light) {
+    body:not([data-theme="dark"]):not([data-theme="light"]) {
+        --bg-base: #f0f2f5;
+        --bg-panel: rgba(255, 255, 255, 0.85);
+        --bg-glass: rgba(0, 0, 0, 0.03);
+        --glass-border: rgba(0, 0, 0, 0.1);
+        --text-main: #1a1d24;
+        --text-muted: #6c757d;
+        background-color: var(--bg-base);
+    }
+    body:not([data-theme="dark"]):not([data-theme="light"]) .glass-box {
+        box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.08);
+    }
+    body:not([data-theme="dark"]):not([data-theme="light"]) .console-output {
+        background: rgba(0, 0, 0, 0.05);
+    }
+}

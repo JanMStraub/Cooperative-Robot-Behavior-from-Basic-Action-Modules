@@ -7,15 +7,19 @@ class DashboardController {
     constructor() {
         this.ws = null;
         this.reconnectAttempts = 0;
+        this.autoRtActive = false;
 
         // Element references
         this.chatHistory = document.getElementById('chat-history');
         this.promptInput = document.getElementById('prompt-input');
         this.consoleOutput = document.getElementById('console-output');
 
+        this.initTheme();
         this.initEventListeners();
         this.initThreeJS();
         this.connectWebSocket();
+        this.startStatusPolling();
+        this.initCameraRetry();
     }
 
     initEventListeners() {
@@ -36,6 +40,14 @@ class DashboardController {
             this.triggerEStop();
         });
 
+        document.getElementById('btn-theme').addEventListener('click', () => {
+            this.toggleTheme();
+        });
+
+        document.getElementById('btn-download-logs').addEventListener('click', () => {
+            this.downloadLogs();
+        });
+
         const autoRtBtn = document.querySelector('.panel-actions .btn-icon[title="Toggle AutoRT"]');
         if (autoRtBtn) {
             autoRtBtn.addEventListener('click', () => this.toggleAutoRT(autoRtBtn));
@@ -49,6 +61,87 @@ class DashboardController {
                 if (title) this.jogRobot(title);
             });
         });
+    }
+
+    /* --- THEME MANAGEMENT --- */
+
+    initTheme() {
+        // Seed from localStorage if user has previously picked a theme;
+        // otherwise leave body with no data-theme so the @media query decides.
+        const saved = localStorage.getItem('acrl-theme');
+        if (saved) document.body.setAttribute('data-theme', saved);
+    }
+
+    toggleTheme() {
+        const current = document.body.getAttribute('data-theme');
+        // Determine effective current theme (account for OS default when no attribute set)
+        const isCurrentlyLight = current === 'light' ||
+            (!current && window.matchMedia('(prefers-color-scheme: light)').matches);
+        const next = isCurrentlyLight ? 'dark' : 'light';
+        document.body.setAttribute('data-theme', next);
+        localStorage.setItem('acrl-theme', next);
+    }
+
+    /* --- CAMERA STREAM RETRY --- */
+
+    initCameraRetry() {
+        // Attach retry logic to each camera <img> that has a data-src-base attribute.
+        // When onerror fires, wait 5s then reload with a cache-busted URL.
+        document.querySelectorAll('.camera-feed img').forEach(img => {
+            const baseSrc = img.src;
+            img.addEventListener('error', () => {
+                setTimeout(() => {
+                    img.style.display = '';
+                    const placeholder = img.nextElementSibling;
+                    if (placeholder && placeholder.classList.contains('feed-placeholder')) {
+                        placeholder.style.display = 'none';
+                    }
+                    img.src = `${baseSrc.split('?')[0]}?_t=${Date.now()}`;
+                }, 5000);
+            });
+        });
+    }
+
+    /* --- STATUS POLLING --- */
+
+    startStatusPolling() {
+        // Poll /api/status every 3 seconds for subsystem badges (ros, llm, unity).
+        // backend badge is driven directly by WebSocket state, not this poll.
+        const poll = () => this.pollStatus();
+        poll();
+        setInterval(poll, 3000);
+    }
+
+    pollStatus() {
+        fetch('/api/status')
+            .then(r => r.json())
+            .then(status => {
+                // backend is always true when the fetch succeeds (server is up)
+                // but the badge reflects WebSocket connectivity, handled separately
+                this.updateStatusBadges(status);
+            })
+            .catch(() => this.updateStatusBadges({ ros: false, llm: false, unity: false }));
+    }
+
+    updateStatusBadges(status) {
+        // backend badge is driven by WebSocket state, not the REST poll
+        const wsConnected = this.ws && this.ws.readyState === WebSocket.OPEN;
+        const effective = { backend: wsConnected, ...status };
+
+        const mapping = {
+            backend: 'badge-backend',
+            ros: 'badge-ros',
+            llm: 'badge-llm',
+            unity: 'badge-unity',
+        };
+        for (const [key, elemId] of Object.entries(mapping)) {
+            const el = document.getElementById(elemId);
+            if (!el) continue;
+            const online = !!effective[key];
+            el.classList.toggle('badge-online', online);
+            el.classList.toggle('badge-offline', !online);
+            el.title = `${key}: ${online ? 'Connected' : 'Disconnected'}`;
+        }
     }
 
     /* --- WEBSOCKET CONNECTION --- */
@@ -65,7 +158,11 @@ class DashboardController {
             this.ws.onopen = () => {
                 this.logToConsole('WebSocket Connected to Backend.', 'success');
                 this.reconnectAttempts = 0;
-                document.querySelector('.dot.online').style.boxShadow = '0 0 15px var(--success)';
+                const banner = document.getElementById('disconnect-banner');
+                if (banner) banner.style.display = 'none';
+                // Immediately reflect new state — don't wait for next poll tick
+                this.updateStatusBadges({});
+                this.pollStatus();
             };
 
             this.ws.onmessage = (event) => {
@@ -74,7 +171,10 @@ class DashboardController {
 
             this.ws.onclose = () => {
                 this.logToConsole('WebSocket Disconnected. Reconnecting...', 'warning');
-                document.querySelector('.dot.online').style.boxShadow = 'none';
+                const banner = document.getElementById('disconnect-banner');
+                if (banner) banner.style.display = 'flex';
+                // Immediately mark backend as offline
+                this.updateStatusBadges({});
 
                 // Exponential backoff
                 const timeout = Math.min(10000, 1000 * Math.pow(1.5, this.reconnectAttempts));
@@ -91,17 +191,26 @@ class DashboardController {
         }
     }
 
+    _hideThinkingIndicator() {
+        const indicator = document.getElementById('thinking-indicator');
+        const sendBtn = document.getElementById('btn-send');
+        if (indicator) indicator.style.display = 'none';
+        if (sendBtn) sendBtn.disabled = false;
+    }
+
     handleMessage(msg) {
         if (!msg || !msg.type) return;
 
         switch (msg.type) {
             case 'log':
                 this.logToConsole(msg.message, msg.level);
+                if (msg.level === 'error') this._hideThinkingIndicator();
                 break;
             case 'world_state':
                 this.updateWorldState(msg.data);
                 break;
             case 'sequence_result':
+                this._hideThinkingIndicator();
                 this.handleSequenceResult(msg.data);
                 break;
             default:
@@ -152,6 +261,12 @@ class DashboardController {
                 prompt: text
             }));
             this.logToConsole(`Sent prompt: ${text}`, 'info');
+
+            // Show loading state
+            const indicator = document.getElementById('thinking-indicator');
+            const sendBtn = document.getElementById('btn-send');
+            if (indicator) indicator.style.display = 'flex';
+            if (sendBtn) sendBtn.disabled = true;
         } else {
             this.logToConsole('Cannot send prompt: Disconnected', 'error');
         }
@@ -249,13 +364,28 @@ class DashboardController {
         const time = new Date().toLocaleTimeString();
         div.textContent = `[${time}] ${msg}`;
 
+        // Snapshot scroll position BEFORE appending so scrollHeight hasn't grown yet
+        const { scrollHeight, clientHeight, scrollTop } = this.consoleOutput;
+        const isScrolledToBottom = Math.abs(scrollHeight - clientHeight - scrollTop) < 5;
+
         this.consoleOutput.appendChild(div);
 
-        // Autoscroll logic (only if currently near bottom)
-        const isScrolledToBottom = this.consoleOutput.scrollHeight - this.consoleOutput.clientHeight <= this.consoleOutput.scrollTop + 10;
         if (isScrolledToBottom) {
             this.consoleOutput.scrollTop = this.consoleOutput.scrollHeight;
         }
+    }
+
+    downloadLogs() {
+        const lines = Array.from(this.consoleOutput.querySelectorAll('.log-line'))
+            .map(el => el.textContent)
+            .join('\n');
+        const blob = new Blob([lines], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `acrl-logs-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
     }
 
     /* --- THREE.JS VISUALIZATION --- */
@@ -268,8 +398,9 @@ class DashboardController {
         const height = container.clientHeight;
 
         // Scene, Camera, Renderer
+        const isLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x0a0a0a);
+        this.scene.background = new THREE.Color(isLight ? 0xf0f2f5 : 0x0a0a0a);
 
         this.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
         this.camera.position.set(0, 2, 3);
@@ -285,7 +416,7 @@ class DashboardController {
         this.controls.dampingFactor = 0.05;
 
         // Grid & Lights
-        const gridHelper = new THREE.GridHelper(5, 20, 0x4361ee, 0x222222);
+        const gridHelper = new THREE.GridHelper(5, 20, 0x4361ee, isLight ? 0xcccccc : 0x222222);
         this.scene.add(gridHelper);
 
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -305,8 +436,9 @@ class DashboardController {
             this.camera.updateProjectionMatrix();
         });
 
-        // Object cache
+        // Object cache and timestamps (TTL prevents single-frame flicker)
         this.meshCache = {};
+        this.meshTimestamps = {};
 
         // Render loop
         const animate = () => {
@@ -320,14 +452,13 @@ class DashboardController {
     updateWorldState(data) {
         if (!this.scene) return;
 
-        // Keep track of what we saw this frame
-        const seenIds = new Set();
+        const now = Date.now();
 
         // Update Objects
         if (data.objects) {
             data.objects.forEach(obj => {
                 const id = obj.object_id;
-                seenIds.add(id);
+                this.meshTimestamps[id] = now;
                 this.updateOrCreateMesh(id, obj, 'object');
             });
         }
@@ -336,16 +467,18 @@ class DashboardController {
         if (data.robots) {
             data.robots.forEach(robot => {
                 const id = robot.robot_id;
-                seenIds.add(id);
+                this.meshTimestamps[id] = now;
                 this.updateOrCreateMesh(id, robot, 'robot');
             });
         }
 
-        // Remove things that disappeared
+        // Remove things that haven't been seen for >2s (prevents single-broadcast flicker)
         Object.keys(this.meshCache).forEach(id => {
-            if (!seenIds.has(id)) {
+            const lastSeen = this.meshTimestamps[id] || 0;
+            if (now - lastSeen > 2000) {
                 this.scene.remove(this.meshCache[id]);
                 delete this.meshCache[id];
+                delete this.meshTimestamps[id];
             }
         });
     }
@@ -393,7 +526,8 @@ window.sendCmd = function (action) {
             robot_id: robot_id,
             command: { type: 'gripper', action: action }
         })
-    }).then(r => r.json()).then(data => console.log(data));
+    }).then(r => r.json()).then(data => console.log(data))
+      .catch(err => console.error('Gripper cmd failed:', err));
 };
 
 document.addEventListener('DOMContentLoaded', () => {

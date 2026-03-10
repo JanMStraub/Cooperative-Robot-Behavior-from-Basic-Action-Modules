@@ -1,4 +1,0 @@
-{
-  "ignore": ["graspnet_server.py"],
-  "reportMissingImports": "none"
-}
