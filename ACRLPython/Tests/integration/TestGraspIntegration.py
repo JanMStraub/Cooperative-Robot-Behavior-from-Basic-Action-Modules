@@ -317,18 +317,13 @@ class TestGraspPerformance:
     def mock_unity_connection(self):
         """Mock Unity connection for performance tests.
 
-        Patches the command broadcaster, the GraspNet health-check, and the
-        GraspNet point-cloud path so the benchmark measures pure command-send
+        Patches the command broadcaster, the VGN availability check, and the
+        point-cloud path so the benchmark measures pure command-send
         overhead without any network I/O.
-
-        GraspNetClient.is_available() makes a real HTTP call per new instance
-        (TTL cache is per-instance, reset on construction) — this alone accounts
-        for ~15-20 ms per grasp_object() call and is the dominant overhead that
-        caused the original 10 ms threshold to be exceeded.
         """
         with patch('config.ROS.ROS_ENABLED', False), \
              patch('operations.GraspOperations._get_command_broadcaster') as mock, \
-             patch('operations.GraspNetClient.GraspNetClient.is_available',
+             patch('operations.VGNClient.VGNClient.is_available',
                    return_value=False), \
              patch('operations.PointCloudOperations.generate_point_cloud'):
             broadcaster = MagicMock()

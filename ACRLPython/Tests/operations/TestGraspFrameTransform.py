@@ -3,7 +3,7 @@
 Unit tests for GraspFrameTransform.py
 
 Tests the RH camera-frame → LH Unity world-frame transformation for
-Contact-GraspNet grasp poses.  All tests are pure math — no Unity or
+VGN grasp poses.  All tests are pure math — no Unity or
 network access required.
 
 Key invariants verified:
@@ -19,7 +19,7 @@ import pytest
 import numpy as np
 
 from operations.GraspFrameTransform import (
-    transform_graspnet_poses_to_unity,
+    transform_grasp_poses_to_unity,
     _quat_multiply,
     _quat_rotate_vector,
     _normalise_quat,
@@ -84,7 +84,7 @@ class TestTransformGraspnetPosesToUnity:
             }
         ]
 
-        result = transform_graspnet_poses_to_unity(grasps, cam_pos, cam_rot)
+        result = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
 
         assert len(result) == 1
         pos = result[0]["position"]
@@ -103,7 +103,7 @@ class TestTransformGraspnetPosesToUnity:
             }
         ]
 
-        result = transform_graspnet_poses_to_unity(grasps, cam_pos, cam_rot)
+        result = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
 
         assert len(result) == 1
         pos = result[0]["position"]
@@ -123,7 +123,7 @@ class TestTransformGraspnetPosesToUnity:
             }
         ]
 
-        result = transform_graspnet_poses_to_unity(grasps, cam_pos, cam_rot)
+        result = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
 
         assert len(result) == 1
         pos = result[0]["position"]
@@ -150,7 +150,7 @@ class TestTransformGraspnetPosesToUnity:
             }
         ]
 
-        result = transform_graspnet_poses_to_unity(grasps, cam_pos, cam_rot)
+        result = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
 
         assert len(result) == 1
         approach = result[0]["approach_direction"]
@@ -160,7 +160,7 @@ class TestTransformGraspnetPosesToUnity:
         )
 
     def test_score_and_width_preserved(self):
-        """score and width fields from GraspNet are preserved in the output."""
+        """score and width fields from VGN are preserved in the output."""
         cam_pos = [0.0, 0.0, 0.0]
         cam_rot = [0.0, 0.0, 0.0, 1.0]
 
@@ -173,7 +173,7 @@ class TestTransformGraspnetPosesToUnity:
             }
         ]
 
-        result = transform_graspnet_poses_to_unity(grasps, cam_pos, cam_rot)
+        result = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
 
         assert len(result) == 1
         assert result[0]["score"] == pytest.approx(0.87)
@@ -193,7 +193,7 @@ class TestTransformGraspnetPosesToUnity:
             },
         ]
 
-        result = transform_graspnet_poses_to_unity(grasps, cam_pos, cam_rot)
+        result = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
 
         # Only the valid grasp should be in the output
         assert len(result) == 1
@@ -201,7 +201,7 @@ class TestTransformGraspnetPosesToUnity:
 
     def test_empty_input_returns_empty_list(self):
         """Empty grasp list returns empty output without error."""
-        result = transform_graspnet_poses_to_unity([], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0])
+        result = transform_grasp_poses_to_unity([], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0])
         assert result == []
 
     def test_multiple_grasps_all_transformed(self):
@@ -215,7 +215,7 @@ class TestTransformGraspnetPosesToUnity:
             {"position": [3.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0], "score": 0.3},
         ]
 
-        result = transform_graspnet_poses_to_unity(grasps, cam_pos, cam_rot)
+        result = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
 
         assert len(result) == 3
         # X-flip: [1,0,0] → [-1,0,0], [2,0,0] → [-2,0,0], etc.
@@ -224,7 +224,7 @@ class TestTransformGraspnetPosesToUnity:
         np.testing.assert_allclose(result[2]["position"], [-3.0, 0.0, 0.0], atol=1e-6)
 
     def test_approach_direction_from_provided_field(self):
-        """When approach_direction is provided by GraspNet it is transformed too."""
+        """When approach_direction is provided by VGN it is transformed too."""
         cam_pos = [0.0, 0.0, 0.0]
         cam_rot = [0.0, 0.0, 0.0, 1.0]  # identity
 
@@ -236,7 +236,7 @@ class TestTransformGraspnetPosesToUnity:
             }
         ]
 
-        result = transform_graspnet_poses_to_unity(grasps, cam_pos, cam_rot)
+        result = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
 
         assert len(result) == 1
         approach = result[0]["approach_direction"]
@@ -258,7 +258,7 @@ class TestTransformGraspnetPosesToUnity:
             }
         ]
 
-        result = transform_graspnet_poses_to_unity(grasps, cam_pos, cam_rot)
+        result = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
 
         # Must not crash and must return exactly one candidate
         assert len(result) == 1, "Euler-angle grasp must not be silently skipped"

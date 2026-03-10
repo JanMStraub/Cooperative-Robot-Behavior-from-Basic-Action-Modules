@@ -1,32 +1,32 @@
 """
-Integration tests for _grasp_via_graspnet orchestration
-=========================================================
+Integration tests for _grasp_via_vgn orchestration
+=====================================================
 
-Tests the full GraspNet fast-path inside ``grasp_object`` by mocking every
-external collaborator so no live Unity, GPU server, or stereo cameras are
+Tests the full VGN fast-path inside ``grasp_object`` by mocking every
+external collaborator so no live Unity, model checkpoint, or stereo cameras are
 required.  The goal is to verify that the orchestration logic correctly
 chains the components and falls back to the geometric pipeline when any
 step fails.
 
 Coverage:
-- Happy path: point cloud → detection → GraspNet → transform → broadcaster
-- Fallback when GraspNet service is unavailable
+- Happy path: point cloud → detection → VGN → transform → broadcaster
+- Fallback when VGN model is unavailable
 - Fallback when point cloud generation fails
-- Fallback when GraspNet returns no candidates
+- Fallback when VGN returns no candidates
 - Fallback when frame transform produces no valid poses
 - Broadcaster unavailable → error result (not fallback)
 - Broadcaster send failure → error result
 - Pre-grasp position computed along approach direction
 - Correct number of candidates forwarded to Unity
-- grasp_object routes to GraspNet path when GRASPNET_ENABLED=true
-- grasp_object falls back to TCP path when GraspNet returns None
+- grasp_object routes to VGN path when VGN_ENABLED=true
+- grasp_object falls back to TCP path when VGN returns None
 """
 
 import pytest
 from unittest.mock import MagicMock, patch
 import numpy as np
 
-from operations.GraspOperations import _grasp_via_graspnet, grasp_object
+from operations.GraspOperations import _grasp_via_vgn, grasp_object
 from operations.Base import OperationResult
 
 
@@ -56,7 +56,7 @@ def _pc_failure():
 
 
 def _sample_grasps(n: int = 3):
-    """Return minimal grasp dicts as returned by the GraspNet service."""
+    """Return minimal grasp dicts as returned by the VGN pipeline."""
     return [
         {
             "position": [0.1 * i, 0.2, 0.5],
@@ -86,12 +86,12 @@ def _world_grasps(n: int = 3):
 _UNSET = object()  # sentinel: distinguishes "caller omitted" from explicit None
 
 
-class _GraspNetPatch:
-    """Context manager that patches all collaborators of _grasp_via_graspnet."""
+class _VGNPatch:
+    """Context manager that patches all collaborators of _grasp_via_vgn."""
 
     def __init__(
         self,
-        graspnet_available: bool = True,
+        vgn_available: bool = True,
         pc_result=_UNSET,
         detect_result=None,
         raw_grasps=_UNSET,
@@ -99,7 +99,7 @@ class _GraspNetPatch:
         broadcaster_available: bool = True,
         send_command_return: bool = True,
     ):
-        self.graspnet_available = graspnet_available
+        self.vgn_available = vgn_available
         self.pc_result = _pc_success() if pc_result is _UNSET else pc_result
         self.detect_result = detect_result
         self.raw_grasps = _sample_grasps() if raw_grasps is _UNSET else raw_grasps
@@ -112,17 +112,13 @@ class _GraspNetPatch:
         self.mock_broadcaster = None
 
     def __enter__(self):
-        # GraspNetClient and its lazy-import siblings live in their own modules;
-        # _grasp_via_graspnet imports them locally so we must patch the source
-        # module, not the GraspOperations namespace.
-
-        # Mock GraspNetClient class in its own module
+        # VGNClient mock — patch in its own module
         self.mock_client = MagicMock()
-        self.mock_client.is_available.return_value = self.graspnet_available
+        self.mock_client.is_available.return_value = self.vgn_available
         self.mock_client.predict_grasps.return_value = self.raw_grasps
 
         client_cls = patch(
-            "operations.GraspNetClient.GraspNetClient",
+            "operations.VGNClient.VGNClient",
             return_value=self.mock_client,
         )
         self._patches.append(client_cls.start())
@@ -144,12 +140,21 @@ class _GraspNetPatch:
 
         # Mock transform in its source module
         transform_patch = patch(
-            "operations.GraspFrameTransform.transform_graspnet_poses_to_unity",
+            "operations.GraspFrameTransform.transform_grasp_poses_to_unity",
             return_value=self.world_grasps_result,
         )
         self._patches.append(transform_patch.start())
 
-        # Mock CommandBroadcaster — this IS a module-level name in GraspOperations
+        # Mock unified image storage (non-fatal, returns None)
+        storage_mock = MagicMock()
+        storage_mock.get_latest_image.return_value = None
+        storage_patch = patch(
+            "core.Imports.get_unified_image_storage",
+            return_value=storage_mock,
+        )
+        self._patches.append(storage_patch.start())
+
+        # Mock CommandBroadcaster
         self.mock_broadcaster = MagicMock()
         self.mock_broadcaster.send_command.return_value = self.send_command_return
 
@@ -167,17 +172,17 @@ class _GraspNetPatch:
 
 
 # ---------------------------------------------------------------------------
-# _grasp_via_graspnet happy path
+# _grasp_via_vgn happy path
 # ---------------------------------------------------------------------------
 
 
-class TestGraspViaGraspnetHappyPath:
+class TestGraspViaVGNHappyPath:
     """Tests for the successful execution path."""
 
     def test_returns_success_result(self):
         """Happy path returns a successful OperationResult."""
-        with _GraspNetPatch() as ctx:
-            result = _grasp_via_graspnet(
+        with _VGNPatch() as ctx:
+            result = _grasp_via_vgn(
                 robot_id="Robot1",
                 object_id="Cube_01",
                 preferred_approach="top",
@@ -190,11 +195,11 @@ class TestGraspViaGraspnetHappyPath:
         assert result is not None
         assert result.success is True
 
-    def test_result_contains_graspnet_candidate_count(self):
-        """Result dict includes how many GraspNet candidates were forwarded."""
+    def test_result_contains_vgn_candidate_count(self):
+        """Result dict includes how many VGN candidates were forwarded."""
         n = 5
-        with _GraspNetPatch(raw_grasps=_sample_grasps(n), world_grasps_result=_world_grasps(n)) as ctx:
-            result = _grasp_via_graspnet(
+        with _VGNPatch(raw_grasps=_sample_grasps(n), world_grasps_result=_world_grasps(n)) as ctx:
+            result = _grasp_via_vgn(
                 robot_id="Robot1",
                 object_id="Cube_01",
                 preferred_approach="auto",
@@ -204,13 +209,13 @@ class TestGraspViaGraspnetHappyPath:
                 retreat_distance=0.0,
                 request_id=2,
             )
-        assert result.result["graspnet_candidates"] == n
+        assert result.result["vgn_candidates"] == n
 
     def test_command_sent_with_precomputed_candidates(self):
         """grasp_object command payload contains precomputed_candidates list."""
         n = 3
-        with _GraspNetPatch(raw_grasps=_sample_grasps(n), world_grasps_result=_world_grasps(n)) as ctx:
-            _grasp_via_graspnet(
+        with _VGNPatch(raw_grasps=_sample_grasps(n), world_grasps_result=_world_grasps(n)) as ctx:
+            _grasp_via_vgn(
                 robot_id="Robot1",
                 object_id="Cube_01",
                 preferred_approach="top",
@@ -234,8 +239,8 @@ class TestGraspViaGraspnetHappyPath:
             "approach_direction": [0.0, 1.0, 0.0],  # +Y
         }]
         hover = 0.1
-        with _GraspNetPatch(raw_grasps=_sample_grasps(1), world_grasps_result=world) as ctx:
-            _grasp_via_graspnet(
+        with _VGNPatch(raw_grasps=_sample_grasps(1), world_grasps_result=world) as ctx:
+            _grasp_via_vgn(
                 robot_id="Robot1",
                 object_id="Cube_01",
                 preferred_approach="auto",
@@ -254,8 +259,8 @@ class TestGraspViaGraspnetHappyPath:
 
     def test_robot_id_and_object_id_in_command(self):
         """Command payload carries correct robot_id and object_id."""
-        with _GraspNetPatch() as ctx:
-            _grasp_via_graspnet(
+        with _VGNPatch() as ctx:
+            _grasp_via_vgn(
                 robot_id="RobotA",
                 object_id="Box_99",
                 preferred_approach="side",
@@ -271,8 +276,8 @@ class TestGraspViaGraspnetHappyPath:
 
     def test_request_id_forwarded_to_command(self):
         """request_id is forwarded into the Unity command."""
-        with _GraspNetPatch() as ctx:
-            _grasp_via_graspnet(
+        with _VGNPatch() as ctx:
+            _grasp_via_vgn(
                 robot_id="Robot1",
                 object_id="Cube_01",
                 preferred_approach="auto",
@@ -291,13 +296,13 @@ class TestGraspViaGraspnetHappyPath:
 # ---------------------------------------------------------------------------
 
 
-class TestGraspViaGraspnetFallback:
-    """Tests for scenarios where _grasp_via_graspnet returns None."""
+class TestGraspViaVGNFallback:
+    """Tests for scenarios where _grasp_via_vgn returns None."""
 
-    def test_returns_none_when_graspnet_unavailable(self):
-        """Service health check fails → None (no exception)."""
-        with _GraspNetPatch(graspnet_available=False):
-            result = _grasp_via_graspnet(
+    def test_returns_none_when_vgn_unavailable(self):
+        """Model not available → None (no exception)."""
+        with _VGNPatch(vgn_available=False):
+            result = _grasp_via_vgn(
                 robot_id="Robot1",
                 object_id="Cube_01",
                 preferred_approach="auto",
@@ -311,8 +316,8 @@ class TestGraspViaGraspnetFallback:
 
     def test_returns_none_when_point_cloud_fails(self):
         """Point cloud generation error → None."""
-        with _GraspNetPatch(pc_result=_pc_failure()):
-            result = _grasp_via_graspnet(
+        with _VGNPatch(pc_result=_pc_failure()):
+            result = _grasp_via_vgn(
                 robot_id="Robot1",
                 object_id="Cube_01",
                 preferred_approach="auto",
@@ -324,10 +329,10 @@ class TestGraspViaGraspnetFallback:
             )
         assert result is None
 
-    def test_returns_none_when_graspnet_returns_no_candidates(self):
-        """GraspNet returns empty list → None."""
-        with _GraspNetPatch(raw_grasps=[]):
-            result = _grasp_via_graspnet(
+    def test_returns_none_when_vgn_returns_no_candidates(self):
+        """VGN returns empty list → None."""
+        with _VGNPatch(raw_grasps=[]):
+            result = _grasp_via_vgn(
                 robot_id="Robot1",
                 object_id="Cube_01",
                 preferred_approach="auto",
@@ -339,10 +344,10 @@ class TestGraspViaGraspnetFallback:
             )
         assert result is None
 
-    def test_returns_none_when_graspnet_returns_none(self):
-        """GraspNet returns None (network error) → None."""
-        with _GraspNetPatch(raw_grasps=None):
-            result = _grasp_via_graspnet(
+    def test_returns_none_when_vgn_returns_none(self):
+        """VGN returns None (e.g. too few points) → None."""
+        with _VGNPatch(raw_grasps=None):
+            result = _grasp_via_vgn(
                 robot_id="Robot1",
                 object_id="Cube_01",
                 preferred_approach="auto",
@@ -356,8 +361,8 @@ class TestGraspViaGraspnetFallback:
 
     def test_returns_none_when_frame_transform_produces_no_poses(self):
         """Empty world_grasps after transform → None."""
-        with _GraspNetPatch(world_grasps_result=[]):
-            result = _grasp_via_graspnet(
+        with _VGNPatch(world_grasps_result=[]):
+            result = _grasp_via_vgn(
                 robot_id="Robot1",
                 object_id="Cube_01",
                 preferred_approach="auto",
@@ -375,13 +380,13 @@ class TestGraspViaGraspnetFallback:
 # ---------------------------------------------------------------------------
 
 
-class TestGraspViaGraspnetErrors:
-    """Tests for scenarios where _grasp_via_graspnet returns an error OperationResult."""
+class TestGraspViaVGNErrors:
+    """Tests for scenarios where _grasp_via_vgn returns an error OperationResult."""
 
     def test_error_when_broadcaster_unavailable(self):
         """Missing broadcaster → error result (not None)."""
-        with _GraspNetPatch(broadcaster_available=False):
-            result = _grasp_via_graspnet(
+        with _VGNPatch(broadcaster_available=False):
+            result = _grasp_via_vgn(
                 robot_id="Robot1",
                 object_id="Cube_01",
                 preferred_approach="auto",
@@ -397,8 +402,8 @@ class TestGraspViaGraspnetErrors:
 
     def test_error_when_send_command_fails(self):
         """Broadcaster.send_command returns False → error result."""
-        with _GraspNetPatch(send_command_return=False):
-            result = _grasp_via_graspnet(
+        with _VGNPatch(send_command_return=False):
+            result = _grasp_via_vgn(
                 robot_id="Robot1",
                 object_id="Cube_01",
                 preferred_approach="auto",
@@ -418,41 +423,34 @@ class TestGraspViaGraspnetErrors:
 # ---------------------------------------------------------------------------
 
 
-class TestGraspObjectGraspNetRouting:
-    """Tests that grasp_object correctly routes through the GraspNet path."""
+class TestGraspObjectVGNRouting:
+    """Tests that grasp_object correctly routes through the VGN path."""
 
-    def _base_patches(self, graspnet_enabled: bool = True):
-        """Return a dict of patches for grasp_object's outer layer."""
-        return {
-            "config.Servers.GRASPNET_ENABLED": graspnet_enabled,
-            "config.ROS.ROS_ENABLED": False,
-        }
-
-    def test_uses_graspnet_path_when_enabled_and_available(self):
-        """When GRASPNET_ENABLED and service is up, _grasp_via_graspnet is called."""
-        graspnet_result = OperationResult.success_result({
+    def test_uses_vgn_path_when_enabled_and_available(self):
+        """When VGN_ENABLED and model is available, _grasp_via_vgn is called."""
+        vgn_result = OperationResult.success_result({
             "command_sent": True,
             "robot_id": "Robot1",
             "object_id": "Cube_01",
             "request_id": 0,
-            "graspnet_candidates": 3,
+            "vgn_candidates": 3,
         })
-        with patch("config.Servers.GRASPNET_ENABLED", True), \
+        with patch("config.Servers.VGN_ENABLED", True), \
              patch("config.ROS.ROS_ENABLED", False), \
-             patch("operations.GraspOperations._grasp_via_graspnet", return_value=graspnet_result) as mock_gvg, \
+             patch("operations.GraspOperations._grasp_via_vgn", return_value=vgn_result) as mock_vgn, \
              patch("operations.GraspOperations._get_command_broadcaster"):
             result = grasp_object(robot_id="Robot1", object_id="Cube_01")
-        mock_gvg.assert_called_once()
+        mock_vgn.assert_called_once()
         assert result.success is True
-        assert result.result.get("graspnet_candidates") == 3
+        assert result.result.get("vgn_candidates") == 3
 
-    def test_falls_back_to_tcp_when_graspnet_returns_none(self):
-        """When _grasp_via_graspnet returns None, geometric TCP path is used."""
+    def test_falls_back_to_tcp_when_vgn_returns_none(self):
+        """When _grasp_via_vgn returns None, geometric TCP path is used."""
         broadcaster = MagicMock()
         broadcaster.send_command.return_value = True
-        with patch("config.Servers.GRASPNET_ENABLED", True), \
+        with patch("config.Servers.VGN_ENABLED", True), \
              patch("config.ROS.ROS_ENABLED", False), \
-             patch("operations.GraspOperations._grasp_via_graspnet", return_value=None), \
+             patch("operations.GraspOperations._grasp_via_vgn", return_value=None), \
              patch("operations.GraspOperations._get_command_broadcaster", return_value=broadcaster):
             result = grasp_object(robot_id="Robot1", object_id="Cube_01")
         # TCP path sends the command
@@ -462,33 +460,33 @@ class TestGraspObjectGraspNetRouting:
         # TCP path does NOT include precomputed_candidates
         assert "precomputed_candidates" not in cmd.get("parameters", {})
 
-    def test_skips_graspnet_when_disabled(self):
-        """When GRASPNET_ENABLED=False, _grasp_via_graspnet is never called."""
+    def test_skips_vgn_when_disabled(self):
+        """When VGN_ENABLED=False, _grasp_via_vgn is never called."""
         broadcaster = MagicMock()
         broadcaster.send_command.return_value = True
-        with patch("config.Servers.GRASPNET_ENABLED", False), \
+        with patch("config.Servers.VGN_ENABLED", False), \
              patch("config.ROS.ROS_ENABLED", False), \
-             patch("operations.GraspOperations._grasp_via_graspnet") as mock_gvg, \
+             patch("operations.GraspOperations._grasp_via_vgn") as mock_vgn, \
              patch("operations.GraspOperations._get_command_broadcaster", return_value=broadcaster):
             grasp_object(robot_id="Robot1", object_id="Cube_01")
-        mock_gvg.assert_not_called()
+        mock_vgn.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
-# _grasp_via_graspnet_with_ros helpers and tests
+# _grasp_via_vgn_with_ros helpers and tests
 # ---------------------------------------------------------------------------
 
 
-class _GraspNetROSPatch:
-    """Context manager that patches all collaborators of _grasp_via_graspnet_with_ros.
+class _VGNROSPatch:
+    """Context manager that patches all collaborators of _grasp_via_vgn_with_ros.
 
-    Mirrors _GraspNetPatch but additionally mocks the ROS bridge and the
+    Mirrors _VGNPatch but additionally mocks the ROS bridge and the
     follow-target helper so no live MoveIt or Unity connection is required.
     """
 
     def __init__(
         self,
-        graspnet_available: bool = True,
+        vgn_available: bool = True,
         pc_result=_UNSET,
         raw_grasps=_UNSET,
         world_grasps_result=_UNSET,
@@ -496,7 +494,7 @@ class _GraspNetROSPatch:
         descent_success: bool = True,
         gripper_success: bool = True,
     ):
-        self.graspnet_available = graspnet_available
+        self.vgn_available = vgn_available
         self.pc_result = _pc_success() if pc_result is _UNSET else pc_result
         self.raw_grasps = _sample_grasps() if raw_grasps is _UNSET else raw_grasps
         self.world_grasps_result = _world_grasps() if world_grasps_result is _UNSET else world_grasps_result
@@ -509,13 +507,13 @@ class _GraspNetROSPatch:
         self.mock_bridge = None
 
     def __enter__(self):
-        # GraspNetClient mock
+        # VGNClient mock
         self.mock_client = MagicMock()
-        self.mock_client.is_available.return_value = self.graspnet_available
+        self.mock_client.is_available.return_value = self.vgn_available
         self.mock_client.predict_grasps.return_value = self.raw_grasps
 
         client_cls = patch(
-            "operations.GraspNetClient.GraspNetClient",
+            "operations.VGNClient.VGNClient",
             return_value=self.mock_client,
         )
         self._patches.append(client_cls.start())
@@ -529,10 +527,19 @@ class _GraspNetROSPatch:
 
         # Frame transform mock
         transform_patch = patch(
-            "operations.GraspFrameTransform.transform_graspnet_poses_to_unity",
+            "operations.GraspFrameTransform.transform_grasp_poses_to_unity",
             return_value=self.world_grasps_result,
         )
         self._patches.append(transform_patch.start())
+
+        # Image storage mock (non-fatal)
+        storage_mock = MagicMock()
+        storage_mock.get_latest_image.return_value = None
+        storage_patch = patch(
+            "core.Imports.get_unified_image_storage",
+            return_value=storage_mock,
+        )
+        self._patches.append(storage_patch.start())
 
         # ROSBridge mock
         self.mock_bridge = MagicMock()
@@ -558,39 +565,19 @@ class _GraspNetROSPatch:
         _um.patch.stopall()
 
 
-def _call_with_ros(world_grasps_result=_UNSET, **kwargs):
-    """Helper: import and call _grasp_via_graspnet_with_ros directly."""
-    from operations.GraspOperations import _grasp_via_graspnet_with_ros
-
-    bridge = MagicMock()
-    bridge.plan_and_execute.return_value = {"success": kwargs.pop("pre_grasp_success", True)}
-    bridge.plan_cartesian_descent.return_value = {"success": kwargs.pop("descent_success", True)}
-
-    wg = _world_grasps() if world_grasps_result is _UNSET else world_grasps_result
-    return _grasp_via_graspnet_with_ros(
-        bridge=bridge,
-        robot_id=kwargs.get("robot_id", "Robot1"),
-        object_id=kwargs.get("object_id", "Cube_01"),
-        preferred_approach=kwargs.get("preferred_approach", "top"),
-        pre_grasp_distance=kwargs.get("pre_grasp_distance", 0.0),
-        request_id=kwargs.get("request_id", 1),
-        world_state=kwargs.get("world_state", None),
-    ), bridge, wg
-
-
 # ---------------------------------------------------------------------------
 # Happy path
 # ---------------------------------------------------------------------------
 
 
-class TestGraspViaGraspnetWithROSHappyPath:
-    """Tests for the successful execution path of _grasp_via_graspnet_with_ros."""
+class TestGraspViaVGNWithROSHappyPath:
+    """Tests for the successful execution path of _grasp_via_vgn_with_ros."""
 
     def test_returns_success_result(self):
         """Full pipeline succeeds → OperationResult with success=True."""
-        with _GraspNetROSPatch() as ctx:
-            from operations.GraspOperations import _grasp_via_graspnet_with_ros
-            result = _grasp_via_graspnet_with_ros(
+        with _VGNROSPatch() as ctx:
+            from operations.GraspOperations import _grasp_via_vgn_with_ros
+            result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
                 object_id="Cube_01",
@@ -602,11 +589,11 @@ class TestGraspViaGraspnetWithROSHappyPath:
         assert result is not None
         assert result.success is True
 
-    def test_status_is_graspnet_ros_executed(self):
-        """Result status key equals 'graspnet_ros_executed'."""
-        with _GraspNetROSPatch() as ctx:
-            from operations.GraspOperations import _grasp_via_graspnet_with_ros
-            result = _grasp_via_graspnet_with_ros(
+    def test_status_is_vgn_ros_executed(self):
+        """Result status key equals 'vgn_ros_executed'."""
+        with _VGNROSPatch() as ctx:
+            from operations.GraspOperations import _grasp_via_vgn_with_ros
+            result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
                 object_id="Cube_01",
@@ -615,14 +602,14 @@ class TestGraspViaGraspnetWithROSHappyPath:
                 request_id=2,
                 world_state=None,
             )
-        assert result.result["status"] == "graspnet_ros_executed"
+        assert result.result["status"] == "vgn_ros_executed"
 
-    def test_graspnet_candidates_count_in_result(self):
-        """result['graspnet_candidates'] equals the number of world-frame poses."""
+    def test_vgn_candidates_count_in_result(self):
+        """result['vgn_candidates'] equals the number of world-frame poses."""
         n = 4
-        with _GraspNetROSPatch(raw_grasps=_sample_grasps(n), world_grasps_result=_world_grasps(n)) as ctx:
-            from operations.GraspOperations import _grasp_via_graspnet_with_ros
-            result = _grasp_via_graspnet_with_ros(
+        with _VGNROSPatch(raw_grasps=_sample_grasps(n), world_grasps_result=_world_grasps(n)) as ctx:
+            from operations.GraspOperations import _grasp_via_vgn_with_ros
+            result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
                 object_id="Cube_01",
@@ -631,10 +618,10 @@ class TestGraspViaGraspnetWithROSHappyPath:
                 request_id=3,
                 world_state=None,
             )
-        assert result.result["graspnet_candidates"] == n
+        assert result.result["vgn_candidates"] == n
 
-    def test_plan_and_execute_called_with_graspnet_orientation(self):
-        """plan_and_execute receives the orientation from the top GraspNet candidate."""
+    def test_plan_and_execute_called_with_vgn_orientation(self):
+        """plan_and_execute receives the orientation from the top VGN candidate."""
         world = [{
             "position": [0.1, 0.2, 0.5],
             "rotation": [0.1, 0.2, 0.3, 0.9],
@@ -642,9 +629,9 @@ class TestGraspViaGraspnetWithROSHappyPath:
             "width": 0.08,
             "approach_direction": [0.0, -1.0, 0.0],
         }]
-        with _GraspNetROSPatch(raw_grasps=_sample_grasps(1), world_grasps_result=world) as ctx:
-            from operations.GraspOperations import _grasp_via_graspnet_with_ros
-            _grasp_via_graspnet_with_ros(
+        with _VGNROSPatch(raw_grasps=_sample_grasps(1), world_grasps_result=world) as ctx:
+            from operations.GraspOperations import _grasp_via_vgn_with_ros
+            _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
                 object_id="Cube_01",
@@ -653,10 +640,6 @@ class TestGraspViaGraspnetWithROSHappyPath:
                 request_id=4,
                 world_state=None,
             )
-        _, kwargs = ctx.mock_bridge.plan_and_execute.call_args
-        ori = kwargs.get("orientation") or ctx.mock_bridge.plan_and_execute.call_args[0][1] \
-            if ctx.mock_bridge.plan_and_execute.call_args[0] else kwargs["orientation"]
-        # Check using keyword call
         call_kwargs = ctx.mock_bridge.plan_and_execute.call_args.kwargs
         assert call_kwargs["orientation"] == {"x": 0.1, "y": 0.2, "z": 0.3, "w": 0.9}
 
@@ -669,9 +652,9 @@ class TestGraspViaGraspnetWithROSHappyPath:
             "width": 0.08,
             "approach_direction": [0.0, 1.0, 0.0],
         }]
-        with _GraspNetROSPatch(raw_grasps=_sample_grasps(1), world_grasps_result=world) as ctx:
-            from operations.GraspOperations import _grasp_via_graspnet_with_ros
-            _grasp_via_graspnet_with_ros(
+        with _VGNROSPatch(raw_grasps=_sample_grasps(1), world_grasps_result=world) as ctx:
+            from operations.GraspOperations import _grasp_via_vgn_with_ros
+            _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
                 object_id="Cube_01",
@@ -685,11 +668,11 @@ class TestGraspViaGraspnetWithROSHappyPath:
 
     def test_follow_target_called_after_descent(self):
         """_execute_grasp_with_follow_target is called after Cartesian descent."""
-        with _GraspNetROSPatch() as ctx:
-            from operations.GraspOperations import _grasp_via_graspnet_with_ros
+        with _VGNROSPatch() as ctx:
+            from operations.GraspOperations import _grasp_via_vgn_with_ros
             import operations.GraspOperations as go_module
             with patch.object(go_module, "_execute_grasp_with_follow_target", return_value=True) as mock_follow:
-                _grasp_via_graspnet_with_ros(
+                _grasp_via_vgn_with_ros(
                     bridge=ctx.mock_bridge,
                     robot_id="Robot1",
                     object_id="Cube_01",
@@ -706,14 +689,14 @@ class TestGraspViaGraspnetWithROSHappyPath:
 # ---------------------------------------------------------------------------
 
 
-class TestGraspViaGraspnetWithROSFallback:
-    """Tests for scenarios where _grasp_via_graspnet_with_ros returns None."""
+class TestGraspViaVGNWithROSFallback:
+    """Tests for scenarios where _grasp_via_vgn_with_ros returns None."""
 
-    def test_returns_none_when_graspnet_unavailable(self):
-        """GraspNet health check fails → None."""
-        with _GraspNetROSPatch(graspnet_available=False) as ctx:
-            from operations.GraspOperations import _grasp_via_graspnet_with_ros
-            result = _grasp_via_graspnet_with_ros(
+    def test_returns_none_when_vgn_unavailable(self):
+        """VGN model not available → None."""
+        with _VGNROSPatch(vgn_available=False) as ctx:
+            from operations.GraspOperations import _grasp_via_vgn_with_ros
+            result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
                 object_id="Cube_01",
@@ -726,9 +709,9 @@ class TestGraspViaGraspnetWithROSFallback:
 
     def test_returns_none_when_point_cloud_fails(self):
         """Point cloud failure → None."""
-        with _GraspNetROSPatch(pc_result=_pc_failure()) as ctx:
-            from operations.GraspOperations import _grasp_via_graspnet_with_ros
-            result = _grasp_via_graspnet_with_ros(
+        with _VGNROSPatch(pc_result=_pc_failure()) as ctx:
+            from operations.GraspOperations import _grasp_via_vgn_with_ros
+            result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
                 object_id="Cube_01",
@@ -739,11 +722,11 @@ class TestGraspViaGraspnetWithROSFallback:
             )
         assert result is None
 
-    def test_returns_none_when_graspnet_returns_no_candidates(self):
-        """GraspNet returns empty list → None."""
-        with _GraspNetROSPatch(raw_grasps=[]) as ctx:
-            from operations.GraspOperations import _grasp_via_graspnet_with_ros
-            result = _grasp_via_graspnet_with_ros(
+    def test_returns_none_when_vgn_returns_no_candidates(self):
+        """VGN returns empty list → None."""
+        with _VGNROSPatch(raw_grasps=[]) as ctx:
+            from operations.GraspOperations import _grasp_via_vgn_with_ros
+            result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
                 object_id="Cube_01",
@@ -756,9 +739,9 @@ class TestGraspViaGraspnetWithROSFallback:
 
     def test_returns_none_when_frame_transform_empty(self):
         """Frame transform produces no valid poses → None."""
-        with _GraspNetROSPatch(world_grasps_result=[]) as ctx:
-            from operations.GraspOperations import _grasp_via_graspnet_with_ros
-            result = _grasp_via_graspnet_with_ros(
+        with _VGNROSPatch(world_grasps_result=[]) as ctx:
+            from operations.GraspOperations import _grasp_via_vgn_with_ros
+            result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
                 object_id="Cube_01",
@@ -771,9 +754,9 @@ class TestGraspViaGraspnetWithROSFallback:
 
     def test_returns_none_when_pre_grasp_move_fails(self):
         """MoveIt pre-grasp planning failure → None (arm has not moved)."""
-        with _GraspNetROSPatch(pre_grasp_success=False) as ctx:
-            from operations.GraspOperations import _grasp_via_graspnet_with_ros
-            result = _grasp_via_graspnet_with_ros(
+        with _VGNROSPatch(pre_grasp_success=False) as ctx:
+            from operations.GraspOperations import _grasp_via_vgn_with_ros
+            result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
                 object_id="Cube_01",
@@ -786,9 +769,9 @@ class TestGraspViaGraspnetWithROSFallback:
 
     def test_returns_none_when_descent_fails(self):
         """MoveIt Cartesian descent failure → None (arm at pre-grasp, not target)."""
-        with _GraspNetROSPatch(descent_success=False) as ctx:
-            from operations.GraspOperations import _grasp_via_graspnet_with_ros
-            result = _grasp_via_graspnet_with_ros(
+        with _VGNROSPatch(descent_success=False) as ctx:
+            from operations.GraspOperations import _grasp_via_vgn_with_ros
+            result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
                 object_id="Cube_01",
@@ -805,14 +788,14 @@ class TestGraspViaGraspnetWithROSFallback:
 # ---------------------------------------------------------------------------
 
 
-class TestGraspViaGraspnetWithROSErrors:
+class TestGraspViaVGNWithROSErrors:
     """Tests for scenarios that return an error OperationResult (not None)."""
 
     def test_error_when_gripper_close_fails(self):
         """Arm descended but gripper close failed → GRIPPER_CLOSE_FAILED error result."""
-        with _GraspNetROSPatch(gripper_success=False) as ctx:
-            from operations.GraspOperations import _grasp_via_graspnet_with_ros
-            result = _grasp_via_graspnet_with_ros(
+        with _VGNROSPatch(gripper_success=False) as ctx:
+            from operations.GraspOperations import _grasp_via_vgn_with_ros
+            result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
                 object_id="Cube_01",
@@ -827,12 +810,12 @@ class TestGraspViaGraspnetWithROSErrors:
 
 
 # ---------------------------------------------------------------------------
-# Routing tests via grasp_object() with both ROS and GraspNet enabled
+# Routing tests via grasp_object() with both ROS and VGN enabled
 # ---------------------------------------------------------------------------
 
 
 class TestGraspObjectRoutingWithBothEnabled:
-    """Tests that grasp_object routes correctly when both GRASPNET_ENABLED and ROS are on."""
+    """Tests that grasp_object routes correctly when both VGN_ENABLED and ROS are on."""
 
     def _make_world_state(self):
         """Return a minimal WorldState mock that satisfies grasp_object's resolution logic."""
@@ -843,23 +826,14 @@ class TestGraspObjectRoutingWithBothEnabled:
         ws._objects = {"Cube_01": MagicMock()}
         return ws
 
-    def _base_ros_patches(self, bridge):
-        """Return a list of context managers for the ROS connection plumbing."""
-        return [
-            patch("config.ROS.ROS_ENABLED", True),
-            patch("config.ROS.DEFAULT_CONTROL_MODE", "ros"),
-            patch("config.Servers.GRASPNET_ENABLED", True),
-            patch("ros2.ROSBridge.ROSBridge", autospec=False),
-        ]
-
-    def test_graspnet_ros_path_attempted_first(self):
-        """When both enabled, _grasp_via_graspnet_with_ros is called before geometric ROS."""
-        graspnet_ros_result = OperationResult.success_result({
+    def test_vgn_ros_path_attempted_first(self):
+        """When both enabled, _grasp_via_vgn_with_ros is called before geometric ROS."""
+        vgn_ros_result = OperationResult.success_result({
             "robot_id": "Robot1",
             "object_id": "Cube_01",
             "request_id": 0,
-            "graspnet_candidates": 3,
-            "status": "graspnet_ros_executed",
+            "vgn_candidates": 3,
+            "status": "vgn_ros_executed",
         })
         bridge_mock = MagicMock()
         bridge_mock.is_connected = True
@@ -867,19 +841,19 @@ class TestGraspObjectRoutingWithBothEnabled:
 
         with patch("config.ROS.ROS_ENABLED", True), \
              patch("config.ROS.DEFAULT_CONTROL_MODE", "ros"), \
-             patch("config.Servers.GRASPNET_ENABLED", True), \
+             patch("config.Servers.VGN_ENABLED", True), \
              patch("ros2.ROSBridge.ROSBridge") as mock_ros_cls, \
              patch("core.Imports.get_world_state", return_value=world_state), \
-             patch("operations.GraspOperations._grasp_via_graspnet_with_ros",
-                   return_value=graspnet_ros_result) as mock_gn_ros:
+             patch("operations.GraspOperations._grasp_via_vgn_with_ros",
+                   return_value=vgn_ros_result) as mock_vgn_ros:
             mock_ros_cls.get_instance.return_value = bridge_mock
             result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
-        mock_gn_ros.assert_called_once()
-        assert result.result["status"] == "graspnet_ros_executed"
+        mock_vgn_ros.assert_called_once()
+        assert result.result["status"] == "vgn_ros_executed"
 
-    def test_falls_back_to_geometric_ros_when_graspnet_ros_returns_none(self):
-        """When _grasp_via_graspnet_with_ros returns None, geometric ROS is used."""
+    def test_falls_back_to_geometric_ros_when_vgn_ros_returns_none(self):
+        """When _grasp_via_vgn_with_ros returns None, geometric ROS is used."""
         bridge_mock = MagicMock()
         bridge_mock.is_connected = True
         bridge_mock.plan_and_execute.return_value = {"success": True}
@@ -889,10 +863,10 @@ class TestGraspObjectRoutingWithBothEnabled:
 
         with patch("config.ROS.ROS_ENABLED", True), \
              patch("config.ROS.DEFAULT_CONTROL_MODE", "ros"), \
-             patch("config.Servers.GRASPNET_ENABLED", True), \
+             patch("config.Servers.VGN_ENABLED", True), \
              patch("ros2.ROSBridge.ROSBridge") as mock_ros_cls, \
              patch("core.Imports.get_world_state", return_value=world_state), \
-             patch("operations.GraspOperations._grasp_via_graspnet_with_ros",
+             patch("operations.GraspOperations._grasp_via_vgn_with_ros",
                    return_value=None), \
              patch("operations.GraspOperations._grasp_via_ros_position_only",
                    return_value=(OperationResult.success_result({"status": "ros_executed"}), False)) as mock_geo:
@@ -902,22 +876,22 @@ class TestGraspObjectRoutingWithBothEnabled:
         mock_geo.assert_called_once()
         assert result.result["status"] == "ros_executed"
 
-    def test_graspnet_unity_path_when_ros_disabled(self):
-        """When ROS is off, _grasp_via_graspnet (not _with_ros) is called."""
-        graspnet_result = OperationResult.success_result({
+    def test_vgn_unity_path_when_ros_disabled(self):
+        """When ROS is off, _grasp_via_vgn (not _with_ros) is called."""
+        vgn_result = OperationResult.success_result({
             "command_sent": True,
             "robot_id": "Robot1",
             "object_id": "Cube_01",
             "request_id": 0,
-            "graspnet_candidates": 2,
+            "vgn_candidates": 2,
         })
         with patch("config.ROS.ROS_ENABLED", False), \
-             patch("config.Servers.GRASPNET_ENABLED", True), \
-             patch("operations.GraspOperations._grasp_via_graspnet",
-                   return_value=graspnet_result) as mock_gvg, \
-             patch("operations.GraspOperations._grasp_via_graspnet_with_ros") as mock_gvg_ros:
+             patch("config.Servers.VGN_ENABLED", True), \
+             patch("operations.GraspOperations._grasp_via_vgn",
+                   return_value=vgn_result) as mock_vgn, \
+             patch("operations.GraspOperations._grasp_via_vgn_with_ros") as mock_vgn_ros:
             result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
-        mock_gvg.assert_called_once()
-        mock_gvg_ros.assert_not_called()
+        mock_vgn.assert_called_once()
+        mock_vgn_ros.assert_not_called()
         assert result.success is True

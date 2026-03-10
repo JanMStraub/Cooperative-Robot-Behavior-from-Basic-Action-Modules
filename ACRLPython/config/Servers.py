@@ -89,30 +89,20 @@ WORLDSTATE_CHECK_INTERVAL = float(os.environ.get("WORLDSTATE_CHECK_INTERVAL", "5
 LMSTUDIO_BASE_URL = os.environ.get("LMSTUDIO_BASE_URL", "http://192.168.178.53:1234/v1")
 
 # ============================================================================
-# Contact-GraspNet Service Configuration
+# VGN (Volumetric Grasp Network) — Local Mac Inference
 # ============================================================================
 
-# Base URL for the Contact-GraspNet FastAPI inference service (GPU server).
-GRASPNET_URL = os.environ.get("GRASPNET_URL", "http://192.168.178.53:8766")
+# Path to the VGN checkpoint file (vgn_conv.pth).
+# Relative paths are resolved from the ACRLPython/ root directory.
+# Download from: https://github.com/ethz-asl/vgn (Google Drive link in README)
+VGN_MODEL_PATH = os.environ.get("VGN_MODEL_PATH", "checkpoints/vgn_conv.pth")
 
-# HTTP request timeout for GraspNet inference calls (seconds).
-# GPU inference typically completes in 300-800ms after warm-up; the first call
-# after container start can take 120-300s due to TF1 CUDA kernel compilation.
-# Set to 300s to accommodate cold-start; override with GRASPNET_TIMEOUT env var.
-GRASPNET_TIMEOUT = float(os.environ.get("GRASPNET_TIMEOUT", "300.0"))
+# Number of top-ranked grasp poses to return per call.
+VGN_TOP_K = int(os.environ.get("VGN_TOP_K", "20"))
 
-# Number of top-ranked grasp poses to request from GraspNet per call.
-GRASPNET_TOP_K = int(os.environ.get("GRASPNET_TOP_K", "20"))
+# Master toggle: set to "false" to skip VGN entirely and use geometric fallback.
+VGN_ENABLED = os.environ.get("VGN_ENABLED", "true").lower() in ("true", "1", "yes")
 
-# Seconds between live /health checks (cached to avoid per-grasp HTTP overhead).
-GRASPNET_HEALTH_CACHE_TTL = float(os.environ.get("GRASPNET_HEALTH_CACHE_TTL", "30.0"))
-
-# Master toggle: set to "false" to skip GraspNet entirely and use geometric fallback.
-GRASPNET_ENABLED = os.environ.get("GRASPNET_ENABLED", "true").lower() in (
-    "true",
-    "1",
-    "yes",
-)
 DEFAULT_LMSTUDIO_MODEL = os.environ.get(
     "DEFAULT_LMSTUDIO_MODEL", "ministral-3-14b-reasoning"
 )

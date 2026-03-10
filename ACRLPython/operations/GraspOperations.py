@@ -517,7 +517,7 @@ def _grasp_via_ros_position_only(
 
 
 # ============================================================================
-# GraspNet helpers
+# VGN helpers
 # ============================================================================
 
 
@@ -598,7 +598,7 @@ def _build_segmentation_mask(
     return mask
 
 
-def _grasp_via_graspnet(
+def _grasp_via_vgn(
     robot_id: str,
     object_id: str,
     preferred_approach: str,
@@ -609,44 +609,44 @@ def _grasp_via_graspnet(
     request_id: int,
     custom_approach_vector: "Optional[List[float]]" = None,
 ) -> "Optional[OperationResult]":
-    """Attempt to grasp using Contact-GraspNet neural grasp prediction.
+    """Attempt to grasp using the local VGN neural grasp prediction pipeline.
 
-    This is the GraspNet fast-path inside ``grasp_object``.  It:
+    This is the VGN fast-path inside ``grasp_object``.  It:
 
     1. Generates a fresh point cloud via ``generate_point_cloud``.
     2. Detects the target object bounding box with ``detect_objects``.
-    3. Builds a segmentation mask respecting ``preferred_approach``.
-    4. Queries the GraspNet service for ranked 6-DOF grasp poses.
-    5. Transforms poses from camera frame to Unity world frame.
-    6. Computes pre-grasp positions (approach hover).
-    7. Sends the ``grasp_object`` command with ``precomputed_candidates`` to Unity.
+    3. Calls VGNClient which internally: refines bbox via VLM, masks point cloud,
+       builds TSDF, runs VGN inference, returns 6-DOF poses in camera frame.
+    4. Transforms poses from camera frame to Unity world frame.
+    5. Computes pre-grasp positions (approach hover).
+    6. Sends the ``grasp_object`` command with ``precomputed_candidates`` to Unity.
 
     Returns:
-        OperationResult on success or definitive failure; None if GraspNet is
+        OperationResult on success or definitive failure; None if VGN is
         unavailable or produced no candidates (triggers geometric fallback).
     """
     import numpy as np
 
     # Lazy imports to respect layered architecture
     try:
-        from config.Servers import GRASPNET_TOP_K
+        from config.Servers import VGN_TOP_K
     except ImportError:
-        GRASPNET_TOP_K = 20
+        VGN_TOP_K = 20
 
     from operations.PointCloudOperations import generate_point_cloud
-    from operations.GraspNetClient import GraspNetClient
-    from operations.GraspFrameTransform import transform_graspnet_poses_to_unity
+    from operations.VGNClient import VGNClient
+    from operations.GraspFrameTransform import transform_grasp_poses_to_unity
 
-    client = GraspNetClient()
+    client = VGNClient()
     if not client.is_available():
-        logger.info("GraspNet service unavailable — will use geometric fallback")
+        logger.info("[VGN] Model unavailable — will use geometric fallback")
         return None
 
     # 1. Generate point cloud
     pc_result = generate_point_cloud(robot_id=robot_id, request_id=request_id)
     if not pc_result.success:
         logger.warning(
-            f"generate_point_cloud failed ({pc_result.error}), using geometric fallback"
+            f"[VGN] generate_point_cloud failed ({pc_result.error}), using geometric fallback"
         )
         return None
 
@@ -660,58 +660,82 @@ def _grasp_via_graspnet(
     points_np = np.array(points_list, dtype=np.float32)
     colors_np = np.array(colors_list, dtype=np.uint8) if colors_list else None
 
-    # 2. Detect target object to get YOLO bounding box for segmentation
-    seg_mask: Optional["np.ndarray"] = None
+    # 2. Detect target object to get YOLO bounding box and image for VGN
+    yolo_bbox: tuple = (0, 0, 0, 0)
+    image_np: "Optional[np.ndarray]" = None
+    img_w = 640
+    img_h = 480
     try:
         from operations.DetectionOperations import detect_objects
 
         det_result = detect_objects(robot_id=robot_id, camera_id="main")
         if det_result.success and det_result.result:
             detections = det_result.result.get("detections", [])
-            # Find first detection whose label matches object_id (case-insensitive)
+            img_w = det_result.result.get("image_width", 640)
+            img_h = det_result.result.get("image_height", 480)
+            # Find first detection whose "color" matches object_id (case-insensitive)
+            # DetectionObject.to_dict() stores the class name in "color" not "label"
             obj_id_lower = object_id.lower().replace("_", " ")
             for det in detections:
-                label = det.get("label", "").lower()
-                if obj_id_lower in label or label in obj_id_lower:
-                    bbox = det.get("bbox")  # [x, y, w, h] or similar
-                    if bbox and len(bbox) == 4:
-                        img_w = det_result.result.get("image_width", 640)
-                        img_h = det_result.result.get("image_height", 480)
-                        seg_mask = _build_segmentation_mask(
-                            points_np,
-                            tuple(int(v) for v in bbox),
-                            img_w,
-                            img_h,
-                            fov,
-                            preferred_approach,
-                        )
+                color_field = det.get("color", "").lower()
+                if obj_id_lower in color_field or color_field in obj_id_lower:
+                    bbox = det.get("bbox")  # dict {x,y,width,height} or list [x,y,w,h]
+                    if bbox:
+                        if isinstance(bbox, dict):
+                            yolo_bbox = (
+                                int(bbox.get("x", 0)),
+                                int(bbox.get("y", 0)),
+                                int(bbox.get("width", 0)),
+                                int(bbox.get("height", 0)),
+                            )
+                        elif len(bbox) == 4:
+                            yolo_bbox = tuple(int(v) for v in bbox)
                         logger.debug(
-                            f"Segmentation mask: {seg_mask.sum()} / {len(seg_mask)} points"
+                            f"[VGN] YOLO bbox for {object_id}: {yolo_bbox}"
                         )
                     break
     except Exception as exc:
-        logger.debug(f"Could not build segmentation mask (non-fatal): {exc}")
+        logger.debug(f"[VGN] Could not get YOLO bbox (non-fatal): {exc}")
 
-    # 3. Query GraspNet
+    # 3. Retrieve left stereo image for VLM
+    try:
+        from core.Imports import get_unified_image_storage
+
+        storage = get_unified_image_storage()
+        left_img = storage.get_latest_image(robot_id, "stereo_left")
+        if left_img is not None:
+            image_np = left_img
+    except Exception as exc:
+        logger.debug(f"[VGN] Could not retrieve stereo image for VLM (non-fatal): {exc}")
+
+    if image_np is None:
+        image_np = np.zeros((img_h, img_w, 3), dtype=np.uint8)
+
+    # 4. Query VGN (includes VLM refinement internally)
     grasps = client.predict_grasps(
         points=points_np,
         colors=colors_np,
-        segmentation_mask=seg_mask,
-        top_k=GRASPNET_TOP_K,
+        image=image_np,
+        yolo_bbox=yolo_bbox,
+        object_label=object_id,
+        image_width=img_w,
+        image_height=img_h,
+        fov=fov,
+        top_k=VGN_TOP_K,
     )
     if not grasps:
-        logger.info("GraspNet returned no candidates — using geometric fallback")
+        logger.info("[VGN] Returned no candidates — using geometric fallback")
         return None
 
-    logger.info(f"GraspNet candidates received: {len(grasps)}")
+    logger.info(f"[VGN] Candidates received: {len(grasps)}")
 
-    # 4. Transform to Unity world frame
-    world_grasps = transform_graspnet_poses_to_unity(grasps, cam_pos, cam_rot)
+    # 5. Transform to Unity world frame
+    world_grasps = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
     if not world_grasps:
-        logger.warning("Frame transform produced no valid poses — using geometric fallback")
+        logger.warning("[VGN] Frame transform produced no valid poses — using geometric fallback")
         return None
 
-    # 4b. Filter and re-rank by custom approach vector when provided
+    # 5b. Filter and re-rank by custom approach vector when provided
     if custom_approach_vector is not None:
         cav = np.array(custom_approach_vector, dtype=np.float64)
         mag = np.linalg.norm(cav)
@@ -728,11 +752,11 @@ def _grasp_via_graspnet(
                 reverse=True,
             )
             logger.info(
-                f"custom_approach_vector filtered {len(world_grasps)} candidates "
+                f"[VGN] custom_approach_vector filtered {len(world_grasps)} candidates "
                 f"(from {len(grasps)} raw)"
             )
 
-    # 5. Build precomputed_candidates list for Unity PlanGraspWithExternalCandidates
+    # 6. Build precomputed_candidates list for Unity PlanGraspWithExternalCandidates
     hover = pre_grasp_distance if pre_grasp_distance > 0 else PRE_GRASP_HOVER_OFFSET
     candidates = []
     for g in world_grasps:
@@ -756,12 +780,12 @@ def _grasp_via_graspnet(
                 "approach_direction": {"x": approach[0], "y": approach[1], "z": approach[2]},
                 "grasp_depth": 0.5,
                 "antipodal_score": g.get("score", 0.0),
-                "graspnet_score": g.get("score", 0.0),
+                "vgn_score": g.get("score", 0.0),
                 "approach_type": preferred_approach,
             }
         )
 
-    # 6. Build and send grasp command with precomputed_candidates
+    # 7. Build and send grasp command with precomputed_candidates
     parameters = {
         "object_id": object_id,
         "use_advanced_planning": use_advanced_planning,
@@ -789,7 +813,7 @@ def _grasp_via_graspnet(
         )
 
     logger.info(
-        f"Sending GraspNet-informed grasp_object: {robot_id} -> {object_id} "
+        f"[VGN] Sending grasp_object: {robot_id} -> {object_id} "
         f"({len(candidates)} candidates)"
     )
     success = broadcaster.send_command(command, request_id)
@@ -800,17 +824,17 @@ def _grasp_via_graspnet(
                 "robot_id": robot_id,
                 "object_id": object_id,
                 "request_id": request_id,
-                "graspnet_candidates": len(candidates),
+                "vgn_candidates": len(candidates),
             }
         )
     return OperationResult.error_result(
         "COMMUNICATION_ERROR",
-        "Failed to send GraspNet grasp command to Unity",
+        "Failed to send VGN grasp command to Unity",
         ["Check Unity is connected to CommandServer"],
     )
 
 
-def _grasp_via_graspnet_with_ros(
+def _grasp_via_vgn_with_ros(
     bridge,
     robot_id: str,
     object_id: str,
@@ -820,17 +844,17 @@ def _grasp_via_graspnet_with_ros(
     world_state,
     custom_approach_vector: "Optional[List[float]]" = None,
 ) -> "Optional[OperationResult]":
-    """Attempt grasp using GraspNet pose selection with MoveIt trajectory execution.
+    """Attempt grasp using VGN pose selection with MoveIt trajectory execution.
 
-    This is the highest-priority path when both GraspNet and ROS are enabled.
-    It combines Contact-GraspNet's 6-DOF pose quality with MoveIt's collision-
-    free trajectory planning.
+    This is the highest-priority path when both VGN and ROS are enabled.
+    It combines VGN's 6-DOF pose quality (via local Apple Silicon inference)
+    with MoveIt's collision-free trajectory planning.
 
     Steps:
-    1. Health-check the GraspNet service; return None immediately if down.
+    1. Check VGN model availability; return None immediately if unavailable.
     2. Generate a fresh stereo point cloud.
-    3. Detect the target object for a segmentation mask.
-    4. Query GraspNet for ranked grasp poses.
+    3. Detect the target object for bbox + image retrieval.
+    4. Query VGNClient (includes VLM bbox refinement) for ranked grasp poses.
     5. Transform poses from camera frame to Unity world frame.
     6. Pick the top-scoring candidate and compute its pre-grasp hover position.
     7. Move to pre-grasp via MoveIt plan_and_execute.
@@ -838,7 +862,7 @@ def _grasp_via_graspnet_with_ros(
     9. Follow-target drift correction + gripper close.
 
     Returns:
-        None — GraspNet unavailable OR MoveIt planning failed before arm moved
+        None — VGN unavailable OR MoveIt planning failed before arm moved
                (arm has not moved; caller falls back to geometric ROS planning).
         OperationResult (error) — Arm descended but gripper close failed.
         OperationResult (success) — Full grasp executed successfully.
@@ -847,25 +871,25 @@ def _grasp_via_graspnet_with_ros(
 
     # Lazy imports — respect layered architecture
     try:
-        from config.Servers import GRASPNET_TOP_K
+        from config.Servers import VGN_TOP_K
     except ImportError:
-        GRASPNET_TOP_K = 20
+        VGN_TOP_K = 20
 
     from operations.PointCloudOperations import generate_point_cloud
-    from operations.GraspNetClient import GraspNetClient
-    from operations.GraspFrameTransform import transform_graspnet_poses_to_unity
+    from operations.VGNClient import VGNClient
+    from operations.GraspFrameTransform import transform_grasp_poses_to_unity
 
-    # 1. Health check
-    client = GraspNetClient()
+    # 1. Availability check
+    client = VGNClient()
     if not client.is_available():
-        logger.info("[GraspNet+ROS] Service unavailable — falling back to geometric ROS")
+        logger.info("[VGN+ROS] Model unavailable — falling back to geometric ROS")
         return None
 
     # 2. Generate point cloud
     pc_result = generate_point_cloud(robot_id=robot_id, request_id=request_id)
     if not pc_result.success:
         logger.warning(
-            f"[GraspNet+ROS] generate_point_cloud failed ({pc_result.error}), "
+            f"[VGN+ROS] generate_point_cloud failed ({pc_result.error}), "
             "falling back to geometric ROS"
         )
         return None
@@ -877,49 +901,72 @@ def _grasp_via_graspnet_with_ros(
     cam_rot = pc["camera_rotation"]
     fov = pc["fov"]
 
-    # 3. Optional segmentation mask from YOLO detection
-    seg_mask: "Optional[np.ndarray]" = None
+    # 3. Detect target object to get YOLO bbox and stereo image for VGN
+    yolo_bbox: tuple = (0, 0, 0, 0)
+    image_np: "Optional[np.ndarray]" = None
+    img_w = 640
+    img_h = 480
     try:
         from operations.DetectionOperations import detect_objects
 
         det_result = detect_objects(robot_id=robot_id, camera_id="main")
         if det_result.success and det_result.result:
             detections = det_result.result.get("detections", [])
+            img_w = det_result.result.get("image_width", 640)
+            img_h = det_result.result.get("image_height", 480)
+            # DetectionObject.to_dict() stores class name in "color" not "label"
             obj_id_lower = object_id.lower().replace("_", " ")
             for det in detections:
-                label = det.get("label", "").lower()
-                if obj_id_lower in label or label in obj_id_lower:
+                color_field = det.get("color", "").lower()
+                if obj_id_lower in color_field or color_field in obj_id_lower:
                     bbox = det.get("bbox")
-                    if bbox and len(bbox) == 4:
-                        img_w = det_result.result.get("image_width", 640)
-                        img_h = det_result.result.get("image_height", 480)
-                        seg_mask = _build_segmentation_mask(
-                            points_np,
-                            tuple(int(v) for v in bbox),
-                            img_w,
-                            img_h,
-                            fov,
-                            preferred_approach,
-                        )
+                    if bbox:
+                        if isinstance(bbox, dict):
+                            yolo_bbox = (
+                                int(bbox.get("x", 0)),
+                                int(bbox.get("y", 0)),
+                                int(bbox.get("width", 0)),
+                                int(bbox.get("height", 0)),
+                            )
+                        elif len(bbox) == 4:
+                            yolo_bbox = tuple(int(v) for v in bbox)
                     break
     except Exception as exc:
-        logger.debug(f"[GraspNet+ROS] Segmentation mask failed (non-fatal): {exc}")
+        logger.debug(f"[VGN+ROS] YOLO bbox (non-fatal): {exc}")
 
-    # 4. Query GraspNet
+    try:
+        from core.Imports import get_unified_image_storage
+
+        storage = get_unified_image_storage()
+        left_img = storage.get_latest_image(robot_id, "stereo_left")
+        if left_img is not None:
+            image_np = left_img
+    except Exception as exc:
+        logger.debug(f"[VGN+ROS] Stereo image retrieval (non-fatal): {exc}")
+
+    if image_np is None:
+        image_np = np.zeros((img_h, img_w, 3), dtype=np.uint8)
+
+    # 4. Query VGN (VLM bbox refinement + TSDF + inference internal to VGNClient)
     grasps = client.predict_grasps(
         points=points_np,
         colors=colors_np,
-        segmentation_mask=seg_mask,
-        top_k=GRASPNET_TOP_K,
+        image=image_np,
+        yolo_bbox=yolo_bbox,
+        object_label=object_id,
+        image_width=img_w,
+        image_height=img_h,
+        fov=fov,
+        top_k=VGN_TOP_K,
     )
     if not grasps:
-        logger.info("[GraspNet+ROS] No candidates returned — falling back to geometric ROS")
+        logger.info("[VGN+ROS] No candidates returned — falling back to geometric ROS")
         return None
 
     # 5. Transform to Unity world frame
-    world_grasps = transform_graspnet_poses_to_unity(grasps, cam_pos, cam_rot)
+    world_grasps = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
     if not world_grasps:
-        logger.warning("[GraspNet+ROS] Frame transform produced no valid poses — falling back")
+        logger.warning("[VGN+ROS] Frame transform produced no valid poses — falling back")
         return None
 
     # 5b. Filter and re-rank by custom approach vector when provided
@@ -939,7 +986,7 @@ def _grasp_via_graspnet_with_ros(
                 reverse=True,
             )
             logger.info(
-                f"[GraspNet+ROS] custom_approach_vector filtered {len(world_grasps)} candidates "
+                f"[VGN+ROS] custom_approach_vector filtered {len(world_grasps)} candidates "
                 f"(from {len(grasps)} raw)"
             )
 
@@ -959,7 +1006,7 @@ def _grasp_via_graspnet_with_ros(
     orientation = {"x": rot[0], "y": rot[1], "z": rot[2], "w": rot[3]}
 
     # 7. MoveIt pre-grasp move
-    logger.info(f"[GraspNet+ROS] Moving to pre-grasp for {robot_id}: {pre_grasp_pos}")
+    logger.info(f"[VGN+ROS] Moving to pre-grasp for {robot_id}: {pre_grasp_pos}")
     pre_result = bridge.plan_and_execute(
         position=pre_grasp_pos,
         orientation=orientation,
@@ -969,7 +1016,7 @@ def _grasp_via_graspnet_with_ros(
     if not pre_result or not pre_result.get("success"):
         pre_err = pre_result.get("error", "Unknown") if pre_result else "No response"
         logger.warning(
-            f"[GraspNet+ROS] Pre-grasp planning failed ({pre_err}) — "
+            f"[VGN+ROS] Pre-grasp planning failed ({pre_err}) — "
             "falling back to geometric ROS"
         )
         return None
@@ -978,7 +1025,7 @@ def _grasp_via_graspnet_with_ros(
     time.sleep(0.3)
 
     # 9. Cartesian descent to grasp position
-    logger.info(f"[GraspNet+ROS] Cartesian descent for {robot_id}: {grasp_pos}")
+    logger.info(f"[VGN+ROS] Cartesian descent for {robot_id}: {grasp_pos}")
     descent_result = bridge.plan_cartesian_descent(
         position=grasp_pos,
         orientation=orientation,
@@ -991,7 +1038,7 @@ def _grasp_via_graspnet_with_ros(
             descent_result.get("error", "Unknown") if descent_result else "No response"
         )
         logger.warning(
-            f"[GraspNet+ROS] Cartesian descent failed ({descent_err}) — "
+            f"[VGN+ROS] Cartesian descent failed ({descent_err}) — "
             "falling back to geometric ROS"
         )
         return None
@@ -1010,7 +1057,7 @@ def _grasp_via_graspnet_with_ros(
     if not gripper_ok:
         return OperationResult.error_result(
             "GRIPPER_CLOSE_FAILED",
-            f"Arm reached GraspNet pose but gripper close failed for {robot_id}",
+            f"Arm reached VGN pose but gripper close failed for {robot_id}",
             [
                 "Check gripper hardware/simulation state",
                 "Verify GripperContactSensor is active",
@@ -1022,8 +1069,8 @@ def _grasp_via_graspnet_with_ros(
             "robot_id": robot_id,
             "object_id": object_id,
             "request_id": request_id,
-            "graspnet_candidates": len(world_grasps),
-            "status": "graspnet_ros_executed",
+            "vgn_candidates": len(world_grasps),
+            "status": "vgn_ros_executed",
             "timestamp": time.time(),
         }
     )
@@ -1178,9 +1225,9 @@ def grasp_object(
                 _use_ros = False
 
         try:
-            from config.Servers import GRASPNET_ENABLED as _graspnet_enabled
+            from config.Servers import VGN_ENABLED as _vgn_enabled
         except ImportError:
-            _graspnet_enabled = False
+            _vgn_enabled = False
 
         # --- ROS path ---
         bridge = None
@@ -1277,10 +1324,10 @@ def grasp_object(
                     object_dimensions = world_state.get_object_dimensions(object_id)
                     robot_state = world_state.get_robot_state(robot_id)
 
-                    # PATH 1: GraspNet pose + MoveIt execution (highest priority when both enabled)
-                    if _graspnet_enabled:
+                    # PATH 1: VGN pose + MoveIt execution (highest priority when both enabled)
+                    if _vgn_enabled:
                         assert bridge is not None
-                        result = _grasp_via_graspnet_with_ros(
+                        result = _grasp_via_vgn_with_ros(
                             bridge=bridge,
                             robot_id=robot_id,
                             object_id=object_id,
@@ -1293,7 +1340,7 @@ def grasp_object(
                         if result is not None:
                             return result
                         logger.info(
-                            "GraspNet+ROS path unavailable or failed — "
+                            "[VGN+ROS] path unavailable or failed — "
                             "falling back to geometric ROS planning"
                         )
 
@@ -1348,11 +1395,11 @@ def grasp_object(
                     return err
                 _use_ros = False
 
-        # --- GraspNet neural path (optional, falls back to geometric on failure) ---
+        # --- VGN neural path (optional, falls back to geometric on failure) ---
         # At this point _use_ros is always False: either it was never set, or the
         # ROS block cleared it.  No need to guard against _use_ros here.
-        if _graspnet_enabled:
-            graspnet_result = _grasp_via_graspnet(
+        if _vgn_enabled:
+            vgn_result = _grasp_via_vgn(
                 robot_id=robot_id,
                 object_id=object_id,
                 preferred_approach=preferred_approach,
@@ -1363,10 +1410,10 @@ def grasp_object(
                 request_id=request_id,
                 custom_approach_vector=custom_approach_vector,
             )
-            if graspnet_result is not None:
-                return graspnet_result
+            if vgn_result is not None:
+                return vgn_result
             logger.info(
-                "GraspNet unavailable or returned no candidates — "
+                "[VGN] Unavailable or returned no candidates — "
                 "falling back to geometric pipeline"
             )
 

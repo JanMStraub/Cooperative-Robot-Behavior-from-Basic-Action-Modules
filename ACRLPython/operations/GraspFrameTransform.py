@@ -2,11 +2,11 @@
 Grasp Frame Transform
 =====================
 
-Converts Contact-GraspNet poses from right-handed OpenCV/camera frame into
+Converts grasp poses from right-handed OpenCV/camera frame into
 Unity's left-handed world frame using pure NumPy (no scipy dependency).
 
-Contact-GraspNet coordinate convention
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Camera frame coordinate convention
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 * Right-handed: X-right, Y-down, Z-forward (OpenCV camera convention).
 * Grasp ``position`` is the grasp centre between finger pads (same as
   ``graspPoint`` in ``GraspCandidateGenerator.cs``).
@@ -104,15 +104,15 @@ def _normalise_quat(q: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 
-def transform_graspnet_poses_to_unity(
-    graspnet_grasps: List[dict],
+def transform_grasp_poses_to_unity(
+    grasps: List[dict],
     camera_position: List[float],
     camera_rotation: List[float],
 ) -> List[dict]:
-    """Transform Contact-GraspNet poses from camera frame to Unity world frame.
+    """Transform grasp poses from camera frame to Unity world frame.
 
     Args:
-        graspnet_grasps: List of grasp dicts from ``GraspNetClient.predict_grasps``.
+        grasps: List of grasp dicts from ``VGNClient.predict_grasps``.
             Each dict must contain ``"position"`` ([x,y,z]) and ``"rotation"``
             ([qx,qy,qz,qw]) in right-handed camera frame.  Optional fields
             ``"score"``, ``"width"``, ``"approach_direction"`` are preserved.
@@ -159,7 +159,7 @@ def transform_graspnet_poses_to_unity(
 
     transformed: List[dict] = []
 
-    for i, grasp in enumerate(graspnet_grasps):
+    for i, grasp in enumerate(grasps):
         try:
             pos_cam = np.array(grasp["position"], dtype=np.float64)
             rot_cam_raw = np.array(grasp["rotation"], dtype=np.float64)
@@ -206,7 +206,7 @@ def transform_graspnet_poses_to_unity(
             approach_world = _quat_rotate_vector(cam_rot, approach_flipped)
             approach_list = approach_world.tolist()
         else:
-            # Derive from quaternion: GraspNet Z-axis is approach direction
+            # Derive from quaternion Z-axis = approach direction
             z_axis_local = np.array([0.0, 0.0, 1.0])
             approach_world = _quat_rotate_vector(rot_world, z_axis_local)
             approach_list = approach_world.tolist()
@@ -222,6 +222,6 @@ def transform_graspnet_poses_to_unity(
         )
 
     logger.debug(
-        f"Transformed {len(transformed)}/{len(graspnet_grasps)} GraspNet poses to Unity frame"
+        f"Transformed {len(transformed)}/{len(grasps)} grasp poses to Unity frame"
     )
     return transformed

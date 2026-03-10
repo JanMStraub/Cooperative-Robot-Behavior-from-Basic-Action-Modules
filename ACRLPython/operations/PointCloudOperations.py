@@ -5,8 +5,7 @@ Point Cloud Operations
 Generates dense 3D point clouds from the robot's stereo camera pair using
 semi-global block matching (SGBM) disparity estimation. The resulting cloud
 is expressed in the Unity camera frame with the X-axis already negated (LH
-convention) so it can be consumed directly by downstream operations such as
-Contact-GraspNet inference.
+convention) so it can be consumed directly by downstream grasp operations.
 """
 
 import logging
@@ -54,7 +53,7 @@ except ImportError:
 # 30s allows for LLM parse latency (typically 3-5s) while still catching truly stale images.
 _DEFAULT_MAX_AGE_SECONDS: float = 30.0
 
-# Uniform random downsample target: avoids sending huge payloads to GraspNet.
+# Uniform random downsample target: limits point cloud size for downstream inference.
 _DEFAULT_MAX_POINTS: int = 50_000
 
 # Default camera pair identifier stored in UnifiedImageStorage.
@@ -157,7 +156,7 @@ def generate_point_cloud(
     semi-global block-matching disparity estimation.
 
     The output points are expressed in the Unity camera frame with the
-    X-axis negated (left-handed convention), ready for Contact-GraspNet
+    X-axis negated (left-handed convention), ready for VGN
     inference.  Camera extrinsics (position + rotation in Unity world
     frame) are included so downstream operations can transform poses back
     into world space.
@@ -358,7 +357,7 @@ GENERATE_POINT_CLOUD_OPERATION = BasicOperation(
         "The cloud is expressed in Unity camera space (X-negated, left-handed) "
         "and includes camera extrinsics so downstream operations can transform "
         "poses into world space. Useful as input for neural grasp planners such "
-        "as Contact-GraspNet."
+        "as VGN."
     ),
     usage_examples=[
         "generate_point_cloud('Robot1')",
