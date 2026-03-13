@@ -117,38 +117,47 @@
                 </div>
 
                 <!-- Teleoperation / Manual Override -->
-                <div class="teleop-panel glass-box">
-                    <h3><i class="fa-solid fa-gamepad"></i> Manual Override</h3>
-                    <div class="teleop-grid">
-                        <div class="control-group">
-                            <label>Robot ID:</label>
-                            <select class="glass-select" id="teleop-robot-id">
-                                <option>Robot1</option>
-                                <option>Robot2</option>
-                            </select>
+                <div class="teleop-panel glass-box expanded" id="teleop-panel">
+                    <div class="panel-header">
+                        <h3><i class="fa-solid fa-gamepad"></i> Manual Override</h3>
+                        <div class="panel-actions">
+                            <button class="btn-icon-small" id="btn-teleop-collapse" title="Collapse">
+                                <i class="fa-solid fa-chevron-down"></i>
+                            </button>
                         </div>
-                        <div class="control-group">
-                            <label>Inverse Kinematics (XYZ)</label>
-                            <div class="xyz-controls">
-                                <button class="btn btn-icon-small" title="X+"><i
-                                        class="fa-solid fa-arrow-up"></i></button>
-                                <button class="btn btn-icon-small" title="X-"><i
-                                        class="fa-solid fa-arrow-down"></i></button>
-                                <button class="btn btn-icon-small" title="Y+"><i
-                                        class="fa-solid fa-arrow-left"></i></button>
-                                <button class="btn btn-icon-small" title="Y-"><i
-                                        class="fa-solid fa-arrow-right"></i></button>
-                                <button class="btn btn-icon-small" title="Z+"><i
-                                        class="fa-solid fa-up-long"></i></button>
-                                <button class="btn btn-icon-small" title="Z-"><i
-                                        class="fa-solid fa-down-long"></i></button>
+                    </div>
+                    <div class="teleop-content">
+                        <div class="teleop-grid">
+                            <div class="control-group">
+                                <label>Robot ID:</label>
+                                <select class="glass-select" id="teleop-robot-id">
+                                    <option>Robot1</option>
+                                    <option>Robot2</option>
+                                </select>
                             </div>
-                        </div>
-                        <div class="control-group">
-                            <label>Gripper</label>
-                            <div class="gripper-controls">
-                                <button class="btn btn-secondary" onclick="sendCmd('open')">Open</button>
-                                <button class="btn btn-secondary" onclick="sendCmd('close')">Close</button>
+                            <div class="control-group">
+                                <label>Inverse Kinematics (XYZ)</label>
+                                <div class="xyz-controls">
+                                    <button class="btn btn-icon-small" title="X+"><i
+                                            class="fa-solid fa-arrow-up"></i></button>
+                                    <button class="btn btn-icon-small" title="X-"><i
+                                            class="fa-solid fa-arrow-down"></i></button>
+                                    <button class="btn btn-icon-small" title="Y+"><i
+                                            class="fa-solid fa-arrow-left"></i></button>
+                                    <button class="btn btn-icon-small" title="Y-"><i
+                                            class="fa-solid fa-arrow-right"></i></button>
+                                    <button class="btn btn-icon-small" title="Z+"><i
+                                            class="fa-solid fa-up-long"></i></button>
+                                    <button class="btn btn-icon-small" title="Z-"><i
+                                            class="fa-solid fa-down-long"></i></button>
+                                </div>
+                            </div>
+                            <div class="control-group">
+                                <label>Gripper</label>
+                                <div class="gripper-controls">
+                                    <button class="btn btn-secondary" onclick="sendCmd('open')">Open</button>
+                                    <button class="btn btn-secondary" onclick="sendCmd('close')">Close</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -157,14 +166,45 @@
 
             <!-- Right Column: Perception & Telemetry -->
             <section class="panel right-panel">
+                <!-- AutoRT Task Approval -->
+                <div class="autort-panel" id="autort-panel">
+                    <div class="panel-header">
+                        <h2>
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            AutoRT Tasks
+                            <span class="autort-badge" id="autort-task-count" style="display:none">0</span>
+                        </h2>
+                        <div class="panel-actions">
+                            <span class="autort-loop-badge" id="autort-loop-badge">STOPPED</span>
+                            <button class="btn-icon-small" id="btn-autort-generate" title="Generate tasks now">
+                                <i class="fa-solid fa-bolt"></i>
+                            </button>
+                            <button class="btn-icon-small" id="btn-autort-collapse" title="Collapse">
+                                <i class="fa-solid fa-chevron-down"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="autort-task-list glass-box" id="autort-task-list">
+                        <div class="autort-empty" id="autort-empty">
+                            <i class="fa-solid fa-inbox"></i>
+                            <span>No pending tasks</span>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Camera Streams -->
-                <div class="perception-panel">
+                <div class="perception-panel expanded" id="perception-panel">
                     <div class="panel-header">
                         <h2><i class="fa-solid fa-camera"></i> Live Perception</h2>
+                        <div class="panel-actions">
+                            <button class="btn-icon-small" id="btn-perception-collapse" title="Collapse">
+                                <i class="fa-solid fa-chevron-up"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="camera-grid">
                         <div class="camera-feed glass-box">
-                            <img src="/api/stream/rgb" alt="RGB Stream"
+                            <img src="/api/stream/rgb" data-src-base="/api/stream/rgb" alt="RGB Stream"
                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
                                 style="width: 100%; height: 100%; object-fit: cover;">
                             <div class="feed-placeholder" style="display: none;">
@@ -174,7 +214,7 @@
                             <div class="feed-overlay">RGB + YOLO</div>
                         </div>
                         <div class="camera-feed glass-box">
-                            <img src="/api/stream/depth" alt="Depth Stream"
+                            <img src="/api/stream/depth" data-src-base="/api/stream/depth" alt="Depth Stream"
                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
                                 style="width: 100%; height: 100%; object-fit: cover;">
                             <div class="feed-placeholder" style="display: none;">
@@ -190,7 +230,8 @@
                 <div class="logs-panel">
                     <div class="panel-header">
                         <h2><i class="fa-solid fa-align-left"></i> Server Logs</h2>
-                        <button class="btn-icon-small" id="btn-download-logs" title="Download logs"><i class="fa-solid fa-download"></i></button>
+                        <button class="btn-icon-small" id="btn-download-logs" title="Download logs"><i
+                                class="fa-solid fa-download"></i></button>
                     </div>
                     <div class="console-output glass-box" id="console-output">
                         <div class="log-line info">[INFO] Backend Gateway Started on port 8000</div>
@@ -198,6 +239,8 @@
                         <!-- Logs injected here -->
                     </div>
                 </div>
+
+
             </section>
         </main>
     </div>

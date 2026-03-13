@@ -89,6 +89,9 @@ class AutoRTHandler:
         # Callback for sending tasks to Unity (set by SequenceServer)
         self._task_callback = None
 
+        # Callback for pushing tasks to WebSocket clients (set by WebUIServer)
+        self._web_broadcast_callback = None
+
         # Bounded thread pool for async task execution (one slot per robot arm)
         self._exec_pool = ThreadPoolExecutor(
             max_workers=2, thread_name_prefix="AutoRT-Execute"
@@ -114,6 +117,11 @@ class AutoRTHandler:
         """
         self._task_callback = callback
         logger.info("Task callback registered")
+
+    def set_web_broadcast_callback(self, callback):
+        """Register callback for pushing tasks to WebSocket clients (web dashboard)."""
+        self._web_broadcast_callback = callback
+        logger.info("Web broadcast callback registered")
 
     def _initialize_orchestrator(self):
         """Lazy-initialize AutoRT orchestrator when needed."""
@@ -509,6 +517,21 @@ class AutoRTHandler:
             "error": None,
         }
 
+    def get_pending_tasks(self) -> dict:
+        """Return all cached pending tasks serialized for HTTP responses."""
+        with self._task_lock:
+            serialized = []
+            for task_id, (task, timestamp) in self._pending_tasks.items():
+                task_dict = self._serialize_task(task)
+                task_dict["cached_at"] = timestamp.isoformat()
+                serialized.append(task_dict)
+        return {
+            "success": True,
+            "tasks": serialized,
+            "loop_running": self._loop_running,
+            "pending_tasks_count": len(serialized),
+        }
+
     def _loop_worker(self):
         """Background thread worker for continuous task generation."""
         logger.info("AutoRT loop worker started")
@@ -528,6 +551,17 @@ class AutoRTHandler:
                     logger.debug(
                         f"Sent {len(response['tasks'])} tasks to Unity via callback"
                     )
+
+                # Push to web dashboard via WebSocket broadcast (if registered)
+                if self._web_broadcast_callback and response.get("tasks"):
+                    try:
+                        self._web_broadcast_callback({
+                            "type": "autort_tasks",
+                            "tasks": response["tasks"],
+                            "loop_running": self._loop_running,
+                        })
+                    except Exception as cb_err:
+                        logger.error(f"Web broadcast callback failed: {cb_err}")
 
                 # Wait with interruptible sleep
                 self._loop_stop_event.wait(timeout=self._loop_delay)

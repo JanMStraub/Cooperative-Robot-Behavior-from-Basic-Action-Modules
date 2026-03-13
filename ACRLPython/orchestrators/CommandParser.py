@@ -1018,9 +1018,9 @@ Examples:
                 )
                 continue
 
-            # Parse return to start position
+            # Parse return to start position (handles "return Robot1 to start" and "return to start")
             if re.search(
-                r"return\s+(?:to\s+)?(?:start|home|default|initial)\s*(?:position)?|go\s+(?:to\s+)?home|home\s+position",
+                r"return\s+(?:\w+\s+)?(?:to\s+)?(?:start|home|default|initial)\s*(?:position)?|go\s+(?:to\s+)?home|home\s+position",
                 part,
             ):
                 commands.append(
@@ -1053,6 +1053,103 @@ Examples:
                     {
                         "operation": "detect_objects",
                         "params": {"robot_id": robot_id},
+                    }
+                )
+                continue
+
+            # Parse analyze scene
+            if re.search(r"analyze\s+(?:the\s+)?scene|scene\s+analysis", part):
+                commands.append(
+                    {
+                        "operation": "analyze_scene",
+                        "params": {
+                            "robot_id": robot_id,
+                            "prompt": "Describe what you see in the scene.",
+                        },
+                    }
+                )
+                continue
+
+            # Parse generate point cloud
+            if re.search(r"generate\s+(?:a\s+)?point\s+cloud|point\s+cloud", part):
+                commands.append(
+                    {
+                        "operation": "generate_point_cloud",
+                        "params": {"robot_id": robot_id},
+                    }
+                )
+                continue
+
+            # Parse wait (duration)
+            wait_dur_match = re.search(
+                r"wait\s+(?:for\s+)?(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s\b)",
+                part,
+            )
+            if wait_dur_match:
+                commands.append(
+                    {
+                        "operation": "wait",
+                        "params": {
+                            "robot_id": robot_id,
+                            "duration_ms": int(float(wait_dur_match.group(1)) * 1000),
+                        },
+                    }
+                )
+                continue
+
+            # Parse wait for signal
+            wait_sig_match = re.search(
+                r"wait\s+(?:for\s+)?(?:signal|event)\s+(\S+)", part
+            )
+            if wait_sig_match:
+                commands.append(
+                    {
+                        "operation": "wait_for_signal",
+                        "params": {
+                            "robot_id": robot_id,
+                            "event_name": wait_sig_match.group(1),
+                        },
+                    }
+                )
+                continue
+
+            # Parse signal (fire event)
+            signal_match = re.search(r"^signal\s+(\S+)", part)
+            if signal_match:
+                commands.append(
+                    {
+                        "operation": "signal",
+                        "params": {
+                            "robot_id": robot_id,
+                            "event_name": signal_match.group(1),
+                        },
+                    }
+                )
+                continue
+
+            # Parse move_from_a_to_b (e.g. "move Robot1 from X Y Z to X Y Z")
+            move_ab_match = re.search(
+                r"move\s+(?:\w+\s+)?from\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+to\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)",
+                part,
+            )
+            if move_ab_match:
+                g = move_ab_match.groups()
+                commands.append(
+                    {
+                        "operation": "move_from_a_to_b",
+                        "params": {
+                            "robot_id": robot_id,
+                            "point_a": {
+                                "x": float(g[0]),
+                                "y": float(g[1]),
+                                "z": float(g[2]),
+                            },
+                            "point_b": {
+                                "x": float(g[3]),
+                                "y": float(g[4]),
+                                "z": float(g[5]),
+                            },
+                        },
                     }
                 )
                 continue

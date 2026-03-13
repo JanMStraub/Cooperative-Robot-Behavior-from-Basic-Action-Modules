@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
 echo "============================================================"
-echo "  ACRL ROS 2 Integration (Apple Silicon / Foxglove)"
+echo "  Starting ACRL ROS 2 Integration (Apple Silicon / Foxglove)"
 echo "============================================================"
 echo ""
 
@@ -27,8 +27,6 @@ ACTION="${1:-up}"
 
 case "$ACTION" in
     up|start)
-        echo "Starting ROS 2 services..."
-        echo ""
 
         # Start services using existing images (skip rebuild)
         docker compose up -d
@@ -49,22 +47,6 @@ case "$ACTION" in
         if docker compose ps | grep -q "acrl_foxglove"; then
              echo "  [OK] Foxglove Bridge is running on port 8765"
         fi
-        echo ""
-
-        echo "------------------------------------------------------------"
-        echo "ROS 2 Services Status:"
-        echo "  - Unity Connection: localhost:10000"
-        echo "  - Foxglove Studio:  ws://localhost:8765"
-        echo "  - Python Bridge:    localhost:5020"
-        echo "------------------------------------------------------------"
-        echo ""
-        echo "NEXT STEPS:"
-        echo "1. Open Foxglove Studio on your Mac."
-        echo "2. Open a new 'Foxglove WebSocket' connection to ws://localhost:8765"
-        echo ""
-        echo "To view logs: docker compose logs -f"
-        echo "To stop:      $0 down"
-        ;;
 
     down|stop)
         echo "Stopping ROS 2 services..."

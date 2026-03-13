@@ -121,8 +121,8 @@ class TCPServerBase(ABC):
         # Last-logged connection snapshot — heartbeat only logs when these change
         self._last_heartbeat_snapshot: Optional[tuple] = None
 
-        # Setup centralized logging
-        self._logger = setup_logging(self.__class__.__module__)
+        # Setup centralized logging — use class name so each server type gets its own logger
+        self._logger = setup_logging(f"{self.__class__.__module__}.{self.__class__.__name__}")
 
     @abstractmethod
     def handle_client_connection(self, client: socket.socket, address: tuple):
@@ -155,9 +155,6 @@ class TCPServerBase(ABC):
 
             self._running = True
             self._start_time = datetime.now()
-            self._logger.info(
-                f"Server started on {self._config.host}:{self._config.port}"
-            )
 
             # Start accept thread
             self._accept_thread = threading.Thread(
@@ -183,7 +180,7 @@ class TCPServerBase(ABC):
         if not self._running:
             return
 
-        self._logger.info("Stopping server...")
+        self._logger.info(f"Stopping {self.__class__.__name__} (port {self._config.port})...")
         self._running = False
 
         # Wait for accept and heartbeat threads to finish
@@ -202,7 +199,6 @@ class TCPServerBase(ABC):
             self._clients.clear()
 
         # Wait for client handler threads to finish
-        self._logger.info("Waiting for client threads to finish...")
         with self._client_threads_lock:
             threads_to_join = list(self._client_threads)
 
@@ -210,11 +206,8 @@ class TCPServerBase(ABC):
             if thread.is_alive():
                 thread.join(timeout=2.0)
 
-        self._logger.info("All client threads stopped")
-
         # Close server socket
         self._cleanup()
-        self._logger.info("Server stopped")
 
     def is_running(self) -> bool:
         """Check if server is running"""

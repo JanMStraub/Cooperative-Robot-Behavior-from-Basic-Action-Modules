@@ -20,6 +20,7 @@ import argparse
 import signal
 import threading
 import logging
+from typing import Optional
 
 # Import config
 try:
@@ -127,7 +128,7 @@ class RobotController:
         model: str = DEFAULT_LMSTUDIO_MODEL,
         check_completion: bool = True,
         env: str = "sim",
-        web_port: int = None,
+        web_port: Optional[int] = None,
     ):
         """
         Initialize the robot controller.
@@ -353,10 +354,6 @@ class RobotController:
         if self._running:
             logger.warning("RobotController already running")
             return
-
-        logger.info("=" * 60)
-        logger.info("Starting RobotController - Unified Robot Control Backend")
-        logger.info("=" * 60)
 
         # Start ImageServer (ports 5005, 5006)
         logger.info(

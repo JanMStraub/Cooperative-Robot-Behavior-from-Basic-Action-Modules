@@ -62,7 +62,6 @@ start_ros() {
             return
         fi
 
-        echo "Starting ROS 2 Docker services..."
         "$ROS_DIR/start_ros_endpoint.sh" up
         echo ""
 
@@ -106,7 +105,7 @@ start_ros() {
 }
 
 start_controller() {
-    print_header "Starting RobotController"
+    print_header "Starting RobotController - Unified Robot Control Backend"
 
     # Set PYTHONPATH to include root
     export PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}"
@@ -122,7 +121,6 @@ start_controller() {
     EXTRA_ARGS+=("--env" "$ENV_FLAG")
     if [ -n "$WEB_PORT" ]; then
         EXTRA_ARGS+=("--web" "$WEB_PORT")
-        echo "  Web UI will be available at http://0.0.0.0:${WEB_PORT}"
     fi
 
     # Enable job control to manage the background process group

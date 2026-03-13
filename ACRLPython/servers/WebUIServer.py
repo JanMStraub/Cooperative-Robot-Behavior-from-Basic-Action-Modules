@@ -11,7 +11,8 @@ import json
 import asyncio
 import logging
 import threading
-from typing import Dict, Any, Optional
+from pathlib import Path
+from typing import TYPE_CHECKING, Dict, Any, List, Optional
 
 try:
     from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
@@ -23,10 +24,16 @@ except ImportError:
     _FASTAPI_AVAILABLE = False
     # Provide stubs so the module can be imported without fastapi installed.
     # A clear RuntimeError is raised only when run_webui_server() is actually called.
-    FastAPI = WebSocket = WebSocketDisconnect = BackgroundTasks = None  # type: ignore
-    StaticFiles = StaticFiles if False else None  # type: ignore
-    HTMLResponse = StreamingResponse = None  # type: ignore
-    uvicorn = None  # type: ignore
+    if TYPE_CHECKING:
+        from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
+        from fastapi.staticfiles import StaticFiles
+        from fastapi.responses import HTMLResponse, StreamingResponse
+        import uvicorn
+    else:
+        FastAPI = WebSocket = WebSocketDisconnect = BackgroundTasks = None  # type: ignore
+        StaticFiles = None  # type: ignore
+        HTMLResponse = StreamingResponse = None  # type: ignore
+        uvicorn = None  # type: ignore
 
 # Try to import core and orchestrator modules
 try:
@@ -93,13 +100,13 @@ app = FastAPI(title="ACRL Mission Control") if _FASTAPI_AVAILABLE else _NoOpApp(
 # Track active websocket connections
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: list[WebSocket] = []
+        self.active_connections: List["WebSocket"] = []
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: "WebSocket"):
         await websocket.accept()
         self.active_connections.append(websocket)
 
-    def disconnect(self, websocket: WebSocket):
+    def disconnect(self, websocket: "WebSocket"):
         if websocket in self.active_connections:
             self.active_connections.remove(websocket)
 
@@ -194,11 +201,10 @@ async def api_status():
 async def api_world_state():
     """Get the current world state"""
     world_state = get_world_state()
-    # WorldState has method to dump all
     try:
         data = {
-            "robots": world_state.get_all_robot_states(),
-            "objects": world_state.get_all_object_states()
+            "robots": [r.__dict__ for r in world_state._robot_states.values()],
+            "objects": [o.__dict__ for o in world_state.get_all_objects()]
         }
         return data
     except Exception as e:
@@ -216,6 +222,16 @@ async def frame_generator(stream_type="left"):
         
     storage = UnifiedImageStorage()
     
+    # Lazy load global detector for RGB stream annotations
+    _detector = None
+    if stream_type == "left":
+        try:
+            from vision.YOLODetector import YOLODetector
+            _model_path = str(Path(__file__).parent.parent / "yolo" / "models" / "field_detector.onnx")
+            _detector = YOLODetector(model_path=_model_path)
+        except Exception as e:
+            logger.warning(f"Could not load YOLODetector for streaming: {e}")
+    
     while True:
         frame_bytes = None
         
@@ -223,7 +239,44 @@ async def frame_generator(stream_type="left"):
         stereo = storage.get_latest_stereo()
         if stereo:
             _, imgL, imgR, _ = stereo
-            frame = imgL if stream_type == "left" else imgR
+            
+            if stream_type == "depth":
+                try:
+                    from vision.DepthEstimator import calc_disparity
+                    import numpy as np
+                    
+                    imgL_gray = cv2.cvtColor(imgL, cv2.COLOR_BGR2GRAY) if len(imgL.shape) == 3 else imgL
+                    imgR_gray = cv2.cvtColor(imgR, cv2.COLOR_BGR2GRAY) if len(imgR.shape) == 3 else imgR
+                    
+                    disparity = calc_disparity(imgL_gray, imgR_gray)
+                    disp_valid = np.nan_to_num(disparity, nan=0.0)
+                    
+                    # Normalize and paint heat map
+                    disp_normalized = np.zeros_like(disp_valid, dtype=np.uint8)
+                    cv2.normalize(disp_valid, disp_normalized, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+                    frame = cv2.applyColorMap(disp_normalized, cv2.COLORMAP_JET)
+                except Exception as e:
+                    logger.debug(f"WebUI depth stream failed: {e}")
+                    frame = imgR # Fallback to right eye if disparity fails
+            else:
+                frame = imgL if stream_type == "left" else imgR
+            
+            # Add YOLO annotations to RGB stream
+            if stream_type == "left" and _detector is not None:
+                try:
+                    res = _detector.detect_objects(frame, camera_id="webui_stream")
+                    for det in res.detections:
+                        color = _detector._get_class_color(det.color)
+                        # Box
+                        cv2.rectangle(frame, (det.bbox_x, det.bbox_y), (det.bbox_x + det.bbox_w, det.bbox_y + det.bbox_h), color, 2)
+                        # Center
+                        cv2.circle(frame, (det.center_x, det.center_y), 5, color, -1)
+                        # Label
+                        cv2.putText(frame, f"{det.color} {det.confidence:.2f}", (det.bbox_x, max(10, det.bbox_y - 10)), 
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                except Exception as detect_err:
+                    logger.debug(f"WebUI Stream detection skipping frame: {detect_err}")
+                    
             _, encoded = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
             frame_bytes = encoded.tobytes()
             
@@ -290,10 +343,83 @@ async def api_send_command(command_data: Dict[str, Any]):
         logger.error(f"API Command Error: {e}")
         return {"success": False, "error": str(e)}
 
+@app.get("/api/autort/tasks")
+async def api_autort_tasks():
+    """Return all currently pending AutoRT tasks."""
+    try:
+        from servers.AutoRTIntegration import AutoRTHandler
+        return AutoRTHandler.get_instance().get_pending_tasks()
+    except Exception as e:
+        logger.error(f"AutoRT tasks fetch error: {e}")
+        return {"success": False, "tasks": [], "error": str(e)}
+
+
+@app.post("/api/autort/generate")
+async def api_autort_generate(body: Dict[str, Any]):
+    """Trigger manual task generation and broadcast results via WebSocket."""
+    try:
+        from servers.AutoRTIntegration import AutoRTHandler
+        handler = AutoRTHandler.get_instance()
+        result = handler.generate_tasks(
+            num_tasks=body.get("num_tasks"),
+            robot_ids=body.get("robot_ids"),
+            strategy=body.get("strategy", "balanced"),
+        )
+        if result.get("tasks") and manager.active_connections:
+            await manager.broadcast(json.dumps({
+                "type": "autort_tasks",
+                "tasks": result["tasks"],
+                "loop_running": result.get("loop_running", False),
+            }))
+        return result
+    except Exception as e:
+        logger.error(f"AutoRT generate error: {e}")
+        return {"success": False, "tasks": [], "error": str(e)}
+
+
+@app.post("/api/autort/execute")
+async def api_autort_execute(body: Dict[str, Any]):
+    """Execute an approved task by ID."""
+    try:
+        task_id = body.get("task_id")
+        if not task_id:
+            return {"success": False, "error": "task_id is required"}
+        from servers.AutoRTIntegration import AutoRTHandler
+        return AutoRTHandler.get_instance().execute_task(task_id)
+    except Exception as e:
+        logger.error(f"AutoRT execute error: {e}")
+        return {"success": False, "error": str(e)}
+
+
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: "WebSocket"):
     await manager.connect(websocket)
     try:
+        # Send historical logs on connect
+        try:
+            from config.Servers import LOG_DIR
+            from pathlib import Path
+            log_path = Path(LOG_DIR) / "server_logs.txt"
+            if log_path.exists():
+                with open(log_path, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                    # Send up to the last 200 lines of history
+                    for line in lines[-200:]:
+                        line = line.strip()
+                        if line:
+                            # Parse out a rudimentary level for coloring
+                            level = "info"
+                            if "[WARNING]" in line: level = "warning"
+                            elif "[ERROR]" in line: level = "error"
+                            elif "[CRITICAL]" in line: level = "error"
+                            await websocket.send_text(json.dumps({
+                                "type": "log",
+                                "level": level,
+                                "message": line
+                            }))
+        except Exception as e:
+            logger.error(f"Failed to send log history: {e}")
+
         while True:
             # Receive commands from Web UI
             data = await websocket.receive_text()
@@ -360,11 +486,12 @@ async def websocket_endpoint(websocket: WebSocket):
             except json.JSONDecodeError:
                 pass
                 
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-        manager.disconnect(websocket)
+        if _FASTAPI_AVAILABLE and WebSocketDisconnect and isinstance(e, WebSocketDisconnect):
+            manager.disconnect(websocket)
+        else:
+            logger.error(f"WebSocket error: {e}")
+            manager.disconnect(websocket)
 
 # Background task to push world state updates to WebSockets
 async def state_broadcaster():
@@ -372,11 +499,12 @@ async def state_broadcaster():
     while True:
         if manager.active_connections:
             try:
+                world_state = get_world_state()
                 world_state_data = {
                     "type": "world_state",
                     "data": {
-                        "robots": get_world_state().get_all_robot_states(),
-                        "objects": get_world_state().get_all_object_states()
+                        "robots": [r.__dict__ for r in world_state._robot_states.values()],
+                        "objects": [o.__dict__ for o in world_state.get_all_objects()]
                     }
                 }
                 await manager.broadcast(json.dumps(world_state_data))
@@ -415,6 +543,23 @@ async def startup_event():
 
     add_websocket_handler(log_callback)
 
+    # Wire AutoRTHandler → WebSocket broadcast for loop-generated tasks
+    try:
+        from servers.AutoRTIntegration import AutoRTHandler
+        _autort = AutoRTHandler.get_instance()
+
+        def _autort_web_push(payload: dict):
+            if manager.active_connections and _main_loop:
+                asyncio.run_coroutine_threadsafe(
+                    manager.broadcast(json.dumps(payload)), _main_loop
+                )
+
+        _autort.set_web_broadcast_callback(_autort_web_push)
+        logger.info("AutoRT web broadcast callback registered")
+    except Exception as e:
+        logger.warning(f"Could not register AutoRT web callback: {e}")
+
+
 def run_webui_server(host: str = "0.0.0.0", port: int = 8000):
     """Run the FastAPI server blocking."""
     if not _FASTAPI_AVAILABLE:
@@ -423,6 +568,7 @@ def run_webui_server(host: str = "0.0.0.0", port: int = 8000):
             "Install them with: pip install fastapi uvicorn"
         )
     logger.info(f"Starting WebUIServer on http://{host}:{port}")
+    assert uvicorn is not None and isinstance(app, FastAPI)
     uvicorn.run(app, host=host, port=port, log_level="warning")
 
 def run_webui_server_background(host: str = "0.0.0.0", port: int = 8000):

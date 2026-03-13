@@ -86,7 +86,7 @@ WORLDSTATE_CHECK_INTERVAL = float(os.environ.get("WORLDSTATE_CHECK_INTERVAL", "5
 # LLM Configuration
 # ============================================================================
 
-LMSTUDIO_BASE_URL = os.environ.get("LMSTUDIO_BASE_URL", "http://192.168.178.53:1234/v1")
+LMSTUDIO_BASE_URL = os.environ.get("LMSTUDIO_BASE_URL", "http://192.168.178.53:1234")
 
 # ============================================================================
 # VGN (Volumetric Grasp Network) — Local Mac Inference

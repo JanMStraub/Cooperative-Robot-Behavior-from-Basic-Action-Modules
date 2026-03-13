@@ -129,10 +129,6 @@ body.dark-theme {
     box-shadow: 0 0 8px currentColor;
 }
 
-.dot.online { color: var(--success); background: var(--success); }
-.dot.warning { color: var(--warning); background: var(--warning); }
-.dot.offline { color: var(--danger); background: var(--danger); }
-
 /* Buttons */
 .btn {
     font-family: var(--font-sans);
@@ -174,7 +170,6 @@ body.dark-theme {
     color: white;
     font-weight: 700;
     letter-spacing: 1px;
-    box-shadow: 0 0 20px rgba(231, 29, 54, 0.6);
 }
 
 .btn-estop:hover {
@@ -376,19 +371,41 @@ body.dark-theme {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    /* Take roughly half the right column height */
-    flex: 1;
-    min-height: 0;
     overflow: hidden;
 }
 
-.camera-grid {
-    display: flex;
+.perception-panel.expanded {
+    /* Take roughly half the right column height */
+    flex: 1;
+    min-height: 0;
+}
+
+.perception-panel .camera-grid {
+    display: none;
     flex-direction: column;
     gap: 0.5rem;
     flex: 1;
     min-height: 0;
     overflow: hidden;
+}
+
+.perception-panel.expanded .camera-grid {
+    display: flex;
+}
+
+/* Collapsible Teleop Panel */
+.teleop-content {
+    transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease, margin 0.3s ease;
+    max-height: 1000px;
+    opacity: 1;
+    overflow: hidden;
+    margin-top: 1rem;
+}
+
+.teleop-panel:not(.expanded) .teleop-content {
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
 }
 
 .camera-feed {
@@ -570,3 +587,183 @@ body[data-theme="light"] ::-webkit-scrollbar-thumb:hover { background: rgba(0, 0
         background: rgba(0, 0, 0, 0.05);
     }
 }
+
+/* ─── AutoRT Task Approval Panel ─────────────────────────────── */
+
+.autort-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.autort-panel .autort-task-list {
+    display: none;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.6rem;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.autort-panel.expanded .autort-task-list {
+    display: flex;
+}
+
+/* Count bubble — sits inline inside the h2 */
+.autort-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--warning);
+    color: #000;
+    font-size: 0.7rem;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    padding: 0 5px;
+    margin-left: 4px;
+    vertical-align: middle;
+}
+
+/* Loop status pill */
+.autort-loop-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 0.2rem 0.55rem;
+    border-radius: 20px;
+    border: 1px solid var(--danger);
+    color: var(--danger);
+    transition: var(--transition);
+}
+
+.autort-loop-badge.running {
+    border-color: var(--success);
+    color: var(--success);
+    box-shadow: 0 0 8px rgba(46, 196, 182, 0.4);
+}
+
+/* Task card entry animation */
+@keyframes autort-card-in {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Task card exit animation */
+@keyframes autort-card-out {
+    from { opacity: 1; max-height: 200px; margin-bottom: 0; }
+    to   { opacity: 0; max-height: 0;     margin-bottom: -0.5rem; }
+}
+
+.autort-task-card {
+    background: var(--bg-glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--text-muted);
+    padding: 0.7rem 0.8rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    animation: autort-card-in 0.2s ease-out;
+    overflow: hidden;
+}
+
+.autort-task-card[data-complexity="low"]    { border-left-color: var(--success); }
+.autort-task-card[data-complexity="medium"] { border-left-color: var(--warning); }
+.autort-task-card[data-complexity="high"]   { border-left-color: var(--danger);  }
+
+.autort-task-card.removing {
+    animation: autort-card-out 0.25s ease-in forwards;
+}
+
+.autort-task-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.autort-task-desc {
+    font-size: 0.85rem;
+    font-weight: 500;
+    flex: 1;
+    min-width: 0;
+    word-break: break-word;
+}
+
+.autort-complexity-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 0.15rem 0.45rem;
+    border-radius: 20px;
+    flex-shrink: 0;
+}
+
+.autort-complexity-badge.low    { background: rgba(46, 196, 182, 0.15); color: var(--success); border: 1px solid var(--success); }
+.autort-complexity-badge.medium { background: rgba(255, 159, 28, 0.15); color: var(--warning); border: 1px solid var(--warning); }
+.autort-complexity-badge.high   { background: rgba(231, 29, 54, 0.15);  color: var(--danger);  border: 1px solid var(--danger);  }
+
+.autort-ops-list {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    max-height: 80px;
+    overflow-y: auto;
+    line-height: 1.5;
+}
+
+.autort-task-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    margin-top: 0.2rem;
+}
+
+.btn-autort-approve {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.3rem 0.7rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--success);
+    background: rgba(46, 196, 182, 0.12);
+    color: var(--success);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-autort-approve:hover {
+    background: rgba(46, 196, 182, 0.25);
+}
+
+.btn-autort-reject {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.3rem 0.7rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--glass-border);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.btn-autort-reject:hover {
+    border-color: var(--danger);
+    color: var(--danger);
+}
+
+/* Empty state */
+.autort-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 1rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+.autort-empty i { font-size: 1.4rem; opacity: 0.5; }

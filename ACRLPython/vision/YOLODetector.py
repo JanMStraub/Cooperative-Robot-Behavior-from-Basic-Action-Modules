@@ -487,7 +487,7 @@ class YOLODetector:
         if self.enable_debug:
             self._save_debug_image(image, detections, camera_id)
 
-        logging.info(f"YOLO detected {len(detections)} objects")
+        logging.debug(f"YOLO detected {len(detections)} objects")
 
         return DetectionResult(camera_id, width, height, detections)
 
