@@ -47,116 +47,17 @@ except ImportError:
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+# Import pytest-safe logging helpers from LoggingSetup
+try:
+    from ..core.LoggingSetup import SafeStreamHandler, _safe_log, _make_handler_safe
+except ImportError:
+    from core.LoggingSetup import SafeStreamHandler, _safe_log, _make_handler_safe
 
-class SafeStreamHandler(logging.StreamHandler):
-    """
-    StreamHandler that silently ignores I/O errors from closed streams.
-
-    This prevents logging errors when pytest closes log handlers before
-    background threads finish executing.
-    """
-
-    def emit(self, record):
-        """
-        Emit a record, catching I/O errors from closed streams.
-
-        Args:
-            record: Log record to emit
-        """
-        try:
-            super().emit(record)
-        except (ValueError, OSError):
-            # Stream closed (e.g., during pytest teardown)
-            # Silently ignore - this is expected in test scenarios
-            pass
-
-    def handleError(self, record):
-        """
-        Handle errors during logging, suppressing I/O errors from closed streams.
-
-        Args:
-            record: Log record that caused the error
-        """
-        import sys
-
-        if sys.exc_info()[0] in (ValueError, OSError):
-            # Stream closed - silently ignore
-            pass
-        else:
-            # Other errors - use default handling
-            super().handleError(record)
-
-
-_patched_handlers = set()  # Track which handlers have been patched
-
-
-def _safe_log(log_func: Callable, message: str, *args, **kwargs):
-    """
-    Safely log a message, catching I/O errors from closed streams.
-
-    This prevents logging errors when pytest closes log handlers before
-    background threads finish executing.
-
-    Args:
-        log_func: Logger function (logger.info, logger.error, etc.)
-        message: Log message
-        *args: Additional positional arguments for log function
-        **kwargs: Additional keyword arguments for log function
-    """
-    # Lazily patch any new handlers (pytest adds handlers after module import)
-    for handler in logging.root.handlers + logger.handlers:
-        if id(handler) not in _patched_handlers:
-            _make_handler_safe(handler)
-            _patched_handlers.add(id(handler))
-
-    try:
-        log_func(message, *args, **kwargs)
-    except (ValueError, OSError):
-        # Stream closed (e.g., during pytest teardown)
-        # Silently ignore - this is expected in test scenarios
-        pass
-
-
-# Patch all existing handlers to safely handle closed streams
-def _make_handler_safe(handler):
-    """Patch a handler's emit method to catch I/O errors from closed streams"""
-    # Store original unbound method to avoid double-wrapping
-    if not hasattr(handler, "_original_emit"):
-        handler._original_emit = handler.__class__.emit
-        handler._original_handleError = handler.__class__.handleError
-
-    def safe_emit(record):
-        try:
-            handler._original_emit(handler, record)
-        except (ValueError, OSError, RuntimeError):
-            # Stream closed (e.g., during pytest teardown) or reentrant call during shutdown
-            # Silently ignore - these are expected during signal handler shutdown
-            pass
-
-    def safe_handleError(record):
-        """Override handleError to suppress I/O error diagnostics"""
-        import sys
-
-        exc_type, exc_val, exc_tb = sys.exc_info()
-        if exc_type in (ValueError, OSError, RuntimeError):
-            # Stream closed or reentrant call - silently ignore diagnostics
-            pass
-        else:
-            # Other errors - use default handling
-            handler._original_handleError(handler, record)
-
-    handler.emit = safe_emit
-    handler.handleError = safe_handleError
-    return handler
-
-
-# Apply safe patching to all handlers (including pytest's handlers)
-for handler in logger.handlers[:]:  # Create copy to avoid modification during iteration
-    _make_handler_safe(handler)
-
-# Also patch root logger handlers (pytest uses these)
-for handler in logging.root.handlers[:]:
-    _make_handler_safe(handler)
+# Apply safe patching to all existing handlers (including pytest's handlers)
+for _handler in logger.handlers[:]:
+    _make_handler_safe(_handler)
+for _handler in logging.root.handlers[:]:
+    _make_handler_safe(_handler)
 
 
 class SequenceExecutor:
@@ -174,6 +75,72 @@ class SequenceExecutor:
     # Class-level atomic counter for request IDs (shared across all instances)
     _request_id_counter = 0
     _request_id_lock = threading.Lock()
+
+    class _MetricsTracker:
+        """
+        Lightweight operation metrics tracker for a single SequenceExecutor.
+
+        Uses Welford's online algorithm for the running average so no list of
+        samples needs to be maintained in memory.
+        """
+
+        def __init__(self):
+            """Initialise all counters to zero."""
+            self._lock = threading.Lock()
+            self._ops_executed: int = 0
+            self._ops_succeeded: int = 0
+            self._ops_failed: int = 0
+            self._avg_duration_ms: float = 0.0
+
+        def record(self, success: bool, duration_ms: float):
+            """
+            Update counters for one completed operation.
+
+            Args:
+                success: Whether the operation succeeded.
+                duration_ms: Wall-clock duration of the operation in ms.
+            """
+            with self._lock:
+                self._ops_executed += 1
+                if success:
+                    self._ops_succeeded += 1
+                else:
+                    self._ops_failed += 1
+                # Welford online mean: avg += (x - avg) / n
+                self._avg_duration_ms += (
+                    duration_ms - self._avg_duration_ms
+                ) / self._ops_executed
+
+        def snapshot(self) -> Dict[str, Any]:
+            """
+            Return a snapshot of current metrics.
+
+            Returns:
+                Dict with keys: ops_executed, ops_succeeded, ops_failed,
+                ops_success_rate (0.0–1.0), avg_duration_ms.
+            """
+            with self._lock:
+                executed = self._ops_executed
+                succeeded = self._ops_succeeded
+                failed = self._ops_failed
+                avg_ms = self._avg_duration_ms
+
+            success_rate = (succeeded / executed) if executed > 0 else 0.0
+            return {
+                "ops_executed": executed,
+                "ops_succeeded": succeeded,
+                "ops_failed": failed,
+                "ops_success_rate": round(success_rate, 4),
+                "avg_duration_ms": round(avg_ms, 1),
+            }
+
+        def reset(self):
+            """Reset all counters to zero."""
+            with self._lock:
+                self._ops_executed = 0
+                self._ops_succeeded = 0
+                self._ops_failed = 0
+                self._avg_duration_ms = 0.0
 
     def __init__(
         self,
@@ -203,13 +170,8 @@ class SequenceExecutor:
             {}
         )  # Variable storage for passing results between operations
 
-        # Operation metrics — lightweight runtime counters.
-        # avg_duration_ms uses Welford's online update: O(1) memory, no list accumulation.
-        self._metrics_lock = threading.Lock()
-        self._ops_executed: int = 0
-        self._ops_succeeded: int = 0
-        self._ops_failed: int = 0
-        self._avg_duration_ms: float = 0.0
+        # Operation metrics — delegated to nested _MetricsTracker
+        self._metrics = self._MetricsTracker()
 
         # Optional OutcomeTracker for self-improvement loop recording.
         # Set to an OutcomeTracker instance to enable; None disables recording.
@@ -627,23 +589,11 @@ class SequenceExecutor:
         """
         Update operation metrics counters in a thread-safe manner.
 
-        Uses Welford's online algorithm for the running average so no sample
-        list needs to be maintained.
-
         Args:
             success: Whether the operation succeeded
             duration_ms: Wall-clock duration of the operation in milliseconds
         """
-        with self._metrics_lock:
-            self._ops_executed += 1
-            if success:
-                self._ops_succeeded += 1
-            else:
-                self._ops_failed += 1
-            # Welford online mean: avg += (x - avg) / n
-            self._avg_duration_ms += (
-                duration_ms - self._avg_duration_ms
-            ) / self._ops_executed
+        self._metrics.record(success, duration_ms)
 
     def get_metrics(self) -> Dict[str, Any]:
         """
@@ -653,28 +603,11 @@ class SequenceExecutor:
             Dict with keys: ops_executed, ops_succeeded, ops_failed,
             ops_success_rate (0.0–1.0), avg_duration_ms.
         """
-        with self._metrics_lock:
-            executed = self._ops_executed
-            succeeded = self._ops_succeeded
-            failed = self._ops_failed
-            avg_ms = self._avg_duration_ms
-
-        success_rate = (succeeded / executed) if executed > 0 else 0.0
-        return {
-            "ops_executed": executed,
-            "ops_succeeded": succeeded,
-            "ops_failed": failed,
-            "ops_success_rate": round(success_rate, 4),
-            "avg_duration_ms": round(avg_ms, 1),
-        }
+        return self._metrics.snapshot()
 
     def reset_metrics(self):
         """Reset all operation metrics counters to zero."""
-        with self._metrics_lock:
-            self._ops_executed = 0
-            self._ops_succeeded = 0
-            self._ops_failed = 0
-            self._avg_duration_ms = 0.0
+        self._metrics.reset()
 
     def _execute_single_command(
         self, operation: str, params: Dict[str, Any], timeout: float

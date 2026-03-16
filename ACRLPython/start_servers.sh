@@ -42,9 +42,18 @@ kill_existing_servers() {
     kill_process_by_pattern "$CONTROLLER_PATTERN" "RunRobotController"
     kill_process_by_pattern "$SEQUENCE_SERVER_PATTERN" "RunSequenceServer"
 
-    # Wait for processes to fully terminate
+    # Wait until the key server ports are actually free (avoids EADDRINUSE on fast restarts)
     echo "Waiting for processes to shut down..."
-    sleep 2
+    local ports=(5005 5006 5010 5013 5014 5015)
+    local timeout=15
+    for port in "${ports[@]}"; do
+        for (( i=0; i<timeout; i++ )); do
+            if ! lsof -nP -i ":$port" 2>/dev/null | grep -q LISTEN; then
+                break
+            fi
+            sleep 1
+        done
+    done
     echo "All previous server processes terminated."
     echo ""
 }

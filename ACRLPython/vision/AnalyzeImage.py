@@ -221,8 +221,11 @@ class LMStudioVisionProcessor:
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
 
-        # Extract response text
-        response_text = response.choices[0].message.content
+        # Extract response text. choices can be empty/None on error responses;
+        # content can be None for tool-call or refusal responses.
+        if not response.choices:
+            raise ValueError("LM Studio returned an empty choices list")
+        response_text = response.choices[0].message.content or ""
 
         # Build result
         result = {

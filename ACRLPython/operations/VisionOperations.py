@@ -146,12 +146,19 @@ def analyze_scene(
         # Use LMStudioVisionProcessor
         processor = LMStudioVisionProcessor(model=model)
 
+        if image is None:
+            return OperationResult.error_result(
+                "NO_IMAGES",
+                "No images available for analysis after fallback",
+                ["Ensure camera is connected", "Check camera_id parameter"],
+            )
+
         # Send image for analysis
         llm_result = processor.send_images(
             images=[image], camera_ids=[camera_id], prompt=prompt
         )
 
-        response_text = llm_result.get("response", "")
+        response_text = (llm_result or {}).get("response", "")
 
         result = {
             "analysis": response_text,

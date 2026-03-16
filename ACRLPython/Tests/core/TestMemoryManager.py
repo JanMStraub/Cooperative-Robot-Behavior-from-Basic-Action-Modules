@@ -51,14 +51,14 @@ def reset_memory_manager(tmp_path):
 @pytest.fixture()
 def fresh_tracker():
     """Return a clean OutcomeTracker singleton with an empty ring buffer."""
-    # Reset the singleton
-    with OutcomeTracker._lock:
+    # Reset the singleton (OutcomeTracker uses SingletonBase._singleton_lock)
+    with OutcomeTracker._singleton_lock:
         OutcomeTracker._instance = None
     tracker = OutcomeTracker()
     yield tracker
     # Cleanup
     tracker.reset()
-    with OutcomeTracker._lock:
+    with OutcomeTracker._singleton_lock:
         OutcomeTracker._instance = None
 
 

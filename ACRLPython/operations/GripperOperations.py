@@ -20,6 +20,8 @@ from .Base import (
     OperationResult,
     OperationRelationship,
 )
+from .Validators import validate_robot_id
+from .ROSDispatcher import execute_with_ros_fallback
 
 # Configure logging
 from core.LoggingSetup import setup_logging
@@ -97,16 +99,8 @@ def control_gripper(
         >>> result = control_gripper("Robot1", False, object_id="RedCube")
     """
     try:
-        # Validate robot_id
-        if not robot_id or not isinstance(robot_id, str):
-            return OperationResult.error_result(
-                "INVALID_ROBOT_ID",
-                f"Robot ID must be a non-empty string, got: {robot_id}",
-                [
-                    "Provide a valid robot ID (e.g., 'Robot1', 'AR4_Robot')",
-                    "Check RobotManager in Unity for available robot IDs",
-                ],
-            )
+        if err := validate_robot_id(robot_id):
+            return err
 
         # Validate open_gripper parameter
         if not isinstance(open_gripper, bool):
@@ -114,122 +108,65 @@ def control_gripper(
                 "INVALID_OPEN_GRIPPER_PARAMETER",
                 f"open_gripper must be a boolean, got: {type(open_gripper).__name__}",
                 [
-                    "Use open_gripper=True to open the gripper or open_gripper=False to close it",
+                    "Use open_gripper=True to open the gripper or open_gripper=False to close it"
                 ],
             )
 
-        # Determine whether to use ROS or TCP path
-        _use_ros = use_ros
-        if _use_ros is None:
-            try:
-                from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+        def _ros_path():
+            from ros2.ROSBridge import ROSBridge
 
-                _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
-            except ImportError:
-                _use_ros = False
+            bridge = ROSBridge.get_instance()
+            gripper_position = 1.0 if open_gripper else 0.0
+            result = bridge.control_gripper(gripper_position, robot_id=robot_id)
+            if result and result.get("success"):
+                logger.info(f"ROS gripper command sent for {robot_id}")
+                return OperationResult.success_result(
+                    {
+                        "robot_id": robot_id,
+                        "open_gripper": open_gripper,
+                        "status": "ros_command_sent",
+                        "timestamp": time.time(),
+                    }
+                )
+            return None
 
-        # Route via ROS if enabled
-        if _use_ros:
-            try:
-                from ros2.ROSBridge import ROSBridge
-
-                bridge = ROSBridge.get_instance()
-                if bridge.is_connected or bridge.connect():
-                    # Gripper: 1.0 = fully open, 0.0 = fully closed (normalized values)
-                    gripper_position = 1.0 if open_gripper else 0.0
-                    result = bridge.control_gripper(
-                        gripper_position, robot_id=robot_id
-                    )  # Pass robot_id
-                    if result and result.get("success"):
-                        logger.info(f"ROS gripper command sent for {robot_id}")
-                        return OperationResult.success_result(
-                            {
-                                "robot_id": robot_id,
-                                "open_gripper": open_gripper,
-                                "status": "ros_command_sent",
-                                "timestamp": time.time(),
-                            }
-                        )
-                    else:
-                        try:
-                            from config.ROS import DEFAULT_CONTROL_MODE
-
-                            if DEFAULT_CONTROL_MODE != "hybrid":
-                                error_msg = (
-                                    result.get("error", "Unknown")
-                                    if result
-                                    else "No response"
-                                )
-                                return OperationResult.error_result(
-                                    "ROS_GRIPPER_FAILED",
-                                    f"ROS gripper command failed: {error_msg}",
-                                    ["Check ROS bridge logs"],
-                                )
-                        except ImportError:
-                            pass
-                        logger.warning("ROS gripper failed, falling back to TCP")
-                else:
-                    try:
-                        from config.ROS import DEFAULT_CONTROL_MODE
-
-                        if DEFAULT_CONTROL_MODE != "hybrid":
-                            return OperationResult.error_result(
-                                "ROS_CONNECTION_FAILED",
-                                "Failed to connect to ROS bridge",
-                                ["Ensure Docker ROS services are running"],
-                            )
-                    except ImportError:
-                        pass
-                    logger.warning("ROS bridge unavailable, falling back to TCP")
-            except ImportError:
-                logger.warning("ros2 module not available, falling back to TCP")
-
-        # Construct command for Unity (TCP path)
-        params: Dict[str, Any] = {
-            "open_gripper": open_gripper,
-        }
-        # Add object_id if specified (for handoff scenarios)
-        if object_id:
-            params["object_id"] = object_id
-
-        command = {
-            "command_type": "control_gripper",
-            "robot_id": robot_id,
-            "parameters": params,
-            "timestamp": time.time(),
-            "request_id": request_id,
-        }
-
-        # Send to Unity via CommandBroadcaster
-        logger.info(
-            f"Sending control_gripper command to {robot_id} (open_gripper={open_gripper})"
-        )
-
-        success = _get_command_broadcaster().send_command(command, request_id)
-
-        if not success:
-            return OperationResult.error_result(
-                "COMMUNICATION_FAILED",
-                "Failed to send command to Unity - no clients connected",
-                [
-                    "Ensure Unity is running with UnifiedPythonReceiver active",
-                    "Verify CommandServer is running (port 5010)",
-                    "Check Unity console for connection errors",
-                    "Restart backend: python -m orchestrators.RunRobotController",
-                ],
-            )
-
-        # Return success
-        logger.info(f"Successfully sent control_gripper command to {robot_id}")
-
-        return OperationResult.success_result(
-            {
+        def _tcp_path():
+            params: Dict[str, Any] = {"open_gripper": open_gripper}
+            if object_id:
+                params["object_id"] = object_id
+            command = {
+                "command_type": "control_gripper",
                 "robot_id": robot_id,
-                "open_gripper": open_gripper,
-                "status": "command_sent",
+                "parameters": params,
                 "timestamp": time.time(),
+                "request_id": request_id,
             }
-        )
+            logger.info(
+                f"Sending control_gripper command to {robot_id} (open_gripper={open_gripper})"
+            )
+            success = _get_command_broadcaster().send_command(command, request_id)
+            if not success:
+                return OperationResult.error_result(
+                    "COMMUNICATION_FAILED",
+                    "Failed to send command to Unity - no clients connected",
+                    [
+                        "Ensure Unity is running with UnifiedPythonReceiver active",
+                        "Verify CommandServer is running (port 5010)",
+                        "Check Unity console for connection errors",
+                        "Restart backend: python -m orchestrators.RunRobotController",
+                    ],
+                )
+            logger.info(f"Successfully sent control_gripper command to {robot_id}")
+            return OperationResult.success_result(
+                {
+                    "robot_id": robot_id,
+                    "open_gripper": open_gripper,
+                    "status": "command_sent",
+                    "timestamp": time.time(),
+                }
+            )
+
+        return execute_with_ros_fallback(_ros_path, _tcp_path, use_ros)
 
     except Exception as e:
         logger.error(f"Unexpected error in control_gripper: {e}", exc_info=True)

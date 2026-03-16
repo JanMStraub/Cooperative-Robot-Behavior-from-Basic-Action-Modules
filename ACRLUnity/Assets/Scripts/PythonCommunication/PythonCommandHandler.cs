@@ -180,26 +180,54 @@ namespace PythonCommunication
             new System.Collections.Generic.Dictionary<string, uint>();
 
         /// <summary>
-        /// Track active event listeners per robot to prevent zombie delegates
+        /// Manages active event listeners per robot to prevent zombie delegates.
+        ///
+        /// Replaces the four separate Dictionary&lt;string, Action&gt; fields that
+        /// previously implemented identical subscribe/fire/clear patterns.
         /// </summary>
-        private System.Collections.Generic.Dictionary<string, System.Action> _activeMoveListeners =
-            new System.Collections.Generic.Dictionary<string, System.Action>();
-        private System.Collections.Generic.Dictionary<string, System.Action> _activeGraspListeners =
-            new System.Collections.Generic.Dictionary<string, System.Action>();
-        private System.Collections.Generic.Dictionary<
-            string,
-            System.Action
-        > _activeGripperListeners = new System.Collections.Generic.Dictionary<
-            string,
-            System.Action
-        >();
-        private System.Collections.Generic.Dictionary<
-            string,
-            System.Action
-        > _activeOrientationListeners = new System.Collections.Generic.Dictionary<
-            string,
-            System.Action
-        >();
+        private sealed class CommandListenerManager
+        {
+            private readonly System.Collections.Generic.Dictionary<string, System.Action> _listeners
+                = new System.Collections.Generic.Dictionary<string, System.Action>();
+
+            /// <summary>Register a callback for the given robot key, overwriting any prior entry.</summary>
+            public void Register(string key, System.Action callback)
+            {
+                _listeners[key] = callback;
+            }
+
+            /// <summary>Return the stored callback without removing it, or null if absent.</summary>
+            public System.Action Get(string key)
+            {
+                _listeners.TryGetValue(key, out System.Action cb);
+                return cb;
+            }
+
+            /// <summary>Remove and return the stored callback, or null if absent.</summary>
+            public System.Action Remove(string key)
+            {
+                if (_listeners.TryGetValue(key, out System.Action cb))
+                {
+                    _listeners.Remove(key);
+                    return cb;
+                }
+                return null;
+            }
+
+            /// <summary>Return true if a callback is registered for the given key.</summary>
+            public bool Contains(string key) => _listeners.ContainsKey(key);
+
+            /// <summary>Remove all entries.</summary>
+            public void ClearAll() => _listeners.Clear();
+        }
+
+        /// <summary>
+        /// Per-command-type active listener managers — prevent zombie delegates on controller events.
+        /// </summary>
+        private readonly CommandListenerManager _activeMoveListeners = new CommandListenerManager();
+        private readonly CommandListenerManager _activeGraspListeners = new CommandListenerManager();
+        private readonly CommandListenerManager _activeGripperListeners = new CommandListenerManager();
+        private readonly CommandListenerManager _activeOrientationListeners = new CommandListenerManager();
 
         /// <summary>
         /// Object lookup cache to avoid expensive FindObjectsByType calls
@@ -611,9 +639,9 @@ namespace PythonCommunication
 
                 // FIX #2: CLEANUP - Remove old listener for this robot if one exists
                 string robotListenerKey = $"move_{command.robot_id}";
-                if (_activeMoveListeners.ContainsKey(robotListenerKey))
+                if (_activeMoveListeners.Contains(robotListenerKey))
                 {
-                    System.Action oldListener = _activeMoveListeners[robotListenerKey];
+                    System.Action oldListener = _activeMoveListeners.Remove(robotListenerKey);
                     if (controller != null)
                         controller.OnTargetReached -= oldListener;
                     else if (robotInstance.simpleController != null)
@@ -654,7 +682,7 @@ namespace PythonCommunication
                     }
                 };
 
-                _activeMoveListeners[robotListenerKey] = onComplete;
+                _activeMoveListeners.Register(robotListenerKey, onComplete);
 
                 if (controller != null)
                 {
@@ -749,9 +777,9 @@ namespace PythonCommunication
 
                 // FIX #2: CLEANUP - Remove old gripper listener for this robot if one exists
                 string listenerKey = $"gripper_{command.robot_id}";
-                if (_activeGripperListeners.ContainsKey(listenerKey))
+                if (_activeGripperListeners.Contains(listenerKey))
                 {
-                    System.Action oldListener = _activeGripperListeners[listenerKey];
+                    System.Action oldListener = _activeGripperListeners.Remove(listenerKey);
                     gripperController.OnGripperActionComplete -= oldListener;
                     _activeGripperListeners.Remove(listenerKey);
                 }
@@ -772,7 +800,7 @@ namespace PythonCommunication
                         );
                     }
                 };
-                _activeGripperListeners[listenerKey] = onComplete; // FIX #2: Track it
+                _activeGripperListeners.Register(listenerKey, onComplete); // FIX #2: Track it
                 gripperController.OnGripperActionComplete += onComplete;
 
                 bool openGripper = command.parameters.open_gripper;
@@ -895,9 +923,9 @@ namespace PythonCommunication
 
                 if (controller != null)
                 {
-                    if (_activeGraspListeners.ContainsKey(robotGraspKey))
+                    if (_activeGraspListeners.Contains(robotGraspKey))
                     {
-                        System.Action oldListener = _activeGraspListeners[robotGraspKey];
+                        System.Action oldListener = _activeGraspListeners.Remove(robotGraspKey);
                         controller.OnTargetReached -= oldListener;
                         _activeGraspListeners.Remove(robotGraspKey);
                     }
@@ -932,7 +960,7 @@ namespace PythonCommunication
                             );
                         }
                     };
-                    _activeGraspListeners[robotGraspKey] = onComplete;
+                    _activeGraspListeners.Register(robotGraspKey, onComplete);
                     controller.OnTargetReached += onComplete;
 
                     // Branch: use GraspNet pre-computed candidates if provided,
@@ -973,9 +1001,9 @@ namespace PythonCommunication
                 {
                     SimpleRobotController simpleController = robotInstance.simpleController;
 
-                    if (_activeGraspListeners.ContainsKey(robotGraspKey))
+                    if (_activeGraspListeners.Contains(robotGraspKey))
                     {
-                        System.Action oldListener = _activeGraspListeners[robotGraspKey];
+                        System.Action oldListener = _activeGraspListeners.Remove(robotGraspKey);
                         simpleController.OnTargetReached -= oldListener;
                         _activeGraspListeners.Remove(robotGraspKey);
                     }
@@ -996,7 +1024,7 @@ namespace PythonCommunication
                             );
                         }
                     };
-                    _activeGraspListeners[robotGraspKey] = onComplete;
+                    _activeGraspListeners.Register(robotGraspKey, onComplete);
                     simpleController.OnTargetReached += onComplete;
 
                     simpleController.SetTarget(targetObject);
@@ -1449,9 +1477,9 @@ namespace PythonCommunication
 
                 // FIX #2: CLEANUP - Remove old orientation listener for this robot if one exists
                 string listenerKey = $"orientation_{command.robot_id}";
-                if (_activeOrientationListeners.ContainsKey(listenerKey))
+                if (_activeOrientationListeners.Contains(listenerKey))
                 {
-                    System.Action oldListener = _activeOrientationListeners[listenerKey];
+                    System.Action oldListener = _activeOrientationListeners.Remove(listenerKey);
                     if (controller != null)
                         controller.OnTargetReached -= oldListener;
                     else if (robotInstance.simpleController != null)
@@ -1481,7 +1509,7 @@ namespace PythonCommunication
                     }
                 };
 
-                _activeOrientationListeners[listenerKey] = onComplete;
+                _activeOrientationListeners.Register(listenerKey, onComplete);
 
                 if (controller != null)
                 {
@@ -1570,9 +1598,9 @@ namespace PythonCommunication
 
                 // FIX #2: CLEANUP - Remove old alignment listener for this robot if one exists
                 string listenerKey = $"align_{command.robot_id}";
-                if (_activeOrientationListeners.ContainsKey(listenerKey))
+                if (_activeOrientationListeners.Contains(listenerKey))
                 {
-                    System.Action oldListener = _activeOrientationListeners[listenerKey];
+                    System.Action oldListener = _activeOrientationListeners.Remove(listenerKey);
                     if (controller != null)
                         controller.OnTargetReached -= oldListener;
                     else if (robotInstance.simpleController != null)
@@ -1602,7 +1630,7 @@ namespace PythonCommunication
                     }
                 };
 
-                _activeOrientationListeners[listenerKey] = onComplete; // FIX #2: Track it
+                _activeOrientationListeners.Register(listenerKey, onComplete); // FIX #2: Track it
 
                 // Execute alignment
                 if (controller != null)

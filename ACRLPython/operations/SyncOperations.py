@@ -23,9 +23,10 @@ from .Base import (
     OperationComplexity,
     OperationResult,
 )
+from core.SingletonBase import SingletonBase
 
 
-class EventBus:
+class EventBus(SingletonBase):
     """
     Thread-safe event bus for robot-to-robot signaling.
 
@@ -53,21 +54,8 @@ class EventBus:
     Singleton pattern ensures all operations share the same event state.
     """
 
-    _instance: Optional["EventBus"] = None
-    _lock = threading.Lock()
-
-    def __new__(cls):
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-                    cls._instance._initialized = False
-        return cls._instance
-
-    def __init__(self):
-        if self._initialized:
-            return
-
+    def _singleton_init(self):
+        """Initialize the event bus (called once by SingletonBase)."""
         # Maps event_name -> threading.Condition (with its own internal Lock)
         self._conditions: Dict[str, threading.Condition] = {}
         # Maps event_name -> monotonic signal generation counter.
@@ -77,7 +65,6 @@ class EventBus:
         # Maps event_name -> active waiter count (for monitoring/tests).
         self._waiter_counts: Dict[str, int] = {}
         self._event_lock = threading.Lock()
-        self._initialized = True
 
     def _ensure_event(self, event_name: str) -> None:
         """
@@ -197,6 +184,38 @@ class EventBus:
             self._conditions.clear()
             self._generations.clear()
             self._waiter_counts.clear()
+
+    # ------------------------------------------------------------------
+    # Public inspection helpers — for testing without accessing internals
+    # ------------------------------------------------------------------
+
+    def is_event_signaled(self, event_name: str) -> bool:
+        """
+        Return True if the event has been signaled at least once since last reset.
+
+        Provides a stable public API for tests instead of direct ``._events`` access.
+
+        Args:
+            event_name: Name of the event to check.
+
+        Returns:
+            True if the event's generation counter > 0.
+        """
+        return self._generations.get(event_name, 0) > 0
+
+    def get_waiter_count(self, event_name: str) -> int:
+        """
+        Return the number of threads currently waiting on an event.
+
+        Provides a stable public API for tests instead of direct ``._waiter_counts`` access.
+
+        Args:
+            event_name: Name of the event to query.
+
+        Returns:
+            Number of active waiters, or 0 if no waiters or event is unknown.
+        """
+        return self._waiter_counts.get(event_name, 0)
 
 
 # ============================================================================

@@ -26,12 +26,14 @@ try:
     from ..core.TCPServerBase import TCPServerBase, ServerConfig
     from ..core.LoggingSetup import get_logger
     from ..core.UnityProtocol import MessageType, UnityProtocol
+    from ..core.SingletonBase import SingletonBase
 
     # NOTE: CommandParser and SequenceExecutor imported lazily in initialize() to avoid circular dependency
 except ImportError:
     from core.TCPServerBase import TCPServerBase, ServerConfig
     from core.LoggingSetup import get_logger
     from core.UnityProtocol import MessageType, UnityProtocol
+    from core.SingletonBase import SingletonBase
 
     # NOTE: CommandParser and SequenceExecutor imported lazily in initialize() to avoid circular dependency
 
@@ -63,7 +65,7 @@ except ImportError:
 logger = get_logger(__name__)
 
 
-class SequenceQueryHandler:
+class SequenceQueryHandler(SingletonBase):
     """
     Singleton handler for sequence queries.
 
@@ -71,28 +73,10 @@ class SequenceQueryHandler:
     query processing.
     """
 
-    _instance = None
-    _lock = threading.RLock()
-
-    def __new__(cls):
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-                    cls._instance._initialized = False
-        return cls._instance
-
-    def __init__(self):
-        if self._initialized:
-            return
-
-        with self._lock:
-            if self._initialized:
-                return
-
-            self._parser: Optional[CommandParser] = None
-            self._executor: Optional[SequenceExecutor] = None
-            self._initialized = True
+    def _singleton_init(self):
+        """Initialize the handler (called once by SingletonBase)."""
+        self._parser: Optional[CommandParser] = None
+        self._executor: Optional[SequenceExecutor] = None
 
     def initialize(
         self,

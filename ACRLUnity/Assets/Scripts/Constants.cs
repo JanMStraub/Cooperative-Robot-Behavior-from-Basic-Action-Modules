@@ -14,6 +14,36 @@ namespace Core
         public const int JACOBIAN_DIMENSIONS = 6;
 
         /// <summary>
+        /// Maximum joint angular velocity in radians per second (IKSolver damping clamp).
+        /// </summary>
+        public const float MAX_JOINT_VELOCITY_RAD_PER_SEC = 5.0f;
+
+        /// <summary>
+        /// IK position gain (Kp) used in RobotController ArticulationBody drive targets.
+        /// </summary>
+        public const float IK_POSITION_GAIN = 3.5f;
+
+        /// <summary>
+        /// IK velocity/damping gain (Kd) used in RobotController ArticulationBody drive targets.
+        /// </summary>
+        public const float IK_VELOCITY_GAIN = 0.5f;
+
+        /// <summary>
+        /// Maximum joint step in degrees per physics frame under normal (non-stalled) conditions.
+        /// </summary>
+        public const float MAX_JOINT_DEGREES_PER_FRAME = 5.0f;
+
+        /// <summary>
+        /// Maximum joint step in degrees per physics frame when the IK solver is stalled.
+        /// </summary>
+        public const float MAX_JOINT_DEGREES_PER_FRAME_STALLED = 8.0f;
+
+        /// <summary>
+        /// Squared velocity magnitude threshold below which an ArticulationBody is considered settled.
+        /// </summary>
+        public const float VELOCITY_SETTLE_THRESHOLD_SQR = 0.005f;
+
+        /// <summary>
         /// Movement detection threshold (meters)
         /// Robot is considered moving if distance to target exceeds this value (1cm)
         /// </summary>

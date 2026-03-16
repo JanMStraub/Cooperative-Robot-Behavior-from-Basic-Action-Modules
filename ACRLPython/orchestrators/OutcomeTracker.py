@@ -25,6 +25,7 @@ from typing import Any, Dict, List, Optional
 
 from config.Memory import OUTCOME_BUFFER_SIZE
 from core.LoggingSetup import setup_logging
+from core.SingletonBase import SingletonBase
 
 setup_logging(__name__)
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ logger = logging.getLogger(__name__)
 _MAX_RECENT_OUTCOMES: int = OUTCOME_BUFFER_SIZE
 
 
-class OutcomeTracker:
+class OutcomeTracker(SingletonBase):
     """
     Singleton tracker for robot operation outcomes.
 
@@ -44,23 +45,9 @@ class OutcomeTracker:
     Thread-safe: all public methods acquire _lock before mutating state.
     """
 
-    _instance: Optional["OutcomeTracker"] = None
-    _lock: threading.Lock = threading.Lock()
-
-    def __new__(cls) -> "OutcomeTracker":
-        """Return the singleton instance, creating it on first call."""
-        with cls._lock:
-            if cls._instance is None:
-                instance = super().__new__(cls)
-                instance._initialized = False
-                cls._instance = instance
-        return cls._instance
-
-    def __init__(self) -> None:
-        """Initialize the tracker (runs once due to singleton guard)."""
-        if self._initialized:
-            return
-        self._initialized = True
+    def _singleton_init(self) -> None:
+        """Initialize the tracker (called once by SingletonBase)."""
+        self._lock: threading.Lock = threading.Lock()
         self._recent_outcomes: deque = deque(maxlen=OUTCOME_BUFFER_SIZE)
         self._vector_store = None  # Lazily fetched from RAGSystem
         logger.info("OutcomeTracker initialized")

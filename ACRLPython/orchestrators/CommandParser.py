@@ -52,6 +52,244 @@ setup_logging(__name__)
 logger = logging.getLogger(__name__)
 
 
+class _PromptBuilder:
+    """
+    Assembles LLM parsing prompts.
+
+    Separated from CommandParser to allow unit testing of prompt construction
+    without needing a full CommandParser instance (LLM URL, RAG system, etc.).
+
+    Args:
+        registry: OperationRegistry with all available operations.
+        workflow_registry: WorkflowPatternRegistry with workflow patterns.
+        rag: Optional RAGSystem for semantic operation retrieval.
+    """
+
+    def __init__(self, registry, workflow_registry, rag):
+        """Initialise the builder with registry references."""
+        self.registry = registry
+        self.workflow_registry = workflow_registry
+        self.rag = rag
+
+    def build(
+        self,
+        command_text: str,
+        robot_id: str,
+        anti_pattern_section: str = "",
+        spatial_section: str = "",
+    ) -> str:
+        """
+        Build the full LLM parsing prompt.
+
+        Args:
+            command_text: Natural language command to parse.
+            robot_id: Default robot ID for the command.
+            anti_pattern_section: Formatted anti-pattern warning block (may be empty).
+            spatial_section: Formatted knowledge-graph spatial context (may be empty).
+
+        Returns:
+            Complete prompt string ready to send to the LLM.
+        """
+        available_ops = self.get_available_operations_summary(command_text)
+        anti_pattern_block = (
+            f"\n        {anti_pattern_section}\n" if anti_pattern_section else ""
+        )
+        spatial_block = f"\n        {spatial_section}\n" if spatial_section else ""
+
+        return f"""You are a robot coordinator planning tasks for multiple robots.
+
+        Available Robots:
+        - Robot1 (left workspace, near x=-0.4)
+        - Robot2 (right workspace, near x=0.4)
+
+        Available Operations:
+        {available_ops}
+
+        Command to parse: "{command_text}"
+        Default robot_id: "{robot_id}"
+
+        === MULTI-ROBOT COORDINATION ===
+
+        When the task involves multiple robots:
+        1. Decide which robot is best positioned for each subtask
+        2. Use "parallel_group" to mark operations that can run concurrently
+        3. Use synchronization primitives (signal, wait_for_signal) for robot-to-robot coordination
+        4. Operations with the SAME parallel_group number execute in parallel
+        5. Operations in LATER parallel_groups wait for ALL operations in previous groups to complete
+
+        Example for multi-robot handoff:
+        {{
+        "reasoning": "Robot1 detects red cube, moves to it, and grips. Robot2 waits for signal, then both move to handoff position. Robot2 grips, then Robot1 releases.",
+        "plan": [
+            {{"parallel_group": 1, "robot": "Robot1", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "capture_var": "target"}},
+            {{"parallel_group": 2, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "position": "$target"}}}},
+            {{"parallel_group": 3, "robot": "Robot1", "operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": false}}}},
+            {{"parallel_group": 3, "robot": "Robot1", "operation": "signal", "params": {{"event_name": "r1_gripped"}}}},
+            {{"parallel_group": 3, "robot": "Robot2", "operation": "wait_for_signal", "params": {{"event_name": "r1_gripped"}}}},
+            {{"parallel_group": 4, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": 0.0, "y": 0.3, "z": 0.15}}}},
+            {{"parallel_group": 4, "robot": "Robot2", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot2", "x": 0.0, "y": 0.3, "z": 0.15}}}},
+            {{"parallel_group": 5, "robot": "Robot2", "operation": "control_gripper", "params": {{"robot_id": "Robot2", "open_gripper": false}}}},
+            {{"parallel_group": 6, "robot": "Robot1", "operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": true}}}}
+        ]
+        }}
+
+        === SYNCHRONIZATION PRIMITIVES ===
+
+        - signal(event_name): Emit named event for other robots to wait on
+        * Example: {{"operation": "signal", "params": {{"event_name": "cube_gripped"}}}}
+
+        - wait_for_signal(event_name, timeout_ms): Wait for event (default timeout: 30000ms)
+        * Example: {{"operation": "wait_for_signal", "params": {{"event_name": "cube_gripped"}}}}
+
+        - wait(duration_ms): Simple time-based pause
+        * Example: {{"operation": "wait", "params": {{"duration_ms": 500}}}}
+
+        === SINGLE-ROBOT RULES ===
+
+        1. Extract each distinct action as a separate operation
+        2. Parse coordinates from text like "(0.3, 0.2, 0.1)" or "x=0.3, y=0.2, z=0.1"
+        3. "close gripper" or "grasp" means control_gripper with open_gripper=false
+        4. "open gripper" or "release" means control_gripper with open_gripper=true
+        5. Include robot_id in every operation's params
+        6. Preserve the order of operations as specified in the command
+
+        === VARIABLE PASSING ===
+
+        CRITICAL: Variables must be DEFINED before they are USED!
+        - Use "capture_var": "target" on detect_object_stereo to store the result
+        - Use "$target" in LATER operations to reference the stored result
+        - NEVER use a $variable before it has been captured by a previous operation
+{spatial_block}{anti_pattern_block}Output only valid JSON, no explanation, no comments."""
+
+    def get_available_operations_summary(self, command_text: str = "") -> str:
+        """
+        Get a summary of available operations for the LLM prompt.
+
+        If RAG is available and command_text is provided, uses semantic search
+        to prioritize the most relevant operations and workflow patterns.
+
+        Args:
+            command_text: The command being parsed (for RAG context)
+
+        Returns:
+            Formatted string of operations and workflow patterns for LLM prompt
+        """
+        if self.rag and command_text:
+            try:
+                rag_results = self.rag.search(command_text, top_k=8)
+                relevant_ops = set()
+                workflow_results = []
+                operation_results = []
+                summary_lines = []
+
+                if rag_results:
+                    for result in rag_results:
+                        result_type = result.get("metadata", {}).get(
+                            "type", "operation"
+                        )
+                        if result_type == "workflow":
+                            workflow_results.append(result)
+                        else:
+                            operation_results.append(result)
+
+                if workflow_results:
+                    summary_lines.append("=== RELEVANT WORKFLOW PATTERNS ===")
+                    for result in workflow_results[:3]:
+                        pattern_name = result.get("name", "")
+                        pattern = self.workflow_registry.get_pattern_by_name(
+                            pattern_name
+                        )
+                        if pattern:
+                            summary_lines.append(self.format_workflow_pattern(pattern))
+                        else:
+                            pattern_id = result.get("metadata", {}).get(
+                                "pattern_id", ""
+                            )
+                            if pattern_id:
+                                pattern = self.workflow_registry.get_pattern(pattern_id)
+                                if pattern:
+                                    summary_lines.append(
+                                        self.format_workflow_pattern(pattern)
+                                    )
+                    summary_lines.append("\n=== MOST RELEVANT OPERATIONS ===")
+
+                if operation_results:
+                    if not workflow_results:
+                        summary_lines.append(
+                            "Most relevant operations for this command:"
+                        )
+                    for result in operation_results[:5]:
+                        op = self.registry.get_operation_by_name(result.get("name", ""))
+                        if op:
+                            relevant_ops.add(op.name)
+                            params = self.format_parameters(op.parameters)
+                            score = result.get("similarity_score", 0)
+                            summary_lines.append(
+                                f"- {op.name}({params}): {op.description} [relevance: {score:.2f}]"
+                            )
+                    summary_lines.append("\n=== OTHER AVAILABLE OPERATIONS ===")
+
+                for op in self.registry.get_all_operations():
+                    if op.name not in relevant_ops:
+                        params = self.format_parameters(op.parameters)
+                        summary_lines.append(f"- {op.name}({params}): {op.description}")
+
+                return "\n".join(summary_lines)
+
+            except Exception as e:
+                logger.warning("RAG search failed, using registry: %s", e)
+
+        ops = self.registry.get_all_operations()
+        summary_lines = []
+        for op in ops:
+            params = self.format_parameters(op.parameters)
+            summary_lines.append(f"- {op.name}({params}): {op.description}")
+        return "\n".join(summary_lines)
+
+    def format_parameters(self, parameters: List) -> str:
+        """
+        Format operation parameters for LLM prompt, including valid values.
+
+        Args:
+            parameters: List of OperationParameter objects
+
+        Returns:
+            Formatted parameter string
+        """
+        param_strs = []
+        for p in parameters:
+            param_str = f"{p.name}: {p.type}"
+            if hasattr(p, "valid_values") and p.valid_values:
+                valid_vals = ", ".join([f"'{v}'" for v in p.valid_values])
+                param_str += f" (valid: {valid_vals})"
+            param_strs.append(param_str)
+        return ", ".join(param_strs)
+
+    def format_workflow_pattern(self, pattern: WorkflowPattern) -> str:
+        """
+        Format a workflow pattern for inclusion in LLM prompt.
+
+        Args:
+            pattern: WorkflowPattern to format
+
+        Returns:
+            Formatted pattern description for LLM
+        """
+        steps_text = "\n".join(
+            f"    {i}. {step.operation_id}: {step.description}"
+            for i, step in enumerate(pattern.steps, 1)
+        )
+        examples = "\n".join(f"  - {ex}" for ex in pattern.usage_examples[:2])
+        return f"""
+Pattern: {pattern.name}
+Description: {pattern.description}
+Steps:
+{steps_text}
+Examples:
+{examples}
+"""
+
+
 class CommandParser:
     """
     Parses compound natural language commands into structured operation sequences.
@@ -115,6 +353,11 @@ class CommandParser:
             except Exception as e:
                 logger.warning(f"Failed to initialize RAG: {e}. Using registry only.")
 
+        # Prompt builder — separated for testability
+        self._prompt_builder = _PromptBuilder(
+            self.registry, self.workflow_registry, self.rag
+        )
+
     def parse(
         self, command_text: str, robot_id: str = "Robot1", use_llm: bool = True
     ) -> Dict[str, Any]:
@@ -172,11 +415,15 @@ class CommandParser:
         Returns:
             Parsed command structure
         """
-        # Get available operations for the prompt (use RAG for semantic context)
-        available_ops = self._get_available_operations_summary(command_text)
-
-        # Build prompt for LLM
-        prompt = self._build_parsing_prompt(command_text, robot_id, available_ops)
+        # Build prompt for LLM using _PromptBuilder
+        anti_pattern_section = self._get_anti_pattern_warnings(command_text)
+        spatial_section = self._get_spatial_context(robot_id)
+        prompt = self._prompt_builder.build(
+            command_text,
+            robot_id,
+            anti_pattern_section=anti_pattern_section,
+            spatial_section=spatial_section,
+        )
 
         try:
             # Use cached or direct request depending on initialization
@@ -377,284 +624,27 @@ class CommandParser:
     def _build_parsing_prompt(
         self, command_text: str, robot_id: str, available_ops: str
     ) -> str:
-        """Build the prompt for LLM command parsing with multi-robot support."""
+        """Build the prompt for LLM command parsing. Delegates to _PromptBuilder."""
         anti_pattern_section = self._get_anti_pattern_warnings(command_text)
-        if anti_pattern_section:
-            anti_pattern_block = f"\n        {anti_pattern_section}\n"
-        else:
-            anti_pattern_block = ""
-
         spatial_section = self._get_spatial_context(robot_id)
-        spatial_block = f"\n        {spatial_section}\n" if spatial_section else ""
-
-        return f"""You are a robot coordinator planning tasks for multiple robots.
-
-        Available Robots:
-        - Robot1 (left workspace, near x=-0.4)
-        - Robot2 (right workspace, near x=0.4)
-
-        Available Operations:
-        {available_ops}
-
-        Command to parse: "{command_text}"
-        Default robot_id: "{robot_id}"
-
-        === MULTI-ROBOT COORDINATION ===
-
-        When the task involves multiple robots:
-        1. Decide which robot is best positioned for each subtask
-        2. Use "parallel_group" to mark operations that can run concurrently
-        3. Use synchronization primitives (signal, wait_for_signal) for robot-to-robot coordination
-        4. Operations with the SAME parallel_group number execute in parallel
-        5. Operations in LATER parallel_groups wait for ALL operations in previous groups to complete
-
-        Example for multi-robot handoff:
-        {{
-        "reasoning": "Robot1 detects red cube, moves to it, and grips. Robot2 waits for signal, then both move to handoff position. Robot2 grips, then Robot1 releases.",
-        "plan": [
-            {{"parallel_group": 1, "robot": "Robot1", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "capture_var": "target"}},
-            {{"parallel_group": 2, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "position": "$target"}}}},
-            {{"parallel_group": 3, "robot": "Robot1", "operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": false}}}},
-            {{"parallel_group": 3, "robot": "Robot1", "operation": "signal", "params": {{"event_name": "r1_gripped"}}}},
-            {{"parallel_group": 3, "robot": "Robot2", "operation": "wait_for_signal", "params": {{"event_name": "r1_gripped"}}}},
-            {{"parallel_group": 4, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": 0.0, "y": 0.3, "z": 0.15}}}},
-            {{"parallel_group": 4, "robot": "Robot2", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot2", "x": 0.0, "y": 0.3, "z": 0.15}}}},
-            {{"parallel_group": 5, "robot": "Robot2", "operation": "control_gripper", "params": {{"robot_id": "Robot2", "open_gripper": false}}}},
-            {{"parallel_group": 6, "robot": "Robot1", "operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": true}}}}
-        ]
-        }}
-
-        === SYNCHRONIZATION PRIMITIVES ===
-
-        - signal(event_name): Emit named event for other robots to wait on
-        * Example: {{"operation": "signal", "params": {{"event_name": "cube_gripped"}}}}
-
-        - wait_for_signal(event_name, timeout_ms): Wait for event (default timeout: 30000ms)
-        * Example: {{"operation": "wait_for_signal", "params": {{"event_name": "cube_gripped"}}}}
-
-        - wait(duration_ms): Simple time-based pause
-        * Example: {{"operation": "wait", "params": {{"duration_ms": 500}}}}
-
-        === SINGLE-ROBOT RULES ===
-
-        1. Extract each distinct action as a separate operation
-        2. Parse coordinates from text like "(0.3, 0.2, 0.1)" or "x=0.3, y=0.2, z=0.1"
-        3. "close gripper" or "grasp" means control_gripper with open_gripper=false
-        4. "open gripper" or "release" means control_gripper with open_gripper=true
-        5. Include robot_id in every operation's params
-        6. Preserve the order of operations as specified in the command
-
-        === VARIABLE PASSING ===
-
-        CRITICAL: Variables must be DEFINED before they are USED!
-        - Use "capture_var": "target" on detect_object_stereo to store the result
-        - Use "$target" in LATER operations to reference the stored result
-        - NEVER use a $variable before it has been captured by a previous operation
-
-        Example for move to detected object:
-        {{
-        "commands": [
-            {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "blue"}}, "capture_var": "target"}},
-            {{"operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "position": "$target"}}}},
-            {{"operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": false}}}}
-        ]
-        }}
-
-        === GRASP OBJECT OPERATION ===
-
-        ALWAYS run detect_object_stereo BEFORE grasp_object in a separate earlier parallel_group.
-        detect_object_stereo populates the internal position database that grasp_object reads from.
-        Skipping detection causes grasp_object to fail with "Object not in WorldState".
-
-        - Object names use the pattern: "red_cube", "blue_cube", "green_cube"
-        - Use the literal object name as object_id in grasp_object (NOT a $variable)
-        - detect_object_stereo color must match the object prefix: "red" for "red_cube"
-
-        Example for grabbing a red cube (CORRECT — detection always first):
-        {{
-        "commands": [
-            {{"parallel_group": 1, "operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "capture_var": "target"}},
-            {{"parallel_group": 2, "operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "red_cube"}}}}
-        ]
-        }}
-
-        INCORRECT — never put grasp_object without a prior detect_object_stereo:
-        {{
-        "commands": [
-            {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "red_cube"}}}}
-        ]
-        }}
-
-        === DETECTION CONSTRAINTS ===
-
-        - detect_object_stereo "color": ONLY "red", "green", "blue", or null
-        - detect_object_stereo "selection": ONLY "left", "right", "closest", "first", or "all"
-          * Use "left" for leftmost object, "right" for rightmost object
-          * "closest" selects nearest object, "first" takes first detection
-          * "all" returns all detections matching criteria
-
-        === OUTPUT FORMAT ===
-
-        For single-robot tasks:
-        {{
-        "commands": [
-            {{"operation": "operation_name", "params": {{"robot_id": "Robot1", "param1": value1}}}}
-        ]
-        }}
-
-        For multi-robot tasks:
-        {{
-        "reasoning": "Brief explanation of the multi-robot coordination strategy",
-        "plan": [
-            {{"parallel_group": 1, "robot": "Robot1", "operation": "...", "params": {{...}}}},
-            {{"parallel_group": 1, "robot": "Robot2", "operation": "...", "params": {{...}}}}
-        ]
-        }}
-
-        {spatial_block}{anti_pattern_block}Output only valid JSON, no explanation, no comments."""
+        return self._prompt_builder.build(
+            command_text,
+            robot_id,
+            anti_pattern_section=anti_pattern_section,
+            spatial_section=spatial_section,
+        )
 
     def _get_available_operations_summary(self, command_text: str = "") -> str:
-        """
-        Get a summary of available operations for the LLM prompt.
-
-        If RAG is available and command_text is provided, uses semantic search
-        to prioritize the most relevant operations and workflow patterns for the given command.
-
-        Args:
-            command_text: The command being parsed (for RAG context)
-
-        Returns:
-            Formatted string of operations and workflow patterns for LLM prompt
-        """
-        # If RAG is available, get semantically relevant operations first
-        if self.rag and command_text:
-            try:
-                # Search for relevant operations and workflow patterns
-                rag_results = self.rag.search(
-                    command_text, top_k=8
-                )  # Increased to get both ops and patterns
-                relevant_ops = set()
-                workflow_results = []
-                operation_results = []
-
-                summary_lines = []
-
-                # Separate workflow patterns from operations
-                if rag_results:
-                    for result in rag_results:
-                        result_type = result.get("metadata", {}).get(
-                            "type", "operation"
-                        )
-                        if result_type == "workflow":
-                            workflow_results.append(result)
-                        else:
-                            operation_results.append(result)
-
-                # Add relevant workflow patterns first (if any found)
-                if workflow_results:
-                    summary_lines.append("=== RELEVANT WORKFLOW PATTERNS ===")
-                    for result in workflow_results[:3]:  # Top 3 most relevant patterns
-                        pattern_name = result.get("name", "")
-                        pattern = self.workflow_registry.get_pattern_by_name(
-                            pattern_name
-                        )
-                        if pattern:
-                            summary_lines.append(self._format_workflow_pattern(pattern))
-                        else:
-                            # Try finding by pattern_id in metadata
-                            pattern_id = result.get("metadata", {}).get(
-                                "pattern_id", ""
-                            )
-                            if pattern_id:
-                                pattern = self.workflow_registry.get_pattern(pattern_id)
-                                if pattern:
-                                    summary_lines.append(
-                                        self._format_workflow_pattern(pattern)
-                                    )
-
-                    summary_lines.append("\n=== MOST RELEVANT OPERATIONS ===")
-
-                # Add RAG-matched operations (most relevant)
-                if operation_results:
-                    if not workflow_results:
-                        summary_lines.append(
-                            "Most relevant operations for this command:"
-                        )
-                    for result in operation_results[:5]:  # Top 5 operations
-                        op = self.registry.get_operation_by_name(result.get("name", ""))
-                        if op:
-                            relevant_ops.add(op.name)
-                            params = self._format_parameters(op.parameters)
-                            score = result.get("similarity_score", 0)
-                            summary_lines.append(
-                                f"- {op.name}({params}): {op.description} [relevance: {score:.2f}]"
-                            )
-
-                    summary_lines.append("\n=== OTHER AVAILABLE OPERATIONS ===")
-
-                # Add remaining operations
-                for op in self.registry.get_all_operations():
-                    if op.name not in relevant_ops:
-                        params = self._format_parameters(op.parameters)
-                        summary_lines.append(f"- {op.name}({params}): {op.description}")
-
-                return "\n".join(summary_lines)
-
-            except Exception as e:
-                logger.warning(f"RAG search failed, using registry: {e}")
-
-        # Fallback: return all operations from registry
-        ops = self.registry.get_all_operations()
-        summary_lines = []
-        for op in ops:
-            params = self._format_parameters(op.parameters)
-            summary_lines.append(f"- {op.name}({params}): {op.description}")
-        return "\n".join(summary_lines)
+        """Get operations summary for LLM prompt. Delegates to _PromptBuilder."""
+        return self._prompt_builder.get_available_operations_summary(command_text)
 
     def _format_parameters(self, parameters: List) -> str:
-        """
-        Format operation parameters for LLM prompt, including valid values.
-
-        Args:
-            parameters: List of OperationParameter objects
-
-        Returns:
-            Formatted parameter string
-        """
-        param_strs = []
-        for p in parameters:
-            param_str = f"{p.name}: {p.type}"
-            # Add valid values if specified
-            if hasattr(p, "valid_values") and p.valid_values:
-                valid_vals = ", ".join([f"'{v}'" for v in p.valid_values])
-                param_str += f" (valid: {valid_vals})"
-            param_strs.append(param_str)
-        return ", ".join(param_strs)
+        """Format parameters for LLM prompt. Delegates to _PromptBuilder."""
+        return self._prompt_builder.format_parameters(parameters)
 
     def _format_workflow_pattern(self, pattern: WorkflowPattern) -> str:
-        """
-        Format a workflow pattern for inclusion in LLM prompt.
-
-        Args:
-            pattern: WorkflowPattern to format
-
-        Returns:
-            Formatted pattern description for LLM
-        """
-        steps_text = "\n".join(
-            f"    {i}. {step.operation_id}: {step.description}"
-            for i, step in enumerate(pattern.steps, 1)
-        )
-        examples = "\n".join(f"  - {ex}" for ex in pattern.usage_examples[:2])
-
-        return f"""
-Pattern: {pattern.name}
-Description: {pattern.description}
-Steps:
-{steps_text}
-Examples:
-{examples}
-"""
+        """Format workflow pattern for LLM prompt. Delegates to _PromptBuilder."""
+        return self._prompt_builder.format_workflow_pattern(pattern)
 
     def _extract_json_from_response(self, content: str) -> Optional[Dict]:
         """Extract JSON object from LLM response text."""

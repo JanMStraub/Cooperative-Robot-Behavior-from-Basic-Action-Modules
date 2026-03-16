@@ -20,11 +20,12 @@ by SequenceExecutor.execute_sequence().
 import re
 import time
 import logging
-import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, Any, List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from core.SingletonBase import SingletonBase
 
 from config.Negotiation import (
     MAX_NEGOTIATION_ROUNDS,
@@ -108,7 +109,7 @@ class NegotiationResult:
 # ============================================================================
 
 
-class NegotiationHub:
+class NegotiationHub(SingletonBase):
     """
     Central coordinator for multi-robot negotiation.
 
@@ -116,30 +117,11 @@ class NegotiationHub:
     negotiation protocol. Thread-safe for concurrent access.
     """
 
-    _instance = None
-    _lock = threading.RLock()
-
-    def __new__(cls):
-        """Singleton pattern with thread safety."""
-        with cls._lock:
-            if cls._instance is None:
-                cls._instance = super().__new__(cls)
-                cls._instance._initialized = False
-        return cls._instance
-
-    def __init__(self):
-        """Initialize the negotiation hub."""
-        if hasattr(self, "_initialized") and self._initialized:
-            return
-
-        with self._lock:
-            if hasattr(self, "_initialized") and self._initialized:
-                return
-
-            self._agents: Dict[str, RobotLLMAgent] = {}
-            self._active_session: Optional[NegotiationSession] = None
-            self._initialized = True
-            logger.info("NegotiationHub initialized")
+    def _singleton_init(self):
+        """Initialize the negotiation hub (called once by SingletonBase)."""
+        self._agents: Dict[str, RobotLLMAgent] = {}
+        self._active_session: Optional[NegotiationSession] = None
+        logger.info("NegotiationHub initialized")
 
     def _get_or_create_agent(self, robot_id: str) -> RobotLLMAgent:
         """

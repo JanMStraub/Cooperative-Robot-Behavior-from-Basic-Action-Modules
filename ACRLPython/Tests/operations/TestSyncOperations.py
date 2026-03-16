@@ -72,7 +72,9 @@ class TestEventBusCore:
         event_bus.reset()
 
         assert len(event_bus._events) == 0
-        assert len(event_bus._waiter_counts) == 0
+        # After reset, previously-used events should report 0 waiters
+        assert event_bus.get_waiter_count("event1") == 0
+        assert event_bus.get_waiter_count("event2") == 0
 
     def test_signal_creates_event(self, event_bus):
         """Test signal() creates event if it doesn't exist"""
@@ -156,7 +158,7 @@ class TestEventBusCore:
         # Event is NOT auto-cleared in the generation-based implementation;
         # the generation counter remains elevated (signal persists) but new
         # waiters can still wait for the NEXT signal by recording their baseline.
-        assert event_bus._waiter_counts[event_name] == 0
+        assert event_bus.get_waiter_count(event_name) == 0
 
     def test_manual_clear_event(self, event_bus):
         """Test manual clear_event() clears event flag"""
@@ -178,7 +180,7 @@ class TestEventBusCore:
 
         assert event_name in event_bus._events
         assert event_bus._is_signaled(event_name)
-        assert event_bus._waiter_counts[event_name] == 0
+        assert event_bus.get_waiter_count(event_name) == 0
 
     def test_wait_on_already_signaled_event(self, event_bus):
         """Test wait_for_signal() returns immediately if event already signaled"""
@@ -432,7 +434,7 @@ class TestEventBusThreadSafety:
         time.sleep(0.2)
 
         # Waiter count should be accurate
-        assert event_bus._waiter_counts[event_name] == num_waiters
+        assert event_bus.get_waiter_count(event_name) == num_waiters
 
         # Signal to release all
         event_bus.signal(event_name)
@@ -442,7 +444,7 @@ class TestEventBusThreadSafety:
             t.join(timeout=2.0)
 
         # Waiter count should be back to 0
-        assert event_bus._waiter_counts[event_name] == 0
+        assert event_bus.get_waiter_count(event_name) == 0
 
     def test_auto_clear_with_concurrent_waiters(self, event_bus):
         """Test auto-clear works correctly with concurrent waiters"""
@@ -472,7 +474,7 @@ class TestEventBusThreadSafety:
         assert all(r is True for r in wait_results)
 
         # All waiters received the signal; waiter count back to 0
-        assert event_bus._waiter_counts[event_name] == 0
+        assert event_bus.get_waiter_count(event_name) == 0
 
     def test_waiter_decrement_on_timeout(self, event_bus):
         """Test waiter count decrements correctly on timeout"""
@@ -489,14 +491,14 @@ class TestEventBusThreadSafety:
         time.sleep(0.1)
 
         # Should have 5 waiters
-        assert event_bus._waiter_counts[event_name] == 5
+        assert event_bus.get_waiter_count(event_name) == 5
 
         # Wait for timeouts
         for t in threads:
             t.join(timeout=1.0)
 
         # Waiter count should be back to 0
-        assert event_bus._waiter_counts[event_name] == 0
+        assert event_bus.get_waiter_count(event_name) == 0
 
 
 # ============================================================================

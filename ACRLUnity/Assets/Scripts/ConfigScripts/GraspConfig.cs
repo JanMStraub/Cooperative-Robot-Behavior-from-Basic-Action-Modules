@@ -146,6 +146,23 @@ namespace Configuration
         [Range(50, 1000)]
         public int maxPipelineTimeMs = 200;
 
+        [Header("Grasp Timing")]
+        [Tooltip("Fallback grasp timeout in seconds when IKConfig is null")]
+        [Range(5f, 120f)]
+        public float graspTimeoutFallbackSeconds = 30f;
+
+        [Tooltip("End-effector velocity threshold after arriving at pre-grasp position (m/s)")]
+        [Range(0.001f, 0.1f)]
+        public float velocityThresholdPostPreGrasp = 0.01f;
+
+        [Tooltip("End-effector velocity threshold before closing gripper (m/s)")]
+        [Range(0.001f, 0.05f)]
+        public float velocityThresholdPreGripperClose = 0.005f;
+
+        [Tooltip("Wait duration after gripper close before confirming grasp (seconds)")]
+        [Range(0.05f, 2f)]
+        public float graspConfirmationWaitSeconds = 0.3f;
+
         /// <summary>
         /// Initialize with default AR4 grasp configuration.
         /// </summary>

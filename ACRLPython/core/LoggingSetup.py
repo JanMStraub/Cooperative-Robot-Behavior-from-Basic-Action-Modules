@@ -156,6 +156,89 @@ def enable_file_logging() -> None:
         root_logger.warning("Continuing with console logging only")
 
 
+_patched_handlers: set = set()  # Track which handlers have been patched
+
+
+class SafeStreamHandler(logging.StreamHandler):
+    """
+    StreamHandler that silently ignores I/O errors from closed streams.
+
+    Prevents logging errors when pytest closes log handlers before
+    background threads finish executing.
+    """
+
+    def emit(self, record):
+        """Emit a record, catching I/O errors from closed streams."""
+        try:
+            super().emit(record)
+        except (ValueError, OSError):
+            pass
+
+    def handleError(self, record):
+        """Handle errors during logging, suppressing I/O errors from closed streams."""
+        import sys
+
+        if sys.exc_info()[0] in (ValueError, OSError):
+            pass
+        else:
+            super().handleError(record)
+
+
+def _safe_log(log_func, message: str, *args, **kwargs):
+    """
+    Safely log a message, catching I/O errors from closed streams.
+
+    Lazily patches any new handlers added after module import (pytest adds
+    handlers dynamically).
+
+    Args:
+        log_func: Logger function (logger.info, logger.error, etc.)
+        message: Log message
+        *args: Additional positional arguments for log function
+        **kwargs: Additional keyword arguments for log function
+    """
+    import logging as _logging
+
+    root_logger = _logging.getLogger()
+    calling_logger = log_func.__self__ if hasattr(log_func, "__self__") else root_logger
+    all_handlers = root_logger.handlers + getattr(calling_logger, "handlers", [])
+    for handler in all_handlers:
+        if id(handler) not in _patched_handlers:
+            _make_handler_safe(handler)
+            _patched_handlers.add(id(handler))
+    try:
+        log_func(message, *args, **kwargs)
+    except (ValueError, OSError):
+        pass
+
+
+def _make_handler_safe(handler):
+    """Patch a handler's emit method to catch I/O errors from closed streams."""
+    if not hasattr(handler, "_original_emit"):
+        handler._original_emit = handler.__class__.emit
+        handler._original_handleError = handler.__class__.handleError
+
+    def safe_emit(record):
+        try:
+            handler._original_emit(handler, record)
+        except (ValueError, OSError, RuntimeError):
+            pass
+
+    def safe_handleError(record):
+        """Override handleError to suppress I/O error diagnostics."""
+        import sys
+
+        exc_type = sys.exc_info()[0]
+        if exc_type in (ValueError, OSError, RuntimeError):
+            pass
+        else:
+            handler._original_handleError(handler, record)
+
+    handler.emit = safe_emit
+    handler.handleError = safe_handleError
+    return handler
+
+
 class WebSocketLogHandler(logging.Handler):
     """
     A custom logging handler that broadcasts log records to a generic callback.

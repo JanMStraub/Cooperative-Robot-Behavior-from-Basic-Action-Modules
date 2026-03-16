@@ -11,10 +11,46 @@ _parent_dir = Path(__file__).parent.parent
 if str(_parent_dir) not in sys.path:
     sys.path.insert(0, str(_parent_dir))
 
+import importlib
 import pytest
 import numpy as np
 import socket
 from unittest.mock import Mock, MagicMock
+
+
+# ---------------------------------------------------------------------------
+# Singleton reset utility
+# ---------------------------------------------------------------------------
+
+
+def _reset_singleton(module_path: str, class_name: str) -> None:
+    """
+    Reset a singleton's ``_instance`` to None.
+
+    Silent on ImportError or AttributeError so it is safe to call even when
+    the module has not been imported yet or the class name has changed.
+
+    Args:
+        module_path: Dotted import path of the module (e.g. 'servers.CommandServer').
+        class_name: Name of the class whose ``_instance`` to reset.
+    """
+    try:
+        mod = importlib.import_module(module_path)
+        getattr(mod, class_name)._instance = None
+    except (ImportError, AttributeError):
+        pass
+
+
+# Singletons that are commonly reset across the test suite
+_ALL_SINGLETONS = [
+    ("servers.ImageStorageCore", "UnifiedImageStorage"),
+    ("servers.CommandServer", "CommandBroadcaster"),
+    ("operations.WorldState", "WorldState"),
+    ("operations.SyncOperations", "EventBus"),
+    ("orchestrators.OutcomeTracker", "OutcomeTracker"),
+    ("agents.FeedbackCollector", "FeedbackCollector"),
+    ("servers.NegotiationHub", "NegotiationHub"),
+]
 
 
 @pytest.fixture
@@ -197,26 +233,15 @@ def mock_lmstudio_client():
 @pytest.fixture
 def cleanup_singletons():
     """
-    Fixture to clean up singleton instances before and after tests
+    Fixture to clean up all known singleton instances before and after tests.
 
-    Cleans up before yielding to ensure clean state, then again after
+    Cleans up before yielding to ensure clean state, then again after.
+    Uses ``_reset_singleton`` so it is safe even if a module is unavailable.
     """
 
-    # Clean up BEFORE the test runs
     def _cleanup():
-        try:
-            from servers.ImageServer import UnifiedImageStorage
-
-            UnifiedImageStorage._instance = None
-        except:
-            pass
-
-        try:
-            from servers.CommandServer import CommandBroadcaster
-
-            CommandBroadcaster._instance = None
-        except:
-            pass
+        for module_path, class_name in _ALL_SINGLETONS:
+            _reset_singleton(module_path, class_name)
 
     _cleanup()  # Clean before test
     yield
@@ -638,37 +663,9 @@ def cleanup_world_state():
     NOTE: autouse=True means this runs automatically for EVERY test,
     preventing state pollution between test files.
     """
-    # Reset BEFORE test to ensure clean state
-    try:
-        from operations.WorldState import WorldState
-
-        if WorldState._instance is not None:
-            try:
-                WorldState._instance.reset()
-            except Exception:
-                # If reset fails, force null the instance
-                pass
-        WorldState._instance = None
-    except (ImportError, AttributeError):
-        # WorldState module not available in this test
-        pass
-
+    _reset_singleton("operations.WorldState", "WorldState")
     yield  # Test runs with clean state
-
-    # Reset AFTER test to clean up
-    try:
-        from operations.WorldState import WorldState
-
-        if WorldState._instance is not None:
-            try:
-                WorldState._instance.reset()
-            except Exception:
-                # If reset fails, force null the instance
-                pass
-        WorldState._instance = None
-    except (ImportError, AttributeError):
-        # WorldState module not available in this test
-        pass
+    _reset_singleton("operations.WorldState", "WorldState")
 
 
 @pytest.fixture

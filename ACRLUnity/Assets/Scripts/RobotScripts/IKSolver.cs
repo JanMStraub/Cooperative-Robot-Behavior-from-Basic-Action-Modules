@@ -1,3 +1,4 @@
+using Core;
 using MathNet.Numerics.LinearAlgebra;
 using MathNet.Numerics.LinearAlgebra.Double;
 using UnityEngine;
@@ -175,13 +176,12 @@ namespace Robotics
             // ⚠️ CRITICAL: Clamp joint velocities near singularities
             // When arm is fully stretched, Jacobian becomes ill-conditioned
             // and requested velocities can spike to infinity
-            const float maxJointVelocity = 5.0f; // rad/sec (configurable)
             for (int i = 0; i < _jointDelta.Count; i++)
             {
                 _jointDelta[i] = System.Math.Clamp(
                     _jointDelta[i],
-                    -maxJointVelocity,
-                    maxJointVelocity
+                    -RobotConstants.MAX_JOINT_VELOCITY_RAD_PER_SEC,
+                    RobotConstants.MAX_JOINT_VELOCITY_RAD_PER_SEC
                 );
             }
 

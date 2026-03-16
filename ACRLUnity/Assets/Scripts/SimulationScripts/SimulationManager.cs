@@ -80,6 +80,13 @@ namespace Simulation
         private SimulationState _currentState = SimulationState.Paused;
         private SimulationState _previousState = SimulationState.Paused;
         private ICoordinationStrategy _coordinationStrategy;
+
+        /// <summary>
+        /// Set to true in Start() when a fatal configuration error prevents
+        /// the simulation from running (e.g. no robots found, strategy null).
+        /// Guards Update() and other periodic methods from executing with bad state.
+        /// </summary>
+        private bool _initializationFailed = false;
         private Dictionary<string, bool> _robotTargetReached = new Dictionary<string, bool>();
         private Dictionary<
             ArticulationBody,
@@ -197,10 +204,19 @@ namespace Simulation
 
                 if (totalRobots == 0)
                 {
-                    Debug.LogWarning($"{_logPrefix} No robot controllers found in scene");
+                    _initializationFailed = true;
+                    HandleError("No robots found. Scene may be misconfigured.");
+                    return;
                 }
 
                 InitializeCoordinationStrategy();
+
+                if (_coordinationStrategy == null)
+                {
+                    _initializationFailed = true;
+                    HandleError("Coordination strategy failed to initialize.");
+                    return;
+                }
 
                 Debug.Log(
                     $"{_logPrefix} Initialized: {totalRobots} robots found. Mode: {config.coordinationMode}"
@@ -226,7 +242,7 @@ namespace Simulation
         /// </summary>
         private void Update()
         {
-            if (!IsRunning || _coordinationStrategy == null || _robotControllers == null)
+            if (_initializationFailed || !IsRunning || _coordinationStrategy == null || _robotControllers == null)
             {
                 return;
             }

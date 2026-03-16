@@ -458,7 +458,7 @@ namespace Robotics
             bool isRotReached = angleError < rotThreshold;
 
             Vector3 currentVelocity = GetEndEffectorVelocity();
-            bool isSettled = currentVelocity.sqrMagnitude < 0.005f;
+            bool isSettled = currentVelocity.sqrMagnitude < RobotConstants.VELOCITY_SETTLE_THRESHOLD_SQR;
 
             bool isStalled = isSettled && (!isPosReached || !isRotReached);
             if (_enableDebugVisualization && isStalled && Time.frameCount % 60 == 0)
@@ -512,8 +512,8 @@ namespace Robotics
                 Vector3.zero,
                 _cachedJointInfos,
                 posThreshold,
-                Kp: 3.5f * kpMult,
-                Kd: 0.5f,
+                Kp: RobotConstants.IK_POSITION_GAIN * kpMult,
+                Kd: RobotConstants.IK_VELOCITY_GAIN,
                 orientationWeight: orientationWeight,
                 orientationConvergenceThreshold: rotThreshold * Mathf.Deg2Rad,
                 overrideDamping: _ikConfig != null ? _ikConfig.dampingFactor : 0.2f
@@ -528,7 +528,9 @@ namespace Robotics
             float globalSpeed = _robotManager != null ? _robotManager.globalSpeedMultiplier : 1.0f;
             float baseScale = Mathf.Rad2Deg * adjSpeed * globalSpeed;
 
-            float maxDegreesPerFrame = isStalled ? 8.0f : 5.0f;
+            float maxDegreesPerFrame = isStalled
+                ? RobotConstants.MAX_JOINT_DEGREES_PER_FRAME_STALLED
+                : RobotConstants.MAX_JOINT_DEGREES_PER_FRAME;
 
             bool hasUpdates = false;
 

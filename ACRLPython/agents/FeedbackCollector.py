@@ -21,8 +21,7 @@ Usage (from CommandParser):
 """
 
 import logging
-import threading
-from typing import List, Optional
+from typing import List
 
 from config.Memory import (
     FEEDBACK_MAX_WARNINGS,
@@ -30,6 +29,7 @@ from config.Memory import (
     FEEDBACK_MIN_OCCURRENCES,
 )
 from core.LoggingSetup import setup_logging
+from core.SingletonBase import SingletonBase
 
 setup_logging(__name__)
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 _MAX_WARNINGS: int = FEEDBACK_MAX_WARNINGS
 
 
-class FeedbackCollector:
+class FeedbackCollector(SingletonBase):
     """
     Collects execution feedback and formats it as LLM prompt warnings.
 
@@ -49,23 +49,8 @@ class FeedbackCollector:
     Thread-safe singleton.
     """
 
-    _instance: Optional["FeedbackCollector"] = None
-    _lock: threading.Lock = threading.Lock()
-
-    def __new__(cls) -> "FeedbackCollector":
-        """Return the singleton instance, creating it on first call."""
-        with cls._lock:
-            if cls._instance is None:
-                instance = super().__new__(cls)
-                instance._initialized = False
-                cls._instance = instance
-        return cls._instance
-
-    def __init__(self) -> None:
-        """Initialize the collector (runs once due to singleton guard)."""
-        if self._initialized:
-            return
-        self._initialized = True
+    def _singleton_init(self) -> None:
+        """Initialize the collector (called once by SingletonBase)."""
         logger.debug("FeedbackCollector initialized")
 
     # ==========================================================================

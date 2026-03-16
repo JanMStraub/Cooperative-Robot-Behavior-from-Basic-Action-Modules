@@ -459,16 +459,33 @@ class TestPerceptionOps:
         ), f"detect_object_stereo failed: {result.get('error')}"
 
     def test_analyze_scene(self):
-        """analyze_scene produces a natural-language scene description."""
+        """analyze_scene produces a natural-language scene description.
+
+        Requires LM Studio to be running with a vision-capable model loaded.
+        Treated as a graceful degradation if LM Studio is unavailable or the
+        model does not support vision (empty choices, connection error, etc.).
+        """
         result = _cmd(
             "analyze scene for Robot1",
             robot_id="Robot1",
             timeout=90.0,
             request_id=502,
         )
-        assert (
-            result.get("success") is True
-        ), f"analyze_scene failed: {result.get('error')}"
+        error = result.get("error", "")
+        lm_unavailable = any(
+            kw in error
+            for kw in (
+                "empty choices",
+                "Connection refused",
+                "LM Studio",
+                "NO_IMAGES",
+                "LMSTUDIO",
+            )
+        )
+        if lm_unavailable:
+            import pytest
+            pytest.skip(f"LM Studio vision model unavailable: {error}")
+        assert result.get("success") is True, f"analyze_scene failed: {error}"
 
     def test_estimate_distance_to_object(self):
         """estimate_distance_to_object returns distance from Robot1 to a named object."""

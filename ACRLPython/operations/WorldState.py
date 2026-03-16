@@ -42,6 +42,7 @@ from .StatusOperations import check_robot_status
 
 # Configure logging
 from core.LoggingSetup import get_logger
+from core.SingletonBase import SingletonBase
 
 logger = get_logger(__name__)
 
@@ -159,7 +160,7 @@ class WorkspaceAllocation:
 # ============================================================================
 
 
-class WorldState:
+class WorldState(SingletonBase):
     """
     Singleton manager for global world state.
 
@@ -172,17 +173,6 @@ class WorldState:
     Thread-safe for concurrent access.
     """
 
-    _instance = None
-    _lock = threading.RLock()
-
-    def __new__(cls):
-        """Singleton pattern with thread safety."""
-        with cls._lock:
-            if cls._instance is None:
-                cls._instance = super().__new__(cls)
-                cls._instance._initialized = False
-        return cls._instance
-
     @classmethod
     def get_instance(cls):
         """
@@ -193,38 +183,30 @@ class WorldState:
         """
         return cls()
 
-    def __init__(self):
-        """Initialize world state manager."""
-        # Check if already initialized (instance variable, not class variable)
-        if hasattr(self, "_initialized") and self._initialized:
-            return
+    def _singleton_init(self):
+        """Initialize world state manager (called once by SingletonBase)."""
+        self._lock = threading.RLock()
 
-        with self._lock:
-            # Double-check after acquiring lock
-            if hasattr(self, "_initialized") and self._initialized:
-                return
+        # Robot state cache
+        self._robot_cache: Dict[str, CachedValue] = {}
+        self._robot_states: Dict[str, RobotState] = {}
 
-            # Robot state cache
-            self._robot_cache: Dict[str, CachedValue] = {}
-            self._robot_states: Dict[str, RobotState] = {}
+        # Object tracking
+        self._objects: Dict[str, ObjectState] = {}
+        # Cache of {normalized_key: original_key} for O(1) partial-match
+        # lookups. Invalidated whenever _objects changes.
+        self._normalized_object_keys: Optional[Dict[str, str]] = None
 
-            # Object tracking
-            self._objects: Dict[str, ObjectState] = {}
-            # Cache of {normalized_key: original_key} for O(1) partial-match
-            # lookups. Invalidated whenever _objects changes.
-            self._normalized_object_keys: Optional[Dict[str, str]] = None
+        # Workspace allocation with timeout tracking
+        self._workspace_allocations: Dict[str, Optional[WorkspaceAllocation]] = {
+            region: None for region in WORKSPACE_REGIONS.keys()
+        }
+        self._workspace_timeout = WORKSPACE_ALLOCATION_TIMEOUT
 
-            # Workspace allocation with timeout tracking
-            self._workspace_allocations: Dict[str, Optional[WorkspaceAllocation]] = {
-                region: None for region in WORKSPACE_REGIONS.keys()
-            }
-            self._workspace_timeout = WORKSPACE_ALLOCATION_TIMEOUT
+        # In-flight command tracking
+        self._pending_commands: Dict[int, Dict[str, Any]] = {}
 
-            # In-flight command tracking
-            self._pending_commands: Dict[int, Dict[str, Any]] = {}
-
-            self._initialized = True
-            logger.info("WorldState initialized")
+        logger.info("WorldState initialized")
 
     # ========================================================================
     # Robot Status Queries

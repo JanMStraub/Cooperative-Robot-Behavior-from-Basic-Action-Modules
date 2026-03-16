@@ -7,11 +7,14 @@ This module provides a central registry of all available robot operations
 that can be queried by a RAG system to enable LLM-driven robot control.
 """
 
+import logging
 from typing import Dict, List, Optional
 import json
 import os
 import threading
 from .Base import BasicOperation, OperationCategory, OperationComplexity
+
+logger = logging.getLogger(__name__)
 
 from .MoveOperations import (
     MOVE_TO_COORDINATE_OPERATION,
@@ -328,7 +331,7 @@ class OperationRegistry:
             }
             json.dump(index, f, indent=2)
 
-        print(f"Exported {len(self.operations)} operations to {output_dir}")
+        logger.info("Exported %d operations to %s", len(self.operations), output_dir)
 
     def generate_summary(self) -> str:
         """
