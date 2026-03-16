@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Per-Robot LLM Agent for Negotiation
 =====================================
@@ -20,7 +21,11 @@ from typing import Dict, Any, List, Optional
 import requests
 
 from config.Servers import LMSTUDIO_BASE_URL, DEFAULT_LMSTUDIO_MODEL
-from config.Negotiation import AGENT_LLM_TIMEOUT, NEGOTIATION_TEMPERATURE, USE_STRUCTURED_OUTPUT
+from config.Negotiation import (
+    AGENT_LLM_TIMEOUT,
+    NEGOTIATION_TEMPERATURE,
+    USE_STRUCTURED_OUTPUT,
+)
 from config.Memory import MEMORY_ENABLED
 from config.Robot import (
     ROBOT_BASE_POSITIONS,
@@ -133,7 +138,9 @@ class RobotLLMAgent:
         self.robot_id = robot_id
         self.lm_studio_url = lm_studio_url or LMSTUDIO_BASE_URL
         self.model = model or DEFAULT_LMSTUDIO_MODEL
-        self.temperature = temperature if temperature is not None else NEGOTIATION_TEMPERATURE
+        self.temperature = (
+            temperature if temperature is not None else NEGOTIATION_TEMPERATURE
+        )
 
         # Robot config
         self.base_position = ROBOT_BASE_POSITIONS.get(robot_id, (0, 0, 0))
@@ -273,13 +280,17 @@ Output only valid JSON."""
 
         response = self._call_llm(system_prompt, user_prompt)
         if response is None:
-            logger.warning(f"[{self.robot_id}] LLM proposal failed, returning empty plan")
+            logger.warning(
+                f"[{self.robot_id}] LLM proposal failed, returning empty plan"
+            )
             return PlanProposal(proposer_id=self.robot_id, round_number=round_number)
 
         try:
             data = self._extract_json(response)
             if data is None:
-                return PlanProposal(proposer_id=self.robot_id, round_number=round_number)
+                return PlanProposal(
+                    proposer_id=self.robot_id, round_number=round_number
+                )
 
             commands = data.get("commands", data.get("plan", []))
             return PlanProposal(
@@ -347,13 +358,19 @@ Output only valid JSON."""
 
         response = self._call_llm(system_prompt, user_prompt)
         if response is None:
-            logger.warning(f"[{self.robot_id}] LLM evaluation failed, accepting by default")
-            return ProposalEvaluation(evaluator_id=self.robot_id, accept=True, confidence=0.3)
+            logger.warning(
+                f"[{self.robot_id}] LLM evaluation failed, accepting by default"
+            )
+            return ProposalEvaluation(
+                evaluator_id=self.robot_id, accept=True, confidence=0.3
+            )
 
         try:
             data = self._extract_json(response)
             if data is None:
-                return ProposalEvaluation(evaluator_id=self.robot_id, accept=True, confidence=0.3)
+                return ProposalEvaluation(
+                    evaluator_id=self.robot_id, accept=True, confidence=0.3
+                )
 
             return ProposalEvaluation(
                 evaluator_id=self.robot_id,
@@ -364,7 +381,9 @@ Output only valid JSON."""
             )
         except Exception as e:
             logger.error(f"[{self.robot_id}] Error parsing evaluation: {e}")
-            return ProposalEvaluation(evaluator_id=self.robot_id, accept=True, confidence=0.3)
+            return ProposalEvaluation(
+                evaluator_id=self.robot_id, accept=True, confidence=0.3
+            )
 
     def _build_agent_context(self, world_state_snapshot: Dict[str, Any]) -> str:
         """
@@ -405,6 +424,7 @@ Max reach: {self.max_reach}m"""
         if MEMORY_ENABLED:
             try:
                 from core.MemoryManager import get_memory_manager
+
                 memory_text = get_memory_manager().read_memory(self.robot_id)
                 if memory_text:
                     context += f"\n\n## Memory (past sessions)\n{memory_text}"
@@ -449,7 +469,9 @@ Max reach: {self.max_reach}m"""
             )
 
             if response.status_code != 200:
-                logger.error(f"[{self.robot_id}] LLM request failed: {response.status_code}")
+                logger.error(
+                    f"[{self.robot_id}] LLM request failed: {response.status_code}"
+                )
                 return None
 
             result = response.json()
@@ -458,10 +480,14 @@ Max reach: {self.max_reach}m"""
             return content
 
         except requests.exceptions.Timeout:
-            logger.error(f"[{self.robot_id}] LLM request timed out after {AGENT_LLM_TIMEOUT}s")
+            logger.error(
+                f"[{self.robot_id}] LLM request timed out after {AGENT_LLM_TIMEOUT}s"
+            )
             return None
         except requests.exceptions.ConnectionError:
-            logger.error(f"[{self.robot_id}] Cannot connect to LM Studio at {self.lm_studio_url}")
+            logger.error(
+                f"[{self.robot_id}] Cannot connect to LM Studio at {self.lm_studio_url}"
+            )
             return None
         except Exception as e:
             logger.error(f"[{self.robot_id}] LLM call error: {e}")

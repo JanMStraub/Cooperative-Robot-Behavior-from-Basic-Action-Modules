@@ -16,13 +16,13 @@ from unittest.mock import Mock, patch, MagicMock
 # Import modules under test
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from core.UnityProtocol import UnityProtocol, MessageType
 from core.TCPServerBase import ServerConfig
 from servers.SequenceServer import SequenceServer
 from servers.AutoRTIntegration import AutoRTHandler
-from config.Servers import SEQUENCE_SERVER_PORT
 
 # Use a test-only port to avoid conflicts with the live SequenceServer on SEQUENCE_SERVER_PORT
 TEST_SEQUENCE_PORT = 15013
@@ -81,20 +81,27 @@ class TestAutoRTSequenceServerIntegration(unittest.TestCase):
         handler._orchestrator = mock_orch
 
         from autort.DataModels import SceneDescription
-        mock_scene = SceneDescription(timestamp=0.0, objects=[], scene_summary="", robot_states={})
+
+        mock_scene = SceneDescription(
+            timestamp=0.0, objects=[], scene_summary="", robot_states={}
+        )
         mock_orch._capture_scene.return_value = mock_scene
         mock_orch.task_generator.generate_tasks.return_value = []
 
-        with patch('servers.AutoRTIntegration.ENABLE_SAFETY_VALIDATION', False):
+        with patch("servers.AutoRTIntegration.ENABLE_SAFETY_VALIDATION", False):
             # Act - Send AUTORT_COMMAND
-            message = UnityProtocol.encode_autort_command(command_type, params, request_id)
+            message = UnityProtocol.encode_autort_command(
+                command_type, params, request_id
+            )
             self.client.sendall(message)
 
             # Receive response
             response_data = self._receive_complete_response()
 
             # Assert - Decode response
-            decoded_request_id, response = UnityProtocol.decode_autort_response(response_data)
+            decoded_request_id, response = UnityProtocol.decode_autort_response(
+                response_data
+            )
 
             self.assertEqual(decoded_request_id, request_id, "Request ID should match")
             self.assertIn("success", response)
@@ -108,22 +115,33 @@ class TestAutoRTSequenceServerIntegration(unittest.TestCase):
         mock_orch = MagicMock()
         handler._orchestrator = mock_orch
         from autort.DataModels import SceneDescription
-        mock_scene = SceneDescription(timestamp=0.0, objects=[], scene_summary="", robot_states={})
+
+        mock_scene = SceneDescription(
+            timestamp=0.0, objects=[], scene_summary="", robot_states={}
+        )
         mock_orch._capture_scene.return_value = mock_scene
         mock_orch.task_generator.generate_tasks.return_value = []
 
         command_type = "start_loop"
-        params = {"loop_delay": 60.0, "robot_ids": ["Robot1"], "strategy": "explore"}  # Long delay
+        params = {
+            "loop_delay": 60.0,
+            "robot_ids": ["Robot1"],
+            "strategy": "explore",
+        }  # Long delay
         request_id = 10002
 
-        with patch('servers.AutoRTIntegration.ENABLE_SAFETY_VALIDATION', False):
+        with patch("servers.AutoRTIntegration.ENABLE_SAFETY_VALIDATION", False):
             # Act
-            message = UnityProtocol.encode_autort_command(command_type, params, request_id)
+            message = UnityProtocol.encode_autort_command(
+                command_type, params, request_id
+            )
             self.client.sendall(message)
 
             # Receive response
             response_data = self._receive_complete_response()
-            decoded_request_id, response = UnityProtocol.decode_autort_response(response_data)
+            decoded_request_id, response = UnityProtocol.decode_autort_response(
+                response_data
+            )
 
         # Assert
         self.assertEqual(decoded_request_id, request_id)
@@ -142,12 +160,17 @@ class TestAutoRTSequenceServerIntegration(unittest.TestCase):
         mock_orch = MagicMock()
         handler._orchestrator = mock_orch
         from autort.DataModels import SceneDescription
-        mock_scene = SceneDescription(timestamp=0.0, objects=[], scene_summary="", robot_states={})
+
+        mock_scene = SceneDescription(
+            timestamp=0.0, objects=[], scene_summary="", robot_states={}
+        )
         mock_orch._capture_scene.return_value = mock_scene
         mock_orch.task_generator.generate_tasks.return_value = []
 
-        with patch('servers.AutoRTIntegration.ENABLE_SAFETY_VALIDATION', False):
-            start_message = UnityProtocol.encode_autort_command("start_loop", {"loop_delay": 60.0}, 10004)
+        with patch("servers.AutoRTIntegration.ENABLE_SAFETY_VALIDATION", False):
+            start_message = UnityProtocol.encode_autort_command(
+                "start_loop", {"loop_delay": 60.0}, 10004
+            )
             self.client.sendall(start_message)
             self._receive_complete_response()  # Consume start response
             time.sleep(0.1)
@@ -158,7 +181,9 @@ class TestAutoRTSequenceServerIntegration(unittest.TestCase):
 
         # Receive response
         response_data = self._receive_complete_response()
-        decoded_request_id, response = UnityProtocol.decode_autort_response(response_data)
+        decoded_request_id, response = UnityProtocol.decode_autort_response(
+            response_data
+        )
 
         # Assert
         self.assertEqual(decoded_request_id, 10005)
@@ -177,7 +202,9 @@ class TestAutoRTSequenceServerIntegration(unittest.TestCase):
 
         # Receive response
         response_data = self._receive_complete_response()
-        decoded_request_id, response = UnityProtocol.decode_autort_response(response_data)
+        decoded_request_id, response = UnityProtocol.decode_autort_response(
+            response_data
+        )
 
         # Assert
         self.assertEqual(decoded_request_id, request_id)
@@ -189,11 +216,14 @@ class TestAutoRTSequenceServerIntegration(unittest.TestCase):
         """Test that execute_task command is routed correctly."""
         # Arrange - cache a ProposedTask object first
         from autort.DataModels import ProposedTask, Operation
+
         handler = AutoRTHandler.get_instance()
         task = ProposedTask(
             task_id="seq_test_task_001",
             description="Test task",
-            operations=[Operation(type="wait", robot_id="Robot1", parameters={"seconds": 1})],
+            operations=[
+                Operation(type="wait", robot_id="Robot1", parameters={"seconds": 1})
+            ],
             required_robots=["Robot1"],
             estimated_complexity=1,
             reasoning="test",
@@ -215,7 +245,9 @@ class TestAutoRTSequenceServerIntegration(unittest.TestCase):
 
         # Receive response
         response_data = self._receive_complete_response()
-        decoded_request_id, response = UnityProtocol.decode_autort_response(response_data)
+        decoded_request_id, response = UnityProtocol.decode_autort_response(
+            response_data
+        )
 
         # Assert
         self.assertEqual(decoded_request_id, request_id)
@@ -234,7 +266,9 @@ class TestAutoRTSequenceServerIntegration(unittest.TestCase):
 
         # Receive response
         response_data = self._receive_complete_response()
-        decoded_request_id, response = UnityProtocol.decode_autort_response(response_data)
+        decoded_request_id, response = UnityProtocol.decode_autort_response(
+            response_data
+        )
 
         # Assert
         self.assertEqual(decoded_request_id, request_id)
@@ -254,7 +288,9 @@ class TestAutoRTSequenceServerIntegration(unittest.TestCase):
 
         try:
             # Act - Send AutoRT command on first client
-            autort_message = UnityProtocol.encode_autort_command("get_status", {}, 20001)
+            autort_message = UnityProtocol.encode_autort_command(
+                "get_status", {}, 20001
+            )
             self.client.sendall(autort_message)
 
             # Send sequence query on second client (would need actual sequence encoding)
@@ -262,7 +298,9 @@ class TestAutoRTSequenceServerIntegration(unittest.TestCase):
 
             # Receive AutoRT response
             response_data = self._receive_complete_response()
-            decoded_request_id, response = UnityProtocol.decode_autort_response(response_data)
+            decoded_request_id, response = UnityProtocol.decode_autort_response(
+                response_data
+            )
 
             # Assert
             self.assertEqual(decoded_request_id, 20001)
@@ -308,7 +346,11 @@ class TestAutoRTSequenceServerIntegration(unittest.TestCase):
                 header_data += chunk
 
             # Assert - Server recovered and responded (header starts with AUTORT_RESPONSE type)
-            self.assertEqual(len(header_data), 5, "Server should respond to get_status on new connection")
+            self.assertEqual(
+                len(header_data),
+                5,
+                "Server should respond to get_status on new connection",
+            )
         finally:
             recovery_client.close()
 
@@ -324,10 +366,14 @@ class TestAutoRTSequenceServerIntegration(unittest.TestCase):
 
             # Receive response immediately
             response_data = self._receive_complete_response()
-            decoded_request_id, response = UnityProtocol.decode_autort_response(response_data)
+            decoded_request_id, response = UnityProtocol.decode_autort_response(
+                response_data
+            )
 
             # Assert - Request ID matches
-            self.assertEqual(decoded_request_id, req_id, f"Request ID {req_id} should match")
+            self.assertEqual(
+                decoded_request_id, req_id, f"Request ID {req_id} should match"
+            )
 
     def _receive_complete_response(self):
         """Helper to receive complete AutoRT response message."""
@@ -382,12 +428,18 @@ class TestAutoRTProtocolCompliance(unittest.TestCase):
         encoded = UnityProtocol.encode_autort_command(command_type, params, request_id)
 
         # Assert - Verify header structure
-        self.assertGreaterEqual(len(encoded), 5, "Message should have at least 5-byte header")
-        self.assertEqual(encoded[0], MessageType.AUTORT_COMMAND, "First byte should be message type")
+        self.assertGreaterEqual(
+            len(encoded), 5, "Message should have at least 5-byte header"
+        )
+        self.assertEqual(
+            encoded[0], MessageType.AUTORT_COMMAND, "First byte should be message type"
+        )
 
         # Decode request_id from header
         header_request_id = struct.unpack("<I", encoded[1:5])[0]
-        self.assertEqual(header_request_id, request_id, "Request ID should be in header")
+        self.assertEqual(
+            header_request_id, request_id, "Request ID should be in header"
+        )
 
     def test_response_format_compliance(self):
         """Verify AutoRT response format compliance."""
@@ -396,7 +448,7 @@ class TestAutoRTProtocolCompliance(unittest.TestCase):
             "success": True,
             "tasks": [],
             "loop_running": False,
-            "error": None
+            "error": None,
         }
         request_id = 50002
 
@@ -414,7 +466,9 @@ class TestAutoRTProtocolCompliance(unittest.TestCase):
 
         # Verify actual JSON length matches
         actual_json_bytes = encoded[9:]
-        self.assertEqual(len(actual_json_bytes), json_length, "JSON length should match actual data")
+        self.assertEqual(
+            len(actual_json_bytes), json_length, "JSON length should match actual data"
+        )
 
     def test_utf8_encoding(self):
         """Test that UTF-8 encoding is handled correctly."""
@@ -425,7 +479,9 @@ class TestAutoRTProtocolCompliance(unittest.TestCase):
 
         # Act
         encoded = UnityProtocol.encode_autort_command(command_type, params, request_id)
-        decoded_request_id, decoded_command, decoded_params = UnityProtocol.decode_autort_command(encoded)
+        decoded_request_id, decoded_command, decoded_params = (
+            UnityProtocol.decode_autort_command(encoded)
+        )
 
         # Assert
         self.assertEqual(decoded_request_id, request_id)

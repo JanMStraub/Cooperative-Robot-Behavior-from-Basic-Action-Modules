@@ -52,10 +52,8 @@ from config.Vision import (
     MIN_ASPECT_RATIO,
     MAX_ASPECT_RATIO,
     MIN_CONFIDENCE,
-    DETECTION_CHECK_INTERVAL,
     DEFAULT_STEREO_BASELINE,
     DEFAULT_STEREO_FOV,
-    STEREO_CHECK_INTERVAL,
     VISION_OPERATION_TIMEOUT,
 )
 
@@ -120,12 +118,13 @@ class TestConfigConstants:
             os.environ.pop("LMSTUDIO_BASE_URL", None)
             # Reload the module to re-evaluate the module-level constant
             import config.Servers as servers_mod
+
             importlib.reload(servers_mod)
             url = servers_mod.LMSTUDIO_BASE_URL
 
-        assert url.startswith("http"), (
-            f"Default LMSTUDIO_BASE_URL must be an http URL, got: {url!r}"
-        )
+        assert url.startswith(
+            "http"
+        ), f"Default LMSTUDIO_BASE_URL must be an http URL, got: {url!r}"
 
     def test_queue_config(self):
         """Test queue configuration"""
@@ -151,15 +150,11 @@ class TestConfigConstants:
         assert 0 < MIN_ASPECT_RATIO < MAX_ASPECT_RATIO
         assert 0 <= MIN_CONFIDENCE <= 1.0
 
-        # Processing intervals
-        assert DETECTION_CHECK_INTERVAL > 0
-
     def test_stereo_config(self):
         """Test stereo reconstruction configuration"""
         assert DEFAULT_STEREO_BASELINE > 0
         assert DEFAULT_STEREO_FOV > 0
         assert DEFAULT_STEREO_FOV < 180  # FOV should be reasonable
-        assert STEREO_CHECK_INTERVAL > 0
 
 
 class TestConfigModuleStructure:
@@ -170,38 +165,38 @@ class TestConfigModuleStructure:
         from config import Servers
 
         # Network constants
-        assert hasattr(Servers, 'DEFAULT_HOST')
-        assert hasattr(Servers, 'STREAMING_SERVER_PORT')
-        assert hasattr(Servers, 'SEQUENCE_SERVER_PORT')
+        assert hasattr(Servers, "DEFAULT_HOST")
+        assert hasattr(Servers, "STREAMING_SERVER_PORT")
+        assert hasattr(Servers, "SEQUENCE_SERVER_PORT")
 
         # LLM constants
-        assert hasattr(Servers, 'LMSTUDIO_BASE_URL')
-        assert hasattr(Servers, 'DEFAULT_LMSTUDIO_MODEL')
+        assert hasattr(Servers, "LMSTUDIO_BASE_URL")
+        assert hasattr(Servers, "DEFAULT_LMSTUDIO_MODEL")
 
     def test_vision_module_imports(self):
         """Test that Vision module exports expected constants"""
         from config import Vision
 
         # Detection constants
-        assert hasattr(Vision, 'USE_YOLO')
-        assert hasattr(Vision, 'MIN_CUBE_AREA_PX')
-        assert hasattr(Vision, 'ENABLE_DEBUG_IMAGES')
+        assert hasattr(Vision, "USE_YOLO")
+        assert hasattr(Vision, "MIN_CUBE_AREA_PX")
+        assert hasattr(Vision, "ENABLE_DEBUG_IMAGES")
 
         # Stereo constants
-        assert hasattr(Vision, 'DEFAULT_STEREO_BASELINE')
+        assert hasattr(Vision, "DEFAULT_STEREO_BASELINE")
 
     def test_rag_module_imports(self):
         """Test that Rag module exports expected constants"""
         from config import Rag
 
-        assert hasattr(Rag, 'RAG_LM_STUDIO_URL')
-        assert hasattr(Rag, 'RAG_EMBEDDING_DIMENSION')
-        assert hasattr(Rag, 'RAG_DEFAULT_TOP_K')
+        assert hasattr(Rag, "RAG_LM_STUDIO_URL")
+        assert hasattr(Rag, "RAG_EMBEDDING_DIMENSION")
+        assert hasattr(Rag, "RAG_DEFAULT_TOP_K")
 
     def test_robot_module_imports(self):
         """Test that Robot module exports expected constants"""
         from config import Robot
 
-        assert hasattr(Robot, 'WORKSPACE_REGIONS')
-        assert hasattr(Robot, 'ROBOT_BASE_POSITIONS')
-        assert hasattr(Robot, 'MIN_ROBOT_SEPARATION')
+        assert hasattr(Robot, "WORKSPACE_REGIONS")
+        assert hasattr(Robot, "ROBOT_BASE_POSITIONS")
+        assert hasattr(Robot, "MIN_ROBOT_SEPARATION")

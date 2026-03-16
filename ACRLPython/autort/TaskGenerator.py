@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 AutoRT Task Generator
 
@@ -99,7 +100,9 @@ Please fix these issues and generate valid tasks following the parameter schemas
                     if is_valid:
                         validated_tasks.append(task)
                     else:
-                        logger.warning(f"Task '{task.task_id}' validation failed: {error_msg}")
+                        logger.warning(
+                            f"Task '{task.task_id}' validation failed: {error_msg}"
+                        )
                         validation_errors.append(f"Task '{task.task_id}': {error_msg}")
 
                 # If we got at least some valid tasks, return them
@@ -113,14 +116,18 @@ Please fix these issues and generate valid tasks following the parameter schemas
 
                 # All tasks failed validation - prepare error for retry
                 if validation_errors:
-                    last_error = "Parameter validation failed:\n" + "\n".join(validation_errors)
+                    last_error = "Parameter validation failed:\n" + "\n".join(
+                        validation_errors
+                    )
                     logger.warning(
                         f"Attempt {attempt + 1}/{self.max_retries}: All tasks failed validation"
                     )
                 else:
                     # No tasks generated
                     last_error = "No tasks generated"
-                    logger.warning(f"Attempt {attempt + 1}/{self.max_retries}: {last_error}")
+                    logger.warning(
+                        f"Attempt {attempt + 1}/{self.max_retries}: {last_error}"
+                    )
 
                 # Last attempt?
                 if attempt == self.max_retries - 1:
@@ -451,7 +458,9 @@ Generate tasks now:
         is_valid, _ = self._validate_operations_with_feedback(task)
         return is_valid
 
-    def _validate_operations_with_feedback(self, task: ProposedTask) -> tuple[bool, str]:
+    def _validate_operations_with_feedback(
+        self, task: ProposedTask
+    ) -> tuple[bool, str]:
         """
         Validate operations and return detailed feedback for LLM retry.
 
@@ -463,10 +472,15 @@ Generate tasks now:
                 # Check operation exists
                 op_def = self.registry.get_operation_by_name(op.type)
                 if op_def is None:
-                    return False, f"Operation #{i} '{op.type}' does not exist in Registry"
+                    return (
+                        False,
+                        f"Operation #{i} '{op.type}' does not exist in Registry",
+                    )
 
                 # Validate parameters against operation definition
-                param_errors = self._validate_operation_parameters_with_feedback(op, op_def)
+                param_errors = self._validate_operation_parameters_with_feedback(
+                    op, op_def
+                )
                 if param_errors:
                     return False, f"Operation #{i} '{op.type}': {param_errors}"
 
@@ -506,16 +520,22 @@ Generate tasks now:
                 continue
 
             # Validate against valid_values constraint
-            if hasattr(param_def, 'valid_values') and param_def.valid_values is not None:
+            if (
+                hasattr(param_def, "valid_values")
+                and param_def.valid_values is not None
+            ):
                 if param_value not in param_def.valid_values:
-                    valid_str = ', '.join(f"'{v}'" if v is not None else 'null' for v in param_def.valid_values)
+                    valid_str = ", ".join(
+                        f"'{v}'" if v is not None else "null"
+                        for v in param_def.valid_values
+                    )
                     return (
                         f"Parameter '{param_name}' value '{param_value}' not in valid values: {valid_str}. "
                         f"Fix: Use one of these exact values."
                     )
 
             # Validate against valid_range constraint
-            if hasattr(param_def, 'valid_range') and param_def.valid_range is not None:
+            if hasattr(param_def, "valid_range") and param_def.valid_range is not None:
                 if not isinstance(param_value, (int, float)):
                     return f"Parameter '{param_name}' must be numeric (got {type(param_value).__name__})"
                 min_val, max_val = param_def.valid_range
@@ -551,21 +571,21 @@ Generate tasks now:
                 spec_parts = [p.name, f":{p.type}"]
 
                 # Add valid values if constrained
-                if hasattr(p, 'valid_values') and p.valid_values:
-                    values_str = '|'.join(str(v) for v in p.valid_values)
+                if hasattr(p, "valid_values") and p.valid_values:
+                    values_str = "|".join(str(v) for v in p.valid_values)
                     spec_parts.append(f"[{values_str}]")
-                elif hasattr(p, 'valid_range') and p.valid_range:
+                elif hasattr(p, "valid_range") and p.valid_range:
                     spec_parts.append(f"[{p.valid_range[0]}-{p.valid_range[1]}]")
 
                 # Add default if exists
-                if not p.required and hasattr(p, 'default') and p.default is not None:
+                if not p.required and hasattr(p, "default") and p.default is not None:
                     spec_parts.append(f"={p.default}")
 
                 # Mark as optional
                 if not p.required:
                     param_specs.append(f"[{' '.join(spec_parts)}]")
                 else:
-                    param_specs.append(' '.join(spec_parts))
+                    param_specs.append(" ".join(spec_parts))
 
             param_str = ", ".join(param_specs) if param_specs else ""
             lines.append(f"- {op.name}({param_str}) - {op.description}")

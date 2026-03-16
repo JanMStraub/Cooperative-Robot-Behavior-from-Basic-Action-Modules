@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 LocalProvider.py - Local USB/RealSense Camera Adapter
 
@@ -45,9 +46,12 @@ class LocalProvider(CameraProvider):
         """Open VideoCapture handles for all configured cameras."""
         try:
             import cv2
+
             self._cap_primary = cv2.VideoCapture(self._device_id)
             if not self._cap_primary.isOpened():
-                logger.warning(f"LocalProvider: Could not open primary camera {self._device_id}")
+                logger.warning(
+                    f"LocalProvider: Could not open primary camera {self._device_id}"
+                )
                 self._cap_primary = None
 
             if self._secondary_device_id is not None:
@@ -59,7 +63,9 @@ class LocalProvider(CameraProvider):
                     self._cap_secondary = None
 
         except ImportError:
-            logger.error("LocalProvider: OpenCV (cv2) is not installed. Cannot open cameras.")
+            logger.error(
+                "LocalProvider: OpenCV (cv2) is not installed. Cannot open cameras."
+            )
 
     def _read_frame(self, cap) -> Optional[np.ndarray]:
         """Read a single frame from a VideoCapture handle."""

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Query Engine for RAG System
 ============================
@@ -18,6 +19,7 @@ except ImportError:
 
 # Configure logging
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -245,7 +247,9 @@ class QueryEngine:
 
         return adjusted_results
 
-    def get_operation_context(self, query: str, top_k: int = 3, robot_id: Optional[str] = None) -> Dict[str, Any]:
+    def get_operation_context(
+        self, query: str, top_k: int = 3, robot_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         Get full context for LLM consumption.
 
@@ -269,7 +273,9 @@ class QueryEngine:
             >>> context['world_state']  # If robot_id provided and WorldState set
             'Robot1 at (-0.3, 0.2, 0.1), gripper open. Objects: ...'
         """
-        results = self.search(query, top_k=top_k, include_full_operation=True, robot_id=robot_id)
+        results = self.search(
+            query, top_k=top_k, include_full_operation=True, robot_id=robot_id
+        )
 
         # Build context with full operation details including relationships
         operations_context = []

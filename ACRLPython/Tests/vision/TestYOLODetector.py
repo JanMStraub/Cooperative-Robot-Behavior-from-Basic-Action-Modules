@@ -193,11 +193,11 @@ class TestYOLODetection:
         ]
         mock_boxes.cls = [
             self._create_mock_tensor(np.array(0)),  # class ID 0 (red_cube)
-            self._create_mock_tensor(np.array(1))   # class ID 1 (blue_cube)
+            self._create_mock_tensor(np.array(1)),  # class ID 1 (blue_cube)
         ]
         mock_boxes.conf = [
             self._create_mock_tensor(np.array(0.85)),  # confidence
-            self._create_mock_tensor(np.array(0.92))   # confidence
+            self._create_mock_tensor(np.array(0.92)),  # confidence
         ]
         mock_boxes.__len__ = Mock(return_value=2)
 
@@ -251,8 +251,6 @@ class TestYOLOIntegration:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-
-
 
 
 class TestYOLODetectorSegmentation:

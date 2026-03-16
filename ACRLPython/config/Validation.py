@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Configuration Validation
 =========================
@@ -59,6 +60,7 @@ def validate_config(config_dict: Optional[Dict[str, Any]] = None) -> Dict[str, l
     if config_dict is None:
         try:
             from . import Servers, Vision, Rag, Robot
+
             config_dict = {
                 **vars(Servers),
                 **vars(Vision),
@@ -116,8 +118,6 @@ def validate_config(config_dict: Optional[Dict[str, Any]] = None) -> Dict[str, l
         "MIN_IMAGE_AGE",
         "MAX_IMAGE_AGE",
         "IMAGE_CHECK_INTERVAL",
-        "DETECTION_CHECK_INTERVAL",
-        "STEREO_CHECK_INTERVAL",
         "DEFAULT_STEREO_BASELINE",
         "DEFAULT_STEREO_FOV",
         "MIN_CUBE_AREA_PX",

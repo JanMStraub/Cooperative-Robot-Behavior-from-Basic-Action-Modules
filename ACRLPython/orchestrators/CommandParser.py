@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Command Parser for Multi-Command Sequences
 ==========================================
@@ -96,6 +97,10 @@ class CommandParser:
             self._parse_cache = functools.lru_cache(maxsize=128)(self._do_llm_request)
         else:
             self._parse_cache = self._do_llm_request
+
+        # Optional FeedbackCollector for self-improvement anti-pattern warnings.
+        # Set to a FeedbackCollector instance to enable; None disables the feature.
+        self.feedback_collector = None
 
         # Initialize RAG system for semantic operation search
         self.rag = None
@@ -234,7 +239,7 @@ class CommandParser:
                         {"role": "user", "content": prompt},
                     ],
                     "temperature": DEFAULT_TEMPERATURE,  # Low temperature for deterministic parsing
-                    "max_tokens": 3000,  # Increased for multi-robot coordination (was 1000)
+                    "max_tokens": 5000,  # Increased for multi-robot coordination (was 1000)
                 },
                 timeout=LLM_REQUEST_TIMEOUT,
             )
@@ -298,9 +303,11 @@ class CommandParser:
         """
         try:
             from config.Memory import MEMORY_ENABLED
+
             if not MEMORY_ENABLED:
                 return ""
             from agents.FeedbackCollector import get_feedback_collector
+
             return get_feedback_collector().get_anti_pattern_warnings(command_text)
         except Exception as e:
             logger.debug(f"FeedbackCollector unavailable: {e}")
@@ -310,9 +317,7 @@ class CommandParser:
         """
         Retrieve formatted spatial context from the Knowledge Graph for the given robot.
 
-        Queries reachable objects and nearby robots to enrich the LLM prompt with
-        live spatial awareness. Returns an empty string if the KG is disabled,
-        unavailable, or raises any exception (graceful degrade).
+        Queries reachable objects and nearby robots to enrich the LLM prompt with live spatial awareness. Returns an empty string if the KG is disabled, unavailable, or raises any exception (graceful degrade).
 
         Args:
             robot_id: The robot whose spatial context to retrieve.
@@ -322,10 +327,12 @@ class CommandParser:
         """
         try:
             from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
+
             if not KNOWLEDGE_GRAPH_ENABLED:
                 return ""
 
             from core.Imports import get_graph_query_engine
+
             qe = get_graph_query_engine()
             if qe is None:
                 return ""
@@ -337,9 +344,19 @@ class CommandParser:
             if reachable:
                 lines.append("Reachable objects:")
                 for obj in reachable:
-                    dist_str = f"{obj['distance']:.2f}m" if obj["distance"] is not None else "?"
-                    held_str = f" [held by {obj['grasped_by']}]" if obj.get("grasped_by") else ""
-                    lines.append(f"  - {obj['object_id']} ({obj['color']}, {dist_str}){held_str}")
+                    dist_str = (
+                        f"{obj['distance']:.2f}m"
+                        if obj["distance"] is not None
+                        else "?"
+                    )
+                    held_str = (
+                        f" [held by {obj['grasped_by']}]"
+                        if obj.get("grasped_by")
+                        else ""
+                    )
+                    lines.append(
+                        f"  - {obj['object_id']} ({obj['color']}, {dist_str}){held_str}"
+                    )
 
             # Nearby robots
             nearby = qe.find_robots_near(robot_id)
@@ -825,7 +842,10 @@ Examples:
         )
 
         if best_score < GENERATION_TRIGGER_THRESHOLD:
-            return True, f"Best RAG score {best_score:.2f} below threshold {GENERATION_TRIGGER_THRESHOLD}"
+            return (
+                True,
+                f"Best RAG score {best_score:.2f} below threshold {GENERATION_TRIGGER_THRESHOLD}",
+            )
 
         return False, ""
 

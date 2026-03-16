@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Tests for OperationIndexer.refresh_index()
 ==========================================
@@ -18,7 +19,7 @@ All network calls (EmbeddingGenerator, OperationRegistry) are mocked.
 
 import numpy as np
 import pytest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from rag.VectorStore import VectorStore
 from rag.Indexer import OperationIndexer
@@ -27,6 +28,7 @@ from rag.Indexer import OperationIndexer
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _unit(n: int) -> np.ndarray:
     """Return a normalised unit vector of length n along axis 0."""
@@ -110,6 +112,7 @@ CONTEXT_DOC_IDS = {
 # Empty-store behaviour
 # ---------------------------------------------------------------------------
 
+
 class TestRefreshIndexEmptyStore:
     """When the store is empty, refresh_index adds all current documents."""
 
@@ -152,6 +155,7 @@ class TestRefreshIndexEmptyStore:
 # ---------------------------------------------------------------------------
 # Skip already-indexed IDs
 # ---------------------------------------------------------------------------
+
 
 class TestRefreshIndexSkipsExisting:
     """refresh_index skips operations already present in the store."""
@@ -223,6 +227,7 @@ class TestRefreshIndexSkipsExisting:
 # Returns same store object
 # ---------------------------------------------------------------------------
 
+
 class TestRefreshIndexReturnValue:
     """refresh_index returns the same VectorStore instance that was passed in."""
 
@@ -251,6 +256,7 @@ class TestRefreshIndexReturnValue:
 # Persistence (save/no-save)
 # ---------------------------------------------------------------------------
 
+
 class TestRefreshIndexSave:
     """refresh_index respects the save= parameter and RAG_AUTO_SAVE_INDEX config."""
 
@@ -260,8 +266,9 @@ class TestRefreshIndexSave:
         indexer, _ = _make_indexer(ops)
         store = VectorStore()
 
-        with patch("rag.Indexer.RAG_AUTO_SAVE_INDEX", True), \
-             patch.object(store, "save") as mock_save:
+        with patch("rag.Indexer.RAG_AUTO_SAVE_INDEX", True), patch.object(
+            store, "save"
+        ) as mock_save:
             indexer.refresh_index(store, save=True)
 
         mock_save.assert_called_once()
@@ -272,8 +279,9 @@ class TestRefreshIndexSave:
         indexer, _ = _make_indexer(ops)
         store = VectorStore()
 
-        with patch("rag.Indexer.RAG_AUTO_SAVE_INDEX", True), \
-             patch.object(store, "save") as mock_save:
+        with patch("rag.Indexer.RAG_AUTO_SAVE_INDEX", True), patch.object(
+            store, "save"
+        ) as mock_save:
             indexer.refresh_index(store, save=False)
 
         mock_save.assert_not_called()
@@ -284,8 +292,9 @@ class TestRefreshIndexSave:
         indexer, _ = _make_indexer(ops)
         store = VectorStore()
 
-        with patch("rag.Indexer.RAG_AUTO_SAVE_INDEX", False), \
-             patch.object(store, "save") as mock_save:
+        with patch("rag.Indexer.RAG_AUTO_SAVE_INDEX", False), patch.object(
+            store, "save"
+        ) as mock_save:
             indexer.refresh_index(store, save=True)
 
         mock_save.assert_not_called()
@@ -294,6 +303,7 @@ class TestRefreshIndexSave:
 # ---------------------------------------------------------------------------
 # Metadata preservation
 # ---------------------------------------------------------------------------
+
 
 class TestRefreshIndexMetadataPreservation:
     """refresh_index must not overwrite metadata on existing entries."""
@@ -305,10 +315,13 @@ class TestRefreshIndexMetadataPreservation:
 
         store = VectorStore()
         store.add_operation("op_001", _unit(4), {"name": "move_to_coordinate"})
-        store.update_operation_metadata("op_001", {
-            "execution_count": 42,
-            "last_outcome": "success",
-        })
+        store.update_operation_metadata(
+            "op_001",
+            {
+                "execution_count": 42,
+                "last_outcome": "success",
+            },
+        )
 
         # Now add all context docs so nothing new is embedded
         for ctx_id in CONTEXT_DOC_IDS:
@@ -347,6 +360,7 @@ class TestRefreshIndexMetadataPreservation:
 # Workflow handling
 # ---------------------------------------------------------------------------
 
+
 class TestRefreshIndexWorkflows:
     """refresh_index handles workflow patterns alongside operations."""
 
@@ -380,4 +394,5 @@ class TestRefreshIndexWorkflows:
 
 if __name__ == "__main__":
     import pytest
+
     pytest.main([__file__, "-v"])

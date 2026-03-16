@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Knowledge Graph Query Engine
 =============================
@@ -14,11 +15,12 @@ Provides semantic queries that leverage graph structure:
 """
 
 import math
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Tuple
 from .Core import KnowledgeGraph
 
 # Configure logging
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -66,7 +68,9 @@ class GraphQueryEngine:
         logger.debug(f"Found {len(robots)} robots that can reach {object_id}")
         return robots
 
-    def find_robots_near(self, robot_id: str, max_distance: float = 0.2) -> List[Dict[str, Any]]:
+    def find_robots_near(
+        self, robot_id: str, max_distance: float = 0.2
+    ) -> List[Dict[str, Any]]:
         """
         Find robots within a distance threshold of a given robot.
 
@@ -111,10 +115,7 @@ class GraphQueryEngine:
 
             distance = math.dist(robot_pos, other_pos)
             if distance <= max_distance:
-                nearby_robots.append({
-                    "robot_id": other_robot_id,
-                    "distance": distance
-                })
+                nearby_robots.append({"robot_id": other_robot_id, "distance": distance})
 
         # Sort by distance
         nearby_robots.sort(key=lambda x: x["distance"])
@@ -181,12 +182,14 @@ class GraphQueryEngine:
                 robot2_pos = robot2_node.get("position")
 
                 if robot1_pos and robot2_pos:
-                    candidates.append({
-                        "position": obj_pos,
-                        "region": "shared_zone",
-                        "r1_distance": math.dist(robot1_pos, obj_pos),
-                        "r2_distance": math.dist(robot2_pos, obj_pos),
-                    })
+                    candidates.append(
+                        {
+                            "position": obj_pos,
+                            "region": "shared_zone",
+                            "r1_distance": math.dist(robot1_pos, obj_pos),
+                            "r2_distance": math.dist(robot2_pos, obj_pos),
+                        }
+                    )
 
         logger.debug(f"Found {len(candidates)} handoff candidates for {object_id}")
         return candidates
@@ -327,18 +330,22 @@ class GraphQueryEngine:
                 continue
 
             obj_pos = obj_node.get("position")
-            distance = math.dist(robot_pos, obj_pos) if (robot_pos and obj_pos) else None
+            distance = (
+                math.dist(robot_pos, obj_pos) if (robot_pos and obj_pos) else None
+            )
 
-            objects.append({
-                "object_id": obj_id,
-                "distance": distance,
-                "color": obj_node.get("color", "unknown"),
-                "stale": obj_node.get("stale", False),
-                "grasped_by": obj_node.get("grasped_by"),
-            })
+            objects.append(
+                {
+                    "object_id": obj_id,
+                    "distance": distance,
+                    "color": obj_node.get("color", "unknown"),
+                    "stale": obj_node.get("stale", False),
+                    "grasped_by": obj_node.get("grasped_by"),
+                }
+            )
 
         # Sort by distance
-        objects.sort(key=lambda x: x["distance"] if x["distance"] else float('inf'))
+        objects.sort(key=lambda x: x["distance"] if x["distance"] else float("inf"))
 
         return objects
 

@@ -44,7 +44,7 @@ try:
         SHARED_VISION_STATE_ENABLED,
     )
     from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
-    from core.LoggingSetup import setup_logging
+    from core.LoggingSetup import setup_logging, enable_file_logging
 
     try:
         from config.ROS import ROS_ENABLED, AUTO_CONNECT_ROS
@@ -74,7 +74,7 @@ except ImportError:
         SHARED_VISION_STATE_ENABLED,
     )
     from ..config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
-    from ..core.LoggingSetup import setup_logging
+    from ..core.LoggingSetup import setup_logging, enable_file_logging
 
     try:
         from ..config.ROS import ROS_ENABLED, AUTO_CONNECT_ROS
@@ -385,11 +385,15 @@ class RobotController:
 
         if self._env == "sim":
             logger.info(f"Starting WorldStateServer (port: {self._world_state_port})")
-            world_state_config = ServerConfig(host=self._host, port=self._world_state_port)
+            world_state_config = ServerConfig(
+                host=self._host, port=self._world_state_port
+            )
             self._world_state_server = WorldStateServer(config=world_state_config)
             self._world_state_server.start()
         else:
-            logger.info("Real env: WorldStateServer disabled — WorldState populated by perception only")
+            logger.info(
+                "Real env: WorldStateServer disabled — WorldState populated by perception only"
+            )
 
         # Start AutoRTServer (port 5015) - autonomous task generation
         logger.info(f"Starting AutoRTServer (port: {self._autort_port})")
@@ -414,6 +418,7 @@ class RobotController:
         # This call seeds the module-level cache so all subsequent lazy accessors
         # via core.Imports return the correct adapter for --env sim or --env real.
         from core.Imports import get_hardware_interface, get_camera_provider
+
         hw = get_hardware_interface(env=self._env)
         cam = get_camera_provider(env=self._env)
         logger.info(f"✓ HardwareInterface: {type(hw).__name__}")
@@ -425,12 +430,18 @@ class RobotController:
         # Start Web UI server if requested
         if self._web_port:
             from servers.WebUIServer import run_webui_server_background
+
             self._web_server_thread = run_webui_server_background(
                 host=self._host, port=self._web_port
             )
-            logger.info(f"  Web UI:                 http://{self._host}:{self._web_port}")
+            logger.info(
+                f"  Web UI:                 http://{self._host}:{self._web_port}"
+            )
 
         self._running = True
+
+        # All servers started — now safe to open the log file
+        enable_file_logging()
 
         # Initialize vision streaming if enabled
         if ENABLE_VISION_STREAMING:
@@ -501,13 +512,17 @@ class RobotController:
         logger.info(f"  Command Server:         {self._host}:{self._command_port}")
         logger.info(f"  Sequence Server:        {self._host}:{self._sequence_port}")
         if self._env == "sim":
-            logger.info(f"  World State Server:     {self._host}:{self._world_state_port}")
+            logger.info(
+                f"  World State Server:     {self._host}:{self._world_state_port}"
+            )
         else:
             logger.info(f"  World State Server:     Disabled (real env)")
         logger.info(f"  AutoRT Server:          {self._host}:{self._autort_port}")
         logger.info(f"  LLM Model:              {self._model}")
         if self._web_port:
-            logger.info(f"  Web UI:                 http://{self._host}:{self._web_port}")
+            logger.info(
+                f"  Web UI:                 http://{self._host}:{self._web_port}"
+            )
         if ENABLE_VISION_STREAMING and self._vision_processor:
             logger.info(f"  Vision Streaming:       Enabled ({VISION_STREAM_FPS} FPS)")
             if ENABLE_VISION_VISUALIZATION:

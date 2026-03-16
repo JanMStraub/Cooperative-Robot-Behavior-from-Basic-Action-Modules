@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Shared Base Classes for Singleton Pattern Tests
 ================================================
@@ -21,7 +22,6 @@ Usage:
 
 import threading
 from typing import Optional
-import pytest
 
 
 class SingletonTestMixin:
@@ -62,7 +62,7 @@ class SingletonTestMixin:
         """Test that only one instance of singleton exists."""
         # Get cleanup fixture if specified
         cleanup_fixture = self.get_cleanup_fixture_name()
-        if cleanup_fixture and hasattr(request, 'getfixturevalue'):
+        if cleanup_fixture and hasattr(request, "getfixturevalue"):
             try:
                 request.getfixturevalue(cleanup_fixture)
             except Exception:
@@ -77,7 +77,7 @@ class SingletonTestMixin:
     def test_singleton_returns_same_instance(self, request):
         """Test multiple calls return same instance (alias for clarity)."""
         cleanup_fixture = self.get_cleanup_fixture_name()
-        if cleanup_fixture and hasattr(request, 'getfixturevalue'):
+        if cleanup_fixture and hasattr(request, "getfixturevalue"):
             try:
                 request.getfixturevalue(cleanup_fixture)
             except Exception:
@@ -92,7 +92,7 @@ class SingletonTestMixin:
     def test_singleton_thread_safe_initialization(self, request):
         """Test singleton is thread-safe during concurrent initialization."""
         cleanup_fixture = self.get_cleanup_fixture_name()
-        if cleanup_fixture and hasattr(request, 'getfixturevalue'):
+        if cleanup_fixture and hasattr(request, "getfixturevalue"):
             try:
                 request.getfixturevalue(cleanup_fixture)
             except Exception:
@@ -124,7 +124,9 @@ class SingletonTestMixin:
         # All threads should get the same instance
         assert len(instances) == 10
         for instance in instances:
-            assert instance is instances[0], "All threads should get same singleton instance"
+            assert (
+                instance is instances[0]
+            ), "All threads should get same singleton instance"
 
 
 class ResetableSingletonTestMixin(SingletonTestMixin):
@@ -144,12 +146,14 @@ class ResetableSingletonTestMixin(SingletonTestMixin):
         Raises:
             NotImplementedError: If not implemented by subclass
         """
-        raise NotImplementedError("Subclass must implement reset_singleton() if singleton is resetable")
+        raise NotImplementedError(
+            "Subclass must implement reset_singleton() if singleton is resetable"
+        )
 
     def test_singleton_reset(self, request):
         """Test singleton can be reset/reinitialized."""
         cleanup_fixture = self.get_cleanup_fixture_name()
-        if cleanup_fixture and hasattr(request, 'getfixturevalue'):
+        if cleanup_fixture and hasattr(request, "getfixturevalue"):
             try:
                 request.getfixturevalue(cleanup_fixture)
             except Exception:
@@ -171,6 +175,7 @@ class ResetableSingletonTestMixin(SingletonTestMixin):
 # ============================================================================
 # Example Usage (for documentation)
 # ============================================================================
+
 
 class ExampleSingletonTest(SingletonTestMixin):
     """
@@ -199,6 +204,7 @@ class ExampleSingletonTest(SingletonTestMixin):
 # ============================================================================
 # Consolidated Singleton Tests
 # ============================================================================
+
 
 class TestConsolidatedSingletons:
     """
@@ -256,5 +262,9 @@ class TestConsolidatedSingletons:
             instances = [getter() for _ in range(3)]
 
             for i in range(1, len(instances)):
-                assert instances[i] is instances[0], f"{name} returned different instances"
-                assert id(instances[i]) == id(instances[0]), f"{name} instances have different IDs"
+                assert (
+                    instances[i] is instances[0]
+                ), f"{name} returned different instances"
+                assert id(instances[i]) == id(
+                    instances[0]
+                ), f"{name} instances have different IDs"

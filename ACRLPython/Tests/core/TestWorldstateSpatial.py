@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Test suite for WorldState spatial query methods.
 
@@ -11,7 +12,7 @@ Tests spatial reasoning capabilities:
 """
 
 import unittest
-from operations.WorldState import WorldState, get_world_state
+from operations.WorldState import get_world_state
 from config.Robot import WORKSPACE_REGIONS
 
 

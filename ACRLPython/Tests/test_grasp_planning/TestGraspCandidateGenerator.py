@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Unit tests for grasp candidate generation.
 
@@ -15,7 +16,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from grasp_planning.GraspCandidateGenerator import GraspCandidateGenerator
 from grasp_planning.GraspConfig import GraspConfig
-from grasp_planning.GraspCandidate import GraspCandidate
 
 
 class TestGraspCandidateGenerator:
@@ -184,7 +184,8 @@ class TestGraspCandidateGenerator:
         """Test that top approach candidates point downward."""
         # Enable only top approach
         config.enabled_approaches = [
-            approach for approach in config.enabled_approaches
+            approach
+            for approach in config.enabled_approaches
             if approach.approach_type == "top"
         ]
 
@@ -246,14 +247,19 @@ class TestGraspConfigIntegration:
         fast_config = GraspConfig.create_fast()
         default_config = GraspConfig.create_default()
 
-        assert fast_config.candidates_per_approach < default_config.candidates_per_approach
+        assert (
+            fast_config.candidates_per_approach < default_config.candidates_per_approach
+        )
 
     def test_precise_config_generates_more_candidates(self):
         """Test that precise config generates more candidates."""
         precise_config = GraspConfig.create_precise()
         default_config = GraspConfig.create_default()
 
-        assert precise_config.candidates_per_approach > default_config.candidates_per_approach
+        assert (
+            precise_config.candidates_per_approach
+            > default_config.candidates_per_approach
+        )
 
     def test_disabled_approach_not_generated(self):
         """Test that disabled approaches are not generated."""
@@ -393,7 +399,9 @@ class TestApproachDirectionDiversity:
 
         x_directions = [c.approach_direction[0] for c in candidates]  # type: ignore[index]
         assert any(x > 0.5 for x in x_directions), "No +X side approach candidate found"
-        assert any(x < -0.5 for x in x_directions), "No -X side approach candidate found"
+        assert any(
+            x < -0.5 for x in x_directions
+        ), "No -X side approach candidate found"
 
 
 if __name__ == "__main__":

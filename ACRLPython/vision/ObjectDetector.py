@@ -83,7 +83,9 @@ if USE_YOLO:
         logging.info("YOLO detection enabled")
     except ImportError as e:
         logging.error(f"YOLO enabled in config but import failed: {e}")
-        logging.error("Falling back to HSV color detection — install ultralytics to enable YOLO")
+        logging.error(
+            "Falling back to HSV color detection — install ultralytics to enable YOLO"
+        )
 
 # Import stereo depth estimation
 try:
@@ -196,6 +198,7 @@ class CubeDetector:
         # Check if YOLO should be used (read dynamically for testability)
         try:
             import config.Vision as vision_cfg
+
             use_yolo_config = vision_cfg.USE_YOLO
         except (ImportError, AttributeError):
             use_yolo_config = USE_YOLO
@@ -206,14 +209,20 @@ class CubeDetector:
         if self.use_yolo and YOLO_AVAILABLE:
             # Initialize detection model
             try:
-                model_path = YOLO_SEGMENTATION_MODEL if YOLO_TASK == "segment" else YOLO_MODEL_PATH
+                model_path = (
+                    YOLO_SEGMENTATION_MODEL
+                    if YOLO_TASK == "segment"
+                    else YOLO_MODEL_PATH
+                )
                 self.yolo_detector = YOLODetector(model_path=model_path)  # type: ignore[name-defined]
                 logging.info(
                     f"CubeDetector initialized with YOLO task='{YOLO_TASK}' (model: {model_path})"
                 )
             except Exception as e:
                 logging.error(f"Failed to initialize YOLO detector: {e}")
-                logging.error("Falling back to HSV color detection — YOLO is unavailable")
+                logging.error(
+                    "Falling back to HSV color detection — YOLO is unavailable"
+                )
                 self.use_yolo = False
 
         # Always initialize HSV detector (for fallback or direct use)
@@ -488,7 +497,9 @@ class CubeDetector:
             (None if segmentation not available or not enabled)
         """
         if not self.use_yolo or not YOLO_AVAILABLE:
-            logging.warning("YOLO not available; falling back to bbox-only detect_objects")
+            logging.warning(
+                "YOLO not available; falling back to bbox-only detect_objects"
+            )
             return self.detect_objects(image, camera_id)
 
         if YOLO_TASK != "segment":
@@ -503,7 +514,9 @@ class CubeDetector:
             # Masks are populated by YOLODetector when task='segment'
             return result
         except Exception as e:
-            logging.error(f"Segmentation detection failed: {e}; falling back to detect_objects")
+            logging.error(
+                f"Segmentation detection failed: {e}; falling back to detect_objects"
+            )
             return self.detect_objects(image, camera_id)
 
     def _detect_all_objects(self, image: np.ndarray) -> List[Dict]:

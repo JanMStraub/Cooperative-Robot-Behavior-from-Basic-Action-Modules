@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Point Cloud Operations
 ======================
@@ -10,7 +11,6 @@ convention) so it can be consumed directly by downstream grasp operations.
 
 import logging
 import time
-from typing import Optional
 
 import numpy as np
 
@@ -19,6 +19,7 @@ from .Base import (
     OperationCategory,
     OperationComplexity,
     OperationParameter,
+    OperationRelationship,
     OperationResult,
 )
 from core.LoggingSetup import setup_logging
@@ -132,7 +133,9 @@ def _save_debug_point_cloud(
                 f.write(struct.pack("<fff", pts[i, 0], pts[i, 1], pts[i, 2]))
                 f.write(struct.pack("BBB", clrs[i, 0], clrs[i, 1], clrs[i, 2]))
 
-        logger.debug(f"[{robot_id}] Debug point cloud saved to {path} ({n} points, PLY)")
+        logger.debug(
+            f"[{robot_id}] Debug point cloud saved to {path} ({n} points, PLY)"
+        )
     except Exception as exc:
         logger.warning(f"[{robot_id}] Failed to save debug point cloud: {exc}")
 
@@ -219,7 +222,8 @@ def generate_point_cloud(
         # --- Staleness check ---
         # Guard against callers (e.g. LLM) passing None, 0 or negative values.
         effective_max_age = (
-            max_age_seconds if (max_age_seconds is not None and max_age_seconds > 0)
+            max_age_seconds
+            if (max_age_seconds is not None and max_age_seconds > 0)
             else _DEFAULT_MAX_AGE_SECONDS
         )
         age = time.time() - timestamp
@@ -237,7 +241,9 @@ def generate_point_cloud(
         # --- Extract camera intrinsics / extrinsics from metadata ---
         camera_params = metadata.get("camera_params", metadata)
         fov = float(camera_params.get("fov", 60.0))
-        baseline = float(camera_params.get("baseline", camera_params.get("cam_dist", 0.1)))
+        baseline = float(
+            camera_params.get("baseline", camera_params.get("cam_dist", 0.1))
+        )
 
         cam_pos_raw = camera_params.get("camera_position", [0.0, 0.0, 0.0])
         cam_rot_raw = camera_params.get("camera_rotation", [0.0, 0.0, 0.0, 1.0])
@@ -284,7 +290,8 @@ def generate_point_cloud(
         # --- Uniform random downsample ---
         # Guard against callers (e.g. LLM) passing None or non-positive values.
         effective_max_points = (
-            max_points if (max_points is not None and max_points > 0)
+            max_points
+            if (max_points is not None and max_points > 0)
             else _DEFAULT_MAX_POINTS
         )
         n_raw = raw_points.shape[0]
@@ -310,7 +317,12 @@ def generate_point_cloud(
         # --- Optional debug save ---
         if SAVE_DEBUG_POINT_CLOUDS:
             _save_debug_point_cloud(
-                robot_id, raw_points, raw_colors, camera_position, camera_rotation, timestamp
+                robot_id,
+                raw_points,
+                raw_colors,
+                camera_position,
+                camera_rotation,
+                timestamp,
             )
 
         return OperationResult.success_result(
@@ -406,8 +418,15 @@ GENERATE_POINT_CLOUD_OPERATION = BasicOperation(
         "Images too old (STALE_IMAGE)",
         "Insufficient texture for disparity matching (EMPTY_POINT_CLOUD)",
     ],
-    required_operations=[],
-    commonly_paired_with=["detect_objects", "grasp_object"],
-    mutually_exclusive_with=[],
+    relationships=OperationRelationship(
+        operation_id="perception_generate_point_cloud_001",
+        required_operations=[],
+        commonly_paired_with=["detect_objects", "grasp_object"],
+        pairing_reasons={
+            "detect_objects": "Detect objects in the scene before generating a point cloud for grasp planning",
+            "grasp_object": "Point cloud feeds directly into VGN grasp planning pipeline",
+        },
+        typical_before=["grasp_object"],
+    ),
     implementation=generate_point_cloud,
 )

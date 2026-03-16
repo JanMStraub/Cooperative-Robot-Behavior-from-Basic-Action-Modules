@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Dynamic Operation Generation Configuration
 =============================================
@@ -28,27 +29,29 @@ GENERATION_TRIGGER_THRESHOLD = float(
 )
 
 # Maximum number of generated operations allowed (safety limit)
-MAX_GENERATED_OPERATIONS = int(
-    os.environ.get("MAX_GENERATED_OPERATIONS", "50")
-)
+MAX_GENERATED_OPERATIONS = int(os.environ.get("MAX_GENERATED_OPERATIONS", "50"))
 
 # ============================================================================
 # Review & Approval
 # ============================================================================
 
 # When True, generated operations require human approval before activation
-REQUIRE_USER_REVIEW = os.environ.get(
-    "REQUIRE_USER_REVIEW", "true"
-).lower() in ("true", "1", "yes")
+REQUIRE_USER_REVIEW = os.environ.get("REQUIRE_USER_REVIEW", "true").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 
 # ============================================================================
 # RAG Integration
 # ============================================================================
 
 # Automatically rebuild the RAG index after generating a new operation
-AUTO_REBUILD_INDEX = os.environ.get(
-    "AUTO_REBUILD_INDEX", "true"
-).lower() in ("true", "1", "yes")
+AUTO_REBUILD_INDEX = os.environ.get("AUTO_REBUILD_INDEX", "true").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 
 # ============================================================================
 # Safety: Restricted Modules

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Utility modules for mathematical operations.
 
@@ -7,8 +8,6 @@ This package provides core math utilities for the ACRL project including:
 - CoordinateTransforms: Coordinate frame transformations
 """
 
-__all__ = [
-    'QuaternionMath',
-    'VectorMath',
-    'CoordinateTransforms'
-]
+from . import QuaternionMath, VectorMath, CoordinateTransforms
+
+__all__ = ["QuaternionMath", "VectorMath", "CoordinateTransforms"]

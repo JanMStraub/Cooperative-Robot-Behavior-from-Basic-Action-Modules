@@ -33,14 +33,11 @@ Run with coverage:
     pytest tests/TestWorldState.py --cov=operations.WorldState --cov-report=html
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch
 import time
 from operations.WorldState import (
     CachedValue,
     RobotState,
-    ObjectState,
-    WorldState,
     get_world_state,
 )
 
@@ -98,19 +95,22 @@ class TestWorldStateSingleton:
 class TestRobotStatus:
     """Test robot status queries and caching"""
 
-    @patch('operations.WorldState.check_robot_status')
+    @patch("operations.WorldState.check_robot_status")
     def test_get_robot_cached(self, mock_check_status, cleanup_world_state):
         """Test robot status returns cached value within TTL"""
         from operations.Base import OperationResult
+
         world_state = get_world_state()
 
         # Mock Unity response - returns OperationResult
-        mock_check_status.return_value = OperationResult.success_result({
-            "robot_id": "Robot1",
-            "position": (0.3, 0.15, 0.1),
-            "is_moving": False,
-            "gripper_state": "open"
-        })
+        mock_check_status.return_value = OperationResult.success_result(
+            {
+                "robot_id": "Robot1",
+                "position": (0.3, 0.15, 0.1),
+                "is_moving": False,
+                "gripper_state": "open",
+            }
+        )
 
         # First call - should query Unity
         status1 = world_state.get_robot_status("Robot1")
@@ -122,19 +122,18 @@ class TestRobotStatus:
         assert status2 is not None
         assert mock_check_status.call_count == 1  # No additional call
 
-    @patch('operations.WorldState.ROBOT_STATUS_CACHE_TTL', 0.1)
-    @patch('operations.WorldState.check_robot_status')
+    @patch("operations.WorldState.ROBOT_STATUS_CACHE_TTL", 0.1)
+    @patch("operations.WorldState.check_robot_status")
     def test_get_robot_status_expired(self, mock_check_status, cleanup_world_state):
         """Test robot status re-queries after TTL expiration"""
         world_state = get_world_state()
 
         # Mock Unity response
         from operations.Base import OperationResult
-        mock_check_status.return_value = OperationResult.success_result({
-            "robot_id": "Robot1",
-            "position": (0.3, 0.15, 0.1),
-            "is_moving": False
-        })
+
+        mock_check_status.return_value = OperationResult.success_result(
+            {"robot_id": "Robot1", "position": (0.3, 0.15, 0.1), "is_moving": False}
+        )
 
         # First call
         status1 = world_state.get_robot_status("Robot1")
@@ -147,16 +146,18 @@ class TestRobotStatus:
         status2 = world_state.get_robot_status("Robot1")
         assert mock_check_status.call_count == 2
 
-    @patch('operations.WorldState.check_robot_status')
-    def test_get_robot_status_force_update(self, mock_check_status, cleanup_world_state):
+    @patch("operations.WorldState.check_robot_status")
+    def test_get_robot_status_force_update(
+        self, mock_check_status, cleanup_world_state
+    ):
         """Test force_update bypasses cache"""
         world_state = get_world_state()
 
         from operations.Base import OperationResult
-        mock_check_status.return_value = OperationResult.success_result({
-            "robot_id": "Robot1",
-            "position": (0.3, 0.15, 0.1)
-        })
+
+        mock_check_status.return_value = OperationResult.success_result(
+            {"robot_id": "Robot1", "position": (0.3, 0.15, 0.1)}
+        )
 
         # First call
         status1 = world_state.get_robot_status("Robot1")
@@ -170,16 +171,16 @@ class TestRobotStatus:
 class TestRobotPosition:
     """Test robot position extraction"""
 
-    @patch('operations.WorldState.check_robot_status')
+    @patch("operations.WorldState.check_robot_status")
     def test_get_robot_position(self, mock_check_status, cleanup_world_state):
         """Test extracting position from robot status"""
         world_state = get_world_state()
 
         from operations.Base import OperationResult
-        mock_check_status.return_value = OperationResult.success_result({
-            "robot_id": "Robot1",
-            "position": (0.3, 0.15, 0.1)
-        })
+
+        mock_check_status.return_value = OperationResult.success_result(
+            {"robot_id": "Robot1", "position": (0.3, 0.15, 0.1)}
+        )
 
         position = world_state.get_robot_position("Robot1")
         assert position == (0.3, 0.15, 0.1)
@@ -201,7 +202,10 @@ class TestRobotPosition:
         world_state = get_world_state()
 
         # Robot not tracked and no Unity query available
-        with patch('operations.StatusOperations.check_robot_status', return_value={"success": False}):
+        with patch(
+            "operations.StatusOperations.check_robot_status",
+            return_value={"success": False},
+        ):
             position = world_state.get_robot_position("UnknownRobot")
             assert position is None
 
@@ -322,6 +326,7 @@ class TestWorkspaceAllocation:
     def test_concurrent_workspace_allocation(self, cleanup_world_state):
         """Test multiple robots competing for workspaces concurrently"""
         import threading
+
         world_state = get_world_state()
 
         results = {"Robot1": None, "Robot2": None, "Robot3": None}
@@ -451,9 +456,15 @@ class TestWorkspaceAllocation:
     def test_workspace_allocation_stress_test(self, cleanup_world_state):
         """Stress test with 15 robots competing for the 4 available workspace regions"""
         import threading
+
         world_state = get_world_state()
 
-        workspace_regions = ["left_workspace", "right_workspace", "shared_zone", "center"]
+        workspace_regions = [
+            "left_workspace",
+            "right_workspace",
+            "shared_zone",
+            "center",
+        ]
         num_robots = 15
         results = {f"Robot{i}": [] for i in range(num_robots)}
         errors = []
@@ -504,7 +515,14 @@ class TestCommandTracking:
         """Test registering in-flight command"""
         world_state = get_world_state()
 
-        world_state.register_command(1, {"operation": "move_to_coordinate", "robot_id": "Robot1", "params": {"x": 0.3, "y": 0.2, "z": 0.1}})
+        world_state.register_command(
+            1,
+            {
+                "operation": "move_to_coordinate",
+                "robot_id": "Robot1",
+                "params": {"x": 0.3, "y": 0.2, "z": 0.1},
+            },
+        )
 
         assert 1 in world_state._pending_commands
         cmd = world_state._pending_commands[1]
@@ -516,7 +534,9 @@ class TestCommandTracking:
         """Test updating command status"""
         world_state = get_world_state()
 
-        world_state.register_command(1, {"operation": "move_to_coordinate", "robot_id": "Robot1", "params": {}})
+        world_state.register_command(
+            1, {"operation": "move_to_coordinate", "robot_id": "Robot1", "params": {}}
+        )
         world_state.update_command_status(1, "completed")
 
         cmd = world_state._pending_commands[1]
@@ -527,11 +547,15 @@ class TestCommandTracking:
         world_state = get_world_state()
 
         # Register command and mark as completed
-        world_state.register_command(1, {"operation": "move_to_coordinate", "robot_id": "Robot1", "params": {}})
+        world_state.register_command(
+            1, {"operation": "move_to_coordinate", "robot_id": "Robot1", "params": {}}
+        )
         world_state.update_command_status(1, "completed")
 
         # Mark command as completed with old timestamp
-        world_state._pending_commands[1]["completion_time"] = time.time() - 400  # 400s ago
+        world_state._pending_commands[1]["completion_time"] = (
+            time.time() - 400
+        )  # 400s ago
 
         # Cleanup (default keeps commands for 300s)
         world_state.cleanup_old_commands(max_age_seconds=300)
@@ -542,16 +566,16 @@ class TestCommandTracking:
 class TestCacheManagement:
     """Test cache invalidation and reset"""
 
-    @patch('operations.WorldState.check_robot_status')
+    @patch("operations.WorldState.check_robot_status")
     def test_clear_cache(self, mock_check_status, cleanup_world_state):
         """Test cache invalidation"""
         world_state = get_world_state()
 
         from operations.Base import OperationResult
-        mock_check_status.return_value = OperationResult.success_result({
-            "robot_id": "Robot1",
-            "position": (0.3, 0.15, 0.1)
-        })
+
+        mock_check_status.return_value = OperationResult.success_result(
+            {"robot_id": "Robot1", "position": (0.3, 0.15, 0.1)}
+        )
 
         # Populate cache
         world_state.get_robot_status("Robot1")
@@ -568,7 +592,9 @@ class TestCacheManagement:
         # Populate state
         world_state.update_object_position("cube_01", (0.3, 0.2, 0.1), "red")
         world_state.allocate_workspace("left_workspace", "Robot1")
-        world_state.register_command(1, {"operation": "move", "robot_id": "Robot1", "params": {}})
+        world_state.register_command(
+            1, {"operation": "move", "robot_id": "Robot1", "params": {}}
+        )
         robot_state = RobotState("Robot1")
         world_state._robot_states["Robot1"] = robot_state
 
@@ -578,6 +604,8 @@ class TestCacheManagement:
         assert len(world_state._robot_states) == 0
         assert len(world_state._objects) == 0
         # workspace_allocations has region keys but all values should be None
-        assert all(owner is None for owner in world_state._workspace_allocations.values())
+        assert all(
+            owner is None for owner in world_state._workspace_allocations.values()
+        )
         assert len(world_state._pending_commands) == 0
         assert len(world_state._robot_cache) == 0

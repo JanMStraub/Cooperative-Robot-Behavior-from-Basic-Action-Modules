@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 hardware/__init__.py - Hardware Interface Factory
 
@@ -36,8 +37,10 @@ def get_hardware_interface(env: str = "sim") -> "RobotHardwareInterface":
     if _instance is None:
         if env == "real":
             from hardware.ROSInterface import ROSHardwareInterface
+
             _instance = ROSHardwareInterface()
         else:
             from hardware.UnityInterface import UnityHardwareInterface
+
             _instance = UnityHardwareInterface()
     return _instance

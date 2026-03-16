@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Tests for FeedbackCollector
 ============================
@@ -26,6 +27,7 @@ from agents.FeedbackCollector import FeedbackCollector, get_feedback_collector
 # ---------------------------------------------------------------------------
 # Fixture: reset singleton between tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def reset_feedback_collector():
@@ -64,6 +66,7 @@ def _make_pattern(op_name, failure_rate, total_executions, sample_errors=None):
 # Singleton
 # ---------------------------------------------------------------------------
 
+
 class TestSingleton:
     """FeedbackCollector follows the project-wide singleton pattern."""
 
@@ -83,6 +86,7 @@ class TestSingleton:
 # ---------------------------------------------------------------------------
 # get_anti_pattern_warnings() — empty cases
 # ---------------------------------------------------------------------------
+
 
 class TestGetAntiPatternWarningsEmpty:
     """get_anti_pattern_warnings() returns empty string when nothing to warn about."""
@@ -110,6 +114,7 @@ class TestGetAntiPatternWarningsEmpty:
 # ---------------------------------------------------------------------------
 # get_anti_pattern_warnings() — content
 # ---------------------------------------------------------------------------
+
 
 class TestGetAntiPatternWarningsContent:
     """Returned warning block contains expected operation names and header."""
@@ -179,6 +184,7 @@ class TestGetAntiPatternWarningsContent:
 # get_anti_pattern_warnings() — thresholds and cap
 # ---------------------------------------------------------------------------
 
+
 class TestGetAntiPatternWarningsThresholds:
     """min_failure_rate, min_occurrences, and _MAX_WARNINGS are passed/respected."""
 
@@ -218,9 +224,7 @@ class TestGetAntiPatternWarningsThresholds:
 
         collector = FeedbackCollector()
         # Create more patterns than the cap
-        patterns = [
-            _make_pattern(f"op_{i}", 0.9, 10) for i in range(_MAX_WARNINGS + 3)
-        ]
+        patterns = [_make_pattern(f"op_{i}", 0.9, 10) for i in range(_MAX_WARNINGS + 3)]
         tracker = _mock_tracker_with_patterns(patterns)
 
         with patch(PATCH_TARGET, return_value=tracker):
@@ -234,6 +238,7 @@ class TestGetAntiPatternWarningsThresholds:
 # ---------------------------------------------------------------------------
 # get_recent_error_context()
 # ---------------------------------------------------------------------------
+
 
 class TestGetRecentErrorContext:
     """get_recent_error_context() fetches and deduplicates errors for an operation."""
@@ -310,6 +315,7 @@ class TestGetRecentErrorContext:
 # summarize_session_outcomes()
 # ---------------------------------------------------------------------------
 
+
 class TestSummarizeSessionOutcomes:
     """summarize_session_outcomes() returns a human-readable session summary."""
 
@@ -372,4 +378,5 @@ class TestSummarizeSessionOutcomes:
 
 if __name__ == "__main__":
     import pytest
+
     pytest.main([__file__, "-v"])

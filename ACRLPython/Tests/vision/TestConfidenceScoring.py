@@ -22,7 +22,6 @@ from rag.ConfidenceScorer import (
     apply_confidence_boosting,
     get_category_min_score,
     ConfidenceLevel,
-    CONFIDENCE_TIERS,
     WEIGHTS,
 )
 
@@ -62,24 +61,21 @@ class TestParameterMatchScore(unittest.TestCase):
     def test_parameter_match(self):
         """Test scoring when query mentions parameter names"""
         score = calculate_parameter_match_score(
-            "move robot with x and y coordinates",
-            ["x", "y", "z", "robot_id"]
+            "move robot with x and y coordinates", ["x", "y", "z", "robot_id"]
         )
         self.assertGreater(score, 0.5)  # Should boost score
 
     def test_no_parameter_match(self):
         """Test scoring when query doesn't mention parameters"""
         score = calculate_parameter_match_score(
-            "pick up the cube",
-            ["x", "y", "z", "speed"]
+            "pick up the cube", ["x", "y", "z", "speed"]
         )
         self.assertEqual(score, 0.3)  # Low score for no matches
 
     def test_partial_parameter_match(self):
         """Test scoring with partial parameter matches"""
         score = calculate_parameter_match_score(
-            "move to coordinate with speed",
-            ["x", "y", "z", "speed", "robot_id"]
+            "move to coordinate with speed", ["x", "y", "z", "speed", "robot_id"]
         )
         # Should match 'speed' and possibly partial from coordinate
         self.assertGreaterEqual(score, 0.3)
@@ -97,25 +93,19 @@ class TestMetadataMatchScore(unittest.TestCase):
     def test_category_match(self):
         """Test scoring when category matches filter"""
         metadata = {"category": "navigation"}
-        score = calculate_metadata_match_score(
-            metadata, category_filter="navigation"
-        )
+        score = calculate_metadata_match_score(metadata, category_filter="navigation")
         self.assertGreater(score, 0.5)  # Boost for match
 
     def test_category_mismatch(self):
         """Test scoring when category doesn't match filter"""
         metadata = {"category": "manipulation"}
-        score = calculate_metadata_match_score(
-            metadata, category_filter="navigation"
-        )
+        score = calculate_metadata_match_score(metadata, category_filter="navigation")
         self.assertLess(score, 0.5)  # Penalty for mismatch
 
     def test_complexity_match(self):
         """Test scoring when complexity matches filter"""
         metadata = {"complexity": "basic"}
-        score = calculate_metadata_match_score(
-            metadata, complexity_filter="basic"
-        )
+        score = calculate_metadata_match_score(metadata, complexity_filter="basic")
         self.assertGreater(score, 0.5)
 
 
@@ -149,7 +139,7 @@ class TestComputeConfidenceScore(unittest.TestCase):
         result = compute_confidence_score(
             similarity_score=0.8,
             metadata={"category": "navigation", "parameters": ["x", "y", "z"]},
-            query_text="move to position x y"
+            query_text="move to position x y",
         )
 
         self.assertIn("final_score", result)
@@ -167,7 +157,7 @@ class TestComputeConfidenceScore(unittest.TestCase):
         result = compute_confidence_score(
             similarity_score=0.9,
             metadata={"category": "navigation", "success_rate": 0.98},
-            query_text="move robot"
+            query_text="move robot",
         )
 
         self.assertGreaterEqual(result["final_score"], 0.0)
@@ -180,9 +170,9 @@ class TestComputeConfidenceScore(unittest.TestCase):
             metadata={
                 "category": "navigation",
                 "success_rate": 0.99,
-                "parameters": ["x", "y", "z"]
+                "parameters": ["x", "y", "z"],
             },
-            query_text="move robot to x y z coordinate"
+            query_text="move robot to x y z coordinate",
         )
 
         self.assertGreater(result["final_score"], 0.7)
@@ -192,7 +182,7 @@ class TestComputeConfidenceScore(unittest.TestCase):
         result = compute_confidence_score(
             similarity_score=0.3,
             metadata={"category": "navigation"},
-            query_text="random text"
+            query_text="random text",
         )
 
         self.assertLess(result["final_score"], 0.5)
@@ -212,13 +202,13 @@ class TestApplyConfidenceBoosting(unittest.TestCase):
             {
                 "operation_id": "op1",
                 "score": 0.8,
-                "metadata": {"category": "navigation", "parameters": ["x", "y"]}
+                "metadata": {"category": "navigation", "parameters": ["x", "y"]},
             },
             {
                 "operation_id": "op2",
                 "score": 0.6,
-                "metadata": {"category": "manipulation", "parameters": ["gripper"]}
-            }
+                "metadata": {"category": "manipulation", "parameters": ["gripper"]},
+            },
         ]
 
         enhanced = apply_confidence_boosting(results, query_text="move to x y")
@@ -237,8 +227,8 @@ class TestApplyConfidenceBoosting(unittest.TestCase):
                 "metadata": {
                     "category": "navigation",
                     "parameters": ["x", "y", "z"],
-                    "success_rate": 0.99
-                }
+                    "success_rate": 0.99,
+                },
             },
             {
                 "operation_id": "op2",
@@ -246,15 +236,13 @@ class TestApplyConfidenceBoosting(unittest.TestCase):
                 "metadata": {
                     "category": "perception",
                     "parameters": [],
-                    "success_rate": 0.5
-                }
-            }
+                    "success_rate": 0.5,
+                },
+            },
         ]
 
         enhanced = apply_confidence_boosting(
-            results,
-            query_text="move to x y z",
-            category_filter="navigation"
+            results, query_text="move to x y z", category_filter="navigation"
         )
 
         # Results should be reordered based on confidence
@@ -292,7 +280,12 @@ class TestWeights(unittest.TestCase):
 
     def test_all_weights_present(self):
         """Test that all expected weights are present"""
-        expected_weights = ["similarity", "metadata_match", "parameter_match", "reliability"]
+        expected_weights = [
+            "similarity",
+            "metadata_match",
+            "parameter_match",
+            "reliability",
+        ]
         for weight in expected_weights:
             self.assertIn(weight, WEIGHTS)
 

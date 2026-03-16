@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Multi-Robot Coordination Safety Verifier
 =========================================
@@ -35,6 +36,7 @@ from .Base import OperationCategory
 
 # Configure logging
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 

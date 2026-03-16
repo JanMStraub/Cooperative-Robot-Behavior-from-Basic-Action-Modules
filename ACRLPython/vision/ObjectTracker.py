@@ -42,6 +42,7 @@ except ImportError:
     from vision.DetectionDataModels import DetectionObject
 
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -374,9 +375,7 @@ class ObjectTracker:
         removed_count = before_count - len(self.tracks)
 
         if removed_count > 0:
-            logger.debug(
-                f"Removed {removed_count} stale tracks (age > {self.max_age})"
-            )
+            logger.debug(f"Removed {removed_count} stale tracks (age > {self.max_age})")
 
     def get_active_tracks(self) -> List[Track]:
         """

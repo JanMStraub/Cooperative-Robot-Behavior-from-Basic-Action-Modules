@@ -18,14 +18,14 @@ To skip these tests in CI:
 
 import pytest
 import time
-from typing import Optional
 
-from backend_client import BackendClient, backend_available, port_open
+from backend_client import BackendClient, backend_available, port_open  # type: ignore[import]
 
 
 # ---------------------------------------------------------------------------
 # Availability check
 # ---------------------------------------------------------------------------
+
 
 def _port_open(port: int, timeout: float = 2.0) -> bool:
     """Return True if a TCP server is accepting connections on *port*."""
@@ -57,6 +57,7 @@ SKIP_REASON = (
 # Test classes
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not UNITY_AVAILABLE, reason=SKIP_REASON)
 class TestUnityCommandExecution:
@@ -79,9 +80,9 @@ class TestUnityCommandExecution:
                 request_id=1,
             )
 
-        assert result.get("success") is True, (
-            f"Status query failed: {result.get('error')}"
-        )
+        assert (
+            result.get("success") is True
+        ), f"Status query failed: {result.get('error')}"
 
     def test_real_move_command_execution(self):
         """Execute a real movement command in Unity for Robot1 (left workspace).
@@ -96,9 +97,9 @@ class TestUnityCommandExecution:
                 request_id=2,
             )
 
-        assert result.get("success") is True, (
-            f"Move command failed: {result.get('error')}"
-        )
+        assert (
+            result.get("success") is True
+        ), f"Move command failed: {result.get('error')}"
 
     def test_real_gripper_control(self):
         """Test real gripper open/close through the backend."""
@@ -109,9 +110,9 @@ class TestUnityCommandExecution:
                 request_id=3,
             )
 
-        assert result_open.get("success") is True, (
-            f"Gripper open failed: {result_open.get('error')}"
-        )
+        assert (
+            result_open.get("success") is True
+        ), f"Gripper open failed: {result_open.get('error')}"
 
         time.sleep(0.3)
 
@@ -122,9 +123,9 @@ class TestUnityCommandExecution:
                 request_id=4,
             )
 
-        assert result_close.get("success") is True, (
-            f"Gripper close failed: {result_close.get('error')}"
-        )
+        assert (
+            result_close.get("success") is True
+        ), f"Gripper close failed: {result_close.get('error')}"
 
 
 @pytest.mark.requires_unity
@@ -152,9 +153,9 @@ class TestUnityImageCapture:
                 request_id=5,
             )
 
-        assert result.get("success") is True, (
-            f"Stereo image capture failed: {result.get('error')}"
-        )
+        assert (
+            result.get("success") is True
+        ), f"Stereo image capture failed: {result.get('error')}"
 
 
 @pytest.mark.requires_unity
@@ -172,9 +173,9 @@ class TestUnityProtocolCompatibility:
                 request_id=request_id,
             )
 
-        assert result.get("request_id") == request_id, (
-            f"request_id mismatch: sent {request_id}, got {result.get('request_id')}"
-        )
+        assert (
+            result.get("request_id") == request_id
+        ), f"request_id mismatch: sent {request_id}, got {result.get('request_id')}"
 
     def test_multiple_concurrent_commands(self):
         """Test that the backend handles multiple concurrent connections correctly.
@@ -245,9 +246,9 @@ class TestUnityObjectDetection:
                 request_id=20,
             )
 
-        assert result.get("success") is True, (
-            f"Object detection failed: {result.get('error')}"
-        )
+        assert (
+            result.get("success") is True
+        ), f"Object detection failed: {result.get('error')}"
         # The detection result is nested inside the sequence execution result.
         # We verify the overall call succeeded; detailed shape is tested in unit tests.
 

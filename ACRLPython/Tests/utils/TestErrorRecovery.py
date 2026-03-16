@@ -11,12 +11,10 @@ dependency failures.
 import pytest
 import time
 import threading
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from queue import Queue, Full
 import socket
 
-from operations.MoveOperations import move_to_coordinate
-from operations.DetectionOperations import detect_objects
 from orchestrators.CommandParser import CommandParser
 from servers.CommandServer import CommandBroadcaster
 from servers.ImageStorageCore import UnifiedImageStorage
@@ -25,6 +23,7 @@ from servers.ImageStorageCore import UnifiedImageStorage
 # ============================================================================
 # Network Failure Tests
 # ============================================================================
+
 
 class TestNetworkFailureRecovery:
     """Test recovery from network failures"""
@@ -61,8 +60,7 @@ class TestNetworkFailureRecovery:
         results = []
         for i in range(4):
             result = broadcaster.send_command(
-                {"command_type": "test", "index": i},
-                request_id=i
+                {"command_type": "test", "index": i}, request_id=i
             )
             results.append(result)
 
@@ -70,9 +68,9 @@ class TestNetworkFailureRecovery:
         # Calls 1 and 3 (odd) raise ConnectionError -> send_command returns False
         # Calls 2 and 4 (even) return 1 -> send_command returns True
         assert results[0] is False  # First call fails
-        assert results[1] is True   # Second succeeds
+        assert results[1] is True  # Second succeeds
         assert results[2] is False  # Third fails
-        assert results[3] is True   # Fourth succeeds
+        assert results[3] is True  # Fourth succeeds
 
     def test_server_restart_mid_operation(self):
         """Test recovery when server restarts during operation"""
@@ -98,7 +96,7 @@ class TestNetworkFailureRecovery:
 
     def test_socket_timeout_handling(self):
         """Test handling of socket timeout errors"""
-        with patch('socket.socket') as mock_socket_class:
+        with patch("socket.socket") as mock_socket_class:
             mock_sock = Mock()
             mock_sock.recv = Mock(side_effect=socket.timeout("Operation timed out"))
             mock_socket_class.return_value = mock_sock
@@ -118,6 +116,7 @@ class TestNetworkFailureRecovery:
 # Resource Exhaustion Tests
 # ============================================================================
 
+
 class TestResourceExhaustion:
     """Test recovery from resource exhaustion"""
 
@@ -131,7 +130,7 @@ class TestResourceExhaustion:
         large_image = np.ones((4000, 4000, 3), dtype=np.uint8)
 
         # Mock OSError for disk full
-        with patch.object(storage, 'store_single_image') as mock_store:
+        with patch.object(storage, "store_single_image") as mock_store:
             mock_store.side_effect = OSError("[Errno 28] No space left on device")
 
             # Try to store image
@@ -158,7 +157,7 @@ class TestResourceExhaustion:
             except MemoryError:
                 return False
 
-        with patch('numpy.zeros', side_effect=MemoryError("Out of memory")):
+        with patch("numpy.zeros", side_effect=MemoryError("Out of memory")):
             result = process_batch((10000, 10000, 100))
 
         assert result is False
@@ -190,6 +189,7 @@ class TestResourceExhaustion:
 # External Dependency Failure Tests
 # ============================================================================
 
+
 class TestExternalDependencyFailures:
     """Test recovery from external dependency failures"""
 
@@ -200,7 +200,9 @@ class TestExternalDependencyFailures:
         with patch("rag.EmbeddingGenerator") as mock_emb_gen:
             # Mock LM Studio connection failure
             mock_emb = Mock()
-            mock_emb.generate_embedding.side_effect = ConnectionError("LM Studio not available")
+            mock_emb.generate_embedding.side_effect = ConnectionError(
+                "LM Studio not available"
+            )
             mock_emb_gen.return_value = mock_emb
 
             rag = RAGSystem(auto_load_index=False)
@@ -228,13 +230,14 @@ class TestExternalDependencyFailures:
         result = detector.detect_objects(image, camera_id="test")
 
         # Should return valid result (empty detections ok)
-        assert hasattr(result, 'detections')
+        assert hasattr(result, "detections")
         assert isinstance(result.detections, list)
 
 
 # ============================================================================
 # Graceful Degradation Tests
 # ============================================================================
+
 
 class TestGracefulDegradation:
     """Test graceful degradation when features unavailable"""
@@ -244,14 +247,14 @@ class TestGracefulDegradation:
         parser = CommandParser(use_rag=False)
 
         # Mock LLM failure
-        with patch.object(parser, '_parse_with_llm') as mock_llm:
+        with patch.object(parser, "_parse_with_llm") as mock_llm:
             mock_llm.side_effect = Exception("LLM unavailable")
 
             # Parse with LLM disabled (should use regex)
             result = parser.parse(
                 "move to (0.3, 0.2, 0.1) and close gripper",
                 robot_id="Robot1",
-                use_llm=False
+                use_llm=False,
             )
 
             # Should parse successfully with regex fallback
@@ -281,15 +284,13 @@ class TestGracefulDegradation:
         """Test operations continue when verification is disabled"""
         from operations.MoveOperations import move_to_coordinate
 
-        with patch('config.ROS.ROS_ENABLED', False), \
-             patch('operations.MoveOperations._get_command_broadcaster') as mock_broadcaster:
+        with patch("config.ROS.ROS_ENABLED", False), patch(
+            "operations.MoveOperations._get_command_broadcaster"
+        ) as mock_broadcaster:
             mock_broadcaster.return_value.send_command = Mock(return_value=True)
 
             # Execute without verification (verification optional)
-            result = move_to_coordinate(
-                robot_id="Robot1",
-                x=0.3, y=0.2, z=0.1
-            )
+            result = move_to_coordinate(robot_id="Robot1", x=0.3, y=0.2, z=0.1)
 
             # Should succeed
             assert result["success"] is True
@@ -298,6 +299,7 @@ class TestGracefulDegradation:
 # ============================================================================
 # Concurrent Failure Tests
 # ============================================================================
+
 
 class TestConcurrentFailures:
     """Test handling of concurrent failures across threads"""
@@ -362,6 +364,7 @@ class TestConcurrentFailures:
 # State Recovery Tests
 # ============================================================================
 
+
 class TestStateRecovery:
     """Test state recovery after failures"""
 
@@ -398,6 +401,7 @@ class TestStateRecovery:
 
         # Store some data
         import numpy as np
+
         image = np.zeros((100, 100, 3), dtype=np.uint8)
         storage.store_single_image("test_cam", image, "test")
 

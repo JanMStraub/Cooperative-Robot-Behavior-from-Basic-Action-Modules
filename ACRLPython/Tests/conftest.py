@@ -233,11 +233,9 @@ def mock_command_broadcaster():
     """
     broadcaster = Mock()
     broadcaster.send_command = Mock(return_value=True)
-    broadcaster.wait_for_result = Mock(return_value={
-        "success": True,
-        "result": {"status": "completed"},
-        "error": None
-    })
+    broadcaster.wait_for_result = Mock(
+        return_value={"success": True, "result": {"status": "completed"}, "error": None}
+    )
     return broadcaster
 
 
@@ -254,8 +252,12 @@ def mock_unified_image_storage(sample_red_cube_image):
     """
     storage = Mock()
     storage.get_single_image = Mock(return_value=sample_red_cube_image)
-    storage.get_stereo_pair = Mock(return_value=(sample_red_cube_image, sample_red_cube_image))
-    storage.get_latest_stereo_image = Mock(return_value=(sample_red_cube_image, sample_red_cube_image))
+    storage.get_stereo_pair = Mock(
+        return_value=(sample_red_cube_image, sample_red_cube_image)
+    )
+    storage.get_latest_stereo_image = Mock(
+        return_value=(sample_red_cube_image, sample_red_cube_image)
+    )
     return storage
 
 
@@ -299,34 +301,39 @@ def patch_command_broadcaster(monkeypatch, mock_command_broadcaster):
     # Disable ROS so operations use TCP path (the mocked broadcaster)
     try:
         import config.ROS as ros_config
-        monkeypatch.setattr(ros_config, 'ROS_ENABLED', False)
+
+        monkeypatch.setattr(ros_config, "ROS_ENABLED", False)
     except (ImportError, AttributeError):
         pass
 
     # Patch at the source: core.Imports.get_command_broadcaster
     try:
         import core.Imports as imports_module
-        monkeypatch.setattr(imports_module, 'get_command_broadcaster',
-                          lambda: mock_command_broadcaster)
+
+        monkeypatch.setattr(
+            imports_module, "get_command_broadcaster", lambda: mock_command_broadcaster
+        )
     except (ImportError, AttributeError):
         pass
 
     # Also patch individual modules for backwards compatibility
     modules_with_broadcaster = [
-        'operations.MoveOperations',
-        'operations.StatusOperations',
-        'operations.GripperOperations',
-        'operations.DefaultPositionOperation',
-        'operations.CoordinationOperations',
-        'operations.CollaborativeOperations',
-        'operations.IntermediateOperations',
+        "operations.MoveOperations",
+        "operations.StatusOperations",
+        "operations.GripperOperations",
+        "operations.DefaultPositionOperation",
+        "operations.CoordinationOperations",
+        "operations.CollaborativeOperations",
+        "operations.IntermediateOperations",
     ]
 
     for module_name in modules_with_broadcaster:
         try:
-            module = __import__(module_name, fromlist=[''])
-            if hasattr(module, '_get_command_broadcaster'):
-                monkeypatch.setattr(module, '_get_command_broadcaster', lambda: mock_command_broadcaster)
+            module = __import__(module_name, fromlist=[""])
+            if hasattr(module, "_get_command_broadcaster"):
+                monkeypatch.setattr(
+                    module, "_get_command_broadcaster", lambda: mock_command_broadcaster
+                )
         except (ImportError, AttributeError):
             pass
 
@@ -340,6 +347,7 @@ def patch_unified_image_storage(monkeypatch, mock_unified_image_storage):
 
     Use this fixture explicitly in tests that need image storage mocking.
     """
+
     # Create a mock class that returns our mock instance
     def mock_unified_storage_class():
         return mock_unified_image_storage
@@ -347,8 +355,11 @@ def patch_unified_image_storage(monkeypatch, mock_unified_image_storage):
     # Patch in the operations module where it's imported
     try:
         import operations.DetectionOperations as det_ops
-        if hasattr(det_ops, 'UnifiedImageStorage'):
-            monkeypatch.setattr(det_ops, 'UnifiedImageStorage', mock_unified_storage_class)
+
+        if hasattr(det_ops, "UnifiedImageStorage"):
+            monkeypatch.setattr(
+                det_ops, "UnifiedImageStorage", mock_unified_storage_class
+            )
     except (ImportError, AttributeError):
         pass
 
@@ -377,8 +388,7 @@ def patch_world_state():
         """Create patch context manager that returns the mock instance."""
         # Patch at operations.WorldState.WorldState (the class itself)
         return patch(
-            'operations.WorldState.WorldState',
-            return_value=mock_world_state_instance
+            "operations.WorldState.WorldState", return_value=mock_world_state_instance
         )
 
     return _create_patch
@@ -407,8 +417,8 @@ def patch_yolo_detector():
     def _create_patch(mock_detector_instance):
         """Create patch context manager that returns the mock detector."""
         return patch(
-            'operations.FieldOperations.YOLODetector',
-            return_value=mock_detector_instance
+            "operations.FieldOperations.YOLODetector",
+            return_value=mock_detector_instance,
         )
 
     return _create_patch
@@ -941,10 +951,12 @@ def mock_move(monkeypatch):
     from operations.Base import OperationResult
 
     def _mock_move(**kwargs):
-        return OperationResult.success_result({
-            "robot_id": kwargs.get("robot_id"),
-            "final_position": (kwargs.get("x"), kwargs.get("y"), kwargs.get("z"))
-        })
+        return OperationResult.success_result(
+            {
+                "robot_id": kwargs.get("robot_id"),
+                "final_position": (kwargs.get("x"), kwargs.get("y"), kwargs.get("z")),
+            }
+        )
 
     mock = Mock(side_effect=_mock_move)
     # Auto-patch into SpatialOperations module

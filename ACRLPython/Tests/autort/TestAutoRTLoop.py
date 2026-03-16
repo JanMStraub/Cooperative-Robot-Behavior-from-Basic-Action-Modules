@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Test AutoRT Orchestration Loop
 
@@ -77,17 +78,17 @@ def sample_task():
             Operation(
                 type="move_to_coordinate",
                 robot_id="Robot1",
-                parameters={"target_position": [0.3, 0.2, 0.1]}
+                parameters={"target_position": [0.3, 0.2, 0.1]},
             ),
             Operation(
                 type="control_gripper",
                 robot_id="Robot1",
-                parameters={"action": "close"}
+                parameters={"action": "close"},
             ),
         ],
         required_robots=["Robot1"],
         estimated_complexity=3,
-        reasoning="Simple pick task"
+        reasoning="Simple pick task",
     )
 
 
@@ -98,16 +99,16 @@ def sample_task():
 
 def test_orchestrator_init_defaults():
     """AutoRTOrchestrator initializes with defaults"""
-    with patch('autort.AutoRTLoop.config') as mock_cfg:
+    with patch("autort.AutoRTLoop.config") as mock_cfg:
         mock_cfg.DEFAULT_ROBOTS = ["Robot1"]
         mock_cfg.HUMAN_IN_LOOP_DEFAULT = True
         mock_cfg.LOOP_DELAY_SECONDS = 5.0
 
-        with patch('autort.AutoRTLoop.get_global_registry'):
-            with patch('autort.AutoRTLoop.get_world_state'):
-                with patch('autort.AutoRTLoop.TaskGenerator'):
-                    with patch('autort.AutoRTLoop.RobotConstitution'):
-                        with patch('orchestrators.SequenceExecutor.SequenceExecutor'):
+        with patch("autort.AutoRTLoop.get_global_registry"):
+            with patch("autort.AutoRTLoop.get_world_state"):
+                with patch("autort.AutoRTLoop.TaskGenerator"):
+                    with patch("autort.AutoRTLoop.RobotConstitution"):
+                        with patch("orchestrators.SequenceExecutor.SequenceExecutor"):
                             orchestrator = AutoRTOrchestrator()
 
                             assert orchestrator.robot_ids == ["Robot1"]
@@ -118,13 +119,13 @@ def test_orchestrator_init_defaults():
 
 def test_orchestrator_init_custom():
     """AutoRTOrchestrator accepts custom parameters"""
-    with patch('autort.AutoRTLoop.get_global_registry'):
-        with patch('autort.AutoRTLoop.get_world_state'):
+    with patch("autort.AutoRTLoop.get_global_registry"):
+        with patch("autort.AutoRTLoop.get_world_state"):
             orchestrator = AutoRTOrchestrator(
                 robot_ids=["Robot2"],
                 human_in_loop=False,
                 loop_delay_seconds=1.0,
-                strategy="explore"
+                strategy="explore",
             )
 
             assert orchestrator.robot_ids == ["Robot2"]
@@ -135,11 +136,10 @@ def test_orchestrator_init_custom():
 
 def test_orchestrator_autonomous_overrides_human_in_loop():
     """Autonomous flag overrides human_in_loop"""
-    with patch('autort.AutoRTLoop.get_global_registry'):
-        with patch('autort.AutoRTLoop.get_world_state'):
+    with patch("autort.AutoRTLoop.get_global_registry"):
+        with patch("autort.AutoRTLoop.get_world_state"):
             orchestrator = AutoRTOrchestrator(
-                human_in_loop=True,
-                autonomous=True  # Should override
+                human_in_loop=True, autonomous=True  # Should override
             )
 
             assert orchestrator.human_in_loop is False
@@ -156,27 +156,29 @@ def test_capture_scene_stereo_detection(mock_config, mock_registry, mock_world_s
     detection_result = Mock(
         success=True,
         result={
-            'detections': [
+            "detections": [
                 {
-                    'object_id': 'cube_01',
-                    'color': 'red',
-                    'x': 0.3,
-                    'y': 0.2,
-                    'z': 0.1,
-                    'confidence': 0.95,
-                    'is_graspable': True,
+                    "object_id": "cube_01",
+                    "color": "red",
+                    "x": 0.3,
+                    "y": 0.2,
+                    "z": 0.1,
+                    "confidence": 0.95,
+                    "is_graspable": True,
                 }
             ]
-        }
+        },
     )
     mock_registry.execute_operation_by_name = Mock(return_value=detection_result)
 
-    with patch('autort.AutoRTLoop.config', mock_config):
-        with patch('autort.AutoRTLoop.get_global_registry', return_value=mock_registry):
-            with patch('autort.AutoRTLoop.get_world_state', return_value=mock_world_state):
-                with patch('autort.AutoRTLoop.TaskGenerator'):
-                    with patch('autort.AutoRTLoop.RobotConstitution'):
-                        with patch('orchestrators.SequenceExecutor.SequenceExecutor'):
+    with patch("autort.AutoRTLoop.config", mock_config):
+        with patch("autort.AutoRTLoop.get_global_registry", return_value=mock_registry):
+            with patch(
+                "autort.AutoRTLoop.get_world_state", return_value=mock_world_state
+            ):
+                with patch("autort.AutoRTLoop.TaskGenerator"):
+                    with patch("autort.AutoRTLoop.RobotConstitution"):
+                        with patch("orchestrators.SequenceExecutor.SequenceExecutor"):
                             orchestrator = AutoRTOrchestrator()
                             scene = orchestrator._capture_scene()
 
@@ -209,12 +211,14 @@ def test_capture_scene_supplements_with_world_state(mock_config, mock_registry):
     mock_world_state.get_all_objects = Mock(return_value=[world_state_obj])
     mock_world_state.get_robot_state = Mock(return_value=None)
 
-    with patch('autort.AutoRTLoop.config', mock_config):
-        with patch('autort.AutoRTLoop.get_global_registry', return_value=mock_registry):
-            with patch('autort.AutoRTLoop.get_world_state', return_value=mock_world_state):
-                with patch('autort.AutoRTLoop.TaskGenerator'):
-                    with patch('autort.AutoRTLoop.RobotConstitution'):
-                        with patch('orchestrators.SequenceExecutor.SequenceExecutor'):
+    with patch("autort.AutoRTLoop.config", mock_config):
+        with patch("autort.AutoRTLoop.get_global_registry", return_value=mock_registry):
+            with patch(
+                "autort.AutoRTLoop.get_world_state", return_value=mock_world_state
+            ):
+                with patch("autort.AutoRTLoop.TaskGenerator"):
+                    with patch("autort.AutoRTLoop.RobotConstitution"):
+                        with patch("orchestrators.SequenceExecutor.SequenceExecutor"):
                             orchestrator = AutoRTOrchestrator()
                             scene = orchestrator._capture_scene()
 
@@ -229,18 +233,18 @@ def test_capture_scene_deduplicates_objects(mock_config, mock_registry):
     detection_result = Mock(
         success=True,
         result={
-            'detections': [
+            "detections": [
                 {
-                    'object_id': 'cube_01',
-                    'color': 'red',
-                    'x': 0.3,
-                    'y': 0.2,
-                    'z': 0.1,
-                    'confidence': 0.95,
-                    'is_graspable': True,
+                    "object_id": "cube_01",
+                    "color": "red",
+                    "x": 0.3,
+                    "y": 0.2,
+                    "z": 0.1,
+                    "confidence": 0.95,
+                    "is_graspable": True,
                 }
             ]
-        }
+        },
     )
     mock_registry.execute_operation_by_name = Mock(return_value=detection_result)
 
@@ -256,12 +260,14 @@ def test_capture_scene_deduplicates_objects(mock_config, mock_registry):
     mock_world_state.get_all_objects = Mock(return_value=[world_state_obj])
     mock_world_state.get_robot_state = Mock(return_value=None)
 
-    with patch('autort.AutoRTLoop.config', mock_config):
-        with patch('autort.AutoRTLoop.get_global_registry', return_value=mock_registry):
-            with patch('autort.AutoRTLoop.get_world_state', return_value=mock_world_state):
-                with patch('autort.AutoRTLoop.TaskGenerator'):
-                    with patch('autort.AutoRTLoop.RobotConstitution'):
-                        with patch('orchestrators.SequenceExecutor.SequenceExecutor'):
+    with patch("autort.AutoRTLoop.config", mock_config):
+        with patch("autort.AutoRTLoop.get_global_registry", return_value=mock_registry):
+            with patch(
+                "autort.AutoRTLoop.get_world_state", return_value=mock_world_state
+            ):
+                with patch("autort.AutoRTLoop.TaskGenerator"):
+                    with patch("autort.AutoRTLoop.RobotConstitution"):
+                        with patch("orchestrators.SequenceExecutor.SequenceExecutor"):
                             orchestrator = AutoRTOrchestrator()
                             scene = orchestrator._capture_scene()
 
@@ -279,11 +285,14 @@ def test_execute_task_converts_to_sequence_format(mock_config, sample_task):
     mock_executor = Mock()
     mock_executor.execute_sequence = Mock(return_value={"success": True})
 
-    with patch('autort.AutoRTLoop.get_global_registry'):
-        with patch('autort.AutoRTLoop.get_world_state'):
-            with patch('autort.AutoRTLoop.TaskGenerator'):
-                with patch('autort.AutoRTLoop.RobotConstitution'):
-                    with patch('orchestrators.SequenceExecutor.SequenceExecutor', return_value=mock_executor):
+    with patch("autort.AutoRTLoop.get_global_registry"):
+        with patch("autort.AutoRTLoop.get_world_state"):
+            with patch("autort.AutoRTLoop.TaskGenerator"):
+                with patch("autort.AutoRTLoop.RobotConstitution"):
+                    with patch(
+                        "orchestrators.SequenceExecutor.SequenceExecutor",
+                        return_value=mock_executor,
+                    ):
                         orchestrator = AutoRTOrchestrator()
                         result = orchestrator._execute_task(sample_task)
 
@@ -291,11 +300,11 @@ def test_execute_task_converts_to_sequence_format(mock_config, sample_task):
                         # Format: [{"operation": "...", "params": {"robot_id": "...", ...}}, ...]
                         call_args = mock_executor.execute_sequence.call_args[0][0]
                         assert len(call_args) == 2
-                        assert call_args[0]['operation'] == 'move_to_coordinate'
-                        assert 'robot_id' in call_args[0]['params']
-                        assert 'target_position' in call_args[0]['params']
+                        assert call_args[0]["operation"] == "move_to_coordinate"
+                        assert "robot_id" in call_args[0]["params"]
+                        assert "target_position" in call_args[0]["params"]
 
-                        assert result['success'] is True
+                        assert result["success"] is True
 
 
 def test_execute_task_handles_errors(mock_config, sample_task):
@@ -303,16 +312,19 @@ def test_execute_task_handles_errors(mock_config, sample_task):
     mock_executor = Mock()
     mock_executor.execute_sequence = Mock(side_effect=Exception("Execution failed"))
 
-    with patch('autort.AutoRTLoop.get_global_registry'):
-        with patch('autort.AutoRTLoop.get_world_state'):
-            with patch('autort.AutoRTLoop.TaskGenerator'):
-                with patch('autort.AutoRTLoop.RobotConstitution'):
-                    with patch('orchestrators.SequenceExecutor.SequenceExecutor', return_value=mock_executor):
+    with patch("autort.AutoRTLoop.get_global_registry"):
+        with patch("autort.AutoRTLoop.get_world_state"):
+            with patch("autort.AutoRTLoop.TaskGenerator"):
+                with patch("autort.AutoRTLoop.RobotConstitution"):
+                    with patch(
+                        "orchestrators.SequenceExecutor.SequenceExecutor",
+                        return_value=mock_executor,
+                    ):
                         orchestrator = AutoRTOrchestrator()
                         result = orchestrator._execute_task(sample_task)
 
-                        assert result['success'] is False
-                        assert 'error' in result
+                        assert result["success"] is False
+                        assert "error" in result
 
 
 # ============================================================================
@@ -323,10 +335,12 @@ def test_execute_task_handles_errors(mock_config, sample_task):
 def test_run_one_iteration_no_objects_skips(mock_config):
     """Iteration skips when no objects detected"""
     mock_orchestrator = MagicMock()
-    mock_orchestrator._capture_scene = Mock(return_value=SceneDescription(
-        timestamp=time.time(),
-        objects=[],  # No objects
-    ))
+    mock_orchestrator._capture_scene = Mock(
+        return_value=SceneDescription(
+            timestamp=time.time(),
+            objects=[],  # No objects
+        )
+    )
 
     # Call the real method with mocked self
     AutoRTOrchestrator._run_one_iteration(mock_orchestrator)
@@ -343,25 +357,26 @@ def test_run_one_iteration_no_tasks_generated_skips(mock_config, sample_scene):
     mock_orchestrator.robot_ids = ["Robot1"]
 
     # Mock config access
-    with patch('autort.AutoRTLoop.config', mock_config):
+    with patch("autort.AutoRTLoop.config", mock_config):
         AutoRTOrchestrator._run_one_iteration(mock_orchestrator)
 
     # Should not proceed to constitution
     mock_orchestrator.constitution.evaluate_task.assert_not_called()
 
 
-def test_run_one_iteration_all_tasks_rejected_skips(mock_config, sample_scene, sample_task):
+def test_run_one_iteration_all_tasks_rejected_skips(
+    mock_config, sample_scene, sample_task
+):
     """Iteration skips when all tasks rejected by constitution"""
     mock_orchestrator = MagicMock()
     mock_orchestrator._capture_scene = Mock(return_value=sample_scene)
     mock_orchestrator.task_generator.generate_tasks = Mock(return_value=[sample_task])
-    mock_orchestrator.constitution.evaluate_task = Mock(return_value=TaskVerdict(
-        approved=False,
-        rejection_reason="Unsafe"
-    ))
+    mock_orchestrator.constitution.evaluate_task = Mock(
+        return_value=TaskVerdict(approved=False, rejection_reason="Unsafe")
+    )
     mock_orchestrator.robot_ids = ["Robot1"]
 
-    with patch('autort.AutoRTLoop.config', mock_config):
+    with patch("autort.AutoRTLoop.config", mock_config):
         AutoRTOrchestrator._run_one_iteration(mock_orchestrator)
 
     # Should not proceed to selection
@@ -373,16 +388,16 @@ def test_run_one_iteration_full_success(mock_config, sample_scene, sample_task):
     mock_orchestrator = MagicMock()
     mock_orchestrator._capture_scene = Mock(return_value=sample_scene)
     mock_orchestrator.task_generator.generate_tasks = Mock(return_value=[sample_task])
-    mock_orchestrator.constitution.evaluate_task = Mock(return_value=TaskVerdict(
-        approved=True
-    ))
+    mock_orchestrator.constitution.evaluate_task = Mock(
+        return_value=TaskVerdict(approved=True)
+    )
     mock_orchestrator.task_selector.select_task = Mock(return_value=sample_task)
     mock_orchestrator._execute_task = Mock(return_value={"success": True})
     mock_orchestrator.task_selector.update_history = Mock()
     mock_orchestrator.robot_ids = ["Robot1"]
     mock_orchestrator.human_in_loop = False
 
-    with patch('autort.AutoRTLoop.config', mock_config):
+    with patch("autort.AutoRTLoop.config", mock_config):
         AutoRTOrchestrator._run_one_iteration(mock_orchestrator)
 
     # Verify full pipeline executed
@@ -401,9 +416,9 @@ def test_run_one_iteration_full_success(mock_config, sample_scene, sample_task):
 
 def test_request_approval_accepts_y(mock_config, sample_task):
     """Human approval accepts 'y' input"""
-    with patch('autort.AutoRTLoop.get_global_registry'):
-        with patch('autort.AutoRTLoop.get_world_state'):
-            with patch('builtins.input', return_value='y'):
+    with patch("autort.AutoRTLoop.get_global_registry"):
+        with patch("autort.AutoRTLoop.get_world_state"):
+            with patch("builtins.input", return_value="y"):
                 orchestrator = AutoRTOrchestrator()
                 approved_task = orchestrator._request_approval(sample_task)
 
@@ -412,9 +427,9 @@ def test_request_approval_accepts_y(mock_config, sample_task):
 
 def test_request_approval_rejects_n(mock_config, sample_task):
     """Human approval rejects 'n' input"""
-    with patch('autort.AutoRTLoop.get_global_registry'):
-        with patch('autort.AutoRTLoop.get_world_state'):
-            with patch('builtins.input', return_value='n'):
+    with patch("autort.AutoRTLoop.get_global_registry"):
+        with patch("autort.AutoRTLoop.get_world_state"):
+            with patch("builtins.input", return_value="n"):
                 orchestrator = AutoRTOrchestrator()
                 approved_task = orchestrator._request_approval(sample_task)
 
@@ -423,9 +438,9 @@ def test_request_approval_rejects_n(mock_config, sample_task):
 
 def test_request_approval_handles_eof(mock_config, sample_task):
     """Human approval handles EOF gracefully"""
-    with patch('autort.AutoRTLoop.get_global_registry'):
-        with patch('autort.AutoRTLoop.get_world_state'):
-            with patch('builtins.input', side_effect=EOFError):
+    with patch("autort.AutoRTLoop.get_global_registry"):
+        with patch("autort.AutoRTLoop.get_world_state"):
+            with patch("builtins.input", side_effect=EOFError):
                 orchestrator = AutoRTOrchestrator()
                 approved_task = orchestrator._request_approval(sample_task)
 
@@ -439,8 +454,8 @@ def test_request_approval_handles_eof(mock_config, sample_task):
 
 def test_stop_stops_loop(mock_config):
     """Stop method stops the loop"""
-    with patch('autort.AutoRTLoop.get_global_registry'):
-        with patch('autort.AutoRTLoop.get_world_state'):
+    with patch("autort.AutoRTLoop.get_global_registry"):
+        with patch("autort.AutoRTLoop.get_world_state"):
             orchestrator = AutoRTOrchestrator()
             orchestrator._running = True
 

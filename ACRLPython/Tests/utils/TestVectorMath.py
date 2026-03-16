@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Test Vector Math Utilities
 ===========================
@@ -28,6 +29,7 @@ from utils.VectorMath import (
 # ---------------------------------------------------------------------------
 # vector_angle
 # ---------------------------------------------------------------------------
+
 
 def test_vector_angle_zero_first():
     """Zero-length first vector should return 0.0, not 90° or NaN."""
@@ -75,12 +77,15 @@ def test_vector_angle_no_nan():
 # vector_slerp: anti-parallel case
 # ---------------------------------------------------------------------------
 
+
 def test_slerp_antiparallel_t0():
     """Slerp between anti-parallel vectors at t=0 should return v1."""
     v1 = np.array([1.0, 0.0, 0.0])
     v2 = np.array([-1.0, 0.0, 0.0])
     result = vector_slerp(v1, v2, 0.0)
-    assert np.allclose(result, v1, atol=1e-6), f"t=0 anti-parallel: expected {v1}, got {result}"
+    assert np.allclose(
+        result, v1, atol=1e-6
+    ), f"t=0 anti-parallel: expected {v1}, got {result}"
 
 
 def test_slerp_antiparallel_t1():
@@ -88,7 +93,9 @@ def test_slerp_antiparallel_t1():
     v1 = np.array([1.0, 0.0, 0.0])
     v2 = np.array([-1.0, 0.0, 0.0])
     result = vector_slerp(v1, v2, 1.0)
-    assert np.allclose(result, v2, atol=1e-6), f"t=1 anti-parallel: expected {v2}, got {result}"
+    assert np.allclose(
+        result, v2, atol=1e-6
+    ), f"t=1 anti-parallel: expected {v2}, got {result}"
 
 
 def test_slerp_antiparallel_no_nan():
@@ -106,12 +113,15 @@ def test_slerp_antiparallel_unit_magnitude():
     v2 = np.array([-1.0, 0.0, 0.0])
     result = vector_slerp(v1, v2, 0.5)
     mag = np.linalg.norm(result)
-    assert abs(mag - 1.0) < 1e-6, f"t=0.5 anti-parallel magnitude: expected 1.0, got {mag}"
+    assert (
+        abs(mag - 1.0) < 1e-6
+    ), f"t=0.5 anti-parallel magnitude: expected 1.0, got {mag}"
 
 
 # ---------------------------------------------------------------------------
 # vector_slerp: boundary values (t=0, t=1)
 # ---------------------------------------------------------------------------
+
 
 def test_slerp_t0_returns_v1():
     """Slerp at t=0 should always return v1."""
@@ -144,14 +154,15 @@ def test_slerp_midpoint_perpendicular():
     result = vector_slerp(v1, v2, 0.5)
     result_norm = vector_normalize(result)
     expected = np.array([1.0, 1.0, 0.0]) / np.sqrt(2.0)
-    assert np.allclose(result_norm, expected, atol=1e-6), (
-        f"Midpoint slerp: expected {expected}, got {result_norm}"
-    )
+    assert np.allclose(
+        result_norm, expected, atol=1e-6
+    ), f"Midpoint slerp: expected {expected}, got {result_norm}"
 
 
 # ---------------------------------------------------------------------------
 # vectors_orthonormal_basis
 # ---------------------------------------------------------------------------
+
 
 def test_orthonormal_basis_standard():
     """Standard forward vector should produce orthonormal basis."""

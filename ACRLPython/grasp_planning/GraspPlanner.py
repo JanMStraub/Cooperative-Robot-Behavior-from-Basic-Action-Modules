@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 End-to-end grasp planning orchestrator.
 
@@ -206,7 +207,9 @@ class GraspPlanner:
             result = bridge.validate_grasp_candidates(candidate_data, robot_id)
 
             if not result or not result.get("success"):
-                logger.error(f"IK validation failed: {result.get('error', 'Unknown error') if result else 'Unknown error'}")
+                logger.error(
+                    f"IK validation failed: {result.get('error', 'Unknown error') if result else 'Unknown error'}"
+                )
                 return candidates
 
             # Update candidates with IK validation results
@@ -273,8 +276,7 @@ class GraspPlanner:
             List of (enabled, preference_weight) tuples in config order
         """
         return [
-            (s.enabled, s.preference_weight)
-            for s in self.config.enabled_approaches
+            (s.enabled, s.preference_weight) for s in self.config.enabled_approaches
         ]
 
     def _restore_approach_state(self, saved_state: list) -> None:

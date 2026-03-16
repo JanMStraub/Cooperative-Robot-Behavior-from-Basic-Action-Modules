@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Confidence Scoring for RAG System
 ==================================
@@ -12,6 +13,7 @@ import re
 
 class ConfidenceLevel(Enum):
     """Confidence level categories"""
+
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
@@ -64,8 +66,7 @@ def get_confidence_level(score: float) -> ConfidenceLevel:
 
 
 def calculate_parameter_match_score(
-    query_text: str,
-    parameter_names: List[str]
+    query_text: str, parameter_names: List[str]
 ) -> float:
     """
     Calculate score based on parameter mentions in query.
@@ -81,15 +82,15 @@ def calculate_parameter_match_score(
         return 0.5  # Neutral score for operations without parameters
 
     query_lower = query_text.lower()
-    query_terms = set(re.findall(r'\w+', query_lower))
+    query_terms = set(re.findall(r"\w+", query_lower))
 
     # Normalize parameter names
     param_terms = set()
     for param in parameter_names:
         # Split snake_case and add variations
-        parts = param.lower().split('_')
+        parts = param.lower().split("_")
         param_terms.update(parts)
-        param_terms.add(param.lower().replace('_', ''))
+        param_terms.add(param.lower().replace("_", ""))
 
     # Count matches
     matches = len(param_terms & query_terms)
@@ -102,7 +103,7 @@ def calculate_parameter_match_score(
 def calculate_metadata_match_score(
     metadata: Dict[str, Any],
     category_filter: Optional[str] = None,
-    complexity_filter: Optional[str] = None
+    complexity_filter: Optional[str] = None,
 ) -> float:
     """
     Calculate score based on metadata filter matches.
@@ -188,10 +189,10 @@ def compute_confidence_score(
 
     # Compute weighted final score
     final_score = (
-        WEIGHTS["similarity"] * similarity_score +
-        WEIGHTS["metadata_match"] * metadata_score +
-        WEIGHTS["parameter_match"] * param_score +
-        WEIGHTS["reliability"] * reliability_score
+        WEIGHTS["similarity"] * similarity_score
+        + WEIGHTS["metadata_match"] * metadata_score
+        + WEIGHTS["parameter_match"] * param_score
+        + WEIGHTS["reliability"] * reliability_score
     )
 
     # Ensure score is in valid range

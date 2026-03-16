@@ -110,13 +110,13 @@ def _calc_disparity(
         minDisparity=0,
         numDisparities=max_disp,
         blockSize=window_size,
-        P1=8 * 3 * window_size**2,   # OpenCV recommended formula
+        P1=8 * 3 * window_size**2,  # OpenCV recommended formula
         P2=32 * 3 * window_size**2,  # OpenCV recommended formula
-        disp12MaxDiff=2,             # Relaxed L-R consistency check (was 1)
-        uniquenessRatio=0,           # Disabled; synthetic scenes have near-identical scores
-        speckleWindowSize=0,         # Disabled speckle filter; flat regions produce large coherent blobs
+        disp12MaxDiff=2,  # Relaxed L-R consistency check (was 1)
+        uniquenessRatio=0,  # Disabled; synthetic scenes have near-identical scores
+        speckleWindowSize=0,  # Disabled speckle filter; flat regions produce large coherent blobs
         speckleRange=0,
-        preFilterCap=63,             # Reduce pre-filter aggressiveness for clean synthetic images
+        preFilterCap=63,  # Reduce pre-filter aggressiveness for clean synthetic images
         mode=cv2.STEREO_SGBM_MODE_HH,  # Full HH scan; better disparity coverage on flat surfaces
     )
     disp = stereo.compute(imgL, imgR).astype(np.float32) / 16.0

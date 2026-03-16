@@ -20,8 +20,6 @@ Usage:
 
 import logging
 import threading
-import time
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
@@ -29,9 +27,11 @@ from datetime import datetime, timedelta
 # Configure logging
 try:
     from core.LoggingSetup import setup_logging
+
     setup_logging(__name__)
 except ImportError:
     from ..core.LoggingSetup import setup_logging
+
     setup_logging(__name__)
 
 logger = logging.getLogger(__name__)
@@ -131,6 +131,7 @@ class AutoRTHandler:
         try:
             # Import here to avoid circular dependencies
             from autort.AutoRTLoop import AutoRTOrchestrator
+
             self._orchestrator = AutoRTOrchestrator()
             logger.info("AutoRTOrchestrator initialized successfully")
         except Exception as e:
@@ -174,8 +175,7 @@ class AutoRTHandler:
             if len(self._pending_tasks) >= TASK_CACHE_SIZE:
                 # Remove oldest task
                 oldest_id = min(
-                    self._pending_tasks.keys(),
-                    key=lambda k: self._pending_tasks[k][1]
+                    self._pending_tasks.keys(), key=lambda k: self._pending_tasks[k][1]
                 )
                 del self._pending_tasks[oldest_id]
                 logger.debug(f"Cache full, removed oldest task: {oldest_id}")
@@ -198,11 +198,13 @@ class AutoRTHandler:
         # Convert Operation objects to dicts
         operations_list = []
         for op in task.operations:
-            operations_list.append({
-                "type": op.type,
-                "robot_id": op.robot_id,
-                "parameters": op.parameters,
-            })
+            operations_list.append(
+                {
+                    "type": op.type,
+                    "robot_id": op.robot_id,
+                    "parameters": op.parameters,
+                }
+            )
 
         return {
             "task_id": task.task_id,
@@ -253,7 +255,9 @@ class AutoRTHandler:
                 scene_state,
                 robot_ids=robot_ids,
                 num_tasks=num_tasks,
-                include_collaborative=(len(robot_ids) > 1 and ENABLE_COLLABORATIVE_TASKS),
+                include_collaborative=(
+                    len(robot_ids) > 1 and ENABLE_COLLABORATIVE_TASKS
+                ),
             )
 
             if not candidates:
@@ -269,13 +273,19 @@ class AutoRTHandler:
             if ENABLE_SAFETY_VALIDATION:
                 validated_tasks = []
                 for candidate in candidates:
-                    verdict = self._orchestrator.constitution.evaluate_task(candidate, scene_state)
+                    verdict = self._orchestrator.constitution.evaluate_task(
+                        candidate, scene_state
+                    )
                     if verdict.approved:
                         validated_tasks.append(candidate)
                         if verdict.warnings:
-                            logger.debug(f"Task '{candidate.task_id}' approved with warnings: {verdict.warnings}")
+                            logger.debug(
+                                f"Task '{candidate.task_id}' approved with warnings: {verdict.warnings}"
+                            )
                     else:
-                        logger.debug(f"Task '{candidate.task_id}' rejected: {verdict.rejection_reason}")
+                        logger.debug(
+                            f"Task '{candidate.task_id}' rejected: {verdict.rejection_reason}"
+                        )
 
                 if not validated_tasks:
                     logger.warning("All tasks rejected by constitution")
@@ -448,7 +458,7 @@ class AutoRTHandler:
                         "success": False,
                         "result": None,
                         "error": f"Task {task_id} not found (may have expired)",
-                        "status": "not_found"
+                        "status": "not_found",
                     }
 
                 task, _ = self._pending_tasks[task_id]
@@ -469,7 +479,9 @@ class AutoRTHandler:
                         return
 
                     result = self._orchestrator._execute_task(task)
-                    logger.info(f"Task {task_id} execution completed: {result.get('success')}")
+                    logger.info(
+                        f"Task {task_id} execution completed: {result.get('success')}"
+                    )
 
                 except Exception as e:
                     logger.error(f"Async task execution failed: {e}", exc_info=True)
@@ -478,12 +490,14 @@ class AutoRTHandler:
             self._exec_pool.submit(execute_async)
 
             # Return immediately with acknowledgment
-            logger.info(f"Task {task_id} submitted to executor pool, returning immediate response")
+            logger.info(
+                f"Task {task_id} submitted to executor pool, returning immediate response"
+            )
             return {
                 "success": True,
                 "result": {"task_id": task_id, "status": "executing"},
                 "error": None,
-                "status": "started"
+                "status": "started",
             }
 
         except Exception as e:
@@ -492,7 +506,7 @@ class AutoRTHandler:
                 "success": False,
                 "result": None,
                 "error": str(e),
-                "status": "error"
+                "status": "error",
             }
 
     def get_status(self) -> dict:
@@ -555,11 +569,13 @@ class AutoRTHandler:
                 # Push to web dashboard via WebSocket broadcast (if registered)
                 if self._web_broadcast_callback and response.get("tasks"):
                     try:
-                        self._web_broadcast_callback({
-                            "type": "autort_tasks",
-                            "tasks": response["tasks"],
-                            "loop_running": self._loop_running,
-                        })
+                        self._web_broadcast_callback(
+                            {
+                                "type": "autort_tasks",
+                                "tasks": response["tasks"],
+                                "loop_running": self._loop_running,
+                            }
+                        )
                     except Exception as cb_err:
                         logger.error(f"Web broadcast callback failed: {cb_err}")
 

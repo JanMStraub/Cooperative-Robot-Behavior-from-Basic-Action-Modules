@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 RAG System Configuration
 ==========================
@@ -34,10 +35,13 @@ RAG_EMBEDDING_TIMEOUT = int(os.environ.get("RAG_EMBEDDING_TIMEOUT", "30"))
 # ============================================================================
 
 RAG_VECTOR_STORE_PATH = os.environ.get(
-    "RAG_VECTOR_STORE_PATH",
-    str(_CONFIG_DIR / "rag" / ".rag_index.pkl")
+    "RAG_VECTOR_STORE_PATH", str(_CONFIG_DIR / "rag" / ".rag_index.pkl")
 )
-RAG_AUTO_SAVE_INDEX = os.environ.get("RAG_AUTO_SAVE_INDEX", "true").lower() in ("true", "1", "yes")
+RAG_AUTO_SAVE_INDEX = os.environ.get("RAG_AUTO_SAVE_INDEX", "true").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 
 # ============================================================================
 # Search Settings
@@ -50,8 +54,12 @@ RAG_MIN_SIMILARITY_SCORE = float(os.environ.get("RAG_MIN_SIMILARITY_SCORE", "0.5
 # Confidence Scoring
 # ============================================================================
 
-RAG_CONFIDENCE_STRATEGY = os.environ.get("RAG_CONFIDENCE_STRATEGY", "balanced")  # strict, balanced, permissive
-RAG_ENABLE_CONFIDENCE_SCORING = os.environ.get("RAG_ENABLE_CONFIDENCE_SCORING", "true").lower() in ("true", "1", "yes")
+RAG_CONFIDENCE_STRATEGY = os.environ.get(
+    "RAG_CONFIDENCE_STRATEGY", "balanced"
+)  # strict, balanced, permissive
+RAG_ENABLE_CONFIDENCE_SCORING = os.environ.get(
+    "RAG_ENABLE_CONFIDENCE_SCORING", "true"
+).lower() in ("true", "1", "yes")
 RAG_CONFIDENCE_TIERS = {
     "high": 0.75,
     "medium": 0.5,
@@ -62,5 +70,9 @@ RAG_CONFIDENCE_TIERS = {
 # Fallback Settings
 # ============================================================================
 
-RAG_USE_TFIDF_FALLBACK = os.environ.get("RAG_USE_TFIDF_FALLBACK", "true").lower() in ("true", "1", "yes")
+RAG_USE_TFIDF_FALLBACK = os.environ.get("RAG_USE_TFIDF_FALLBACK", "true").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 RAG_TFIDF_MAX_FEATURES = int(os.environ.get("RAG_TFIDF_MAX_FEATURES", "500"))

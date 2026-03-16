@@ -6,7 +6,7 @@ Tests color-based cube detection in pixel space
 """
 
 import numpy as np
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 
 from vision.ObjectDetector import (
     DetectionObject,
@@ -19,7 +19,6 @@ from config.Vision import (
     MIN_ASPECT_RATIO,
     MAX_ASPECT_RATIO,
     MIN_CONFIDENCE,
-    DEBUG_IMAGES_DIR,
 )
 
 
@@ -218,7 +217,9 @@ class TestCubeDetectorDetection:
         assert det.bbox_w > 0
         assert det.bbox_h > 0
 
-    def test_detect_cubes_blue_cube(self, sample_blue_cube_image, disable_yolo_detection):
+    def test_detect_cubes_blue_cube(
+        self, sample_blue_cube_image, disable_yolo_detection
+    ):
         """Test detection of blue cube using HSV color detection"""
         detector = CubeDetector()
 

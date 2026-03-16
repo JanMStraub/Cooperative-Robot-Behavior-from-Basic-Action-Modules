@@ -14,11 +14,9 @@ Tests the gripper control operations including:
 """
 
 import pytest
-import time
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock
 
 from operations.GripperOperations import control_gripper, CONTROL_GRIPPER_OPERATION
-from operations.Base import OperationResult
 
 
 # ============================================================================

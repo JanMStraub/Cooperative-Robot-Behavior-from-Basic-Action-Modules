@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Test Coordinate Transformation
 ================================
@@ -153,7 +154,9 @@ def test_lateral_offset_axis_conversion():
     # Unity local: (0.1, 0.05, 0.3)
     # Axis convert: ros_x=0.3, ros_y=-0.1, ros_z=0.05
     assert abs(ros_pos["x"] - 0.3) < 0.001, f"ROS X: {ros_pos['x']}"
-    assert abs(ros_pos["y"] - (-0.1)) < 0.001, f"ROS Y (expect -0.1 for right): {ros_pos['y']}"
+    assert (
+        abs(ros_pos["y"] - (-0.1)) < 0.001
+    ), f"ROS Y (expect -0.1 for right): {ros_pos['y']}"
     assert abs(ros_pos["z"] - 0.05) < 0.001, f"ROS Z: {ros_pos['z']}"
 
     print("\nLateral offset test:")
@@ -165,6 +168,7 @@ def test_lateral_offset_axis_conversion():
 # Direct tests of world_to_robot_frame_np / robot_to_world_frame_np
 # These exercise the actual CoordinateTransforms module (not the mock).
 # ---------------------------------------------------------------------------
+
 
 def test_np_robot1_axis_conversion():
     """NumPy wrapper: Robot1 world pos → ROS frame matches mock behavior."""
@@ -214,9 +218,9 @@ def test_np_roundtrip_robot1():
     original = np.array([-0.3, 0.15, 0.25])
     ros = world_to_robot_frame_np(original, "Robot1")
     recovered = robot_to_world_frame_np(ros, "Robot1")
-    assert np.allclose(recovered, original, atol=1e-10), (
-        f"Roundtrip Robot1 failed: {original} → {ros} → {recovered}"
-    )
+    assert np.allclose(
+        recovered, original, atol=1e-10
+    ), f"Roundtrip Robot1 failed: {original} → {ros} → {recovered}"
     print("\nNumPy roundtrip Robot1:")
     print(f"  {original} → ros {ros} → {recovered}")
     print("  ✅ roundtrip exact")
@@ -227,9 +231,9 @@ def test_np_roundtrip_robot2():
     original = np.array([0.6, 0.1, -0.2])
     ros = world_to_robot_frame_np(original, "Robot2")
     recovered = robot_to_world_frame_np(ros, "Robot2")
-    assert np.allclose(recovered, original, atol=1e-10), (
-        f"Roundtrip Robot2 failed: {original} → {ros} → {recovered}"
-    )
+    assert np.allclose(
+        recovered, original, atol=1e-10
+    ), f"Roundtrip Robot2 failed: {original} → {ros} → {recovered}"
     print("\nNumPy roundtrip Robot2:")
     print(f"  {original} → ros {ros} → {recovered}")
     print("  ✅ roundtrip exact")
@@ -244,9 +248,15 @@ def test_np_matches_dict_robot1():
     ros_dict = server._transform_world_to_local(world_dict, "Robot1")
     ros_np = world_to_robot_frame_np(world_np, "Robot1")
 
-    assert abs(ros_np[0] - ros_dict["x"]) < 1e-10, f"X mismatch: {ros_np[0]} vs {ros_dict['x']}"
-    assert abs(ros_np[1] - ros_dict["y"]) < 1e-10, f"Y mismatch: {ros_np[1]} vs {ros_dict['y']}"
-    assert abs(ros_np[2] - ros_dict["z"]) < 1e-10, f"Z mismatch: {ros_np[2]} vs {ros_dict['z']}"
+    assert (
+        abs(ros_np[0] - ros_dict["x"]) < 1e-10
+    ), f"X mismatch: {ros_np[0]} vs {ros_dict['x']}"
+    assert (
+        abs(ros_np[1] - ros_dict["y"]) < 1e-10
+    ), f"Y mismatch: {ros_np[1]} vs {ros_dict['y']}"
+    assert (
+        abs(ros_np[2] - ros_dict["z"]) < 1e-10
+    ), f"Z mismatch: {ros_np[2]} vs {ros_dict['z']}"
 
     print("\nNumPy vs dict equivalence (Robot1):")
     print(f"  dict: {ros_dict}, np: {ros_np}")
@@ -262,9 +272,15 @@ def test_np_matches_dict_robot2():
     ros_dict = server._transform_world_to_local(world_dict, "Robot2")
     ros_np = world_to_robot_frame_np(world_np, "Robot2")
 
-    assert abs(ros_np[0] - ros_dict["x"]) < 1e-10, f"X mismatch: {ros_np[0]} vs {ros_dict['x']}"
-    assert abs(ros_np[1] - ros_dict["y"]) < 1e-10, f"Y mismatch: {ros_np[1]} vs {ros_dict['y']}"
-    assert abs(ros_np[2] - ros_dict["z"]) < 1e-10, f"Z mismatch: {ros_np[2]} vs {ros_dict['z']}"
+    assert (
+        abs(ros_np[0] - ros_dict["x"]) < 1e-10
+    ), f"X mismatch: {ros_np[0]} vs {ros_dict['x']}"
+    assert (
+        abs(ros_np[1] - ros_dict["y"]) < 1e-10
+    ), f"Y mismatch: {ros_np[1]} vs {ros_dict['y']}"
+    assert (
+        abs(ros_np[2] - ros_dict["z"]) < 1e-10
+    ), f"Z mismatch: {ros_np[2]} vs {ros_dict['z']}"
 
     print("\nNumPy vs dict equivalence (Robot2):")
     print(f"  dict: {ros_dict}, np: {ros_np}")
@@ -297,5 +313,6 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ Unexpected error: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)

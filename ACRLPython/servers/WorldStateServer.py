@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 WorldStateServer - Receives robot and object state updates from Unity.
 
@@ -155,7 +156,9 @@ class WorldStateServer(TCPServerBase):
             >>> server.register_update_callback(on_update)
         """
         self._on_state_update_callbacks.append(callback)
-        self._logger.info(f"Registered state update callback: {callback.__name__ if hasattr(callback, '__name__') else repr(callback)}")
+        self._logger.info(
+            f"Registered state update callback: {callback.__name__ if hasattr(callback, '__name__') else repr(callback)}"
+        )
 
     def _update_world_state(self, state_update: Dict) -> None:
         """

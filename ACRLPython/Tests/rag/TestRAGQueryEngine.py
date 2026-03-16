@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Test Cases for RAG Query Engine
 ================================
@@ -22,12 +23,20 @@ class TestQueryEngine:
         self.vector_store.add_operation(
             "op_001",
             np.array([1.0, 0.0, 0.0]),
-            {"name": "move_to_coordinate", "category": "navigation", "description": "Move robot"}
+            {
+                "name": "move_to_coordinate",
+                "category": "navigation",
+                "description": "Move robot",
+            },
         )
         self.vector_store.add_operation(
             "op_002",
             np.array([0.0, 1.0, 0.0]),
-            {"name": "grip_object", "category": "manipulation", "description": "Grip object"}
+            {
+                "name": "grip_object",
+                "category": "manipulation",
+                "description": "Grip object",
+            },
         )
 
     @patch("rag.QueryEngine.EmbeddingGenerator")

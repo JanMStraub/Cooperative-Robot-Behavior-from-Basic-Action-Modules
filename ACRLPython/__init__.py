@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 ACRLPython - Unity ↔ Python communication package for robot vision and AI
 

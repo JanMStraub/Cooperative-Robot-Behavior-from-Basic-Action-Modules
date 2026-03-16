@@ -454,10 +454,7 @@ class YOLODetector:
                 # Create detection object
                 # Extract segmentation mask if available (task=segment)
                 mask = None
-                if (
-                    results[0].masks is not None
-                    and hasattr(results[0].masks, "data")
-                ):
+                if results[0].masks is not None and hasattr(results[0].masks, "data"):
                     try:
                         masks_array = results[0].masks.data.cpu().numpy()  # type: ignore[union-attr]
                         if object_id < masks_array.shape[0]:
@@ -704,7 +701,11 @@ class YOLODetector:
                 focal_length_px = get_focal_length_pixels(camera_config, w, h)
 
                 bbox = (det.bbox_x, det.bbox_y, det.bbox_w, det.bbox_h)
-                strategy = DEPTH_SAMPLING_STRATEGY if DEPTH_SAMPLING_STRATEGY else "median_inner_50pct"
+                strategy = (
+                    DEPTH_SAMPLING_STRATEGY
+                    if DEPTH_SAMPLING_STRATEGY
+                    else "median_inner_50pct"
+                )
                 inner_pct = DEPTH_SAMPLE_INNER_PERCENT
 
                 bbox_result = estimate_depth_from_bbox(

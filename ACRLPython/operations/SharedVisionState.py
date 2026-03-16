@@ -63,6 +63,7 @@ except ImportError:
     )
 
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 

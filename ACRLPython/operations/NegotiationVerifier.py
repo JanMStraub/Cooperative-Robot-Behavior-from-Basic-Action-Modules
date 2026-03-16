@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Negotiation Plan Verifier
 ==========================
@@ -9,7 +10,7 @@ parallel group ordering) and spatial safety before execution.
 
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Tuple
 
 from .WorldState import get_world_state
 from .CoordinationVerifier import CoordinationVerifier
@@ -113,7 +114,9 @@ class NegotiationVerifier:
             result.add_error(err)
 
         # Run spatial safety checks
-        safety_errors, safety_warnings = self._verify_spatial_safety(commands, world_state)
+        safety_errors, safety_warnings = self._verify_spatial_safety(
+            commands, world_state
+        )
         for err in safety_errors:
             result.add_error(err)
             result.safety_check = False
@@ -187,7 +190,9 @@ class NegotiationVerifier:
         # Warn about signals nobody waits for (not an error)
         unused = defined_signals - waited_signals
         for event in unused:
-            logger.debug(f"signal('{event}') has no matching wait_for_signal (harmless)")
+            logger.debug(
+                f"signal('{event}') has no matching wait_for_signal (harmless)"
+            )
 
         return errors
 
@@ -239,7 +244,9 @@ class NegotiationVerifier:
 
         return errors
 
-    def _verify_parallel_group_ordering(self, commands: List[Dict[str, Any]]) -> List[str]:
+    def _verify_parallel_group_ordering(
+        self, commands: List[Dict[str, Any]]
+    ) -> List[str]:
         """
         Verify parallel group numbers are valid.
 
@@ -256,7 +263,9 @@ class NegotiationVerifier:
             group = cmd.get("parallel_group")
             if group is not None:
                 if not isinstance(group, int):
-                    errors.append(f"Command {i}: parallel_group must be an integer, got {type(group).__name__}")
+                    errors.append(
+                        f"Command {i}: parallel_group must be an integer, got {type(group).__name__}"
+                    )
                 else:
                     groups_seen.add(group)
 
@@ -291,7 +300,10 @@ class NegotiationVerifier:
 
         # Collect all move targets per parallel group to check for collisions
         from collections import defaultdict
-        group_targets: Dict[int, List[Tuple[str, Tuple[float, float, float]]]] = defaultdict(list)
+
+        group_targets: Dict[int, List[Tuple[str, Tuple[float, float, float]]]] = (
+            defaultdict(list)
+        )
 
         for i, cmd in enumerate(commands):
             operation = cmd.get("operation", "")

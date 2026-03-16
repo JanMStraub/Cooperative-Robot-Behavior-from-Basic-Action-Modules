@@ -292,8 +292,12 @@ class SequenceServer(TCPServerBase):
                     self._handle_autort_command(client, header_bytes)
                     continue
                 elif msg_type != MessageType.SEQUENCE_QUERY:
-                    logger.error(f"Invalid message type: {msg_type} (expected {MessageType.SEQUENCE_QUERY} or {MessageType.AUTORT_COMMAND})")
-                    self._send_error(client, request_id, f"Invalid message type: {msg_type}")
+                    logger.error(
+                        f"Invalid message type: {msg_type} (expected {MessageType.SEQUENCE_QUERY} or {MessageType.AUTORT_COMMAND})"
+                    )
+                    self._send_error(
+                        client, request_id, f"Invalid message type: {msg_type}"
+                    )
                     continue
 
                 # Read command length (4 bytes, little-endian)
@@ -373,8 +377,7 @@ class SequenceServer(TCPServerBase):
 
     def _recv_exact(self, client: socket.socket, num_bytes: int) -> Optional[bytes]:
         """
-        Receive exact number of bytes from client, preserving partial reads across
-        socket timeouts.
+        Receive exact number of bytes from client, preserving partial reads across socket timeouts.
 
         The client socket has a 1-second timeout so the outer loop can check
         is_running(). Without this guard, a timeout mid-read discards accumulated
@@ -422,13 +425,17 @@ class SequenceServer(TCPServerBase):
                 from servers.AutoRTIntegration import AutoRTHandler
 
             # Receive complete message using TCPServerBase helper
-            complete_message = self._receive_complete_autort_command(client, header_bytes)
+            complete_message = self._receive_complete_autort_command(
+                client, header_bytes
+            )
             if not complete_message:
                 logger.error("Failed to receive complete AutoRT command")
                 return
 
             # Decode using UnityProtocol (now accepts only bytes)
-            request_id, command_type, params = UnityProtocol.decode_autort_command(complete_message)
+            request_id, command_type, params = UnityProtocol.decode_autort_command(
+                complete_message
+            )
 
             logger.info(f"AutoRT command received: {command_type} (params={params})")
 
@@ -492,7 +499,9 @@ class SequenceServer(TCPServerBase):
             # Encode using UnityProtocol
             response_bytes = UnityProtocol.encode_autort_response(result, request_id)
             client.sendall(response_bytes)
-            logger.info(f"Sent AutoRT response for request {request_id}: success={result.get('success')}, status={result.get('status')}")
+            logger.info(
+                f"Sent AutoRT response for request {request_id}: success={result.get('success')}, status={result.get('status')}"
+            )
 
         except Exception as e:
             logger.error(f"Failed to send AutoRT response: {e}")
@@ -549,7 +558,6 @@ def run_sequence_server_background(
     config: Optional[Union[ServerConfig, Dict[str, Any]]] = None,
     lm_studio_url: Optional[str] = None,
     model: Optional[str] = None,
-    setup_signals: bool = False,  # noqa: ARG001
     check_completion: bool = True,
 ) -> SequenceServer:
     """
@@ -559,7 +567,6 @@ def run_sequence_server_background(
         config: Server configuration dictionary
         lm_studio_url: LM Studio URL for parsing
         model: Model name for parsing
-        setup_signals: Whether to set up signal handlers (False for threads)
         check_completion: Whether to wait for Unity completion signals
 
     Returns:

@@ -13,17 +13,15 @@ Tests the status check operations including:
 - Error handling
 """
 
-import pytest
-import time
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock
 
 from operations.StatusOperations import check_robot_status, CHECK_ROBOT_STATUS_OPERATION
-from operations.Base import OperationResult
 
 
 # ============================================================================
 # Test Class: Basic Status Operations
 # ============================================================================
+
 
 class TestStatusOperations:
     """Test basic status check operations."""
@@ -84,6 +82,7 @@ class TestStatusOperations:
 # Test Class: Parameter Validation
 # ============================================================================
 
+
 class TestStatusParameterValidation:
     """Test parameter validation for status operations."""
 
@@ -116,6 +115,7 @@ class TestStatusParameterValidation:
 # Test Class: Error Handling
 # ============================================================================
 
+
 class TestStatusErrors:
     """Test error handling for status operations."""
 
@@ -131,7 +131,9 @@ class TestStatusErrors:
 
     def test_status_network_error(self, patch_command_broadcaster):
         """Test status check when broadcaster raises exception."""
-        patch_command_broadcaster.send_command = Mock(side_effect=Exception("Network error"))
+        patch_command_broadcaster.send_command = Mock(
+            side_effect=Exception("Network error")
+        )
 
         result = check_robot_status("Robot1")
 
@@ -143,6 +145,7 @@ class TestStatusErrors:
 # ============================================================================
 # Test Class: Operation Definition
 # ============================================================================
+
 
 class TestStatusOperationDefinition:
     """Test the BasicOperation definition for status check."""

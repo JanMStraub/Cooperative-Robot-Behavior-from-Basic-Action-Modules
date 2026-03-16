@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 ROS Motion Client - ROS 2 Node for MoveIt Plan-Only Integration
 ================================================================
@@ -38,12 +39,15 @@ import signal
 import socket
 import threading
 import time
+from typing import Any
 
 try:
     from core.LoggingSetup import get_logger
+
     logger = get_logger(__name__)
 except ImportError:
     import logging
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -51,7 +55,11 @@ except ImportError:
     logger = logging.getLogger(__name__)
 
 try:
-    from config.ROS import MOVEIT_PLANNING_TIME, MOVEIT_PLANNING_ATTEMPTS, MOVEIT_GOAL_TOLERANCE
+    from config.ROS import (
+        MOVEIT_PLANNING_TIME,
+        MOVEIT_PLANNING_ATTEMPTS,
+        MOVEIT_GOAL_TOLERANCE,
+    )
 except ImportError:
     MOVEIT_PLANNING_TIME = 5.0
     MOVEIT_PLANNING_ATTEMPTS = 10
@@ -67,11 +75,11 @@ except ImportError:
 
 # ROS 2 imports - only available inside Docker
 try:
-    import rclpy
-    from rclpy.node import Node
-    from rclpy.action import ActionClient
-    from moveit_msgs.action import MoveGroup
-    from moveit_msgs.msg import (
+    import rclpy  # type: ignore[import-not-found]
+    from rclpy.node import Node  # type: ignore[import-not-found]
+    from rclpy.action import ActionClient  # type: ignore[import-not-found]
+    from moveit_msgs.action import MoveGroup  # type: ignore[import-not-found]
+    from moveit_msgs.msg import (  # type: ignore[import-not-found]
         MotionPlanRequest,
         Constraints,
         JointConstraint,
@@ -82,45 +90,47 @@ try:
         PlanningScene,
         CollisionObject,
     )
-    from moveit_msgs.srv import GetPositionIK, GetCartesianPath
-    from geometry_msgs.msg import PoseStamped, Point, Quaternion, Vector3, Pose
-    from shape_msgs.msg import SolidPrimitive
-    from trajectory_msgs.msg import JointTrajectory
-    from sensor_msgs.msg import JointState
-    from std_msgs.msg import String
+    from moveit_msgs.srv import GetPositionIK, GetCartesianPath  # type: ignore[import-not-found]
+    from geometry_msgs.msg import PoseStamped, Point, Quaternion, Vector3, Pose  # type: ignore[import-not-found]
+    from shape_msgs.msg import SolidPrimitive  # type: ignore[import-not-found]
+    from trajectory_msgs.msg import JointTrajectory  # type: ignore[import-not-found]
+    from sensor_msgs.msg import JointState  # type: ignore[import-not-found]
+    from std_msgs.msg import String  # type: ignore[import-not-found]
 
     HAS_ROS = True
     # GetCartesianPath gained velocity/acceleration scaling fields in moveit_msgs ~2.3.
     # Probe once at import time so _plan_cartesian_descent can set them unconditionally.
-    _CARTESIAN_HAS_SCALING = hasattr(GetCartesianPath.Request(), "max_velocity_scaling_factor")
+    _CARTESIAN_HAS_SCALING = hasattr(
+        GetCartesianPath.Request(), "max_velocity_scaling_factor"
+    )
 except ImportError:
     HAS_ROS = False
     _CARTESIAN_HAS_SCALING = False
     logger.warning("ROS 2 packages not available. Running in stub mode.")
-    rclpy = None  # type: ignore[assignment]
-    Node = None  # type: ignore[assignment,misc]
-    ActionClient = None  # type: ignore[assignment,misc]
-    MoveGroup = None  # type: ignore[assignment,misc]
-    MotionPlanRequest = None  # type: ignore[assignment,misc]
-    Constraints = None  # type: ignore[assignment,misc]
-    PositionConstraint = None  # type: ignore[assignment,misc]
-    OrientationConstraint = None  # type: ignore[assignment,misc]
-    BoundingVolume = None  # type: ignore[assignment,misc]
-    RobotState = None  # type: ignore[assignment,misc]
-    PlanningScene = None  # type: ignore[assignment,misc]
-    CollisionObject = None  # type: ignore[assignment,misc]
-    JointConstraint = None  # type: ignore[assignment,misc]
-    GetPositionIK = None  # type: ignore[assignment,misc]
-    GetCartesianPath = None  # type: ignore[assignment,misc]
-    PoseStamped = None  # type: ignore[assignment,misc]
-    Point = None  # type: ignore[assignment,misc]
-    Quaternion = None  # type: ignore[assignment,misc]
-    Vector3 = None  # type: ignore[assignment,misc]
-    Pose = None  # type: ignore[assignment,misc]
-    SolidPrimitive = None  # type: ignore[assignment,misc]
-    JointTrajectory = None  # type: ignore[assignment,misc]
-    JointState = None  # type: ignore[assignment,misc]
-    String = None  # type: ignore[assignment,misc]
+    rclpy: Any = None
+    Node: Any = None
+    ActionClient: Any = None
+    MoveGroup: Any = None
+    MotionPlanRequest: Any = None
+    Constraints: Any = None
+    PositionConstraint: Any = None
+    OrientationConstraint: Any = None
+    BoundingVolume: Any = None
+    RobotState: Any = None
+    PlanningScene: Any = None
+    CollisionObject: Any = None
+    JointConstraint: Any = None
+    GetPositionIK: Any = None
+    GetCartesianPath: Any = None
+    PoseStamped: Any = None
+    Point: Any = None
+    Quaternion: Any = None
+    Vector3: Any = None
+    Pose: Any = None
+    SolidPrimitive: Any = None
+    JointTrajectory: Any = None
+    JointState: Any = None
+    String: Any = None
 
 
 class ROSMotionServer:
@@ -138,7 +148,10 @@ class ROSMotionServer:
     # Robot1: Unity rotation (0, 0, 0, -1) = 360° = 0° effective rotation - facing forward (+Z in Unity)
     # Robot2: Unity rotation (0, 1, 0, 0) = 180° around Y - facing backward (-Z in Unity)
     ROBOT_BASE_TRANSFORMS = {
-        robot_id: {"position": pos, "y_rotation": 0.0 if robot_id == "Robot1" else 180.0}
+        robot_id: {
+            "position": pos,
+            "y_rotation": 0.0 if robot_id == "Robot1" else 180.0,
+        }
         for robot_id, pos in ROBOT_BASE_POSITIONS.items()
     }
 
@@ -147,12 +160,14 @@ class ROSMotionServer:
         self.host = host
         self.port = port
         self._running = False
-        self._node = None
+        self._node: Any = None
 
         # Multi-robot support: dict of robot_id -> clients/publishers
         self._move_group_clients = {}  # robot_id -> ActionClient
         self._ik_service_clients = {}  # robot_id -> Service Client for IK
-        self._cartesian_path_clients = {}  # robot_id -> Service Client for Cartesian paths
+        self._cartesian_path_clients = (
+            {}
+        )  # robot_id -> Service Client for Cartesian paths
         self._trajectory_pubs = {}  # robot_id -> Publisher
         self._gripper_pubs = {}  # robot_id -> Publisher
         self._joint_state_subs = {}  # robot_id -> Subscription
@@ -212,7 +227,9 @@ class ROSMotionServer:
         # 20-30s to fully initialize, and blocking in __init__ causes timeouts when
         # MoveIt is still starting. Instead, we check server availability at request
         # time in _call_move_group_plan with a generous timeout.
-        logger.info(f"Registered move_action client and IK service for {robot_id} (non-blocking)")
+        logger.info(
+            f"Registered move_action client and IK service for {robot_id} (non-blocking)"
+        )
 
         # Publisher: planned trajectories -> Unity's ROSTrajectorySubscriber
         self._trajectory_pubs[robot_id] = self._node.create_publisher(
@@ -302,7 +319,9 @@ class ROSMotionServer:
 
         scene.world.collision_objects = [ground]
         self._planning_scene_pubs[robot_id].publish(scene)
-        logger.info(f"Published ground plane collision object to {robot_id} planning scene")
+        logger.info(
+            f"Published ground plane collision object to {robot_id} planning scene"
+        )
 
     def _transform_world_to_local(self, world_position: dict, robot_id: str) -> dict:
         """Transform Unity world coordinates to ROS base_link coordinates.
@@ -402,7 +421,9 @@ class ROSMotionServer:
         except (json.JSONDecodeError, Exception):
             pass
 
-    def _wait_for_trajectory_completion(self, robot_id: str, timeout: float = 30.0) -> bool:
+    def _wait_for_trajectory_completion(
+        self, robot_id: str, timeout: float = 30.0
+    ) -> bool:
         """Wait until Unity reports the current trajectory as completed or aborted.
 
         Args:
@@ -646,7 +667,9 @@ class ROSMotionServer:
                         filtered_js.velocity.append(0.0)  # zero velocity at start
 
             start_state = RobotState()
-            start_state.is_diff = True  # Differential update: only override listed joints,
+            start_state.is_diff = (
+                True  # Differential update: only override listed joints,
+            )
             # keep remaining joints from MoveIt's current state.  Without is_diff=True,
             # unlisted joints default to 0 which can put the robot in collision with
             # itself or the ground plane — triggering UNKNOWN_ERROR_99999.
@@ -682,7 +705,9 @@ class ROSMotionServer:
         bounding_vol = BoundingVolume()
         primitive = SolidPrimitive()
         primitive.type = SolidPrimitive.SPHERE
-        primitive.dimensions = [MOVEIT_GOAL_TOLERANCE]  # position goal tolerance (from config.ROS)
+        primitive.dimensions = [
+            MOVEIT_GOAL_TOLERANCE
+        ]  # position goal tolerance (from config.ROS)
         bounding_vol.primitives.append(primitive)
         bounding_vol.primitive_poses.append(pose_goal.pose)
         pos_constraint.constraint_region = bounding_vol
@@ -941,12 +966,16 @@ class ROSMotionServer:
         # Minimum 15s ensures even instantaneous-plan trajectories have enough time.
         if trajectory.points:
             last_pt = trajectory.points[-1]
-            traj_duration = last_pt.time_from_start.sec + last_pt.time_from_start.nanosec * 1e-9
+            traj_duration = (
+                last_pt.time_from_start.sec + last_pt.time_from_start.nanosec * 1e-9
+            )
         else:
             traj_duration = 5.0
         execution_timeout = max(15.0, traj_duration * 2.5 + 10.0)
 
-        completed = self._wait_for_trajectory_completion(robot_id, timeout=execution_timeout)
+        completed = self._wait_for_trajectory_completion(
+            robot_id, timeout=execution_timeout
+        )
         if not completed:
             logger.warning(
                 f"{robot_id}: Trajectory completion not confirmed within {execution_timeout:.1f}s "
@@ -1041,7 +1070,11 @@ class ROSMotionServer:
         planning_time = request.get("planning_time", MOVEIT_PLANNING_TIME)
 
         if len(waypoints) < 1:
-            return {"success": False, "error": "At least one waypoint required", "robot_id": robot_id}
+            return {
+                "success": False,
+                "error": "At least one waypoint required",
+                "robot_id": robot_id,
+            }
 
         total_planning_time = 0.0
         total_points = 0
@@ -1113,7 +1146,11 @@ class ROSMotionServer:
         # Get current position from joint states to maintain it
         current_pose = self._get_current_pose(robot_id)
         if not current_pose.get("success"):
-            return {"success": False, "error": "Cannot get current pose for orientation change", "robot_id": robot_id}
+            return {
+                "success": False,
+                "error": "Cannot get current pose for orientation change",
+                "robot_id": robot_id,
+            }
 
         # Use plan_and_execute with current position and new orientation
         orient_request = {
@@ -1149,11 +1186,17 @@ class ROSMotionServer:
         cartesian_client = self._cartesian_path_clients.get(robot_id)
         if cartesian_client is None:
             logger.error(f"No Cartesian path client for {robot_id}")
-            return {"success": False, "error": f"No Cartesian path client for {robot_id}"}
+            return {
+                "success": False,
+                "error": f"No Cartesian path client for {robot_id}",
+            }
 
         if not cartesian_client.wait_for_service(timeout_sec=10.0):
             logger.error(f"Cartesian path service not available for {robot_id}")
-            return {"success": False, "error": "compute_cartesian_path service unavailable"}
+            return {
+                "success": False,
+                "error": "compute_cartesian_path service unavailable",
+            }
 
         position = request.get("position", {})
         orientation = request.get("orientation")
@@ -1191,8 +1234,8 @@ class ROSMotionServer:
         req.group_name = "arm"
         req.link_name = "ee_link"
         req.waypoints = [target_pose.pose]
-        req.max_step = 0.01          # 1cm maximum interpolation step along the path
-        req.jump_threshold = 0.0     # Disable jump detection (causes false failures)
+        req.max_step = 0.01  # 1cm maximum interpolation step along the path
+        req.jump_threshold = 0.0  # Disable jump detection (causes false failures)
         req.avoid_collisions = True
         # max_velocity/acceleration_scaling_factor were added to GetCartesianPath in
         # moveit_msgs ~2.3. _CARTESIAN_HAS_SCALING is set once at import time.
@@ -1231,7 +1274,9 @@ class ROSMotionServer:
                     filtered_js.name.append(name)
                     filtered_js.position.append(clamped)
             start_state = RobotState()
-            start_state.is_diff = True  # Differential update: only override listed joints
+            start_state.is_diff = (
+                True  # Differential update: only override listed joints
+            )
             start_state.joint_state = filtered_js
             req.start_state = start_state
 
@@ -1243,7 +1288,11 @@ class ROSMotionServer:
             time.sleep(0.05)
 
         if not future.done() or future.result() is None:
-            return {"success": False, "error": "Cartesian path planning timed out", "robot_id": robot_id}
+            return {
+                "success": False,
+                "error": "Cartesian path planning timed out",
+                "robot_id": robot_id,
+            }
 
         response = future.result()
         fraction = response.fraction
@@ -1258,7 +1307,11 @@ class ROSMotionServer:
                     f"{robot_id}: Cartesian path only {fraction*100:.0f}% complete — "
                     "goal likely unreachable or in collision, skipping free-space fallback"
                 )
-                return {"success": False, "error": f"Cartesian descent failed ({fraction*100:.0f}% complete) — goal unreachable", "robot_id": robot_id}
+                return {
+                    "success": False,
+                    "error": f"Cartesian descent failed ({fraction*100:.0f}% complete) — goal unreachable",
+                    "robot_id": robot_id,
+                }
 
             logger.warning(
                 f"{robot_id}: Cartesian path only {fraction*100:.0f}% complete — "
@@ -1269,7 +1322,11 @@ class ROSMotionServer:
 
         trajectory = response.solution.joint_trajectory
         if not trajectory.points:
-            return {"success": False, "error": "Cartesian path returned empty trajectory", "robot_id": robot_id}
+            return {
+                "success": False,
+                "error": "Cartesian path returned empty trajectory",
+                "robot_id": robot_id,
+            }
 
         logger.info(
             f"{robot_id}: Cartesian path {fraction*100:.0f}% complete, "
@@ -1284,14 +1341,20 @@ class ROSMotionServer:
 
         if trajectory.points:
             last_pt = trajectory.points[-1]
-            traj_duration = last_pt.time_from_start.sec + last_pt.time_from_start.nanosec * 1e-9
+            traj_duration = (
+                last_pt.time_from_start.sec + last_pt.time_from_start.nanosec * 1e-9
+            )
         else:
             traj_duration = 5.0
         execution_timeout = max(15.0, traj_duration * 2.5 + 10.0)
 
-        completed = self._wait_for_trajectory_completion(robot_id, timeout=execution_timeout)
+        completed = self._wait_for_trajectory_completion(
+            robot_id, timeout=execution_timeout
+        )
         if not completed:
-            logger.warning(f"{robot_id}: Cartesian trajectory completion not confirmed within {execution_timeout:.1f}s")
+            logger.warning(
+                f"{robot_id}: Cartesian trajectory completion not confirmed within {execution_timeout:.1f}s"
+            )
 
         return {
             "success": completed,
@@ -1368,8 +1431,12 @@ class ROSMotionServer:
             constraints.joint_constraints.append(jc)
         goal.request.goal_constraints.append(constraints)
 
-        logger.info(f"Planning return-to-start for {robot_id} (joint-space, all joints→0)")
-        trajectory, plan_time, error = self._call_move_group_plan(goal, robot_id, planning_time)
+        logger.info(
+            f"Planning return-to-start for {robot_id} (joint-space, all joints→0)"
+        )
+        trajectory, plan_time, error = self._call_move_group_plan(
+            goal, robot_id, planning_time
+        )
 
         if trajectory is None:
             return {"success": False, "error": error, "robot_id": robot_id}
@@ -1382,12 +1449,16 @@ class ROSMotionServer:
 
         if trajectory.points:
             last_pt = trajectory.points[-1]
-            traj_duration = last_pt.time_from_start.sec + last_pt.time_from_start.nanosec * 1e-9
+            traj_duration = (
+                last_pt.time_from_start.sec + last_pt.time_from_start.nanosec * 1e-9
+            )
         else:
             traj_duration = 5.0
         execution_timeout = max(15.0, traj_duration * 2.5 + 10.0)
 
-        completed = self._wait_for_trajectory_completion(robot_id, timeout=execution_timeout)
+        completed = self._wait_for_trajectory_completion(
+            robot_id, timeout=execution_timeout
+        )
         return {
             "success": completed,
             "robot_id": robot_id,
@@ -1476,7 +1547,9 @@ class ROSMotionServer:
                 ik_request.ik_request.group_name = "arm"
                 ik_request.ik_request.avoid_collisions = False  # Fast validation only
                 ik_request.ik_request.timeout.sec = 0
-                ik_request.ik_request.timeout.nanosec = 100_000_000  # 100ms per candidate
+                ik_request.ik_request.timeout.nanosec = (
+                    100_000_000  # 100ms per candidate
+                )
 
                 # Set target pose
                 ik_request.ik_request.pose_stamped.header.frame_id = "base_link"
@@ -1497,8 +1570,12 @@ class ROSMotionServer:
                 if joint_state is not None:
                     # Filter to arm joints only
                     arm_joint_names = [
-                        "joint_1", "joint_2", "joint_3",
-                        "joint_4", "joint_5", "joint_6"
+                        "joint_1",
+                        "joint_2",
+                        "joint_3",
+                        "joint_4",
+                        "joint_5",
+                        "joint_6",
                     ]
                     filtered_js = JointState()
                     filtered_js.header = joint_state.header
@@ -1521,7 +1598,7 @@ class ROSMotionServer:
         # generous deadline so a few slow candidates don't starve the rest.
         batch_timeout = 0.5 + len(candidates) * 0.1
         batch_deadline = time.time() + batch_timeout
-        results = [None] * len(candidates)
+        results: list = [None] * len(candidates)
 
         for i, future in futures:
             if future is None:
@@ -1546,7 +1623,9 @@ class ROSMotionServer:
                         logger.debug(f"Candidate {i}: IK valid")
                     else:
                         results[i] = (False, 0.0)
-                        logger.debug(f"Candidate {i}: IK failed (error={response.error_code.val})")
+                        logger.debug(
+                            f"Candidate {i}: IK failed (error={response.error_code.val})"
+                        )
                 except Exception as e:
                     logger.error(f"Error reading IK result for candidate {i}: {e}")
                     results[i] = (False, 0.0)

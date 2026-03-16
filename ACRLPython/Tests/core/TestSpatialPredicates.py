@@ -7,8 +7,7 @@ and multi-robot collision detection.
 """
 
 import pytest
-from unittest.mock import Mock, patch
-import math
+from unittest.mock import Mock
 
 from operations.WorldState import WorldState
 from operations.SpatialPredicates import (
@@ -23,7 +22,6 @@ from operations.SpatialPredicates import (
     robots_will_collide,
     evaluate_predicate,
     list_predicates,
-    PREDICATE_REGISTRY,
 )
 from config.Robot import ROBOT_BASE_POSITIONS, MAX_ROBOT_REACH, MIN_ROBOT_SEPARATION
 
@@ -203,7 +201,9 @@ class TestGripperPredicates:
 
     def test_gripper_is_open_false(self, mock_world_state):
         """Test gripper is closed"""
-        mock_world_state.get_robot_status = Mock(return_value={"gripper_state": "closed"})
+        mock_world_state.get_robot_status = Mock(
+            return_value={"gripper_state": "closed"}
+        )
 
         is_valid, reason = gripper_is_open("Robot1", mock_world_state)
 
@@ -212,7 +212,9 @@ class TestGripperPredicates:
 
     def test_gripper_is_closed_true(self, mock_world_state):
         """Test gripper is closed"""
-        mock_world_state.get_robot_status = Mock(return_value={"gripper_state": "closed"})
+        mock_world_state.get_robot_status = Mock(
+            return_value={"gripper_state": "closed"}
+        )
 
         is_valid, reason = gripper_is_closed("Robot1", mock_world_state)
 
@@ -230,7 +232,9 @@ class TestGripperPredicates:
 
     def test_gripper_state_unknown(self, mock_world_state):
         """Test unknown gripper state"""
-        mock_world_state.get_robot_status = Mock(return_value={"gripper_state": "unknown"})
+        mock_world_state.get_robot_status = Mock(
+            return_value={"gripper_state": "unknown"}
+        )
 
         is_valid, reason = gripper_is_open("Robot1", mock_world_state)
 
@@ -246,7 +250,9 @@ class TestObjectAccessibility:
         # Object within Robot1's left_workspace and reach
         object_pos = (-0.4, 0.0, 0.2)
 
-        is_valid, reason = object_accessible_by_robot("Robot1", object_pos, mock_world_state)
+        is_valid, reason = object_accessible_by_robot(
+            "Robot1", object_pos, mock_world_state
+        )
 
         assert is_valid is True
 
@@ -255,7 +261,9 @@ class TestObjectAccessibility:
         # Object in shared_zone
         object_pos = (0.0, 0.0, 0.2)
 
-        is_valid, reason = object_accessible_by_robot("Robot1", object_pos, mock_world_state)
+        is_valid, reason = object_accessible_by_robot(
+            "Robot1", object_pos, mock_world_state
+        )
 
         assert is_valid is True  # Shared zone accessible by all
 
@@ -264,7 +272,9 @@ class TestObjectAccessibility:
         # Object too far from Robot1
         object_pos = (2.0, 0.0, 0.2)
 
-        is_valid, reason = object_accessible_by_robot("Robot1", object_pos, mock_world_state)
+        is_valid, reason = object_accessible_by_robot(
+            "Robot1", object_pos, mock_world_state
+        )
 
         assert is_valid is False
         assert "not reachable" in reason
@@ -274,7 +284,9 @@ class TestObjectAccessibility:
         # Object in Robot2's right_workspace
         object_pos = (0.5, 0.0, 0.2)
 
-        is_valid, reason = object_accessible_by_robot("Robot1", object_pos, mock_world_state)
+        is_valid, reason = object_accessible_by_robot(
+            "Robot1", object_pos, mock_world_state
+        )
 
         assert is_valid is False
         # The predicate checks reachability first, so we expect "not reachable"
@@ -312,7 +324,11 @@ class TestMultiRobotCollision:
     def test_robots_will_collide_path_intersection(self, mock_world_state_multi_robot):
         """Test linear path collision detection"""
         # Setup robots with positions that will cross paths
-        mock_world_state_multi_robot._robot_states["Robot1"].position = (-0.3, -0.5, 0.1)
+        mock_world_state_multi_robot._robot_states["Robot1"].position = (
+            -0.3,
+            -0.5,
+            0.1,
+        )
         mock_world_state_multi_robot._robot_states["Robot2"].position = (0.3, 0.5, 0.1)
 
         # Targets that cross paths
@@ -365,19 +381,14 @@ class TestPredicateRegistry:
     def test_evaluate_predicate_valid(self, mock_world_state):
         """Test dynamic predicate evaluation"""
         is_valid, reason = evaluate_predicate(
-            "target_within_reach",
-            robot_id="Robot1",
-            x=0.0,
-            y=0.0,
-            z=0.2)
+            "target_within_reach", robot_id="Robot1", x=0.0, y=0.0, z=0.2
+        )
 
         assert is_valid is True
 
     def test_evaluate_predicate_unknown(self, mock_world_state):
         """Test unknown predicate evaluation"""
-        is_valid, reason = evaluate_predicate(
-            "unknown_predicate",
-            robot_id="Robot1")
+        is_valid, reason = evaluate_predicate("unknown_predicate", robot_id="Robot1")
 
         assert is_valid is False
         assert "Unknown predicate" in reason

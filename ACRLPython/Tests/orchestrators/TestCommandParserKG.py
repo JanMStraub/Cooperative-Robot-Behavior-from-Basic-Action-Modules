@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Tests for CommandParser Knowledge Graph Integration
 =====================================================
@@ -21,9 +22,14 @@ class TestCommandParserKG(unittest.TestCase):
         """Create a CommandParser with all heavy dependencies mocked out."""
         with (
             patch("orchestrators.CommandParser.RAGSystem", MagicMock()),
-            patch("orchestrators.CommandParser.FeedbackCollector", MagicMock(), create=True),
+            patch(
+                "orchestrators.CommandParser.FeedbackCollector",
+                MagicMock(),
+                create=True,
+            ),
         ):
             from orchestrators.CommandParser import CommandParser
+
             parser = CommandParser.__new__(CommandParser)
             parser.rag = None
             parser.feedback_collector = None
@@ -51,7 +57,12 @@ class TestCommandParserKG(unittest.TestCase):
         parser = self._make_parser()
         mock_qe = MagicMock()
         mock_qe.get_objects_in_reach.return_value = [
-            {"object_id": "red_cube", "distance": 0.45, "color": "red", "grasped_by": None},
+            {
+                "object_id": "red_cube",
+                "distance": 0.45,
+                "color": "red",
+                "grasped_by": None,
+            },
         ]
         mock_qe.find_robots_near.return_value = []
 
@@ -71,7 +82,12 @@ class TestCommandParserKG(unittest.TestCase):
         parser = self._make_parser()
         mock_qe = MagicMock()
         mock_qe.get_objects_in_reach.return_value = [
-            {"object_id": "blue_cube", "distance": 0.3, "color": "blue", "grasped_by": "Robot2"},
+            {
+                "object_id": "blue_cube",
+                "distance": 0.3,
+                "color": "blue",
+                "grasped_by": "Robot2",
+            },
         ]
         mock_qe.find_robots_near.return_value = []
 
@@ -88,7 +104,12 @@ class TestCommandParserKG(unittest.TestCase):
         parser = self._make_parser()
         mock_qe = MagicMock()
         mock_qe.get_objects_in_reach.return_value = [
-            {"object_id": f"obj_{i}", "distance": float(i) * 0.1, "color": "red", "grasped_by": None}
+            {
+                "object_id": f"obj_{i}",
+                "distance": float(i) * 0.1,
+                "color": "red",
+                "grasped_by": None,
+            }
             for i in range(10)
         ]
         mock_qe.find_robots_near.return_value = []
@@ -130,7 +151,9 @@ class TestCommandParserKG(unittest.TestCase):
         parser = self._make_parser()
         with (
             patch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True),
-            patch("core.Imports.get_graph_query_engine", side_effect=RuntimeError("boom")),
+            patch(
+                "core.Imports.get_graph_query_engine", side_effect=RuntimeError("boom")
+            ),
         ):
             result = parser._get_spatial_context("Robot1")
         self.assertEqual(result, "")

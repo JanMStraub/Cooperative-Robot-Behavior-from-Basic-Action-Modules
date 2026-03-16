@@ -223,14 +223,14 @@ class TestTCPServerBaseClientHandling:
                 address=("127.0.0.1", 12345),
                 state=ConnectionState.CONNECTED,
                 connected_at=now,
-                last_activity=now
+                last_activity=now,
             )
             server._client_info[mock_client2] = ClientInfo(
                 socket=mock_client2,
                 address=("127.0.0.1", 12346),
                 state=ConnectionState.CONNECTED,
                 connected_at=now,
-                last_activity=now
+                last_activity=now,
             )
 
         result = server.broadcast_to_all_clients(b"test_data")
@@ -261,14 +261,14 @@ class TestTCPServerBaseClientHandling:
                 address=("127.0.0.1", 12345),
                 state=ConnectionState.CONNECTED,
                 connected_at=now,
-                last_activity=now
+                last_activity=now,
             )
             server._client_info[mock_client2] = ClientInfo(
                 socket=mock_client2,
                 address=("127.0.0.1", 12346),
                 state=ConnectionState.CONNECTED,
                 connected_at=now,
-                last_activity=now
+                last_activity=now,
             )
 
         assert server.get_client_count() == 2

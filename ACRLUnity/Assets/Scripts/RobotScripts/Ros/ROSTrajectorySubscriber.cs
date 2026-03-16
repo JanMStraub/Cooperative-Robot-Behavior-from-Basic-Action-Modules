@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
-using Unity.Robotics.ROSTCPConnector;
-using RosMessageTypes.Trajectory;
 using RosMessageTypes.Std;
+using RosMessageTypes.Trajectory;
+using Unity.Robotics.ROSTCPConnector;
 using UnityEngine;
 
 namespace Robotics
@@ -23,7 +23,9 @@ namespace Robotics
         [SerializeField]
         private string _trajectoryTopic = "/{robot_id}/arm_controller/joint_trajectory";
 
-        [Tooltip("ROS topic for trajectory execution feedback (use {robot_id} for per-robot topics)")]
+        [Tooltip(
+            "ROS topic for trajectory execution feedback (use {robot_id} for per-robot topics)"
+        )]
         [SerializeField]
         private string _feedbackTopic = "/{robot_id}/arm_controller/feedback";
 
@@ -37,18 +39,24 @@ namespace Robotics
         private float _maxPointGap = 5f;
 
         [Header("Speed Control")]
-        [Tooltip("Speed scaling factor for trajectory execution (1.0 = normal speed, 0.5 = half speed, 2.0 = double speed)")]
+        [Tooltip(
+            "Speed scaling factor for trajectory execution (1.0 = normal speed, 0.5 = half speed, 2.0 = double speed)"
+        )]
         [SerializeField]
         [Range(0.1f, 2.0f)]
         private float _speedScaling = 0.5f; // Default to 50% speed for slower, more visible motion
 
         [Header("Settle Detection")]
-        [Tooltip("Max joint velocity (deg/s) considered 'settled'. Feedback fires only after all joints drop below this.")]
+        [Tooltip(
+            "Max joint velocity (deg/s) considered 'settled'. Feedback fires only after all joints drop below this."
+        )]
         [SerializeField]
         private float _settleVelocityThresholdDegPerSec = 5.0f;
 
-        [Tooltip("Base time (seconds) to wait for joints to settle before firing 'completed' feedback anyway. "
-               + "Actual timeout = this value / _speedScaling so slower trajectories get proportionally more settle time.")]
+        [Tooltip(
+            "Base time (seconds) to wait for joints to settle before firing 'completed' feedback anyway. "
+                + "Actual timeout = this value / _speedScaling so slower trajectories get proportionally more settle time."
+        )]
         [SerializeField]
         private float _settleTimeoutSeconds = 2.0f;
 
@@ -56,8 +64,10 @@ namespace Robotics
         [SerializeField]
         private RobotController _robotController;
 
-        [Tooltip("Used to determine whether ROS or Unity IK owns the arm after trajectory completion. "
-               + "Auto-found on the same GameObject if not assigned.")]
+        [Tooltip(
+            "Used to determine whether ROS or Unity IK owns the arm after trajectory completion. "
+                + "Auto-found on the same GameObject if not assigned."
+        )]
         [SerializeField]
         private ROSControlModeManager _controlModeManager;
 
@@ -87,7 +97,12 @@ namespace Robotics
         /// </summary>
         private static readonly string[] ExpectedJointNames =
         {
-            "joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6"
+            "joint_1",
+            "joint_2",
+            "joint_3",
+            "joint_4",
+            "joint_5",
+            "joint_6",
         };
 
         private void Start()
@@ -159,7 +174,7 @@ namespace Robotics
 
             Debug.Log(
                 $"{_logPrefix} Executing trajectory with {msg.points.Length} points "
-                + $"for {_robotController.robotId}"
+                    + $"for {_robotController.robotId}"
             );
 
             // Set IsManuallyDriven immediately (before the coroutine's first frame) so
@@ -193,9 +208,7 @@ namespace Robotics
 
                 if (found < 0 || found >= _joints.Length)
                 {
-                    Debug.LogError(
-                        $"{_logPrefix} Unknown joint name: {trajectoryJointNames[i]}"
-                    );
+                    Debug.LogError($"{_logPrefix} Unknown joint name: {trajectoryJointNames[i]}");
                     return null;
                 }
 
@@ -223,7 +236,7 @@ namespace Robotics
                 {
                     Debug.LogError(
                         $"{_logPrefix} Non-monotonic time at point {p}: "
-                        + $"{pointTime:F4}s < prev {prevTime:F4}s"
+                            + $"{pointTime:F4}s < prev {prevTime:F4}s"
                     );
                     return false;
                 }
@@ -248,7 +261,7 @@ namespace Robotics
                         {
                             Debug.LogError(
                                 $"{_logPrefix} Joint {idx} position {posDeg:F1} deg exceeds limits "
-                                + $"[{joint.xDrive.lowerLimit:F1}, {joint.xDrive.upperLimit:F1}]"
+                                    + $"[{joint.xDrive.lowerLimit:F1}, {joint.xDrive.upperLimit:F1}]"
                             );
                             return false;
                         }
@@ -267,7 +280,7 @@ namespace Robotics
                         {
                             Debug.LogWarning(
                                 $"{_logPrefix} Joint {j} planned velocity {point.velocities[j]:F2} rad/s "
-                                + $"exceeds scaled limit {effectiveLimit:F2} — will be clamped during execution."
+                                    + $"exceeds scaled limit {effectiveLimit:F2} — will be clamped during execution."
                             );
                         }
                     }
@@ -299,9 +312,8 @@ namespace Robotics
             for (int j = 0; j < _jointIndexMap.Length; j++)
             {
                 int idx = _jointIndexMap[j];
-                startPositions[j] = _joints[idx].jointPosition.dofCount > 0
-                    ? _joints[idx].jointPosition[0]
-                    : 0.0;
+                startPositions[j] =
+                    _joints[idx].jointPosition.dofCount > 0 ? _joints[idx].jointPosition[0] : 0.0;
             }
 
             JointTrajectoryPointMsg prevPoint = null;
@@ -310,8 +322,8 @@ namespace Robotics
             for (int p = 0; p < msg.points.Length; p++)
             {
                 var targetPoint = msg.points[p];
-                double targetTime = targetPoint.time_from_start.sec
-                    + targetPoint.time_from_start.nanosec * 1e-9;
+                double targetTime =
+                    targetPoint.time_from_start.sec + targetPoint.time_from_start.nanosec * 1e-9;
 
                 // Always interpolate from actual physics state for the first segment.
                 // For subsequent segments use the previous planned point so the overall
@@ -360,8 +372,12 @@ namespace Robotics
                             // Use cubic Hermite when velocity data is available on both ends.
                             // This matches MoveIt's trajectory intent and eliminates velocity
                             // discontinuities at waypoints (the main source of visible jerks).
-                            if (fromVelocities != null && toVelocities != null
-                                && j < fromVelocities.Length && j < toVelocities.Length)
+                            if (
+                                fromVelocities != null
+                                && toVelocities != null
+                                && j < fromVelocities.Length
+                                && j < toVelocities.Length
+                            )
                             {
                                 // Convert MoveIt rad/s velocities to normalised-time tangents.
                                 // The Hermite curve is parameterised over t ∈ [0,1] mapping to
@@ -373,14 +389,15 @@ namespace Robotics
                                 // rawSegmentDuration (not the scaled wall-clock value) keeps the
                                 // curve shape identical to MoveIt's intent.
                                 double v0 = fromVelocities[j] * rawSegmentDuration;
-                                double v1 = toVelocities[j]   * rawSegmentDuration;
+                                double v1 = toVelocities[j] * rawSegmentDuration;
                                 double t2 = t * t;
                                 double t3 = t2 * t;
                                 // Standard cubic Hermite basis functions
-                                interpRad = (2*t3 - 3*t2 + 1) * p0
-                                          + (t3 - 2*t2 + t)   * v0
-                                          + (-2*t3 + 3*t2)    * p1
-                                          + (t3 - t2)         * v1;
+                                interpRad =
+                                    (2 * t3 - 3 * t2 + 1) * p0
+                                    + (t3 - 2 * t2 + t) * v0
+                                    + (-2 * t3 + 3 * t2) * p1
+                                    + (t3 - t2) * v1;
                             }
                             else
                             {
@@ -392,7 +409,11 @@ namespace Robotics
                             float targetDeg = (float)interpRad * Mathf.Rad2Deg;
 
                             ArticulationDrive drive = _joints[idx].xDrive;
-                            drive.target = Mathf.Clamp(targetDeg, drive.lowerLimit, drive.upperLimit);
+                            drive.target = Mathf.Clamp(
+                                targetDeg,
+                                drive.lowerLimit,
+                                drive.upperLimit
+                            );
                             _joints[idx].xDrive = drive;
 
                             if (idx < _robotController.jointDriveTargets.Length)
@@ -425,9 +446,10 @@ namespace Robotics
                 for (int j = 0; j < _jointIndexMap.Length; j++)
                 {
                     int idx = _jointIndexMap[j];
-                    float velDegPerSec = _joints[idx].jointVelocity.dofCount > 0
-                        ? Mathf.Abs(_joints[idx].jointVelocity[0]) * Mathf.Rad2Deg
-                        : 0f;
+                    float velDegPerSec =
+                        _joints[idx].jointVelocity.dofCount > 0
+                            ? Mathf.Abs(_joints[idx].jointVelocity[0]) * Mathf.Rad2Deg
+                            : 0f;
                     if (velDegPerSec > _settleVelocityThresholdDegPerSec)
                     {
                         settled = false;
@@ -454,8 +476,8 @@ namespace Robotics
             // start from the current pose (zero error) or it will fight the ROS position.
             // In Unity mode the IK owns motion end-to-end and manages its own target, so
             // we must NOT overwrite it here.
-            bool isROSControlled = _controlModeManager == null
-                || _controlModeManager.CurrentMode != ControlMode.Unity;
+            bool isROSControlled =
+                _controlModeManager == null || _controlModeManager.CurrentMode != ControlMode.Unity;
 
             if (isROSControlled)
             {
@@ -513,9 +535,10 @@ namespace Robotics
 
             var feedback = new StringMsg
             {
-                data = $"{{\"robot_id\":\"{_robotController.robotId}\","
+                data =
+                    $"{{\"robot_id\":\"{_robotController.robotId}\","
                     + $"\"status\":\"{status}\",\"message\":\"{message}\","
-                    + $"\"timestamp\":{Time.time}}}"
+                    + $"\"timestamp\":{Time.time}}}",
             };
 
             _ros.Publish(_resolvedFeedbackTopic, feedback);

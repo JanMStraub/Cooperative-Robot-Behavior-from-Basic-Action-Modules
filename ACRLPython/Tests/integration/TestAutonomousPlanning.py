@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Test Autonomous Planning for Multi-Robot Coordination
 ======================================================
@@ -22,6 +23,7 @@ def is_llm_available():
     """Check if LM Studio is running and responding."""
     try:
         from rag.Embeddings import EmbeddingGenerator
+
         gen = EmbeddingGenerator()
         return gen.use_lm_studio
     except Exception:
@@ -56,13 +58,17 @@ class TestAutonomousPlanning(unittest.TestCase):
         self.assertIn("move_to_coordinate", ops_summary.lower())
 
         print(f"✓ Operations summary generated ({len(ops_summary)} chars)")
-        print(f"  Contains workflow patterns: {'WORKFLOW PATTERN' in ops_summary or 'workflow' in ops_summary.lower()}")
+        print(
+            f"  Contains workflow patterns: {'WORKFLOW PATTERN' in ops_summary or 'workflow' in ops_summary.lower()}"
+        )
 
     def test_workflow_registry_integration(self):
         """Test workflow registry is properly integrated"""
         # Verify workflow registry has patterns
         all_patterns = self.workflow_registry.get_all_patterns()
-        self.assertGreater(len(all_patterns), 0, "Workflow registry should have patterns")
+        self.assertGreater(
+            len(all_patterns), 0, "Workflow registry should have patterns"
+        )
 
         # Verify handoff pattern exists
         handoff = self.workflow_registry.get_pattern_by_name("handoff")
@@ -74,7 +80,9 @@ class TestAutonomousPlanning(unittest.TestCase):
         print(f"✓ Workflow registry has {len(all_patterns)} patterns")
         print(f"  Handoff pattern has {len(handoff.steps)} steps")
 
-    @pytest.mark.skipif(not LLM_AVAILABLE, reason="Requires LM Studio with embedding model")
+    @pytest.mark.skipif(
+        not LLM_AVAILABLE, reason="Requires LM Studio with embedding model"
+    )
     def test_handoff_plan_generation(self):
         """Test full pipeline generates valid parallel groups for handoff"""
         result = self.parser.parse(
@@ -105,9 +113,7 @@ class TestAutonomousPlanning(unittest.TestCase):
                 self.assertGreater(
                     len(signals), 0, "Multi-robot plan should have signals"
                 )
-                self.assertGreater(
-                    len(waits), 0, "Multi-robot plan should have waits"
-                )
+                self.assertGreater(len(waits), 0, "Multi-robot plan should have waits")
         else:
             print("  No parallel_group (LLM may be unavailable, using fallback)")
 
@@ -183,7 +189,9 @@ class TestAutonomousPlanning(unittest.TestCase):
 
         print(f"✓ Validation passed for valid plan with {len(valid_plan)} commands")
 
-    @pytest.mark.skipif(not LLM_AVAILABLE, reason="Requires LM Studio with embedding model")
+    @pytest.mark.skipif(
+        not LLM_AVAILABLE, reason="Requires LM Studio with embedding model"
+    )
     def test_simultaneous_movement_command(self):
         """Test parsing command for simultaneous robot movement"""
         result = self.parser.parse(
@@ -197,12 +205,18 @@ class TestAutonomousPlanning(unittest.TestCase):
         self.assertIsInstance(commands, list)
 
         # Should have at least 2 move commands
-        move_commands = [c for c in commands if c.get("operation") == "move_to_coordinate"]
-        self.assertGreaterEqual(len(move_commands), 2, "Should have moves for both robots")
+        move_commands = [
+            c for c in commands if c.get("operation") == "move_to_coordinate"
+        ]
+        self.assertGreaterEqual(
+            len(move_commands), 2, "Should have moves for both robots"
+        )
 
         print(f"✓ Simultaneous movement: {len(move_commands)} move commands")
 
-    @pytest.mark.skipif(not LLM_AVAILABLE, reason="Requires LM Studio with embedding model")
+    @pytest.mark.skipif(
+        not LLM_AVAILABLE, reason="Requires LM Studio with embedding model"
+    )
     def test_collaborative_task_command(self):
         """Test parsing collaborative task command"""
         result = self.parser.parse(

@@ -13,7 +13,8 @@ from unittest.mock import Mock, patch, MagicMock
 # Import modules under test
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from servers.AutoRTIntegration import AutoRTHandler
 from autort.DataModels import ProposedTask, Operation
@@ -23,13 +24,17 @@ from config.AutoRT import (
 )
 
 
-def _make_task(description="Test task", task_id=None, operations=None, required_robots=None):
+def _make_task(
+    description="Test task", task_id=None, operations=None, required_robots=None
+):
     """Helper to create a ProposedTask object for caching tests."""
     import uuid
+
     return ProposedTask(
         task_id=task_id or str(uuid.uuid4()),
         description=description,
-        operations=operations or [Operation(type="wait", robot_id="Robot1", parameters={"seconds": 1})],
+        operations=operations
+        or [Operation(type="wait", robot_id="Robot1", parameters={"seconds": 1})],
         required_robots=required_robots or ["Robot1"],
         estimated_complexity=1,
         reasoning="test",
@@ -65,10 +70,14 @@ class TestAutoRTHandler(unittest.TestCase):
 
     def test_initial_state(self):
         """Test initial state of handler."""
-        self.assertIsNone(self.handler._orchestrator, "Orchestrator should be lazy-initialized")
+        self.assertIsNone(
+            self.handler._orchestrator, "Orchestrator should be lazy-initialized"
+        )
         self.assertIsNone(self.handler._loop_thread, "No loop thread initially")
         self.assertFalse(self.handler._loop_running, "Loop should not be running")
-        self.assertEqual(len(self.handler._pending_tasks), 0, "No pending tasks initially")
+        self.assertEqual(
+            len(self.handler._pending_tasks), 0, "No pending tasks initially"
+        )
         self.assertIsNone(self.handler._task_callback, "No callback initially")
 
     def test_set_task_callback(self):
@@ -86,7 +95,10 @@ class TestAutoRTHandler(unittest.TestCase):
 
         # Mock scene capture
         from autort.DataModels import SceneDescription
-        mock_scene = SceneDescription(timestamp=0.0, objects=[], scene_summary="test", robot_states={})
+
+        mock_scene = SceneDescription(
+            timestamp=0.0, objects=[], scene_summary="test", robot_states={}
+        )
         mock_orchestrator._capture_scene.return_value = mock_scene
 
         # Mock task candidates (ProposedTask objects)
@@ -102,11 +114,15 @@ class TestAutoRTHandler(unittest.TestCase):
         mock_orchestrator.constitution.evaluate_task.return_value = mock_verdict
 
         # Mock selection
-        mock_orchestrator.task_selector.select_task.side_effect = mock_candidates + [None]
+        mock_orchestrator.task_selector.select_task.side_effect = mock_candidates + [
+            None
+        ]
 
         # Generate tasks with safety validation disabled to avoid the full stack
-        with patch('servers.AutoRTIntegration.ENABLE_SAFETY_VALIDATION', False):
-            result = self.handler.generate_tasks(num_tasks=2, robot_ids=["Robot1", "Robot2"])
+        with patch("servers.AutoRTIntegration.ENABLE_SAFETY_VALIDATION", False):
+            result = self.handler.generate_tasks(
+                num_tasks=2, robot_ids=["Robot1", "Robot2"]
+            )
 
         # Assertions
         self.assertTrue(result["success"], "Should succeed")
@@ -132,7 +148,10 @@ class TestAutoRTHandler(unittest.TestCase):
         self.handler._orchestrator = mock_orchestrator
 
         from autort.DataModels import SceneDescription
-        mock_scene = SceneDescription(timestamp=0.0, objects=[], scene_summary="test", robot_states={})
+
+        mock_scene = SceneDescription(
+            timestamp=0.0, objects=[], scene_summary="test", robot_states={}
+        )
         mock_orchestrator._capture_scene.return_value = mock_scene
 
         task_valid1 = _make_task("Valid 1", task_id="v1")
@@ -145,12 +164,18 @@ class TestAutoRTHandler(unittest.TestCase):
         def mock_evaluate(task, scene):
             verdict = MagicMock()
             verdict.warnings = []
-            verdict.approved = (task.description != "Invalid")
-            verdict.rejection_reason = "Safety violation" if task.description == "Invalid" else ""
+            verdict.approved = task.description != "Invalid"
+            verdict.rejection_reason = (
+                "Safety violation" if task.description == "Invalid" else ""
+            )
             return verdict
 
         mock_orchestrator.constitution.evaluate_task.side_effect = mock_evaluate
-        mock_orchestrator.task_selector.select_task.side_effect = [task_valid1, task_valid2, None]
+        mock_orchestrator.task_selector.select_task.side_effect = [
+            task_valid1,
+            task_valid2,
+            None,
+        ]
 
         result = self.handler.generate_tasks(num_tasks=3)
 
@@ -163,7 +188,10 @@ class TestAutoRTHandler(unittest.TestCase):
         self.handler._orchestrator = mock_orchestrator
 
         from autort.DataModels import SceneDescription
-        mock_scene = SceneDescription(timestamp=0.0, objects=[], scene_summary="test", robot_states={})
+
+        mock_scene = SceneDescription(
+            timestamp=0.0, objects=[], scene_summary="test", robot_states={}
+        )
         mock_orchestrator._capture_scene.return_value = mock_scene
         mock_orchestrator.task_generator.generate_tasks.return_value = []
 
@@ -219,13 +247,18 @@ class TestAutoRTHandler(unittest.TestCase):
         mock_orchestrator = MagicMock()
         self.handler._orchestrator = mock_orchestrator
         from autort.DataModels import SceneDescription
-        mock_scene = SceneDescription(timestamp=0.0, objects=[], scene_summary="", robot_states={})
+
+        mock_scene = SceneDescription(
+            timestamp=0.0, objects=[], scene_summary="", robot_states={}
+        )
         mock_orchestrator._capture_scene.return_value = mock_scene
         mock_orchestrator.task_generator.generate_tasks.return_value = []
 
         # Start loop first
-        with patch('servers.AutoRTIntegration.ENABLE_SAFETY_VALIDATION', False):
-            self.handler.start_loop(loop_delay=60.0)  # Long delay so loop sleeps after 1st iter
+        with patch("servers.AutoRTIntegration.ENABLE_SAFETY_VALIDATION", False):
+            self.handler.start_loop(
+                loop_delay=60.0
+            )  # Long delay so loop sleeps after 1st iter
         time.sleep(0.1)  # Let it start and complete first iteration
 
         # Stop loop
@@ -260,10 +293,7 @@ class TestAutoRTHandler(unittest.TestCase):
         task_id = self.handler._cache_task(task)
 
         # Mock execution
-        mock_orchestrator._execute_task.return_value = {
-            "success": True,
-            "error": None
-        }
+        mock_orchestrator._execute_task.return_value = {"success": True, "error": None}
 
         # Execute
         result = self.handler.execute_task(task_id)
@@ -339,8 +369,11 @@ class TestAutoRTHandler(unittest.TestCase):
 
         # Manually set timestamp to expired
         from datetime import datetime, timedelta
+
         with self.handler._task_lock:
-            expired_time = datetime.now() - timedelta(seconds=TASK_EXPIRATION_SECONDS + 1)
+            expired_time = datetime.now() - timedelta(
+                seconds=TASK_EXPIRATION_SECONDS + 1
+            )
             self.handler._pending_tasks[task_id] = (task, expired_time)
 
         # Run cleanup
@@ -360,11 +393,11 @@ class TestAutoRTHandler(unittest.TestCase):
             description="Move to position",
             operations=[
                 Operation(type="move", robot_id="Robot1", parameters={}),
-                Operation(type="grasp", robot_id="Robot1", parameters={})
+                Operation(type="grasp", robot_id="Robot1", parameters={}),
             ],
             required_robots=["Robot1"],
             estimated_complexity=3,
-            reasoning="Need to pick up object"
+            reasoning="Need to pick up object",
         )
 
         serialized = self.handler._serialize_task(task)
@@ -383,7 +416,10 @@ class TestAutoRTHandler(unittest.TestCase):
         self.handler._orchestrator = mock_orchestrator
 
         from autort.DataModels import SceneDescription
-        mock_scene = SceneDescription(timestamp=0.0, objects=[], scene_summary="test", robot_states={})
+
+        mock_scene = SceneDescription(
+            timestamp=0.0, objects=[], scene_summary="test", robot_states={}
+        )
         mock_orchestrator._capture_scene.return_value = mock_scene
         loop_task = _make_task("Loop task")
         mock_orchestrator.task_generator.generate_tasks.return_value = [loop_task]
@@ -400,7 +436,7 @@ class TestAutoRTHandler(unittest.TestCase):
         self.handler.set_task_callback(mock_callback)
 
         # Start loop with short delay (safety validation disabled for speed)
-        with patch('servers.AutoRTIntegration.ENABLE_SAFETY_VALIDATION', False):
+        with patch("servers.AutoRTIntegration.ENABLE_SAFETY_VALIDATION", False):
             self.handler.start_loop(loop_delay=0.2, robot_ids=["Robot1"])
 
         # Wait for at least one callback
@@ -451,7 +487,9 @@ class TestAutoRTProtocol(unittest.TestCase):
         encoded = UnityProtocol.encode_autort_command(command_type, params, request_id)
 
         # Decode
-        decoded_request_id, decoded_command, decoded_params = UnityProtocol.decode_autort_command(encoded)
+        decoded_request_id, decoded_command, decoded_params = (
+            UnityProtocol.decode_autort_command(encoded)
+        )
 
         # Verify
         self.assertEqual(decoded_request_id, request_id)
@@ -472,11 +510,11 @@ class TestAutoRTProtocol(unittest.TestCase):
                     "operations": [],
                     "required_robots": ["Robot1"],
                     "estimated_complexity": 2,
-                    "reasoning": "Test"
+                    "reasoning": "Test",
                 }
             ],
             "loop_running": False,
-            "error": None
+            "error": None,
         }
         request_id = 67890
 
@@ -484,7 +522,9 @@ class TestAutoRTProtocol(unittest.TestCase):
         encoded = UnityProtocol.encode_autort_response(response_data, request_id)
 
         # Decode
-        decoded_request_id, decoded_response = UnityProtocol.decode_autort_response(encoded)
+        decoded_request_id, decoded_response = UnityProtocol.decode_autort_response(
+            encoded
+        )
 
         # Verify
         self.assertEqual(decoded_request_id, request_id)

@@ -48,7 +48,7 @@ namespace PythonCommunication.Core
         /// </summary>
         private static void WriteInt32LE(byte[] buffer, ref int offset, int value)
         {
-            buffer[offset]     = (byte)(value);
+            buffer[offset] = (byte)(value);
             buffer[offset + 1] = (byte)(value >> 8);
             buffer[offset + 2] = (byte)(value >> 16);
             buffer[offset + 3] = (byte)(value >> 24);
@@ -107,10 +107,11 @@ namespace PythonCommunication.Core
 
             // Explicit little-endian decode — matches EncodeHeader's bit-shift writes
             // and avoids BitConverter's platform-endian dependency.
-            requestId = (uint)data[offset]
-                      | ((uint)data[offset + 1] << 8)
-                      | ((uint)data[offset + 2] << 16)
-                      | ((uint)data[offset + 3] << 24);
+            requestId =
+                (uint)data[offset]
+                | ((uint)data[offset + 1] << 8)
+                | ((uint)data[offset + 2] << 16)
+                | ((uint)data[offset + 3] << 24);
             offset += INT_SIZE;
 
             return offset;

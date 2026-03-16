@@ -10,7 +10,6 @@ Note: WorldState workspace API uses (region, robot_id) parameter order.
 
 import pytest
 import time
-from unittest.mock import Mock, patch
 from operations.WorldState import (
     WorldState,
     get_world_state,
@@ -23,14 +22,11 @@ class TestWorkspaceAutoRelease:
 
     def test_workspace_allocation_structure(self, cleanup_world_state):
         """Test WorkspaceAllocation dataclass has required fields"""
-        allocation = WorkspaceAllocation(
-            robot_id="Robot1",
-            region="left_workspace"
-        )
+        allocation = WorkspaceAllocation(robot_id="Robot1", region="left_workspace")
 
         assert allocation.robot_id == "Robot1"
         assert allocation.region == "left_workspace"
-        assert hasattr(allocation, 'allocated_at')
+        assert hasattr(allocation, "allocated_at")
         assert isinstance(allocation.allocated_at, float)
 
     def test_allocate_workspace_fresh(self, cleanup_world_state):
@@ -56,7 +52,9 @@ class TestWorkspaceAutoRelease:
 
         assert result is True  # Should succeed (same owner)
 
-    def test_allocate_workspace_already_owned_different_robot(self, cleanup_world_state):
+    def test_allocate_workspace_already_owned_different_robot(
+        self, cleanup_world_state
+    ):
         """Test allocating a workspace owned by another robot"""
         world_state = get_world_state()
 
@@ -147,7 +145,7 @@ class TestWorkspaceAutoRelease:
         world_state = get_world_state()
 
         # Default timeout should be 60 seconds
-        assert hasattr(world_state, '_workspace_timeout')
+        assert hasattr(world_state, "_workspace_timeout")
         assert world_state._workspace_timeout == 60.0
 
     def test_configurable_timeout(self, cleanup_world_state):
@@ -240,6 +238,7 @@ class TestWorkspaceAutoRelease:
     def test_stale_allocation_warning_logged(self, cleanup_world_state, caplog):
         """Test that stale allocation cleanup logs a warning"""
         import logging
+
         world_state = get_world_state()
 
         # Set short timeout
@@ -256,8 +255,10 @@ class TestWorkspaceAutoRelease:
             world_state._cleanup_stale_allocations()
 
         # Verify warning was logged
-        assert any("Auto-releasing stale allocation" in record.message
-                   for record in caplog.records)
+        assert any(
+            "Auto-releasing stale allocation" in record.message
+            for record in caplog.records
+        )
 
     def test_multiple_robots_same_region_sequential(self, cleanup_world_state):
         """Test multiple robots can use same region sequentially after timeout"""

@@ -14,14 +14,12 @@ all major components of the robot control system including:
 
 import pytest
 import numpy as np
-import json
 import time
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 from operations.MoveOperations import move_to_coordinate
 from operations.GripperOperations import control_gripper
 from operations.DetectionOperations import detect_objects
-from operations.Base import OperationResult
 from orchestrators.CommandParser import CommandParser
 from servers.ImageServer import UnifiedImageStorage
 from servers.CommandServer import CommandBroadcaster
@@ -30,6 +28,7 @@ from servers.CommandServer import CommandBroadcaster
 # ============================================================================
 # Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def mock_broadcaster():
@@ -49,55 +48,54 @@ def mock_broadcaster():
 # Test Extreme Coordinate Values
 # ============================================================================
 
+
 class TestExtremeCoordinateValues:
     """Test operations with extreme coordinate values"""
 
     def test_move_with_maximum_valid_coordinates(self, mock_broadcaster):
         """Test movement at maximum valid coordinate limits"""
-        with patch('config.ROS.ROS_ENABLED', False), \
-             patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
+        with patch("config.ROS.ROS_ENABLED", False), patch(
+            "operations.MoveOperations._get_command_broadcaster",
+            return_value=mock_broadcaster,
+        ):
             result = move_to_coordinate(
                 robot_id="Robot1",
                 x=0.65,  # Maximum X (workspace bound: [-0.65, 0.65])
-                y=0.7,   # Maximum Y (workspace bound: [0.0, 0.7])
-                z=0.5    # Maximum Z (workspace bound: [-0.5, 0.5])
+                y=0.7,  # Maximum Y (workspace bound: [0.0, 0.7])
+                z=0.5,  # Maximum Z (workspace bound: [-0.5, 0.5])
             )
 
             assert result["success"] is True
 
     def test_move_with_minimum_valid_coordinates(self, mock_broadcaster):
         """Test movement at minimum valid coordinate limits"""
-        with patch('config.ROS.ROS_ENABLED', False), \
-             patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
+        with patch("config.ROS.ROS_ENABLED", False), patch(
+            "operations.MoveOperations._get_command_broadcaster",
+            return_value=mock_broadcaster,
+        ):
             result = move_to_coordinate(
                 robot_id="Robot1",
                 x=-0.65,  # Minimum X (workspace bound: [-0.65, 0.65])
-                y=0.0,    # Minimum Y (workspace bound: [0.0, 0.7])
-                z=-0.5    # Minimum Z (workspace bound: [-0.5, 0.5])
+                y=0.0,  # Minimum Y (workspace bound: [0.0, 0.7])
+                z=-0.5,  # Minimum Z (workspace bound: [-0.5, 0.5])
             )
 
             assert result["success"] is True
 
     def test_move_with_zero_coordinates(self, mock_broadcaster):
         """Test movement to origin (0, 0, 0)"""
-        with patch('config.ROS.ROS_ENABLED', False), \
-             patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
-            result = move_to_coordinate(
-                robot_id="Robot1",
-                x=0.0,
-                y=0.0,
-                z=0.0
-            )
+        with patch("config.ROS.ROS_ENABLED", False), patch(
+            "operations.MoveOperations._get_command_broadcaster",
+            return_value=mock_broadcaster,
+        ):
+            result = move_to_coordinate(robot_id="Robot1", x=0.0, y=0.0, z=0.0)
 
             assert result["success"] is True
 
     def test_move_beyond_maximum_x(self):
         """Test movement beyond maximum X coordinate"""
         result = move_to_coordinate(
-            robot_id="Robot1",
-            x=1.5,  # Exceeds maximum
-            y=0.0,
-            z=0.1
+            robot_id="Robot1", x=1.5, y=0.0, z=0.1  # Exceeds maximum
         )
 
         assert result["success"] is False
@@ -106,10 +104,7 @@ class TestExtremeCoordinateValues:
     def test_move_below_minimum_z(self):
         """Test movement below minimum Z coordinate"""
         result = move_to_coordinate(
-            robot_id="Robot1",
-            x=0.0,
-            y=0.0,
-            z=-1.0  # Below minimum
+            robot_id="Robot1", x=0.0, y=0.0, z=-1.0  # Below minimum
         )
 
         assert result["success"] is False
@@ -117,13 +112,12 @@ class TestExtremeCoordinateValues:
 
     def test_move_with_very_small_increments(self, mock_broadcaster):
         """Test movement with extremely small coordinate differences"""
-        with patch('config.ROS.ROS_ENABLED', False), \
-             patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
+        with patch("config.ROS.ROS_ENABLED", False), patch(
+            "operations.MoveOperations._get_command_broadcaster",
+            return_value=mock_broadcaster,
+        ):
             result = move_to_coordinate(
-                robot_id="Robot1",
-                x=0.000001,  # Very small
-                y=0.000001,
-                z=0.000001
+                robot_id="Robot1", x=0.000001, y=0.000001, z=0.000001  # Very small
             )
 
             assert result["success"] is True
@@ -132,6 +126,7 @@ class TestExtremeCoordinateValues:
 # ============================================================================
 # Test Long and Complex Command Strings
 # ============================================================================
+
 
 class TestLongCommandStrings:
     """Test parsing and execution of very long commands"""
@@ -153,7 +148,9 @@ class TestLongCommandStrings:
         """Test command with many repeated operations"""
         parser = CommandParser(use_rag=False)
 
-        command = " and ".join([f"move to ({0.1 + i*0.05}, 0.0, 0.1)" for i in range(20)])
+        command = " and ".join(
+            [f"move to ({0.1 + i*0.05}, 0.0, 0.1)" for i in range(20)]
+        )
 
         result = parser.parse(command, robot_id="Robot1", use_llm=False)
 
@@ -182,6 +179,7 @@ class TestLongCommandStrings:
 # Test Unicode and Special Characters
 # ============================================================================
 
+
 class TestUnicodeAndSpecialCharacters:
     """Test handling of Unicode and special characters"""
 
@@ -199,13 +197,12 @@ class TestUnicodeAndSpecialCharacters:
 
     def test_robot_id_with_special_characters(self, mock_broadcaster):
         """Test robot ID with special characters"""
-        with patch('config.ROS.ROS_ENABLED', False), \
-             patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
+        with patch("config.ROS.ROS_ENABLED", False), patch(
+            "operations.MoveOperations._get_command_broadcaster",
+            return_value=mock_broadcaster,
+        ):
             result = move_to_coordinate(
-                robot_id="Robot-1_v2.0",  # Special chars in ID
-                x=0.3,
-                y=0.0,
-                z=0.1
+                robot_id="Robot-1_v2.0", x=0.3, y=0.0, z=0.1  # Special chars in ID
             )
 
             # Should succeed - robot ID is just a string
@@ -228,6 +225,7 @@ class TestUnicodeAndSpecialCharacters:
 # Test Malformed Data Handling
 # ============================================================================
 
+
 class TestMalformedDataHandling:
     """Test handling of malformed and invalid data"""
 
@@ -239,7 +237,7 @@ class TestMalformedDataHandling:
                 robot_id="Robot1",
                 x="invalid",  # type: ignore[arg-type]  # String instead of float - intentional for testing
                 y=0.0,
-                z=0.1
+                z=0.1,
             )
             # If it doesn't raise, should return error
             assert result["success"] is False
@@ -251,7 +249,7 @@ class TestMalformedDataHandling:
         """Test gripper control with invalid open_gripper parameter"""
         result = control_gripper(
             robot_id="Robot1",
-            open_gripper="maybe"  # type: ignore[arg-type]  # Should be boolean - intentional for testing
+            open_gripper="maybe",  # type: ignore[arg-type]  # Should be boolean - intentional for testing
         )
 
         assert result["success"] is False
@@ -281,6 +279,7 @@ class TestMalformedDataHandling:
 # ============================================================================
 # Test Resource Limits
 # ============================================================================
+
 
 class TestResourceLimits:
     """Test behavior at resource limits"""
@@ -337,6 +336,7 @@ class TestResourceLimits:
 # Test Boundary Time Values
 # ============================================================================
 
+
 class TestBoundaryTimeValues:
     """Test time-related edge cases"""
 
@@ -349,14 +349,16 @@ class TestBoundaryTimeValues:
     def test_very_long_timeout(self, mock_broadcaster):
         """Test operation with extremely long timeout"""
         # Should not cause overflow or issues
-        with patch('config.ROS.ROS_ENABLED', False), \
-             patch('operations.MoveOperations._get_command_broadcaster', return_value=mock_broadcaster):
+        with patch("config.ROS.ROS_ENABLED", False), patch(
+            "operations.MoveOperations._get_command_broadcaster",
+            return_value=mock_broadcaster,
+        ):
             result = move_to_coordinate(
                 robot_id="Robot1",
                 x=0.3,
                 y=0.0,
                 z=0.1,
-                request_id=999999999  # Large request ID
+                request_id=999999999,  # Large request ID
             )
 
             assert result["success"] is True
@@ -373,7 +375,11 @@ class TestBoundaryTimeValues:
             if "old_cam" in storage._single_images:
                 img, _, prompt = storage._single_images["old_cam"]
                 # Set to 1 year ago
-                storage._single_images["old_cam"] = (img, time.time() - 31536000, prompt)
+                storage._single_images["old_cam"] = (
+                    img,
+                    time.time() - 31536000,
+                    prompt,
+                )
 
         age = storage.get_single_age("old_cam")
 
@@ -386,17 +392,13 @@ class TestBoundaryTimeValues:
 # Test Null and Missing Parameters
 # ============================================================================
 
+
 class TestNullAndMissingParameters:
     """Test operations with null or missing parameters"""
 
     def test_move_with_missing_robot_id(self):
         """Test movement without robot_id"""
-        result = move_to_coordinate(
-            robot_id="",  # Empty robot ID
-            x=0.3,
-            y=0.0,
-            z=0.1
-        )
+        result = move_to_coordinate(robot_id="", x=0.3, y=0.0, z=0.1)  # Empty robot ID
 
         assert result["success"] is False
         assert "INVALID_ROBOT_ID" in result["error"]["code"]
@@ -407,7 +409,7 @@ class TestNullAndMissingParameters:
             robot_id=None,  # type: ignore[arg-type]  # None instead of str - intentional for testing
             x=0.3,
             y=0.0,
-            z=0.1
+            z=0.1,
         )
 
         assert result["success"] is False
@@ -416,17 +418,14 @@ class TestNullAndMissingParameters:
         """Test gripper with None for open_gripper"""
         result = control_gripper(
             robot_id="Robot1",
-            open_gripper=None  # type: ignore[arg-type]  # None instead of bool - intentional for testing
+            open_gripper=None,  # type: ignore[arg-type]  # None instead of bool - intentional for testing
         )
 
         assert result["success"] is False
 
     def test_detect_with_nonexistent_camera(self):
         """Test detection with camera that has no image"""
-        result = detect_objects(
-            robot_id="Robot1",
-            camera_id="nonexistent_camera_12345"
-        )
+        result = detect_objects(robot_id="Robot1", camera_id="nonexistent_camera_12345")
 
         assert result["success"] is False
         assert "NO_IMAGE" in result["error"]["code"]

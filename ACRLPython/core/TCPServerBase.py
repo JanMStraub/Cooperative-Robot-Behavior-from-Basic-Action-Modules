@@ -122,7 +122,9 @@ class TCPServerBase(ABC):
         self._last_heartbeat_snapshot: Optional[tuple] = None
 
         # Setup centralized logging — use class name so each server type gets its own logger
-        self._logger = setup_logging(f"{self.__class__.__module__}.{self.__class__.__name__}")
+        self._logger = setup_logging(
+            f"{self.__class__.__module__}.{self.__class__.__name__}"
+        )
 
     @abstractmethod
     def handle_client_connection(self, client: socket.socket, address: tuple):
@@ -180,7 +182,9 @@ class TCPServerBase(ABC):
         if not self._running:
             return
 
-        self._logger.info(f"Stopping {self.__class__.__name__} (port {self._config.port})...")
+        self._logger.info(
+            f"Stopping {self.__class__.__name__} (port {self._config.port})..."
+        )
         self._running = False
 
         # Wait for accept and heartbeat threads to finish
@@ -321,7 +325,7 @@ class TCPServerBase(ABC):
         if not len_bytes:
             return None
 
-        str_len = struct.unpack('<I', len_bytes)[0]
+        str_len = struct.unpack("<I", len_bytes)[0]
 
         # Read string data
         if str_len == 0:
@@ -330,7 +334,9 @@ class TCPServerBase(ABC):
         str_bytes = self._recv_exactly(sock, str_len)
         return str_bytes
 
-    def _receive_complete_rag_query(self, sock: socket.socket, header_bytes: bytes) -> Optional[bytes]:
+    def _receive_complete_rag_query(
+        self, sock: socket.socket, header_bytes: bytes
+    ) -> Optional[bytes]:
         """
         Receive a complete RAG query message from socket.
 
@@ -353,7 +359,7 @@ class TCPServerBase(ABC):
             return None
 
         # Append length + data
-        data.extend(struct.pack('<I', len(query_bytes)))
+        data.extend(struct.pack("<I", len(query_bytes)))
         data.extend(query_bytes)
 
         # Read top_k (4 bytes)
@@ -367,12 +373,14 @@ class TCPServerBase(ABC):
         if filters_bytes is None:
             return None
 
-        data.extend(struct.pack('<I', len(filters_bytes)))
+        data.extend(struct.pack("<I", len(filters_bytes)))
         data.extend(filters_bytes)
 
         return bytes(data)
 
-    def _receive_complete_status_query(self, sock: socket.socket, header_bytes: bytes) -> Optional[bytes]:
+    def _receive_complete_status_query(
+        self, sock: socket.socket, header_bytes: bytes
+    ) -> Optional[bytes]:
         """
         Receive a complete status query message from socket.
 
@@ -394,7 +402,7 @@ class TCPServerBase(ABC):
         if robot_id_bytes is None:
             return None
 
-        data.extend(struct.pack('<I', len(robot_id_bytes)))
+        data.extend(struct.pack("<I", len(robot_id_bytes)))
         data.extend(robot_id_bytes)
 
         # Read detailed flag (1 byte)
@@ -405,7 +413,9 @@ class TCPServerBase(ABC):
 
         return bytes(data)
 
-    def _receive_complete_autort_command(self, sock: socket.socket, header_bytes: bytes) -> Optional[bytes]:
+    def _receive_complete_autort_command(
+        self, sock: socket.socket, header_bytes: bytes
+    ) -> Optional[bytes]:
         """
         Receive a complete AutoRT command message from socket.
 
@@ -427,7 +437,7 @@ class TCPServerBase(ABC):
         if cmd_type_bytes is None:
             return None
 
-        data.extend(struct.pack('<I', len(cmd_type_bytes)))
+        data.extend(struct.pack("<I", len(cmd_type_bytes)))
         data.extend(cmd_type_bytes)
 
         # Read params JSON (length-prefixed)
@@ -435,7 +445,7 @@ class TCPServerBase(ABC):
         if params_bytes is None:
             return None
 
-        data.extend(struct.pack('<I', len(params_bytes)))
+        data.extend(struct.pack("<I", len(params_bytes)))
         data.extend(params_bytes)
 
         return bytes(data)

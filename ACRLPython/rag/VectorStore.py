@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Vector Store for RAG System
 ============================
@@ -30,6 +31,7 @@ except ImportError:
 
 # Configure logging
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -77,7 +79,10 @@ class VectorStore:
             # Set embedding dimension on first add; validate against config
             if self.embedding_dimension is None:
                 self.embedding_dimension = len(embedding)
-                if RAG_EMBEDDING_DIMENSION and self.embedding_dimension != RAG_EMBEDDING_DIMENSION:
+                if (
+                    RAG_EMBEDDING_DIMENSION
+                    and self.embedding_dimension != RAG_EMBEDDING_DIMENSION
+                ):
                     logger.warning(
                         f"Embedding dimension {self.embedding_dimension} != configured "
                         f"RAG_EMBEDDING_DIMENSION={RAG_EMBEDDING_DIMENSION}. "
@@ -305,7 +310,9 @@ class VectorStore:
             logger.error(f"Failed to load vector store: {e}")
             raise
 
-    def update_operation_metadata(self, operation_id: str, metadata_update: Dict[str, Any]) -> bool:
+    def update_operation_metadata(
+        self, operation_id: str, metadata_update: Dict[str, Any]
+    ) -> bool:
         """
         Merge new fields into the metadata of an existing operation.
 

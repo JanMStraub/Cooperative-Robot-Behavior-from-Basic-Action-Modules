@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Test suite for KnowledgeGraph Builder and QueryEngine
 ======================================================
@@ -33,13 +34,17 @@ class TestGraphBuilder(unittest.TestCase):
         self.assertTrue(self.graph.has_node("shared_zone"))
 
         # Check ADJACENT_TO edges
-        left_neighbors = self.graph.get_neighbors("left_workspace", edge_type="ADJACENT_TO")
+        left_neighbors = self.graph.get_neighbors(
+            "left_workspace", edge_type="ADJACENT_TO"
+        )
         self.assertIn("shared_zone", left_neighbors)
 
     def test_update_robot_nodes(self):
         """Test robot node creation and updates."""
         # Add robot to WorldState
-        self.world_state.update_robot("Robot1", position=(-0.3, 0.2, 0.1), gripper_state="open")
+        self.world_state.update_robot(
+            "Robot1", position=(-0.3, 0.2, 0.1), gripper_state="open"
+        )
 
         # Trigger update
         state_data = {"robots": [{"robot_id": "Robot1"}], "objects": []}
@@ -56,13 +61,12 @@ class TestGraphBuilder(unittest.TestCase):
     def test_update_object_nodes(self):
         """Test object node creation and updates."""
         # Add object to WorldState
-        self.world_state.register_object("RedCube", position=(0.1, 0.3, 0.0), color="red")
+        self.world_state.register_object(
+            "RedCube", position=(0.1, 0.3, 0.0), color="red"
+        )
 
         # Trigger update
-        state_data = {
-            "robots": [],
-            "objects": [{"object_id": "RedCube"}]
-        }
+        state_data = {"robots": [], "objects": [{"object_id": "RedCube"}]}
         self.builder.on_state_update(state_data)
 
         # Verify object node created
@@ -82,7 +86,7 @@ class TestGraphBuilder(unittest.TestCase):
         # Trigger update
         state_data = {
             "robots": [{"robot_id": "Robot1"}],
-            "objects": [{"object_id": "NearbyObj"}]
+            "objects": [{"object_id": "NearbyObj"}],
         }
         self.builder.on_state_update(state_data)
 
@@ -99,7 +103,7 @@ class TestGraphBuilder(unittest.TestCase):
         # Trigger update
         state_data = {
             "robots": [],
-            "objects": [{"object_id": "Obj1"}, {"object_id": "Obj2"}]
+            "objects": [{"object_id": "Obj1"}, {"object_id": "Obj2"}],
         }
         self.builder.on_state_update(state_data)
 
@@ -116,10 +120,7 @@ class TestGraphBuilder(unittest.TestCase):
         self.world_state.update_robot("Robot1", position=(-0.3, 0.3, 0.0))
 
         # Trigger update
-        state_data = {
-            "robots": [{"robot_id": "Robot1"}],
-            "objects": []
-        }
+        state_data = {"robots": [{"robot_id": "Robot1"}], "objects": []}
         self.builder.on_state_update(state_data)
 
         # Verify IN_REGION edge
@@ -136,7 +137,7 @@ class TestGraphBuilder(unittest.TestCase):
         # Trigger update
         state_data = {
             "robots": [{"robot_id": "Robot1"}],
-            "objects": [{"object_id": "GraspedCube"}]
+            "objects": [{"object_id": "GraspedCube"}],
         }
         self.builder.on_state_update(state_data)
 
@@ -151,10 +152,7 @@ class TestGraphBuilder(unittest.TestCase):
         self.world_state.allocate_workspace("left_workspace", "Robot1")
 
         # Trigger update
-        state_data = {
-            "robots": [{"robot_id": "Robot1"}],
-            "objects": []
-        }
+        state_data = {"robots": [{"robot_id": "Robot1"}], "objects": []}
         self.builder.on_state_update(state_data)
 
         # Verify ALLOCATED edge
@@ -167,18 +165,12 @@ class TestGraphBuilder(unittest.TestCase):
         self.world_state.register_object("TempObj", position=(0.1, 0.3, 0.0))
 
         # Trigger update (object present)
-        state_data = {
-            "robots": [],
-            "objects": [{"object_id": "TempObj"}]
-        }
+        state_data = {"robots": [], "objects": [{"object_id": "TempObj"}]}
         self.builder.on_state_update(state_data)
         self.assertTrue(self.graph.has_node("TempObj"))
 
         # Trigger update (object gone)
-        state_data = {
-            "robots": [],
-            "objects": []  # No objects
-        }
+        state_data = {"robots": [], "objects": []}  # No objects
         self.builder.on_state_update(state_data)
 
         # Verify object removed
@@ -199,13 +191,17 @@ class TestGraphQueryEngine(unittest.TestCase):
         # Setup test scenario
         self.world_state.update_robot("Robot1", position=(-0.475, 0.0, 0.0))
         self.world_state.update_robot("Robot2", position=(0.475, 0.0, 0.0))
-        self.world_state.register_object("RedCube", position=(-0.3, 0.3, 0.0), color="red")
-        self.world_state.register_object("BlueCube", position=(0.3, 0.3, 0.0), color="blue")
+        self.world_state.register_object(
+            "RedCube", position=(-0.3, 0.3, 0.0), color="red"
+        )
+        self.world_state.register_object(
+            "BlueCube", position=(0.3, 0.3, 0.0), color="blue"
+        )
 
         # Build graph
         state_data = {
             "robots": [{"robot_id": "Robot1"}, {"robot_id": "Robot2"}],
-            "objects": [{"object_id": "RedCube"}, {"object_id": "BlueCube"}]
+            "objects": [{"object_id": "RedCube"}, {"object_id": "BlueCube"}],
         }
         self.builder.on_state_update(state_data)
 
@@ -254,12 +250,14 @@ class TestGraphQueryEngine(unittest.TestCase):
         # Rebuild graph
         state_data = {
             "robots": [{"robot_id": "Robot1"}, {"robot_id": "Robot2"}],
-            "objects": [{"object_id": "SharedObj"}]
+            "objects": [{"object_id": "SharedObj"}],
         }
         self.builder.on_state_update(state_data)
 
         # Query handoff candidates
-        candidates = self.query_engine.get_handoff_candidates("Robot1", "Robot2", "SharedObj")
+        candidates = self.query_engine.get_handoff_candidates(
+            "Robot1", "Robot2", "SharedObj"
+        )
 
         # Should have candidates if both can reach
         # (depends on specific positions and MAX_ROBOT_REACH)

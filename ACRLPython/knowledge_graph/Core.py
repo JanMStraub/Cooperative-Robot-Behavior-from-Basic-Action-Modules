@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Knowledge Graph Core Implementation
 ====================================
@@ -30,6 +31,7 @@ except ImportError:
 
 # Configure logging
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -249,7 +251,9 @@ class KnowledgeGraph:
 
             return neighbors
 
-    def get_predecessors(self, node_id: str, edge_type: Optional[str] = None) -> List[str]:
+    def get_predecessors(
+        self, node_id: str, edge_type: Optional[str] = None
+    ) -> List[str]:
         """
         Get predecessors of a node (incoming edges), optionally filtered by edge type.
 
@@ -360,7 +364,9 @@ class KnowledgeGraph:
                 node_type = attrs.get("node_type")
                 if node_type:
                     self._nodes_by_type[node_type].add(node_id)
-            logger.info(f"Loaded graph from {path} ({self._graph.number_of_nodes()} nodes, {self._graph.number_of_edges()} edges)")
+            logger.info(
+                f"Loaded graph from {path} ({self._graph.number_of_nodes()} nodes, {self._graph.number_of_edges()} edges)"
+            )
 
     def get_stats(self) -> Dict[str, Any]:
         """

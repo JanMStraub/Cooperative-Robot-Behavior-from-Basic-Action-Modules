@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Consolidated Request ID Correlation Tests
 ==========================================
@@ -33,8 +34,6 @@ Run tests:
 import pytest
 import threading
 import time
-from unittest.mock import Mock, patch, MagicMock
-from queue import Queue
 
 
 class TestRequestIDBasics:
@@ -154,11 +153,14 @@ class TestRequestIDConcurrency:
 
                 # Simulate receiving response (in background)
                 time.sleep(0.01)  # Small delay
-                broadcaster.put_completion(request_id, {
-                    "request_id": request_id,
-                    "success": True,
-                    "data": f"result_{request_id}"
-                })
+                broadcaster.put_completion(
+                    request_id,
+                    {
+                        "request_id": request_id,
+                        "success": True,
+                        "data": f"result_{request_id}",
+                    },
+                )
 
                 # Get completion
                 completion = broadcaster.get_completion(request_id, timeout=2.0)
@@ -220,10 +222,9 @@ class TestRequestIDTimeouts:
 
         def send_response():
             time.sleep(0.1)  # Small delay
-            broadcaster.put_completion(request_id, {
-                "request_id": request_id,
-                "success": True
-            })
+            broadcaster.put_completion(
+                request_id, {"request_id": request_id, "success": True}
+            )
 
         # Start response sender
         thread = threading.Thread(target=send_response)
@@ -298,10 +299,7 @@ class TestRequestIDErrors:
         error_response = {
             "request_id": request_id,
             "success": False,
-            "error": {
-                "code": "INVALID_COMMAND",
-                "message": "Command not recognized"
-            }
+            "error": {"code": "INVALID_COMMAND", "message": "Command not recognized"},
         }
 
         broadcaster.put_completion(request_id, error_response)
@@ -333,11 +331,9 @@ class TestRequestIDSequencing:
 
         # Send responses in reverse order
         for rid in reversed(request_ids):
-            broadcaster.put_completion(rid, {
-                "request_id": rid,
-                "success": True,
-                "order": rid
-            })
+            broadcaster.put_completion(
+                rid, {"request_id": rid, "success": True, "order": rid}
+            )
 
         # Retrieve responses in original order
         for rid in request_ids:
@@ -390,8 +386,8 @@ class TestRequestIDIntegration:
                 "result": {
                     "robot_id": "Robot1",
                     "command": "move_to_coordinate",
-                    "position": [0.3, 0.2, 0.1]
-                }
+                    "position": [0.3, 0.2, 0.1],
+                },
             }
             broadcaster.put_completion(request_id, result)
 
@@ -425,11 +421,9 @@ class TestRequestIDIntegration:
         # Each component creates and uses request ID
         for comp, rid in request_ids.items():
             broadcaster.create_completion_queue(rid)
-            broadcaster.put_completion(rid, {
-                "request_id": rid,
-                "component": comp,
-                "success": True
-            })
+            broadcaster.put_completion(
+                rid, {"request_id": rid, "component": comp, "success": True}
+            )
 
         # Verify each component gets correct response
         for comp, rid in request_ids.items():

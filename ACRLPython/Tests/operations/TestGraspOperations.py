@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Unit tests for GraspOperations module
 ======================================
@@ -44,7 +45,7 @@ Run specific test class:
 """
 
 import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 from operations.GraspOperations import grasp_object, GRASP_OBJECT_OPERATION
 from operations.Base import OperationCategory, OperationComplexity
 
@@ -55,8 +56,9 @@ class TestGraspObjectOperation:
     @pytest.fixture
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
-        with patch('operations.GraspOperations._get_command_broadcaster') as mock, \
-             patch('config.ROS.ROS_ENABLED', False):
+        with patch(
+            "operations.GraspOperations._get_command_broadcaster"
+        ) as mock, patch("config.ROS.ROS_ENABLED", False):
             broadcaster = MagicMock()
             mock.return_value = broadcaster
             yield broadcaster
@@ -72,7 +74,7 @@ class TestGraspObjectOperation:
             object_id="Cube_01",
             use_advanced_planning=True,
             preferred_approach="top",
-            request_id=42
+            request_id=42,
         )
 
         # Verify result - async mode returns command_sent confirmation
@@ -99,7 +101,7 @@ class TestGraspObjectOperation:
         result = grasp_object(
             robot_id="Robot1",
             object_id="Cube_01",
-            custom_approach_vector=[0.0, 1.0, 0.5]
+            custom_approach_vector=[0.0, 1.0, 0.5],
         )
 
         assert result["success"] is True
@@ -114,9 +116,7 @@ class TestGraspObjectOperation:
         mock_broadcaster.send_command.return_value = True
 
         result = grasp_object(
-            robot_id="Robot1",
-            object_id="Cube_01",
-            enable_retreat=False
+            robot_id="Robot1", object_id="Cube_01", enable_retreat=False
         )
 
         assert result["success"] is True
@@ -131,7 +131,7 @@ class TestGraspObjectOperation:
             robot_id="Robot1",
             object_id="Cube_01",
             pre_grasp_distance=0.12,
-            retreat_distance=0.15
+            retreat_distance=0.15,
         )
 
         assert result["success"] is True
@@ -162,7 +162,7 @@ class TestGraspObjectOperation:
         result = grasp_object(
             robot_id="Robot1",
             object_id="Cube_01",
-            preferred_approach="invalid_approach"
+            preferred_approach="invalid_approach",
         )
 
         assert result["success"] is False
@@ -177,7 +177,7 @@ class TestGraspObjectOperation:
         result = grasp_object(
             robot_id="Robot1",
             object_id="Cube_01",
-            custom_approach_vector=[0.0, 1.0]  # Only 2 elements
+            custom_approach_vector=[0.0, 1.0],  # Only 2 elements
         )
 
         assert result["success"] is False
@@ -188,7 +188,7 @@ class TestGraspObjectOperation:
         result = grasp_object(
             robot_id="Robot1",
             object_id="Cube_01",
-            custom_approach_vector="not_a_list"  # type: ignore
+            custom_approach_vector="not_a_list",  # type: ignore
         )
 
         assert result["success"] is False
@@ -199,7 +199,9 @@ class TestGraspObjectOperation:
         """Test error handling when CommandBroadcaster is not available."""
         mock_broadcaster.return_value = None
 
-        with patch('operations.GraspOperations._get_command_broadcaster', return_value=None):
+        with patch(
+            "operations.GraspOperations._get_command_broadcaster", return_value=None
+        ):
             result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
         assert result["success"] is False
@@ -218,7 +220,9 @@ class TestGraspObjectOperation:
 
     def test_grasp_object_no_response(self, mock_broadcaster):
         """Test error handling when broadcaster not available."""
-        with patch('operations.GraspOperations._get_command_broadcaster', return_value=None):
+        with patch(
+            "operations.GraspOperations._get_command_broadcaster", return_value=None
+        ):
             result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
         assert result["success"] is False
@@ -242,9 +246,7 @@ class TestGraspObjectOperation:
         valid_approaches = ["auto", "top", "front", "side"]
         for approach in valid_approaches:
             result = grasp_object(
-                robot_id="Robot1",
-                object_id="Cube_01",
-                preferred_approach=approach
+                robot_id="Robot1", object_id="Cube_01", preferred_approach=approach
             )
             assert result["success"] is True
 
@@ -336,7 +338,7 @@ class TestGraspObjectOperationDefinition:
         rels = GRASP_OBJECT_OPERATION.relationships
         # If relationships exist, they should be an OperationRelationship
         if rels is not None:
-            assert hasattr(rels, 'operation_id')
+            assert hasattr(rels, "operation_id")
 
     def test_operation_implementation_function(self):
         """Test implementation function is set."""
@@ -347,7 +349,10 @@ class TestGraspObjectOperationDefinition:
         assert len(GRASP_OBJECT_OPERATION.usage_examples) >= 3
 
         # Check for basic example
-        assert any("automatic approach" in ex.lower() for ex in GRASP_OBJECT_OPERATION.usage_examples)
+        assert any(
+            "automatic approach" in ex.lower()
+            for ex in GRASP_OBJECT_OPERATION.usage_examples
+        )
 
     def test_operation_tags(self):
         """Test operation description contains key tags."""
@@ -373,7 +378,7 @@ class TestGraspObjectIntegration:
     @pytest.fixture
     def mock_world_state(self):
         """Mock world state for integration tests."""
-        with patch('operations.WorldState.WorldState') as mock:
+        with patch("operations.WorldState.WorldState") as mock:
             state = MagicMock()
             state.get_object_position.return_value = (0.0, 0.0, 0.15)
             mock.return_value = state
@@ -381,8 +386,9 @@ class TestGraspObjectIntegration:
 
     def test_grasp_object_with_all_parameters(self, mock_world_state):
         """Test grasp operation with all parameters specified."""
-        with patch('operations.GraspOperations._get_command_broadcaster') as mock_bc, \
-             patch('config.ROS.ROS_ENABLED', False):
+        with patch(
+            "operations.GraspOperations._get_command_broadcaster"
+        ) as mock_bc, patch("config.ROS.ROS_ENABLED", False):
             broadcaster = MagicMock()
             broadcaster.send_command.return_value = True
             mock_bc.return_value = broadcaster
@@ -396,7 +402,7 @@ class TestGraspObjectIntegration:
                 enable_retreat=True,
                 retreat_distance=0.12,
                 custom_approach_vector=[1.0, 0.0, 0.0],
-                request_id=99
+                request_id=99,
             )
 
             assert result["success"] is True
@@ -423,8 +429,9 @@ class TestGraspTrajectoryValidation:
     @pytest.fixture
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
-        with patch('operations.GraspOperations._get_command_broadcaster') as mock, \
-             patch('config.ROS.ROS_ENABLED', False):
+        with patch(
+            "operations.GraspOperations._get_command_broadcaster"
+        ) as mock, patch("config.ROS.ROS_ENABLED", False):
             broadcaster = MagicMock()
             mock.return_value = broadcaster
             yield broadcaster
@@ -435,9 +442,7 @@ class TestGraspTrajectoryValidation:
         mock_broadcaster.send_command.return_value = True
 
         result = grasp_object(
-            robot_id="Robot1",
-            object_id="Cube_01",
-            preferred_approach="top"
+            robot_id="Robot1", object_id="Cube_01", preferred_approach="top"
         )
 
         assert result["success"] is True
@@ -456,9 +461,7 @@ class TestGraspTrajectoryValidation:
 
         for approach_type in test_cases:
             result = grasp_object(
-                robot_id="Robot1",
-                object_id="Cube_01",
-                preferred_approach=approach_type
+                robot_id="Robot1", object_id="Cube_01", preferred_approach=approach_type
             )
 
             assert result["success"] is True
@@ -471,9 +474,7 @@ class TestGraspTrajectoryValidation:
         mock_broadcaster.send_command.return_value = True
 
         result = grasp_object(
-            robot_id="Robot1",
-            object_id="Cube_01",
-            pre_grasp_distance=0.1
+            robot_id="Robot1", object_id="Cube_01", pre_grasp_distance=0.1
         )
 
         assert result["success"] is True
@@ -485,10 +486,7 @@ class TestGraspTrajectoryValidation:
         """Test command sent for grasp (collision checking done in Unity)."""
         mock_broadcaster.send_command.return_value = True
 
-        result = grasp_object(
-            robot_id="Robot1",
-            object_id="Cube_01"
-        )
+        result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
         assert result["success"] is True
         assert result["result"]["command_sent"] is True
@@ -502,10 +500,7 @@ class TestGraspForceEstimation:
         """Test grasp command sent (force estimation done by Unity GripperContactSensor)."""
         mock_broadcaster.send_command.return_value = True
 
-        result = grasp_object(
-            robot_id="Robot1",
-            object_id="Cube_01"
-        )
+        result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
         assert result["success"] is True
         assert result["result"]["command_sent"] is True
@@ -515,21 +510,18 @@ class TestGraspForceEstimation:
         """Test grasp command sent (force verification done by Unity)."""
         mock_broadcaster.send_command.return_value = True
 
-        result = grasp_object(
-            robot_id="Robot1",
-            object_id="Cube_01"
-        )
+        result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
         assert result["success"] is True
         assert result["result"]["command_sent"] is True
         # Note: Force threshold checking performed by Unity's VerifyGraspSuccess() method
 
-
     @pytest.fixture
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
-        with patch('operations.GraspOperations._get_command_broadcaster') as mock, \
-             patch('config.ROS.ROS_ENABLED', False):
+        with patch(
+            "operations.GraspOperations._get_command_broadcaster"
+        ) as mock, patch("config.ROS.ROS_ENABLED", False):
             broadcaster = MagicMock()
             mock.return_value = broadcaster
             yield broadcaster
@@ -538,24 +530,17 @@ class TestGraspForceEstimation:
         """Test grasp command sent (contact detection done by Unity)."""
         mock_broadcaster.send_command.return_value = True
 
-        result = grasp_object(
-            robot_id="Robot1",
-            object_id="Cube_01"
-        )
+        result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
         assert result["success"] is True
         assert result["result"]["command_sent"] is True
         # Note: Contact sensor detection performed by Unity's GripperContactSensor
 
-
     def test_early_contact_during_approach(self, mock_broadcaster):
         """Test grasp command sent (early contact handled by Unity)."""
         mock_broadcaster.send_command.return_value = True
 
-        result = grasp_object(
-            robot_id="Robot1",
-            object_id="Cube_01"
-        )
+        result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
         assert result["success"] is True
         assert result["result"]["command_sent"] is True
@@ -568,26 +553,20 @@ class TestGraspFailureRecovery:
     @pytest.fixture
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
-        with patch('operations.GraspOperations._get_command_broadcaster') as mock, \
-             patch('config.ROS.ROS_ENABLED', False):
+        with patch(
+            "operations.GraspOperations._get_command_broadcaster"
+        ) as mock, patch("config.ROS.ROS_ENABLED", False):
             broadcaster = MagicMock()
             mock.return_value = broadcaster
             yield broadcaster
-
 
     def test_grasp_success_verification_multi_criteria(self, mock_broadcaster):
         """Test grasp command sent (multi-criteria verification done by Unity)."""
         mock_broadcaster.send_command.return_value = True
 
-        result = grasp_object(
-            robot_id="Robot1",
-            object_id="Cube_01"
-        )
+        result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
         assert result["success"] is True
         assert result["result"]["command_sent"] is True
         # Note: Multi-criteria verification (contact + force + closure) performed by
         # Unity's VerifyGraspSuccess() method as documented in RobotControlRedesign.md
-
-
-

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Grasp planning system for ROS-MoveIt integration.
 
@@ -14,10 +15,16 @@ Key components:
 - GraspPlanner: End-to-end orchestration
 """
 
+from .GraspCandidate import GraspCandidate
+from .GraspConfig import GraspConfig
+from .GraspCandidateGenerator import GraspCandidateGenerator
+from .GraspScorer import GraspScorer
+from .GraspPlanner import GraspPlanner
+
 __all__ = [
-    'GraspCandidate',
-    'GraspConfig',
-    'GraspCandidateGenerator',
-    'GraspScorer',
-    'GraspPlanner',
+    "GraspCandidate",
+    "GraspConfig",
+    "GraspCandidateGenerator",
+    "GraspScorer",
+    "GraspPlanner",
 ]

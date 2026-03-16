@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Grasp candidate scoring and ranking.
 
@@ -17,10 +18,20 @@ from .GraspConfig import GraspConfig
 # Import quaternion and vector utilities
 try:
     from utils.QuaternionMath import quaternion_angle
-    from utils.VectorMath import vector_normalize, vector_dot, vector_cross, vector_distance
+    from utils.VectorMath import (
+        vector_normalize,
+        vector_dot,
+        vector_cross,
+        vector_distance,
+    )
 except ImportError:
     from ..utils.QuaternionMath import quaternion_angle
-    from ..utils.VectorMath import vector_normalize, vector_dot, vector_cross, vector_distance
+    from ..utils.VectorMath import (
+        vector_normalize,
+        vector_dot,
+        vector_cross,
+        vector_distance,
+    )
 
 
 logger = logging.getLogger(__name__)
@@ -81,8 +92,12 @@ class GraspScorer:
         # Score each candidate
         for candidate in candidates:
             self._score_candidate(
-                candidate, object_size, gripper_position, gripper_rotation,
-                obj_size_array=obj_size_array, ideal_distance=ideal_distance,
+                candidate,
+                object_size,
+                gripper_position,
+                gripper_rotation,
+                obj_size_array=obj_size_array,
+                ideal_distance=ideal_distance,
             )
 
         # Sort by total score (descending)
@@ -130,7 +145,9 @@ class GraspScorer:
         candidate.ik_score = self._compute_ik_score(candidate, gripper_position)
         approach_score = self._compute_approach_score(candidate)
         depth_score = self._compute_depth_score(candidate, obj_size_array)
-        stability_score = self._compute_stability_score(candidate, obj_size_array, ideal_distance)
+        stability_score = self._compute_stability_score(
+            candidate, obj_size_array, ideal_distance
+        )
 
         # Compute orientation consistency (default to 1.0 if no current rotation)
         if gripper_rotation is not None:
@@ -260,7 +277,9 @@ class GraspScorer:
 
         # Distance ratio: prefer distances close to ideal
         if ideal_distance > 1e-6:
-            distance_ratio = abs(candidate.approach_distance - ideal_distance) / ideal_distance
+            distance_ratio = (
+                abs(candidate.approach_distance - ideal_distance) / ideal_distance
+            )
             score *= np.clip(1.0 - distance_ratio, 0.0, 1.0)
 
         # Center alignment: prefer grasps centered on object

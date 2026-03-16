@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Basic Operations Foundation
 ============================
@@ -303,36 +304,16 @@ class BasicOperation:
     success_rate: float
     failure_modes: List[str]
 
-    # Relationships to other operations (deprecated - use relationships field)
+    # Rich relationship metadata
+    relationships: Optional[OperationRelationship] = None
+
+    # Flat relationship lists (legacy / convenience aliases for test construction)
     required_operations: List[str] = field(default_factory=list)
     commonly_paired_with: List[str] = field(default_factory=list)
     mutually_exclusive_with: List[str] = field(default_factory=list)
 
-    # Rich relationship metadata (preferred over simple lists above)
-    relationships: Optional[OperationRelationship] = None
-
     # The actual implementation function
     implementation: Optional[Callable] = None
-
-    def __post_init__(self):
-        """
-        Post-initialization to ensure backward compatibility.
-
-        If relationships is None but simple relationship lists are provided,
-        auto-convert to OperationRelationship for consistency.
-        """
-        if self.relationships is None and (
-            self.required_operations
-            or self.commonly_paired_with
-            or self.mutually_exclusive_with
-        ):
-            # Auto-convert simple lists to OperationRelationship
-            self.relationships = OperationRelationship(
-                operation_id=self.operation_id,
-                required_operations=self.required_operations,
-                commonly_paired_with=self.commonly_paired_with,
-                mutually_exclusive_with=self.mutually_exclusive_with,
-            )
 
     def execute(self, **kwargs) -> OperationResult:
         """
@@ -505,26 +486,10 @@ class BasicOperation:
                 for key, value in self.relationships.coordination_requirements.items():
                     doc += f"                - {key}: {value}\n"
 
-        else:
-            # Fallback to simple relationship lists for backward compatibility
-            doc += f"""
-                RELATED OPERATIONS:
-                - Required operations: {', '.join(self.required_operations) if self.required_operations else 'None'}
-                - Commonly paired with: {', '.join(self.commonly_paired_with) if self.commonly_paired_with else 'None'}
-                - Mutually exclusive with: {', '.join(self.mutually_exclusive_with) if self.mutually_exclusive_with else 'None'}
-              """
-
         return doc
 
     def to_json(self) -> str:
-        """
-        Convert to JSON for structured storage.
-
-        Serializes the full rich OperationRelationship object when present
-        (includes required_reasons, pairing_reasons, parameter_flows, etc.).
-        Falls back to the deprecated flat lists for operations that have not
-        yet been migrated to the rich format.
-        """
+        """Convert to JSON for structured storage."""
         data: Dict[str, Any] = {
             "operation_id": self.operation_id,
             "name": self.name,
@@ -539,14 +504,9 @@ class BasicOperation:
             "average_duration_ms": self.average_duration_ms,
             "success_rate": self.success_rate,
             "failure_modes": self.failure_modes,
+            "relationships": (
+                self.relationships.to_dict() if self.relationships else None
+            ),
         }
-
-        if self.relationships is not None:
-            data["relationships"] = self.relationships.to_dict()
-        else:
-            # Backward-compatible fallback for operations still on flat deprecated fields
-            data["required_operations"] = self.required_operations
-            data["commonly_paired_with"] = self.commonly_paired_with
-            data["mutually_exclusive_with"] = self.mutually_exclusive_with
 
         return json.dumps(data, indent=2)

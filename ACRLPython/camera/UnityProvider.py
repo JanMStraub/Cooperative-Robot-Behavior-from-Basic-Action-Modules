@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 UnityProvider.py - Unity Camera Adapter
 
@@ -28,6 +29,7 @@ class UnityProvider(CameraProvider):
     def _storage(self):
         """Return the UnifiedImageStorage singleton via the lazy import path."""
         from core.Imports import get_unified_image_storage
+
         return get_unified_image_storage()
 
     def get_rgb_frame(self) -> Optional[np.ndarray]:

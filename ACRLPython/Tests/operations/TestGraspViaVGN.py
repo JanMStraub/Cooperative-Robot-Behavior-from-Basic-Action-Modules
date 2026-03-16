@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Integration tests for _grasp_via_vgn orchestration
 =====================================================
@@ -39,16 +40,18 @@ def _pc_success(n_pts: int = 200):
     """Return a successful OperationResult wrapping a minimal point cloud."""
     pts = np.random.rand(n_pts, 3).astype(np.float32).tolist()
     clr = np.zeros((n_pts, 3), dtype=np.uint8).tolist()
-    return OperationResult.success_result({
-        "points": pts,
-        "colors": clr,
-        "point_count": n_pts,
-        "camera_position": [0.0, 1.0, 0.5],
-        "camera_rotation": [0.0, 0.0, 0.0, 1.0],
-        "fov": 60.0,
-        "baseline": 0.1,
-        "timestamp": 1234567890.0,
-    })
+    return OperationResult.success_result(
+        {
+            "points": pts,
+            "colors": clr,
+            "point_count": n_pts,
+            "camera_position": [0.0, 1.0, 0.5],
+            "camera_rotation": [0.0, 0.0, 0.0, 1.0],
+            "fov": 60.0,
+            "baseline": 0.1,
+            "timestamp": 1234567890.0,
+        }
+    )
 
 
 def _pc_failure():
@@ -98,20 +101,22 @@ class _VGNPatch:
         world_grasps_result=_UNSET,
         broadcaster_available: bool = True,
         send_command_return: bool = True,
-    ):
+    ) -> None:
         self.vgn_available = vgn_available
         self.pc_result = _pc_success() if pc_result is _UNSET else pc_result
         self.detect_result = detect_result
         self.raw_grasps = _sample_grasps() if raw_grasps is _UNSET else raw_grasps
-        self.world_grasps_result = _world_grasps() if world_grasps_result is _UNSET else world_grasps_result
+        self.world_grasps_result = (
+            _world_grasps() if world_grasps_result is _UNSET else world_grasps_result
+        )
         self.broadcaster_available = broadcaster_available
         self.send_command_return = send_command_return
 
         self._patches = []
-        self.mock_client = None
-        self.mock_broadcaster = None
+        self.mock_client: MagicMock = MagicMock()
+        self.mock_broadcaster: MagicMock = MagicMock()
 
-    def __enter__(self):
+    def __enter__(self) -> "_VGNPatch":
         # VGNClient mock — patch in its own module
         self.mock_client = MagicMock()
         self.mock_client.is_available.return_value = self.vgn_available
@@ -168,6 +173,7 @@ class _VGNPatch:
 
     def __exit__(self, *args):
         import unittest.mock as _um
+
         _um.patch.stopall()
 
 
@@ -198,7 +204,9 @@ class TestGraspViaVGNHappyPath:
     def test_result_contains_vgn_candidate_count(self):
         """Result dict includes how many VGN candidates were forwarded."""
         n = 5
-        with _VGNPatch(raw_grasps=_sample_grasps(n), world_grasps_result=_world_grasps(n)) as ctx:
+        with _VGNPatch(
+            raw_grasps=_sample_grasps(n), world_grasps_result=_world_grasps(n)
+        ) as ctx:
             result = _grasp_via_vgn(
                 robot_id="Robot1",
                 object_id="Cube_01",
@@ -209,12 +217,16 @@ class TestGraspViaVGNHappyPath:
                 retreat_distance=0.0,
                 request_id=2,
             )
+        assert result is not None
+        assert result.result is not None
         assert result.result["vgn_candidates"] == n
 
     def test_command_sent_with_precomputed_candidates(self):
         """grasp_object command payload contains precomputed_candidates list."""
         n = 3
-        with _VGNPatch(raw_grasps=_sample_grasps(n), world_grasps_result=_world_grasps(n)) as ctx:
+        with _VGNPatch(
+            raw_grasps=_sample_grasps(n), world_grasps_result=_world_grasps(n)
+        ) as ctx:
             _grasp_via_vgn(
                 robot_id="Robot1",
                 object_id="Cube_01",
@@ -237,13 +249,15 @@ class TestGraspViaVGNHappyPath:
         (i.e. subtract), not along it.  Adding would place the arm on the far
         side of the object and cause a collision.
         """
-        world = [{
-            "position": [0.0, 0.0, 0.5],
-            "rotation": [0.0, 0.0, 0.0, 1.0],
-            "score": 0.9,
-            "width": 0.08,
-            "approach_direction": [0.0, 1.0, 0.0],  # +Y
-        }]
+        world = [
+            {
+                "position": [0.0, 0.0, 0.5],
+                "rotation": [0.0, 0.0, 0.0, 1.0],
+                "score": 0.9,
+                "width": 0.08,
+                "approach_direction": [0.0, 1.0, 0.0],  # +Y
+            }
+        ]
         hover = 0.1
         with _VGNPatch(raw_grasps=_sample_grasps(1), world_grasps_result=world) as ctx:
             _grasp_via_vgn(
@@ -404,6 +418,7 @@ class TestGraspViaVGNErrors:
             )
         assert result is not None
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "COMMUNICATION_ERROR"
 
     def test_error_when_send_command_fails(self):
@@ -421,6 +436,7 @@ class TestGraspViaVGNErrors:
             )
         assert result is not None
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "COMMUNICATION_ERROR"
 
 
@@ -434,30 +450,38 @@ class TestGraspObjectVGNRouting:
 
     def test_uses_vgn_path_when_enabled_and_available(self):
         """When VGN_ENABLED and model is available, _grasp_via_vgn is called."""
-        vgn_result = OperationResult.success_result({
-            "command_sent": True,
-            "robot_id": "Robot1",
-            "object_id": "Cube_01",
-            "request_id": 0,
-            "vgn_candidates": 3,
-        })
-        with patch("config.Servers.VGN_ENABLED", True), \
-             patch("config.ROS.ROS_ENABLED", False), \
-             patch("operations.GraspOperations._grasp_via_vgn", return_value=vgn_result) as mock_vgn, \
-             patch("operations.GraspOperations._get_command_broadcaster"):
+        vgn_result = OperationResult.success_result(
+            {
+                "command_sent": True,
+                "robot_id": "Robot1",
+                "object_id": "Cube_01",
+                "request_id": 0,
+                "vgn_candidates": 3,
+            }
+        )
+        with patch("config.Servers.VGN_ENABLED", True), patch(
+            "config.ROS.ROS_ENABLED", False
+        ), patch(
+            "operations.GraspOperations._grasp_via_vgn", return_value=vgn_result
+        ) as mock_vgn, patch(
+            "operations.GraspOperations._get_command_broadcaster"
+        ):
             result = grasp_object(robot_id="Robot1", object_id="Cube_01")
         mock_vgn.assert_called_once()
         assert result.success is True
+        assert result.result is not None
         assert result.result.get("vgn_candidates") == 3
 
     def test_falls_back_to_tcp_when_vgn_returns_none(self):
         """When _grasp_via_vgn returns None, geometric TCP path is used."""
         broadcaster = MagicMock()
         broadcaster.send_command.return_value = True
-        with patch("config.Servers.VGN_ENABLED", True), \
-             patch("config.ROS.ROS_ENABLED", False), \
-             patch("operations.GraspOperations._grasp_via_vgn", return_value=None), \
-             patch("operations.GraspOperations._get_command_broadcaster", return_value=broadcaster):
+        with patch("config.Servers.VGN_ENABLED", True), patch(
+            "config.ROS.ROS_ENABLED", False
+        ), patch("operations.GraspOperations._grasp_via_vgn", return_value=None), patch(
+            "operations.GraspOperations._get_command_broadcaster",
+            return_value=broadcaster,
+        ):
             result = grasp_object(robot_id="Robot1", object_id="Cube_01")
         # TCP path sends the command
         assert result.success is True
@@ -470,10 +494,12 @@ class TestGraspObjectVGNRouting:
         """When VGN_ENABLED=False, _grasp_via_vgn is never called."""
         broadcaster = MagicMock()
         broadcaster.send_command.return_value = True
-        with patch("config.Servers.VGN_ENABLED", False), \
-             patch("config.ROS.ROS_ENABLED", False), \
-             patch("operations.GraspOperations._grasp_via_vgn") as mock_vgn, \
-             patch("operations.GraspOperations._get_command_broadcaster", return_value=broadcaster):
+        with patch("config.Servers.VGN_ENABLED", False), patch(
+            "config.ROS.ROS_ENABLED", False
+        ), patch("operations.GraspOperations._grasp_via_vgn") as mock_vgn, patch(
+            "operations.GraspOperations._get_command_broadcaster",
+            return_value=broadcaster,
+        ):
             grasp_object(robot_id="Robot1", object_id="Cube_01")
         mock_vgn.assert_not_called()
 
@@ -503,16 +529,18 @@ class _VGNROSPatch:
         self.vgn_available = vgn_available
         self.pc_result = _pc_success() if pc_result is _UNSET else pc_result
         self.raw_grasps = _sample_grasps() if raw_grasps is _UNSET else raw_grasps
-        self.world_grasps_result = _world_grasps() if world_grasps_result is _UNSET else world_grasps_result
+        self.world_grasps_result = (
+            _world_grasps() if world_grasps_result is _UNSET else world_grasps_result
+        )
         self.pre_grasp_success = pre_grasp_success
         self.descent_success = descent_success
         self.gripper_success = gripper_success
 
         self._patches = []
-        self.mock_client = None
-        self.mock_bridge = None
+        self.mock_client: MagicMock = MagicMock()
+        self.mock_bridge: MagicMock = MagicMock()
 
-    def __enter__(self):
+    def __enter__(self) -> "_VGNROSPatch":
         # VGNClient mock
         self.mock_client = MagicMock()
         self.mock_client.is_available.return_value = self.vgn_available
@@ -549,8 +577,12 @@ class _VGNROSPatch:
 
         # ROSBridge mock
         self.mock_bridge = MagicMock()
-        self.mock_bridge.plan_and_execute.return_value = {"success": self.pre_grasp_success}
-        self.mock_bridge.plan_cartesian_descent.return_value = {"success": self.descent_success}
+        self.mock_bridge.plan_and_execute.return_value = {
+            "success": self.pre_grasp_success
+        }
+        self.mock_bridge.plan_cartesian_descent.return_value = {
+            "success": self.descent_success
+        }
         bridge_patch = patch(
             "ros2.ROSBridge.ROSBridge.get_instance",
             return_value=self.mock_bridge,
@@ -568,6 +600,7 @@ class _VGNROSPatch:
 
     def __exit__(self, *args):
         import unittest.mock as _um
+
         _um.patch.stopall()
 
 
@@ -583,6 +616,7 @@ class TestGraspViaVGNWithROSHappyPath:
         """Full pipeline succeeds → OperationResult with success=True."""
         with _VGNROSPatch() as ctx:
             from operations.GraspOperations import _grasp_via_vgn_with_ros
+
             result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
@@ -599,6 +633,7 @@ class TestGraspViaVGNWithROSHappyPath:
         """Result status key equals 'vgn_ros_executed'."""
         with _VGNROSPatch() as ctx:
             from operations.GraspOperations import _grasp_via_vgn_with_ros
+
             result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
@@ -608,13 +643,18 @@ class TestGraspViaVGNWithROSHappyPath:
                 request_id=2,
                 world_state=None,
             )
+        assert result is not None
+        assert result.result is not None
         assert result.result["status"] == "vgn_ros_executed"
 
     def test_vgn_candidates_count_in_result(self):
         """result['vgn_candidates'] equals the number of world-frame poses."""
         n = 4
-        with _VGNROSPatch(raw_grasps=_sample_grasps(n), world_grasps_result=_world_grasps(n)) as ctx:
+        with _VGNROSPatch(
+            raw_grasps=_sample_grasps(n), world_grasps_result=_world_grasps(n)
+        ) as ctx:
             from operations.GraspOperations import _grasp_via_vgn_with_ros
+
             result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
@@ -624,19 +664,26 @@ class TestGraspViaVGNWithROSHappyPath:
                 request_id=3,
                 world_state=None,
             )
+        assert result is not None
+        assert result.result is not None
         assert result.result["vgn_candidates"] == n
 
     def test_plan_and_execute_called_with_vgn_orientation(self):
         """plan_and_execute receives the orientation from the top VGN candidate."""
-        world = [{
-            "position": [0.1, 0.2, 0.5],
-            "rotation": [0.1, 0.2, 0.3, 0.9],
-            "score": 0.95,
-            "width": 0.08,
-            "approach_direction": [0.0, -1.0, 0.0],
-        }]
-        with _VGNROSPatch(raw_grasps=_sample_grasps(1), world_grasps_result=world) as ctx:
+        world = [
+            {
+                "position": [0.1, 0.2, 0.5],
+                "rotation": [0.1, 0.2, 0.3, 0.9],
+                "score": 0.95,
+                "width": 0.08,
+                "approach_direction": [0.0, -1.0, 0.0],
+            }
+        ]
+        with _VGNROSPatch(
+            raw_grasps=_sample_grasps(1), world_grasps_result=world
+        ) as ctx:
             from operations.GraspOperations import _grasp_via_vgn_with_ros
+
             _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
@@ -651,15 +698,20 @@ class TestGraspViaVGNWithROSHappyPath:
 
     def test_cartesian_descent_called_at_grasp_position(self):
         """plan_cartesian_descent is called at grasp position (not pre-grasp)."""
-        world = [{
-            "position": [0.3, 0.4, 0.5],
-            "rotation": [0.0, 0.0, 0.0, 1.0],
-            "score": 0.9,
-            "width": 0.08,
-            "approach_direction": [0.0, 1.0, 0.0],
-        }]
-        with _VGNROSPatch(raw_grasps=_sample_grasps(1), world_grasps_result=world) as ctx:
+        world = [
+            {
+                "position": [0.3, 0.4, 0.5],
+                "rotation": [0.0, 0.0, 0.0, 1.0],
+                "score": 0.9,
+                "width": 0.08,
+                "approach_direction": [0.0, 1.0, 0.0],
+            }
+        ]
+        with _VGNROSPatch(
+            raw_grasps=_sample_grasps(1), world_grasps_result=world
+        ) as ctx:
             from operations.GraspOperations import _grasp_via_vgn_with_ros
+
             _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
@@ -677,7 +729,10 @@ class TestGraspViaVGNWithROSHappyPath:
         with _VGNROSPatch() as ctx:
             from operations.GraspOperations import _grasp_via_vgn_with_ros
             import operations.GraspOperations as go_module
-            with patch.object(go_module, "_execute_grasp_with_follow_target", return_value=True) as mock_follow:
+
+            with patch.object(
+                go_module, "_execute_grasp_with_follow_target", return_value=True
+            ) as mock_follow:
                 _grasp_via_vgn_with_ros(
                     bridge=ctx.mock_bridge,
                     robot_id="Robot1",
@@ -702,6 +757,7 @@ class TestGraspViaVGNWithROSFallback:
         """VGN model not available → None."""
         with _VGNROSPatch(vgn_available=False) as ctx:
             from operations.GraspOperations import _grasp_via_vgn_with_ros
+
             result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
@@ -717,6 +773,7 @@ class TestGraspViaVGNWithROSFallback:
         """Point cloud failure → None."""
         with _VGNROSPatch(pc_result=_pc_failure()) as ctx:
             from operations.GraspOperations import _grasp_via_vgn_with_ros
+
             result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
@@ -732,6 +789,7 @@ class TestGraspViaVGNWithROSFallback:
         """VGN returns empty list → None."""
         with _VGNROSPatch(raw_grasps=[]) as ctx:
             from operations.GraspOperations import _grasp_via_vgn_with_ros
+
             result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
@@ -747,6 +805,7 @@ class TestGraspViaVGNWithROSFallback:
         """Frame transform produces no valid poses → None."""
         with _VGNROSPatch(world_grasps_result=[]) as ctx:
             from operations.GraspOperations import _grasp_via_vgn_with_ros
+
             result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
@@ -762,6 +821,7 @@ class TestGraspViaVGNWithROSFallback:
         """MoveIt pre-grasp planning failure → None (arm has not moved)."""
         with _VGNROSPatch(pre_grasp_success=False) as ctx:
             from operations.GraspOperations import _grasp_via_vgn_with_ros
+
             result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
@@ -777,6 +837,7 @@ class TestGraspViaVGNWithROSFallback:
         """MoveIt Cartesian descent failure → None (arm at pre-grasp, not target)."""
         with _VGNROSPatch(descent_success=False) as ctx:
             from operations.GraspOperations import _grasp_via_vgn_with_ros
+
             result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
@@ -801,6 +862,7 @@ class TestGraspViaVGNWithROSErrors:
         """Arm descended but gripper close failed → GRIPPER_CLOSE_FAILED error result."""
         with _VGNROSPatch(gripper_success=False) as ctx:
             from operations.GraspOperations import _grasp_via_vgn_with_ros
+
             result = _grasp_via_vgn_with_ros(
                 bridge=ctx.mock_bridge,
                 robot_id="Robot1",
@@ -812,6 +874,7 @@ class TestGraspViaVGNWithROSErrors:
             )
         assert result is not None
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "GRIPPER_CLOSE_FAILED"
 
 
@@ -834,28 +897,34 @@ class TestGraspObjectRoutingWithBothEnabled:
 
     def test_vgn_ros_path_attempted_first(self):
         """When both enabled, _grasp_via_vgn_with_ros is called before geometric ROS."""
-        vgn_ros_result = OperationResult.success_result({
-            "robot_id": "Robot1",
-            "object_id": "Cube_01",
-            "request_id": 0,
-            "vgn_candidates": 3,
-            "status": "vgn_ros_executed",
-        })
+        vgn_ros_result = OperationResult.success_result(
+            {
+                "robot_id": "Robot1",
+                "object_id": "Cube_01",
+                "request_id": 0,
+                "vgn_candidates": 3,
+                "status": "vgn_ros_executed",
+            }
+        )
         bridge_mock = MagicMock()
         bridge_mock.is_connected = True
         world_state = self._make_world_state()
 
-        with patch("config.ROS.ROS_ENABLED", True), \
-             patch("config.ROS.DEFAULT_CONTROL_MODE", "ros"), \
-             patch("config.Servers.VGN_ENABLED", True), \
-             patch("ros2.ROSBridge.ROSBridge") as mock_ros_cls, \
-             patch("core.Imports.get_world_state", return_value=world_state), \
-             patch("operations.GraspOperations._grasp_via_vgn_with_ros",
-                   return_value=vgn_ros_result) as mock_vgn_ros:
+        with patch("config.ROS.ROS_ENABLED", True), patch(
+            "config.ROS.DEFAULT_CONTROL_MODE", "ros"
+        ), patch("config.Servers.VGN_ENABLED", True), patch(
+            "ros2.ROSBridge.ROSBridge"
+        ) as mock_ros_cls, patch(
+            "core.Imports.get_world_state", return_value=world_state
+        ), patch(
+            "operations.GraspOperations._grasp_via_vgn_with_ros",
+            return_value=vgn_ros_result,
+        ) as mock_vgn_ros:
             mock_ros_cls.get_instance.return_value = bridge_mock
             result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
         mock_vgn_ros.assert_called_once()
+        assert result.result is not None
         assert result.result["status"] == "vgn_ros_executed"
 
     def test_falls_back_to_geometric_ros_when_vgn_ros_returns_none(self):
@@ -867,35 +936,46 @@ class TestGraspObjectRoutingWithBothEnabled:
         bridge_mock.control_gripper.return_value = {"success": True}
         world_state = self._make_world_state()
 
-        with patch("config.ROS.ROS_ENABLED", True), \
-             patch("config.ROS.DEFAULT_CONTROL_MODE", "ros"), \
-             patch("config.Servers.VGN_ENABLED", True), \
-             patch("ros2.ROSBridge.ROSBridge") as mock_ros_cls, \
-             patch("core.Imports.get_world_state", return_value=world_state), \
-             patch("operations.GraspOperations._grasp_via_vgn_with_ros",
-                   return_value=None), \
-             patch("operations.GraspOperations._grasp_via_ros_position_only",
-                   return_value=(OperationResult.success_result({"status": "ros_executed"}), False)) as mock_geo:
+        with patch("config.ROS.ROS_ENABLED", True), patch(
+            "config.ROS.DEFAULT_CONTROL_MODE", "ros"
+        ), patch("config.Servers.VGN_ENABLED", True), patch(
+            "ros2.ROSBridge.ROSBridge"
+        ) as mock_ros_cls, patch(
+            "core.Imports.get_world_state", return_value=world_state
+        ), patch(
+            "operations.GraspOperations._grasp_via_vgn_with_ros", return_value=None
+        ), patch(
+            "operations.GraspOperations._grasp_via_ros_position_only",
+            return_value=(
+                OperationResult.success_result({"status": "ros_executed"}),
+                False,
+            ),
+        ) as mock_geo:
             mock_ros_cls.get_instance.return_value = bridge_mock
             result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
         mock_geo.assert_called_once()
+        assert result.result is not None
         assert result.result["status"] == "ros_executed"
 
     def test_vgn_unity_path_when_ros_disabled(self):
         """When ROS is off, _grasp_via_vgn (not _with_ros) is called."""
-        vgn_result = OperationResult.success_result({
-            "command_sent": True,
-            "robot_id": "Robot1",
-            "object_id": "Cube_01",
-            "request_id": 0,
-            "vgn_candidates": 2,
-        })
-        with patch("config.ROS.ROS_ENABLED", False), \
-             patch("config.Servers.VGN_ENABLED", True), \
-             patch("operations.GraspOperations._grasp_via_vgn",
-                   return_value=vgn_result) as mock_vgn, \
-             patch("operations.GraspOperations._grasp_via_vgn_with_ros") as mock_vgn_ros:
+        vgn_result = OperationResult.success_result(
+            {
+                "command_sent": True,
+                "robot_id": "Robot1",
+                "object_id": "Cube_01",
+                "request_id": 0,
+                "vgn_candidates": 2,
+            }
+        )
+        with patch("config.ROS.ROS_ENABLED", False), patch(
+            "config.Servers.VGN_ENABLED", True
+        ), patch(
+            "operations.GraspOperations._grasp_via_vgn", return_value=vgn_result
+        ) as mock_vgn, patch(
+            "operations.GraspOperations._grasp_via_vgn_with_ros"
+        ) as mock_vgn_ros:
             result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
         mock_vgn.assert_called_once()

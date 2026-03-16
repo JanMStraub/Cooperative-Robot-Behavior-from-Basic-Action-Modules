@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Collaborative Manipulation Operations (Level 5)
 ================================================
@@ -70,10 +71,12 @@ def _kg_both_robots_can_reach(object_id: str, robot_id: str) -> Optional[str]:
     """
     try:
         from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
+
         if not KNOWLEDGE_GRAPH_ENABLED:
             return None
 
         from core.Imports import get_graph_query_engine
+
         qe = get_graph_query_engine()
         if qe is None:
             return None

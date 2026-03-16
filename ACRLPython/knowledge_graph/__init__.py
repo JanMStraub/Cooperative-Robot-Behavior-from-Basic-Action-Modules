@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Knowledge Graph System for Spatial Reasoning
 =============================================

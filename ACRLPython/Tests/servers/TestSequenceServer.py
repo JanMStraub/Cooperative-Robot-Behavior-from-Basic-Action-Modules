@@ -26,9 +26,7 @@ class TestCommandParser:
     def test_parse_simple_move(self):
         """Test parsing a simple move command"""
         result = self.parser.parse(
-            "move to (0.3, 0.2, 0.1)",
-            robot_id="Robot1",
-            use_llm=False
+            "move to (0.3, 0.2, 0.1)", robot_id="Robot1", use_llm=False
         )
 
         assert result["success"] is True
@@ -42,9 +40,7 @@ class TestCommandParser:
     def test_parse_close_gripper(self):
         """Test parsing a close gripper command"""
         result = self.parser.parse(
-            "close the gripper",
-            robot_id="Robot1",
-            use_llm=False
+            "close the gripper", robot_id="Robot1", use_llm=False
         )
 
         assert result["success"] is True
@@ -54,11 +50,7 @@ class TestCommandParser:
 
     def test_parse_open_gripper(self):
         """Test parsing an open gripper command"""
-        result = self.parser.parse(
-            "open gripper",
-            robot_id="Robot1",
-            use_llm=False
-        )
+        result = self.parser.parse("open gripper", robot_id="Robot1", use_llm=False)
 
         assert result["success"] is True
         assert len(result["commands"]) == 1
@@ -70,7 +62,7 @@ class TestCommandParser:
         result = self.parser.parse(
             "move to (0.3, 0.2, 0.1) and close the gripper",
             robot_id="Robot1",
-            use_llm=False
+            use_llm=False,
         )
 
         assert result["success"] is True
@@ -82,9 +74,7 @@ class TestCommandParser:
     def test_parse_compound_command_with_then(self):
         """Test parsing compound command with 'then'"""
         result = self.parser.parse(
-            "open gripper then move to (0, 0, 0.3)",
-            robot_id="Robot1",
-            use_llm=False
+            "open gripper then move to (0, 0, 0.3)", robot_id="Robot1", use_llm=False
         )
 
         assert result["success"] is True
@@ -98,7 +88,7 @@ class TestCommandParser:
         result = self.parser.parse(
             "move to (0.1, 0.2, 0.15), then close gripper, then move to (0, 0, 0.4)",
             robot_id="Robot1",
-            use_llm=False
+            use_llm=False,
         )
 
         assert result["success"] is True
@@ -110,9 +100,7 @@ class TestCommandParser:
     def test_parse_alternative_coordinate_format(self):
         """Test parsing alternative coordinate format (x=, y=, z=)"""
         result = self.parser.parse(
-            "move to x=0.3, y=0.2, z=0.1",
-            robot_id="Robot1",
-            use_llm=False
+            "move to x=0.3, y=0.2, z=0.1", robot_id="Robot1", use_llm=False
         )
 
         assert result["success"] is True
@@ -124,9 +112,7 @@ class TestCommandParser:
     def test_parse_negative_coordinates(self):
         """Test parsing negative coordinates"""
         result = self.parser.parse(
-            "move to (-0.3, 0.2, 0.1)",
-            robot_id="Robot1",
-            use_llm=False
+            "move to (-0.3, 0.2, 0.1)", robot_id="Robot1", use_llm=False
         )
 
         assert result["success"] is True
@@ -134,11 +120,7 @@ class TestCommandParser:
 
     def test_parse_grasp_synonym(self):
         """Test parsing 'grasp' as close gripper"""
-        result = self.parser.parse(
-            "grasp",
-            robot_id="Robot1",
-            use_llm=False
-        )
+        result = self.parser.parse("grasp", robot_id="Robot1", use_llm=False)
 
         assert result["success"] is True
         assert result["commands"][0]["operation"] == "control_gripper"
@@ -146,11 +128,7 @@ class TestCommandParser:
 
     def test_parse_release_synonym(self):
         """Test parsing 'release' as open gripper"""
-        result = self.parser.parse(
-            "release",
-            robot_id="Robot1",
-            use_llm=False
-        )
+        result = self.parser.parse("release", robot_id="Robot1", use_llm=False)
 
         assert result["success"] is True
         assert result["commands"][0]["operation"] == "control_gripper"
@@ -158,21 +136,13 @@ class TestCommandParser:
 
     def test_parse_empty_command(self):
         """Test parsing empty command fails"""
-        result = self.parser.parse(
-            "",
-            robot_id="Robot1",
-            use_llm=False
-        )
+        result = self.parser.parse("", robot_id="Robot1", use_llm=False)
 
         assert result["success"] is False
 
     def test_parse_unknown_command(self):
         """Test parsing unknown command fails"""
-        result = self.parser.parse(
-            "dance around",
-            robot_id="Robot1",
-            use_llm=False
-        )
+        result = self.parser.parse("dance around", robot_id="Robot1", use_llm=False)
 
         assert result["success"] is False
 
@@ -181,7 +151,7 @@ class TestCommandParser:
         result = self.parser.parse(
             "move to (0.1, 0.2, 0.3) and close gripper",
             robot_id="MyRobot",
-            use_llm=False
+            use_llm=False,
         )
 
         assert result["success"] is True

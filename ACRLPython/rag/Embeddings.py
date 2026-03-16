@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Embedding Generation via LM Studio
 ===================================
@@ -37,6 +38,7 @@ except ImportError:
 
 # Configure logging
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -158,10 +160,7 @@ class EmbeddingGenerator:
         # Check if client is available
         if self.client is None:
             logger.error("LM Studio client not initialized")
-            return [
-                np.zeros(RAG_EMBEDDING_DIMENSION, dtype=np.float32)
-                for _ in texts
-            ]
+            return [np.zeros(RAG_EMBEDDING_DIMENSION, dtype=np.float32) for _ in texts]
 
         # Process in batches
         batch_size = RAG_EMBEDDING_BATCH_SIZE
@@ -200,9 +199,7 @@ class EmbeddingGenerator:
         # Check again after initialization
         if self.tfidf_vectorizer is None:
             logger.error("TF-IDF vectorizer initialization failed")
-            return [
-                np.zeros(RAG_TFIDF_MAX_FEATURES, dtype=np.float32) for _ in texts
-            ]
+            return [np.zeros(RAG_TFIDF_MAX_FEATURES, dtype=np.float32) for _ in texts]
 
         try:
             # Fit and transform if not already fitted
@@ -235,9 +232,7 @@ class EmbeddingGenerator:
         except Exception as e:
             logger.error(f"Error generating TF-IDF embeddings: {e}")
             # Return zero vectors
-            return [
-                np.zeros(RAG_TFIDF_MAX_FEATURES, dtype=np.float32) for _ in texts
-            ]
+            return [np.zeros(RAG_TFIDF_MAX_FEATURES, dtype=np.float32) for _ in texts]
 
     def get_embedding_dimension(self) -> int:
         """

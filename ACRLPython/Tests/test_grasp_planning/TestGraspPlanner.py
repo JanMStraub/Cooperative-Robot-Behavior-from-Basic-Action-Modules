@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Integration tests for end-to-end grasp planning pipeline.
 
@@ -180,12 +181,18 @@ class TestGraspPlanner:
     def test_fast_planner_generates_fewer_candidates(self, fast_planner, planner):
         """Test that fast planner generates fewer candidates."""
         # Fast planner should have fewer candidates per approach
-        assert fast_planner.config.candidates_per_approach < planner.config.candidates_per_approach
+        assert (
+            fast_planner.config.candidates_per_approach
+            < planner.config.candidates_per_approach
+        )
 
     def test_precise_planner_generates_more_candidates(self, precise_planner, planner):
         """Test that precise planner generates more candidates."""
         # Precise planner should have more candidates per approach
-        assert precise_planner.config.candidates_per_approach > planner.config.candidates_per_approach
+        assert (
+            precise_planner.config.candidates_per_approach
+            > planner.config.candidates_per_approach
+        )
 
     def test_object_rotation_affects_candidates(self, planner):
         """Test that object rotation affects grasp candidates."""
@@ -206,7 +213,8 @@ class TestGraspPlanner:
 
         # 45 degree rotation around Y
         from utils.QuaternionMath import quaternion_from_euler
-        rotated_quat = quaternion_from_euler(0.0, np.pi/4, 0.0)
+
+        rotated_quat = quaternion_from_euler(0.0, np.pi / 4, 0.0)
 
         best_grasp_2 = planner.plan_grasp(
             object_position=object_position,
@@ -220,9 +228,7 @@ class TestGraspPlanner:
         # Grasp rotations should differ (object rotation affects grasp orientation)
         if best_grasp_1 and best_grasp_2:
             assert not np.allclose(
-                best_grasp_1.grasp_rotation,
-                best_grasp_2.grasp_rotation,
-                atol=1e-3
+                best_grasp_1.grasp_rotation, best_grasp_2.grasp_rotation, atol=1e-3
             )
 
     def test_different_object_sizes(self, planner):
@@ -280,7 +286,8 @@ class TestGraspPlanner:
 
         # With gripper rotation (should affect orientation consistency)
         from utils.QuaternionMath import quaternion_from_euler
-        gripper_rot = quaternion_from_euler(0.0, 0.0, np.pi/2)
+
+        gripper_rot = quaternion_from_euler(0.0, 0.0, np.pi / 2)
 
         grasp_with_rot = planner.plan_grasp(
             object_position=object_position,
@@ -375,7 +382,9 @@ class TestGraspPlannerConfigMutationRegression:
         )
 
         approach_types = {c.approach_type for c in candidates}
-        assert "top" in approach_types, "top approach missing after preferred_approach call"
+        assert (
+            "top" in approach_types
+        ), "top approach missing after preferred_approach call"
         assert "side" in approach_types, "side approach was permanently disabled"
         assert "front" in approach_types, "front approach was permanently disabled"
 
@@ -404,9 +413,9 @@ class TestGraspPlannerConfigMutationRegression:
         )
 
         for s in planner.config.enabled_approaches:
-            assert s.preference_weight == original_weights[s.approach_type], (
-                f"preference_weight for '{s.approach_type}' was not restored"
-            )
+            assert (
+                s.preference_weight == original_weights[s.approach_type]
+            ), f"preference_weight for '{s.approach_type}' was not restored"
 
     def test_unknown_preferred_approach_logs_warning_and_returns_none(self):
         """
@@ -441,7 +450,9 @@ class TestGraspPlannerConfigMutationRegression:
         original_enabled = [s.enabled for s in planner.config.enabled_approaches]
 
         with mock.patch.object(
-            planner.generator, "generate_candidates", side_effect=RuntimeError("test error")
+            planner.generator,
+            "generate_candidates",
+            side_effect=RuntimeError("test error"),
         ):
             with pytest.raises(RuntimeError):
                 planner.plan_grasp(
@@ -456,7 +467,9 @@ class TestGraspPlannerConfigMutationRegression:
 
         # Config must be restored despite the exception
         for s, orig in zip(planner.config.enabled_approaches, original_enabled):
-            assert s.enabled == orig, f"enabled state for '{s.approach_type}' not restored after exception"
+            assert (
+                s.enabled == orig
+            ), f"enabled state for '{s.approach_type}' not restored after exception"
 
 
 if __name__ == "__main__":

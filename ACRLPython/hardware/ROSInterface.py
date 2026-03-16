@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 ROSInterface.py - ROS/MoveIt Hardware Adapter (stub)
 
@@ -26,6 +27,7 @@ class ROSHardwareInterface(RobotHardwareInterface):
     def _bridge(self):
         """Return the ROSBridge singleton."""
         from ros2.ROSBridge import ROSBridge
+
         return ROSBridge.get_instance()
 
     def move_to(self, robot_id: str, x: float, y: float, z: float, **kwargs) -> bool:

@@ -60,7 +60,6 @@ namespace PythonCommunication
         public float scale_factor; // For mirror_movement
         public int duration_ms; // For stabilize_object
         public float force_limit; // For stabilize_object
-        public TargetPosition place_position; // For release_object (deprecated - kept for backward compat)
 
         // GraspNet: optional pre-computed neural grasp candidates.
         // When non-empty, GraspPlanningPipeline skips geometric candidate generation

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Grasp planning configuration.
 
@@ -69,11 +70,13 @@ class GraspConfig:
 
     # Candidate generation
     candidates_per_approach: int = 8
-    enabled_approaches: List[GraspApproachSettings] = field(default_factory=lambda: [
-        GraspApproachSettings("top", True, 1.2),
-        GraspApproachSettings("front", True, 1.0),
-        GraspApproachSettings("side", True, 0.8),
-    ])
+    enabled_approaches: List[GraspApproachSettings] = field(
+        default_factory=lambda: [
+            GraspApproachSettings("top", True, 1.2),
+            GraspApproachSettings("front", True, 1.0),
+            GraspApproachSettings("side", True, 0.8),
+        ]
+    )
 
     # Approach distances
     pre_grasp_distance_factor: float = 1.5
@@ -83,7 +86,11 @@ class GraspConfig:
     # Retreat motion
     enable_retreat: bool = True
     retreat_distance_factor: float = 2.0
-    retreat_direction: Tuple[float, float, float] = (0.0, 1.0, 0.0)  # Unity's Vector3.up
+    retreat_direction: Tuple[float, float, float] = (
+        0.0,
+        1.0,
+        0.0,
+    )  # Unity's Vector3.up
 
     # Gripper settings
     gripper_geometry: GripperGeometry = field(default_factory=GripperGeometry)

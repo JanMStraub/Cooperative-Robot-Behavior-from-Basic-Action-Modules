@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Unit tests for grasp scoring system.
 
@@ -52,9 +53,13 @@ class TestGraspScorer:
         """Test that score_and_rank returns candidates sorted by score."""
         candidates = [
             GraspCandidate.create(
-                (0.0, 0.15, 0.0), (0.0, 0.0, 0.0, 1.0),
-                (0.0, 0.05, 0.0), (0.0, 0.0, 0.0, 1.0), "top"
-            ) for _ in range(5)
+                (0.0, 0.15, 0.0),
+                (0.0, 0.0, 0.0, 1.0),
+                (0.0, 0.05, 0.0),
+                (0.0, 0.0, 0.0, 1.0),
+                "top",
+            )
+            for _ in range(5)
         ]
 
         object_size = (0.05, 0.05, 0.05)
@@ -69,8 +74,11 @@ class TestGraspScorer:
     def test_ik_score_uses_validation_when_available(self, scorer):
         """Test that IK score uses MoveIt validation when available."""
         candidate = GraspCandidate.create(
-            (0.0, 0.15, 0.0), (0.0, 0.0, 0.0, 1.0),
-            (0.0, 0.05, 0.0), (0.0, 0.0, 0.0, 1.0), "top"
+            (0.0, 0.15, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            (0.0, 0.05, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            "top",
         )
 
         # Set IK validation result
@@ -89,20 +97,28 @@ class TestGraspScorer:
         """Test that IK score is distance-based when not validated."""
         # Close candidate
         close_candidate = GraspCandidate.create(
-            (0.0, 0.16, 0.0), (0.0, 0.0, 0.0, 1.0),
-            (0.0, 0.05, 0.0), (0.0, 0.0, 0.0, 1.0), "top"
+            (0.0, 0.16, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            (0.0, 0.05, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            "top",
         )
 
         # Far candidate
         far_candidate = GraspCandidate.create(
-            (0.0, 0.50, 0.0), (0.0, 0.0, 0.0, 1.0),
-            (0.0, 0.05, 0.0), (0.0, 0.0, 0.0, 1.0), "top"
+            (0.0, 0.50, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            (0.0, 0.05, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            "top",
         )
 
         object_size = (0.05, 0.05, 0.05)
         gripper_position = (0.0, 0.15, 0.0)
 
-        scorer.score_and_rank([close_candidate, far_candidate], object_size, gripper_position)
+        scorer.score_and_rank(
+            [close_candidate, far_candidate], object_size, gripper_position
+        )
 
         # Close candidate should have higher IK score
         assert close_candidate.ik_score > far_candidate.ik_score
@@ -111,20 +127,28 @@ class TestGraspScorer:
         """Test that approach score uses configured weights."""
         # Top approach has weight 1.2 by default
         top_candidate = GraspCandidate.create(
-            (0.0, 0.15, 0.0), (0.0, 0.0, 0.0, 1.0),
-            (0.0, 0.05, 0.0), (0.0, 0.0, 0.0, 1.0), "top"
+            (0.0, 0.15, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            (0.0, 0.05, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            "top",
         )
 
         # Side approach has weight 0.8 by default
         side_candidate = GraspCandidate.create(
-            (0.1, 0.05, 0.0), (0.0, 0.0, 0.0, 1.0),
-            (0.0, 0.05, 0.0), (0.0, 0.0, 0.0, 1.0), "side"
+            (0.1, 0.05, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            (0.0, 0.05, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            "side",
         )
 
         object_size = (0.05, 0.05, 0.05)
         gripper_position = (0.0, 0.15, 0.0)
 
-        scorer.score_and_rank([top_candidate, side_candidate], object_size, gripper_position)
+        scorer.score_and_rank(
+            [top_candidate, side_candidate], object_size, gripper_position
+        )
 
         # Top should have higher total score (all else equal)
         # Note: Other factors affect total score, so we just verify both scored
@@ -139,21 +163,29 @@ class TestGraspScorer:
 
         # Candidate with exactly target depth
         target_candidate = GraspCandidate.create(
-            (0.0, 0.15, 0.0), (0.0, 0.0, 0.0, 1.0),
-            (0.0, 0.05, 0.0), (0.0, 0.0, 0.0, 1.0), "top"
+            (0.0, 0.15, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            (0.0, 0.05, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            "top",
         )
         target_candidate.grasp_depth = target_depth
 
         # Candidate with depth far from target
         far_candidate = GraspCandidate.create(
-            (0.0, 0.15, 0.0), (0.0, 0.0, 0.0, 1.0),
-            (0.0, 0.05, 0.0), (0.0, 0.0, 0.0, 1.0), "top"
+            (0.0, 0.15, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            (0.0, 0.05, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            "top",
         )
         far_candidate.grasp_depth = target_depth * 2.0
 
         gripper_position = (0.0, 0.15, 0.0)
 
-        scorer.score_and_rank([target_candidate, far_candidate], object_size, gripper_position)
+        scorer.score_and_rank(
+            [target_candidate, far_candidate], object_size, gripper_position
+        )
 
         # Candidate at target depth should have higher depth score
         # (extracted via _compute_depth_score, reflected in total)
@@ -163,22 +195,30 @@ class TestGraspScorer:
         """Test that stability score considers gravity alignment."""
         # Downward approach (aligned with gravity)
         down_candidate = GraspCandidate.create(
-            (0.0, 0.15, 0.0), (0.0, 0.0, 0.0, 1.0),
-            (0.0, 0.05, 0.0), (0.0, 0.0, 0.0, 1.0), "top"
+            (0.0, 0.15, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            (0.0, 0.05, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            "top",
         )
         down_candidate.approach_direction = (0.0, -1.0, 0.0)
 
         # Horizontal approach (perpendicular to gravity)
         horizontal_candidate = GraspCandidate.create(
-            (0.1, 0.05, 0.0), (0.0, 0.0, 0.0, 1.0),
-            (0.0, 0.05, 0.0), (0.0, 0.0, 0.0, 1.0), "side"
+            (0.1, 0.05, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            (0.0, 0.05, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            "side",
         )
         horizontal_candidate.approach_direction = (1.0, 0.0, 0.0)
 
         object_size = (0.05, 0.05, 0.05)
         gripper_position = (0.0, 0.15, 0.0)
 
-        scorer.score_and_rank([down_candidate, horizontal_candidate], object_size, gripper_position)
+        scorer.score_and_rank(
+            [down_candidate, horizontal_candidate], object_size, gripper_position
+        )
 
         # Both should be scored
         assert down_candidate.total_score > 0
@@ -188,14 +228,20 @@ class TestGraspScorer:
         """Test that orientation consistency penalizes large rotations."""
         # Same orientation as current
         same_candidate = GraspCandidate.create(
-            (0.0, 0.15, 0.0), (0.0, 0.0, 0.0, 1.0),
-            (0.0, 0.05, 0.0), (0.0, 0.0, 0.0, 1.0), "top"
+            (0.0, 0.15, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            (0.0, 0.05, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            "top",
         )
 
         # 180 degree rotation from current
         flipped_candidate = GraspCandidate.create(
-            (0.0, 0.15, 0.0), quaternion_from_euler(np.pi, 0.0, 0.0),
-            (0.0, 0.05, 0.0), quaternion_from_euler(np.pi, 0.0, 0.0), "top"
+            (0.0, 0.15, 0.0),
+            quaternion_from_euler(np.pi, 0.0, 0.0),
+            (0.0, 0.05, 0.0),
+            quaternion_from_euler(np.pi, 0.0, 0.0),
+            "top",
         )
 
         object_size = (0.05, 0.05, 0.05)
@@ -206,7 +252,7 @@ class TestGraspScorer:
             [same_candidate, flipped_candidate],
             object_size,
             gripper_position,
-            current_rotation
+            current_rotation,
         )
 
         # Same orientation should have higher total score
@@ -217,8 +263,11 @@ class TestGraspScorer:
         candidates = []
         for i in range(5):
             candidate = GraspCandidate.create(
-                (0.0, 0.15 + i * 0.01, 0.0), (0.0, 0.0, 0.0, 1.0),
-                (0.0, 0.05, 0.0), (0.0, 0.0, 0.0, 1.0), "top"
+                (0.0, 0.15 + i * 0.01, 0.0),
+                (0.0, 0.0, 0.0, 1.0),
+                (0.0, 0.05, 0.0),
+                (0.0, 0.0, 0.0, 1.0),
+                "top",
             )
             candidates.append(candidate)
 
@@ -239,8 +288,11 @@ class TestGraspScorer:
         candidates = []
         for i in range(10):
             candidate = GraspCandidate.create(
-                (0.0, 0.15 + i * 0.01, 0.0), (0.0, 0.0, 0.0, 1.0),
-                (0.0, 0.05, 0.0), (0.0, 0.0, 0.0, 1.0), "top"
+                (0.0, 0.15 + i * 0.01, 0.0),
+                (0.0, 0.0, 0.0, 1.0),
+                (0.0, 0.05, 0.0),
+                (0.0, 0.0, 0.0, 1.0),
+                "top",
             )
             candidates.append(candidate)
 
@@ -260,8 +312,11 @@ class TestGraspScorer:
         candidates = []
         for i in range(5):
             candidate = GraspCandidate.create(
-                (0.0, 0.15 + i * 0.05, 0.0), (0.0, 0.0, 0.0, 1.0),
-                (0.0, 0.05, 0.0), (0.0, 0.0, 0.0, 1.0), "top"
+                (0.0, 0.15 + i * 0.05, 0.0),
+                (0.0, 0.0, 0.0, 1.0),
+                (0.0, 0.05, 0.0),
+                (0.0, 0.0, 0.0, 1.0),
+                "top",
             )
             candidates.append(candidate)
 
@@ -282,8 +337,11 @@ class TestGraspScorer:
     def test_all_scores_in_valid_range(self, scorer):
         """Test that all score components are in valid range."""
         candidate = GraspCandidate.create(
-            (0.0, 0.15, 0.0), (0.0, 0.0, 0.0, 1.0),
-            (0.0, 0.05, 0.0), (0.0, 0.0, 0.0, 1.0), "top"
+            (0.0, 0.15, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            (0.0, 0.05, 0.0),
+            (0.0, 0.0, 0.0, 1.0),
+            "top",
         )
         candidate.approach_direction = (0.0, -1.0, 0.0)
 

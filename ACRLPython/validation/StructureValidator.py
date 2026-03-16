@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Structure Validator for Generated Operations
 ==============================================
@@ -108,11 +109,11 @@ def _check_restricted_builtins(tree: ast.AST, errors: List[str]):
 
 def _check_implementation_function(tree: ast.AST, errors: List[str]):
     """Check that there is at least one function definition (the implementation)."""
-    functions = [
-        node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
-    ]
+    functions = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)]
     if not functions:
-        errors.append("No function definitions found - need at least an implementation function")
+        errors.append(
+            "No function definitions found - need at least an implementation function"
+        )
 
 
 def _check_factory_function(tree: ast.AST, errors: List[str]):

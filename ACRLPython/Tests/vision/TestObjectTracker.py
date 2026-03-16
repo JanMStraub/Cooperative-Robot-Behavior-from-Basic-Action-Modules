@@ -8,7 +8,6 @@ Tests the IOU-based object tracking system for persistent object IDs across fram
 import sys
 import os
 import unittest
-import numpy as np
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))

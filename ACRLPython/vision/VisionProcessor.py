@@ -44,6 +44,7 @@ from typing import Optional, Callable, List, Any
 cv2: Any = None
 try:
     import cv2
+
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
@@ -66,10 +67,12 @@ try:
 except ImportError:
     from core.Imports import get_unified_image_storage
 
+
 # Helper to get storage instance
 def _get_storage():
     """Get UnifiedImageStorage instance using centralized imports"""
     return get_unified_image_storage()
+
 
 # Import config
 try:
@@ -92,6 +95,7 @@ except ImportError:
     )
 
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -159,7 +163,9 @@ class VisionProcessor:
 
         # Initialize tracker if enabled
         if self.enable_tracking:
-            self.tracker = ObjectTracker(max_age=TRACKING_MAX_AGE, min_iou=TRACKING_MIN_IOU)
+            self.tracker = ObjectTracker(
+                max_age=TRACKING_MAX_AGE, min_iou=TRACKING_MIN_IOU
+            )
             logger.info("Object tracking enabled for VisionProcessor")
 
         # Initialize shared state if enabled

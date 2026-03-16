@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 VisionConflictResolver - Multi-robot object claim conflict resolution.
 

@@ -6,10 +6,8 @@ Tests synchronization primitives (signal, wait_for_signal, wait) and EventBus
 for multi-robot coordination.
 """
 
-import pytest
 import time
 import threading
-from unittest.mock import Mock, patch, call
 
 from operations.SyncOperations import (
     EventBus,
@@ -20,12 +18,12 @@ from operations.SyncOperations import (
     _execute_wait_for_signal,
     _execute_wait,
 )
-from operations.Base import OperationResult
 
 
 # ============================================================================
 # UNIT TESTS: EventBus Core
 # ============================================================================
+
 
 class TestEventBusCore:
     """Test EventBus singleton and basic event operations"""
@@ -203,10 +201,13 @@ class TestEventBusCore:
 # UNIT TESTS: EventBus Thread Safety
 # ============================================================================
 
+
 class TestEventBusThreadSafety:
     """Test EventBus thread safety and race conditions"""
 
-    def test_concurrent_signals_different_events(self, event_bus, thread_error_collector):
+    def test_concurrent_signals_different_events(
+        self, event_bus, thread_error_collector
+    ):
         """Test multiple threads signaling different events simultaneously"""
         errors, add_error = thread_error_collector
         num_threads = 20
@@ -217,7 +218,9 @@ class TestEventBusThreadSafety:
             except Exception as e:
                 add_error(e)
 
-        threads = [threading.Thread(target=signal_event, args=(i,)) for i in range(num_threads)]
+        threads = [
+            threading.Thread(target=signal_event, args=(i,)) for i in range(num_threads)
+        ]
 
         for t in threads:
             t.start()
@@ -288,8 +291,12 @@ class TestEventBusThreadSafety:
             results[event_name].append(result)
 
         # Start waiters for two different events
-        threads_e1 = [threading.Thread(target=waiter, args=("event1",)) for _ in range(5)]
-        threads_e2 = [threading.Thread(target=waiter, args=("event2",)) for _ in range(5)]
+        threads_e1 = [
+            threading.Thread(target=waiter, args=("event1",)) for _ in range(5)
+        ]
+        threads_e2 = [
+            threading.Thread(target=waiter, args=("event2",)) for _ in range(5)
+        ]
 
         for t in threads_e1 + threads_e2:
             t.start()
@@ -496,6 +503,7 @@ class TestEventBusThreadSafety:
 # UNIT TESTS: Signal Operation
 # ============================================================================
 
+
 class TestSignalOperation:
     """Test signal() operation"""
 
@@ -514,7 +522,10 @@ class TestSignalOperation:
         after = time.time()
 
         assert result.success is True
-        assert result.result is not None and before <= result.result["signaled_at"] <= after
+        assert (
+            result.result is not None
+            and before <= result.result["signaled_at"] <= after
+        )
 
     def test_signal_invalid_event_name(self, cleanup_event_bus):
         """Test signal with various event name types"""
@@ -525,7 +536,11 @@ class TestSignalOperation:
         # None gets converted to string "None" by Python, EventBus accepts it
         result = _execute_signal(None)  # type: ignore[arg-type]
         # This actually succeeds because Python converts None to str
-        assert result.success is True or (result.success is False and result.error is not None and result.error["code"] == "SIGNAL_FAILED")
+        assert result.success is True or (
+            result.success is False
+            and result.error is not None
+            and result.error["code"] == "SIGNAL_FAILED"
+        )
 
     def test_signal_empty_string(self, cleanup_event_bus):
         """Test signal with empty string event name"""
@@ -540,12 +555,17 @@ class TestSignalOperation:
         result = _execute_signal(12345)  # type: ignore[arg-type]
 
         # This succeeds because Python converts int to str
-        assert result.success is True or (result.success is False and result.error is not None and result.error["code"] == "SIGNAL_FAILED")
+        assert result.success is True or (
+            result.success is False
+            and result.error is not None
+            and result.error["code"] == "SIGNAL_FAILED"
+        )
 
 
 # ============================================================================
 # UNIT TESTS: Wait For Signal Operation
 # ============================================================================
+
 
 class TestWaitForSignalOperation:
     """Test wait_for_signal() operation"""
@@ -584,7 +604,9 @@ class TestWaitForSignalOperation:
         assert result.error["code"] == "WAIT_TIMEOUT"
         assert event_name in result.error["message"]
 
-    def test_wait_elapsed_time_tracking(self, cleanup_event_bus, async_executor, timing_helper):
+    def test_wait_elapsed_time_tracking(
+        self, cleanup_event_bus, async_executor, timing_helper
+    ):
         """Test wait_for_signal tracks elapsed time accurately"""
         event_name = "elapsed_test"
         wait_result = {}
@@ -604,7 +626,9 @@ class TestWaitForSignalOperation:
 
         assert wait_result["result"].success is True
         # Elapsed time should be ~300ms (within ±20% tolerance)
-        assert timing_helper(wait_result["result"].result["elapsed_ms"], 300, tolerance_percent=20)
+        assert timing_helper(
+            wait_result["result"].result["elapsed_ms"], 300, tolerance_percent=20
+        )
 
     def test_wait_default_timeout(self, cleanup_event_bus):
         """Test wait_for_signal uses default timeout (30 seconds)"""
@@ -639,7 +663,9 @@ class TestWaitForSignalOperation:
         # It will timeout immediately
         result = _execute_wait_for_signal(event_name, timeout_ms=-100)
         # Should timeout immediately
-        assert result.success is False or (result.result is not None and result.result.get("elapsed_ms", 0) < 10)
+        assert result.success is False or (
+            result.result is not None and result.result.get("elapsed_ms", 0) < 10
+        )
 
     def test_wait_negative_timeout(self, cleanup_event_bus):
         """Test wait_for_signal with negative timeout"""
@@ -648,7 +674,9 @@ class TestWaitForSignalOperation:
         result = _execute_wait_for_signal(event_name, timeout_ms=-1)
 
         # Should timeout immediately (negative timeout converted to 0)
-        assert result.success is False or (result.result is not None and result.result.get("elapsed_ms", 0) < 10)
+        assert result.success is False or (
+            result.result is not None and result.result.get("elapsed_ms", 0) < 10
+        )
 
     def test_wait_zero_timeout(self, cleanup_event_bus):
         """Test wait_for_signal with zero timeout"""
@@ -657,7 +685,9 @@ class TestWaitForSignalOperation:
         result = _execute_wait_for_signal(event_name, timeout_ms=0)
 
         # Should timeout immediately
-        assert result.success is False or (result.result is not None and result.result.get("elapsed_ms", 0) < 10)
+        assert result.success is False or (
+            result.result is not None and result.result.get("elapsed_ms", 0) < 10
+        )
 
     def test_wait_recovery_suggestions_on_timeout(self, cleanup_event_bus):
         """Test wait_for_signal provides recovery suggestions on timeout"""
@@ -671,12 +701,16 @@ class TestWaitForSignalOperation:
         assert "recovery_suggestions" in result.error
         assert len(result.error["recovery_suggestions"]) > 0
         # Should mention checking if signal is sent
-        assert any("signal" in suggestion.lower() for suggestion in result.error["recovery_suggestions"])
+        assert any(
+            "signal" in suggestion.lower()
+            for suggestion in result.error["recovery_suggestions"]
+        )
 
 
 # ============================================================================
 # UNIT TESTS: Wait Operation
 # ============================================================================
+
 
 class TestWaitOperation:
     """Test wait() operation"""
@@ -754,6 +788,7 @@ class TestWaitOperation:
 # INTEGRATION TESTS: Basic Scenarios
 # ============================================================================
 
+
 class TestSyncIntegrationBasic:
     """Basic integration scenarios with real EventBus"""
 
@@ -767,8 +802,7 @@ class TestSyncIntegrationBasic:
 
         # Wait (should receive immediately)
         wait_result = WAIT_FOR_SIGNAL_OPERATION.execute(
-            event_name=event_name,
-            timeout_ms=1000
+            event_name=event_name, timeout_ms=1000
         )
         assert wait_result.success is True
         assert wait_result.result is not None
@@ -789,8 +823,7 @@ class TestSyncIntegrationBasic:
 
             # Wait for robot2 ready
             wait_result = WAIT_FOR_SIGNAL_OPERATION.execute(
-                event_name="robot2_ready",
-                timeout_ms=2000
+                event_name="robot2_ready", timeout_ms=2000
             )
             assert wait_result.success
 
@@ -799,8 +832,7 @@ class TestSyncIntegrationBasic:
         def robot2():
             # Robot2: Wait for cube gripped
             wait_result = WAIT_FOR_SIGNAL_OPERATION.execute(
-                event_name="cube_gripped",
-                timeout_ms=2000
+                event_name="cube_gripped", timeout_ms=2000
             )
             assert wait_result.success
 
@@ -896,6 +928,7 @@ class TestSyncIntegrationBasic:
 # INTEGRATION TESTS: Multi-Robot Coordination
 # ============================================================================
 
+
 class TestSyncIntegrationMultiRobot:
     """Multi-robot coordination scenarios"""
 
@@ -917,10 +950,7 @@ class TestSyncIntegrationMultiRobot:
             WAIT_FOR_SIGNAL_OPERATION.execute(event_name="r1_done", timeout_ms=2000)
             results["robot2"].append("final_op2")
 
-        threads = [
-            threading.Thread(target=robot1),
-            threading.Thread(target=robot2)
-        ]
+        threads = [threading.Thread(target=robot1), threading.Thread(target=robot2)]
 
         for t in threads:
             t.start()
@@ -950,7 +980,7 @@ class TestSyncIntegrationMultiRobot:
         threads = [
             threading.Thread(target=robot1),
             threading.Thread(target=robot2),
-            threading.Thread(target=robot3)
+            threading.Thread(target=robot3),
         ]
 
         for t in threads:
@@ -970,7 +1000,9 @@ class TestSyncIntegrationMultiRobot:
             results.append(robot_id)
 
         # Start 5 robots waiting
-        threads = [threading.Thread(target=robot_waiter, args=(f"robot{i}",)) for i in range(5)]
+        threads = [
+            threading.Thread(target=robot_waiter, args=(f"robot{i}",)) for i in range(5)
+        ]
 
         for t in threads:
             t.start()
@@ -1012,7 +1044,7 @@ class TestSyncIntegrationMultiRobot:
         threads = [
             threading.Thread(target=robot1),
             threading.Thread(target=robot2),
-            threading.Thread(target=robot3)
+            threading.Thread(target=robot3),
         ]
 
         for t in threads:
@@ -1031,6 +1063,7 @@ class TestSyncIntegrationMultiRobot:
 # INTEGRATION TESTS: SequenceExecutor Integration
 # ============================================================================
 
+
 class TestSyncWithSequenceExecutor:
     """Integration with SequenceExecutor"""
 
@@ -1043,7 +1076,10 @@ class TestSyncWithSequenceExecutor:
         commands = [
             {"operation": "signal", "params": {"event_name": "test_event"}},
             {"operation": "wait", "params": {"duration_ms": 100}},
-            {"operation": "wait_for_signal", "params": {"event_name": "test_event", "timeout_ms": 1000}},
+            {
+                "operation": "wait_for_signal",
+                "params": {"event_name": "test_event", "timeout_ms": 1000},
+            },
         ]
 
         result = executor.execute_sequence(commands)
@@ -1063,22 +1099,22 @@ class TestSyncWithSequenceExecutor:
             {
                 "parallel_group": 0,
                 "operation": "signal",
-                "params": {"event_name": "group0_r1"}
+                "params": {"event_name": "group0_r1"},
             },
             {
                 "parallel_group": 0,
                 "operation": "signal",
-                "params": {"event_name": "group0_r2"}
+                "params": {"event_name": "group0_r2"},
             },
             {
                 "parallel_group": 1,
                 "operation": "wait_for_signal",
-                "params": {"event_name": "group0_r1", "timeout_ms": 1000}
+                "params": {"event_name": "group0_r1", "timeout_ms": 1000},
             },
             {
                 "parallel_group": 1,
                 "operation": "wait_for_signal",
-                "params": {"event_name": "group0_r2", "timeout_ms": 1000}
+                "params": {"event_name": "group0_r2", "timeout_ms": 1000},
             },
         ]
 
@@ -1094,7 +1130,10 @@ class TestSyncWithSequenceExecutor:
         executor = SequenceExecutor(check_completion=False)
 
         commands = [
-            {"operation": "wait_for_signal", "params": {"event_name": "never_sent", "timeout_ms": 5000}},
+            {
+                "operation": "wait_for_signal",
+                "params": {"event_name": "never_sent", "timeout_ms": 5000},
+            },
             {"operation": "wait", "params": {"duration_ms": 100}},
         ]
 
@@ -1132,7 +1171,10 @@ class TestSyncWithSequenceExecutor:
         executor = SequenceExecutor(check_completion=False)
 
         commands = [
-            {"operation": "wait_for_signal", "params": {"event_name": "timeout_event", "timeout_ms": 300}},
+            {
+                "operation": "wait_for_signal",
+                "params": {"event_name": "timeout_event", "timeout_ms": 300},
+            },
             {"operation": "wait", "params": {"duration_ms": 100}},  # Should not execute
         ]
 

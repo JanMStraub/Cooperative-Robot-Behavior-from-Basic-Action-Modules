@@ -4,6 +4,9 @@
   "pythonVersion": "3.12",
   "typeCheckingMode": "basic",
   "reportMissingModuleSource": "none",
+  "extraPaths": [
+    "tests/integration/helpers"
+  ],
   "ignore": [
     "ros2/**",
     "ros_unity_integration/**"

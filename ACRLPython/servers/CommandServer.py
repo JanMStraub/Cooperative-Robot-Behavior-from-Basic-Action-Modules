@@ -133,7 +133,7 @@ class CommandBroadcaster:
 
     def send_result(self, result: Dict[str, Any]) -> bool:
         """
-        Send a result to Unity (backward compatibility with ResultsBroadcaster).
+        Send a result to Unity.
 
         Args:
             result: Result dictionary
@@ -161,7 +161,9 @@ class CommandBroadcaster:
                 self._completion_queues[request_id].put(completion)
                 logger.debug(f"Completion queued for request {request_id}")
             else:
-                logger.warning(f"No queue for request {request_id} (late arrival or Unity-initiated)")
+                logger.warning(
+                    f"No queue for request {request_id} (late arrival or Unity-initiated)"
+                )
 
     def get_completion(
         self, request_id: int, timeout: float = 5.0

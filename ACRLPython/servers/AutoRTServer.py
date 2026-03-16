@@ -11,7 +11,6 @@ Architecture:
 - Protocol V2 with AUTORT_COMMAND/AUTORT_RESPONSE message types
 """
 
-import json
 import logging
 import socket
 import struct
@@ -20,9 +19,11 @@ from typing import Any, Dict, Optional
 # Configure logging
 try:
     from core.LoggingSetup import setup_logging
+
     setup_logging(__name__)
 except ImportError:
     from ..core.LoggingSetup import setup_logging
+
     setup_logging(__name__)
 
 logger = logging.getLogger(__name__)
@@ -97,7 +98,9 @@ class AutoRTServer(TCPServerBase):
                     logger.error(
                         f"Invalid message type: {msg_type} (expected {MessageType.AUTORT_COMMAND})"
                     )
-                    self._send_error(client, request_id, f"Invalid message type: {msg_type}")
+                    self._send_error(
+                        client, request_id, f"Invalid message type: {msg_type}"
+                    )
                     continue
 
                 # Handle AutoRT command
@@ -129,14 +132,20 @@ class AutoRTServer(TCPServerBase):
         """
         try:
             # Receive complete message
-            complete_message = self._receive_complete_autort_command(client, header_bytes)
+            complete_message = self._receive_complete_autort_command(
+                client, header_bytes
+            )
             if not complete_message:
                 logger.error("Failed to receive complete AutoRT command")
-                self._send_error(client, request_id, "Failed to receive complete command")
+                self._send_error(
+                    client, request_id, "Failed to receive complete command"
+                )
                 return
 
             # Decode command
-            request_id, command_type, params = UnityProtocol.decode_autort_command(complete_message)
+            request_id, command_type, params = UnityProtocol.decode_autort_command(
+                complete_message
+            )
 
             logger.info(f"AutoRT command received: {command_type} (params={params})")
 
@@ -248,7 +257,9 @@ class AutoRTServer(TCPServerBase):
                 chunk = client.recv(num_bytes - len(data))
                 if not chunk:
                     # Connection closed by peer (recv returned empty bytes)
-                    logger.debug(f"Connection closed by peer (_recv_exact got empty chunk)")
+                    logger.debug(
+                        f"Connection closed by peer (_recv_exact got empty chunk)"
+                    )
                     return None
                 data += chunk
             except socket.timeout:

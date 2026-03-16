@@ -12,7 +12,7 @@ Full integration testing requires actual Unity connection.
 import pytest
 import threading
 import time
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 from servers.CommandServer import CommandServer, CommandBroadcaster
 
 
@@ -32,9 +32,9 @@ class TestCommandBroadcasterThreadSafety:
         broadcaster = CommandBroadcaster()
 
         # Verify thread-safe command tracking structures exist
-        assert hasattr(broadcaster, '_active_commands')
-        assert hasattr(broadcaster, '_active_commands_lock')
-        assert hasattr(broadcaster, '_robot_clients')
+        assert hasattr(broadcaster, "_active_commands")
+        assert hasattr(broadcaster, "_active_commands_lock")
+        assert hasattr(broadcaster, "_robot_clients")
 
         # Verify lock is RLock for reentrant locking
         rlock_type = type(threading.RLock())
@@ -73,22 +73,23 @@ class TestCommandServerInitialization:
     @pytest.fixture
     def server(self):
         """Create a CommandServer instance for testing"""
-        with patch('socket.socket'):
+        with patch("socket.socket"):
             from core.TCPServerBase import ServerConfig
-            config = ServerConfig(host='localhost', port=5010)
+
+            config = ServerConfig(host="localhost", port=5010)
             server = CommandServer(config=config)
             yield server
 
     def test_server_creates_broadcaster(self, server):
         """Test server creates and initializes broadcaster"""
-        assert hasattr(server, '_broadcaster')
+        assert hasattr(server, "_broadcaster")
         assert server._broadcaster is not None
         assert isinstance(server._broadcaster, CommandBroadcaster)
 
     def test_server_broadcaster_has_server_reference(self, server):
         """Test broadcaster has reference to server"""
         broadcaster = server._broadcaster
-        assert hasattr(broadcaster, '_server')
+        assert hasattr(broadcaster, "_server")
         assert broadcaster._server is server
 
 
@@ -181,25 +182,25 @@ class TestCommandBroadcasterMethods:
     def test_broadcaster_has_send_command(self):
         """Test broadcaster has send_command method"""
         broadcaster = CommandBroadcaster()
-        assert hasattr(broadcaster, 'send_command')
+        assert hasattr(broadcaster, "send_command")
         assert callable(broadcaster.send_command)
 
     def test_broadcaster_has_track_command(self):
         """Test broadcaster has track_command method"""
         broadcaster = CommandBroadcaster()
-        assert hasattr(broadcaster, 'track_command')
+        assert hasattr(broadcaster, "track_command")
         assert callable(broadcaster.track_command)
 
     def test_broadcaster_has_complete_command(self):
         """Test broadcaster has complete_command method"""
         broadcaster = CommandBroadcaster()
-        assert hasattr(broadcaster, 'complete_command')
+        assert hasattr(broadcaster, "complete_command")
         assert callable(broadcaster.complete_command)
 
     def test_broadcaster_has_register_robot_client(self):
         """Test broadcaster has register_robot_client method"""
         broadcaster = CommandBroadcaster()
-        assert hasattr(broadcaster, 'register_robot_client')
+        assert hasattr(broadcaster, "register_robot_client")
         assert callable(broadcaster.register_robot_client)
 
 
@@ -209,7 +210,7 @@ class TestConcurrentAccess:
     def test_concurrent_dictionary_access(self):
         """Test concurrent access to active commands dictionary"""
         broadcaster = CommandBroadcaster()
-        success_count = {'value': 0}
+        success_count = {"value": 0}
         lock = threading.Lock()
 
         def safe_access(thread_id):
@@ -222,11 +223,11 @@ class TestConcurrentAccess:
                         # Write - use integer key (request IDs are integers)
                         key = thread_id * 1000 + i  # Generate unique int key
                         broadcaster._active_commands[key] = {
-                            'thread': thread_id,
-                            'index': i
+                            "thread": thread_id,
+                            "index": i,
                         }
                 with lock:
-                    success_count['value'] += 1
+                    success_count["value"] += 1
             except Exception:
                 pass
 
@@ -242,7 +243,7 @@ class TestConcurrentAccess:
             thread.join()
 
         # All threads should complete successfully
-        assert success_count['value'] == 10
+        assert success_count["value"] == 10
 
 
 # Note: Full integration tests require actual Unity connection and are beyond

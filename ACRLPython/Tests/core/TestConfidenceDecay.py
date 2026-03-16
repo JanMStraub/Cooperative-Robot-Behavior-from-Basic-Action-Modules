@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Test suite for object confidence decay and liveness tracking.
 
@@ -8,10 +9,9 @@ Tests the WorldState confidence decay mechanism, including:
 - Staleness threshold marking
 """
 
-import math
 import unittest
 import time
-from operations.WorldState import WorldState, get_world_state
+from operations.WorldState import get_world_state
 from config.Robot import (
     CONFIDENCE_DECAY_PER_FRAME,
     STALE_CONFIDENCE_THRESHOLD,
@@ -59,7 +59,9 @@ class TestConfidenceDecay(unittest.TestCase):
         # Verify confidence decayed by 5 * CONFIDENCE_DECAY_PER_FRAME
         obj = self.world_state._objects["obj1"]
         expected_confidence = 1.0 - (5 * CONFIDENCE_DECAY_PER_FRAME)
-        self.assertAlmostEqual(obj.confidence, expected_confidence, delta=_CONFIDENCE_TOL)
+        self.assertAlmostEqual(
+            obj.confidence, expected_confidence, delta=_CONFIDENCE_TOL
+        )
 
     def test_confidence_cannot_go_negative(self):
         """Test that confidence is clamped to 0.0."""
@@ -95,7 +97,9 @@ class TestConfidenceDecay(unittest.TestCase):
         # One more frame brings us to threshold (7 frames total)
         self.world_state.decay_object_confidence(set())
         obj = self.world_state._objects["obj1"]
-        self.assertAlmostEqual(obj.confidence, STALE_CONFIDENCE_THRESHOLD, delta=_CONFIDENCE_TOL)
+        self.assertAlmostEqual(
+            obj.confidence, STALE_CONFIDENCE_THRESHOLD, delta=_CONFIDENCE_TOL
+        )
         self.assertFalse(obj.stale, "Should not be stale at threshold (< not <=)")
 
         # One more frame makes it stale (8 frames total)

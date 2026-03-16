@@ -67,6 +67,7 @@ except ImportError:
     )
 
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 import time as _time
@@ -91,6 +92,7 @@ def _make_cache_key(imgL: np.ndarray, imgR: np.ndarray) -> tuple:
     Returns:
         Tuple usable as dict key
     """
+
     def _head(img: np.ndarray) -> bytes:
         flat = img.flat
         return bytes(int(next(flat)) for _ in range(min(64, img.size)))
@@ -331,6 +333,7 @@ def save_disparity_map_debug(disparity: np.ndarray, output_path: Optional[Path] 
 
     try:
         import time as _time
+
         if output_path is None:
             output_dir = Path(DEBUG_DISPARITY_DIR)
             output_dir.mkdir(parents=True, exist_ok=True)
@@ -342,7 +345,9 @@ def save_disparity_map_debug(disparity: np.ndarray, output_path: Optional[Path] 
         cv2.imwrite(str(output_path), (disp_valid * 16).astype(np.uint16))
         # Also save a colorized visualization
         disp_normalized = np.zeros_like(disp_valid, dtype=np.uint8)
-        cv2.normalize(disp_valid, disp_normalized, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+        cv2.normalize(
+            disp_valid, disp_normalized, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U
+        )
         disp_colored = cv2.applyColorMap(disp_normalized, cv2.COLORMAP_JET)
         color_path = str(output_path).replace(".png", "_color.jpg")
         cv2.imwrite(color_path, disp_colored)

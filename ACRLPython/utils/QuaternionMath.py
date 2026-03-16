@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Quaternion mathematical operations for 3D rotations.
 
@@ -11,7 +12,9 @@ import numpy as np
 from typing import Tuple
 
 
-def quaternion_from_euler(roll: float, pitch: float, yaw: float) -> Tuple[float, float, float, float]:
+def quaternion_from_euler(
+    roll: float, pitch: float, yaw: float
+) -> Tuple[float, float, float, float]:
     """
     Convert Euler angles (in radians) to quaternion.
 
@@ -41,7 +44,9 @@ def quaternion_from_euler(roll: float, pitch: float, yaw: float) -> Tuple[float,
     return (x, y, z, w)
 
 
-def euler_from_quaternion(x: float, y: float, z: float, w: float) -> Tuple[float, float, float]:
+def euler_from_quaternion(
+    x: float, y: float, z: float, w: float
+) -> Tuple[float, float, float]:
     """
     Convert quaternion to Euler angles (in radians).
 
@@ -73,8 +78,9 @@ def euler_from_quaternion(x: float, y: float, z: float, w: float) -> Tuple[float
     return (roll, pitch, yaw)
 
 
-def quaternion_multiply(q1: Tuple[float, float, float, float],
-                       q2: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
+def quaternion_multiply(
+    q1: Tuple[float, float, float, float], q2: Tuple[float, float, float, float]
+) -> Tuple[float, float, float, float]:
     """
     Multiply two quaternions.
 
@@ -99,8 +105,9 @@ def quaternion_multiply(q1: Tuple[float, float, float, float],
     return (x, y, z, w)
 
 
-def quaternion_rotate_vector(quat: Tuple[float, float, float, float],
-                             vec: np.ndarray) -> np.ndarray:
+def quaternion_rotate_vector(
+    quat: Tuple[float, float, float, float], vec: np.ndarray
+) -> np.ndarray:
     """
     Rotate a 3D vector by a quaternion.
 
@@ -127,8 +134,9 @@ def quaternion_rotate_vector(quat: Tuple[float, float, float, float],
     return rotated
 
 
-def quaternion_angle(q1: Tuple[float, float, float, float],
-                     q2: Tuple[float, float, float, float]) -> float:
+def quaternion_angle(
+    q1: Tuple[float, float, float, float], q2: Tuple[float, float, float, float]
+) -> float:
     """
     Calculate the angular distance between two quaternions in degrees.
 
@@ -158,7 +166,9 @@ def quaternion_angle(q1: Tuple[float, float, float, float],
     return angle_deg
 
 
-def quaternion_inverse(quat: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
+def quaternion_inverse(
+    quat: Tuple[float, float, float, float],
+) -> Tuple[float, float, float, float]:
     """
     Calculate the inverse (conjugate for unit quaternions) of a quaternion.
 
@@ -174,7 +184,7 @@ def quaternion_inverse(quat: Tuple[float, float, float, float]) -> Tuple[float, 
     x, y, z, w = quat
 
     # Normalize to ensure unit quaternion
-    norm = np.sqrt(x*x + y*y + z*z + w*w)
+    norm = np.sqrt(x * x + y * y + z * z + w * w)
 
     if norm < 1e-8:
         # Degenerate case, return identity
@@ -185,7 +195,9 @@ def quaternion_inverse(quat: Tuple[float, float, float, float]) -> Tuple[float, 
     return (-x * scale, -y * scale, -z * scale, w * scale)
 
 
-def quaternion_normalize(quat: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
+def quaternion_normalize(
+    quat: Tuple[float, float, float, float],
+) -> Tuple[float, float, float, float]:
     """
     Normalize a quaternion to unit length.
 
@@ -196,7 +208,7 @@ def quaternion_normalize(quat: Tuple[float, float, float, float]) -> Tuple[float
         Normalized quaternion (x, y, z, w)
     """
     x, y, z, w = quat
-    norm = np.sqrt(x*x + y*y + z*z + w*w)
+    norm = np.sqrt(x * x + y * y + z * z + w * w)
 
     if norm < 1e-8:
         # Degenerate case, return identity
@@ -215,7 +227,9 @@ def quaternion_identity() -> Tuple[float, float, float, float]:
     return (0.0, 0.0, 0.0, 1.0)
 
 
-def quaternion_from_axis_angle(axis: np.ndarray, angle_rad: float) -> Tuple[float, float, float, float]:
+def quaternion_from_axis_angle(
+    axis: np.ndarray, angle_rad: float
+) -> Tuple[float, float, float, float]:
     """
     Create a quaternion from an axis-angle representation.
 

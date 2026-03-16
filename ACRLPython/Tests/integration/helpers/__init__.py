@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Integration test helpers for ACRL backend tests.
 

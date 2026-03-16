@@ -47,6 +47,7 @@ case "$ACTION" in
         if docker compose ps | grep -q "acrl_foxglove"; then
              echo "  [OK] Foxglove Bridge is running on port 8765"
         fi
+        ;;
 
     down|stop)
         echo "Stopping ROS 2 services..."

@@ -1,8 +1,8 @@
-using Unity.Robotics.ROSTCPConnector;
+using RosMessageTypes.BuiltinInterfaces;
 using RosMessageTypes.Sensor;
 using RosMessageTypes.Std;
-using RosMessageTypes.BuiltinInterfaces;
 using Simulation;
+using Unity.Robotics.ROSTCPConnector;
 using UnityEngine;
 
 namespace Robotics
@@ -48,7 +48,12 @@ namespace Robotics
         /// </summary>
         private static readonly string[] ArmJointNames =
         {
-            "joint_1", "joint_2", "joint_3", "joint_4", "joint_5", "joint_6"
+            "joint_1",
+            "joint_2",
+            "joint_3",
+            "joint_4",
+            "joint_5",
+            "joint_6",
         };
 
         /// <summary>
@@ -56,7 +61,8 @@ namespace Robotics
         /// </summary>
         private static readonly string[] GripperJointNames =
         {
-            "gripper_jaw1_joint", "gripper_jaw2_joint"
+            "gripper_jaw1_joint",
+            "gripper_jaw2_joint",
         };
 
         private const string _logPrefix = "[ROS_JOINT_STATE_PUBLISHER]";
@@ -100,7 +106,7 @@ namespace Robotics
 
             Debug.Log(
                 $"{_logPrefix} Initialized for {_robotController.robotId}. "
-                + $"Publishing {jointCount} joints at {_publishRate}Hz on {_resolvedTopicName}"
+                    + $"Publishing {jointCount} joints at {_publishRate}Hz on {_resolvedTopicName}"
             );
         }
 
@@ -134,7 +140,10 @@ namespace Robotics
                 return;
 
             // Don't queue messages before the ROS connection is established
-            if (ROSConnectionInitializer.Instance != null && !ROSConnectionInitializer.Instance.IsConnected)
+            if (
+                ROSConnectionInitializer.Instance != null
+                && !ROSConnectionInitializer.Instance.IsConnected
+            )
                 return;
 
             _timeSinceLastPublish += Time.fixedDeltaTime;
@@ -166,17 +175,14 @@ namespace Robotics
                 if (joint == null)
                     continue;
 
-                _jointStateMsg.position[i] = joint.jointPosition.dofCount > 0
-                    ? joint.jointPosition[0]
-                    : 0.0;
+                _jointStateMsg.position[i] =
+                    joint.jointPosition.dofCount > 0 ? joint.jointPosition[0] : 0.0;
 
-                _jointStateMsg.velocity[i] = joint.jointVelocity.dofCount > 0
-                    ? joint.jointVelocity[0]
-                    : 0.0;
+                _jointStateMsg.velocity[i] =
+                    joint.jointVelocity.dofCount > 0 ? joint.jointVelocity[0] : 0.0;
 
-                _jointStateMsg.effort[i] = joint.jointForce.dofCount > 0
-                    ? joint.jointForce[0]
-                    : 0.0;
+                _jointStateMsg.effort[i] =
+                    joint.jointForce.dofCount > 0 ? joint.jointForce[0] : 0.0;
             }
 
             // Read gripper joint data
@@ -187,23 +193,23 @@ namespace Robotics
                 if (_gripperController.leftGripper != null)
                 {
                     var lg = _gripperController.leftGripper;
-                    _jointStateMsg.position[offset] = lg.jointPosition.dofCount > 0
-                        ? lg.jointPosition[0] : 0.0;
-                    _jointStateMsg.velocity[offset] = lg.jointVelocity.dofCount > 0
-                        ? lg.jointVelocity[0] : 0.0;
-                    _jointStateMsg.effort[offset] = lg.jointForce.dofCount > 0
-                        ? lg.jointForce[0] : 0.0;
+                    _jointStateMsg.position[offset] =
+                        lg.jointPosition.dofCount > 0 ? lg.jointPosition[0] : 0.0;
+                    _jointStateMsg.velocity[offset] =
+                        lg.jointVelocity.dofCount > 0 ? lg.jointVelocity[0] : 0.0;
+                    _jointStateMsg.effort[offset] =
+                        lg.jointForce.dofCount > 0 ? lg.jointForce[0] : 0.0;
                 }
 
                 if (_gripperController.rightGripper != null)
                 {
                     var rg = _gripperController.rightGripper;
-                    _jointStateMsg.position[offset + 1] = rg.jointPosition.dofCount > 0
-                        ? rg.jointPosition[0] : 0.0;
-                    _jointStateMsg.velocity[offset + 1] = rg.jointVelocity.dofCount > 0
-                        ? rg.jointVelocity[0] : 0.0;
-                    _jointStateMsg.effort[offset + 1] = rg.jointForce.dofCount > 0
-                        ? rg.jointForce[0] : 0.0;
+                    _jointStateMsg.position[offset + 1] =
+                        rg.jointPosition.dofCount > 0 ? rg.jointPosition[0] : 0.0;
+                    _jointStateMsg.velocity[offset + 1] =
+                        rg.jointVelocity.dofCount > 0 ? rg.jointVelocity[0] : 0.0;
+                    _jointStateMsg.effort[offset + 1] =
+                        rg.jointForce.dofCount > 0 ? rg.jointForce[0] : 0.0;
                 }
             }
 
@@ -219,7 +225,15 @@ namespace Robotics
         {
             // Use system clock (Unix epoch) instead of Unity simulation time
             // ROS expects seconds since 1970-01-01 00:00:00 UTC
-            System.DateTime epoch = new System.DateTime(1970, 1, 1, 0, 0, 0, System.DateTimeKind.Utc);
+            System.DateTime epoch = new System.DateTime(
+                1970,
+                1,
+                1,
+                0,
+                0,
+                0,
+                System.DateTimeKind.Utc
+            );
             System.TimeSpan timeSinceEpoch = System.DateTime.UtcNow - epoch;
             double t = timeSinceEpoch.TotalSeconds;
             int sec = (int)t;

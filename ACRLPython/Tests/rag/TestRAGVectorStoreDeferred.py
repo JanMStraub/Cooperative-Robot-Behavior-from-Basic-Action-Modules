@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Tests for VectorStore deferred-flush and metadata-update features
 =================================================================
@@ -27,6 +28,7 @@ from rag.VectorStore import VectorStore
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _unit(n: int) -> np.ndarray:
     """Return a unit vector of length n pointing along axis 0."""
     v = np.zeros(n)
@@ -48,6 +50,7 @@ def _store_with_ops(n: int, dim: int = 4) -> VectorStore:
 # ---------------------------------------------------------------------------
 # Deferred flush: internal staging behaviour
 # ---------------------------------------------------------------------------
+
 
 class TestDeferredFlush:
     """add_operation stages embeddings; flush materialises them in one pass."""
@@ -132,6 +135,7 @@ class TestDeferredFlush:
 # Flush triggered by public API
 # ---------------------------------------------------------------------------
 
+
 class TestFlushTriggeredByPublicAPI:
     """search, get_operation, and save all auto-flush before use."""
 
@@ -177,6 +181,7 @@ class TestFlushTriggeredByPublicAPI:
 # update_operation_metadata
 # ---------------------------------------------------------------------------
 
+
 class TestUpdateOperationMetadata:
     """Merge new fields into metadata without re-embedding."""
 
@@ -185,12 +190,15 @@ class TestUpdateOperationMetadata:
         store = VectorStore()
         store.add_operation("op_0", _unit(4), {"name": "move", "type": "navigation"})
 
-        ok = store.update_operation_metadata("op_0", {
-            "execution_count": 10,
-            "success_count": 8,
-            "failure_count": 2,
-            "last_outcome": "success",
-        })
+        ok = store.update_operation_metadata(
+            "op_0",
+            {
+                "execution_count": 10,
+                "success_count": 8,
+                "failure_count": 2,
+                "last_outcome": "success",
+            },
+        )
 
         assert ok is True
         meta = store.metadata[0]
@@ -202,7 +210,9 @@ class TestUpdateOperationMetadata:
     def test_preserves_existing_fields(self):
         """Merging new fields must not overwrite unrelated existing metadata."""
         store = VectorStore()
-        store.add_operation("op_0", _unit(4), {"name": "grasp", "category": "manipulation"})
+        store.add_operation(
+            "op_0", _unit(4), {"name": "grasp", "category": "manipulation"}
+        )
 
         store.update_operation_metadata("op_0", {"execution_count": 5})
 
@@ -233,10 +243,13 @@ class TestUpdateOperationMetadata:
         """Outcome metadata written via update_operation_metadata persists through pickle."""
         store = VectorStore()
         store.add_operation("op_0", _unit(4), {"name": "move"})
-        store.update_operation_metadata("op_0", {
-            "execution_count": 3,
-            "last_outcome": "failure",
-        })
+        store.update_operation_metadata(
+            "op_0",
+            {
+                "execution_count": 3,
+                "last_outcome": "failure",
+            },
+        )
 
         with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as f:
             tmp = f.name

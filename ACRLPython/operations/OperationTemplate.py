@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 TEMPLATE: Robot Operation Implementation
 ==========================================
@@ -337,65 +338,47 @@ def create_[operation_name]_operation() -> BasicOperation:
         # RELATIONSHIPS: How this relates to other operations
         # =================================================================
 
-        # Option 1: Simple lists (backward compatible, auto-converted to OperationRelationship)
-        required_operations=[
-            # List operation IDs that must be executed first
-            # Example: ["perception_detect_001"] if you need to detect before acting
-        ],
+        relationships=OperationRelationship(
+            operation_id="[category]_[name]_[number]",
 
-        commonly_paired_with=[
-            # List operation IDs often used together
-            # Example: ["motion_move_001", "manipulation_grip_001"]
-        ],
+            # Required operations with explanations
+            required_operations=["status_check_robot_001"],
+            required_reasons={
+                "status_check_robot_001": "Verify robot is ready before executing operation",
+            },
 
-        mutually_exclusive_with=[
-            # List operation IDs that can't run simultaneously
-            # Example: ["motion_rotate_001"]
-        ],
+            # Commonly paired operations with reasons
+            commonly_paired_with=["perception_detect_001", "motion_move_001"],
+            pairing_reasons={
+                "perception_detect_001": "Detect objects before acting on them",
+                "motion_move_001": "Position robot after detection",
+            },
 
-        # Option 2: Enhanced relationships (RECOMMENDED - provides richer context for LLM)
-        # Uncomment and use this for better RAG retrieval and task planning
-        # relationships=OperationRelationship(
-        #     operation_id="[category]_[name]_[number]",
-        #
-        #     # Required operations with explanations
-        #     required_operations=["status_check_robot_001"],
-        #     required_reasons={
-        #         "status_check_robot_001": "Verify robot is ready before executing operation",
-        #     },
-        #
-        #     # Commonly paired operations with reasons
-        #     commonly_paired_with=["perception_detect_001", "motion_move_001"],
-        #     pairing_reasons={
-        #         "perception_detect_001": "Detect objects before acting on them",
-        #         "motion_move_001": "Position robot after detection",
-        #     },
-        #
-        #     # Mutually exclusive operations with reasons
-        #     mutually_exclusive_with=[],
-        #     exclusion_reasons={},
-        #
-        #     # Parameter flows for automatic chaining
-        #     parameter_flows=[
-        #         # Example: Pass detection coordinates to movement
-        #         # ParameterFlow(
-        #         #     source_operation="perception_detect_001",
-        #         #     source_output_key="x",
-        #         #     target_operation="motion_move_001",
-        #         #     target_input_param="x",
-        #         #     description="X coordinate of detected object"
-        #         # ),
-        #     ],
-        #
-        #     # Temporal ordering hints
-        #     typical_before=["manipulation_grip_001"],  # Operations usually after this one
-        #     typical_after=["perception_detect_001"],   # Operations usually before this one
-        #
-        #     # Multi-robot coordination (optional)
-        #     coordination_requirements={
-        #         # Example: "sync_required": True, "min_robots": 2
-        #     },
-        # ),
+            # Mutually exclusive operations with reasons
+            mutually_exclusive_with=[],
+            exclusion_reasons={},
+
+            # Parameter flows for automatic chaining
+            parameter_flows=[
+                # Example: Pass detection coordinates to movement
+                # ParameterFlow(
+                #     source_operation="perception_detect_001",
+                #     source_output_key="x",
+                #     target_operation="motion_move_001",
+                #     target_input_param="x",
+                #     description="X coordinate of detected object"
+                # ),
+            ],
+
+            # Temporal ordering hints
+            typical_before=["manipulation_grip_001"],  # Operations usually after this one
+            typical_after=["perception_detect_001"],   # Operations usually before this one
+
+            # Multi-robot coordination (optional)
+            coordination_requirements={
+                # Example: "sync_required": True, "min_robots": 2
+            },
+        ),
 
         # =================================================================
         # IMPLEMENTATION: Link to the actual function

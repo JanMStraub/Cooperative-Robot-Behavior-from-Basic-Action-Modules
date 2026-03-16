@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 UnityInterface.py - Unity Hardware Adapter
 
@@ -26,6 +27,7 @@ class UnityHardwareInterface(RobotHardwareInterface):
     def _broadcaster(self):
         """Return the CommandBroadcaster singleton."""
         from core.Imports import get_command_broadcaster
+
         return get_command_broadcaster()
 
     def move_to(self, robot_id: str, x: float, y: float, z: float, **kwargs) -> bool:
@@ -63,9 +65,10 @@ class UnityHardwareInterface(RobotHardwareInterface):
         """
         try:
             from core.Imports import get_world_state
+
             robot_state = get_world_state().get_robot_state(robot_id)
             if robot_state:
-                return robot_state.get("joint_positions", [])
+                return robot_state.joint_angles or []
             return []
         except Exception as e:
             logger.error(f"UnityInterface.get_joint_states failed: {e}")

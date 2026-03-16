@@ -11,8 +11,7 @@ Tests the field detection operations including:
 """
 
 import pytest
-import time
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock, patch
 import numpy as np
 
 from operations.FieldOperations import (
@@ -23,7 +22,6 @@ from operations.FieldOperations import (
     GET_FIELD_CENTER_OPERATION,
     DETECT_ALL_FIELDS_OPERATION,
 )
-from operations.Base import OperationResult
 
 
 # ============================================================================
@@ -89,7 +87,9 @@ class TestDetectField:
         # Mock YOLODetector
         with patch("vision.YOLODetector.YOLODetector") as mock_yolo_class:
             mock_detector = Mock()
-            mock_detector.detect_objects_stereo = Mock(return_value=mock_detection_result)
+            mock_detector.detect_objects_stereo = Mock(
+                return_value=mock_detection_result
+            )
             mock_yolo_class.return_value = mock_detector
 
             result = detect_field("Robot1", "A")
@@ -113,7 +113,9 @@ class TestDetectField:
 
         with patch("vision.YOLODetector.YOLODetector") as mock_yolo_class:
             mock_detector = Mock()
-            mock_detector.detect_objects_stereo = Mock(return_value=mock_detection_result)
+            mock_detector.detect_objects_stereo = Mock(
+                return_value=mock_detection_result
+            )
             mock_yolo_class.return_value = mock_detector
 
             result = detect_field("Robot1", "a")  # Lowercase
@@ -122,9 +124,7 @@ class TestDetectField:
             assert result.result is not None
             assert result.result["field_label"] == "A"  # Should be uppercase in result
 
-    def test_detect_field_all_labels(
-        self, mock_image_storage_with_stereo, monkeypatch
-    ):
+    def test_detect_field_all_labels(self, mock_image_storage_with_stereo, monkeypatch):
         """Test detection of all field labels A-I."""
         monkeypatch.setattr(
             "operations.FieldOperations.get_unified_image_storage",
@@ -245,7 +245,9 @@ class TestDetectField:
 
         with patch("vision.YOLODetector.YOLODetector") as mock_yolo_class:
             mock_detector = Mock()
-            mock_detector.detect_objects_stereo = Mock(return_value=mock_detection_result)
+            mock_detector.detect_objects_stereo = Mock(
+                return_value=mock_detection_result
+            )
             mock_yolo_class.return_value = mock_detector
 
             result = detect_field("Robot1", "A", confidence_threshold=0.7)
@@ -336,7 +338,9 @@ class TestGetFieldCenter:
 
         with patch("vision.YOLODetector.YOLODetector") as mock_yolo_class:
             mock_detector = Mock()
-            mock_detector.detect_objects_stereo = Mock(return_value=mock_detection_result)
+            mock_detector.detect_objects_stereo = Mock(
+                return_value=mock_detection_result
+            )
             mock_yolo_class.return_value = mock_detector
 
             result = get_field_center("Robot1", "E")
@@ -512,13 +516,18 @@ class TestFieldOperationDefinitions:
         """Test GET_FIELD_CENTER_OPERATION is properly defined."""
         assert GET_FIELD_CENTER_OPERATION is not None
         assert GET_FIELD_CENTER_OPERATION.name == "get_field_center"
-        assert GET_FIELD_CENTER_OPERATION.operation_id == "perception_get_field_center_005"
+        assert (
+            GET_FIELD_CENTER_OPERATION.operation_id == "perception_get_field_center_005"
+        )
 
     def test_detect_all_fields_operation_definition(self):
         """Test DETECT_ALL_FIELDS_OPERATION is properly defined."""
         assert DETECT_ALL_FIELDS_OPERATION is not None
         assert DETECT_ALL_FIELDS_OPERATION.name == "detect_all_fields"
-        assert DETECT_ALL_FIELDS_OPERATION.operation_id == "perception_detect_all_fields_006"
+        assert (
+            DETECT_ALL_FIELDS_OPERATION.operation_id
+            == "perception_detect_all_fields_006"
+        )
 
     def test_all_operations_have_metadata(self):
         """Test all operations have required metadata."""
@@ -556,7 +565,9 @@ class TestFieldOperationsEdgeCases:
 
         with patch("vision.YOLODetector.YOLODetector") as mock_yolo_class:
             mock_detector = Mock()
-            mock_detector.detect_objects_stereo = Mock(return_value=mock_detection_result)
+            mock_detector.detect_objects_stereo = Mock(
+                return_value=mock_detection_result
+            )
             mock_yolo_class.return_value = mock_detector
 
             # Whitespace should be stripped
@@ -613,7 +624,9 @@ class TestFieldOperationsEdgeCases:
 
         with patch("vision.YOLODetector.YOLODetector") as mock_yolo_class:
             mock_detector = Mock()
-            mock_detector.detect_objects_stereo = Mock(return_value=mock_detection_result)
+            mock_detector.detect_objects_stereo = Mock(
+                return_value=mock_detection_result
+            )
             mock_yolo_class.return_value = mock_detector
 
             # Both should work

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Sandbox Executor for Generated Operations
 ============================================
@@ -77,7 +78,9 @@ def validate_in_sandbox(code: str, timeout: Optional[float] = None) -> Tuple[boo
     # inside the worker itself so no pickling issues arise.
     ctx = mp.get_context("spawn")
     result_queue = ctx.Queue()
-    process = ctx.Process(target=_sandbox_worker, args=(code, result_queue), daemon=True)
+    process = ctx.Process(
+        target=_sandbox_worker, args=(code, result_queue), daemon=True
+    )
     process.start()
     process.join(timeout=timeout)
 
@@ -127,15 +130,32 @@ def _build_safe_builtins() -> dict:
 
 # Modules that generated operations are allowed to import
 _ALLOWED_MODULES = {
-    "time", "logging", "json", "math", "re", "copy", "functools",
-    "typing", "dataclasses", "enum", "collections",
-    "operations", "operations.Base", "core", "core.Imports", "core.LoggingSetup",
+    "time",
+    "logging",
+    "json",
+    "math",
+    "re",
+    "copy",
+    "functools",
+    "typing",
+    "dataclasses",
+    "enum",
+    "collections",
+    "operations",
+    "operations.Base",
+    "core",
+    "core.Imports",
+    "core.LoggingSetup",
 }
 
 
 def _make_restricted_import():
     """Create a restricted __import__ function that only allows safe modules."""
-    real_import = __builtins__["__import__"] if isinstance(__builtins__, dict) else __builtins__.__import__
+    real_import = (
+        __builtins__["__import__"]
+        if isinstance(__builtins__, dict)
+        else __builtins__.__import__
+    )
 
     def restricted_import(name, *args, **kwargs):
         """Import only from allowed modules."""
@@ -182,22 +202,24 @@ def _build_sandbox_namespace(safe_builtins: dict) -> dict:
         OperationRelationship,
     )
 
-    namespace.update({
-        "time": time,
-        "logging": _logging,
-        "json": json,
-        "Any": Any,
-        "Dict": Dict,
-        "Optional": Optional,
-        "List": List,
-        "BasicOperation": BasicOperation,
-        "OperationCategory": OperationCategory,
-        "OperationComplexity": OperationComplexity,
-        "OperationParameter": OperationParameter,
-        "OperationResult": OperationResult,
-        "OperationRelationship": OperationRelationship,
-        "_get_command_broadcaster": lambda: mock_broadcaster,
-    })
+    namespace.update(
+        {
+            "time": time,
+            "logging": _logging,
+            "json": json,
+            "Any": Any,
+            "Dict": Dict,
+            "Optional": Optional,
+            "List": List,
+            "BasicOperation": BasicOperation,
+            "OperationCategory": OperationCategory,
+            "OperationComplexity": OperationComplexity,
+            "OperationParameter": OperationParameter,
+            "OperationResult": OperationResult,
+            "OperationRelationship": OperationRelationship,
+            "_get_command_broadcaster": lambda: mock_broadcaster,
+        }
+    )
 
     return namespace
 
@@ -211,7 +233,8 @@ def _verify_sandbox_artifacts(namespace: dict) -> str:
     """
     # Check for *_OPERATION constant
     operation_constants = [
-        key for key in namespace
+        key
+        for key in namespace
         if key.endswith("_OPERATION") and not key.startswith("_")
     ]
 

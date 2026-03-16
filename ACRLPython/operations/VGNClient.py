@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 VGN Client — Local Mac Inference
 =================================
@@ -82,9 +83,7 @@ def _parse_bbox_from_vlm_response(
         data = json.loads(raw)
         for key in ("x", "y", "w", "h"):
             if key not in data:
-                logger.debug(
-                    f"VLM bbox: JSON missing key '{key}', using fallback"
-                )
+                logger.debug(f"VLM bbox: JSON missing key '{key}', using fallback")
                 return fallback
 
         x = max(0, min(int(data["x"]), image_width - 1))
@@ -140,8 +139,12 @@ def _points_to_tsdf_grid(
         occupancy[idx[:, 0], idx[:, 1], idx[:, 2]] = 1
 
     # SDF: distance in voxel units, then convert to metres and truncate
-    dist_outside = distance_transform_edt(1 - occupancy).astype(np.float32) * vox_size
-    dist_inside = distance_transform_edt(occupancy).astype(np.float32) * vox_size
+    dist_outside = (
+        np.asarray(distance_transform_edt(1 - occupancy), dtype=np.float32) * vox_size
+    )
+    dist_inside = (
+        np.asarray(distance_transform_edt(occupancy), dtype=np.float32) * vox_size
+    )
     sdf = dist_outside - dist_inside
 
     # Truncate to [-size/2, size/2] and normalise to [-1, 1]
@@ -176,9 +179,7 @@ class VGNClient:
         # Resolve relative path from ACRLPython/ root
         if not os.path.isabs(VGN_MODEL_PATH):
             _root = os.path.join(os.path.dirname(__file__), "..")
-            VGN_MODEL_PATH = os.path.abspath(
-                os.path.join(_root, VGN_MODEL_PATH)
-            )
+            VGN_MODEL_PATH = os.path.abspath(os.path.join(_root, VGN_MODEL_PATH))
 
         self._model_path: str = VGN_MODEL_PATH
         self._top_k_default: int = int(VGN_TOP_K)
@@ -278,18 +279,14 @@ class VGNClient:
                     image_width=image_width,
                     image_height=image_height,
                 )
-                logger.info(
-                    f"[VGN] VLM refined bbox: {yolo_bbox} → {refined_bbox}"
-                )
+                logger.info(f"[VGN] VLM refined bbox: {yolo_bbox} → {refined_bbox}")
             except Exception as exc:
                 logger.warning(
                     f"[VGN] VLM bbox refinement failed ({exc}), "
                     "using YOLO bbox as fallback"
                 )
         else:
-            logger.debug(
-                "[VGN] VLM refinement skipped (VGN_USE_VLM_REFINEMENT=false)"
-            )
+            logger.debug("[VGN] VLM refinement skipped (VGN_USE_VLM_REFINEMENT=false)")
 
         # ----------------------------------------------------------------
         # Step 2 — Point cloud masking
@@ -358,12 +355,12 @@ class VGNClient:
                 from vgn.detection import process, select  # type: ignore
 
                 # process() returns cleaned volumes on CPU numpy
-                qual_np, rot_np, width_np = process(
-                    None, qual_vol, rot_vol, width_vol
-                )
+                qual_np, rot_np, width_np = process(None, qual_vol, rot_vol, width_vol)
                 grasps, scores = select(qual_np, rot_np, width_np)
             else:
-                logger.warning("[VGN] VGN source not on path; cannot call process/select")
+                logger.warning(
+                    "[VGN] VGN source not on path; cannot call process/select"
+                )
                 return None
         except Exception as exc:
             logger.warning(f"[VGN] process/select failed: {exc}")
@@ -404,7 +401,9 @@ class VGNClient:
             return None
 
         results.sort(key=lambda g: g["score"], reverse=True)
-        logger.info(f"[VGN] Returning {min(top_k, len(results))} / {len(results)} grasps")
+        logger.info(
+            f"[VGN] Returning {min(top_k, len(results))} / {len(results)} grasps"
+        )
         return results[:top_k]
 
     # ------------------------------------------------------------------
@@ -448,9 +447,7 @@ class VGNClient:
                 VGN_MODEL_PATH = "checkpoints/vgn_conv.pth"
             if not os.path.isabs(VGN_MODEL_PATH):
                 _root = os.path.join(os.path.dirname(__file__), "..")
-                VGN_MODEL_PATH = os.path.abspath(
-                    os.path.join(_root, VGN_MODEL_PATH)
-                )
+                VGN_MODEL_PATH = os.path.abspath(os.path.join(_root, VGN_MODEL_PATH))
 
             state = torch.load(VGN_MODEL_PATH, map_location=device, weights_only=True)
             net.load_state_dict(state)

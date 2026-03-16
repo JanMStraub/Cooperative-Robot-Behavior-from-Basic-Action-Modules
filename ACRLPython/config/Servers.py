@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Server Network Configuration
 =============================
@@ -43,9 +44,6 @@ AUTORT_SERVER_PORT = int(
     os.environ.get("AUTORT_SERVER_PORT", "5015")
 )  # AutoRT task generation server
 
-# Legacy port names for backward compatibility
-RESULTS_SERVER_PORT = LLM_RESULTS_PORT
-DETECTION_SERVER_PORT = DEPTH_RESULTS_PORT
 
 # ============================================================================
 # Connection Limits
@@ -148,5 +146,4 @@ ENABLE_FILE_LOGGING = os.environ.get("ENABLE_FILE_LOGGING", "true").lower() in (
     "1",
     "yes",
 )
-LOG_FILE_MAX_BYTES = int(os.environ.get("LOG_FILE_MAX_BYTES", str(10 * 1024 * 1024)))
 LOG_FILE_BACKUP_COUNT = int(os.environ.get("LOG_FILE_BACKUP_COUNT", "20"))

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Unit tests for VGNClient
 =========================
@@ -19,13 +20,15 @@ Coverage:
 - segmentation mask uses "color" field not "label" (label bug fixed)
 """
 
-import os
 import sys
 import types
-import importlib
 import numpy as np
 import pytest
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
+
+if TYPE_CHECKING:
+    from operations.VGNClient import VGNClient
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +70,7 @@ class TestParseBboxFromVlmResponse:
 
     def _fn(self, text, fallback=(10, 20, 30, 40), iw=640, ih=480):
         from operations.VGNClient import _parse_bbox_from_vlm_response
+
         return _parse_bbox_from_vlm_response(text, fallback, iw, ih)
 
     def test_parse_bbox_valid_json(self):
@@ -147,7 +151,7 @@ class TestVGNClientIsAvailable:
 
         # Provide a minimal torch stub so the ImportError branch is skipped
         torch_stub = types.ModuleType("torch")
-        torch_stub.device = lambda x: x
+        setattr(torch_stub, "device", lambda x: x)
 
         from operations.VGNClient import VGNClient
 
@@ -171,6 +175,7 @@ def _make_mock_grasp(pos=(0.1, 0.2, 0.3), score=0.9, width=0.08):
     grasp.pose.translation = np.array(pos)
     # Use scipy Rotation to produce a real unit quaternion / matrix
     from scipy.spatial.transform import Rotation
+
     r = Rotation.from_euler("z", 0.0)
     grasp.pose.rotation.as_quat.return_value = r.as_quat()
     grasp.pose.rotation.as_matrix.return_value = r.as_matrix()
@@ -227,7 +232,9 @@ class _VGNPatchedClient:
         )
         # VLM is imported inside predict_grasps; patch the vision module directly
         self._patches.append(
-            patch("vision.AnalyzeImage.LMStudioVisionProcessor", return_value=vlm_mock).start()
+            patch(
+                "vision.AnalyzeImage.LMStudioVisionProcessor", return_value=vlm_mock
+            ).start()
         )
 
         # Patch process + select from vgn.detection
@@ -236,27 +243,38 @@ class _VGNPatchedClient:
         mock_scores = [s for _, s in grasps_and_scores]
 
         vgn_det = types.ModuleType("vgn.detection")
-        vgn_det.process = MagicMock(return_value=(None, None, None))
-        vgn_det.select = MagicMock(return_value=(mock_grasps, mock_scores))
+        setattr(vgn_det, "process", MagicMock(return_value=(None, None, None)))
+        setattr(vgn_det, "select", MagicMock(return_value=(mock_grasps, mock_scores)))
         vgn_mod = types.ModuleType("vgn")
-        vgn_mod.detection = vgn_det
+        setattr(vgn_mod, "detection", vgn_det)
         sys.modules.setdefault("vgn", vgn_mod)
         sys.modules.setdefault("vgn.detection", vgn_det)
 
         # Patch torch to avoid GPU requirement
         torch_stub = types.ModuleType("torch")
-        torch_stub.from_numpy = lambda x: MagicMock(unsqueeze=lambda d: MagicMock(to=lambda dev: MagicMock()))
-        torch_stub.no_grad = MagicMock(return_value=MagicMock(__enter__=lambda s: None, __exit__=lambda s, *a: None))
         import contextlib
 
         @contextlib.contextmanager
         def _no_grad():
             yield
 
-        torch_stub.no_grad = _no_grad
-        torch_stub.backends = types.SimpleNamespace(mps=types.SimpleNamespace(is_available=lambda: False))
-        torch_stub.device = lambda s: s
-        torch_stub.load = MagicMock(return_value={})
+        setattr(
+            torch_stub,
+            "from_numpy",
+            lambda x: MagicMock(
+                unsqueeze=lambda d: MagicMock(to=lambda dev: MagicMock())
+            ),
+        )
+        setattr(torch_stub, "no_grad", _no_grad)
+        setattr(
+            torch_stub,
+            "backends",
+            types.SimpleNamespace(
+                mps=types.SimpleNamespace(is_available=lambda: False)
+            ),
+        )
+        setattr(torch_stub, "device", lambda s: s)
+        setattr(torch_stub, "load", MagicMock(return_value={}))
         existing_torch = sys.modules.get("torch")
         if existing_torch is None:
             sys.modules["torch"] = torch_stub
@@ -282,6 +300,7 @@ class _VGNPatchedClient:
 
     def __exit__(self, *args):
         import unittest.mock as _um
+
         _um.patch.stopall()
         # Clean up stubs from sys.modules
         for key in ["vgn", "vgn.detection"]:
@@ -371,9 +390,9 @@ class TestPredictGraspsOutputContract:
             pytest.skip("VGN mock produced None — check test setup")
         for g in result:
             q = np.array(g["rotation"])
-            assert abs(np.linalg.norm(q) - 1.0) < 1e-5, (
-                f"Quaternion not unit: {q}, norm={np.linalg.norm(q)}"
-            )
+            assert (
+                abs(np.linalg.norm(q) - 1.0) < 1e-5
+            ), f"Quaternion not unit: {q}, norm={np.linalg.norm(q)}"
 
     def test_predict_grasps_respects_top_k(self, tmp_path):
         """Result length is at most top_k."""
@@ -432,6 +451,6 @@ class TestSegmentationMaskLabelBugFix:
 
         # Verify that using the old 'label' key returns empty string (key is absent)
         label_field = detection_with_color.get("label", "").lower()
-        assert label_field == "", (
-            "Old 'label' key should be absent from DetectionObject.to_dict() output"
-        )
+        assert (
+            label_field == ""
+        ), "Old 'label' key should be absent from DetectionObject.to_dict() output"

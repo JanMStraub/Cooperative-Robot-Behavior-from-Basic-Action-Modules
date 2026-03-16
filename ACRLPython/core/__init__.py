@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Core infrastructure for Unity-Python communication.
 

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 AutoRT Orchestration Loop
 
@@ -67,6 +68,7 @@ class AutoRTOrchestrator:
 
         # Import once at construction time rather than on every _execute_task call
         from orchestrators.SequenceExecutor import SequenceExecutor
+
         self._executor = SequenceExecutor()
 
         self._running = False

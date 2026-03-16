@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Tests for OutcomeTracker
 ========================
@@ -15,8 +16,7 @@ Covers:
 
 import time
 import threading
-from collections import deque
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 import pytest
 
 from orchestrators.OutcomeTracker import OutcomeTracker, get_outcome_tracker
@@ -25,6 +25,7 @@ from orchestrators.OutcomeTracker import OutcomeTracker, get_outcome_tracker
 # ---------------------------------------------------------------------------
 # Fixture: reset singleton between tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def reset_outcome_tracker():
@@ -44,6 +45,7 @@ def reset_outcome_tracker():
     # Patch the `rag` module import inside _get_vector_store so RAGSystem is never
     # actually loaded.  We patch at the source module level.
     import sys
+
     _fake_rag = MagicMock()
     _fake_rag.RAGSystem.return_value.vector_store = None
     _orig = sys.modules.get("rag")
@@ -59,6 +61,7 @@ def reset_outcome_tracker():
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _record_n(tracker, op_name, n_success, n_failure, robot_id="Robot1"):
     """Record n_success successes and n_failure failures for op_name."""
     for _ in range(n_success):
@@ -70,6 +73,7 @@ def _record_n(tracker, op_name, n_success, n_failure, robot_id="Robot1"):
 # ---------------------------------------------------------------------------
 # Singleton
 # ---------------------------------------------------------------------------
+
 
 class TestSingleton:
     """OutcomeTracker follows the project-wide singleton pattern."""
@@ -102,6 +106,7 @@ class TestSingleton:
 # ---------------------------------------------------------------------------
 # record()
 # ---------------------------------------------------------------------------
+
 
 class TestRecord:
     """record() appends outcomes to the ring buffer with correct fields."""
@@ -148,6 +153,7 @@ class TestRecord:
 # ---------------------------------------------------------------------------
 # get_recent_failures()
 # ---------------------------------------------------------------------------
+
 
 class TestGetRecentFailures:
     """get_recent_failures() returns only failures, most-recent-first."""
@@ -210,6 +216,7 @@ class TestGetRecentFailures:
 # get_failure_rate()
 # ---------------------------------------------------------------------------
 
+
 class TestGetFailureRate:
     """get_failure_rate() computes failure rate over the most recent window."""
 
@@ -255,6 +262,7 @@ class TestGetFailureRate:
 # get_frequent_failure_patterns()
 # ---------------------------------------------------------------------------
 
+
 class TestGetFrequentFailurePatterns:
     """get_frequent_failure_patterns() identifies high-failure-rate operations."""
 
@@ -268,7 +276,9 @@ class TestGetFrequentFailurePatterns:
         tracker = OutcomeTracker()
         _record_n(tracker, "op_a", n_success=9, n_failure=1)  # 10% failure
 
-        patterns = tracker.get_frequent_failure_patterns(min_failure_rate=0.3, min_occurrences=1)
+        patterns = tracker.get_frequent_failure_patterns(
+            min_failure_rate=0.3, min_occurrences=1
+        )
         assert patterns == []
 
     def test_high_failure_rate_included(self):
@@ -276,7 +286,9 @@ class TestGetFrequentFailurePatterns:
         tracker = OutcomeTracker()
         _record_n(tracker, "op_a", n_success=2, n_failure=8)  # 80% failure
 
-        patterns = tracker.get_frequent_failure_patterns(min_failure_rate=0.3, min_occurrences=1)
+        patterns = tracker.get_frequent_failure_patterns(
+            min_failure_rate=0.3, min_occurrences=1
+        )
         assert len(patterns) == 1
         assert patterns[0]["operation_name"] == "op_a"
         assert abs(patterns[0]["failure_rate"] - 0.8) < 1e-9
@@ -284,20 +296,26 @@ class TestGetFrequentFailurePatterns:
     def test_min_occurrences_excludes_sparse_ops(self):
         """Operations with fewer executions than min_occurrences are skipped."""
         tracker = OutcomeTracker()
-        _record_n(tracker, "op_a", n_success=0, n_failure=2)  # 100% failure, 2 executions
+        _record_n(
+            tracker, "op_a", n_success=0, n_failure=2
+        )  # 100% failure, 2 executions
 
         # Require 3 min — should be excluded
-        patterns = tracker.get_frequent_failure_patterns(min_failure_rate=0.3, min_occurrences=3)
+        patterns = tracker.get_frequent_failure_patterns(
+            min_failure_rate=0.3, min_occurrences=3
+        )
         assert patterns == []
 
     def test_sorted_by_failure_rate_descending(self):
         """Patterns are sorted highest failure rate first."""
         tracker = OutcomeTracker()
-        _record_n(tracker, "op_low", n_success=7, n_failure=3)   # 30%
-        _record_n(tracker, "op_high", n_success=1, n_failure=9)   # 90%
-        _record_n(tracker, "op_mid", n_success=4, n_failure=6)    # 60%
+        _record_n(tracker, "op_low", n_success=7, n_failure=3)  # 30%
+        _record_n(tracker, "op_high", n_success=1, n_failure=9)  # 90%
+        _record_n(tracker, "op_mid", n_success=4, n_failure=6)  # 60%
 
-        patterns = tracker.get_frequent_failure_patterns(min_failure_rate=0.1, min_occurrences=1)
+        patterns = tracker.get_frequent_failure_patterns(
+            min_failure_rate=0.1, min_occurrences=1
+        )
         rates = [p["failure_rate"] for p in patterns]
         assert rates == sorted(rates, reverse=True)
 
@@ -307,7 +325,9 @@ class TestGetFrequentFailurePatterns:
         for err in ["err_a", "err_b", "err_c", "err_a", "err_d"]:
             tracker.record("op_a", "Robot1", success=False, error=err)
 
-        patterns = tracker.get_frequent_failure_patterns(min_failure_rate=0.0, min_occurrences=1)
+        patterns = tracker.get_frequent_failure_patterns(
+            min_failure_rate=0.0, min_occurrences=1
+        )
         assert len(patterns) == 1
         errors = patterns[0]["sample_errors"]
         assert len(errors) <= 3
@@ -320,7 +340,9 @@ class TestGetFrequentFailurePatterns:
         tracker.record("op_a", "Robot1", success=False, error=None)
         tracker.record("op_a", "Robot1", success=False, error=None)
 
-        patterns = tracker.get_frequent_failure_patterns(min_failure_rate=0.0, min_occurrences=1)
+        patterns = tracker.get_frequent_failure_patterns(
+            min_failure_rate=0.0, min_occurrences=1
+        )
         assert patterns[0]["sample_errors"] == []
 
     def test_total_executions_field(self):
@@ -328,13 +350,16 @@ class TestGetFrequentFailurePatterns:
         tracker = OutcomeTracker()
         _record_n(tracker, "op_a", n_success=4, n_failure=6)
 
-        patterns = tracker.get_frequent_failure_patterns(min_failure_rate=0.0, min_occurrences=1)
+        patterns = tracker.get_frequent_failure_patterns(
+            min_failure_rate=0.0, min_occurrences=1
+        )
         assert patterns[0]["total_executions"] == 10
 
 
 # ---------------------------------------------------------------------------
 # reset()
 # ---------------------------------------------------------------------------
+
 
 class TestReset:
     """reset() clears the in-memory ring buffer."""
@@ -364,6 +389,7 @@ class TestReset:
 # ---------------------------------------------------------------------------
 # Ring-buffer cap
 # ---------------------------------------------------------------------------
+
 
 class TestRingBufferCap:
     """The ring buffer never grows beyond _MAX_RECENT_OUTCOMES."""
@@ -396,6 +422,7 @@ class TestRingBufferCap:
 # VectorStore integration
 # ---------------------------------------------------------------------------
 
+
 class TestVectorStoreIntegration:
     """record() calls update_operation_metadata on the VectorStore when available."""
 
@@ -423,8 +450,10 @@ class TestVectorStoreIntegration:
         if not update_kwargs:
             _, meta_dict = mock_store.update_operation_metadata.call_args[0]
         else:
-            meta_dict = update_kwargs.get("metadata_update") or \
-                        mock_store.update_operation_metadata.call_args[0][1]
+            meta_dict = (
+                update_kwargs.get("metadata_update")
+                or mock_store.update_operation_metadata.call_args[0][1]
+            )
 
         assert meta_dict["execution_count"] == 1
         assert meta_dict["success_count"] == 1
@@ -470,6 +499,7 @@ class TestVectorStoreIntegration:
 # Thread safety
 # ---------------------------------------------------------------------------
 
+
 class TestThreadSafety:
     """Concurrent records and reads must not corrupt the ring buffer."""
 
@@ -485,7 +515,9 @@ class TestThreadSafety:
             except Exception as e:
                 errors.append(e)
 
-        threads = [threading.Thread(target=worker, args=(f"Robot{i}", 50)) for i in range(4)]
+        threads = [
+            threading.Thread(target=worker, args=(f"Robot{i}", 50)) for i in range(4)
+        ]
         for t in threads:
             t.start()
         for t in threads:
@@ -496,4 +528,5 @@ class TestThreadSafety:
 
 if __name__ == "__main__":
     import pytest
+
     pytest.main([__file__, "-v"])

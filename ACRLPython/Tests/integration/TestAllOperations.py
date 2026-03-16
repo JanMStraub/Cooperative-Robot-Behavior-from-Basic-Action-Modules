@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 All Operations Integration Test
 ================================
@@ -78,7 +79,7 @@ import pytest
 # loaded), but this protects against accidental config-module imports here.
 os.environ.setdefault("ENABLE_DYNAMIC_OPERATIONS", "false")
 
-from backend_client import (
+from backend_client import (  # type: ignore[import]
     BackendClient,
     backend_available,
     port_open,
@@ -97,13 +98,14 @@ SKIP_REASON = (
 
 # Robot workspace coordinates (within reach of the AR4 arm).
 # Robot1 → left workspace (x negative), Robot2 → right workspace (x positive).
-_R1_COORD = (-0.25, 0.30, 0.10)   # x, y, z  — Robot1 reachable point
-_R2_COORD = ( 0.25, 0.30, 0.10)   # x, y, z  — Robot2 reachable point
+_R1_COORD = (-0.25, 0.30, 0.10)  # x, y, z  — Robot1 reachable point
+_R2_COORD = (0.25, 0.30, 0.10)  # x, y, z  — Robot2 reachable point
 
 
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
+
 
 def _reset_robot(robot_id: str, timeout: float = 30.0) -> None:
     """
@@ -162,6 +164,7 @@ def _cmd(
 # Status Operations (timeout: 15 s)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not BACKEND_AVAILABLE, reason=SKIP_REASON)
@@ -176,9 +179,9 @@ class TestStatusOps:
             timeout=15.0,
             request_id=100,
         )
-        assert result.get("success") is True, (
-            f"check_robot_status failed: {result.get('error')}"
-        )
+        assert (
+            result.get("success") is True
+        ), f"check_robot_status failed: {result.get('error')}"
 
     def test_check_robot_status_robot2(self):
         """check_robot_status returns a successful result for Robot2."""
@@ -188,14 +191,15 @@ class TestStatusOps:
             timeout=15.0,
             request_id=101,
         )
-        assert result.get("success") is True, (
-            f"check_robot_status failed for Robot2: {result.get('error')}"
-        )
+        assert (
+            result.get("success") is True
+        ), f"check_robot_status failed for Robot2: {result.get('error')}"
 
 
 # ---------------------------------------------------------------------------
 # Sync Operations (timeout: 15–30 s)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.requires_unity
@@ -213,9 +217,7 @@ class TestSyncOps:
             request_id=200,
         )
         elapsed = time.time() - start
-        assert result.get("success") is True, (
-            f"wait failed: {result.get('error')}"
-        )
+        assert result.get("success") is True, f"wait failed: {result.get('error')}"
         # Allow generous tolerance for network + backend overhead.
         assert elapsed < 10.0, f"wait(0.5) took unexpectedly long: {elapsed:.1f}s"
 
@@ -272,17 +274,18 @@ class TestSyncOps:
         t_signal.join(timeout=20.0)
 
         assert not errors, f"Thread errors in signal/wait pair: {errors}"
-        assert results.get("signal", {}).get("success") is True, (
-            f"signal failed: {results.get('signal', {}).get('error')}"
-        )
-        assert results.get("wait", {}).get("success") is True, (
-            f"wait_for_signal failed: {results.get('wait', {}).get('error')}"
-        )
+        assert (
+            results.get("signal", {}).get("success") is True
+        ), f"signal failed: {results.get('signal', {}).get('error')}"
+        assert (
+            results.get("wait", {}).get("success") is True
+        ), f"wait_for_signal failed: {results.get('wait', {}).get('error')}"
 
 
 # ---------------------------------------------------------------------------
 # Gripper Operations (timeout: 15 s)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.requires_unity
@@ -298,9 +301,9 @@ class TestGripperOps:
             timeout=15.0,
             request_id=300,
         )
-        assert result.get("success") is True, (
-            f"open gripper failed: {result.get('error')}"
-        )
+        assert (
+            result.get("success") is True
+        ), f"open gripper failed: {result.get('error')}"
 
     def test_control_gripper_close(self):
         """control_gripper(close) succeeds for Robot1."""
@@ -310,9 +313,9 @@ class TestGripperOps:
             timeout=15.0,
             request_id=301,
         )
-        assert result.get("success") is True, (
-            f"close gripper failed: {result.get('error')}"
-        )
+        assert (
+            result.get("success") is True
+        ), f"close gripper failed: {result.get('error')}"
 
     def test_release_object(self):
         """release_object succeeds (robot opens gripper and releases any held object)."""
@@ -322,14 +325,15 @@ class TestGripperOps:
             timeout=15.0,
             request_id=302,
         )
-        assert result.get("success") is True, (
-            f"release_object failed: {result.get('error')}"
-        )
+        assert (
+            result.get("success") is True
+        ), f"release_object failed: {result.get('error')}"
 
 
 # ---------------------------------------------------------------------------
 # Navigation Operations (timeout: 30 s)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.requires_unity
@@ -353,9 +357,9 @@ class TestNavigationOps:
             timeout=30.0,
             request_id=400,
         )
-        assert result.get("success") is True, (
-            f"move_to_coordinate failed: {result.get('error')}"
-        )
+        assert (
+            result.get("success") is True
+        ), f"move_to_coordinate failed: {result.get('error')}"
 
     def test_move_to_coordinate_robot2(self):
         """move_to_coordinate moves Robot2 to a reachable right-workspace point."""
@@ -366,9 +370,9 @@ class TestNavigationOps:
             timeout=60.0,
             request_id=401,
         )
-        assert result.get("success") is True, (
-            f"move_to_coordinate Robot2 failed: {result.get('error')}"
-        )
+        assert (
+            result.get("success") is True
+        ), f"move_to_coordinate Robot2 failed: {result.get('error')}"
 
     def test_move_from_a_to_b(self):
         """move_from_a_to_b moves Robot1 between two left-workspace waypoints."""
@@ -378,9 +382,9 @@ class TestNavigationOps:
             timeout=30.0,
             request_id=402,
         )
-        assert result.get("success") is True, (
-            f"move_from_a_to_b failed: {result.get('error')}"
-        )
+        assert (
+            result.get("success") is True
+        ), f"move_from_a_to_b failed: {result.get('error')}"
 
     def test_adjust_end_effector_orientation(self):
         """adjust_end_effector_orientation changes Robot1 end-effector roll/pitch/yaw.
@@ -394,9 +398,9 @@ class TestNavigationOps:
             timeout=30.0,
             request_id=403,
         )
-        assert result.get("success") is True or result.get("error") is not None, (
-            "adjust_end_effector_orientation returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "adjust_end_effector_orientation returned an unexpected response"
 
     def test_return_to_start(self):
         """return_to_start returns Robot1 to its home joint configuration."""
@@ -406,14 +410,15 @@ class TestNavigationOps:
             timeout=30.0,
             request_id=404,
         )
-        assert result.get("success") is True, (
-            f"return_to_start failed: {result.get('error')}"
-        )
+        assert (
+            result.get("success") is True
+        ), f"return_to_start failed: {result.get('error')}"
 
 
 # ---------------------------------------------------------------------------
 # Perception Operations (timeout: 30 s)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.requires_unity
@@ -436,9 +441,9 @@ class TestPerceptionOps:
             timeout=30.0,
             request_id=500,
         )
-        assert result.get("success") is True or result.get("error") is not None, (
-            "detect_objects returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "detect_objects returned an unexpected response"
 
     def test_detect_object_stereo(self):
         """detect_object_stereo returns 3D world-space coordinates via stereo camera."""
@@ -449,9 +454,9 @@ class TestPerceptionOps:
             timeout=30.0,
             request_id=501,
         )
-        assert result.get("success") is True, (
-            f"detect_object_stereo failed: {result.get('error')}"
-        )
+        assert (
+            result.get("success") is True
+        ), f"detect_object_stereo failed: {result.get('error')}"
 
     def test_analyze_scene(self):
         """analyze_scene produces a natural-language scene description."""
@@ -461,9 +466,9 @@ class TestPerceptionOps:
             timeout=90.0,
             request_id=502,
         )
-        assert result.get("success") is True, (
-            f"analyze_scene failed: {result.get('error')}"
-        )
+        assert (
+            result.get("success") is True
+        ), f"analyze_scene failed: {result.get('error')}"
 
     def test_estimate_distance_to_object(self):
         """estimate_distance_to_object returns distance from Robot1 to a named object."""
@@ -474,9 +479,9 @@ class TestPerceptionOps:
             request_id=503,
         )
         # Distance estimation may fail gracefully if object is not in scene.
-        assert result.get("success") is True or result.get("error") is not None, (
-            "estimate_distance_to_object returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "estimate_distance_to_object returned an unexpected response"
 
     def test_estimate_distance_between_objects(self):
         """estimate_distance_between_objects returns distance between two objects."""
@@ -486,14 +491,15 @@ class TestPerceptionOps:
             timeout=30.0,
             request_id=504,
         )
-        assert result.get("success") is True or result.get("error") is not None, (
-            "estimate_distance_between_objects returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "estimate_distance_between_objects returned an unexpected response"
 
 
 # ---------------------------------------------------------------------------
 # Field Operations (timeout: 30 s, camera_id="TableStereoCamera")
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.requires_unity
@@ -514,9 +520,9 @@ class TestFieldOps:
             timeout=30.0,
             request_id=600,
         )
-        assert result.get("success") is True or result.get("error") is not None, (
-            "detect_field returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "detect_field returned an unexpected response"
 
     def test_get_field_center(self):
         """get_field_center returns 3D centre coordinates of a detected field."""
@@ -527,9 +533,9 @@ class TestFieldOps:
             timeout=30.0,
             request_id=601,
         )
-        assert result.get("success") is True or result.get("error") is not None, (
-            "get_field_center returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "get_field_center returned an unexpected response"
 
     def test_detect_all_fields(self):
         """detect_all_fields returns all labelled workspace fields in the stereo view."""
@@ -540,14 +546,15 @@ class TestFieldOps:
             timeout=30.0,
             request_id=602,
         )
-        assert result.get("success") is True or result.get("error") is not None, (
-            "detect_all_fields returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "detect_all_fields returned an unexpected response"
 
 
 # ---------------------------------------------------------------------------
 # Spatial / Intermediate Operations (timeout: 30–60 s)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.requires_unity
@@ -569,9 +576,9 @@ class TestSpatialOps:
             timeout=30.0,
             request_id=700,
         )
-        assert result.get("success") is True or result.get("error") is not None, (
-            "move_relative_to_object returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "move_relative_to_object returned an unexpected response"
 
     def test_move_between_objects(self):
         """move_between_objects moves Robot1 to the midpoint between two objects."""
@@ -581,9 +588,9 @@ class TestSpatialOps:
             timeout=60.0,
             request_id=701,
         )
-        assert result.get("success") is True or result.get("error") is not None, (
-            "move_between_objects returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "move_between_objects returned an unexpected response"
 
     def test_move_to_region(self):
         """move_to_region moves Robot1 to its allocated workspace region centre."""
@@ -593,9 +600,9 @@ class TestSpatialOps:
             timeout=60.0,
             request_id=702,
         )
-        assert result.get("success") is True or result.get("error") is not None, (
-            "move_to_region returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "move_to_region returned an unexpected response"
 
     def test_follow_path(self):
         """follow_path moves Robot1 through a sequence of waypoints."""
@@ -605,14 +612,15 @@ class TestSpatialOps:
             timeout=60.0,
             request_id=703,
         )
-        assert result.get("success") is True or result.get("error") is not None, (
-            "follow_path returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "follow_path returned an unexpected response"
 
 
 # ---------------------------------------------------------------------------
 # Grasp Operations (timeout: 60 s)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.requires_unity
@@ -659,9 +667,9 @@ class TestGraspOps:
             request_id=800,
         )
         # A structured error (e.g. "object not found") is still a valid response.
-        assert result.get("success") is True or result.get("error") is not None, (
-            "grasp_object returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "grasp_object returned an unexpected response"
 
     def test_align_object(self):
         """align_object aligns Robot2's end effector to match redCube's orientation."""
@@ -671,14 +679,15 @@ class TestGraspOps:
             timeout=60.0,
             request_id=801,
         )
-        assert result.get("success") is True or result.get("error") is not None, (
-            "align_object returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "align_object returned an unexpected response"
 
 
 # ---------------------------------------------------------------------------
 # Multi-Robot Operations (timeout: 120 s, negotiation-aware)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.requires_unity
@@ -712,9 +721,9 @@ class TestMultiRobotOps:
             timeout=120.0,
             request_id=900,
         )
-        assert result.get("success") is True or result.get("error") is not None, (
-            "detect_other_robot returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "detect_other_robot returned an unexpected response"
 
     def test_mirror_movement(self):
         """mirror_movement makes Robot2 mirror Robot1's motion symmetrically."""
@@ -724,9 +733,9 @@ class TestMultiRobotOps:
             timeout=120.0,
             request_id=901,
         )
-        assert result.get("success") is True or result.get("error") is not None, (
-            "mirror_movement returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "mirror_movement returned an unexpected response"
 
     def test_grasp_object_for_handoff(self):
         """grasp_object_for_handoff grasps redCube with Robot2 for handoff to Robot1.
@@ -740,14 +749,15 @@ class TestMultiRobotOps:
             timeout=120.0,
             request_id=902,
         )
-        assert result.get("success") is True or result.get("error") is not None, (
-            "grasp_object_for_handoff returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "grasp_object_for_handoff returned an unexpected response"
 
 
 # ---------------------------------------------------------------------------
 # Collaborative Operations (timeout: 120 s)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.requires_unity
@@ -775,14 +785,15 @@ class TestCollaborativeOps:
             timeout=120.0,
             request_id=1000,
         )
-        assert result.get("success") is True or result.get("error") is not None, (
-            "stabilize_object returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "stabilize_object returned an unexpected response"
 
 
 # ---------------------------------------------------------------------------
 # Variable Chaining (timeout: 30–60 s)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 @pytest.mark.requires_unity
@@ -817,9 +828,9 @@ class TestVariableChaining:
             request_id=1100,
         )
         # Either succeeds end-to-end or fails with a structured error explaining why.
-        assert result.get("success") is True or result.get("error") is not None, (
-            "detect → $target → move pipeline returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "detect → $target → move pipeline returned an unexpected response"
 
     def test_detect_then_grasp_via_variable(self):
         """detect_object_stereo → $target → grasp_object($target.color) pipeline."""
@@ -830,9 +841,9 @@ class TestVariableChaining:
             timeout=60.0,
             request_id=1101,
         )
-        assert result.get("success") is True or result.get("error") is not None, (
-            "detect → $target → grasp pipeline returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "detect → $target → grasp pipeline returned an unexpected response"
 
     def test_dotted_variable_notation(self):
         """$target.x / $target.y / $target.z extraction feeds into move_to_coordinate."""
@@ -846,9 +857,9 @@ class TestVariableChaining:
             timeout=90.0,
             request_id=1102,
         )
-        assert result.get("success") is True or result.get("error") is not None, (
-            "dotted variable pipeline returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "dotted variable pipeline returned an unexpected response"
 
 
 # ---------------------------------------------------------------------------
@@ -857,4 +868,5 @@ class TestVariableChaining:
 
 if __name__ == "__main__":
     import sys
+
     pytest.main([__file__, "-v", *sys.argv[1:]])

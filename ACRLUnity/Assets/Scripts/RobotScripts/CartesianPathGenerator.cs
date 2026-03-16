@@ -46,7 +46,6 @@ namespace RobotScripts
                     position = Vector3.Lerp(startPos, targetPos, t),
                     rotation = Quaternion.Slerp(startRot, targetRot, t),
                     distanceFromStart = distance * t,
-                    timeFromStart = 0f,
                 };
 
                 waypoints.Add(wp);
@@ -59,46 +58,6 @@ namespace RobotScripts
                 maxVelocity = maxVelocity,
                 acceleration = acceleration,
             };
-        }
-
-        /// <summary>
-        /// Generate a circular arc path (future enhancement).
-        /// </summary>
-        public static CartesianPath GenerateArcPath(
-            Vector3 startPos,
-            Quaternion startRot,
-            Vector3 targetPos,
-            Quaternion targetRot,
-            Vector3 arcCenter,
-            float waypointSpacing = 0.03f
-        )
-        {
-            // TODO: Implement circular arc path generation
-            // For now, fall back to linear path
-            Debug.LogWarning(
-                "[CartesianPathGenerator] Arc path not yet implemented, using linear path"
-            );
-            return GenerateLinearPath(startPos, startRot, targetPos, targetRot, waypointSpacing);
-        }
-
-        /// <summary>
-        /// Generate a path that avoids obstacles (future enhancement).
-        /// </summary>
-        public static CartesianPath GenerateObstacleAvoidingPath(
-            Vector3 startPos,
-            Quaternion startRot,
-            Vector3 targetPos,
-            Quaternion targetRot,
-            List<Collider> obstacles,
-            float waypointSpacing = 0.03f
-        )
-        {
-            // TODO: Implement obstacle avoidance path generation
-            // For now, fall back to linear path
-            Debug.LogWarning(
-                "[CartesianPathGenerator] Obstacle avoidance not yet implemented, using linear path"
-            );
-            return GenerateLinearPath(startPos, startRot, targetPos, targetRot, waypointSpacing);
         }
     }
 }

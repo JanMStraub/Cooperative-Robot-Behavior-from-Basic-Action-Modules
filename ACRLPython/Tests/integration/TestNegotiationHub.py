@@ -41,9 +41,7 @@ def _mock_llm_response(content):
     """Create a mock requests.post response with given content."""
     mock_resp = MagicMock()
     mock_resp.status_code = 200
-    mock_resp.json.return_value = {
-        "choices": [{"message": {"content": content}}]
-    }
+    mock_resp.json.return_value = {"choices": [{"message": {"content": content}}]}
     return mock_resp
 
 
@@ -71,8 +69,13 @@ class TestNegotiationConfig:
     def test_collaboration_keywords_coverage(self):
         """Test that collaboration keywords cover common phrases."""
         expected_keywords = [
-            "both", "together", "cooperate", "collaborate",
-            "coordinate", "simultaneously", "handoff",
+            "both",
+            "together",
+            "cooperate",
+            "collaborate",
+            "coordinate",
+            "simultaneously",
+            "handoff",
         ]
         for kw in expected_keywords:
             assert kw in COLLABORATION_KEYWORDS, f"Missing keyword: {kw}"
@@ -149,14 +152,18 @@ class TestRobotLLMAgent:
     @patch("agents.RobotLLMAgent.requests.post")
     def test_analyze_task(self, mock_post):
         """Test task analysis with mocked LLM."""
-        mock_post.return_value = _mock_llm_response(json.dumps({
-            "can_contribute": True,
-            "capabilities": ["move to object", "grasp object"],
-            "constraints": ["limited to left workspace"],
-            "suggested_role": "primary manipulator",
-            "requires_collaboration": True,
-            "confidence": 0.8,
-        }))
+        mock_post.return_value = _mock_llm_response(
+            json.dumps(
+                {
+                    "can_contribute": True,
+                    "capabilities": ["move to object", "grasp object"],
+                    "constraints": ["limited to left workspace"],
+                    "suggested_role": "primary manipulator",
+                    "requires_collaboration": True,
+                    "confidence": 0.8,
+                }
+            )
+        )
 
         agent = RobotLLMAgent("Robot1")
         analysis = agent.analyze_task(
@@ -175,28 +182,37 @@ class TestRobotLLMAgent:
     @patch("agents.RobotLLMAgent.requests.post")
     def test_propose_plan(self, mock_post):
         """Test plan proposal with mocked LLM."""
-        mock_post.return_value = _mock_llm_response(json.dumps({
-            "reasoning": "Robot1 detects, Robot2 waits then both move",
-            "commands": [
+        mock_post.return_value = _mock_llm_response(
+            json.dumps(
                 {
-                    "parallel_group": 1,
-                    "operation": "detect_object_stereo",
-                    "params": {"robot_id": "Robot1", "color": "red"},
-                    "capture_var": "target",
-                },
-                {
-                    "parallel_group": 2,
-                    "operation": "move_to_coordinate",
-                    "params": {"robot_id": "Robot1", "position": "$target"},
-                },
-                {
-                    "parallel_group": 2,
-                    "operation": "move_to_coordinate",
-                    "params": {"robot_id": "Robot2", "x": 0.0, "y": 0.3, "z": 0.0},
-                },
-            ],
-            "estimated_duration_s": 15.0,
-        }))
+                    "reasoning": "Robot1 detects, Robot2 waits then both move",
+                    "commands": [
+                        {
+                            "parallel_group": 1,
+                            "operation": "detect_object_stereo",
+                            "params": {"robot_id": "Robot1", "color": "red"},
+                            "capture_var": "target",
+                        },
+                        {
+                            "parallel_group": 2,
+                            "operation": "move_to_coordinate",
+                            "params": {"robot_id": "Robot1", "position": "$target"},
+                        },
+                        {
+                            "parallel_group": 2,
+                            "operation": "move_to_coordinate",
+                            "params": {
+                                "robot_id": "Robot2",
+                                "x": 0.0,
+                                "y": 0.3,
+                                "z": 0.0,
+                            },
+                        },
+                    ],
+                    "estimated_duration_s": 15.0,
+                }
+            )
+        )
 
         agent = RobotLLMAgent("Robot1")
         other_analysis = TaskAnalysis(
@@ -215,26 +231,40 @@ class TestRobotLLMAgent:
         assert proposal.proposer_id == "Robot1"
         assert len(proposal.commands) == 3
         assert proposal.round_number == 1
-        assert "detect" in proposal.reasoning.lower() or "robot" in proposal.reasoning.lower()
+        assert (
+            "detect" in proposal.reasoning.lower()
+            or "robot" in proposal.reasoning.lower()
+        )
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_evaluate_proposal_accept(self, mock_post):
         """Test proposal evaluation (accept)."""
-        mock_post.return_value = _mock_llm_response(json.dumps({
-            "accept": True,
-            "concerns": [],
-            "suggested_changes": [],
-            "confidence": 0.9,
-        }))
+        mock_post.return_value = _mock_llm_response(
+            json.dumps(
+                {
+                    "accept": True,
+                    "concerns": [],
+                    "suggested_changes": [],
+                    "confidence": 0.9,
+                }
+            )
+        )
 
         agent = RobotLLMAgent("Robot2")
         proposal = PlanProposal(
             proposer_id="Robot1",
             reasoning="test plan",
-            commands=[{"operation": "move_to_coordinate", "params": {"robot_id": "Robot2", "x": 0, "y": 0.3, "z": 0}}],
+            commands=[
+                {
+                    "operation": "move_to_coordinate",
+                    "params": {"robot_id": "Robot2", "x": 0, "y": 0.3, "z": 0},
+                }
+            ],
         )
 
-        evaluation = agent.evaluate_proposal(proposal, "test task", {"robots": {}, "objects": {}})
+        evaluation = agent.evaluate_proposal(
+            proposal, "test task", {"robots": {}, "objects": {}}
+        )
         assert evaluation.evaluator_id == "Robot2"
         assert evaluation.accept is True
         assert evaluation.confidence == 0.9
@@ -242,12 +272,16 @@ class TestRobotLLMAgent:
     @patch("agents.RobotLLMAgent.requests.post")
     def test_evaluate_proposal_reject(self, mock_post):
         """Test proposal evaluation (reject with concerns)."""
-        mock_post.return_value = _mock_llm_response(json.dumps({
-            "accept": False,
-            "concerns": ["target is out of my workspace"],
-            "suggested_changes": ["move target to shared zone"],
-            "confidence": 0.7,
-        }))
+        mock_post.return_value = _mock_llm_response(
+            json.dumps(
+                {
+                    "accept": False,
+                    "concerns": ["target is out of my workspace"],
+                    "suggested_changes": ["move target to shared zone"],
+                    "confidence": 0.7,
+                }
+            )
+        )
 
         agent = RobotLLMAgent("Robot2")
         proposal = PlanProposal(
@@ -256,7 +290,9 @@ class TestRobotLLMAgent:
             commands=[],
         )
 
-        evaluation = agent.evaluate_proposal(proposal, "test task", {"robots": {}, "objects": {}})
+        evaluation = agent.evaluate_proposal(
+            proposal, "test task", {"robots": {}, "objects": {}}
+        )
         assert evaluation.accept is False
         assert len(evaluation.concerns) == 1
         assert "workspace" in evaluation.concerns[0]
@@ -368,57 +404,83 @@ class TestNegotiationHub:
         # Set up LLM responses for analysis, proposal, and evaluation
         responses = [
             # Robot1 analysis
-            _mock_llm_response(json.dumps({
-                "can_contribute": True,
-                "capabilities": ["grasp"],
-                "constraints": [],
-                "suggested_role": "left gripper",
-                "requires_collaboration": True,
-                "confidence": 0.8,
-            })),
+            _mock_llm_response(
+                json.dumps(
+                    {
+                        "can_contribute": True,
+                        "capabilities": ["grasp"],
+                        "constraints": [],
+                        "suggested_role": "left gripper",
+                        "requires_collaboration": True,
+                        "confidence": 0.8,
+                    }
+                )
+            ),
             # Robot2 analysis
-            _mock_llm_response(json.dumps({
-                "can_contribute": True,
-                "capabilities": ["grasp"],
-                "constraints": [],
-                "suggested_role": "right gripper",
-                "requires_collaboration": True,
-                "confidence": 0.8,
-            })),
+            _mock_llm_response(
+                json.dumps(
+                    {
+                        "can_contribute": True,
+                        "capabilities": ["grasp"],
+                        "constraints": [],
+                        "suggested_role": "right gripper",
+                        "requires_collaboration": True,
+                        "confidence": 0.8,
+                    }
+                )
+            ),
             # Robot1 proposal
-            _mock_llm_response(json.dumps({
-                "reasoning": "Both robots move to cube and grasp",
-                "commands": [
+            _mock_llm_response(
+                json.dumps(
                     {
-                        "parallel_group": 1,
-                        "operation": "move_to_coordinate",
-                        "params": {"robot_id": "Robot1", "x": -0.1, "y": 0.2, "z": 0.0},
-                    },
-                    {
-                        "parallel_group": 1,
-                        "operation": "move_to_coordinate",
-                        "params": {"robot_id": "Robot2", "x": 0.1, "y": 0.2, "z": 0.0},
-                    },
-                    {
-                        "parallel_group": 2,
-                        "operation": "control_gripper",
-                        "params": {"robot_id": "Robot1", "open_gripper": False},
-                    },
-                    {
-                        "parallel_group": 2,
-                        "operation": "control_gripper",
-                        "params": {"robot_id": "Robot2", "open_gripper": False},
-                    },
-                ],
-                "estimated_duration_s": 10.0,
-            })),
+                        "reasoning": "Both robots move to cube and grasp",
+                        "commands": [
+                            {
+                                "parallel_group": 1,
+                                "operation": "move_to_coordinate",
+                                "params": {
+                                    "robot_id": "Robot1",
+                                    "x": -0.1,
+                                    "y": 0.2,
+                                    "z": 0.0,
+                                },
+                            },
+                            {
+                                "parallel_group": 1,
+                                "operation": "move_to_coordinate",
+                                "params": {
+                                    "robot_id": "Robot2",
+                                    "x": 0.1,
+                                    "y": 0.2,
+                                    "z": 0.0,
+                                },
+                            },
+                            {
+                                "parallel_group": 2,
+                                "operation": "control_gripper",
+                                "params": {"robot_id": "Robot1", "open_gripper": False},
+                            },
+                            {
+                                "parallel_group": 2,
+                                "operation": "control_gripper",
+                                "params": {"robot_id": "Robot2", "open_gripper": False},
+                            },
+                        ],
+                        "estimated_duration_s": 10.0,
+                    }
+                )
+            ),
             # Robot2 evaluation (accept)
-            _mock_llm_response(json.dumps({
-                "accept": True,
-                "concerns": [],
-                "suggested_changes": [],
-                "confidence": 0.9,
-            })),
+            _mock_llm_response(
+                json.dumps(
+                    {
+                        "accept": True,
+                        "concerns": [],
+                        "suggested_changes": [],
+                        "confidence": 0.9,
+                    }
+                )
+            ),
         ]
         mock_post.side_effect = responses
 
@@ -435,21 +497,29 @@ class TestNegotiationHub:
     def test_negotiate_no_consensus(self, mock_post):
         """Test negotiation failure when robots reject proposals."""
         # Analysis responses (both can contribute)
-        analysis_response = _mock_llm_response(json.dumps({
-            "can_contribute": True,
-            "capabilities": ["move"],
-            "constraints": [],
-            "suggested_role": "helper",
-            "requires_collaboration": True,
-            "confidence": 0.7,
-        }))
+        analysis_response = _mock_llm_response(
+            json.dumps(
+                {
+                    "can_contribute": True,
+                    "capabilities": ["move"],
+                    "constraints": [],
+                    "suggested_role": "helper",
+                    "requires_collaboration": True,
+                    "confidence": 0.7,
+                }
+            )
+        )
 
         # Proposal with empty commands (triggers continue)
-        proposal_response = _mock_llm_response(json.dumps({
-            "reasoning": "plan",
-            "commands": [],
-            "estimated_duration_s": 5.0,
-        }))
+        proposal_response = _mock_llm_response(
+            json.dumps(
+                {
+                    "reasoning": "plan",
+                    "commands": [],
+                    "estimated_duration_s": 5.0,
+                }
+            )
+        )
 
         # Cycle through: 2 analyses + (proposal per round * 3 rounds)
         responses = [analysis_response, analysis_response]
@@ -477,13 +547,22 @@ class TestNegotiationHub:
             task="test task",
             robot_ids=["Robot1", "Robot2"],
         )
-        session.analyses["Robot1"] = TaskAnalysis(robot_id="Robot1", can_contribute=True)
-        session.analyses["Robot2"] = TaskAnalysis(robot_id="Robot2", can_contribute=False)
+        session.analyses["Robot1"] = TaskAnalysis(
+            robot_id="Robot1", can_contribute=True
+        )
+        session.analyses["Robot2"] = TaskAnalysis(
+            robot_id="Robot2", can_contribute=False
+        )
 
         proposal = PlanProposal(
             proposer_id="Robot1",
             reasoning="test proposal",
-            commands=[{"operation": "move_to_coordinate", "params": {"robot_id": "Robot1", "x": 0, "y": 0.3, "z": 0}}],
+            commands=[
+                {
+                    "operation": "move_to_coordinate",
+                    "params": {"robot_id": "Robot1", "x": 0, "y": 0.3, "z": 0},
+                }
+            ],
         )
 
         # Run evaluation — Robot2 has can_contribute=False, so its LLM should never be called
@@ -496,17 +575,22 @@ class TestNegotiationHub:
     @patch("agents.RobotLLMAgent.requests.post")
     def test_negotiate_timeout(self, mock_post):
         """Test negotiation timeout."""
+
         # Make LLM calls very slow
         def slow_response(*args, **kwargs):
             time.sleep(0.5)
-            return _mock_llm_response(json.dumps({
-                "can_contribute": True,
-                "capabilities": [],
-                "constraints": [],
-                "suggested_role": "slow",
-                "requires_collaboration": True,
-                "confidence": 0.5,
-            }))
+            return _mock_llm_response(
+                json.dumps(
+                    {
+                        "can_contribute": True,
+                        "capabilities": [],
+                        "constraints": [],
+                        "suggested_role": "slow",
+                        "requires_collaboration": True,
+                        "confidence": 0.5,
+                    }
+                )
+            )
 
         mock_post.side_effect = slow_response
 
@@ -567,7 +651,9 @@ class TestNegotiationVerifier:
         verifier = NegotiationVerifier()
         result = verifier.verify_plan(commands)
         assert result.valid is False
-        assert any("wait_for_signal" in e and "cube_gripped" in e for e in result.errors)
+        assert any(
+            "wait_for_signal" in e and "cube_gripped" in e for e in result.errors
+        )
 
     def test_matched_signal_wait_pair(self):
         """Test matched signal/wait pair passes."""
@@ -758,33 +844,73 @@ class TestSequenceExecutorNegotiation:
         # Mock LLM responses for full negotiation
         responses = [
             # Robot1 analysis
-            _mock_llm_response(json.dumps({
-                "can_contribute": True, "capabilities": ["grasp"],
-                "constraints": [], "suggested_role": "left",
-                "requires_collaboration": True, "confidence": 0.8,
-            })),
+            _mock_llm_response(
+                json.dumps(
+                    {
+                        "can_contribute": True,
+                        "capabilities": ["grasp"],
+                        "constraints": [],
+                        "suggested_role": "left",
+                        "requires_collaboration": True,
+                        "confidence": 0.8,
+                    }
+                )
+            ),
             # Robot2 analysis
-            _mock_llm_response(json.dumps({
-                "can_contribute": True, "capabilities": ["grasp"],
-                "constraints": [], "suggested_role": "right",
-                "requires_collaboration": True, "confidence": 0.8,
-            })),
+            _mock_llm_response(
+                json.dumps(
+                    {
+                        "can_contribute": True,
+                        "capabilities": ["grasp"],
+                        "constraints": [],
+                        "suggested_role": "right",
+                        "requires_collaboration": True,
+                        "confidence": 0.8,
+                    }
+                )
+            ),
             # Proposal
-            _mock_llm_response(json.dumps({
-                "reasoning": "Both robots cooperate",
-                "commands": [
-                    {"parallel_group": 1, "operation": "move_to_coordinate",
-                     "params": {"robot_id": "Robot1", "x": -0.1, "y": 0.2, "z": 0}},
-                    {"parallel_group": 1, "operation": "move_to_coordinate",
-                     "params": {"robot_id": "Robot2", "x": 0.1, "y": 0.2, "z": 0}},
-                ],
-                "estimated_duration_s": 10.0,
-            })),
+            _mock_llm_response(
+                json.dumps(
+                    {
+                        "reasoning": "Both robots cooperate",
+                        "commands": [
+                            {
+                                "parallel_group": 1,
+                                "operation": "move_to_coordinate",
+                                "params": {
+                                    "robot_id": "Robot1",
+                                    "x": -0.1,
+                                    "y": 0.2,
+                                    "z": 0,
+                                },
+                            },
+                            {
+                                "parallel_group": 1,
+                                "operation": "move_to_coordinate",
+                                "params": {
+                                    "robot_id": "Robot2",
+                                    "x": 0.1,
+                                    "y": 0.2,
+                                    "z": 0,
+                                },
+                            },
+                        ],
+                        "estimated_duration_s": 10.0,
+                    }
+                )
+            ),
             # Evaluation (accept)
-            _mock_llm_response(json.dumps({
-                "accept": True, "concerns": [],
-                "suggested_changes": [], "confidence": 0.9,
-            })),
+            _mock_llm_response(
+                json.dumps(
+                    {
+                        "accept": True,
+                        "concerns": [],
+                        "suggested_changes": [],
+                        "confidence": 0.9,
+                    }
+                )
+            ),
         ]
         mock_post.side_effect = responses
 

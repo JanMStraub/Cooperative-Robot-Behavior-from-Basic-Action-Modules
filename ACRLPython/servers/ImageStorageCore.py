@@ -36,7 +36,7 @@ Consolidation:
 import threading
 import time
 from collections import OrderedDict
-from typing import Optional, Tuple, List, Dict
+from typing import Optional, Tuple, List
 import numpy as np
 
 # Maximum number of camera entries retained in each storage dict.
@@ -53,6 +53,7 @@ except ImportError:
     from ..config.Vision import ENABLE_VISION_STREAMING
 
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 

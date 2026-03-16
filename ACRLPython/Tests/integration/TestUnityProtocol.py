@@ -35,7 +35,9 @@ class TestImageMessageEncoding:
         image_bytes = b"FAKE_IMAGE_DATA" * 10
         request_id = 123
 
-        encoded = UnityProtocol.encode_image_message(camera_id, prompt, image_bytes, request_id)
+        encoded = UnityProtocol.encode_image_message(
+            camera_id, prompt, image_bytes, request_id
+        )
 
         # Check that message has correct structure
         assert isinstance(encoded, bytes)
@@ -61,7 +63,9 @@ class TestImageMessageEncoding:
         image_bytes = b"IMAGE_DATA"
         request_id = 0
 
-        encoded = UnityProtocol.encode_image_message(camera_id, prompt, image_bytes, request_id)
+        encoded = UnityProtocol.encode_image_message(
+            camera_id, prompt, image_bytes, request_id
+        )
         assert isinstance(encoded, bytes)
         assert len(encoded) > 0
 
@@ -72,7 +76,9 @@ class TestImageMessageEncoding:
         image_bytes = b"IMAGE"
         request_id = 999
 
-        encoded = UnityProtocol.encode_image_message(camera_id, prompt, image_bytes, request_id)
+        encoded = UnityProtocol.encode_image_message(
+            camera_id, prompt, image_bytes, request_id
+        )
         assert isinstance(encoded, bytes)
 
     def test_encode_empty_camera_id_raises(self):
@@ -115,9 +121,11 @@ class TestImageMessageDecoding:
         request_id = 42
 
         # Encode then decode
-        encoded = UnityProtocol.encode_image_message(camera_id, prompt, image_bytes, request_id)
-        decoded_request_id, decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(
-            encoded
+        encoded = UnityProtocol.encode_image_message(
+            camera_id, prompt, image_bytes, request_id
+        )
+        decoded_request_id, decoded_id, decoded_prompt, decoded_image = (
+            UnityProtocol.decode_image_message(encoded)
         )
 
         assert decoded_request_id == request_id
@@ -132,9 +140,11 @@ class TestImageMessageDecoding:
         image_bytes = b"DATA"
         request_id = 5
 
-        encoded = UnityProtocol.encode_image_message(camera_id, prompt, image_bytes, request_id)
-        decoded_request_id, decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(
-            encoded
+        encoded = UnityProtocol.encode_image_message(
+            camera_id, prompt, image_bytes, request_id
+        )
+        decoded_request_id, decoded_id, decoded_prompt, decoded_image = (
+            UnityProtocol.decode_image_message(encoded)
         )
 
         assert decoded_request_id == request_id
@@ -149,9 +159,11 @@ class TestImageMessageDecoding:
         image_bytes = b"IMAGE"
         request_id = 100
 
-        encoded = UnityProtocol.encode_image_message(camera_id, prompt, image_bytes, request_id)
-        decoded_request_id, decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(
-            encoded
+        encoded = UnityProtocol.encode_image_message(
+            camera_id, prompt, image_bytes, request_id
+        )
+        decoded_request_id, decoded_id, decoded_prompt, decoded_image = (
+            UnityProtocol.decode_image_message(encoded)
         )
 
         assert decoded_request_id == request_id
@@ -166,7 +178,9 @@ class TestImageMessageDecoding:
         image_bytes = b"DATA"
         request_id = 1
 
-        encoded = UnityProtocol.encode_image_message(camera_id, prompt, image_bytes, request_id)
+        encoded = UnityProtocol.encode_image_message(
+            camera_id, prompt, image_bytes, request_id
+        )
 
         # Truncate the message
         truncated = encoded[: len(encoded) // 2]
@@ -325,6 +339,7 @@ class TestResultMessageDecoding:
         """Test that invalid JSON raises ValueError (Protocol V2)"""
         # Create header
         from core.UnityProtocol import MessageType
+
         header = bytearray()
         header.append(MessageType.RESULT)
         header.extend(struct.pack(UnityProtocol.INT_FORMAT, 1))  # request_id = 1
@@ -348,9 +363,11 @@ class TestRoundTripEncoding:
         image_bytes = bytes(range(256))  # All byte values
         request_id = 456
 
-        encoded = UnityProtocol.encode_image_message(camera_id, prompt, image_bytes, request_id)
-        decoded_request_id, decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(
-            encoded
+        encoded = UnityProtocol.encode_image_message(
+            camera_id, prompt, image_bytes, request_id
+        )
+        decoded_request_id, decoded_id, decoded_prompt, decoded_image = (
+            UnityProtocol.decode_image_message(encoded)
         )
 
         assert decoded_request_id == request_id
@@ -388,9 +405,11 @@ class TestRoundTripEncoding:
         image_bytes = b"X" * (1024 * 1024)
         request_id = 1000
 
-        encoded = UnityProtocol.encode_image_message(camera_id, prompt, image_bytes, request_id)
-        decoded_request_id, decoded_id, decoded_prompt, decoded_image = UnityProtocol.decode_image_message(
-            encoded
+        encoded = UnityProtocol.encode_image_message(
+            camera_id, prompt, image_bytes, request_id
+        )
+        decoded_request_id, decoded_id, decoded_prompt, decoded_image = (
+            UnityProtocol.decode_image_message(encoded)
         )
 
         assert decoded_request_id == request_id

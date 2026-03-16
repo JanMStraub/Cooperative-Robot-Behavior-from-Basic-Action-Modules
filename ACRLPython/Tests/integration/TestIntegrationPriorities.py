@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Integration Tests for Priority 1-3 Implementations
 ===================================================
@@ -13,12 +14,10 @@ Run with:
 """
 
 import pytest
-import time
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from operations.Registry import get_global_registry
 from operations.WorkflowPatterns import get_global_workflow_registry
-from operations.Base import OperationResult
 from rag import RAGSystem
 from orchestrators.SequenceExecutor import SequenceExecutor
 
@@ -57,9 +56,9 @@ class TestPriority1_RAGWorkflowIntegration:
             # Use simpler queries that match workflow document text with lower threshold
             test_queries = [
                 "detect approach",  # From workflow_detect_approach_001
-                "pick place",       # From workflow_pick_place_001
-                "grasp object",     # From workflow document text
-                "move robot",       # Generic operation text
+                "pick place",  # From workflow_pick_place_001
+                "grasp object",  # From workflow document text
+                "move robot",  # Generic operation text
             ]
             # Use very low minimum score for TF-IDF to allow any matches
             min_score = 0.0
@@ -80,17 +79,27 @@ class TestPriority1_RAGWorkflowIntegration:
         if using_tfidf and len(all_results) == 0:
             # TF-IDF may not work well without LM Studio - skip test
             print("⚠️  TF-IDF fallback did not return results (vocabulary mismatch)")
-            print("⚠️  Skipping test - workflows are indexed but TF-IDF cannot search them")
-            pytest.skip("TF-IDF fallback insufficient for semantic search - requires LM Studio")
+            print(
+                "⚠️  Skipping test - workflows are indexed but TF-IDF cannot search them"
+            )
+            pytest.skip(
+                "TF-IDF fallback insufficient for semantic search - requires LM Studio"
+            )
 
-        assert len(all_results) > 0, f"No results found for any test query: {test_queries}"
+        assert (
+            len(all_results) > 0
+        ), f"No results found for any test query: {test_queries}"
 
         # Check if at least one result is a workflow
-        has_workflow = any(r.get("metadata", {}).get("type") == "workflow" for r in all_results)
+        has_workflow = any(
+            r.get("metadata", {}).get("type") == "workflow" for r in all_results
+        )
 
         if using_tfidf and not has_workflow:
             # TF-IDF may return operations instead of workflows - that's acceptable
-            print("⚠️  TF-IDF returned results but no workflows in top results (acceptable)")
+            print(
+                "⚠️  TF-IDF returned results but no workflows in top results (acceptable)"
+            )
         else:
             assert has_workflow, "No workflow patterns found in search results"
             print("✓ Workflow patterns are searchable in RAG")
@@ -101,7 +110,9 @@ class TestPriority1_RAGWorkflowIntegration:
         results = rag.search("detect object and move to it", top_k=3)
 
         # Find workflow results
-        workflows = [r for r in results if r.get("metadata", {}).get("type") == "workflow"]
+        workflows = [
+            r for r in results if r.get("metadata", {}).get("type") == "workflow"
+        ]
 
         if workflows:
             workflow = workflows[0]
@@ -117,7 +128,7 @@ class TestPriority1_RAGWorkflowIntegration:
 class TestPriority2_AutomatedParameterFlow:
     """Test Priority 2: Automatic parameter chaining between operations."""
 
-    @patch('operations.Registry.get_global_registry')
+    @patch("operations.Registry.get_global_registry")
     def test_auto_capture_outputs(self, mock_registry):
         """Test that operation outputs are automatically captured."""
         # Create mock operation with parameter flows
@@ -128,13 +139,14 @@ class TestPriority2_AutomatedParameterFlow:
 
         # Define parameter flow: detect output x → move input x
         from operations.Base import ParameterFlow
+
         mock_op.relationships.parameter_flows = [
             ParameterFlow(
                 source_operation="detect_object_stereo",
                 source_output_key="x",
                 target_operation="move_to_coordinate",
                 target_input_param="x",
-                description="Object X coordinate"
+                description="Object X coordinate",
             )
         ]
 
@@ -179,10 +191,14 @@ class TestPriority2_AutomatedParameterFlow:
         if enhanced.get("x") == 0.3:
             assert enhanced.get("y") == 0.2, "Parameter y not injected"
             assert enhanced.get("z") == 0.1, "Parameter z not injected"
-            print("✓ Parameters automatically injected from previous operations (x, y, z)")
+            print(
+                "✓ Parameters automatically injected from previous operations (x, y, z)"
+            )
         else:
             # Parameter flows may not be defined yet in real operations
-            print("⚠️  Parameter flows not configured in real operations (expected - define in VisionOperations.py)")
+            print(
+                "⚠️  Parameter flows not configured in real operations (expected - define in VisionOperations.py)"
+            )
             assert enhanced["robot_id"] == "Robot1", "Original param lost"
 
     def test_manual_variable_resolution_still_works(self):
@@ -205,9 +221,11 @@ class TestPriority2_AutomatedParameterFlow:
 class TestPriority3_UnifiedVerification:
     """Test Priority 3: Unified safety verification."""
 
-    @patch('operations.Verification.OperationVerifier')
-    @patch('operations.CoordinationVerifier.CoordinationVerifier')
-    def test_unified_verification_combines_checks(self, mock_coord_verifier, mock_op_verifier):
+    @patch("operations.Verification.OperationVerifier")
+    @patch("operations.CoordinationVerifier.CoordinationVerifier")
+    def test_unified_verification_combines_checks(
+        self, mock_coord_verifier, mock_op_verifier
+    ):
         """Test that unified verification calls both verifiers."""
         # Create mock operation
         mock_op = MagicMock()
@@ -225,8 +243,12 @@ class TestPriority3_UnifiedVerification:
         mock_coord_result.warnings = []
         mock_coord_result.to_dict.return_value = {"status": "ok"}
 
-        mock_op_verifier.return_value.verify_preconditions.return_value = mock_pre_result
-        mock_coord_verifier.return_value.verify_multi_robot_safety.return_value = mock_coord_result
+        mock_op_verifier.return_value.verify_preconditions.return_value = (
+            mock_pre_result
+        )
+        mock_coord_verifier.return_value.verify_multi_robot_safety.return_value = (
+            mock_coord_result
+        )
 
         # Create executor
         executor = SequenceExecutor(enable_verification=True, check_completion=False)
@@ -245,7 +267,7 @@ class TestPriority3_UnifiedVerification:
         assert "coordination_check" in result["details"]
         print("✓ Unified verification combines both checks")
 
-    @patch('operations.Verification.OperationVerifier')
+    @patch("operations.Verification.OperationVerifier")
     def test_verification_blocks_on_precondition_failure(self, mock_verifier):
         """Test that precondition failures block execution."""
         mock_op = MagicMock()
@@ -278,9 +300,11 @@ class TestPriority3_UnifiedVerification:
         assert "target_within_reach" in result["error"]
         print("✓ Precondition failures block execution")
 
-    @patch('operations.Verification.OperationVerifier')
-    @patch('operations.CoordinationVerifier.CoordinationVerifier')
-    def test_verification_blocks_on_coordination_failure(self, mock_coord_verifier, mock_op_verifier):
+    @patch("operations.Verification.OperationVerifier")
+    @patch("operations.CoordinationVerifier.CoordinationVerifier")
+    def test_verification_blocks_on_coordination_failure(
+        self, mock_coord_verifier, mock_op_verifier
+    ):
         """Test that coordination failures block execution."""
         mock_op = MagicMock()
         mock_op.name = "move_to_coordinate"
@@ -302,8 +326,12 @@ class TestPriority3_UnifiedVerification:
         mock_coord_result.issues = [mock_issue]
         mock_coord_result.to_dict.return_value = {"status": "failed"}
 
-        mock_op_verifier.return_value.verify_preconditions.return_value = mock_pre_result
-        mock_coord_verifier.return_value.verify_multi_robot_safety.return_value = mock_coord_result
+        mock_op_verifier.return_value.verify_preconditions.return_value = (
+            mock_pre_result
+        )
+        mock_coord_verifier.return_value.verify_multi_robot_safety.return_value = (
+            mock_coord_result
+        )
 
         # Create executor
         executor = SequenceExecutor(enable_verification=True, check_completion=False)
@@ -333,12 +361,12 @@ class TestEndToEndIntegration:
         print("✓ SequenceExecutor has access to operations registry (RAG backing)")
 
         # Check Priority 2: Parameter flow methods exist
-        assert hasattr(executor, '_auto_capture_outputs')
-        assert hasattr(executor, '_auto_inject_parameters')
+        assert hasattr(executor, "_auto_capture_outputs")
+        assert hasattr(executor, "_auto_inject_parameters")
         print("✓ SequenceExecutor has automated parameter flow methods")
 
         # Check Priority 3: Unified verification exists
-        assert hasattr(executor, '_verify_operation_safety')
+        assert hasattr(executor, "_verify_operation_safety")
         print("✓ SequenceExecutor has unified verification method")
 
     def test_system_info_summary(self):
@@ -349,9 +377,9 @@ class TestEndToEndIntegration:
         operations = registry.get_all_operations()
         workflows = workflow_registry.get_all_patterns()
 
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("SYSTEM INTEGRATION SUMMARY")
-        print("="*60)
+        print("=" * 60)
         print(f"✓ Priority 1: RAG Workflow Integration")
         print(f"  - {len(operations)} operations indexed")
         print(f"  - {len(workflows)} workflow patterns indexed")
@@ -367,9 +395,9 @@ class TestEndToEndIntegration:
         print(f"  - Combines operation preconditions + coordination checks")
         print(f"  - Comprehensive error reporting with details")
         print()
-        print("="*60)
+        print("=" * 60)
         print("ALL THREE PRIORITIES IMPLEMENTED AND INTEGRATED")
-        print("="*60)
+        print("=" * 60)
 
 
 if __name__ == "__main__":

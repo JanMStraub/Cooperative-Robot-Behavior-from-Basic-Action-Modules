@@ -7,13 +7,14 @@ interpolation between objects, and region-based movement.
 """
 
 import pytest
-from unittest.mock import Mock, patch, call
+from unittest.mock import Mock, patch
 from operations.SpatialOperations import (
     move_relative_to_object,
     move_between_objects,
     move_to_region,
 )
 from operations.Base import OperationResult
+
 # Config imports not needed - using fixtures
 
 
@@ -154,10 +155,14 @@ class TestMoveRelativeToObject:
         """Test using direct position instead of object_id"""
         from operations.Base import OperationResult
 
-        mock_move = Mock(return_value=OperationResult.success_result(
-            {"final_position": (0.5, 0.3, 0.3)}
-        ))
-        monkeypatch.setattr("operations.SpatialOperations.move_to_coordinate", mock_move)
+        mock_move = Mock(
+            return_value=OperationResult.success_result(
+                {"final_position": (0.5, 0.3, 0.3)}
+            )
+        )
+        monkeypatch.setattr(
+            "operations.SpatialOperations.move_to_coordinate", mock_move
+        )
 
         result = move_relative_to_object(
             robot_id="Robot1",
@@ -236,11 +241,18 @@ class TestMoveBetweenObjects:
         mock_world_state_with_objects,
     ):
         """Test bias=0.5 calculates center"""
-        mock_move = Mock(return_value=OperationResult.success_result(
-            {"final_position": (0.35, 0.25, 0.1)}
-        ))
-        monkeypatch.setattr("operations.SpatialOperations.get_world_state", Mock(return_value=mock_world_state_with_objects))
-        monkeypatch.setattr("operations.SpatialOperations.move_to_coordinate", mock_move)
+        mock_move = Mock(
+            return_value=OperationResult.success_result(
+                {"final_position": (0.35, 0.25, 0.1)}
+            )
+        )
+        monkeypatch.setattr(
+            "operations.SpatialOperations.get_world_state",
+            Mock(return_value=mock_world_state_with_objects),
+        )
+        monkeypatch.setattr(
+            "operations.SpatialOperations.move_to_coordinate", mock_move
+        )
 
         result = move_between_objects(
             robot_id="Robot1", object1="cube_01", object2="cube_02", bias=0.5
@@ -260,11 +272,18 @@ class TestMoveBetweenObjects:
         mock_world_state_with_objects,
     ):
         """Test bias=0.3 closer to object1"""
-        mock_move = Mock(return_value=OperationResult.success_result(
-            {"final_position": (0.33, 0.23, 0.1)}
-        ))
-        monkeypatch.setattr("operations.SpatialOperations.get_world_state", Mock(return_value=mock_world_state_with_objects))
-        monkeypatch.setattr("operations.SpatialOperations.move_to_coordinate", mock_move)
+        mock_move = Mock(
+            return_value=OperationResult.success_result(
+                {"final_position": (0.33, 0.23, 0.1)}
+            )
+        )
+        monkeypatch.setattr(
+            "operations.SpatialOperations.get_world_state",
+            Mock(return_value=mock_world_state_with_objects),
+        )
+        monkeypatch.setattr(
+            "operations.SpatialOperations.move_to_coordinate", mock_move
+        )
 
         result = move_between_objects(
             robot_id="Robot1", object1="cube_01", object2="cube_02", bias=0.3
@@ -284,11 +303,18 @@ class TestMoveBetweenObjects:
         mock_world_state_with_objects,
     ):
         """Test bias=0.7 closer to object2"""
-        mock_move = Mock(return_value=OperationResult.success_result(
-            {"final_position": (0.37, 0.27, 0.1)}
-        ))
-        monkeypatch.setattr("operations.SpatialOperations.get_world_state", Mock(return_value=mock_world_state_with_objects))
-        monkeypatch.setattr("operations.SpatialOperations.move_to_coordinate", mock_move)
+        mock_move = Mock(
+            return_value=OperationResult.success_result(
+                {"final_position": (0.37, 0.27, 0.1)}
+            )
+        )
+        monkeypatch.setattr(
+            "operations.SpatialOperations.get_world_state",
+            Mock(return_value=mock_world_state_with_objects),
+        )
+        monkeypatch.setattr(
+            "operations.SpatialOperations.move_to_coordinate", mock_move
+        )
 
         result = move_between_objects(
             robot_id="Robot1", object1="cube_01", object2="cube_02", bias=0.7
@@ -306,11 +332,18 @@ class TestMoveBetweenObjects:
         mock_world_state_with_objects,
     ):
         """Test vertical offset application"""
-        mock_move = Mock(return_value=OperationResult.success_result(
-            {"final_position": (0.35, 0.25, 0.25)}
-        ))
-        monkeypatch.setattr("operations.SpatialOperations.get_world_state", Mock(return_value=mock_world_state_with_objects))
-        monkeypatch.setattr("operations.SpatialOperations.move_to_coordinate", mock_move)
+        mock_move = Mock(
+            return_value=OperationResult.success_result(
+                {"final_position": (0.35, 0.25, 0.25)}
+            )
+        )
+        monkeypatch.setattr(
+            "operations.SpatialOperations.get_world_state",
+            Mock(return_value=mock_world_state_with_objects),
+        )
+        monkeypatch.setattr(
+            "operations.SpatialOperations.move_to_coordinate", mock_move
+        )
 
         result = move_between_objects(
             robot_id="Robot1",
@@ -327,10 +360,14 @@ class TestMoveBetweenObjects:
 
     def test_move_between_with_positions(self, monkeypatch):
         """Test using direct position tuples"""
-        mock_move = Mock(return_value=OperationResult.success_result(
-            {"final_position": (0.4, 0.3, 0.1)}
-        ))
-        monkeypatch.setattr("operations.SpatialOperations.move_to_coordinate", mock_move)
+        mock_move = Mock(
+            return_value=OperationResult.success_result(
+                {"final_position": (0.4, 0.3, 0.1)}
+            )
+        )
+        monkeypatch.setattr(
+            "operations.SpatialOperations.move_to_coordinate", mock_move
+        )
 
         result = move_between_objects(
             robot_id="Robot1",
@@ -367,10 +404,14 @@ class TestMoveToRegion:
 
     def test_move_to_region_center(self, monkeypatch):
         """Test center position calculation"""
-        mock_move = Mock(return_value=OperationResult.success_result(
-            {"final_position": (-0.325, 0.3, 0.0)}
-        ))
-        monkeypatch.setattr("operations.SpatialOperations.move_to_coordinate", mock_move)
+        mock_move = Mock(
+            return_value=OperationResult.success_result(
+                {"final_position": (-0.325, 0.3, 0.0)}
+            )
+        )
+        monkeypatch.setattr(
+            "operations.SpatialOperations.move_to_coordinate", mock_move
+        )
 
         result = move_to_region(
             robot_id="Robot1", region_name="left_workspace", position_in_region="center"
@@ -386,10 +427,14 @@ class TestMoveToRegion:
 
     def test_move_to_region_near(self, monkeypatch):
         """Test near position (near the workspace edge closest to robot)"""
-        mock_move = Mock(return_value=OperationResult.success_result(
-            {"final_position": (-0.25, 0.3, 0.0)}
-        ))
-        monkeypatch.setattr("operations.SpatialOperations.move_to_coordinate", mock_move)
+        mock_move = Mock(
+            return_value=OperationResult.success_result(
+                {"final_position": (-0.25, 0.3, 0.0)}
+            )
+        )
+        monkeypatch.setattr(
+            "operations.SpatialOperations.move_to_coordinate", mock_move
+        )
 
         result = move_to_region(
             robot_id="Robot1", region_name="left_workspace", position_in_region="near"
@@ -405,10 +450,14 @@ class TestMoveToRegion:
 
     def test_move_to_region_far(self, monkeypatch):
         """Test far position (farther from robot base)"""
-        mock_move = Mock(return_value=OperationResult.success_result(
-            {"final_position": (-0.4, 0.3, 0.0)}
-        ))
-        monkeypatch.setattr("operations.SpatialOperations.move_to_coordinate", mock_move)
+        mock_move = Mock(
+            return_value=OperationResult.success_result(
+                {"final_position": (-0.4, 0.3, 0.0)}
+            )
+        )
+        monkeypatch.setattr(
+            "operations.SpatialOperations.move_to_coordinate", mock_move
+        )
 
         result = move_to_region(
             robot_id="Robot1", region_name="left_workspace", position_in_region="far"
@@ -423,10 +472,14 @@ class TestMoveToRegion:
 
     def test_move_to_all_regions(self, monkeypatch):
         """Test all workspace regions"""
-        mock_move = Mock(return_value=OperationResult.success_result(
-            {"final_position": (0.0, 0.0, 0.2)}
-        ))
-        monkeypatch.setattr("operations.SpatialOperations.move_to_coordinate", mock_move)
+        mock_move = Mock(
+            return_value=OperationResult.success_result(
+                {"final_position": (0.0, 0.0, 0.2)}
+            )
+        )
+        monkeypatch.setattr(
+            "operations.SpatialOperations.move_to_coordinate", mock_move
+        )
 
         regions = ["left_workspace", "right_workspace", "shared_zone", "center"]
 
@@ -445,10 +498,14 @@ class TestMoveToRegion:
 
     def test_move_to_region_z_override(self, monkeypatch):
         """Test custom Z height"""
-        mock_move = Mock(return_value=OperationResult.success_result(
-            {"final_position": (0.0, 0.0, 0.35)}
-        ))
-        monkeypatch.setattr("operations.SpatialOperations.move_to_coordinate", mock_move)
+        mock_move = Mock(
+            return_value=OperationResult.success_result(
+                {"final_position": (0.0, 0.0, 0.35)}
+            )
+        )
+        monkeypatch.setattr(
+            "operations.SpatialOperations.move_to_coordinate", mock_move
+        )
 
         result = move_to_region(
             robot_id="Robot1",
@@ -493,11 +550,18 @@ class TestSpatialOperationsIntegration:
         mock_world_state_with_objects,
     ):
         """Test multiple spatial operations in sequence"""
-        mock_move = Mock(return_value=OperationResult.success_result(
-            {"final_position": (0.3, 0.2, 0.25)}
-        ))
-        monkeypatch.setattr("operations.SpatialOperations.get_world_state", Mock(return_value=mock_world_state_with_objects))
-        monkeypatch.setattr("operations.SpatialOperations.move_to_coordinate", mock_move)
+        mock_move = Mock(
+            return_value=OperationResult.success_result(
+                {"final_position": (0.3, 0.2, 0.25)}
+            )
+        )
+        monkeypatch.setattr(
+            "operations.SpatialOperations.get_world_state",
+            Mock(return_value=mock_world_state_with_objects),
+        )
+        monkeypatch.setattr(
+            "operations.SpatialOperations.move_to_coordinate", mock_move
+        )
 
         # Move relative to object
         result1 = move_relative_to_object(

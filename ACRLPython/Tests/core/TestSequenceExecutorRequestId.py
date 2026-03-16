@@ -6,10 +6,8 @@ Tests the atomic counter + timestamp hybrid approach to prevent request ID colli
 in multi-threaded scenarios with rapid sequential operations.
 """
 
-import pytest
 import time
 import threading
-from unittest.mock import Mock, patch
 from orchestrators.SequenceExecutor import SequenceExecutor
 
 
@@ -60,8 +58,10 @@ class TestRequestIdGeneration:
         timestamp_part = (request_id >> 16) & 0xFFFF
 
         # Timestamp should be between before and after (with wrapping consideration)
-        assert before_time <= timestamp_part <= after_time or \
-               (before_time > after_time and (timestamp_part >= before_time or timestamp_part <= after_time))
+        assert before_time <= timestamp_part <= after_time or (
+            before_time > after_time
+            and (timestamp_part >= before_time or timestamp_part <= after_time)
+        )
 
     def test_request_id_thread_safety(self):
         """Test request ID generation is thread-safe"""
@@ -92,7 +92,9 @@ class TestRequestIdGeneration:
             thread.join()
 
         # Should have 500 unique IDs (10 threads * 50 IDs each)
-        assert len(request_ids) == 500, f"Expected 500 unique IDs, got {len(request_ids)}"
+        assert (
+            len(request_ids) == 500
+        ), f"Expected 500 unique IDs, got {len(request_ids)}"
 
     def test_request_id_rapid_sequential(self):
         """Test rapid sequential ID generation doesn't create collisions"""
@@ -105,7 +107,9 @@ class TestRequestIdGeneration:
 
         # All should be unique
         unique_ids = set(request_ids)
-        assert len(unique_ids) == 1000, f"Expected 1000 unique IDs, got {len(unique_ids)}"
+        assert (
+            len(unique_ids) == 1000
+        ), f"Expected 1000 unique IDs, got {len(unique_ids)}"
 
     def test_request_id_counter_overflow(self):
         """Test counter handles overflow gracefully"""
@@ -114,7 +118,9 @@ class TestRequestIdGeneration:
 
         # Generate IDs across overflow boundary
         id_before = SequenceExecutor._generate_request_id()  # Counter: 0xFFFF
-        id_overflow = SequenceExecutor._generate_request_id()  # Counter: 0x0000 (wrapped)
+        id_overflow = (
+            SequenceExecutor._generate_request_id()
+        )  # Counter: 0x0000 (wrapped)
         id_after = SequenceExecutor._generate_request_id()  # Counter: 0x0001
 
         # All should be unique (timestamp part will differ or be handled)
@@ -136,7 +142,7 @@ class TestRequestIdGeneration:
 
     def test_request_id_lock_usage(self):
         """Test request ID generation uses lock for thread safety"""
-        assert hasattr(SequenceExecutor, '_request_id_lock')
+        assert hasattr(SequenceExecutor, "_request_id_lock")
         # Lock is a threading.Lock instance
         lock_type = type(threading.Lock())
         assert isinstance(SequenceExecutor._request_id_lock, lock_type)
@@ -187,4 +193,6 @@ class TestRequestIdEdgeCases:
         assert len(unique_ids) == num_iterations
 
         # Should complete in reasonable time (< 1 second for 10k IDs)
-        assert duration < 1.0, f"Request ID generation too slow: {duration}s for {num_iterations} IDs"
+        assert (
+            duration < 1.0
+        ), f"Request ID generation too slow: {duration}s for {num_iterations} IDs"

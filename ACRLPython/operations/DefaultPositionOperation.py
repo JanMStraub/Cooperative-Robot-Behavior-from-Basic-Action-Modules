@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Default Position Operations for Robot Control
 ==============================================
@@ -21,6 +22,7 @@ from .Base import (
 
 # Configure logging
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 

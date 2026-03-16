@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Test detection result to grasp operation integration.
 
@@ -7,7 +8,6 @@ are correctly converted to object_id when passed to grasp operations.
 
 import pytest
 from orchestrators.SequenceExecutor import SequenceExecutor
-from operations.Base import OperationResult
 
 
 class TestDetectionToGraspIntegration:
@@ -25,7 +25,7 @@ class TestDetectionToGraspIntegration:
             "color": "blue_cube",
             "confidence": 0.7154967784881592,
             "camera_id": "TableStereoCamera",
-            "selection": "right"
+            "selection": "right",
         }
         executor._variables["target"] = detection_result
 
@@ -34,8 +34,9 @@ class TestDetectionToGraspIntegration:
         resolved = executor._resolve_variables(params)
 
         # Should extract 'color' field for object_id
-        assert resolved["object_id"] == "blue_cube", \
-            f"Expected object_id='blue_cube', got {resolved['object_id']}"
+        assert (
+            resolved["object_id"] == "blue_cube"
+        ), f"Expected object_id='blue_cube', got {resolved['object_id']}"
         assert resolved["robot_id"] == "Robot1"
 
     def test_auto_injection_extracts_object_id_from_detection(self):
@@ -49,7 +50,7 @@ class TestDetectionToGraspIntegration:
             "z": 0.3,
             "color": "red_cube",
             "confidence": 0.9,
-            "camera_id": "MainCamera"
+            "camera_id": "MainCamera",
         }
         # Auto-captured variables use the pattern: {operation_name}_{output_key}
         executor._variables["detect_object_result"] = detection_result
@@ -69,8 +70,9 @@ class TestDetectionToGraspIntegration:
         if isinstance(var_value, dict) and "color" in var_value:
             params["object_id"] = var_value["color"]
 
-        assert params["object_id"] == "red_cube", \
-            f"Expected object_id='red_cube', got {params['object_id']}"
+        assert (
+            params["object_id"] == "red_cube"
+        ), f"Expected object_id='red_cube', got {params['object_id']}"
 
     def test_coordinate_extraction_from_detection_still_works(self):
         """Test that x, y, z extraction from detection results still works"""
@@ -81,7 +83,7 @@ class TestDetectionToGraspIntegration:
             "y": 2.5,
             "z": 3.5,
             "color": "blue_cube",
-            "confidence": 0.8
+            "confidence": 0.8,
         }
         executor._variables["target"] = detection_result
 
@@ -99,12 +101,7 @@ class TestDetectionToGraspIntegration:
         """Test that dotted notation ($target.x) still works correctly"""
         executor = SequenceExecutor(check_completion=False, enable_verification=False)
 
-        detection_result = {
-            "x": 0.7,
-            "y": 0.8,
-            "z": 0.9,
-            "color": "green_cube"
-        }
+        detection_result = {"x": 0.7, "y": 0.8, "z": 0.9, "color": "green_cube"}
         executor._variables["target"] = detection_result
 
         # Test dotted notation
@@ -112,7 +109,7 @@ class TestDetectionToGraspIntegration:
             "x": "$target.x",
             "y": "$target.y",
             "z": "$target.z",
-            "robot_id": "Robot1"
+            "robot_id": "Robot1",
         }
         resolved = executor._resolve_variables(params)
 
@@ -125,12 +122,7 @@ class TestDetectionToGraspIntegration:
         executor = SequenceExecutor(check_completion=False, enable_verification=False)
 
         # Detection result missing 'color' field
-        incomplete_result = {
-            "x": 0.5,
-            "y": 0.5,
-            "z": 0.5,
-            "confidence": 0.7
-        }
+        incomplete_result = {"x": 0.5, "y": 0.5, "z": 0.5, "confidence": 0.7}
         executor._variables["target"] = incomplete_result
 
         # Test parameter resolution
@@ -138,8 +130,9 @@ class TestDetectionToGraspIntegration:
         resolved = executor._resolve_variables(params)
 
         # Should keep the original variable reference since extraction failed
-        assert resolved["object_id"] == "$target", \
-            f"Expected fallback to '$target', got {resolved['object_id']}"
+        assert (
+            resolved["object_id"] == "$target"
+        ), f"Expected fallback to '$target', got {resolved['object_id']}"
 
 
 if __name__ == "__main__":

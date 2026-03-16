@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Test AutoRT Task Selector
 
@@ -27,7 +28,7 @@ def sample_tasks():
             ],
             required_robots=["Robot1"],
             estimated_complexity=3,
-            reasoning="test"
+            reasoning="test",
         ),
         ProposedTask(
             task_id="task_002",
@@ -37,7 +38,7 @@ def sample_tasks():
             ],
             required_robots=["Robot1"],
             estimated_complexity=3,
-            reasoning="test"
+            reasoning="test",
         ),
         ProposedTask(
             task_id="task_003",
@@ -46,12 +47,12 @@ def sample_tasks():
                 Operation(
                     type="move_to_coordinate",
                     robot_id="Robot1",
-                    parameters={"x": 0.3, "y": 0.2, "z": 0.1}
+                    parameters={"x": 0.3, "y": 0.2, "z": 0.1},
                 )
             ],
             required_robots=["Robot1"],
             estimated_complexity=2,
-            reasoning="test"
+            reasoning="test",
         ),
     ]
 
@@ -168,18 +169,20 @@ def test_task_key_same_operations(task_selector):
         ],
         required_robots=["Robot1"],
         estimated_complexity=1,
-        reasoning="test"
+        reasoning="test",
     )
 
     task2 = ProposedTask(
         task_id="task_002",
         description="test",
         operations=[
-            Operation(type="wait", robot_id="Robot1", parameters={"seconds": 5})  # Different params
+            Operation(
+                type="wait", robot_id="Robot1", parameters={"seconds": 5}
+            )  # Different params
         ],
         required_robots=["Robot1"],
         estimated_complexity=1,
-        reasoning="test"
+        reasoning="test",
     )
 
     # Should have same key (same operation sequence)
@@ -196,7 +199,7 @@ def test_task_key_different_operations(task_selector):
         ],
         required_robots=["Robot1"],
         estimated_complexity=1,
-        reasoning="test"
+        reasoning="test",
     )
 
     task2 = ProposedTask(
@@ -206,12 +209,12 @@ def test_task_key_different_operations(task_selector):
             Operation(
                 type="move_to_coordinate",
                 robot_id="Robot1",
-                parameters={"x": 0.3, "y": 0.2, "z": 0.1}
+                parameters={"x": 0.3, "y": 0.2, "z": 0.1},
             )
         ],
         required_robots=["Robot1"],
         estimated_complexity=1,
-        reasoning="test"
+        reasoning="test",
     )
 
     # Should have different keys (different operations)
@@ -228,12 +231,12 @@ def test_task_key_operation_sequence_matters(task_selector):
             Operation(
                 type="move_to_coordinate",
                 robot_id="Robot1",
-                parameters={"x": 0.3, "y": 0.2, "z": 0.1}
+                parameters={"x": 0.3, "y": 0.2, "z": 0.1},
             ),
         ],
         required_robots=["Robot1"],
         estimated_complexity=2,
-        reasoning="test"
+        reasoning="test",
     )
 
     task2 = ProposedTask(
@@ -243,13 +246,13 @@ def test_task_key_operation_sequence_matters(task_selector):
             Operation(
                 type="move_to_coordinate",
                 robot_id="Robot1",
-                parameters={"x": 0.3, "y": 0.2, "z": 0.1}
+                parameters={"x": 0.3, "y": 0.2, "z": 0.1},
             ),
             Operation(type="wait", robot_id="Robot1", parameters={"seconds": 1}),
         ],
         required_robots=["Robot1"],
         estimated_complexity=2,
-        reasoning="test"
+        reasoning="test",
     )
 
     # Should have different keys (different sequence)
@@ -334,8 +337,8 @@ def test_balanced_novelty_decay(task_selector, sample_tasks):
 def test_balanced_weights_success_and_novelty(task_selector, sample_tasks):
     """Balanced strategy weights success (60%) and novelty (40%)"""
     # Use task[0] (wait) and task[2] (move_to_coordinate) — they have different operation keys
-    task_practiced = sample_tasks[0]   # key: ("wait",)
-    task_novel = sample_tasks[2]       # key: ("move_to_coordinate",)
+    task_practiced = sample_tasks[0]  # key: ("wait",)
+    task_novel = sample_tasks[2]  # key: ("move_to_coordinate",)
 
     # First task: high success, many attempts
     for _ in range(5):
@@ -349,7 +352,9 @@ def test_balanced_weights_success_and_novelty(task_selector, sample_tasks):
     # task_novel: neutral_success=0.5, novelty=1.0
     #        score = 0.5 * 0.6 + 1.0 * 0.4 = 0.7
 
-    selected = task_selector.select_task([task_practiced, task_novel], strategy="balanced")
+    selected = task_selector.select_task(
+        [task_practiced, task_novel], strategy="balanced"
+    )
 
     # Novel task should win (higher balanced score)
     assert selected == task_novel

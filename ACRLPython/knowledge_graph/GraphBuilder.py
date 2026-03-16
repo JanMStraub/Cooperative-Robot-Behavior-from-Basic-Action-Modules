@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Knowledge Graph Builder
 =======================
@@ -23,6 +24,7 @@ from .Schema import RobotNode, ObjectNode, RegionNode
 
 # Configure logging
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 # Configuration constants
@@ -119,7 +121,9 @@ class GraphBuilder:
             # Determine workspace region
             workspace_region = None
             if robot_state.position:
-                workspace_region = self._world_state.get_region_for_position(robot_state.position)
+                workspace_region = self._world_state.get_region_for_position(
+                    robot_state.position
+                )
 
             # Create node
             robot_node = RobotNode(
@@ -229,9 +233,11 @@ class GraphBuilder:
                 if is_accessible:
                     distance = math.dist(robot_pos, obj_pos)
                     self._graph.add_edge(
-                        robot_id, obj_id, "CAN_REACH",
+                        robot_id,
+                        obj_id,
+                        "CAN_REACH",
                         distance=distance,
-                        approach_direction=None  # Could compute from positions
+                        approach_direction=None,  # Could compute from positions
                     )
 
         # Recompute NEAR edges (proximity)
@@ -266,7 +272,7 @@ class GraphBuilder:
             if not obj1_pos:
                 continue
 
-            for obj2_id in objects[i+1:]:
+            for obj2_id in objects[i + 1 :]:
                 obj2_node = self._graph.get_node(obj2_id)
                 if not obj2_node:
                     continue
@@ -291,7 +297,9 @@ class GraphBuilder:
                     if region:
                         # Remove old IN_REGION edges
                         for old_region in regions:
-                            self._graph.remove_edge(robot_id, old_region, edge_type="IN_REGION")
+                            self._graph.remove_edge(
+                                robot_id, old_region, edge_type="IN_REGION"
+                            )
                         # Add new edge
                         self._graph.add_edge(robot_id, region, "IN_REGION")
 
@@ -304,7 +312,9 @@ class GraphBuilder:
                     if region:
                         # Remove old IN_REGION edges
                         for old_region in regions:
-                            self._graph.remove_edge(obj_id, old_region, edge_type="IN_REGION")
+                            self._graph.remove_edge(
+                                obj_id, old_region, edge_type="IN_REGION"
+                            )
                         # Add new edge
                         self._graph.add_edge(obj_id, region, "IN_REGION")
 
@@ -331,8 +341,7 @@ class GraphBuilder:
 
             if grasped_by:
                 self._graph.add_edge(
-                    grasped_by, obj_id, "GRASPING",
-                    grasp_time=time.time()
+                    grasped_by, obj_id, "GRASPING", grasp_time=time.time()
                 )
 
     def _update_allocation_edges(self):
@@ -354,6 +363,5 @@ class GraphBuilder:
             owner = self._world_state.get_workspace_owner(region)
             if owner:
                 self._graph.add_edge(
-                    region, owner, "ALLOCATED",
-                    allocated_at=time.time()
+                    region, owner, "ALLOCATED", allocated_at=time.time()
                 )

@@ -8,7 +8,6 @@ Tests detection matching between left and right stereo images to reduce false po
 import sys
 import os
 import unittest
-import numpy as np
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -23,9 +22,7 @@ class TestStereoValidation(unittest.TestCase):
     def setUp(self):
         """Create YOLODetector instance for testing"""
         # Note: We'll test the matching functions directly without loading YOLO model
-        self.detector = YOLODetector.__new__(
-            YOLODetector
-        )  # Create without __init__
+        self.detector = YOLODetector.__new__(YOLODetector)  # Create without __init__
 
     def test_calculate_iou_identical(self):
         """Test IOU calculation for identical bboxes"""

@@ -9,15 +9,11 @@ Tests the collaborative manipulation operations including:
 - Handoff scenarios with stabilization
 """
 
-import pytest
-import time
-from unittest.mock import Mock, MagicMock, patch
-
+from unittest.mock import Mock
 from operations.CollaborativeOperations import (
     stabilize_object,
     STABILIZE_OBJECT_OPERATION,
 )
-from operations.Base import OperationResult
 
 
 # ============================================================================
@@ -30,7 +26,9 @@ class TestStabilizeObject:
 
     def test_stabilize_object_success(self, patch_command_broadcaster):
         """Test successful object stabilization."""
-        result = stabilize_object("Robot1", "LargeCube", duration_ms=5000, force_limit=10.0)
+        result = stabilize_object(
+            "Robot1", "LargeCube", duration_ms=5000, force_limit=10.0
+        )
 
         assert result.success is True
         assert result.result is not None
@@ -166,7 +164,9 @@ class TestStabilizeObject:
 
     def test_stabilize_object_network_error(self, patch_command_broadcaster):
         """Test stabilization when broadcaster raises exception."""
-        patch_command_broadcaster.send_command = Mock(side_effect=Exception("Network error"))
+        patch_command_broadcaster.send_command = Mock(
+            side_effect=Exception("Network error")
+        )
 
         result = stabilize_object("Robot1", "Cube01")
 
@@ -186,7 +186,9 @@ class TestDualArmStabilization:
     def test_stabilize_for_partner_manipulation(self, patch_command_broadcaster):
         """Test stabilization while partner robot manipulates object."""
         # Robot1 stabilizes
-        result1 = stabilize_object("Robot1", "LargeBoard", duration_ms=10000, force_limit=20.0)
+        result1 = stabilize_object(
+            "Robot1", "LargeBoard", duration_ms=10000, force_limit=20.0
+        )
         assert result1.success is True
 
         # This would be followed by Robot2 manipulation in real scenario
@@ -194,7 +196,9 @@ class TestDualArmStabilization:
 
     def test_short_duration_stabilization(self, patch_command_broadcaster):
         """Test brief stabilization for quick handoff."""
-        result = stabilize_object("Robot1", "SmallPart", duration_ms=1000, force_limit=5.0)
+        result = stabilize_object(
+            "Robot1", "SmallPart", duration_ms=1000, force_limit=5.0
+        )
 
         assert result.success is True
         assert result.result is not None
@@ -202,7 +206,9 @@ class TestDualArmStabilization:
 
     def test_long_duration_stabilization(self, patch_command_broadcaster):
         """Test extended stabilization for complex assembly."""
-        result = stabilize_object("Robot1", "AssemblyBase", duration_ms=25000, force_limit=30.0)
+        result = stabilize_object(
+            "Robot1", "AssemblyBase", duration_ms=25000, force_limit=30.0
+        )
 
         assert result.success is True
         assert result.result is not None
@@ -210,7 +216,9 @@ class TestDualArmStabilization:
 
     def test_low_force_fragile_object(self, patch_command_broadcaster):
         """Test stabilization with low force for fragile objects."""
-        result = stabilize_object("Robot1", "GlassVial", duration_ms=5000, force_limit=2.0)
+        result = stabilize_object(
+            "Robot1", "GlassVial", duration_ms=5000, force_limit=2.0
+        )
 
         assert result.success is True
         assert result.result is not None
@@ -218,7 +226,9 @@ class TestDualArmStabilization:
 
     def test_high_force_heavy_object(self, patch_command_broadcaster):
         """Test stabilization with high force for heavy objects."""
-        result = stabilize_object("Robot1", "HeavyBlock", duration_ms=5000, force_limit=45.0)
+        result = stabilize_object(
+            "Robot1", "HeavyBlock", duration_ms=5000, force_limit=45.0
+        )
 
         assert result.success is True
         assert result.result is not None
@@ -259,10 +269,14 @@ class TestStabilizeOperationDefinition:
         assert op.relationships.required_operations is not None
         assert len(op.relationships.required_operations) > 0
         # Should require gripper control and movement
-        assert "manipulation_control_gripper_001" in op.relationships.required_operations
+        assert (
+            "manipulation_control_gripper_001" in op.relationships.required_operations
+        )
         assert "motion_move_to_coord_001" in op.relationships.required_operations
 
-    def test_stabilize_operation_execution_through_definition(self, patch_command_broadcaster):
+    def test_stabilize_operation_execution_through_definition(
+        self, patch_command_broadcaster
+    ):
         """Test executing stabilize operation through BasicOperation.execute()."""
         result = STABILIZE_OBJECT_OPERATION.execute(
             robot_id="Robot1", object_id="TestCube", duration_ms=5000, force_limit=10.0
@@ -294,7 +308,9 @@ class TestStabilizeOperationDefinition:
 class TestStabilizationConcurrency:
     """Test thread safety for stabilization operations."""
 
-    def test_concurrent_stabilization_different_objects(self, patch_command_broadcaster):
+    def test_concurrent_stabilization_different_objects(
+        self, patch_command_broadcaster
+    ):
         """Test concurrent stabilization of different objects by different robots."""
         import threading
 
@@ -327,7 +343,8 @@ class TestStabilizationConcurrency:
             results.append(result)
 
         threads = [
-            threading.Thread(target=stabilize_worker, args=(f"Object{i}",)) for i in range(1, 4)
+            threading.Thread(target=stabilize_worker, args=(f"Object{i}",))
+            for i in range(1, 4)
         ]
         for t in threads:
             t.start()
@@ -371,7 +388,9 @@ class TestStabilizationEdgeCases:
         assert result.result["duration_ms"] == 15000
         assert result.result["force_limit"] == 25.0
 
-    def test_stabilize_object_id_with_special_characters(self, patch_command_broadcaster):
+    def test_stabilize_object_id_with_special_characters(
+        self, patch_command_broadcaster
+    ):
         """Test stabilization with object ID containing special characters."""
         result = stabilize_object("Robot1", "Object_123-ABC")
 
@@ -389,7 +408,9 @@ class TestStabilizationEdgeCases:
 
     def test_stabilize_minimum_duration_maximum_force(self, patch_command_broadcaster):
         """Test stabilization with minimum duration and maximum force."""
-        result = stabilize_object("Robot1", "HeavyObject", duration_ms=100, force_limit=50.0)
+        result = stabilize_object(
+            "Robot1", "HeavyObject", duration_ms=100, force_limit=50.0
+        )
 
         assert result.success is True
         assert result.result is not None
@@ -398,7 +419,9 @@ class TestStabilizationEdgeCases:
 
     def test_stabilize_maximum_duration_minimum_force(self, patch_command_broadcaster):
         """Test stabilization with maximum duration and minimum force."""
-        result = stabilize_object("Robot1", "DelicateObject", duration_ms=30000, force_limit=1.0)
+        result = stabilize_object(
+            "Robot1", "DelicateObject", duration_ms=30000, force_limit=1.0
+        )
 
         assert result.success is True
         assert result.result is not None

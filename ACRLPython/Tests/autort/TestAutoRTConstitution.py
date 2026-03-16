@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Test AutoRT Robot Constitution
 
@@ -8,7 +9,7 @@ import pytest
 import json
 from unittest.mock import Mock, MagicMock, patch
 from autort.RobotConstitution import RobotConstitution, BoundingBox
-from autort.DataModels import ProposedTask, Operation, SceneDescription, TaskVerdict
+from autort.DataModels import ProposedTask, Operation, SceneDescription
 
 
 @pytest.fixture
@@ -18,8 +19,8 @@ def mock_config():
     config.LM_STUDIO_URL = "http://localhost:1234/v1"
     config.SAFETY_VALIDATION_MODEL = "test-model"
     config.WORKSPACE_BOUNDS = {
-        'min_corner': (-1.0, -1.0, 0.0),
-        'max_corner': (1.0, 1.0, 1.5),
+        "min_corner": (-1.0, -1.0, 0.0),
+        "max_corner": (1.0, 1.0, 1.5),
     }
     config.MAX_VELOCITY = 2.0
     config.MIN_ROBOT_SEPARATION = 0.2
@@ -51,12 +52,12 @@ def safe_move_task():
             Operation(
                 type="move_to_coordinate",
                 robot_id="Robot1",
-                parameters={"target_position": [0.3, 0.2, 0.1]}
+                parameters={"target_position": [0.3, 0.2, 0.1]},
             )
         ],
         required_robots=["Robot1"],
         estimated_complexity=2,
-        reasoning="Simple movement"
+        reasoning="Simple movement",
     )
 
 
@@ -93,8 +94,8 @@ def test_bounding_box_contains_boundary():
 
 def test_constitution_init(mock_config):
     """RobotConstitution initializes with config"""
-    with patch('autort.RobotConstitution.get_world_state', return_value=Mock()):
-        with patch('autort.RobotConstitution.OpenAI'):
+    with patch("autort.RobotConstitution.get_world_state", return_value=Mock()):
+        with patch("autort.RobotConstitution.OpenAI"):
             constitution = RobotConstitution(mock_config)
             assert constitution.config == mock_config
             assert len(constitution.semantic_rules) > 0
@@ -107,21 +108,23 @@ def test_constitution_init(mock_config):
 # ============================================================================
 
 
-def test_semantic_safety_approves_safe_task(mock_config, mock_world_state, safe_move_task):
+def test_semantic_safety_approves_safe_task(
+    mock_config, mock_world_state, safe_move_task
+):
     """Semantic safety approves benign task"""
     mock_client = MagicMock()
     mock_choice = MagicMock()
-    mock_choice.message.content = json.dumps({
-        "violates": False,
-        "rule_violated": None,
-        "reason": "Task is safe"
-    })
+    mock_choice.message.content = json.dumps(
+        {"violates": False, "rule_violated": None, "reason": "Task is safe"}
+    )
     mock_response = MagicMock()
     mock_response.choices = [mock_choice]
     mock_client.chat.completions.create = Mock(return_value=mock_response)
 
-    with patch('autort.RobotConstitution.get_world_state', return_value=mock_world_state):
-        with patch('autort.RobotConstitution.OpenAI', return_value=mock_client):
+    with patch(
+        "autort.RobotConstitution.get_world_state", return_value=mock_world_state
+    ):
+        with patch("autort.RobotConstitution.OpenAI", return_value=mock_client):
             constitution = RobotConstitution(mock_config)
             verdict = constitution._evaluate_semantic_safety(safe_move_task)
 
@@ -138,27 +141,31 @@ def test_semantic_safety_rejects_harmful_task(mock_config, mock_world_state):
             Operation(
                 type="move_to_coordinate",
                 robot_id="Robot1",
-                parameters={"target_position": [0.3, 0.2, 0.1]}
+                parameters={"target_position": [0.3, 0.2, 0.1]},
             )
         ],
         required_robots=["Robot1"],
         estimated_complexity=3,
-        reasoning="Throw object"
+        reasoning="Throw object",
     )
 
     mock_client = MagicMock()
     mock_choice = MagicMock()
-    mock_choice.message.content = json.dumps({
-        "violates": True,
-        "rule_violated": "Do not throw objects at living beings",
-        "reason": "Task involves throwing object at camera"
-    })
+    mock_choice.message.content = json.dumps(
+        {
+            "violates": True,
+            "rule_violated": "Do not throw objects at living beings",
+            "reason": "Task involves throwing object at camera",
+        }
+    )
     mock_response = MagicMock()
     mock_response.choices = [mock_choice]
     mock_client.chat.completions.create = Mock(return_value=mock_response)
 
-    with patch('autort.RobotConstitution.get_world_state', return_value=mock_world_state):
-        with patch('autort.RobotConstitution.OpenAI', return_value=mock_client):
+    with patch(
+        "autort.RobotConstitution.get_world_state", return_value=mock_world_state
+    ):
+        with patch("autort.RobotConstitution.OpenAI", return_value=mock_client):
             constitution = RobotConstitution(mock_config)
             verdict = constitution._evaluate_semantic_safety(harmful_task)
 
@@ -167,13 +174,19 @@ def test_semantic_safety_rejects_harmful_task(mock_config, mock_world_state):
             assert "Semantic safety" in verdict.violations[0]
 
 
-def test_semantic_safety_llm_error_rejects(mock_config, mock_world_state, safe_move_task):
+def test_semantic_safety_llm_error_rejects(
+    mock_config, mock_world_state, safe_move_task
+):
     """Semantic safety rejects on LLM error (fail-safe)"""
     mock_client = MagicMock()
-    mock_client.chat.completions.create = Mock(side_effect=Exception("LLM connection failed"))
+    mock_client.chat.completions.create = Mock(
+        side_effect=Exception("LLM connection failed")
+    )
 
-    with patch('autort.RobotConstitution.get_world_state', return_value=mock_world_state):
-        with patch('autort.RobotConstitution.OpenAI', return_value=mock_client):
+    with patch(
+        "autort.RobotConstitution.get_world_state", return_value=mock_world_state
+    ):
+        with patch("autort.RobotConstitution.OpenAI", return_value=mock_client):
             constitution = RobotConstitution(mock_config)
             verdict = constitution._evaluate_semantic_safety(safe_move_task)
 
@@ -197,16 +210,18 @@ def test_kinematic_rejects_out_of_bounds_x(mock_config, mock_world_state, empty_
             Operation(
                 type="move_to_coordinate",
                 robot_id="Robot1",
-                parameters={"target_position": [10.0, 0.0, 0.5]}  # Outside bounds
+                parameters={"target_position": [10.0, 0.0, 0.5]},  # Outside bounds
             )
         ],
         required_robots=["Robot1"],
         estimated_complexity=2,
-        reasoning="test"
+        reasoning="test",
     )
 
-    with patch('autort.RobotConstitution.get_world_state', return_value=mock_world_state):
-        with patch('autort.RobotConstitution.OpenAI'):
+    with patch(
+        "autort.RobotConstitution.get_world_state", return_value=mock_world_state
+    ):
+        with patch("autort.RobotConstitution.OpenAI"):
             constitution = RobotConstitution(mock_config)
             verdict = constitution._evaluate_kinematic_safety(task, empty_scene)
 
@@ -223,16 +238,18 @@ def test_kinematic_rejects_out_of_bounds_z(mock_config, mock_world_state, empty_
             Operation(
                 type="move_to_coordinate",
                 robot_id="Robot1",
-                parameters={"target_position": [0.0, 0.0, 2.0]}  # Above max Z
+                parameters={"target_position": [0.0, 0.0, 2.0]},  # Above max Z
             )
         ],
         required_robots=["Robot1"],
         estimated_complexity=2,
-        reasoning="test"
+        reasoning="test",
     )
 
-    with patch('autort.RobotConstitution.get_world_state', return_value=mock_world_state):
-        with patch('autort.RobotConstitution.OpenAI'):
+    with patch(
+        "autort.RobotConstitution.get_world_state", return_value=mock_world_state
+    ):
+        with patch("autort.RobotConstitution.OpenAI"):
             constitution = RobotConstitution(mock_config)
             verdict = constitution._evaluate_kinematic_safety(task, empty_scene)
 
@@ -240,12 +257,18 @@ def test_kinematic_rejects_out_of_bounds_z(mock_config, mock_world_state, empty_
             assert any("outside workspace" in v.lower() for v in verdict.violations)
 
 
-def test_kinematic_approves_within_bounds(mock_config, mock_world_state, empty_scene, safe_move_task):
+def test_kinematic_approves_within_bounds(
+    mock_config, mock_world_state, empty_scene, safe_move_task
+):
     """Kinematic safety approves target within bounds"""
-    with patch('autort.RobotConstitution.get_world_state', return_value=mock_world_state):
-        with patch('autort.RobotConstitution.OpenAI'):
+    with patch(
+        "autort.RobotConstitution.get_world_state", return_value=mock_world_state
+    ):
+        with patch("autort.RobotConstitution.OpenAI"):
             constitution = RobotConstitution(mock_config)
-            verdict = constitution._evaluate_kinematic_safety(safe_move_task, empty_scene)
+            verdict = constitution._evaluate_kinematic_safety(
+                safe_move_task, empty_scene
+            )
 
             assert verdict.approved is True
             assert len(verdict.violations) == 0
@@ -256,7 +279,9 @@ def test_kinematic_approves_within_bounds(mock_config, mock_world_state, empty_s
 # ============================================================================
 
 
-def test_kinematic_rejects_excessive_velocity(mock_config, mock_world_state, empty_scene):
+def test_kinematic_rejects_excessive_velocity(
+    mock_config, mock_world_state, empty_scene
+):
     """Kinematic safety rejects velocity above limit"""
     task = ProposedTask(
         task_id="task_001",
@@ -265,21 +290,29 @@ def test_kinematic_rejects_excessive_velocity(mock_config, mock_world_state, emp
             Operation(
                 type="move_to_coordinate",
                 robot_id="Robot1",
-                parameters={"target_position": [0.3, 0.2, 0.1], "velocity": 10.0}  # Too fast
+                parameters={
+                    "target_position": [0.3, 0.2, 0.1],
+                    "velocity": 10.0,
+                },  # Too fast
             )
         ],
         required_robots=["Robot1"],
         estimated_complexity=2,
-        reasoning="test"
+        reasoning="test",
     )
 
-    with patch('autort.RobotConstitution.get_world_state', return_value=mock_world_state):
-        with patch('autort.RobotConstitution.OpenAI'):
+    with patch(
+        "autort.RobotConstitution.get_world_state", return_value=mock_world_state
+    ):
+        with patch("autort.RobotConstitution.OpenAI"):
             constitution = RobotConstitution(mock_config)
             verdict = constitution._evaluate_kinematic_safety(task, empty_scene)
 
             assert verdict.approved is False
-            assert any("velocity" in v.lower() and "exceeds" in v.lower() for v in verdict.violations)
+            assert any(
+                "velocity" in v.lower() and "exceeds" in v.lower()
+                for v in verdict.violations
+            )
 
 
 def test_kinematic_approves_safe_velocity(mock_config, mock_world_state, empty_scene):
@@ -291,16 +324,21 @@ def test_kinematic_approves_safe_velocity(mock_config, mock_world_state, empty_s
             Operation(
                 type="move_to_coordinate",
                 robot_id="Robot1",
-                parameters={"target_position": [0.3, 0.2, 0.1], "velocity": 1.0}  # Safe
+                parameters={
+                    "target_position": [0.3, 0.2, 0.1],
+                    "velocity": 1.0,
+                },  # Safe
             )
         ],
         required_robots=["Robot1"],
         estimated_complexity=2,
-        reasoning="test"
+        reasoning="test",
     )
 
-    with patch('autort.RobotConstitution.get_world_state', return_value=mock_world_state):
-        with patch('autort.RobotConstitution.OpenAI'):
+    with patch(
+        "autort.RobotConstitution.get_world_state", return_value=mock_world_state
+    ):
+        with patch("autort.RobotConstitution.OpenAI"):
             constitution = RobotConstitution(mock_config)
             verdict = constitution._evaluate_kinematic_safety(task, empty_scene)
 
@@ -312,7 +350,9 @@ def test_kinematic_approves_safe_velocity(mock_config, mock_world_state, empty_s
 # ============================================================================
 
 
-def test_kinematic_rejects_high_gripper_force(mock_config, mock_world_state, empty_scene):
+def test_kinematic_rejects_high_gripper_force(
+    mock_config, mock_world_state, empty_scene
+):
     """Kinematic safety rejects task when gripper force exceeds limit"""
     task = ProposedTask(
         task_id="task_001",
@@ -321,16 +361,18 @@ def test_kinematic_rejects_high_gripper_force(mock_config, mock_world_state, emp
             Operation(
                 type="control_gripper",
                 robot_id="Robot1",
-                parameters={"action": "close", "force": 100.0}  # Exceeds 50N limit
+                parameters={"action": "close", "force": 100.0},  # Exceeds 50N limit
             )
         ],
         required_robots=["Robot1"],
         estimated_complexity=2,
-        reasoning="test"
+        reasoning="test",
     )
 
-    with patch('autort.RobotConstitution.get_world_state', return_value=mock_world_state):
-        with patch('autort.RobotConstitution.OpenAI'):
+    with patch(
+        "autort.RobotConstitution.get_world_state", return_value=mock_world_state
+    ):
+        with patch("autort.RobotConstitution.OpenAI"):
             constitution = RobotConstitution(mock_config)
             verdict = constitution._evaluate_kinematic_safety(task, empty_scene)
 
@@ -354,24 +396,26 @@ def test_kinematic_rejects_robot_collision_planned(mock_config, empty_scene):
             Operation(
                 type="move_to_coordinate",
                 robot_id="Robot1",
-                parameters={"target_position": [0.0, 0.0, 0.1]}
+                parameters={"target_position": [0.0, 0.0, 0.1]},
             ),
             Operation(
                 type="move_to_coordinate",
                 robot_id="Robot2",
-                parameters={"target_position": [0.05, 0.0, 0.1]}  # Too close
+                parameters={"target_position": [0.05, 0.0, 0.1]},  # Too close
             ),
         ],
         required_robots=["Robot1", "Robot2"],
         estimated_complexity=3,
-        reasoning="test"
+        reasoning="test",
     )
 
     mock_world_state = Mock()
     mock_world_state.get_robot_position = Mock(return_value=None)  # No live positions
 
-    with patch('autort.RobotConstitution.get_world_state', return_value=mock_world_state):
-        with patch('autort.RobotConstitution.OpenAI'):
+    with patch(
+        "autort.RobotConstitution.get_world_state", return_value=mock_world_state
+    ):
+        with patch("autort.RobotConstitution.OpenAI"):
             constitution = RobotConstitution(mock_config)
             verdict = constitution._evaluate_kinematic_safety(task, empty_scene)
 
@@ -388,22 +432,26 @@ def test_kinematic_rejects_collision_with_live_position(mock_config, empty_scene
             Operation(
                 type="move_to_coordinate",
                 robot_id="Robot1",
-                parameters={"target_position": [0.5, 0.2, 0.1]}
+                parameters={"target_position": [0.5, 0.2, 0.1]},
             )
         ],
         required_robots=["Robot1", "Robot2"],
         estimated_complexity=2,
-        reasoning="test"
+        reasoning="test",
     )
 
     # Mock WorldState with Robot2 at position close to Robot1's target
     mock_world_state = Mock()
-    mock_world_state.get_robot_position = Mock(side_effect=lambda rid:
-        (0.5, 0.2, 0.1) if rid == "Robot2" else None  # Robot2 at same position
+    mock_world_state.get_robot_position = Mock(
+        side_effect=lambda rid: (
+            (0.5, 0.2, 0.1) if rid == "Robot2" else None
+        )  # Robot2 at same position
     )
 
-    with patch('autort.RobotConstitution.get_world_state', return_value=mock_world_state):
-        with patch('autort.RobotConstitution.OpenAI'):
+    with patch(
+        "autort.RobotConstitution.get_world_state", return_value=mock_world_state
+    ):
+        with patch("autort.RobotConstitution.OpenAI"):
             constitution = RobotConstitution(mock_config)
             verdict = constitution._evaluate_kinematic_safety(task, empty_scene)
 
@@ -420,24 +468,26 @@ def test_kinematic_approves_safe_separation(mock_config, empty_scene):
             Operation(
                 type="move_to_coordinate",
                 robot_id="Robot1",
-                parameters={"target_position": [-0.3, 0.0, 0.1]}
+                parameters={"target_position": [-0.3, 0.0, 0.1]},
             ),
             Operation(
                 type="move_to_coordinate",
                 robot_id="Robot2",
-                parameters={"target_position": [0.3, 0.0, 0.1]}  # 0.6m apart
+                parameters={"target_position": [0.3, 0.0, 0.1]},  # 0.6m apart
             ),
         ],
         required_robots=["Robot1", "Robot2"],
         estimated_complexity=3,
-        reasoning="test"
+        reasoning="test",
     )
 
     mock_world_state = Mock()
     mock_world_state.get_robot_position = Mock(return_value=None)
 
-    with patch('autort.RobotConstitution.get_world_state', return_value=mock_world_state):
-        with patch('autort.RobotConstitution.OpenAI'):
+    with patch(
+        "autort.RobotConstitution.get_world_state", return_value=mock_world_state
+    ):
+        with patch("autort.RobotConstitution.OpenAI"):
             constitution = RobotConstitution(mock_config)
             verdict = constitution._evaluate_kinematic_safety(task, empty_scene)
 
@@ -453,11 +503,9 @@ def test_evaluate_task_both_layers_approve(mock_config, empty_scene, safe_move_t
     """Task passes both safety layers"""
     mock_client = MagicMock()
     mock_choice = MagicMock()
-    mock_choice.message.content = json.dumps({
-        "violates": False,
-        "rule_violated": None,
-        "reason": "Safe"
-    })
+    mock_choice.message.content = json.dumps(
+        {"violates": False, "rule_violated": None, "reason": "Safe"}
+    )
     mock_response = MagicMock()
     mock_response.choices = [mock_choice]
     mock_client.chat.completions.create = Mock(return_value=mock_response)
@@ -465,8 +513,10 @@ def test_evaluate_task_both_layers_approve(mock_config, empty_scene, safe_move_t
     mock_world_state = Mock()
     mock_world_state.get_robot_position = Mock(return_value=None)
 
-    with patch('autort.RobotConstitution.get_world_state', return_value=mock_world_state):
-        with patch('autort.RobotConstitution.OpenAI', return_value=mock_client):
+    with patch(
+        "autort.RobotConstitution.get_world_state", return_value=mock_world_state
+    ):
+        with patch("autort.RobotConstitution.OpenAI", return_value=mock_client):
             constitution = RobotConstitution(mock_config)
             verdict = constitution.evaluate_task(safe_move_task, empty_scene)
 
@@ -483,16 +533,14 @@ def test_evaluate_task_semantic_rejects(mock_config, empty_scene):
         ],
         required_robots=["Robot1"],
         estimated_complexity=2,
-        reasoning="test"
+        reasoning="test",
     )
 
     mock_client = MagicMock()
     mock_choice = MagicMock()
-    mock_choice.message.content = json.dumps({
-        "violates": True,
-        "rule_violated": "harmful",
-        "reason": "Dangerous action"
-    })
+    mock_choice.message.content = json.dumps(
+        {"violates": True, "rule_violated": "harmful", "reason": "Dangerous action"}
+    )
     mock_response = MagicMock()
     mock_response.choices = [mock_choice]
     mock_client.chat.completions.create = Mock(return_value=mock_response)
@@ -500,8 +548,10 @@ def test_evaluate_task_semantic_rejects(mock_config, empty_scene):
     mock_world_state = Mock()
     mock_world_state.get_robot_position = Mock(return_value=None)
 
-    with patch('autort.RobotConstitution.get_world_state', return_value=mock_world_state):
-        with patch('autort.RobotConstitution.OpenAI', return_value=mock_client):
+    with patch(
+        "autort.RobotConstitution.get_world_state", return_value=mock_world_state
+    ):
+        with patch("autort.RobotConstitution.OpenAI", return_value=mock_client):
             constitution = RobotConstitution(mock_config)
             verdict = constitution.evaluate_task(harmful_task, empty_scene)
 
@@ -518,21 +568,19 @@ def test_evaluate_task_kinematic_rejects(mock_config, empty_scene):
             Operation(
                 type="move_to_coordinate",
                 robot_id="Robot1",
-                parameters={"target_position": [10.0, 0.0, 0.5]}  # Out of bounds
+                parameters={"target_position": [10.0, 0.0, 0.5]},  # Out of bounds
             )
         ],
         required_robots=["Robot1"],
         estimated_complexity=2,
-        reasoning="test"
+        reasoning="test",
     )
 
     mock_client = MagicMock()
     mock_choice = MagicMock()
-    mock_choice.message.content = json.dumps({
-        "violates": False,
-        "rule_violated": None,
-        "reason": "Safe"
-    })
+    mock_choice.message.content = json.dumps(
+        {"violates": False, "rule_violated": None, "reason": "Safe"}
+    )
     mock_response = MagicMock()
     mock_response.choices = [mock_choice]
     mock_client.chat.completions.create = Mock(return_value=mock_response)
@@ -540,8 +588,10 @@ def test_evaluate_task_kinematic_rejects(mock_config, empty_scene):
     mock_world_state = Mock()
     mock_world_state.get_robot_position = Mock(return_value=None)
 
-    with patch('autort.RobotConstitution.get_world_state', return_value=mock_world_state):
-        with patch('autort.RobotConstitution.OpenAI', return_value=mock_client):
+    with patch(
+        "autort.RobotConstitution.get_world_state", return_value=mock_world_state
+    ):
+        with patch("autort.RobotConstitution.OpenAI", return_value=mock_client):
             constitution = RobotConstitution(mock_config)
             verdict = constitution.evaluate_task(out_of_bounds_task, empty_scene)
 

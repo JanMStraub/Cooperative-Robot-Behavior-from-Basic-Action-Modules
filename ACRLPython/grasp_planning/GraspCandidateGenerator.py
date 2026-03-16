@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Grasp candidate generation with adaptive positioning.
 
@@ -73,7 +74,9 @@ class GraspCandidateGenerator:
         "front": np.array([0.0, 0.0, 1.0]),
     }
 
-    def __init__(self, config: Optional[GraspConfig] = None, seed: Optional[int] = None):
+    def __init__(
+        self, config: Optional[GraspConfig] = None, seed: Optional[int] = None
+    ):
         """
         Initialize grasp candidate generator.
 
@@ -194,7 +197,11 @@ class GraspCandidateGenerator:
 
             # Calculate gripper rotation
             grasp_rotation = self._calculate_gripper_rotation(
-                approach, perturbed_approach_dir, approach_tangent_world, obj_rot, angle_var
+                approach,
+                perturbed_approach_dir,
+                approach_tangent_world,
+                obj_rot,
+                angle_var,
             )
 
             # Calculate pre-grasp position
@@ -310,7 +317,9 @@ class GraspCandidateGenerator:
             Perturbed direction vector (normalized)
         """
         # Random angle within cone (in degrees)
-        perturbation_angle = (self.random.rand() * 2.0 - 1.0) * self.config.angle_variation_range
+        perturbation_angle = (
+            self.random.rand() * 2.0 - 1.0
+        ) * self.config.angle_variation_range
         perturbation_roll = self.random.rand() * 360.0
 
         # Convert to radians
@@ -422,7 +431,9 @@ class GraspCandidateGenerator:
                 centering_score = 1.0
 
             # Vertical alignment (pointing down)
-            vertical_alignment = abs(vector_dot(vector_normalize(to_center), np.array([0.0, -1.0, 0.0])))
+            vertical_alignment = abs(
+                vector_dot(vector_normalize(to_center), np.array([0.0, -1.0, 0.0]))
+            )
             vertical_score = np.clip(vertical_alignment, 0.0, 1.0)
 
             return 0.3 + (centering_score * 0.4) + (vertical_score * 0.3)
@@ -438,7 +449,9 @@ class GraspCandidateGenerator:
         max_extent = max(obj_size[0], obj_size[2]) * 0.5
 
         if max_extent > 1e-6:
-            side_centering_score = 1.0 - np.clip(dist_from_center_line / max_extent, 0.0, 1.0)
+            side_centering_score = 1.0 - np.clip(
+                dist_from_center_line / max_extent, 0.0, 1.0
+            )
         else:
             side_centering_score = 1.0
 
@@ -456,11 +469,13 @@ class GraspCandidateGenerator:
         """
         avg_size = np.mean(obj_size)
         distance = avg_size * self.config.pre_grasp_distance_factor
-        return float(np.clip(
-            distance,
-            self.config.min_pre_grasp_distance,
-            self.config.max_pre_grasp_distance,
-        ))
+        return float(
+            np.clip(
+                distance,
+                self.config.min_pre_grasp_distance,
+                self.config.max_pre_grasp_distance,
+            )
+        )
 
     def _calculate_retreat_distance(self, obj_size: np.ndarray) -> float:
         """
@@ -485,7 +500,9 @@ class GraspCandidateGenerator:
         Returns:
             Varied distance in meters
         """
-        variation = (self.random.rand() * 2.0 - 1.0) * self.config.distance_variation_range
+        variation = (
+            self.random.rand() * 2.0 - 1.0
+        ) * self.config.distance_variation_range
         distance = base_dist * (1.0 + variation)
         return np.clip(
             distance,

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 RAG System for Robot Operations
 ================================
@@ -35,6 +36,7 @@ def _get_registry():
 
     return get_global_registry()
 
+
 # Import config
 try:
     from config.Rag import RAG_VECTOR_STORE_PATH
@@ -54,6 +56,7 @@ from .ConfidenceScorer import (
 
 # Configure logging
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -287,8 +290,7 @@ class RAGSystem:
         # Get more results than requested to allow for filtering
         all_results = self.search(query, top_k=top_k * 3)
         filtered = [
-            r for r in all_results
-            if r.get("metadata", {}).get("type") == result_type
+            r for r in all_results if r.get("metadata", {}).get("type") == result_type
         ]
         return filtered[:top_k]
 
@@ -321,11 +323,21 @@ class RAGSystem:
                 "is_ready": self.is_ready(),
             },
             "indexer_stats": {
-                "total_operations": len(self.registry.get_all_operations()) if self.registry else 0,
+                "total_operations": (
+                    len(self.registry.get_all_operations()) if self.registry else 0
+                ),
             },
             "embedding_stats": {
-                "embedding_dimension": self.embedding_generator.get_embedding_dimension() if hasattr(self.embedding_generator, 'get_embedding_dimension') else None,
-                "using_lm_studio": self.embedding_generator.is_using_lm_studio() if hasattr(self.embedding_generator, 'is_using_lm_studio') else None,
+                "embedding_dimension": (
+                    self.embedding_generator.get_embedding_dimension()
+                    if hasattr(self.embedding_generator, "get_embedding_dimension")
+                    else None
+                ),
+                "using_lm_studio": (
+                    self.embedding_generator.is_using_lm_studio()
+                    if hasattr(self.embedding_generator, "is_using_lm_studio")
+                    else None
+                ),
             },
         }
 

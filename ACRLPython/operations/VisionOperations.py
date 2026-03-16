@@ -693,12 +693,18 @@ def detect_object_stereo(
         # Sync detected object into KG immediately (don't wait for WorldStatePublisher 10Hz cycle)
         try:
             from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
+
             if KNOWLEDGE_GRAPH_ENABLED:
                 from core.Imports import get_graph_query_engine
+
                 qe = get_graph_query_engine()
                 if qe is not None:
                     kg_object_id = best.color if best.color else "unknown_object"
-                    pos = (best.world_position[0], best.world_position[1], best.world_position[2])
+                    pos = (
+                        best.world_position[0],
+                        best.world_position[1],
+                        best.world_position[2],
+                    )
                     qe._graph.add_node(
                         kg_object_id,
                         node_type="object",
@@ -815,7 +821,6 @@ def create_detect_object_stereo_operation() -> BasicOperation:
             "No objects match color filter",
             "All detections below confidence threshold",
         ],
-        commonly_paired_with=["move_to_coordinate", "control_gripper"],
         relationships=OperationRelationship(
             operation_id="perception_stereo_detect_001",
             commonly_paired_with=[

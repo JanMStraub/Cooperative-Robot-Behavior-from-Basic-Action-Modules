@@ -43,7 +43,9 @@ class TestQuaternionMath:
 
     def test_180_rotation_around_y_negates_xz(self):
         """180° around Y maps (x,y,z) → (-x,y,-z)."""
-        q_180y = np.array([0.0, 1.0, 0.0, 0.0])  # [sin(90°)*Y, cos(90°)] already normalised
+        q_180y = np.array(
+            [0.0, 1.0, 0.0, 0.0]
+        )  # [sin(90°)*Y, cos(90°)] already normalised
         v = np.array([1.0, 0.0, 1.0])
         result = _quat_rotate_vector(q_180y, v)
         np.testing.assert_allclose(result, np.array([-1.0, 0.0, -1.0]), atol=1e-9)
@@ -155,9 +157,7 @@ class TestTransformGraspnetPosesToUnity:
         assert len(result) == 1
         approach = result[0]["approach_direction"]
         # Approach should be near (0, -1, 0) in world — pointing down
-        np.testing.assert_allclose(
-            approach, [0.0, -1.0, 0.0], atol=1e-5
-        )
+        np.testing.assert_allclose(approach, [0.0, -1.0, 0.0], atol=1e-5)
 
     def test_score_and_width_preserved(self):
         """score and width fields from VGN are preserved in the output."""
@@ -201,7 +201,9 @@ class TestTransformGraspnetPosesToUnity:
 
     def test_empty_input_returns_empty_list(self):
         """Empty grasp list returns empty output without error."""
-        result = transform_grasp_poses_to_unity([], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0])
+        result = transform_grasp_poses_to_unity(
+            [], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]
+        )
         assert result == []
 
     def test_multiple_grasps_all_transformed(self):
@@ -210,9 +212,21 @@ class TestTransformGraspnetPosesToUnity:
         cam_rot = [0.0, 0.0, 0.0, 1.0]
 
         grasps = [
-            {"position": [1.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0], "score": 0.1},
-            {"position": [2.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0], "score": 0.2},
-            {"position": [3.0, 0.0, 0.0], "rotation": [0.0, 0.0, 0.0, 1.0], "score": 0.3},
+            {
+                "position": [1.0, 0.0, 0.0],
+                "rotation": [0.0, 0.0, 0.0, 1.0],
+                "score": 0.1,
+            },
+            {
+                "position": [2.0, 0.0, 0.0],
+                "rotation": [0.0, 0.0, 0.0, 1.0],
+                "score": 0.2,
+            },
+            {
+                "position": [3.0, 0.0, 0.0],
+                "rotation": [0.0, 0.0, 0.0, 1.0],
+                "score": 0.3,
+            },
         ]
 
         result = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
@@ -265,5 +279,5 @@ class TestTransformGraspnetPosesToUnity:
         candidate = result[0]
         # The resulting quaternion must be normalised (unit length)
         rot = candidate["rotation"]
-        norm = sum(v ** 2 for v in rot) ** 0.5
+        norm = sum(v**2 for v in rot) ** 0.5
         assert abs(norm - 1.0) < 1e-5, f"Output quaternion not normalised: {rot}"

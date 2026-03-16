@@ -16,18 +16,20 @@ import socket
 import struct
 import json
 import time
-import threading
-from unittest.mock import Mock, MagicMock, patch, call
-from queue import Queue, Empty
+from unittest.mock import Mock, patch
 
-from servers.CommandServer import CommandServer, CommandBroadcaster, get_command_broadcaster
-from core.TCPServerBase import ServerConfig
+from servers.CommandServer import (
+    CommandServer,
+    CommandBroadcaster,
+    get_command_broadcaster,
+)
 from core.UnityProtocol import UnityProtocol, MessageType
 
 
 # ============================================================================
 # Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def command_broadcaster():
@@ -81,6 +83,7 @@ def mock_client_socket():
 # Test Class: CommandBroadcaster
 # ============================================================================
 
+
 class TestCommandBroadcaster:
     """Test CommandBroadcaster singleton and command sending functionality."""
 
@@ -111,7 +114,9 @@ class TestCommandBroadcaster:
         assert command["request_id"] == 123
         command_server.broadcast_to_all_clients.assert_called_once()
 
-    def test_send_command_queue_when_no_clients(self, command_broadcaster, command_server):
+    def test_send_command_queue_when_no_clients(
+        self, command_broadcaster, command_server
+    ):
         """Test command is queued when no clients are connected."""
         command_broadcaster.set_server(command_server)
         command_server.broadcast_to_all_clients = Mock(return_value=0)  # No clients
@@ -124,7 +129,9 @@ class TestCommandBroadcaster:
         assert len(queued) == 1
         assert queued[0]["command_type"] == "test"
 
-    def test_send_result_backward_compatibility(self, command_broadcaster, command_server):
+    def test_send_result_backward_compatibility(
+        self, command_broadcaster, command_server
+    ):
         """Test send_result() for backward compatibility with ResultsBroadcaster."""
         command_broadcaster.set_server(command_server)
         command_server.broadcast_to_all_clients = Mock(return_value=1)
@@ -173,6 +180,7 @@ class TestCommandBroadcaster:
 # Test Class: CommandServer - Connection Management
 # ============================================================================
 
+
 class TestCommandServerConnection:
     """Test CommandServer connection management and lifecycle."""
 
@@ -204,7 +212,7 @@ class TestCommandServerConnection:
         time.sleep(0.1)
 
         # Mock client connections
-        with patch.object(command_server, 'handle_client_connection') as mock_handle:
+        with patch.object(command_server, "handle_client_connection") as mock_handle:
             mock_handle.return_value = None
 
             # Simulate multiple clients connecting
@@ -215,13 +223,15 @@ class TestCommandServerConnection:
 
         command_server.stop()
 
-    def test_client_reconnection_after_disconnect(self, command_server, mock_client_socket):
+    def test_client_reconnection_after_disconnect(
+        self, command_server, mock_client_socket
+    ):
         """Test client can reconnect after disconnecting."""
         command_server.start()
         time.sleep(0.1)
 
         # Simulate connection, disconnection, reconnection
-        with patch.object(command_server, 'handle_client_connection') as mock_handle:
+        with patch.object(command_server, "handle_client_connection") as mock_handle:
             # First connection
             mock_handle.return_value = None
             command_server._client_threads.append(Mock())
@@ -238,6 +248,7 @@ class TestCommandServerConnection:
 # Test Class: CommandServer - Command Handling
 # ============================================================================
 
+
 class TestCommandServerCommands:
     """Test CommandServer command handling functionality."""
 
@@ -250,11 +261,13 @@ class TestCommandServerCommands:
         message = UnityProtocol.encode_result_message(completion, request_id)
 
         # Mock socket to return message
-        mock_client_socket.recv = Mock(side_effect=[
-            message[:5],  # Header
-            message[5:9],  # JSON length
-            message[9:]  # JSON data
-        ])
+        mock_client_socket.recv = Mock(
+            side_effect=[
+                message[:5],  # Header
+                message[5:9],  # JSON length
+                message[9:],  # JSON data
+            ]
+        )
 
         result = command_server._receive_completion(mock_client_socket)
 
@@ -270,11 +283,9 @@ class TestCommandServerCommands:
         json_len = struct.pack("<I", len(json_data))
         message = header + json_len + json_data
 
-        mock_client_socket.recv = Mock(side_effect=[
-            message[:5],
-            message[5:9],
-            message[9:]
-        ])
+        mock_client_socket.recv = Mock(
+            side_effect=[message[:5], message[5:9], message[9:]]
+        )
 
         result = command_server._receive_completion(mock_client_socket)
 
@@ -288,10 +299,7 @@ class TestCommandServerCommands:
         # JSON length exceeds maximum
         json_len = struct.pack("<I", MAX_STRING_LENGTH * 20)
 
-        mock_client_socket.recv = Mock(side_effect=[
-            header,
-            json_len
-        ])
+        mock_client_socket.recv = Mock(side_effect=[header, json_len])
 
         result = command_server._receive_completion(mock_client_socket)
 
@@ -313,6 +321,7 @@ class TestCommandServerCommands:
 # ============================================================================
 # Test Class: CommandServer - Protocol V2
 # ============================================================================
+
 
 class TestCommandServerProtocolV2:
     """Test Protocol V2 request ID correlation."""
@@ -369,6 +378,7 @@ class TestCommandServerProtocolV2:
 # Test Class: CommandServer - Error Handling
 # ============================================================================
 
+
 class TestCommandServerErrors:
     """Test CommandServer error handling and recovery."""
 
@@ -379,11 +389,9 @@ class TestCommandServerErrors:
         json_len = struct.pack("<I", len(json_data))
         message = header + json_len + json_data
 
-        mock_client_socket.recv = Mock(side_effect=[
-            message[:5],
-            message[5:9],
-            message[9:]
-        ])
+        mock_client_socket.recv = Mock(
+            side_effect=[message[:5], message[5:9], message[9:]]
+        )
 
         result = command_server._receive_completion(mock_client_socket)
 
@@ -414,18 +422,18 @@ class TestCommandServerErrors:
         request_id = 100
         world_state_update = {
             "type": "world_state_update",
-            "robots": [{"robot_id": "Robot1", "position": {"x": 0.3, "y": 0.0, "z": 0.1}}],
-            "objects": []
+            "robots": [
+                {"robot_id": "Robot1", "position": {"x": 0.3, "y": 0.0, "z": 0.1}}
+            ],
+            "objects": [],
         }
 
         # Encode message
         message = UnityProtocol.encode_result_message(world_state_update, request_id)
 
-        mock_client_socket.recv = Mock(side_effect=[
-            message[:5],
-            message[5:9],
-            message[9:]
-        ])
+        mock_client_socket.recv = Mock(
+            side_effect=[message[:5], message[5:9], message[9:]]
+        )
 
         result = command_server._receive_completion(mock_client_socket)
 
@@ -436,6 +444,7 @@ class TestCommandServerErrors:
 # ============================================================================
 # Integration Test
 # ============================================================================
+
 
 class TestCommandServerIntegration:
     """Integration tests for full command flow."""

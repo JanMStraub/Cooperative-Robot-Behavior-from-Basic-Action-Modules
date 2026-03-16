@@ -39,7 +39,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 logger = logging.getLogger(__name__)
 
 try:
-    import openai
     from openai import OpenAI
 except ImportError:
     logger.info("Error: 'openai' package not found. Install with: pip install openai")
@@ -90,6 +89,7 @@ except ImportError:
 
 # Configure logging
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Tests for MemoryManager
 ========================
@@ -15,11 +16,8 @@ Covers:
 """
 
 import os
-import tempfile
 import threading
 import time
-from collections import deque
-from unittest.mock import MagicMock, patch
 import pytest
 
 from core.MemoryManager import MemoryManager, get_memory_manager
@@ -136,7 +134,9 @@ def test_lessons_reflect_failure_rate(reset_memory_manager, fresh_tracker):
     assert "IK failed" in content
 
 
-def test_lessons_shows_zero_failure_for_successful_op(reset_memory_manager, fresh_tracker):
+def test_lessons_shows_zero_failure_for_successful_op(
+    reset_memory_manager, fresh_tracker
+):
     """Operations with no failures must show 0% failure rate."""
     fresh_tracker.record("move_to_coordinate", "Robot1", success=True)
     reset_memory_manager.write_memory("Robot1", fresh_tracker)
@@ -158,6 +158,7 @@ def test_lessons_max_lessons_limit(reset_memory_manager, fresh_tracker):
     Lessons section must not exceed MEMORY_MAX_LESSONS entries.
     """
     from config.Memory import MEMORY_MAX_LESSONS
+
     # Record more operations than the limit
     for i in range(MEMORY_MAX_LESSONS + 5):
         fresh_tracker.record(f"op_{i}", "Robot1", success=True)
@@ -182,8 +183,12 @@ def test_recent_errors_filters_to_robot(reset_memory_manager, fresh_tracker):
     Note: Lessons Learned is cross-robot (global operation stats), so R2 error
     may appear there. We assert only on the Recent Errors section specifically.
     """
-    fresh_tracker.record("grasp_object", "Robot1", success=False, error="R1 unique error")
-    fresh_tracker.record("move_to_coordinate", "Robot2", success=False, error="R2 unique error")
+    fresh_tracker.record(
+        "grasp_object", "Robot1", success=False, error="R1 unique error"
+    )
+    fresh_tracker.record(
+        "move_to_coordinate", "Robot2", success=False, error="R2 unique error"
+    )
 
     reset_memory_manager.write_memory("Robot1", fresh_tracker)
     content = reset_memory_manager.read_memory("Robot1")
@@ -191,13 +196,19 @@ def test_recent_errors_filters_to_robot(reset_memory_manager, fresh_tracker):
     # Extract only the Recent Errors section
     errors_start = content.find("## Recent Errors")
     stats_start = content.find("## Session Stats")
-    errors_section = content[errors_start:stats_start] if errors_start != -1 and stats_start != -1 else ""
+    errors_section = (
+        content[errors_start:stats_start]
+        if errors_start != -1 and stats_start != -1
+        else ""
+    )
 
     assert "R1 unique error" in errors_section
     assert "R2 unique error" not in errors_section
 
 
-def test_recent_errors_no_failures_shows_placeholder(reset_memory_manager, fresh_tracker):
+def test_recent_errors_no_failures_shows_placeholder(
+    reset_memory_manager, fresh_tracker
+):
     """No failures for the robot must show 'No failures recorded.' in Errors."""
     fresh_tracker.record("move_to_coordinate", "Robot1", success=True)
     reset_memory_manager.write_memory("Robot1", fresh_tracker)
@@ -208,6 +219,7 @@ def test_recent_errors_no_failures_shows_placeholder(reset_memory_manager, fresh
 def test_recent_errors_max_errors_limit(reset_memory_manager, fresh_tracker):
     """Recent Errors section must not exceed MEMORY_MAX_ERRORS entries."""
     from config.Memory import MEMORY_MAX_ERRORS
+
     for i in range(MEMORY_MAX_ERRORS + 5):
         fresh_tracker.record("grasp_object", "Robot1", success=False, error=f"err_{i}")
 
@@ -332,8 +344,12 @@ def test_separate_files_per_robot(reset_memory_manager, fresh_tracker):
     Recent Errors sections must be robot-specific; Lessons Learned is
     cross-robot (global stats) so we only check the errors section.
     """
-    fresh_tracker.record("grasp_object", "Robot1", success=False, error="R1-specific-error")
-    fresh_tracker.record("move_to_coordinate", "Robot2", success=False, error="R2-specific-error")
+    fresh_tracker.record(
+        "grasp_object", "Robot1", success=False, error="R1-specific-error"
+    )
+    fresh_tracker.record(
+        "move_to_coordinate", "Robot2", success=False, error="R2-specific-error"
+    )
 
     reset_memory_manager.write_memory("Robot1", fresh_tracker)
     reset_memory_manager.write_memory("Robot2", fresh_tracker)

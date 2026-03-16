@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Configuration module for stereo image reconstruction system.
 
@@ -7,6 +8,7 @@ including camera parameters, reconstruction settings, and server configuration.
 
 from dataclasses import dataclass
 from typing import Optional
+
 try:
     from config.Servers import DEFAULT_HOST, STREAMING_SERVER_PORT
 except ImportError:

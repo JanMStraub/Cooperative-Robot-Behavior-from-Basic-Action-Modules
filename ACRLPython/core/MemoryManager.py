@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Memory Manager
 ==============
@@ -197,10 +198,9 @@ class MemoryManager:
 
         # --- Recent Errors (filtered to this robot) ---
         all_failures = outcome_tracker.get_recent_failures(limit=MEMORY_MAX_ERRORS * 3)
-        robot_failures = [
-            f for f in all_failures
-            if f.get("robot_id") == robot_id
-        ][:MEMORY_MAX_ERRORS]
+        robot_failures = [f for f in all_failures if f.get("robot_id") == robot_id][
+            :MEMORY_MAX_ERRORS
+        ]
 
         lines.append("## Recent Errors (last session)")
         if robot_failures:

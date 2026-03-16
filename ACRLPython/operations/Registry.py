@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Operation Registry for RAG System
 ==================================

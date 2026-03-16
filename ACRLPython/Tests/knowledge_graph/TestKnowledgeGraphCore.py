@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Test suite for KnowledgeGraph Core
 ===================================
@@ -13,7 +14,6 @@ Tests the NetworkX-based knowledge graph wrapper:
 import unittest
 import os
 import tempfile
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from knowledge_graph.Core import KnowledgeGraph
@@ -45,9 +45,7 @@ class TestKnowledgeGraphCore(unittest.TestCase):
     def test_add_node_with_schema(self):
         """Test adding node using schema dataclass."""
         robot = RobotNode(
-            node_id="Robot1",
-            position=(-0.3, 0.2, 0.1),
-            gripper_state="open"
+            node_id="Robot1", position=(-0.3, 0.2, 0.1), gripper_state="open"
         )
 
         self.graph.add_node(robot.node_id, **robot.to_dict())
@@ -216,7 +214,9 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.graph.add_edge("Robot1", "RedCube", "CAN_REACH", distance=0.5)
 
         # Save to temp file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.graphml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".graphml", delete=False
+        ) as f:
             temp_path = f.name
 
         try:
@@ -254,11 +254,14 @@ class TestKnowledgeGraphCore(unittest.TestCase):
             futures = [executor.submit(read_nodes) for _ in range(10)]
             for future in as_completed(futures):
                 counts = future.result()  # raises if worker raised
-                self.assertTrue(all(c >= 10 for c in counts),
-                                "Node count should never drop below pre-populated 10")
+                self.assertTrue(
+                    all(c >= 10 for c in counts),
+                    "Node count should never drop below pre-populated 10",
+                )
 
     def test_thread_safety_concurrent_writes(self):
         """Test thread safety with concurrent write operations."""
+
         def add_nodes(offset):
             """Add 10 uniquely-named nodes; return the node IDs added."""
             added = []
@@ -278,8 +281,10 @@ class TestKnowledgeGraphCore(unittest.TestCase):
         self.assertEqual(self.graph.node_count(), 50)  # 5 threads * 10 nodes each
         # Verify every node that was claimed to be added actually exists
         for node_id in added_ids:
-            self.assertTrue(self.graph.has_node(node_id),
-                            f"Node {node_id} was added but not found in graph")
+            self.assertTrue(
+                self.graph.has_node(node_id),
+                f"Node {node_id} was added but not found in graph",
+            )
 
     def test_thread_safety_mixed_operations(self):
         """Test thread safety with mixed read/write operations."""
@@ -314,8 +319,10 @@ class TestKnowledgeGraphCore(unittest.TestCase):
             # non-decreasing (writers only add nodes, never remove them here)
             for future in as_completed(reader_futures):
                 counts = future.result()
-                self.assertTrue(all(c >= 10 for c in counts),
-                                "Observed node count should never drop below initial 10")
+                self.assertTrue(
+                    all(c >= 10 for c in counts),
+                    "Observed node count should never drop below initial 10",
+                )
 
 
 if __name__ == "__main__":

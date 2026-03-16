@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Operation Generator
 =====================
@@ -391,7 +392,9 @@ Start directly with the module docstring."""
             logger.error(f"Failed to save generated operation: {e}")
             return None
 
-    def _generate_test_file(self, operation_file: Path, op_name: str, command_text: str) -> None:
+    def _generate_test_file(
+        self, operation_file: Path, op_name: str, command_text: str
+    ) -> None:
         """
         Generate a pytest skeleton file alongside a newly created operation.
 
@@ -410,7 +413,10 @@ Start directly with the module docstring."""
             command_text: The original natural-language command that triggered generation,
                 included as a comment so reviewers have context.
         """
-        test_path = operation_file.parent / f"Test_{op_name}_{operation_file.stem.split('_')[-1]}.py"
+        test_path = (
+            operation_file.parent
+            / f"Test_{op_name}_{operation_file.stem.split('_')[-1]}.py"
+        )
         module_stem = operation_file.stem  # e.g. rotate_gripper_1700000000
         fn_name = op_name  # e.g. rotate_gripper
         class_name = "".join(part.capitalize() for part in op_name.split("_"))
@@ -522,8 +528,12 @@ class Test{class_name}:
             tree = ast.parse(code)
             for node in ast.walk(tree):
                 if isinstance(node, ast.FunctionDef):
-                    if node.name.startswith("create_") and node.name.endswith("_operation"):
-                        return node.name.removeprefix("create_").removesuffix("_operation")
+                    if node.name.startswith("create_") and node.name.endswith(
+                        "_operation"
+                    ):
+                        return node.name.removeprefix("create_").removesuffix(
+                            "_operation"
+                        )
         except Exception:
             pass
 

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Feedback Collector
 ===================
@@ -23,20 +24,18 @@ import logging
 import threading
 from typing import List, Optional
 
+from config.Memory import (
+    FEEDBACK_MAX_WARNINGS,
+    FEEDBACK_MIN_FAILURE_RATE,
+    FEEDBACK_MIN_OCCURRENCES,
+)
 from core.LoggingSetup import setup_logging
 
 setup_logging(__name__)
 logger = logging.getLogger(__name__)
 
-# Minimum failure rate before an operation is included in warnings (0-1).
-_DEFAULT_MIN_FAILURE_RATE = 0.3
-
-# Minimum executions before an operation is considered for warnings.
-_DEFAULT_MIN_OCCURRENCES = 3
-
-# Maximum number of anti-pattern warnings to inject per prompt.
-# More than this becomes noise and wastes context window.
-_MAX_WARNINGS = 5
+# Module-level alias for tests that need to verify the warning cap.
+_MAX_WARNINGS: int = FEEDBACK_MAX_WARNINGS
 
 
 class FeedbackCollector:
@@ -69,15 +68,15 @@ class FeedbackCollector:
         self._initialized = True
         logger.debug("FeedbackCollector initialized")
 
-    # ------------------------------------------------------------------
+    # ==========================================================================
     # Public API
-    # ------------------------------------------------------------------
+    # ==========================================================================
 
     def get_anti_pattern_warnings(
         self,
         command_text: str = "",
-        min_failure_rate: float = _DEFAULT_MIN_FAILURE_RATE,
-        min_occurrences: int = _DEFAULT_MIN_OCCURRENCES,
+        min_failure_rate: float = FEEDBACK_MIN_FAILURE_RATE,
+        min_occurrences: int = FEEDBACK_MIN_OCCURRENCES,
     ) -> str:
         """
         Return a formatted anti-pattern warning block for the LLM prompt.
@@ -106,7 +105,7 @@ class FeedbackCollector:
         if not patterns:
             return ""
 
-        return self._format_warnings(patterns[:_MAX_WARNINGS])
+        return self._format_warnings(patterns[:FEEDBACK_MAX_WARNINGS])
 
     def get_recent_error_context(
         self, operation_name: str, limit: int = 3
@@ -128,7 +127,9 @@ class FeedbackCollector:
             from orchestrators.OutcomeTracker import get_outcome_tracker
 
             tracker = get_outcome_tracker()
-            failures = tracker.get_recent_failures(limit=limit * 2, operation_name=operation_name)
+            failures = tracker.get_recent_failures(
+                limit=limit * 2, operation_name=operation_name
+            )
             errors = [f["error"] for f in failures if f.get("error")]
             return list(dict.fromkeys(errors))[:limit]  # deduplicate, preserve order
         except Exception as e:
@@ -169,9 +170,9 @@ class FeedbackCollector:
             logger.debug(f"Could not build session summary: {e}")
             return ""
 
-    # ------------------------------------------------------------------
+    # ==========================================================================
     # Private helpers
-    # ------------------------------------------------------------------
+    # ==========================================================================
 
     def _get_failure_patterns(
         self, min_failure_rate: float, min_occurrences: int
@@ -222,10 +223,12 @@ class FeedbackCollector:
             rate_pct = int(p["failure_rate"] * 100)
             op_name = p["operation_name"]
             n = p["total_executions"]
-            lines.append(f"- {op_name}: {rate_pct}% failure rate ({n} recent executions)")
+            lines.append(
+                f"- {op_name}: {rate_pct}% failure rate ({n} recent executions)"
+            )
 
             for err in p.get("sample_errors", [])[:2]:
-                lines.append(f"    Recent error: \"{err}\"")
+                lines.append(f'    Recent error: "{err}"')
 
         lines.append("")
         lines.append(
@@ -236,9 +239,10 @@ class FeedbackCollector:
         return "\n".join(lines)
 
 
-# ---------------------------------------------------------------------------
+# ==========================================================================---------
 # Module-level singleton accessor
-# ---------------------------------------------------------------------------
+# ==========================================================================---------
+
 
 def get_feedback_collector() -> FeedbackCollector:
     """

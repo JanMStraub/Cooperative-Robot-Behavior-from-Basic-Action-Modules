@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Vector mathematical operations for spatial calculations.
 
@@ -188,7 +189,7 @@ def vector_slerp(v1: np.ndarray, v2: np.ndarray, t: float) -> np.ndarray:
         _, perp, _ = vectors_orthonormal_basis(v1_norm)
         # Rotate v1 toward v2 via the perpendicular axis
         half_theta = t * np.pi
-        result_norm = (np.cos(half_theta) * v1_norm + np.sin(half_theta) * perp)
+        result_norm = np.cos(half_theta) * v1_norm + np.sin(half_theta) * perp
         magnitude = np.linalg.norm(v1) * (1.0 - t) + np.linalg.norm(v2) * t
         return result_norm * magnitude
 
@@ -222,7 +223,9 @@ def vector_clamp_magnitude(v: np.ndarray, max_magnitude: float) -> np.ndarray:
     return v
 
 
-def vectors_orthonormal_basis(forward: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def vectors_orthonormal_basis(
+    forward: np.ndarray,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Generate an orthonormal basis from a forward vector.
 

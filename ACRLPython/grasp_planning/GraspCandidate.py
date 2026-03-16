@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Grasp candidate data structures.
 

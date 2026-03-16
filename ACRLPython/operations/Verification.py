@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Formal Verification System for Robot Operations
 ================================================
@@ -21,6 +22,7 @@ from .Base import BasicOperation, OperationResult
 
 # Configure logging
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -435,9 +437,13 @@ class OperationVerifier:
                 # Check which other robots can reach this target
                 for robot_id, state in self.world_state._robot_states.items():
                     if robot_id != params.get("robot_id"):
-                        is_valid, _ = target_within_reach(robot_id, x, y, z, world_state=self.world_state)
+                        is_valid, _ = target_within_reach(
+                            robot_id, x, y, z, world_state=self.world_state
+                        )
                         if is_valid:
-                            suggestions.append(f"Use {robot_id} instead (target is within reach)")
+                            suggestions.append(
+                                f"Use {robot_id} instead (target is within reach)"
+                            )
 
             # Add generic suggestions if no specific robot found
             if not suggestions:

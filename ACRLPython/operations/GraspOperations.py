@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Grasp Operations for Advanced Grasp Planning
 =============================================
@@ -577,6 +578,7 @@ def _grasp_via_vgn(
         return None
 
     pc = pc_result.result
+    assert pc is not None
     points_list = pc["points"]
     colors_list = pc["colors"]
     cam_pos = pc["camera_position"]
@@ -616,9 +618,7 @@ def _grasp_via_vgn(
                             )
                         elif len(bbox) == 4:
                             yolo_bbox = tuple(int(v) for v in bbox)
-                        logger.debug(
-                            f"[VGN] YOLO bbox for {object_id}: {yolo_bbox}"
-                        )
+                        logger.debug(f"[VGN] YOLO bbox for {object_id}: {yolo_bbox}")
                     break
     except Exception as exc:
         logger.debug(f"[VGN] Could not get YOLO bbox (non-fatal): {exc}")
@@ -628,11 +628,14 @@ def _grasp_via_vgn(
         from core.Imports import get_unified_image_storage
 
         storage = get_unified_image_storage()
-        left_img = storage.get_latest_image(robot_id, "stereo_left")
-        if left_img is not None:
+        stereo = storage.get_latest_stereo()
+        if stereo is not None:
+            _, left_img, _, _ = stereo
             image_np = left_img
     except Exception as exc:
-        logger.debug(f"[VGN] Could not retrieve stereo image for VLM (non-fatal): {exc}")
+        logger.debug(
+            f"[VGN] Could not retrieve stereo image for VLM (non-fatal): {exc}"
+        )
 
     if image_np is None:
         image_np = np.zeros((img_h, img_w, 3), dtype=np.uint8)
@@ -658,7 +661,9 @@ def _grasp_via_vgn(
     # 5. Transform to Unity world frame
     world_grasps = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
     if not world_grasps:
-        logger.warning("[VGN] Frame transform produced no valid poses — using geometric fallback")
+        logger.warning(
+            "[VGN] Frame transform produced no valid poses — using geometric fallback"
+        )
         return None
 
     # 5b. Filter and re-rank by custom approach vector when provided
@@ -668,7 +673,8 @@ def _grasp_via_vgn(
         if mag > 1e-6:
             cav_unit = cav / mag
             aligned = [
-                g for g in world_grasps
+                g
+                for g in world_grasps
                 if np.dot(np.array(g["approach_direction"]), cav_unit) > 0.0
             ]
             world_grasps = aligned if aligned else world_grasps
@@ -701,11 +707,24 @@ def _grasp_via_vgn(
 
         candidates.append(
             {
-                "pre_grasp_position": {"x": pre_pos[0], "y": pre_pos[1], "z": pre_pos[2]},
-                "pre_grasp_rotation": {"x": rot[0], "y": rot[1], "z": rot[2], "w": rot[3]},
+                "pre_grasp_position": {
+                    "x": pre_pos[0],
+                    "y": pre_pos[1],
+                    "z": pre_pos[2],
+                },
+                "pre_grasp_rotation": {
+                    "x": rot[0],
+                    "y": rot[1],
+                    "z": rot[2],
+                    "w": rot[3],
+                },
                 "grasp_position": {"x": pos[0], "y": pos[1], "z": pos[2]},
                 "grasp_rotation": {"x": rot[0], "y": rot[1], "z": rot[2], "w": rot[3]},
-                "approach_direction": {"x": approach[0], "y": approach[1], "z": approach[2]},
+                "approach_direction": {
+                    "x": approach[0],
+                    "y": approach[1],
+                    "z": approach[2],
+                },
                 "grasp_depth": 0.5,
                 "antipodal_score": g.get("score", 0.0),
                 "vgn_score": g.get("score", 0.0),
@@ -823,6 +842,7 @@ def _grasp_via_vgn_with_ros(
         return None
 
     pc = pc_result.result
+    assert pc is not None
     points_np = np.array(pc["points"], dtype=np.float32)
     colors_np = np.array(pc["colors"], dtype=np.uint8) if pc.get("colors") else None
     cam_pos = pc["camera_position"]
@@ -866,8 +886,9 @@ def _grasp_via_vgn_with_ros(
         from core.Imports import get_unified_image_storage
 
         storage = get_unified_image_storage()
-        left_img = storage.get_latest_image(robot_id, "stereo_left")
-        if left_img is not None:
+        stereo = storage.get_latest_stereo()
+        if stereo is not None:
+            _, left_img, _, _ = stereo
             image_np = left_img
     except Exception as exc:
         logger.debug(f"[VGN+ROS] Stereo image retrieval (non-fatal): {exc}")
@@ -894,7 +915,9 @@ def _grasp_via_vgn_with_ros(
     # 5. Transform to Unity world frame
     world_grasps = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
     if not world_grasps:
-        logger.warning("[VGN+ROS] Frame transform produced no valid poses — falling back")
+        logger.warning(
+            "[VGN+ROS] Frame transform produced no valid poses — falling back"
+        )
         return None
 
     # 5b. Filter and re-rank by custom approach vector when provided
@@ -904,7 +927,8 @@ def _grasp_via_vgn_with_ros(
         if mag > 1e-6:
             cav_unit = cav / mag
             aligned = [
-                g for g in world_grasps
+                g
+                for g in world_grasps
                 if np.dot(np.array(g["approach_direction"]), cav_unit) > 0.0
             ]
             world_grasps = aligned if aligned else world_grasps

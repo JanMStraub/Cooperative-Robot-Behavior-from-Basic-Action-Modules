@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Grasp Frame Transform
 =====================
@@ -141,16 +142,20 @@ def transform_grasp_poses_to_unity(
         # Legacy path: Unity sent Euler angles (degrees) instead of a quaternion.
         # Convert XYZ Euler (degrees) → quaternion [x, y, z, w].
         import math
+
         rx, ry, rz = [math.radians(a) for a in cam_rot_raw]
         cx, sx = math.cos(rx / 2), math.sin(rx / 2)
         cy, sy = math.cos(ry / 2), math.sin(ry / 2)
         cz, sz = math.cos(rz / 2), math.sin(rz / 2)
-        cam_rot_raw = np.array([
-            sx * cy * cz + cx * sy * sz,
-            cx * sy * cz - sx * cy * sz,
-            cx * cy * sz + sx * sy * cz,
-            cx * cy * cz - sx * sy * sz,
-        ], dtype=np.float64)
+        cam_rot_raw = np.array(
+            [
+                sx * cy * cz + cx * sy * sz,
+                cx * sy * cz - sx * cy * sz,
+                cx * cy * sz + sx * sy * cz,
+                cx * cy * cz - sx * sy * sz,
+            ],
+            dtype=np.float64,
+        )
         logger.warning(
             "camera_rotation had 3 components (Euler angles); converted to quaternion. "
             "Update StereoCameraController to send rotation.xyzw instead of eulerAngles."
@@ -168,16 +173,20 @@ def transform_grasp_poses_to_unity(
                 # a quaternion [x, y, z, w].  Convert using the same path used for
                 # camera_rotation above.
                 import math
+
                 rx, ry, rz = [math.radians(a) for a in rot_cam_raw]
                 cx, sx = math.cos(rx / 2), math.sin(rx / 2)
                 cy, sy = math.cos(ry / 2), math.sin(ry / 2)
                 cz, sz = math.cos(rz / 2), math.sin(rz / 2)
-                rot_cam_raw = np.array([
-                    sx * cy * cz + cx * sy * sz,
-                    cx * sy * cz - sx * cy * sz,
-                    cx * cy * sz + sx * sy * cz,
-                    cx * cy * cz - sx * sy * sz,
-                ], dtype=np.float64)
+                rot_cam_raw = np.array(
+                    [
+                        sx * cy * cz + cx * sy * sz,
+                        cx * sy * cz - sx * cy * sz,
+                        cx * cy * sz + sx * sy * cz,
+                        cx * cy * cz - sx * sy * sz,
+                    ],
+                    dtype=np.float64,
+                )
                 logger.warning(
                     f"Grasp #{i} rotation had 3 components (Euler angles); converted to quaternion."
                 )

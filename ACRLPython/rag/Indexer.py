@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Index Builder for RAG System
 =============================
@@ -22,6 +23,7 @@ except ImportError:
 
 # Configure logging
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -36,7 +38,9 @@ class OperationIndexer:
     def __init__(
         self,
         registry: Optional[Any] = None,  # Changed to Any to avoid circular import
-        workflow_registry: Optional[Any] = None,  # Changed to Any to avoid circular import
+        workflow_registry: Optional[
+            Any
+        ] = None,  # Changed to Any to avoid circular import
         embedding_generator: Optional[EmbeddingGenerator] = None,
     ):
         """
@@ -393,7 +397,9 @@ class OperationIndexer:
 
         return store
 
-    def refresh_index(self, existing_store: VectorStore, save: bool = True) -> VectorStore:
+    def refresh_index(
+        self, existing_store: VectorStore, save: bool = True
+    ) -> VectorStore:
         """
         Incrementally add new operations and workflows to an existing index.
 
@@ -431,47 +437,53 @@ class OperationIndexer:
             if op.operation_id in existing_ids:
                 continue
             texts_to_embed.append(op.to_rag_document())
-            operation_data.append({
-                "operation_id": op.operation_id,
-                "metadata": {
-                    "name": op.name,
-                    "category": op.category.value,
-                    "complexity": op.complexity.value,
-                    "description": op.description,
-                    "average_duration_ms": op.average_duration_ms,
-                    "success_rate": op.success_rate,
-                    "parameters": [p.name for p in op.parameters],
-                    "type": "operation",
-                },
-            })
+            operation_data.append(
+                {
+                    "operation_id": op.operation_id,
+                    "metadata": {
+                        "name": op.name,
+                        "category": op.category.value,
+                        "complexity": op.complexity.value,
+                        "description": op.description,
+                        "average_duration_ms": op.average_duration_ms,
+                        "success_rate": op.success_rate,
+                        "parameters": [p.name for p in op.parameters],
+                        "type": "operation",
+                    },
+                }
+            )
 
         for workflow in workflows:
             if workflow.pattern_id in existing_ids:
                 continue
             texts_to_embed.append(workflow.to_rag_document())
-            operation_data.append({
-                "operation_id": workflow.pattern_id,
-                "metadata": {
-                    "name": workflow.name,
-                    "category": workflow.category.value,
-                    "complexity": "workflow",
-                    "description": workflow.description,
-                    "average_duration_ms": 0,
-                    "success_rate": 1.0,
-                    "parameters": [],
-                    "type": "workflow",
-                    "step_count": len(workflow.steps),
-                },
-            })
+            operation_data.append(
+                {
+                    "operation_id": workflow.pattern_id,
+                    "metadata": {
+                        "name": workflow.name,
+                        "category": workflow.category.value,
+                        "complexity": "workflow",
+                        "description": workflow.description,
+                        "average_duration_ms": 0,
+                        "success_rate": 1.0,
+                        "parameters": [],
+                        "type": "workflow",
+                        "step_count": len(workflow.steps),
+                    },
+                }
+            )
 
         for ctx in context_docs:
             if ctx["metadata"]["operation_id"] in existing_ids:
                 continue
             texts_to_embed.append(ctx["text"])
-            operation_data.append({
-                "operation_id": ctx["metadata"]["operation_id"],
-                "metadata": ctx["metadata"],
-            })
+            operation_data.append(
+                {
+                    "operation_id": ctx["metadata"]["operation_id"],
+                    "metadata": ctx["metadata"],
+                }
+            )
 
         total_checked = len(operations) + len(workflows) + len(context_docs)
         logger.info(

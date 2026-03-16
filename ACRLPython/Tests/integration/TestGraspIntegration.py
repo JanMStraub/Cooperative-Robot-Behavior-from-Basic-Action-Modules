@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 End-to-end integration tests for grasp planning system.
 
@@ -8,9 +9,8 @@ Requires Unity to be running with proper scene setup.
 import pytest
 import socket
 import time
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import patch, MagicMock
 from operations.GraspOperations import grasp_object
-from servers.CommandServer import CommandBroadcaster
 
 
 def _is_unity_available() -> bool:
@@ -18,7 +18,7 @@ def _is_unity_available() -> bool:
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(1.0)
-        result = sock.connect_ex(('localhost', 5010))
+        result = sock.connect_ex(("localhost", 5010))
         sock.close()
         return result == 0
     except Exception:
@@ -30,7 +30,7 @@ def _is_ros_available() -> bool:
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(1.0)
-        result = sock.connect_ex(('localhost', 5020))
+        result = sock.connect_ex(("localhost", 5020))
         sock.close()
         return result == 0
     except Exception:
@@ -40,7 +40,9 @@ def _is_ros_available() -> bool:
 _UNITY_AVAILABLE = _is_unity_available()
 _ROS_AVAILABLE = _is_ros_available()
 _SKIP_REASON = "Unity not running. Start Unity and backend servers to run these tests."
-_SKIP_REASON_ROS = "ROS/MoveIt not running. Start Docker with MoveIt to run these tests."
+_SKIP_REASON_ROS = (
+    "ROS/MoveIt not running. Start Docker with MoveIt to run these tests."
+)
 
 
 @pytest.mark.integration
@@ -51,8 +53,9 @@ class TestGraspEndToEnd:
     def mock_unity_connection(self):
         """Mock Unity connection for integration tests."""
         # Disable ROS to ensure tests use mocked Unity connection
-        with patch('config.ROS.ROS_ENABLED', False), \
-             patch('operations.GraspOperations._get_command_broadcaster') as mock:
+        with patch("config.ROS.ROS_ENABLED", False), patch(
+            "operations.GraspOperations._get_command_broadcaster"
+        ) as mock:
             broadcaster = MagicMock()
             broadcaster.send_command_and_wait = MagicMock()
             mock.return_value = broadcaster
@@ -70,7 +73,7 @@ class TestGraspEndToEnd:
             object_id="Cube_01",
             use_advanced_planning=True,
             preferred_approach="auto",
-            enable_retreat=True
+            enable_retreat=True,
         )
 
         # Verify command was sent successfully
@@ -98,7 +101,7 @@ class TestGraspEndToEnd:
             use_advanced_planning=True,
             custom_approach_vector=[0.0, 1.0, 0.5],
             pre_grasp_distance=0.12,
-            retreat_distance=0.15
+            retreat_distance=0.15,
         )
 
         assert result["success"] is True
@@ -116,10 +119,7 @@ class TestGraspEndToEnd:
         # Test command send failure
         mock_unity_connection.send_command.return_value = False
 
-        result = grasp_object(
-            robot_id="Robot1",
-            object_id="TestObject"
-        )
+        result = grasp_object(robot_id="Robot1", object_id="TestObject")
 
         assert result["success"] is False
         assert result["error"]["code"] == "COMMUNICATION_ERROR"
@@ -137,9 +137,7 @@ class TestGraspEndToEnd:
 
         for approach in approach_types:
             result = grasp_object(
-                robot_id="Robot1",
-                object_id="Cube_01",
-                preferred_approach=approach
+                robot_id="Robot1", object_id="Cube_01", preferred_approach=approach
             )
 
             assert result["success"] is True, f"Approach '{approach}' should succeed"
@@ -153,9 +151,7 @@ class TestGraspEndToEnd:
 
         # Test with retreat enabled
         result = grasp_object(
-            robot_id="Robot1",
-            object_id="Cube_01",
-            enable_retreat=True
+            robot_id="Robot1", object_id="Cube_01", enable_retreat=True
         )
 
         assert result["success"] is True
@@ -164,9 +160,7 @@ class TestGraspEndToEnd:
 
         # Test with retreat disabled
         result = grasp_object(
-            robot_id="Robot1",
-            object_id="Cube_01",
-            enable_retreat=False
+            robot_id="Robot1", object_id="Cube_01", enable_retreat=False
         )
 
         assert result["success"] is True
@@ -180,9 +174,7 @@ class TestGraspEndToEnd:
         mock_unity_connection.send_command.return_value = True
 
         result = grasp_object(
-            robot_id="Robot1",
-            object_id="Cube_01",
-            request_id=request_id
+            robot_id="Robot1", object_id="Cube_01", request_id=request_id
         )
 
         assert result["success"] is True
@@ -197,10 +189,7 @@ class TestGraspEndToEnd:
         """Test command send in async mode (timeout handled by SequenceExecutor)."""
         mock_unity_connection.send_command.return_value = True
 
-        result = grasp_object(
-            robot_id="Robot1",
-            object_id="Cube_01"
-        )
+        result = grasp_object(robot_id="Robot1", object_id="Cube_01")
 
         assert result["success"] is True
         assert result["result"]["command_sent"] is True
@@ -218,16 +207,13 @@ class TestGraspEndToEnd:
                 "data": {
                     "robot_id": "Robot1",
                     "object_id": f"Cube_{i:02d}",
-                    "execution_time_ms": 120.0 + (i * 5)  # Simulated variance
-                }
+                    "execution_time_ms": 120.0 + (i * 5),  # Simulated variance
+                },
             }
             mock_unity_connection.send_command_and_wait.return_value = unity_response
 
             start_time = time.time()
-            result = grasp_object(
-                robot_id="Robot1",
-                object_id=f"Cube_{i:02d}"
-            )
+            result = grasp_object(robot_id="Robot1", object_id=f"Cube_{i:02d}")
             end_time = time.time()
 
             assert result["success"] is True
@@ -244,20 +230,25 @@ class TestGraspEndToEnd:
         print(f"  Max: {max_time:.2f}ms")
 
         # Performance assertions
-        assert avg_time < 50, f"Average Python overhead should be <50ms, got {avg_time:.2f}ms"
+        assert (
+            avg_time < 50
+        ), f"Average Python overhead should be <50ms, got {avg_time:.2f}ms"
 
 
 def _is_sequence_server_available() -> bool:
     """Check if the SequenceServer (port 5013) is reachable."""
-    from backend_client import port_open
+    from backend_client import port_open  # type: ignore[import]
+
     return port_open(5013, timeout=1.0)
 
 
 _SEQUENCE_AVAILABLE = _is_sequence_server_available()
-_SKIP_REASON_SEQ = "SequenceServer not running on port 5013. Start backend servers to run these tests."
+_SKIP_REASON_SEQ = (
+    "SequenceServer not running on port 5013. Start backend servers to run these tests."
+)
 
 # Import the shared BackendClient from the helpers package.
-from backend_client import BackendClient as _BackendClient
+from backend_client import BackendClient as _BackendClient  # type: ignore[import]
 
 
 @pytest.mark.integration
@@ -287,9 +278,9 @@ class TestGraspWithRealUnity:
                 request_id=10,
             )
 
-        assert result.get("success") is True or result.get("error") is not None, (
-            "grasp_object returned an unexpected response"
-        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "grasp_object returned an unexpected response"
 
     def test_real_collision_avoidance(self):
         """Test that grasping an out-of-workspace object fails gracefully via backend.
@@ -321,11 +312,13 @@ class TestGraspPerformance:
         point-cloud path so the benchmark measures pure command-send
         overhead without any network I/O.
         """
-        with patch('config.ROS.ROS_ENABLED', False), \
-             patch('operations.GraspOperations._get_command_broadcaster') as mock, \
-             patch('operations.VGNClient.VGNClient.is_available',
-                   return_value=False), \
-             patch('operations.PointCloudOperations.generate_point_cloud'):
+        with patch("config.ROS.ROS_ENABLED", False), patch(
+            "operations.GraspOperations._get_command_broadcaster"
+        ) as mock, patch(
+            "operations.VGNClient.VGNClient.is_available", return_value=False
+        ), patch(
+            "operations.PointCloudOperations.generate_point_cloud"
+        ):
             broadcaster = MagicMock()
             broadcaster.send_command_and_wait = MagicMock()
             mock.return_value = broadcaster
@@ -334,11 +327,7 @@ class TestGraspPerformance:
     @pytest.fixture
     def benchmark_config(self):
         """Configuration for performance tests."""
-        return {
-            "target_time_ms": 200,
-            "acceptable_variance_pct": 20,
-            "sample_size": 50
-        }
+        return {"target_time_ms": 200, "acceptable_variance_pct": 20, "sample_size": 50}
 
     @pytest.mark.slow
     def test_pipeline_performance_target(self, mock_unity_connection, benchmark_config):
@@ -363,7 +352,8 @@ class TestGraspPerformance:
         print(f"  Max: {max_time:.2f}ms")
 
         # Command send should be very fast (< 10ms)
-        assert avg_time < 10.0, \
-            f"Average command send time {avg_time:.2f}ms exceeds 10ms"
+        assert (
+            avg_time < 10.0
+        ), f"Average command send time {avg_time:.2f}ms exceeds 10ms"
 
         # Note: Actual grasp execution time (pipeline performance) measured by Unity

@@ -798,7 +798,9 @@ class UnityProtocol:
             raise ValueError(f"Failed to decode status response: {e}")
 
     @staticmethod
-    def encode_autort_command(command_type: str, params: dict, request_id: int = 0) -> bytes:
+    def encode_autort_command(
+        command_type: str, params: dict, request_id: int = 0
+    ) -> bytes:
         """
         Encode an AutoRT command message for sending to Python server.
 
@@ -868,7 +870,9 @@ class UnityProtocol:
             msg_type, request_id, offset = UnityProtocol._decode_header(data)
 
             if msg_type != MessageType.AUTORT_COMMAND:
-                raise ValueError(f"Expected AUTORT_COMMAND message, got {msg_type.name}")
+                raise ValueError(
+                    f"Expected AUTORT_COMMAND message, got {msg_type.name}"
+                )
 
             # Read command type
             command_type, offset = UnityProtocol._read_string(data, offset)

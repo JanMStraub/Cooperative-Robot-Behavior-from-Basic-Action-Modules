@@ -119,7 +119,11 @@ def draw_bounding_boxes(image, boxes, class_names=None):
             label_y = y2 + text_height + 10
 
         cv2.rectangle(
-            result_image, (x1, label_y - text_height - 10), (x1 + text_width, label_y), color, -1
+            result_image,
+            (x1, label_y - text_height - 10),
+            (x1 + text_width, label_y),
+            color,
+            -1,
         )
 
         # Draw label text
@@ -192,7 +196,9 @@ def main():
     else:
         print("\n2. Select corresponding label file...")
         label_path = select_file(
-            "Select YOLO Label File", [("Text files", "*.txt"), ("All files", "*.*")], root
+            "Select YOLO Label File",
+            [("Text files", "*.txt"), ("All files", "*.*")],
+            root,
         )
 
     root.destroy()

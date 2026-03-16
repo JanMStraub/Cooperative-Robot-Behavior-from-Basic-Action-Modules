@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Status Check Operations for Robot Control
 ==========================================
@@ -20,6 +21,7 @@ from .Base import (
 
 # Configure logging
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -223,8 +225,7 @@ def create_check_robot_status_operation() -> BasicOperation:
         preconditions=[
             "robot_is_initialized(robot_id)",
         ],
-        postconditions=[
-        ],
+        postconditions=[],
         # Performance
         average_duration_ms=50.0,  # Very fast - just a query
         success_rate=0.99,  # Very reliable

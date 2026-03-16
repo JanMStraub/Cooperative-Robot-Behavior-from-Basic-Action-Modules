@@ -13,10 +13,8 @@ Tests the image storage and retrieval system including:
 
 import pytest
 import numpy as np
-import cv2
 import time
 import threading
-from unittest.mock import Mock, patch
 
 from servers.ImageServer import UnifiedImageStorage
 
@@ -24,6 +22,7 @@ from servers.ImageServer import UnifiedImageStorage
 # ============================================================================
 # Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def image_storage():
@@ -75,6 +74,7 @@ def sample_stereo_pair():
 # Test ImageStorage Singleton
 # ============================================================================
 
+
 class TestImageStorageSingleton:
     """Test ImageStorage singleton behavior"""
 
@@ -107,6 +107,7 @@ class TestImageStorageSingleton:
 # ============================================================================
 # Test Image Storage and Retrieval
 # ============================================================================
+
 
 class TestImageStorageBasics:
     """Test basic image storage and retrieval"""
@@ -164,6 +165,7 @@ class TestImageStorageBasics:
 # Test Camera ID Management
 # ============================================================================
 
+
 class TestCameraIDManagement:
     """Test camera ID tracking and management"""
 
@@ -192,6 +194,7 @@ class TestCameraIDManagement:
 # ============================================================================
 # Test Stereo Pair Handling
 # ============================================================================
+
 
 class TestStereoPairHandling:
     """Test handling of stereo image pairs"""
@@ -230,6 +233,7 @@ class TestStereoPairHandling:
 # ============================================================================
 # Test Prompt and Age Tracking
 # ============================================================================
+
 
 class TestPromptAndAgeTracking:
     """Test prompt and timestamp tracking"""
@@ -283,6 +287,7 @@ class TestPromptAndAgeTracking:
 # Test Memory Management
 # ============================================================================
 
+
 class TestMemoryManagement:
     """Test cleanup and memory management"""
 
@@ -297,7 +302,11 @@ class TestMemoryManagement:
             if camera_id in image_storage._single_images:
                 img, _, prompt = image_storage._single_images[camera_id]
                 # Set timestamp to 400 seconds ago
-                image_storage._single_images[camera_id] = (img, time.time() - 400, prompt)
+                image_storage._single_images[camera_id] = (
+                    img,
+                    time.time() - 400,
+                    prompt,
+                )
 
         # Cleanup images older than 300 seconds
         image_storage.cleanup_old_images(max_age_seconds=300.0)
@@ -339,6 +348,7 @@ class TestMemoryManagement:
 # Test Concurrent Access
 # ============================================================================
 
+
 class TestConcurrentAccess:
     """Test thread-safe concurrent operations"""
 
@@ -353,7 +363,9 @@ class TestConcurrentAccess:
                 image = np.ones((50, 50, 3), dtype=np.uint8) * thread_id
                 image_storage.store_single_image(camera_id, image)
 
-        threads = [threading.Thread(target=store_images, args=(i,)) for i in range(num_threads)]
+        threads = [
+            threading.Thread(target=store_images, args=(i,)) for i in range(num_threads)
+        ]
         for t in threads:
             t.start()
         for t in threads:

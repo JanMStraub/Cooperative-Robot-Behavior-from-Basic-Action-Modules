@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Tests for SequenceExecutor Knowledge Graph Integration
 =======================================================
@@ -9,12 +10,11 @@ Validates:
 
 import unittest
 from unittest.mock import MagicMock, patch
-from typing import Any
-
 
 # ---------------------------------------------------------------------------
 # Helper: minimal op_def stub
 # ---------------------------------------------------------------------------
+
 
 def _op_def(name: str) -> MagicMock:
     """Create a minimal operation definition mock with the given name."""
@@ -27,9 +27,11 @@ def _op_def(name: str) -> MagicMock:
 # Helper: create SequenceExecutor without real dependencies
 # ---------------------------------------------------------------------------
 
+
 def _make_executor():
     """Instantiate SequenceExecutor bypassing __init__ heavy setup."""
     from orchestrators.SequenceExecutor import SequenceExecutor
+
     ex = SequenceExecutor.__new__(SequenceExecutor)
     ex._variables = {}
     ex.registry = MagicMock()
@@ -43,6 +45,7 @@ def _make_executor():
 # ===========================================================================
 # _check_spatial_feasibility tests
 # ===========================================================================
+
 
 class TestCheckSpatialFeasibility(unittest.TestCase):
     """Tests for SequenceExecutor._check_spatial_feasibility()."""
@@ -183,7 +186,9 @@ class TestCheckSpatialFeasibility(unittest.TestCase):
         """Returns safe=True with warning when an exception occurs."""
         with (
             patch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True),
-            patch("core.Imports.get_graph_query_engine", side_effect=RuntimeError("boom")),
+            patch(
+                "core.Imports.get_graph_query_engine", side_effect=RuntimeError("boom")
+            ),
         ):
             result = self.ex._check_spatial_feasibility(
                 _op_def("move_to_coordinate"),
@@ -198,6 +203,7 @@ class TestCheckSpatialFeasibility(unittest.TestCase):
 # ===========================================================================
 # _get_handoff_context tests
 # ===========================================================================
+
 
 class TestGetHandoffContext(unittest.TestCase):
     """Tests for SequenceExecutor._get_handoff_context()."""
@@ -234,16 +240,25 @@ class TestGetHandoffContext(unittest.TestCase):
         with (
             patch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True),
             patch("core.Imports.get_graph_query_engine", return_value=mock_qe),
-            patch("knowledge_graph._singleton.get_knowledge_graph", return_value=mock_kg),
+            patch(
+                "knowledge_graph._singleton.get_knowledge_graph", return_value=mock_kg
+            ),
         ):
-            result = self.ex._get_handoff_context("transfer the cube to Robot2", "Robot1")
+            result = self.ex._get_handoff_context(
+                "transfer the cube to Robot2", "Robot1"
+            )
         self.assertIsNone(result)
 
     def test_returns_candidates_when_handoff_keyword_present(self):
         """Returns a dict with handoff_candidates when keyword + object match."""
         mock_qe = MagicMock()
         mock_qe.get_handoff_candidates.return_value = [
-            {"position": (0.0, 0.3, 0.1), "region": "shared_zone", "r1_distance": 0.4, "r2_distance": 0.4}
+            {
+                "position": (0.0, 0.3, 0.1),
+                "region": "shared_zone",
+                "r1_distance": 0.4,
+                "r2_distance": 0.4,
+            }
         ]
         mock_kg = MagicMock()
         mock_kg.get_all_nodes.return_value = ["red_cube"]
@@ -251,14 +266,19 @@ class TestGetHandoffContext(unittest.TestCase):
         with (
             patch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True),
             patch("core.Imports.get_graph_query_engine", return_value=mock_qe),
-            patch("knowledge_graph._singleton.get_knowledge_graph", return_value=mock_kg),
+            patch(
+                "knowledge_graph._singleton.get_knowledge_graph", return_value=mock_kg
+            ),
         ):
             result = self.ex._get_handoff_context("hand red_cube to Robot2", "Robot1")
 
         self.assertIsNotNone(result)
+        assert result is not None
         self.assertEqual(result["handoff_object"], "red_cube")
         self.assertIsInstance(result["handoff_candidates"], list)
-        mock_qe.get_handoff_candidates.assert_called_once_with("Robot1", "Robot2", "red_cube")
+        mock_qe.get_handoff_candidates.assert_called_once_with(
+            "Robot1", "Robot2", "red_cube"
+        )
 
     def test_robot2_uses_robot1_as_other(self):
         """Robot2 queries handoff candidates against Robot1."""
@@ -270,17 +290,23 @@ class TestGetHandoffContext(unittest.TestCase):
         with (
             patch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True),
             patch("core.Imports.get_graph_query_engine", return_value=mock_qe),
-            patch("knowledge_graph._singleton.get_knowledge_graph", return_value=mock_kg),
+            patch(
+                "knowledge_graph._singleton.get_knowledge_graph", return_value=mock_kg
+            ),
         ):
             self.ex._get_handoff_context("give blue_cube to Robot1", "Robot2")
 
-        mock_qe.get_handoff_candidates.assert_called_once_with("Robot2", "Robot1", "blue_cube")
+        mock_qe.get_handoff_candidates.assert_called_once_with(
+            "Robot2", "Robot1", "blue_cube"
+        )
 
     def test_returns_none_on_exception(self):
         """Returns None when any exception occurs (graceful degrade)."""
         with (
             patch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True),
-            patch("core.Imports.get_graph_query_engine", side_effect=RuntimeError("boom")),
+            patch(
+                "core.Imports.get_graph_query_engine", side_effect=RuntimeError("boom")
+            ),
         ):
             result = self.ex._get_handoff_context("transfer cube", "Robot1")
         self.assertIsNone(result)

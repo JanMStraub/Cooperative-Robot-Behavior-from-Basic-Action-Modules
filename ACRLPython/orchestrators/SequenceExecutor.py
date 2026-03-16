@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Sequence Executor for Multi-Command Operations
 ===============================================
@@ -210,6 +211,10 @@ class SequenceExecutor:
         self._ops_failed: int = 0
         self._avg_duration_ms: float = 0.0
 
+        # Optional OutcomeTracker for self-improvement loop recording.
+        # Set to an OutcomeTracker instance to enable; None disables recording.
+        self.outcome_tracker = None
+
         # Initialize verification components
         if enable_verification:
             self.verifier = OperationVerifier()
@@ -309,7 +314,7 @@ class SequenceExecutor:
             results = group_results
             completed = group_completed
         else:
-            # Sequential execution (legacy mode)
+            # Sequential execution
             logger.info("Sequential execution mode (no parallel_group)")
             for i, cmd in enumerate(commands):
                 if self._abort_flag:
@@ -322,7 +327,6 @@ class SequenceExecutor:
                 params = cmd.get("params", {})
                 capture_var = cmd.get("capture_var")  # Variable name to capture result
 
-                # === PRIORITY 2: Automatic Parameter Flow ===
                 # Auto-inject parameters from previous operations based on ParameterFlow definitions
                 params = self._auto_inject_parameters(operation, params)
 
@@ -359,7 +363,6 @@ class SequenceExecutor:
                         self._variables[capture_var] = cmd_result["result"]
                         logger.debug(f"Captured result to ${capture_var}")
 
-                    # === PRIORITY 2: Automatic Parameter Flow ===
                     # Automatically capture outputs based on ParameterFlow definitions
                     self._auto_capture_outputs(operation, cmd_result.get("result", {}))
                 else:
@@ -413,6 +416,7 @@ class SequenceExecutor:
             try:
                 from core.MemoryManager import get_memory_manager
                 from orchestrators.OutcomeTracker import get_outcome_tracker
+
                 _mgr = get_memory_manager()
                 _tracker = get_outcome_tracker()
                 _robot_ids = {
@@ -847,6 +851,7 @@ class SequenceExecutor:
             if MEMORY_ENABLED:
                 try:
                     from orchestrators.OutcomeTracker import get_outcome_tracker
+
                     get_outcome_tracker().record(
                         operation_name=operation,
                         robot_id=params.get("robot_id", "unknown"),
@@ -1114,10 +1119,12 @@ class SequenceExecutor:
         """
         try:
             from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
+
             if not KNOWLEDGE_GRAPH_ENABLED:
                 return {"safe": True}
 
             from core.Imports import get_graph_query_engine
+
             qe = get_graph_query_engine()
             if qe is None:
                 return {"safe": True}
@@ -1144,7 +1151,11 @@ class SequenceExecutor:
                             float(pos.get("z", 0)),
                         )
                 elif all(k in params for k in ("x", "y", "z")):
-                    target = (float(params["x"]), float(params["y"]), float(params["z"]))
+                    target = (
+                        float(params["x"]),
+                        float(params["y"]),
+                        float(params["z"]),
+                    )
 
                 if target is not None and qe.is_path_blocked(robot_id, target):
                     return {
@@ -1548,16 +1559,19 @@ class SequenceExecutor:
                 return None
 
             from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
+
             if not KNOWLEDGE_GRAPH_ENABLED:
                 return None
 
             from core.Imports import get_graph_query_engine
+
             qe = get_graph_query_engine()
             if qe is None:
                 return None
 
             # Get all object node IDs from the KG graph
             from knowledge_graph._singleton import get_knowledge_graph
+
             kg = get_knowledge_graph()
             all_objects = kg.get_all_nodes(node_type="object")
 
@@ -1574,7 +1588,9 @@ class SequenceExecutor:
             # Determine other robot (simple two-robot assumption)
             other_robot = "Robot2" if robot_id == "Robot1" else "Robot1"
 
-            candidates = qe.get_handoff_candidates(robot_id, other_robot, matched_object)
+            candidates = qe.get_handoff_candidates(
+                robot_id, other_robot, matched_object
+            )
 
             return {
                 "handoff_candidates": candidates,

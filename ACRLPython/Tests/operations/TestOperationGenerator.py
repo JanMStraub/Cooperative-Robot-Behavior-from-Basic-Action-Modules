@@ -13,10 +13,8 @@ Tests:
 - Review status management
 """
 
-import pytest
-import time
 from pathlib import Path
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import patch
 
 from validation.SyntaxValidator import validate_syntax
 from validation.StructureValidator import validate_structure
@@ -109,10 +107,10 @@ def create_rotate_end_effector_operation() -> BasicOperation:
 ROTATE_END_EFFECTOR_OPERATION = create_rotate_end_effector_operation()
 '''
 
-INVALID_SYNTAX_CODE = '''
+INVALID_SYNTAX_CODE = """
 def broken_function(
     return "missing closing paren"
-'''
+"""
 
 RESTRICTED_IMPORT_CODE = '''
 import os
@@ -161,6 +159,7 @@ EVAL_OPERATION = create_eval_operation()
 # Test Class: Syntax Validation
 # ============================================================================
 
+
 class TestSyntaxValidation:
     """Test Python syntax validation."""
 
@@ -197,6 +196,7 @@ class TestSyntaxValidation:
 # ============================================================================
 # Test Class: Structure Validation
 # ============================================================================
+
 
 class TestStructureValidation:
     """Test operation structure validation."""
@@ -253,6 +253,7 @@ SOME_VALUE = create_something_operation()
 # Test Class: Sandbox Execution
 # ============================================================================
 
+
 class TestSandboxExecution:
     """Test sandbox execution of generated operations."""
 
@@ -301,6 +302,7 @@ result = create_simple_operation()
 # Test Class: Generated Operations Loader
 # ============================================================================
 
+
 class TestGeneratedOperationsLoader:
     """Test loading of generated operations from files."""
 
@@ -309,7 +311,9 @@ class TestGeneratedOperationsLoader:
         from operations.generated import _get_review_status
 
         op_file = tmp_path / "test_op.py"
-        op_file.write_text("# REVIEW_STATUS: PENDING\n# GENERATED_AT: 2025-01-01\n\ndef foo(): pass\n")
+        op_file.write_text(
+            "# REVIEW_STATUS: PENDING\n# GENERATED_AT: 2025-01-01\n\ndef foo(): pass\n"
+        )
 
         status = _get_review_status(op_file)
         assert status == "PENDING"
@@ -365,6 +369,7 @@ class TestGeneratedOperationsLoader:
 # Test Class: Operation Generator
 # ============================================================================
 
+
 class TestOperationGenerator:
     """Test the OperationGenerator class."""
 
@@ -384,9 +389,9 @@ class TestOperationGenerator:
         """Test that generator respects MAX_GENERATED_OPERATIONS."""
         from operations.Generator import OperationGenerator
 
-        with patch("operations.Generator.ENABLE_DYNAMIC_OPERATIONS", True), \
-             patch("operations.Generator.MAX_GENERATED_OPERATIONS", 5), \
-             patch("operations.generated.get_generated_operations_count", return_value=5):
+        with patch("operations.Generator.ENABLE_DYNAMIC_OPERATIONS", True), patch(
+            "operations.Generator.MAX_GENERATED_OPERATIONS", 5
+        ), patch("operations.generated.get_generated_operations_count", return_value=5):
 
             generator = OperationGenerator()
             success, msg, path = generator.generate_operation("test command")
@@ -459,11 +464,14 @@ class TestOperationGenerator:
         """Test saving generated code to file."""
         from operations.Generator import OperationGenerator
 
-        with patch("operations.Generator.GENERATED_OPERATIONS_DIR", str(tmp_path)), \
-             patch("operations.Generator.REQUIRE_USER_REVIEW", True):
+        with patch(
+            "operations.Generator.GENERATED_OPERATIONS_DIR", str(tmp_path)
+        ), patch("operations.Generator.REQUIRE_USER_REVIEW", True):
 
             generator = OperationGenerator()
-            file_path = generator._save_and_register(VALID_OPERATION_CODE, "rotate gripper 45 degrees")
+            file_path = generator._save_and_register(
+                VALID_OPERATION_CODE, "rotate gripper 45 degrees"
+            )
 
             assert file_path is not None
             assert Path(file_path).exists()
@@ -477,6 +485,7 @@ class TestOperationGenerator:
 # Test Class: CommandParser Integration
 # ============================================================================
 
+
 class TestCommandParserGeneration:
     """Test CommandParser integration with dynamic generation."""
 
@@ -484,9 +493,9 @@ class TestCommandParserGeneration:
         """Test that low RAG scores trigger generation."""
         from orchestrators.CommandParser import CommandParser
 
-        with patch("orchestrators.CommandParser.RAGSystem"), \
-             patch("config.DynamicOperations.ENABLE_DYNAMIC_OPERATIONS", True), \
-             patch("config.DynamicOperations.GENERATION_TRIGGER_THRESHOLD", 0.4):
+        with patch("orchestrators.CommandParser.RAGSystem"), patch(
+            "config.DynamicOperations.ENABLE_DYNAMIC_OPERATIONS", True
+        ), patch("config.DynamicOperations.GENERATION_TRIGGER_THRESHOLD", 0.4):
 
             parser = CommandParser(use_rag=False)
             rag_results = [
@@ -502,9 +511,9 @@ class TestCommandParserGeneration:
         """Test that high RAG scores don't trigger generation."""
         from orchestrators.CommandParser import CommandParser
 
-        with patch("orchestrators.CommandParser.RAGSystem"), \
-             patch("config.DynamicOperations.ENABLE_DYNAMIC_OPERATIONS", True), \
-             patch("config.DynamicOperations.GENERATION_TRIGGER_THRESHOLD", 0.4):
+        with patch("orchestrators.CommandParser.RAGSystem"), patch(
+            "config.DynamicOperations.ENABLE_DYNAMIC_OPERATIONS", True
+        ), patch("config.DynamicOperations.GENERATION_TRIGGER_THRESHOLD", 0.4):
 
             parser = CommandParser(use_rag=False)
             rag_results = [
@@ -519,8 +528,9 @@ class TestCommandParserGeneration:
         """Test that generation check respects feature flag."""
         from orchestrators.CommandParser import CommandParser
 
-        with patch("orchestrators.CommandParser.RAGSystem"), \
-             patch("config.DynamicOperations.ENABLE_DYNAMIC_OPERATIONS", False):
+        with patch("orchestrators.CommandParser.RAGSystem"), patch(
+            "config.DynamicOperations.ENABLE_DYNAMIC_OPERATIONS", False
+        ):
 
             parser = CommandParser(use_rag=False)
             should_generate, reason = parser._check_generation_needed([])
@@ -530,8 +540,9 @@ class TestCommandParserGeneration:
         """Test that empty RAG results trigger generation."""
         from orchestrators.CommandParser import CommandParser
 
-        with patch("orchestrators.CommandParser.RAGSystem"), \
-             patch("config.DynamicOperations.ENABLE_DYNAMIC_OPERATIONS", True):
+        with patch("orchestrators.CommandParser.RAGSystem"), patch(
+            "config.DynamicOperations.ENABLE_DYNAMIC_OPERATIONS", True
+        ):
 
             parser = CommandParser(use_rag=False)
             should_generate, reason = parser._check_generation_needed([])
@@ -542,12 +553,14 @@ class TestCommandParserGeneration:
 # Test Class: _generate_test_file
 # ============================================================================
 
+
 class TestGenerateTestFile:
     """Tests for the auto-generated pytest skeleton writer."""
 
     def _make_generator(self):
         """Return an OperationGenerator with default config."""
         from operations.Generator import OperationGenerator
+
         return OperationGenerator()
 
     def test_creates_test_file_alongside_operation(self, tmp_path):
@@ -556,7 +569,9 @@ class TestGenerateTestFile:
         op_file = tmp_path / "rotate_gripper_1700000000.py"
         op_file.write_text("# placeholder operation")
 
-        generator._generate_test_file(op_file, "rotate_gripper", "rotate gripper 45 degrees")
+        generator._generate_test_file(
+            op_file, "rotate_gripper", "rotate gripper 45 degrees"
+        )
 
         # File should exist adjacent to the operation file
         test_files = list(tmp_path.glob("Test_rotate_gripper_*.py"))
@@ -580,7 +595,9 @@ class TestGenerateTestFile:
         op_file = tmp_path / "rotate_gripper_1700000000.py"
         op_file.write_text("# placeholder")
 
-        generator._generate_test_file(op_file, "rotate_gripper", "rotate gripper 45 degrees")
+        generator._generate_test_file(
+            op_file, "rotate_gripper", "rotate gripper 45 degrees"
+        )
 
         test_file = next(tmp_path.glob("Test_rotate_gripper_*.py"))
         content = test_file.read_text()
@@ -624,8 +641,9 @@ class TestGenerateTestFile:
 
     def test_save_and_register_creates_test_file_too(self, tmp_path):
         """_save_and_register calls _generate_test_file, so a Test_*.py appears on disk."""
-        with patch("operations.Generator.GENERATED_OPERATIONS_DIR", str(tmp_path)), \
-             patch("operations.Generator.REQUIRE_USER_REVIEW", True):
+        with patch(
+            "operations.Generator.GENERATED_OPERATIONS_DIR", str(tmp_path)
+        ), patch("operations.Generator.REQUIRE_USER_REVIEW", True):
 
             generator = self._make_generator()
             file_path = generator._save_and_register(

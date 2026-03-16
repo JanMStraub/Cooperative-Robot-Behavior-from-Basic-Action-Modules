@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Outcome Tracker
 ================
@@ -22,14 +23,14 @@ import time
 from collections import deque
 from typing import Any, Dict, List, Optional
 
+from config.Memory import OUTCOME_BUFFER_SIZE
 from core.LoggingSetup import setup_logging
 
 setup_logging(__name__)
 logger = logging.getLogger(__name__)
 
-# Maximum number of recent outcomes held in memory.
-# Old entries are automatically evicted once the buffer is full.
-_MAX_RECENT_OUTCOMES = 200
+# Module-level alias for tests that need to validate ring-buffer capacity.
+_MAX_RECENT_OUTCOMES: int = OUTCOME_BUFFER_SIZE
 
 
 class OutcomeTracker:
@@ -60,13 +61,13 @@ class OutcomeTracker:
         if self._initialized:
             return
         self._initialized = True
-        self._recent_outcomes: deque = deque(maxlen=_MAX_RECENT_OUTCOMES)
+        self._recent_outcomes: deque = deque(maxlen=OUTCOME_BUFFER_SIZE)
         self._vector_store = None  # Lazily fetched from RAGSystem
         logger.info("OutcomeTracker initialized")
 
-    # ------------------------------------------------------------------
+    # ==========================================================================
     # Public API
-    # ------------------------------------------------------------------
+    # ==========================================================================
 
     def record(
         self,
@@ -128,7 +129,8 @@ class OutcomeTracker:
         """
         with self._lock:
             failures = [
-                o for o in self._recent_outcomes
+                o
+                for o in self._recent_outcomes
                 if not o["success"]
                 and (operation_name is None or o["operation_name"] == operation_name)
             ]
@@ -149,7 +151,8 @@ class OutcomeTracker:
         """
         with self._lock:
             relevant = [
-                o for o in self._recent_outcomes
+                o
+                for o in self._recent_outcomes
                 if o["operation_name"] == operation_name
             ]
         # Most recent N
@@ -190,16 +193,16 @@ class OutcomeTracker:
             if rate >= min_failure_rate:
                 # Collect up to 3 distinct non-None error messages
                 sample_errors = list(
-                    dict.fromkeys(
-                        o["error"] for o in failures if o.get("error")
-                    )
+                    dict.fromkeys(o["error"] for o in failures if o.get("error"))
                 )[:3]
-                patterns.append({
-                    "operation_name": op_name,
-                    "failure_rate": rate,
-                    "total_executions": len(outcomes),
-                    "sample_errors": sample_errors,
-                })
+                patterns.append(
+                    {
+                        "operation_name": op_name,
+                        "failure_rate": rate,
+                        "total_executions": len(outcomes),
+                        "sample_errors": sample_errors,
+                    }
+                )
 
         # Sort by failure rate descending
         patterns.sort(key=lambda p: p["failure_rate"], reverse=True)
@@ -215,9 +218,9 @@ class OutcomeTracker:
             self._recent_outcomes.clear()
         logger.debug("OutcomeTracker ring buffer cleared")
 
-    # ------------------------------------------------------------------
+    # ==========================================================================
     # Private helpers
-    # ------------------------------------------------------------------
+    # ==========================================================================
 
     def _update_vector_store(self, operation_name: str, success: bool) -> None:
         """
@@ -252,15 +255,20 @@ class OutcomeTracker:
             success_count = meta.get("success_count", 0) + (1 if success else 0)
             failure_count = meta.get("failure_count", 0) + (0 if success else 1)
 
-            store.update_operation_metadata(operation_id, {
-                "execution_count": exec_count,
-                "success_count": success_count,
-                "failure_count": failure_count,
-                "last_outcome": "success" if success else "failure",
-                "last_outcome_at": time.time(),
-            })
+            store.update_operation_metadata(
+                operation_id,
+                {
+                    "execution_count": exec_count,
+                    "success_count": success_count,
+                    "failure_count": failure_count,
+                    "last_outcome": "success" if success else "failure",
+                    "last_outcome_at": time.time(),
+                },
+            )
         except Exception as e:
-            logger.debug(f"Could not update VectorStore metadata for {operation_name}: {e}")
+            logger.debug(
+                f"Could not update VectorStore metadata for {operation_name}: {e}"
+            )
 
     def _get_vector_store(self):
         """
@@ -274,6 +282,7 @@ class OutcomeTracker:
 
         try:
             from rag import RAGSystem
+
             rag = RAGSystem()
             # RAGSystem exposes its store as .vector_store after index_operations()
             if hasattr(rag, "vector_store") and rag.vector_store is not None:
@@ -302,9 +311,10 @@ class OutcomeTracker:
         return None
 
 
-# ---------------------------------------------------------------------------
+# ==========================================================================---------
 # Module-level singleton accessor
-# ---------------------------------------------------------------------------
+# ==========================================================================---------
+
 
 def get_outcome_tracker() -> OutcomeTracker:
     """

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Provider.py - Abstract Camera Provider
 

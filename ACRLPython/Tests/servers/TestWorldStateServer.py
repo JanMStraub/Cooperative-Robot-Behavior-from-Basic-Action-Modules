@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Test suite for WorldStateServer
 
@@ -7,11 +8,10 @@ state updates from Unity's WorldStatePublisher.
 
 import unittest
 import socket
-import json
 import time
 import threading
 from servers.WorldStateServer import WorldStateServer
-from core.UnityProtocol import UnityProtocol, MessageType
+from core.UnityProtocol import UnityProtocol
 
 
 class TestWorldStateServer(unittest.TestCase):
@@ -21,7 +21,10 @@ class TestWorldStateServer(unittest.TestCase):
     def setUpClass(cls):
         """Start server once for all tests."""
         from core.TCPServerBase import ServerConfig
-        config = ServerConfig(host="127.0.0.1", port=5914)  # Use different port for testing
+
+        config = ServerConfig(
+            host="127.0.0.1", port=5914
+        )  # Use different port for testing
         cls.server = WorldStateServer(config=config)
         cls.server.start()
         time.sleep(0.5)  # Wait for server to start
@@ -81,7 +84,7 @@ class TestWorldStateServer(unittest.TestCase):
                     "gripper_state": "open",
                     "is_moving": True,
                     "is_initialized": True,
-                    "joint_angles": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+                    "joint_angles": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5],
                 }
             ],
             "objects": [
@@ -90,10 +93,10 @@ class TestWorldStateServer(unittest.TestCase):
                     "position": {"x": 2.0, "y": 0.1, "z": 3.0},
                     "color": "red",
                     "object_type": "cube",
-                    "confidence": 0.95
+                    "confidence": 0.95,
                 }
             ],
-            "timestamp": 123.45
+            "timestamp": 123.45,
         }
 
         # Send world state
@@ -123,7 +126,7 @@ class TestWorldStateServer(unittest.TestCase):
                     "gripper_state": "closed",
                     "is_moving": False,
                     "is_initialized": True,
-                    "joint_angles": []
+                    "joint_angles": [],
                 },
                 {
                     "robot_id": "Robot2",
@@ -131,11 +134,11 @@ class TestWorldStateServer(unittest.TestCase):
                     "gripper_state": "open",
                     "is_moving": True,
                     "is_initialized": True,
-                    "joint_angles": []
-                }
+                    "joint_angles": [],
+                },
             ],
             "objects": [],
-            "timestamp": 200.0
+            "timestamp": 200.0,
         }
 
         self.client = self._create_client()
@@ -171,17 +174,17 @@ class TestWorldStateServer(unittest.TestCase):
                     "position": {"x": 1.0, "y": 0.1, "z": 2.0},
                     "color": "red",
                     "object_type": "cube",
-                    "confidence": 0.9
+                    "confidence": 0.9,
                 },
                 {
                     "object_id": "BlueSphere",
                     "position": {"x": -1.0, "y": 0.2, "z": -2.0},
                     "color": "blue",
                     "object_type": "sphere",
-                    "confidence": 0.85
-                }
+                    "confidence": 0.85,
+                },
             ],
-            "timestamp": 300.0
+            "timestamp": 300.0,
         }
 
         self.client = self._create_client()
@@ -210,14 +213,14 @@ class TestWorldStateServer(unittest.TestCase):
             "type": "world_state_update",
             "robots": [
                 {"robot_id": "Robot1", "is_moving": False},
-                {"robot_id": "Robot2", "is_moving": True}
+                {"robot_id": "Robot2", "is_moving": True},
             ],
             "objects": [
                 {"object_id": "Cube1", "color": "red"},
                 {"object_id": "Cube2", "color": "blue"},
-                {"object_id": "Sphere1", "color": "green"}
+                {"object_id": "Sphere1", "color": "green"},
             ],
-            "timestamp": 400.0
+            "timestamp": 400.0,
         }
 
         self.client = self._create_client()
@@ -241,7 +244,7 @@ class TestWorldStateServer(unittest.TestCase):
         """Test server statistics tracking."""
         # Get initial stats
         stats = self.server.get_statistics()
-        initial_count = stats['updates_received']
+        initial_count = stats["updates_received"]
 
         # Send multiple updates
         for i in range(3):
@@ -249,7 +252,7 @@ class TestWorldStateServer(unittest.TestCase):
                 "type": "world_state_update",
                 "robots": [],
                 "objects": [],
-                "timestamp": float(i)
+                "timestamp": float(i),
             }
             self.client = self._create_client()
             self._send_world_state(self.client, world_state)
@@ -258,9 +261,9 @@ class TestWorldStateServer(unittest.TestCase):
 
         # Check stats updated
         stats = self.server.get_statistics()
-        self.assertEqual(stats['updates_received'], initial_count + 3)
-        self.assertTrue(stats['has_state'])
-        self.assertIsNotNone(stats['last_update_time'])
+        self.assertEqual(stats["updates_received"], initial_count + 3)
+        self.assertTrue(stats["has_state"])
+        self.assertIsNotNone(stats["last_update_time"])
 
     def test_thread_safety(self):
         """Test concurrent access to world state."""
@@ -269,7 +272,7 @@ class TestWorldStateServer(unittest.TestCase):
             "type": "world_state_update",
             "robots": [{"robot_id": "Robot1", "is_moving": False}],
             "objects": [],
-            "timestamp": 500.0
+            "timestamp": 500.0,
         }
         self.client = self._create_client()
         self._send_world_state(self.client, world_state)
@@ -277,6 +280,7 @@ class TestWorldStateServer(unittest.TestCase):
 
         # Concurrent reads
         results = []
+
         def read_state():
             for _ in range(10):
                 state = self.server.get_latest_state()

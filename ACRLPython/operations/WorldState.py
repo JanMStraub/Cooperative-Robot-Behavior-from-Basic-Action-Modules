@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 World State Tracking System
 ============================
@@ -16,7 +17,7 @@ Features:
 import time
 import threading
 import math
-from typing import Dict, Optional, Tuple, Any, Set
+from typing import Dict, Optional, Tuple, Any
 from dataclasses import dataclass, field
 
 try:
@@ -41,6 +42,7 @@ from .StatusOperations import check_robot_status
 
 # Configure logging
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -355,7 +357,7 @@ class WorldState:
             return None
 
     @staticmethod
-    def _to_position_tuple(value):
+    def _to_position_tuple(value) -> Optional[Tuple[float, float, float]]:
         """
         Normalize a position value to a (float, float, float) tuple.
 
@@ -378,7 +380,7 @@ class WorldState:
             )
         if isinstance(value, (list, tuple)) and len(value) >= 3:
             return (float(value[0]), float(value[1]), float(value[2]))
-        return value
+        return None
 
     def update_robot_state(self, robot_id: str, state_data: Dict[str, Any]):
         """
@@ -517,8 +519,7 @@ class WorldState:
         """
         if self._normalized_object_keys is None:
             self._normalized_object_keys = {
-                k.lower().replace(" ", "_").replace("-", "_"): k
-                for k in self._objects
+                k.lower().replace(" ", "_").replace("-", "_"): k for k in self._objects
             }
         return self._normalized_object_keys
 
@@ -748,7 +749,9 @@ class WorldState:
 
             # Remove stale objects
             for obj_id in to_delete:
-                logger.debug(f"Removing stale object {obj_id} (not seen for {OBJECT_TTL_SECONDS}s)")
+                logger.debug(
+                    f"Removing stale object {obj_id} (not seen for {OBJECT_TTL_SECONDS}s)"
+                )
                 del self._objects[obj_id]
 
             if to_delete:
@@ -850,7 +853,9 @@ class WorldState:
 
                 # Check if target is within reach
                 x, y, z = obj.position
-                is_reachable, _ = target_within_reach(robot_id, x, y, z, world_state=self)
+                is_reachable, _ = target_within_reach(
+                    robot_id, x, y, z, world_state=self
+                )
 
                 if is_reachable:
                     # Additional check: object must be accessible (workspace, no collision)
@@ -951,7 +956,9 @@ class WorldState:
             context = f"{robot_id} at ({pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}), gripper {gripper}."
 
             # Get reachable objects for this robot
-            reachable_ids = {obj.object_id for obj in self.get_reachable_objects(robot_id)}
+            reachable_ids = {
+                obj.object_id for obj in self.get_reachable_objects(robot_id)
+            }
 
             # Format object list
             if not self._objects:

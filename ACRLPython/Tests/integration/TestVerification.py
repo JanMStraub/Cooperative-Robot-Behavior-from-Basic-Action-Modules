@@ -6,8 +6,7 @@ Tests formal verification engine including predicate parsing, precondition/
 postcondition validation, and operation safety checks.
 """
 
-import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 from operations.Verification import (
     PredicateViolation,
     VerificationResult,
@@ -15,7 +14,7 @@ from operations.Verification import (
     OperationVerifier,
     quick_verify_operation,
 )
-from operations.Base import OperationResult, BasicOperation, OperationCategory, OperationComplexity
+from operations.Base import OperationResult
 
 
 class TestPredicateViolation:
@@ -27,7 +26,7 @@ class TestPredicateViolation:
             predicate="target_within_reach(robot_id, x, y, z)",
             reason="Target exceeds max reach of 0.8m",
             severity="error",
-            recovery_suggestions=["Move target closer", "Use different robot"]
+            recovery_suggestions=["Move target closer", "Use different robot"],
         )
 
         assert violation.predicate == "target_within_reach(robot_id, x, y, z)"
@@ -38,8 +37,7 @@ class TestPredicateViolation:
     def test_predicate_violation_defaults(self):
         """Test default values for PredicateViolation"""
         violation = PredicateViolation(
-            predicate="test_predicate()",
-            reason="Test reason"
+            predicate="test_predicate()", reason="Test reason"
         )
 
         assert violation.severity == "error"
@@ -66,7 +64,7 @@ class TestVerificationResult:
             predicate="robot_is_initialized(robot_id)",
             reason="Robot not found",
             severity="error",
-            suggestions=["Initialize robot first"]
+            suggestions=["Initialize robot first"],
         )
 
         assert result.success is False
@@ -81,7 +79,7 @@ class TestVerificationResult:
         result.add_violation(
             predicate="robot_is_stationary(robot_id)",
             reason="Robot may still be moving",
-            severity="warning"
+            severity="warning",
         )
 
         assert result.success is True  # Still successful
@@ -93,9 +91,7 @@ class TestVerificationResult:
         """Test serialization to dictionary"""
         result = VerificationResult(success=True)
         result.add_violation(
-            predicate="test_predicate()",
-            reason="Test failure",
-            severity="error"
+            predicate="test_predicate()", reason="Test failure", severity="error"
         )
         result.checked_predicates = ["predicate1", "predicate2"]
 
@@ -156,12 +152,7 @@ class TestPredicateParser:
     def test_resolve_parameters(self):
         """Test resolving parameter names to values"""
         param_names = ["robot_id", "x", "y", "z"]
-        operation_params = {
-            "robot_id": "Robot1",
-            "x": 0.3,
-            "y": 0.2,
-            "z": 0.1
-        }
+        operation_params = {"robot_id": "Robot1", "x": 0.3, "y": 0.2, "z": 0.1}
 
         resolved = PredicateParser.resolve_parameters(param_names, operation_params)
 
@@ -184,53 +175,51 @@ class TestPredicateParser:
 class TestOperationVerifier:
     """Test OperationVerifier"""
 
-    @patch('operations.Verification.evaluate_predicate')
-    def test_verify_preconditions_pass(self, mock_evaluate, sample_operation_with_conditions, mock_world_state, cleanup_world_state):
+    @patch("operations.Verification.evaluate_predicate")
+    def test_verify_preconditions_pass(
+        self,
+        mock_evaluate,
+        sample_operation_with_conditions,
+        mock_world_state,
+        cleanup_world_state,
+    ):
         """Test all preconditions valid"""
         verifier = OperationVerifier()
 
         # Mock all predicates pass
         mock_evaluate.return_value = (True, "")
 
-        params = {
-            "robot_id": "Robot1",
-            "x": 0.3,
-            "y": 0.2,
-            "z": 0.1
-        }
+        params = {"robot_id": "Robot1", "x": 0.3, "y": 0.2, "z": 0.1}
 
         result = verifier.verify_preconditions(
-            sample_operation_with_conditions,
-            params,
-            mock_world_state
+            sample_operation_with_conditions, params, mock_world_state
         )
 
         assert result.success is True
         assert result.execution_allowed is True
         assert len(result.violations) == 0
 
-    @patch('operations.Verification.evaluate_predicate')
-    def test_verify_preconditions_fail(self, mock_evaluate, sample_operation_with_conditions, mock_world_state, cleanup_world_state):
+    @patch("operations.Verification.evaluate_predicate")
+    def test_verify_preconditions_fail(
+        self,
+        mock_evaluate,
+        sample_operation_with_conditions,
+        mock_world_state,
+        cleanup_world_state,
+    ):
         """Test precondition violation blocks execution"""
         verifier = OperationVerifier()
 
         # Mock first predicate fails
         mock_evaluate.side_effect = [
             (False, "Target exceeds max reach of 0.8m"),  # target_within_reach fails
-            (True, "")  # robot_is_initialized passes
+            (True, ""),  # robot_is_initialized passes
         ]
 
-        params = {
-            "robot_id": "Robot1",
-            "x": 2.0,
-            "y": 0.0,
-            "z": 0.1
-        }
+        params = {"robot_id": "Robot1", "x": 2.0, "y": 0.0, "z": 0.1}
 
         result = verifier.verify_preconditions(
-            sample_operation_with_conditions,
-            params,
-            mock_world_state
+            sample_operation_with_conditions, params, mock_world_state
         )
 
         assert result.success is False
@@ -238,45 +227,55 @@ class TestOperationVerifier:
         assert len(result.violations) == 1
         assert "exceeds max reach" in result.violations[0].reason
 
-    @patch('operations.Verification.evaluate_predicate')
-    def test_verify_postconditions_pass(self, mock_evaluate, sample_operation_with_conditions, mock_world_state, cleanup_world_state):
+    @patch("operations.Verification.evaluate_predicate")
+    def test_verify_postconditions_pass(
+        self,
+        mock_evaluate,
+        sample_operation_with_conditions,
+        mock_world_state,
+        cleanup_world_state,
+    ):
         """Test postconditions satisfied"""
         verifier = OperationVerifier()
 
         # Mock postcondition passes
         mock_evaluate.return_value = (True, "")
 
-        operation_result = OperationResult.success_result({"final_position": (0.3, 0.2, 0.1)})
+        operation_result = OperationResult.success_result(
+            {"final_position": (0.3, 0.2, 0.1)}
+        )
 
         params = {"robot_id": "Robot1"}
 
         result = verifier.verify_postconditions(
-            sample_operation_with_conditions,
-            operation_result,
-            params,
-            mock_world_state
+            sample_operation_with_conditions, operation_result, params, mock_world_state
         )
 
         assert result.success is True
         assert len(result.violations) == 0
 
-    @patch('operations.Verification.evaluate_predicate')
-    def test_verify_postconditions_fail(self, mock_evaluate, sample_operation_with_conditions, mock_world_state, cleanup_world_state):
+    @patch("operations.Verification.evaluate_predicate")
+    def test_verify_postconditions_fail(
+        self,
+        mock_evaluate,
+        sample_operation_with_conditions,
+        mock_world_state,
+        cleanup_world_state,
+    ):
         """Test postcondition violation is warning"""
         verifier = OperationVerifier()
 
         # Mock postcondition fails
         mock_evaluate.return_value = (False, "Robot is still moving")
 
-        operation_result = OperationResult.success_result({"final_position": (0.3, 0.2, 0.1)})
+        operation_result = OperationResult.success_result(
+            {"final_position": (0.3, 0.2, 0.1)}
+        )
 
         params = {"robot_id": "Robot1"}
 
         result = verifier.verify_postconditions(
-            sample_operation_with_conditions,
-            operation_result,
-            params,
-            mock_world_state
+            sample_operation_with_conditions, operation_result, params, mock_world_state
         )
 
         # Postcondition failures are warnings, not errors
@@ -284,23 +283,22 @@ class TestOperationVerifier:
         assert len(result.warnings) == 1
         assert "still moving" in result.warnings[0].reason
 
-    def test_verify_postconditions_operation_failed(self, sample_operation_with_conditions, mock_world_state, cleanup_world_state):
+    def test_verify_postconditions_operation_failed(
+        self, sample_operation_with_conditions, mock_world_state, cleanup_world_state
+    ):
         """Test postconditions fail when operation failed"""
         verifier = OperationVerifier()
 
         operation_result = OperationResult.error_result(
-                error_code="MOVEMENT_FAILED",
-                message="Robot could not reach target",
-                recovery_suggestions=["Check logs"]
-            )
+            error_code="MOVEMENT_FAILED",
+            message="Robot could not reach target",
+            recovery_suggestions=["Check logs"],
+        )
 
         params = {"robot_id": "Robot1"}
 
         result = verifier.verify_postconditions(
-            sample_operation_with_conditions,
-            operation_result,
-            params,
-            mock_world_state
+            sample_operation_with_conditions, operation_result, params, mock_world_state
         )
 
         assert result.success is False
@@ -315,7 +313,7 @@ class TestOperationVerifier:
         suggestions = verifier._suggest_recovery_for_predicate(
             "target_within_reach",
             "Target exceeds max reach",
-            {"robot_id": "Robot1", "x": 2.0}
+            {"robot_id": "Robot1", "x": 2.0},
         )
 
         assert len(suggestions) > 0
@@ -326,9 +324,7 @@ class TestOperationVerifier:
         verifier = OperationVerifier()
 
         suggestions = verifier._suggest_recovery_for_predicate(
-            "robot_is_initialized",
-            "Robot not found",
-            {"robot_id": "UnknownRobot"}
+            "robot_is_initialized", "Robot not found", {"robot_id": "UnknownRobot"}
         )
 
         assert len(suggestions) > 0
@@ -338,48 +334,43 @@ class TestOperationVerifier:
 class TestQuickVerifyOperation:
     """Test quick_verify_operation helper"""
 
-    @patch('operations.Verification.evaluate_predicate')
-    def test_quick_verify_safe(self, mock_evaluate, sample_operation_with_conditions, mock_world_state, cleanup_world_state):
+    @patch("operations.Verification.evaluate_predicate")
+    def test_quick_verify_safe(
+        self,
+        mock_evaluate,
+        sample_operation_with_conditions,
+        mock_world_state,
+        cleanup_world_state,
+    ):
         """Test quick verification passes"""
         # Mock all predicates pass
         mock_evaluate.return_value = (True, "")
 
-        params = {
-            "robot_id": "Robot1",
-            "x": 0.3,
-            "y": 0.2,
-            "z": 0.1
-        }
+        params = {"robot_id": "Robot1", "x": 0.3, "y": 0.2, "z": 0.1}
 
         is_safe, result = quick_verify_operation(
-            sample_operation_with_conditions,
-            params,
-            mock_world_state
+            sample_operation_with_conditions, params, mock_world_state
         )
 
         assert is_safe is True
         assert result.execution_allowed is True
 
-    @patch('operations.Verification.evaluate_predicate')
-    def test_quick_verify_unsafe(self, mock_evaluate, sample_operation_with_conditions, mock_world_state, cleanup_world_state):
+    @patch("operations.Verification.evaluate_predicate")
+    def test_quick_verify_unsafe(
+        self,
+        mock_evaluate,
+        sample_operation_with_conditions,
+        mock_world_state,
+        cleanup_world_state,
+    ):
         """Test quick verification blocks unsafe operation"""
         # Mock predicate fails
-        mock_evaluate.side_effect = [
-            (False, "Target out of reach"),
-            (True, "")
-        ]
+        mock_evaluate.side_effect = [(False, "Target out of reach"), (True, "")]
 
-        params = {
-            "robot_id": "Robot1",
-            "x": 5.0,
-            "y": 0.0,
-            "z": 0.1
-        }
+        params = {"robot_id": "Robot1", "x": 5.0, "y": 0.0, "z": 0.1}
 
         is_safe, result = quick_verify_operation(
-            sample_operation_with_conditions,
-            params,
-            mock_world_state
+            sample_operation_with_conditions, params, mock_world_state
         )
 
         assert is_safe is False
@@ -390,6 +381,7 @@ class TestQuickVerifyOperation:
 # ============================================================================
 # Test Class: Spatial Predicate Accuracy
 # ============================================================================
+
 
 class TestSpatialPredicateAccuracy:
     """Test accuracy of spatial predicate calculations."""
@@ -417,9 +409,9 @@ class TestSpatialPredicateAccuracy:
         assert object_pos is not None, "Object position should not be None"
 
         actual_distance = math.sqrt(
-            (object_pos[0] - robot_pos[0])**2 +
-            (object_pos[1] - robot_pos[1])**2 +
-            (object_pos[2] - robot_pos[2])**2
+            (object_pos[0] - robot_pos[0]) ** 2
+            + (object_pos[1] - robot_pos[1]) ** 2
+            + (object_pos[2] - robot_pos[2]) ** 2
         )
 
         # Verify accuracy to 1mm (0.001m)
@@ -438,22 +430,23 @@ class TestSpatialPredicateAccuracy:
         # Calculate expected distance from Robot1 base
         base = ROBOT_BASE_POSITIONS.get("Robot1", (0, 0, 0))
         expected_distance = math.sqrt(
-            (x - base[0])**2 + (y - base[1])**2 + (z - base[2])**2
+            (x - base[0]) ** 2 + (y - base[1]) ** 2 + (z - base[2]) ** 2
         )
 
         # Should be within MAX_ROBOT_REACH (0.8m by default)
         is_valid, reason = evaluate_predicate(
-            "target_within_reach",
-            robot_id="Robot1",
-            x=x, y=y, z=z,
-            world_state=None
+            "target_within_reach", robot_id="Robot1", x=x, y=y, z=z, world_state=None
         )
 
         # Check result matches expectation based on distance
         if expected_distance <= MAX_ROBOT_REACH:
-            assert is_valid is True, f"Expected within reach: {expected_distance:.3f}m <= {MAX_ROBOT_REACH}m"
+            assert (
+                is_valid is True
+            ), f"Expected within reach: {expected_distance:.3f}m <= {MAX_ROBOT_REACH}m"
         else:
-            assert is_valid is False, f"Expected out of reach: {expected_distance:.3f}m > {MAX_ROBOT_REACH}m"
+            assert (
+                is_valid is False
+            ), f"Expected out of reach: {expected_distance:.3f}m > {MAX_ROBOT_REACH}m"
 
     def test_object_at_location_tolerance(self, cleanup_world_state):
         """Test object location tolerance checking using WorldState."""
@@ -474,12 +467,14 @@ class TestSpatialPredicateAccuracy:
 
         # Test within 1cm tolerance
         target_pos = (0.305, 0.198, 0.102)
-        distance = math.sqrt(sum((a-b)**2 for a, b in zip(obj_pos, target_pos)))
+        distance = math.sqrt(sum((a - b) ** 2 for a, b in zip(obj_pos, target_pos)))
         assert distance < 0.01  # Within 1cm
 
         # Test outside 1cm tolerance
         target_pos_far = (0.320, 0.220, 0.120)
-        distance_far = math.sqrt(sum((a-b)**2 for a, b in zip(obj_pos, target_pos_far)))
+        distance_far = math.sqrt(
+            sum((a - b) ** 2 for a, b in zip(obj_pos, target_pos_far))
+        )
         assert distance_far > 0.01  # Outside 1cm
 
     def test_complex_spatial_and_predicate(self, cleanup_world_state):
@@ -497,8 +492,10 @@ class TestSpatialPredicateAccuracy:
         is_reachable, _ = evaluate_predicate(
             "target_within_reach",
             robot_id="Robot1",
-            x=0.3, y=0.3, z=0.0,
-            world_state=world_state
+            x=0.3,
+            y=0.3,
+            z=0.0,
+            world_state=world_state,
         )
 
         # Check object exists in world state
@@ -526,8 +523,10 @@ class TestSpatialPredicateAccuracy:
         is_reachable, _ = evaluate_predicate(
             "target_within_reach",
             robot_id="Robot1",
-            x=5.0, y=0.0, z=0.0,
-            world_state=world_state
+            x=5.0,
+            y=0.0,
+            z=0.0,
+            world_state=world_state,
         )
         assert is_reachable is False, "Target should be out of reach at 5m distance"
 
@@ -559,13 +558,15 @@ class TestSpatialPredicateAccuracy:
         obj_pos = world_state.get_object_position("Obj1")
 
         # Ensure positions are tuples
-        assert robot_pos is not None and obj_pos is not None, "Positions should not be None"
+        assert (
+            robot_pos is not None and obj_pos is not None
+        ), "Positions should not be None"
         if not isinstance(robot_pos, tuple):
             robot_pos = tuple(robot_pos)
         if not isinstance(obj_pos, tuple):
             obj_pos = tuple(obj_pos)
 
-        distance = math.sqrt(sum((a-b)**2 for a, b in zip(obj_pos, robot_pos)))
+        distance = math.sqrt(sum((a - b) ** 2 for a, b in zip(obj_pos, robot_pos)))
 
         assert abs(distance - 1.0) < 0.0001  # Exact 1.0m
 
@@ -575,7 +576,7 @@ class TestSpatialPredicateAccuracy:
         assert obj_pos is not None
         if not isinstance(obj_pos, tuple):
             obj_pos = tuple(obj_pos)
-        distance = math.sqrt(sum((a-b)**2 for a, b in zip(obj_pos, robot_pos)))
+        distance = math.sqrt(sum((a - b) ** 2 for a, b in zip(obj_pos, robot_pos)))
 
         expected = math.sqrt(2.0)  # ~1.414m
         assert abs(distance - expected) < 0.0001
@@ -586,7 +587,7 @@ class TestSpatialPredicateAccuracy:
         assert obj_pos is not None
         if not isinstance(obj_pos, tuple):
             obj_pos = tuple(obj_pos)
-        distance = math.sqrt(sum((a-b)**2 for a, b in zip(obj_pos, robot_pos)))
+        distance = math.sqrt(sum((a - b) ** 2 for a, b in zip(obj_pos, robot_pos)))
 
         expected = math.sqrt(3.0)  # ~1.732m
         assert abs(distance - expected) < 0.0001
@@ -610,8 +611,10 @@ class TestSpatialPredicateAccuracy:
             is_valid, _ = evaluate_predicate(
                 "is_in_robot_workspace",
                 robot_id="Robot1",
-                x=x_mid, y=y_mid, z=z_mid,
-                world_state=None
+                x=x_mid,
+                y=y_mid,
+                z=z_mid,
+                world_state=None,
             )
             assert is_valid is True  # Should be inside workspace
 
@@ -620,8 +623,9 @@ class TestSpatialPredicateAccuracy:
                 "is_in_robot_workspace",
                 robot_id="Robot1",
                 x=workspace["x_max"] + 1.0,  # 1m beyond boundary
-                y=y_mid, z=z_mid,
-                world_state=None
+                y=y_mid,
+                z=z_mid,
+                world_state=None,
             )
             assert is_valid_out is False  # Should be outside
 
@@ -636,9 +640,9 @@ class TestSpatialPredicateAccuracy:
         world_state.update_robot(robot_id="Robot1", position=(0.0, 0.0, 0.0))
 
         # Three objects at different distances
-        world_state.update_object_position("Near", (0.1, 0.0, 0.0), "red")    # 0.1m
-        world_state.update_object_position("Mid", (0.5, 0.0, 0.0), "blue")    # 0.5m
-        world_state.update_object_position("Far", (1.0, 0.0, 0.0), "green")   # 1.0m
+        world_state.update_object_position("Near", (0.1, 0.0, 0.0), "red")  # 0.1m
+        world_state.update_object_position("Mid", (0.5, 0.0, 0.0), "blue")  # 0.5m
+        world_state.update_object_position("Far", (1.0, 0.0, 0.0), "green")  # 1.0m
 
         robot_pos = world_state.get_robot_position("Robot1")
 
@@ -649,7 +653,9 @@ class TestSpatialPredicateAccuracy:
 
         # Ensure all positions are tuples
         assert robot_pos is not None, "Robot position should not be None"
-        assert near_pos is not None and mid_pos is not None and far_pos is not None, "Object positions should not be None"
+        assert (
+            near_pos is not None and mid_pos is not None and far_pos is not None
+        ), "Object positions should not be None"
 
         if not isinstance(robot_pos, tuple):
             robot_pos = tuple(robot_pos)
@@ -660,9 +666,9 @@ class TestSpatialPredicateAccuracy:
         if not isinstance(far_pos, tuple):
             far_pos = tuple(far_pos)
 
-        dist_near = math.sqrt(sum((a-b)**2 for a, b in zip(near_pos, robot_pos)))
-        dist_mid = math.sqrt(sum((a-b)**2 for a, b in zip(mid_pos, robot_pos)))
-        dist_far = math.sqrt(sum((a-b)**2 for a, b in zip(far_pos, robot_pos)))
+        dist_near = math.sqrt(sum((a - b) ** 2 for a, b in zip(near_pos, robot_pos)))
+        dist_mid = math.sqrt(sum((a - b) ** 2 for a, b in zip(mid_pos, robot_pos)))
+        dist_far = math.sqrt(sum((a - b) ** 2 for a, b in zip(far_pos, robot_pos)))
 
         # Verify ordering
         assert dist_near < dist_mid < dist_far
@@ -679,19 +685,23 @@ class TestSpatialPredicateAccuracy:
 
         # Two robots very close to each other
         world_state.update_robot(robot_id="Robot1", position=(0.0, 0.0, 0.0))
-        world_state.update_robot(robot_id="Robot2", position=(0.15, 0.0, 0.0))  # 15cm apart
+        world_state.update_robot(
+            robot_id="Robot2", position=(0.15, 0.0, 0.0)
+        )  # 15cm apart
 
         # Calculate distance between robots
         pos1 = world_state.get_robot_position("Robot1")
         pos2 = world_state.get_robot_position("Robot2")
 
-        assert pos1 is not None and pos2 is not None, "Robot positions should not be None"
+        assert (
+            pos1 is not None and pos2 is not None
+        ), "Robot positions should not be None"
         if not isinstance(pos1, tuple):
             pos1 = tuple(pos1)
         if not isinstance(pos2, tuple):
             pos2 = tuple(pos2)
 
-        distance = math.sqrt(sum((a-b)**2 for a, b in zip(pos2, pos1)))
+        distance = math.sqrt(sum((a - b) ** 2 for a, b in zip(pos2, pos1)))
 
         # Verify distance calculations - relaxed tolerance for floating point
         assert abs(distance - 0.15) < 0.001  # Should be 15cm
@@ -728,7 +738,7 @@ class TestSpatialPredicateAccuracy:
             if obj_pos:
                 if not isinstance(obj_pos, tuple):
                     obj_pos = tuple(obj_pos)
-                dist = math.sqrt(sum((a-b)**2 for a, b in zip(obj_pos, robot_pos)))
+                dist = math.sqrt(sum((a - b) ** 2 for a, b in zip(obj_pos, robot_pos)))
                 distances.append(dist)
 
         elapsed = time.time() - start
@@ -752,13 +762,15 @@ class TestSpatialPredicateAccuracy:
         robot_pos = world_state.get_robot_position("Robot1")
         obj_pos = world_state.get_object_position("Target")
 
-        assert robot_pos is not None and obj_pos is not None, "Positions should not be None"
+        assert (
+            robot_pos is not None and obj_pos is not None
+        ), "Positions should not be None"
         if not isinstance(robot_pos, tuple):
             robot_pos = tuple(robot_pos)
         if not isinstance(obj_pos, tuple):
             obj_pos = tuple(obj_pos)
 
-        distance = math.sqrt(sum((a-b)**2 for a, b in zip(obj_pos, robot_pos)))
+        distance = math.sqrt(sum((a - b) ** 2 for a, b in zip(obj_pos, robot_pos)))
 
         # Distance: sqrt((1.0)^2 + (0.6)^2) = sqrt(1.36) = 1.166m
         expected = math.sqrt(1.0**2 + 0.6**2)
@@ -791,8 +803,10 @@ class TestSpatialPredicateAccuracy:
             is_valid1, _ = evaluate_predicate(
                 "target_within_reach",
                 robot_id="Robot1",
-                x=0.5, y=0.5, z=0.0,
-                world_state=world_state
+                x=0.5,
+                y=0.5,
+                z=0.0,
+                world_state=world_state,
             )
 
             # Check object exists in world state
@@ -801,7 +815,9 @@ class TestSpatialPredicateAccuracy:
         elapsed = time.time() - start
 
         # 10 predicate evaluations with 1000 objects should complete quickly (< 100ms)
-        assert elapsed < 0.1, f"Predicate evaluation took {elapsed:.3f}s, expected < 0.1s"
+        assert (
+            elapsed < 0.1
+        ), f"Predicate evaluation took {elapsed:.3f}s, expected < 0.1s"
 
         # Verify object exists
         obj_999 = world_state.get_object_position("Obj_0999")
@@ -812,6 +828,7 @@ class TestSpatialPredicateAccuracy:
 # Test Class: Recovery Suggestion Effectiveness
 # ============================================================================
 
+
 class TestRecoverySuggestions:
     """Test recovery suggestion generation and effectiveness."""
 
@@ -819,7 +836,11 @@ class TestRecoverySuggestions:
         """Test recovery suggestion for out-of-reach target using OperationVerifier."""
         from operations.WorldState import get_world_state
         from operations.Verification import OperationVerifier
-        from operations.Base import BasicOperation, OperationCategory, OperationComplexity
+        from operations.Base import (
+            BasicOperation,
+            OperationCategory,
+            OperationComplexity,
+        )
 
         world_state = get_world_state()
 
@@ -838,7 +859,7 @@ class TestRecoverySuggestions:
             average_duration_ms=100.0,
             success_rate=0.95,
             failure_modes=["Target out of reach"],
-            implementation=lambda: None
+            implementation=lambda: None,
         )
 
         # Target way beyond reach (10m away - definitely out of reach)
@@ -858,7 +879,10 @@ class TestRecoverySuggestions:
 
         # Suggestion should mention moving closer or reach
         suggestion_text = " ".join(violation.recovery_suggestions).lower()
-        assert any(keyword in suggestion_text for keyword in ["move", "closer", "reach", "robot"])
+        assert any(
+            keyword in suggestion_text
+            for keyword in ["move", "closer", "reach", "robot"]
+        )
 
     def test_missing_object_recovery_suggestion(self, cleanup_world_state):
         """Test detection of missing object in WorldState."""
@@ -878,4 +902,3 @@ class TestRecoverySuggestions:
         # In practice, recovery would involve running detect_objects operation
         # to find and register objects in the scene
         # (Implementation dependent - just verify predicate works)
-

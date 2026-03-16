@@ -4,7 +4,6 @@ Unit tests for RobotController ROS auto-connect behaviour.
 """
 
 import threading
-import pytest
 from unittest.mock import patch, MagicMock
 
 

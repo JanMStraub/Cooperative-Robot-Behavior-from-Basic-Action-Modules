@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Multi-Robot Coordination Operations (Level 4)
 ==============================================
@@ -168,8 +169,10 @@ def detect_other_robot(
         kg_proximity = None
         try:
             from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
+
             if KNOWLEDGE_GRAPH_ENABLED:
                 from core.Imports import get_graph_query_engine
+
                 qe = get_graph_query_engine()
                 if qe is not None:
                     nearby = qe.find_robots_near(robot_id, max_distance=distance + 0.05)

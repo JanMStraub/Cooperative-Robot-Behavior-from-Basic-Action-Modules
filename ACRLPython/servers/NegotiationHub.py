@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Negotiation Hub - Central Multi-Robot Negotiation Coordinator
 =============================================================
@@ -26,10 +27,8 @@ from typing import Dict, Any, List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from config.Negotiation import (
-    NEGOTIATION_ENABLED,
     MAX_NEGOTIATION_ROUNDS,
     NEGOTIATION_TIMEOUT,
-    COLLABORATION_KEYWORDS,
     VERIFY_NEGOTIATED_PLANS,
     MAX_PLAN_LENGTH,
 )
@@ -187,7 +186,8 @@ class NegotiationHub:
         # Check for explicit multi-robot references (word-boundary match prevents
         # "Robot1" from matching inside "Robot10", "Robot1x", etc.)
         robot_refs = sum(
-            1 for rid in ROBOT_BASE_POSITIONS
+            1
+            for rid in ROBOT_BASE_POSITIONS
             if re.search(r"\b" + re.escape(rid.lower()) + r"\b", text_lower)
         )
         if robot_refs >= 2:
@@ -310,7 +310,9 @@ class NegotiationHub:
             result.rounds_taken = MAX_NEGOTIATION_ROUNDS
             result.duration_s = time.time() - start_time
             result.reasoning = "No consensus reached after max rounds"
-            logger.warning(f"Negotiation {session_id} failed after {MAX_NEGOTIATION_ROUNDS} rounds")
+            logger.warning(
+                f"Negotiation {session_id} failed after {MAX_NEGOTIATION_ROUNDS} rounds"
+            )
             return result
 
         except Exception as e:
@@ -338,6 +340,7 @@ class NegotiationHub:
         # Get available operations
         try:
             from core.Imports import get_global_registry
+
             registry = get_global_registry()
             available_ops = [op.name for op in registry.get_all_operations()]
         except Exception:
@@ -392,9 +395,7 @@ class NegotiationHub:
         Returns:
             PlanProposal or None if proposal failed
         """
-        contributors = [
-            rid for rid, a in session.analyses.items() if a.can_contribute
-        ]
+        contributors = [rid for rid, a in session.analyses.items() if a.can_contribute]
         if not contributors:
             return None
 
@@ -440,7 +441,8 @@ class NegotiationHub:
         # Only ask robots that can contribute — robots that set can_contribute=False
         # during analysis have nothing useful to evaluate, and querying them wastes LLM tokens.
         evaluator_ids = [
-            rid for rid, analysis in session.analyses.items()
+            rid
+            for rid, analysis in session.analyses.items()
             if rid != proposal.proposer_id and analysis.can_contribute
         ]
 
@@ -486,6 +488,7 @@ class NegotiationHub:
 
         try:
             from core.Imports import get_world_state
+
             ws = get_world_state()
 
             # Serialize robot states
@@ -567,7 +570,9 @@ class NegotiationHub:
         errors = []
 
         if len(commands) > MAX_PLAN_LENGTH:
-            errors.append(f"Plan too long: {len(commands)} commands (max {MAX_PLAN_LENGTH})")
+            errors.append(
+                f"Plan too long: {len(commands)} commands (max {MAX_PLAN_LENGTH})"
+            )
 
         if not commands:
             errors.append("Empty plan")
@@ -576,6 +581,7 @@ class NegotiationHub:
         # Use NegotiationVerifier for detailed checks
         try:
             from operations.NegotiationVerifier import NegotiationVerifier
+
             verifier = NegotiationVerifier()
             result = verifier.verify_plan(commands)
             errors.extend(result.errors)

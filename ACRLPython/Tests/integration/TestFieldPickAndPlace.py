@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Integration Test: Field Pick-and-Place (ATOMIC OPERATIONS)
 ============================================================
@@ -20,7 +21,6 @@ For positioned release, LLM must chain: move_to_coordinate → release_object
 import unittest
 from unittest.mock import patch, MagicMock
 from operations.FieldOperations import detect_field, get_field_center
-from operations.DetectionOperations import detect_objects
 from operations import GraspOperations
 from operations.MoveOperations import move_to_coordinate
 from operations.GripperOperations import release_object
@@ -105,11 +105,13 @@ class TestFieldPickAndPlace(unittest.TestCase):
         mock_gripper_broadcaster.return_value = mock_gripper_instance
 
         # Mock grasp_object to return success
-        mock_grasp_object.return_value = OperationResult.success_result({
-            "robot_id": "Robot1",
-            "object_id": "cube_on_field_d",
-            "success": True,
-        })
+        mock_grasp_object.return_value = OperationResult.success_result(
+            {
+                "robot_id": "Robot1",
+                "object_id": "cube_on_field_d",
+                "success": True,
+            }
+        )
 
         # ========================================================================
         # STEP 1: Detect field D
@@ -120,7 +122,9 @@ class TestFieldPickAndPlace(unittest.TestCase):
         self.assertTrue(result_field_d.success, "Field D detection failed")
         assert result_field_d.result is not None
         self.assertEqual(result_field_d.result["field_label"], "D")
-        self.assertEqual(result_field_d.result["center"], {"x": 0.2, "y": -0.1, "z": 0.0})
+        self.assertEqual(
+            result_field_d.result["center"], {"x": 0.2, "y": -0.1, "z": 0.0}
+        )
         print(f"✓ Step 1: Detected field D at {result_field_d.result['center']}")
 
         # ========================================================================
@@ -149,7 +153,9 @@ class TestFieldPickAndPlace(unittest.TestCase):
         self.assertTrue(result_field_e.success, "Field E detection failed")
         assert result_field_e.result is not None
         self.assertEqual(result_field_e.result["field_label"], "E")
-        self.assertEqual(result_field_e.result["center"], {"x": 0.3, "y": 0.1, "z": 0.0})
+        self.assertEqual(
+            result_field_e.result["center"], {"x": 0.3, "y": 0.1, "z": 0.0}
+        )
         print(f"✓ Step 3: Detected field E at {result_field_e.result['center']}")
 
         # ========================================================================
@@ -186,10 +192,14 @@ class TestFieldPickAndPlace(unittest.TestCase):
         # ========================================================================
 
         # Verify all operations were executed
-        self.assertEqual(mock_yolo_instance.detect_objects_stereo.call_count, 2)  # Field D + E
+        self.assertEqual(
+            mock_yolo_instance.detect_objects_stereo.call_count, 2
+        )  # Field D + E
 
         print("\n✓ Integration test PASSED: Field pick-and-place workflow complete")
-        print("  Workflow: detect_field(D) → grasp_object → detect_field(E) → move_to_coordinate(E) → release_object (atomic)")
+        print(
+            "  Workflow: detect_field(D) → grasp_object → detect_field(E) → move_to_coordinate(E) → release_object (atomic)"
+        )
 
     @patch("operations.FieldOperations.get_unified_image_storage")
     @patch("vision.YOLODetector.YOLODetector")

@@ -117,9 +117,7 @@ namespace Robotics
                 // Value is in meters (0=closed, 0.014=fully open) — clamp to valid jaw range.
                 float positionMeters = Mathf.Clamp((float)msg.position[0], 0f, 0.014f);
 
-                Debug.Log(
-                    $"{_logPrefix} Gripper command received: position={positionMeters:F4}m"
-                );
+                Debug.Log($"{_logPrefix} Gripper command received: position={positionMeters:F4}m");
 
                 // When closing, arm the attachment by finding the nearest Target-tagged object
                 // within the gripper's reach so GripperController.AttachObject fires.
@@ -136,7 +134,9 @@ namespace Robotics
                     }
                     else
                     {
-                        Debug.LogWarning($"{_logPrefix} Close command received but no graspable object found nearby");
+                        Debug.LogWarning(
+                            $"{_logPrefix} Close command received but no graspable object found nearby"
+                        );
                     }
                     _gripperController.CloseGrippers();
                 }
@@ -182,9 +182,10 @@ namespace Robotics
             {
                 // Average of both finger positions gives the centre of the gripper mouth
                 Vector3 left = _gripperController.leftGripper.transform.position;
-                Vector3 right = _gripperController.rightGripper != null
-                    ? _gripperController.rightGripper.transform.position
-                    : left;
+                Vector3 right =
+                    _gripperController.rightGripper != null
+                        ? _gripperController.rightGripper.transform.position
+                        : left;
                 searchOrigin = (left + right) * 0.5f;
             }
             else if (_gripperController.attachmentPoint != null)
@@ -225,15 +226,19 @@ namespace Robotics
             {
                 if (candidateCount > 1)
                     Debug.LogWarning(
-                        $"{_logPrefix} {candidateCount} Target-tagged objects within {searchRadius*100f:F0}cm — "
-                        + $"attaching to nearest ('{nearest.name}' at {nearestDist*100f:F1}cm). "
-                        + "Wrong object may be grasped in dense scenes."
+                        $"{_logPrefix} {candidateCount} Target-tagged objects within {searchRadius * 100f:F0}cm — "
+                            + $"attaching to nearest ('{nearest.name}' at {nearestDist * 100f:F1}cm). "
+                            + "Wrong object may be grasped in dense scenes."
                     );
                 else
-                    Debug.Log($"{_logPrefix} Found '{nearest.name}' at {nearestDist*100f:F1}cm from gripper centre");
+                    Debug.Log(
+                        $"{_logPrefix} Found '{nearest.name}' at {nearestDist * 100f:F1}cm from gripper centre"
+                    );
             }
             else
-                Debug.LogWarning($"{_logPrefix} No Target-tagged object within {searchRadius*100f:F0}cm of {searchOrigin}");
+                Debug.LogWarning(
+                    $"{_logPrefix} No Target-tagged object within {searchRadius * 100f:F0}cm of {searchOrigin}"
+                );
 
             return nearest;
         }

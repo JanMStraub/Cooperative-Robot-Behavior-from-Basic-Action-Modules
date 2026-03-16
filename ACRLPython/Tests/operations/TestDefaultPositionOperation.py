@@ -10,15 +10,13 @@ Tests the return to start position operation including:
 - Speed parameter validation
 """
 
-import pytest
 import time
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import Mock
 
 from operations.DefaultPositionOperation import (
     return_to_start_position,
     RETURN_TO_START_POSITION_OPERATION,
 )
-from operations.Base import OperationResult
 
 
 # ============================================================================
@@ -41,7 +39,9 @@ class TestReturnToStartPosition:
         assert "timestamp" in result.result
         patch_command_broadcaster.send_command.assert_called_once()
 
-    def test_return_to_start_position_with_custom_speed(self, patch_command_broadcaster):
+    def test_return_to_start_position_with_custom_speed(
+        self, patch_command_broadcaster
+    ):
         """Test return to start with custom speed."""
         result = return_to_start_position("Robot1", speed=0.5)
 
@@ -105,7 +105,9 @@ class TestReturnToStartPosition:
         assert result.error is not None
         assert result.error["code"] == "INVALID_SPEED"
 
-    def test_return_to_start_position_command_structure(self, patch_command_broadcaster):
+    def test_return_to_start_position_command_structure(
+        self, patch_command_broadcaster
+    ):
         """Test that return command has correct structure."""
         result = return_to_start_position("Robot1", speed=0.8, request_id=555)
 
@@ -121,7 +123,9 @@ class TestReturnToStartPosition:
         request_id = call_args[0][1]
         assert request_id == 555
 
-    def test_return_to_start_position_communication_failed(self, patch_command_broadcaster):
+    def test_return_to_start_position_communication_failed(
+        self, patch_command_broadcaster
+    ):
         """Test return when communication fails."""
         patch_command_broadcaster.send_command = Mock(return_value=False)
 
@@ -133,7 +137,9 @@ class TestReturnToStartPosition:
 
     def test_return_to_start_position_network_error(self, patch_command_broadcaster):
         """Test return when broadcaster raises exception."""
-        patch_command_broadcaster.send_command = Mock(side_effect=Exception("Network error"))
+        patch_command_broadcaster.send_command = Mock(
+            side_effect=Exception("Network error")
+        )
 
         result = return_to_start_position("Robot1")
 
@@ -246,7 +252,10 @@ class TestReturnOperationDefinition:
         """Test RETURN_TO_START_POSITION_OPERATION is properly defined."""
         assert RETURN_TO_START_POSITION_OPERATION is not None
         assert RETURN_TO_START_POSITION_OPERATION.name == "return_to_start_position"
-        assert RETURN_TO_START_POSITION_OPERATION.operation_id == "motion_return_to_start_001"
+        assert (
+            RETURN_TO_START_POSITION_OPERATION.operation_id
+            == "motion_return_to_start_001"
+        )
 
     def test_return_operation_has_metadata(self):
         """Test return operation has required metadata."""
@@ -274,9 +283,13 @@ class TestReturnOperationDefinition:
         assert op.failure_modes is not None
         assert len(op.failure_modes) > 0
 
-    def test_return_operation_execution_through_definition(self, patch_command_broadcaster):
+    def test_return_operation_execution_through_definition(
+        self, patch_command_broadcaster
+    ):
         """Test executing return operation through BasicOperation.execute()."""
-        result = RETURN_TO_START_POSITION_OPERATION.execute(robot_id="Robot1", speed=1.0)
+        result = RETURN_TO_START_POSITION_OPERATION.execute(
+            robot_id="Robot1", speed=1.0
+        )
 
         assert result.success is True
 
@@ -326,7 +339,10 @@ class TestReturnConcurrency:
             result = return_to_start_position(robot_id)
             results.append(result)
 
-        threads = [threading.Thread(target=return_worker, args=(f"Robot{i}",)) for i in range(1, 4)]
+        threads = [
+            threading.Thread(target=return_worker, args=(f"Robot{i}",))
+            for i in range(1, 4)
+        ]
         for t in threads:
             t.start()
         for t in threads:
@@ -375,7 +391,9 @@ class TestReturnEdgeCases:
 
     def test_return_with_all_parameters(self, patch_command_broadcaster):
         """Test return with all parameters specified."""
-        result = return_to_start_position(robot_id="AR4_Robot", speed=0.7, request_id=999)
+        result = return_to_start_position(
+            robot_id="AR4_Robot", speed=0.7, request_id=999
+        )
 
         assert result.success is True
         assert result.result is not None
@@ -454,7 +472,9 @@ class TestReturnErrorHandling:
         assert "recovery_suggestions" in result.error
         assert len(result.error["recovery_suggestions"]) > 0
 
-    def test_return_communication_failed_has_suggestions(self, patch_command_broadcaster):
+    def test_return_communication_failed_has_suggestions(
+        self, patch_command_broadcaster
+    ):
         """Test that communication failure provides recovery suggestions."""
         patch_command_broadcaster.send_command = Mock(return_value=False)
 
@@ -468,7 +488,9 @@ class TestReturnErrorHandling:
 
     def test_return_unexpected_error_has_suggestions(self, patch_command_broadcaster):
         """Test that unexpected error provides recovery suggestions."""
-        patch_command_broadcaster.send_command = Mock(side_effect=Exception("Test error"))
+        patch_command_broadcaster.send_command = Mock(
+            side_effect=Exception("Test error")
+        )
 
         result = return_to_start_position("Robot1")
 

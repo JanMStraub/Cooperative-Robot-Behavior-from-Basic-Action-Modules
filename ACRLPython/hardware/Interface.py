@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Interface.py - Abstract Hardware Interface for Robot Motion Execution
 
@@ -7,7 +8,6 @@ operation code never needs to know which backend is active.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any
 
 
 class RobotHardwareInterface(ABC):

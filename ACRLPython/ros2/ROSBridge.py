@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 ROS Bridge - Python Backend Client for ROS Motion Server
 =========================================================
@@ -55,6 +56,7 @@ class ROSBridge:
                 ROS_TIMEOUT_PER_CANDIDATE,
                 ROS_EXECUTION_TIMEOUT,
             )
+
             self._host = host or ROS_BRIDGE_HOST
             self._port = port or ROS_BRIDGE_PORT
             self._timeout_base = ROS_TIMEOUT_BASE
@@ -144,7 +146,9 @@ class ROSBridge:
         }
 
         # Adjust timeout based on number of candidates
-        adjusted_timeout = max(timeout, self._timeout_base + len(candidates) * self._timeout_per_candidate)
+        adjusted_timeout = max(
+            timeout, self._timeout_base + len(candidates) * self._timeout_per_candidate
+        )
 
         return self._send_command(cmd, timeout=adjusted_timeout)
 
@@ -185,7 +189,9 @@ class ROSBridge:
                 return json.loads(line)
 
             except socket.timeout:
-                logger.error(f"Timeout waiting for response to {command.get('command')}")
+                logger.error(
+                    f"Timeout waiting for response to {command.get('command')}"
+                )
                 return None
             except Exception as e:
                 logger.error(f"Error sending command: {e}")
@@ -273,7 +279,9 @@ class ROSBridge:
 
         return self._send_command(cmd, timeout=self._execution_timeout)
 
-    def plan_to_pose(self, position, orientation=None, planning_time=5.0, robot_id="Robot1"):
+    def plan_to_pose(
+        self, position, orientation=None, planning_time=5.0, robot_id="Robot1"
+    ):
         """
         Plan (but don't execute) a trajectory to target pose for a specific robot.
 
@@ -308,10 +316,12 @@ class ROSBridge:
         Returns:
             Dict with joint positions and names.
         """
-        return self._send_command({
-            "command": "get_current_pose",
-            "robot_id": robot_id,
-        })
+        return self._send_command(
+            {
+                "command": "get_current_pose",
+                "robot_id": robot_id,
+            }
+        )
 
     def control_gripper(self, position, robot_id="Robot1"):
         """
@@ -324,11 +334,13 @@ class ROSBridge:
         Returns:
             Dict with success status.
         """
-        return self._send_command({
-            "command": "control_gripper",
-            "robot_id": robot_id,
-            "position": position,
-        })
+        return self._send_command(
+            {
+                "command": "control_gripper",
+                "robot_id": robot_id,
+                "position": position,
+            }
+        )
 
     def plan_multi_waypoint(self, waypoints, robot_id="Robot1", planning_time=10.0):
         """
@@ -353,7 +365,9 @@ class ROSBridge:
         }
         return self._send_command(cmd, timeout=planning_time * len(waypoints) + 10)
 
-    def plan_orientation_change(self, orientation, robot_id="Robot1", planning_time=5.0):
+    def plan_orientation_change(
+        self, orientation, robot_id="Robot1", planning_time=5.0
+    ):
         """
         Plan and execute an orientation change while maintaining position.
 
@@ -374,7 +388,9 @@ class ROSBridge:
         }
         return self._send_command(cmd, timeout=self._execution_timeout)
 
-    def plan_grasp(self, object_id, robot_id="Robot1", approach="auto", planning_time=10.0):
+    def plan_grasp(
+        self, object_id, robot_id="Robot1", approach="auto", planning_time=10.0
+    ):
         """
         Plan and execute a grasp on an object via MoveIt.
 

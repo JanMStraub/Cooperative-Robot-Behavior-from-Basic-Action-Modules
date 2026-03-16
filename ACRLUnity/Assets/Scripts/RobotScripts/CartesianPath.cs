@@ -69,7 +69,6 @@ namespace RobotScripts
         public Vector3 position;
         public Quaternion rotation;
         public float distanceFromStart;
-        public float timeFromStart;
     }
 
     /// <summary>

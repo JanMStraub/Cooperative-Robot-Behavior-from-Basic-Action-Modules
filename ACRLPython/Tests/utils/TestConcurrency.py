@@ -12,17 +12,20 @@ the robot control system including:
 - Thread-safe queue operations
 """
 
-import pytest
 import numpy as np
 import threading
 import time
-from unittest.mock import Mock, patch, MagicMock
-from queue import Queue
+from unittest.mock import Mock, patch
 
 from servers.ImageServer import UnifiedImageStorage
 from servers.CommandServer import CommandBroadcaster
-from operations.Registry import OperationRegistry, get_global_registry
-from operations.Base import BasicOperation, OperationResult, OperationCategory, OperationComplexity
+from operations.Registry import get_global_registry
+from operations.Base import (
+    BasicOperation,
+    OperationResult,
+    OperationCategory,
+    OperationComplexity,
+)
 from operations.MoveOperations import move_to_coordinate
 from operations.WorldState import WorldState
 
@@ -30,6 +33,7 @@ from operations.WorldState import WorldState
 # ============================================================================
 # Test Concurrent Image Operations
 # ============================================================================
+
 
 class TestConcurrentImageOperations:
     """Test thread safety of ImageStorage"""
@@ -47,12 +51,16 @@ class TestConcurrentImageOperations:
                 for i in range(images_per_thread):
                     camera_id = f"cam_t{thread_id}_i{i}"
                     image = np.ones((50, 50, 3), dtype=np.uint8) * thread_id
-                    storage.store_single_image(camera_id, image, f"prompt_{thread_id}_{i}")
+                    storage.store_single_image(
+                        camera_id, image, f"prompt_{thread_id}_{i}"
+                    )
                     time.sleep(0.001)  # Small delay to increase contention
             except Exception as e:
                 errors.append(e)
 
-        threads = [threading.Thread(target=write_images, args=(i,)) for i in range(num_threads)]
+        threads = [
+            threading.Thread(target=write_images, args=(i,)) for i in range(num_threads)
+        ]
 
         for t in threads:
             t.start()
@@ -162,6 +170,7 @@ class TestConcurrentImageOperations:
 # Test Concurrent Command Broadcasting
 # ============================================================================
 
+
 class TestConcurrentCommandBroadcasting:
     """Test thread safety of CommandBroadcaster"""
 
@@ -171,6 +180,7 @@ class TestConcurrentCommandBroadcasting:
 
         # Mock server to allow commands to be queued
         from unittest.mock import Mock
+
         mock_server = Mock()
         broadcaster.set_server(mock_server)
 
@@ -186,7 +196,7 @@ class TestConcurrentCommandBroadcasting:
                     command = {
                         "command_type": "test",
                         "thread_id": thread_id,
-                        "index": i
+                        "index": i,
                     }
                     success = broadcaster.send_command(command)
                     if success:
@@ -195,7 +205,10 @@ class TestConcurrentCommandBroadcasting:
             except Exception as e:
                 errors.append(e)
 
-        threads = [threading.Thread(target=send_commands, args=(i,)) for i in range(num_threads)]
+        threads = [
+            threading.Thread(target=send_commands, args=(i,))
+            for i in range(num_threads)
+        ]
 
         for t in threads:
             t.start()
@@ -231,7 +244,9 @@ class TestConcurrentCommandBroadcasting:
             except Exception as e:
                 errors.append(e)
 
-        threads = [threading.Thread(target=create_and_use_queue, args=(i,)) for i in range(20)]
+        threads = [
+            threading.Thread(target=create_and_use_queue, args=(i,)) for i in range(20)
+        ]
 
         for t in threads:
             t.start()
@@ -245,6 +260,7 @@ class TestConcurrentCommandBroadcasting:
 # ============================================================================
 # Test Concurrent Registry Operations
 # ============================================================================
+
 
 class TestConcurrentRegistryOperations:
     """Test thread safety of OperationRegistry"""
@@ -272,7 +288,7 @@ class TestConcurrentRegistryOperations:
             average_duration_ms=10.0,
             success_rate=1.0,
             failure_modes=[],
-            implementation=test_impl
+            implementation=test_impl,
         )
 
         # Register manually if needed (use correct dict name: operations)
@@ -285,13 +301,17 @@ class TestConcurrentRegistryOperations:
         def execute_operation(thread_id):
             try:
                 for i in range(10):
-                    result = registry.execute_operation_by_name("test_concurrent", thread_id=thread_id, index=i)
+                    result = registry.execute_operation_by_name(
+                        "test_concurrent", thread_id=thread_id, index=i
+                    )
                     if result and result.success:
                         success_count[0] += 1
             except Exception as e:
                 errors.append(e)
 
-        threads = [threading.Thread(target=execute_operation, args=(i,)) for i in range(10)]
+        threads = [
+            threading.Thread(target=execute_operation, args=(i,)) for i in range(10)
+        ]
 
         for t in threads:
             t.start()
@@ -346,6 +366,7 @@ class TestConcurrentRegistryOperations:
 # Test Concurrent World State Updates
 # ============================================================================
 
+
 class TestConcurrentWorldStateUpdates:
     """Test thread safety of WorldState singleton"""
 
@@ -363,7 +384,7 @@ class TestConcurrentWorldStateUpdates:
                         position=(float(i) * 0.01, 0.0, 0.1),
                         rotation=(0.0, 0.0, 0.0),
                         joint_angles=[0.0] * 6,
-                        is_moving=(i % 2 == 0)
+                        is_moving=(i % 2 == 0),
                     )
                     time.sleep(0.001)
             except Exception as e:
@@ -402,7 +423,7 @@ class TestConcurrentWorldStateUpdates:
                         object_id=obj_id,
                         object_type="cube",
                         position=(float(i) * 0.1, 0.0, 0.0),
-                        graspable=True
+                        graspable=True,
                     )
                     time.sleep(0.001)
             except Exception as e:
@@ -410,8 +431,7 @@ class TestConcurrentWorldStateUpdates:
 
         # Register objects from 10 threads
         threads = [
-            threading.Thread(target=register_objects, args=(i, 20))
-            for i in range(10)
+            threading.Thread(target=register_objects, args=(i, 20)) for i in range(10)
         ]
 
         for t in threads:
@@ -436,7 +456,7 @@ class TestConcurrentWorldStateUpdates:
                 robot_id=f"Robot{i}",
                 position=(0.0, 0.0, 0.0),
                 rotation=(0.0, 0.0, 0.0),
-                joint_angles=[0.0] * 6
+                joint_angles=[0.0] * 6,
             )
 
         errors = []
@@ -462,7 +482,7 @@ class TestConcurrentWorldStateUpdates:
                             robot_id=f"Robot{i}",
                             position=(float(iteration) * 0.01, 0.0, 0.0),
                             rotation=(0.0, 0.0, 0.0),
-                            joint_angles=[0.0] * 6
+                            joint_angles=[0.0] * 6,
                         )
                         write_count[0] += 1
                     time.sleep(0.002)
@@ -488,6 +508,7 @@ class TestConcurrentWorldStateUpdates:
 # ============================================================================
 # Test Singleton Thread Safety
 # ============================================================================
+
 
 class TestSingletonThreadSafety:
     """Test thread safety of singleton initialization"""
@@ -555,6 +576,7 @@ class TestSingletonThreadSafety:
 # Test Race Conditions
 # ============================================================================
 
+
 class TestRaceConditions:
     """Test for potential race conditions"""
 
@@ -574,7 +596,9 @@ class TestRaceConditions:
                 errors.append(e)
 
         # Send many commands simultaneously
-        threads = [threading.Thread(target=send_and_track, args=(i,)) for i in range(100)]
+        threads = [
+            threading.Thread(target=send_and_track, args=(i,)) for i in range(100)
+        ]
 
         for t in threads:
             t.start()
@@ -587,8 +611,10 @@ class TestRaceConditions:
         # All commands should be tracked
         assert len(results) == 100
 
-    @patch('servers.CommandServer.get_command_broadcaster')
-    def test_operation_execution_race_condition(self, mock_broadcaster, cleanup_world_state):
+    @patch("servers.CommandServer.get_command_broadcaster")
+    def test_operation_execution_race_condition(
+        self, mock_broadcaster, cleanup_world_state
+    ):
         """Test for race conditions during operation execution"""
         # Mock broadcaster to return success
         mock_broadcaster.return_value.send_command = Mock(return_value=True)
@@ -599,10 +625,7 @@ class TestRaceConditions:
 
         def execute_move(robot_id, x, y, z):
             try:
-                result = move_to_coordinate(
-                    robot_id=robot_id,
-                    x=x, y=y, z=z
-                )
+                result = move_to_coordinate(robot_id=robot_id, x=x, y=y, z=z)
 
                 with lock:
                     execution_order.append(robot_id)

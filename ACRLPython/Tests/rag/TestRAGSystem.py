@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Test Cases for RAG System Integration
 ======================================
@@ -104,10 +105,11 @@ class TestRAGSystemIntegration:
         rag.vector_store.add_operation(
             "op_001",
             np.array([1.0, 0.0, 0.0]),
-            {"name": "move_to_coordinate", "category": "navigation"}
+            {"name": "move_to_coordinate", "category": "navigation"},
         )
 
         from rag.QueryEngine import QueryEngine
+
         rag.query_engine = QueryEngine(rag.vector_store, mock_emb, mock_reg)
 
         # Search
@@ -220,7 +222,9 @@ class TestRAGSystemIntegration:
     @patch("operations.Registry.get_global_registry")
     @patch("rag.EmbeddingGenerator")
     @patch("os.path.exists")
-    def test_index_loading_failure_recovery(self, mock_exists, mock_embedding_gen, mock_registry):
+    def test_index_loading_failure_recovery(
+        self, mock_exists, mock_embedding_gen, mock_registry
+    ):
         """Test RAG system recovers gracefully from index loading failures"""
         mock_reg = Mock()
         mock_registry.return_value = mock_reg
@@ -231,7 +235,9 @@ class TestRAGSystemIntegration:
         # Simulate index file exists but is corrupted
         mock_exists.return_value = True
 
-        with patch.object(VectorStore, "load", side_effect=Exception("Corrupted index")):
+        with patch.object(
+            VectorStore, "load", side_effect=Exception("Corrupted index")
+        ):
             rag = RAGSystem(auto_load_index=True)
 
             # Should initialize successfully despite load failure
@@ -256,7 +262,9 @@ class TestRAGSystemIntegration:
 
     @patch("operations.Registry.get_global_registry")
     @patch("rag.EmbeddingGenerator")
-    def test_get_operation_context_without_index(self, mock_embedding_gen, mock_registry):
+    def test_get_operation_context_without_index(
+        self, mock_embedding_gen, mock_registry
+    ):
         """Test get_operation_context returns error dict when index not built"""
         mock_reg = Mock()
         mock_registry.return_value = mock_reg
@@ -320,7 +328,9 @@ class TestRAGSystemIntegration:
 
     @patch("operations.Registry.get_global_registry")
     @patch("rag.EmbeddingGenerator")
-    def test_embedding_dimension_mismatch_handling(self, mock_embedding_gen, mock_registry):
+    def test_embedding_dimension_mismatch_handling(
+        self, mock_embedding_gen, mock_registry
+    ):
         """Test handling of embedding dimension mismatches"""
         mock_op = Mock()
         mock_op.operation_id = "op_001"
@@ -344,7 +354,9 @@ class TestRAGSystemIntegration:
             [np.random.rand(384).astype(np.float32)],
             [np.random.rand(256).astype(np.float32)],
         ]
-        mock_emb.generate_embedding.return_value = np.random.rand(256).astype(np.float32)
+        mock_emb.generate_embedding.return_value = np.random.rand(256).astype(
+            np.float32
+        )
         mock_embedding_gen.return_value = mock_emb
 
         rag = RAGSystem(auto_load_index=False)
@@ -363,7 +375,6 @@ class TestRAGSystemIntegration:
             # Dimension mismatch should be caught and handled
             assert "dimension" in str(e).lower() or "shape" in str(e).lower()
 
-
     @patch("operations.Registry.get_global_registry")
     @patch("rag.EmbeddingGenerator")
     @pytest.mark.slow
@@ -377,8 +388,12 @@ class TestRAGSystemIntegration:
             mock_op = Mock()
             mock_op.operation_id = f"op_{i:04d}"
             mock_op.name = f"operation_{i}"
-            mock_op.category = Mock(value=["navigation", "manipulation", "detection"][i % 3])
-            mock_op.complexity = Mock(value=["basic", "intermediate", "advanced"][i % 3])
+            mock_op.category = Mock(
+                value=["navigation", "manipulation", "detection"][i % 3]
+            )
+            mock_op.complexity = Mock(
+                value=["basic", "intermediate", "advanced"][i % 3]
+            )
             mock_op.description = f"Test operation {i} for category {i % 3}"
             mock_op.average_duration_ms = 1000.0 + (i * 10)
             mock_op.success_rate = 0.9 + (i % 10) * 0.01
@@ -396,7 +411,9 @@ class TestRAGSystemIntegration:
             np.random.rand(384).astype(np.float32) for _ in range(1000)
         ]
         # Mock query embedding
-        mock_emb.generate_embedding.return_value = np.random.rand(384).astype(np.float32)
+        mock_emb.generate_embedding.return_value = np.random.rand(384).astype(
+            np.float32
+        )
         mock_embedding_gen.return_value = mock_emb
 
         rag = RAGSystem(auto_load_index=False)
@@ -435,7 +452,9 @@ class TestRAGSystemIntegration:
         move_op.average_duration_ms = 2000.0
         move_op.success_rate = 0.95
         move_op.parameters = []
-        move_op.to_rag_document.return_value = "move_to_coordinate: Move robot to specified XYZ coordinate"
+        move_op.to_rag_document.return_value = (
+            "move_to_coordinate: Move robot to specified XYZ coordinate"
+        )
 
         grasp_op = Mock()
         grasp_op.operation_id = "grasp_001"
@@ -446,7 +465,9 @@ class TestRAGSystemIntegration:
         grasp_op.average_duration_ms = 5000.0
         grasp_op.success_rate = 0.85
         grasp_op.parameters = []
-        grasp_op.to_rag_document.return_value = "execute_grasp: Execute grasp operation to pick up object"
+        grasp_op.to_rag_document.return_value = (
+            "execute_grasp: Execute grasp operation to pick up object"
+        )
 
         detect_op = Mock()
         detect_op.operation_id = "detect_001"
@@ -457,14 +478,16 @@ class TestRAGSystemIntegration:
         detect_op.average_duration_ms = 1000.0
         detect_op.success_rate = 0.90
         detect_op.parameters = []
-        detect_op.to_rag_document.return_value = "detect_objects: Detect objects in camera view using color or ML"
+        detect_op.to_rag_document.return_value = (
+            "detect_objects: Detect objects in camera view using color or ML"
+        )
 
         mock_reg = Mock()
         mock_reg.get_all_operations.return_value = [move_op, grasp_op, detect_op]
         mock_reg.get_operation_by_id.side_effect = lambda op_id: {
             "move_001": move_op,
             "grasp_001": grasp_op,
-            "detect_001": detect_op
+            "detect_001": detect_op,
         }.get(op_id)
         mock_registry.return_value = mock_reg
 
@@ -477,7 +500,11 @@ class TestRAGSystemIntegration:
         detect_embedding = np.array([0.1, 0.1, 0.9] + [0.0] * 381, dtype=np.float32)
 
         mock_emb = Mock()
-        mock_emb.generate_embeddings.return_value = [move_embedding, grasp_embedding, detect_embedding]
+        mock_emb.generate_embeddings.return_value = [
+            move_embedding,
+            grasp_embedding,
+            detect_embedding,
+        ]
         mock_embedding_gen.return_value = mock_emb
 
         rag = RAGSystem(auto_load_index=False)
@@ -485,26 +512,32 @@ class TestRAGSystemIntegration:
         assert success is True
 
         # Test 1: Query similar to "move" should return move operation first
-        mock_emb.generate_embedding.return_value = np.array([0.85, 0.05, 0.05] + [0.0] * 381, dtype=np.float32)
+        mock_emb.generate_embedding.return_value = np.array(
+            [0.85, 0.05, 0.05] + [0.0] * 381, dtype=np.float32
+        )
         results = rag.search("move robot to position", top_k=3)
 
         assert len(results) > 0
         # First result should be move operation (highest similarity)
-        assert results[0]['operation_id'] == "move_001"
+        assert results[0]["operation_id"] == "move_001"
 
         # Test 2: Query similar to "grasp" should return grasp operation first
-        mock_emb.generate_embedding.return_value = np.array([0.05, 0.85, 0.05] + [0.0] * 381, dtype=np.float32)
+        mock_emb.generate_embedding.return_value = np.array(
+            [0.05, 0.85, 0.05] + [0.0] * 381, dtype=np.float32
+        )
         results = rag.search("pick up object", top_k=3)
 
         assert len(results) > 0
-        assert results[0]['operation_id'] == "grasp_001"
+        assert results[0]["operation_id"] == "grasp_001"
 
         # Test 3: Query similar to "detect" should return detect operation first
-        mock_emb.generate_embedding.return_value = np.array([0.05, 0.05, 0.85] + [0.0] * 381, dtype=np.float32)
+        mock_emb.generate_embedding.return_value = np.array(
+            [0.05, 0.05, 0.85] + [0.0] * 381, dtype=np.float32
+        )
         results = rag.search("find objects in scene", top_k=3)
 
         assert len(results) > 0
-        assert results[0]['operation_id'] == "detect_001"
+        assert results[0]["operation_id"] == "detect_001"
 
     @patch("operations.Registry.get_global_registry")
     @patch("rag.EmbeddingGenerator")
@@ -540,7 +573,9 @@ class TestRAGSystemIntegration:
         mock_emb.generate_embeddings.return_value = [
             np.random.rand(384).astype(np.float32) for _ in range(9)
         ]
-        mock_emb.generate_embedding.return_value = np.random.rand(384).astype(np.float32)
+        mock_emb.generate_embedding.return_value = np.random.rand(384).astype(
+            np.float32
+        )
         mock_embedding_gen.return_value = mock_emb
 
         rag = RAGSystem(auto_load_index=False)
@@ -558,7 +593,9 @@ class TestRAGSystemIntegration:
         assert len(basic_results) <= 3
 
         # Test both filters combined
-        nav_basic_results = rag.search("test query", top_k=10, category="navigation", complexity="basic")
+        nav_basic_results = rag.search(
+            "test query", top_k=10, category="navigation", complexity="basic"
+        )
         # Should return only navigation + basic (1 total: op 0)
         assert len(nav_basic_results) <= 1
 

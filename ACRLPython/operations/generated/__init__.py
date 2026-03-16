@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Generated Operations Loader
 ===============================
@@ -12,7 +13,6 @@ Each generated file is expected to contain:
 
 import importlib.util
 import logging
-import os
 from pathlib import Path
 from typing import List, Tuple
 
@@ -39,7 +39,9 @@ def load_generated_operations() -> List[Tuple[str, str]]:
             GENERATED_OPERATIONS_DIR,
         )
     except ImportError:
-        logger.debug("DynamicOperations config not available, skipping generated operations")
+        logger.debug(
+            "DynamicOperations config not available, skipping generated operations"
+        )
         return []
 
     if not ENABLE_DYNAMIC_OPERATIONS:
@@ -62,14 +64,18 @@ def load_generated_operations() -> List[Tuple[str, str]]:
             status = _get_review_status(py_file)
 
             if REQUIRE_USER_REVIEW and status != "APPROVED":
-                logger.debug(f"Skipping unapproved operation: {py_file.name} (status: {status})")
+                logger.debug(
+                    f"Skipping unapproved operation: {py_file.name} (status: {status})"
+                )
                 continue
 
             # Load the module
             operation = _load_operation_from_file(py_file)
             if operation:
                 loaded.append((operation.name, str(py_file)))
-                logger.info(f"Loaded generated operation: {operation.name} from {py_file.name}")
+                logger.info(
+                    f"Loaded generated operation: {operation.name} from {py_file.name}"
+                )
 
         except Exception as e:
             logger.warning(f"Failed to load generated operation {py_file.name}: {e}")
@@ -163,10 +169,7 @@ def get_generated_operations_count() -> int:
     if not generated_dir.exists():
         return 0
 
-    return sum(
-        1 for f in generated_dir.glob("*.py")
-        if f.name != "__init__.py"
-    )
+    return sum(1 for f in generated_dir.glob("*.py") if f.name != "__init__.py")
 
 
 def set_review_status(file_path: str, status: str) -> bool:

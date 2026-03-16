@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Test Cases for RAG Vector Store
 ================================
@@ -193,13 +194,19 @@ class TestVectorStore:
         store = VectorStore()
 
         store.add_operation(
-            "op_001", np.array([0.1, 0.2]), {"name": "op1", "category": "navigation", "complexity": "basic"}
+            "op_001",
+            np.array([0.1, 0.2]),
+            {"name": "op1", "category": "navigation", "complexity": "basic"},
         )
         store.add_operation(
-            "op_002", np.array([0.3, 0.4]), {"name": "op2", "category": "manipulation", "complexity": "basic"}
+            "op_002",
+            np.array([0.3, 0.4]),
+            {"name": "op2", "category": "manipulation", "complexity": "basic"},
         )
         store.add_operation(
-            "op_003", np.array([0.5, 0.6]), {"name": "op3", "category": "navigation", "complexity": "intermediate"}
+            "op_003",
+            np.array([0.5, 0.6]),
+            {"name": "op3", "category": "navigation", "complexity": "intermediate"},
         )
 
         stats = store.get_stats()

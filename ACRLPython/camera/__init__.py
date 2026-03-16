@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 camera/__init__.py - Camera Provider Factory
 
@@ -35,8 +36,10 @@ def get_camera_provider(env: str = "sim") -> "CameraProvider":
     if _instance is None:
         if env == "real":
             from camera.LocalProvider import LocalProvider
+
             _instance = LocalProvider()
         else:
             from camera.UnityProvider import UnityProvider
+
             _instance = UnityProvider()
     return _instance

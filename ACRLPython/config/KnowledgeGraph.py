@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Knowledge Graph Configuration
 ==============================
@@ -13,7 +14,9 @@ Environment variable overrides:
 import os
 
 # Master switch: enable/disable knowledge graph (off by default)
-KNOWLEDGE_GRAPH_ENABLED = os.environ.get("KNOWLEDGE_GRAPH_ENABLED", "false").lower() in (
+KNOWLEDGE_GRAPH_ENABLED = os.environ.get(
+    "KNOWLEDGE_GRAPH_ENABLED", "false"
+).lower() in (
     "true",
     "1",
     "yes",

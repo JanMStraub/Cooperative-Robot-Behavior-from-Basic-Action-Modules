@@ -13,10 +13,12 @@ Tests:
 import time
 import pytest
 import numpy as np
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
-from operations.PointCloudOperations import generate_point_cloud, GENERATE_POINT_CLOUD_OPERATION
-from operations.Base import OperationResult
+from operations.PointCloudOperations import (
+    generate_point_cloud,
+    GENERATE_POINT_CLOUD_OPERATION,
+)
 
 
 def _load_backend_client():
@@ -28,12 +30,15 @@ def _load_backend_client():
     """
     import importlib.util
     import os
+
     helper_path = os.path.join(
         os.path.dirname(__file__), "..", "integration", "helpers", "backend_client.py"
     )
     spec = importlib.util.spec_from_file_location("backend_client", helper_path)
+    assert spec is not None
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)  # type: ignore[union-attr]
     return module.BackendClient
 
 
@@ -46,6 +51,7 @@ def _backend_available() -> bool:
     """
     try:
         import socket as _socket
+
         sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
         sock.settimeout(2.0)
         result = sock.connect_ex(("localhost", 5013))
@@ -56,7 +62,9 @@ def _backend_available() -> bool:
 
 
 _STEREO_AVAILABLE = _backend_available()
-_STEREO_SKIP = "Backend not reachable on port 5013 — run Unity and start the backend servers"
+_STEREO_SKIP = (
+    "Backend not reachable on port 5013 — run Unity and start the backend servers"
+)
 
 
 # ============================================================================
@@ -92,7 +100,13 @@ def _make_storage_mock(
             "camera_rotation": [0.0, 0.0, 0.0, 1.0],
         }
     storage = Mock()
-    storage.get_latest_stereo_image.return_value = (left, right, "", timestamp, metadata)
+    storage.get_latest_stereo_image.return_value = (
+        left,
+        right,
+        "",
+        timestamp,
+        metadata,
+    )
     return storage
 
 
@@ -137,6 +151,7 @@ class TestGeneratePointCloud:
         result = generate_point_cloud("Robot1")
 
         assert result.success, f"Expected success but got error: {result.error}"
+        assert result.result is not None
         r = result.result
         assert "points" in r
         assert "colors" in r
@@ -158,6 +173,7 @@ class TestGeneratePointCloud:
         result = generate_point_cloud("Robot1", max_age_seconds=2.0)
 
         assert not result.success
+        assert result.error is not None
         assert result.error["code"] == "STALE_IMAGE"
 
     def test_no_stereo_images_available(self, monkeypatch):
@@ -169,6 +185,7 @@ class TestGeneratePointCloud:
         result = generate_point_cloud("Robot1")
 
         assert not result.success
+        assert result.error is not None
         assert result.error["code"] == "NO_STEREO_IMAGES"
 
     def test_incomplete_stereo_pair(self, monkeypatch):
@@ -180,6 +197,7 @@ class TestGeneratePointCloud:
         result = generate_point_cloud("Robot1")
 
         assert not result.success
+        assert result.error is not None
         assert result.error["code"] == "INCOMPLETE_STEREO_PAIR"
 
     def test_downsample_applied_when_above_max_points(self, monkeypatch):
@@ -199,6 +217,7 @@ class TestGeneratePointCloud:
         result = generate_point_cloud("Robot1", max_points=max_pts)
 
         assert result.success
+        assert result.result is not None
         assert result.result["point_count"] == max_pts
         assert len(result.result["points"]) == max_pts
 
@@ -208,7 +227,10 @@ class TestGeneratePointCloud:
         storage = _make_storage_mock(left, right)
         self._patch_storage(monkeypatch, storage)
 
-        pts = np.array([[1.0, 2.0, 3.0], [float("nan"), 0.0, 0.0], [4.0, 5.0, 6.0]], dtype=np.float32)
+        pts = np.array(
+            [[1.0, 2.0, 3.0], [float("nan"), 0.0, 0.0], [4.0, 5.0, 6.0]],
+            dtype=np.float32,
+        )
         clr = np.zeros((3, 3), dtype=np.uint8)
         fake_pc = {"points": pts, "colors": clr}
         self._patch_reconstruct(monkeypatch, fake_pc)
@@ -216,6 +238,7 @@ class TestGeneratePointCloud:
         result = generate_point_cloud("Robot1")
 
         assert result.success
+        assert result.result is not None
         # Only the 2 valid points should remain
         assert result.result["point_count"] == 2
 
@@ -242,6 +265,7 @@ class TestGeneratePointCloud:
         result = generate_point_cloud("Robot1")
 
         assert result.success
+        assert result.result is not None
         assert result.result["camera_position"] == pytest.approx(expected_pos)
 
     def test_operation_definition_has_implementation(self):
@@ -329,6 +353,6 @@ class TestGeneratePointCloudIntegration:
         cmd_results = result_dict.get("results", [{}])
         r = cmd_results[0].get("result", {}) if cmd_results else {}
         cam_pos = r.get("camera_position", [0, 0, 0])
-        assert any(abs(v) > 1e-3 for v in cam_pos), (
-            "camera_position is all zeros — check Unity stereo camera metadata"
-        )
+        assert any(
+            abs(v) > 1e-3 for v in cam_pos
+        ), "camera_position is all zeros — check Unity stereo camera metadata"

@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Field Detection Operations
 ===========================
@@ -493,8 +494,7 @@ def create_detect_field_operation() -> BasicOperation:
             ),
         ],
         preconditions=[],
-        postconditions=[
-        ],
+        postconditions=[],
         average_duration_ms=100,
         success_rate=0.92,
         failure_modes=[

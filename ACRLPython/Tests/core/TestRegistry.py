@@ -23,13 +23,14 @@ from operations.Base import (
     OperationCategory,
     OperationComplexity,
     OperationParameter,
-    OperationResult
+    OperationResult,
 )
 
 
 # ============================================================================
 # Fixtures
 # ============================================================================
+
 
 @pytest.fixture
 def sample_operation():
@@ -39,6 +40,7 @@ def sample_operation():
     Returns:
         BasicOperation instance
     """
+
     def test_impl(**kwargs):
         return OperationResult.success_result({"executed": True})
 
@@ -55,7 +57,7 @@ def sample_operation():
                 name="robot_id",
                 type="str",
                 description="Robot identifier",
-                required=True
+                required=True,
             )
         ],
         preconditions=["Robot is initialized"],
@@ -66,7 +68,7 @@ def sample_operation():
         required_operations=[],
         commonly_paired_with=[],
         mutually_exclusive_with=[],
-        implementation=test_impl
+        implementation=test_impl,
     )
     return op
 
@@ -81,6 +83,7 @@ def clean_registry():
     """
     # Reset global registry
     import operations.Registry as registry_module
+
     registry_module._global_registry = None
 
     registry = OperationRegistry()
@@ -90,6 +93,7 @@ def clean_registry():
 # ============================================================================
 # Test Class: Registration & Lookup
 # ============================================================================
+
 
 class TestRegistryRegistration:
     """Test operation registration and lookup."""
@@ -166,6 +170,7 @@ class TestRegistryRegistration:
 # Test Class: Execution
 # ============================================================================
 
+
 class TestRegistryExecution:
     """Test operation execution through registry."""
 
@@ -174,8 +179,7 @@ class TestRegistryExecution:
         clean_registry.operations[sample_operation.operation_id] = sample_operation
 
         result = clean_registry.execute_operation(
-            sample_operation.operation_id,
-            robot_id="Robot1"
+            sample_operation.operation_id, robot_id="Robot1"
         )
 
         assert result.success is True
@@ -186,8 +190,7 @@ class TestRegistryExecution:
         clean_registry.operations[sample_operation.operation_id] = sample_operation
 
         result = clean_registry.execute_operation_by_name(
-            "test_operation",
-            robot_id="Robot1"
+            "test_operation", robot_id="Robot1"
         )
 
         assert result.success is True
@@ -217,6 +220,7 @@ class TestRegistryExecution:
 # Test Class: Filtering
 # ============================================================================
 
+
 class TestRegistryFiltering:
     """Test operation filtering by category and complexity."""
 
@@ -243,10 +247,14 @@ class TestRegistryFiltering:
         clean_registry.operations[sample_operation.operation_id] = sample_operation
 
         # Get navigation operations
-        nav_ops = clean_registry.get_operations_by_category(OperationCategory.NAVIGATION)
+        nav_ops = clean_registry.get_operations_by_category(
+            OperationCategory.NAVIGATION
+        )
 
         # Further filter by basic complexity
-        basic_nav_ops = [op for op in nav_ops if op.complexity == OperationComplexity.BASIC]
+        basic_nav_ops = [
+            op for op in nav_ops if op.complexity == OperationComplexity.BASIC
+        ]
 
         assert len(basic_nav_ops) > 0
         assert all(op.category == OperationCategory.NAVIGATION for op in basic_nav_ops)
@@ -256,6 +264,7 @@ class TestRegistryFiltering:
 # ============================================================================
 # Test Class: Concurrency
 # ============================================================================
+
 
 class TestRegistryConcurrency:
     """Test concurrent access to registry."""
@@ -270,8 +279,7 @@ class TestRegistryConcurrency:
         def execute_op():
             try:
                 result = clean_registry.execute_operation_by_name(
-                    "test_operation",
-                    robot_id="Robot1"
+                    "test_operation", robot_id="Robot1"
                 )
                 results.append(result)
             except Exception as e:
@@ -326,6 +334,7 @@ class TestRegistryConcurrency:
 # Test Class: Performance
 # ============================================================================
 
+
 class TestRegistryPerformance:
     """Test registry performance with many operations."""
 
@@ -347,6 +356,7 @@ class TestRegistryPerformance:
 # ============================================================================
 # Test Class: Export and Documentation
 # ============================================================================
+
 
 class TestRegistryExport:
     """Test registry export and documentation generation."""
@@ -382,6 +392,7 @@ class TestRegistryExport:
 # Test Class: Global Registry Singleton
 # ============================================================================
 
+
 class TestGlobalRegistry:
     """Test global registry singleton."""
 
@@ -398,4 +409,3 @@ class TestGlobalRegistry:
 
         ops = registry.get_all_operations()
         assert len(ops) > 0
-

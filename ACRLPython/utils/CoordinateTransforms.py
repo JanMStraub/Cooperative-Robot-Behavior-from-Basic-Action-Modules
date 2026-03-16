@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Coordinate transformation utilities for Unity-ROS integration.
 
@@ -11,7 +12,7 @@ Robot base positions and rotations are configured to match the Unity scene setup
 
 import math
 import numpy as np
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple
 
 
 # Robot base positions and rotations in Unity world coordinates
@@ -24,7 +25,9 @@ ROBOT_BASE_TRANSFORMS = {
 }
 
 
-def world_to_robot_frame(world_pos: Dict[str, float], robot_id: str) -> Dict[str, float]:
+def world_to_robot_frame(
+    world_pos: Dict[str, float], robot_id: str
+) -> Dict[str, float]:
     """
     Transform a position from Unity world coordinates to robot-local ROS frame.
 
@@ -79,7 +82,9 @@ def world_to_robot_frame(world_pos: Dict[str, float], robot_id: str) -> Dict[str
     return {"x": ros_x, "y": ros_y, "z": ros_z}
 
 
-def robot_to_world_frame(local_pos: Dict[str, float], robot_id: str) -> Dict[str, float]:
+def robot_to_world_frame(
+    local_pos: Dict[str, float], robot_id: str
+) -> Dict[str, float]:
     """
     Transform a position from robot-local ROS frame to Unity world coordinates.
 
@@ -170,11 +175,14 @@ def _build_np_transform_cache() -> Dict[str, Dict]:
         # ros_x = rotated_z = -s*ux + c*uz
         # ros_y = -rotated_x = -(c*ux + s*uz) = -c*ux - s*uz
         # ros_z = rotated_y = uy
-        fwd = np.array([
-            [-s,  0.0,  c],   # ros_x row
-            [-c,  0.0, -s],   # ros_y row
-            [0.0, 1.0,  0.0], # ros_z row
-        ], dtype=float)
+        fwd = np.array(
+            [
+                [-s, 0.0, c],  # ros_x row
+                [-c, 0.0, -s],  # ros_y row
+                [0.0, 1.0, 0.0],  # ros_z row
+            ],
+            dtype=float,
+        )
 
         cache[robot_id] = {
             "base": base,
@@ -187,9 +195,7 @@ def _build_np_transform_cache() -> Dict[str, Dict]:
 _NP_TRANSFORM_CACHE: Dict[str, Dict] = _build_np_transform_cache()
 
 
-def world_to_robot_frame_np(
-    world_pos: np.ndarray, robot_id: str
-) -> np.ndarray:
+def world_to_robot_frame_np(world_pos: np.ndarray, robot_id: str) -> np.ndarray:
     """
     Transform a position from Unity world to robot ROS frame (NumPy version).
 
@@ -216,9 +222,7 @@ def world_to_robot_frame_np(
     return entry["fwd"] @ unity_local
 
 
-def robot_to_world_frame_np(
-    local_pos: np.ndarray, robot_id: str
-) -> np.ndarray:
+def robot_to_world_frame_np(local_pos: np.ndarray, robot_id: str) -> np.ndarray:
     """
     Transform a position from robot ROS frame to Unity world (NumPy version).
 

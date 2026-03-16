@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Unit Tests for Basic Operations (Level 1-2)
 ============================================
@@ -97,7 +98,9 @@ class TestAdjustEndEffectorOrientation(unittest.TestCase):
         """Test successful orientation adjustment"""
         mock_broadcaster().send_command = MagicMock(return_value=True)
 
-        result = adjust_end_effector_orientation("Robot1", roll=90.0, pitch=0.0, yaw=45.0)
+        result = adjust_end_effector_orientation(
+            "Robot1", roll=90.0, pitch=0.0, yaw=45.0
+        )
 
         self.assertTrue(result.success)
         assert result.result is not None
@@ -153,7 +156,9 @@ class TestReleaseObject(unittest.TestCase):
     @patch("config.ROS.ROS_ENABLED", False)
     @patch("operations.MoveOperations._get_command_broadcaster")
     @patch("operations.GripperOperations._get_command_broadcaster")
-    def test_release_object_chaining_with_move(self, mock_gripper_broadcaster, mock_move_broadcaster):
+    def test_release_object_chaining_with_move(
+        self, mock_gripper_broadcaster, mock_move_broadcaster
+    ):
         """Test chaining: move_to_coordinate → release_object (LLM pattern)"""
         from operations.MoveOperations import move_to_coordinate
 

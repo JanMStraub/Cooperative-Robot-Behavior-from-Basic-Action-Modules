@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Spatial Predicates for Robot Operations
 ========================================
@@ -33,6 +34,7 @@ except ImportError:
 
 # Configure logging
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 # Global predicate registry
@@ -648,7 +650,10 @@ def object_not_stale(object_id: str, world_state=None) -> Tuple[bool, str]:
         return False, f"Object '{object_id}' not found in world state"
 
     if obj.stale:
-        return False, f"Object '{object_id}' is stale (confidence: {obj.confidence:.2f})"
+        return (
+            False,
+            f"Object '{object_id}' is stale (confidence: {obj.confidence:.2f})",
+        )
 
     return True, ""
 

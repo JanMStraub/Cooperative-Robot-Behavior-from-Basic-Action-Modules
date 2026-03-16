@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Review Tool for Generated Operations
 =======================================
@@ -98,9 +99,7 @@ def cmd_list(filter_status: Optional[str] = None):
     operations = _get_operations()
 
     if filter_status:
-        operations = [
-            op for op in operations if op["review_status"] == filter_status
-        ]
+        operations = [op for op in operations if op["review_status"] == filter_status]
 
     if not operations:
         print("No generated operations found.")
@@ -111,7 +110,11 @@ def cmd_list(filter_status: Optional[str] = None):
 
     for op in operations:
         status = op["review_status"]
-        status_display = f"\033[33m{status}\033[0m" if status == "PENDING" else f"\033[32m{status}\033[0m"
+        status_display = (
+            f"\033[33m{status}\033[0m"
+            if status == "PENDING"
+            else f"\033[32m{status}\033[0m"
+        )
         print(
             f"{op['id']:<4} {status:<10} {op['generated_at']:<20} "
             f"{op['original_command'][:40]:<40} {op['filename']}"

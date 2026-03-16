@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Test Dual-Robot ROS Control
 ============================
@@ -28,6 +29,7 @@ from ros2.ROSBridge import ROSBridge
 
 # Configure logging
 from core.LoggingSetup import get_logger
+
 logger = get_logger(__name__)
 
 
@@ -167,9 +169,13 @@ def test_simultaneous_motion():
     else:
         errors = []
         if not success1:
-            errors.append(f"Robot1: {result1.get('error', 'Unknown') if result1 else 'No response'}")
+            errors.append(
+                f"Robot1: {result1.get('error', 'Unknown') if result1 else 'No response'}"
+            )
         if not success2:
-            errors.append(f"Robot2: {result2.get('error', 'Unknown') if result2 else 'No response'}")
+            errors.append(
+                f"Robot2: {result2.get('error', 'Unknown') if result2 else 'No response'}"
+            )
         pytest.fail(f"Simultaneous motion failed - {'; '.join(errors)}")
 
 

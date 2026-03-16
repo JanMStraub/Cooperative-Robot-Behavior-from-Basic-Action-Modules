@@ -85,7 +85,7 @@ class TestVisionProcessor(unittest.TestCase):
         self.assertTrue(processor.enable_tracking)
         self.assertIsNotNone(processor.tracker)
 
-    @patch('vision.VisionProcessor._get_storage')
+    @patch("vision.VisionProcessor._get_storage")
     def test_start_stop(self, mock_get_storage):
         """Test starting and stopping processor"""
         mock_get_storage.return_value = create_mock_storage()
@@ -365,9 +365,7 @@ class TestVisionProcessorConfiguration(unittest.TestCase):
         # Note: May fail to import SharedVisionState in test environment
         # Test verifies configuration flag is set correctly
         try:
-            processor = VisionProcessor(
-                detector, fps=5.0, enable_shared_state=True
-            )
+            processor = VisionProcessor(detector, fps=5.0, enable_shared_state=True)
             # If import succeeds, should be enabled
             # If import fails, should fall back to disabled
             self.assertIsNotNone(processor.enable_shared_state)
