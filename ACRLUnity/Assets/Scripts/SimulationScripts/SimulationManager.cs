@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using Configuration;
 using Robotics;
-using Simulation.CoordinationStrategies;
 using UnityEngine;
 #if UNITY_EDITOR
 using UnityEditor;
@@ -34,7 +33,7 @@ namespace Simulation
             EditorGUILayout.LabelField("Simulation Controls", EditorStyles.boldLabel);
 
             EditorGUILayout.LabelField($"Current State: {manager.CurrentState}");
-            EditorGUILayout.LabelField($"Active Robot: {manager.GetActiveRobotId()}");
+            EditorGUILayout.LabelField("Active Robot: All");
 
             EditorGUILayout.Space();
 
@@ -73,17 +72,13 @@ namespace Simulation
         [SerializeField]
         public SimulationConfig config;
 
-        [SerializeField]
-        private CoordinationConfig _coordinationConfig;
-
         private RobotController[] _robotControllers;
         private SimulationState _currentState = SimulationState.Paused;
         private SimulationState _previousState = SimulationState.Paused;
-        private ICoordinationStrategy _coordinationStrategy;
 
         /// <summary>
         /// Set to true in Start() when a fatal configuration error prevents
-        /// the simulation from running (e.g. no robots found, strategy null).
+        /// the simulation from running (e.g. no robots found).
         /// Guards Update() and other periodic methods from executing with bad state.
         /// </summary>
         private bool _initializationFailed = false;
@@ -209,17 +204,8 @@ namespace Simulation
                     return;
                 }
 
-                InitializeCoordinationStrategy();
-
-                if (_coordinationStrategy == null)
-                {
-                    _initializationFailed = true;
-                    HandleError("Coordination strategy failed to initialize.");
-                    return;
-                }
-
                 Debug.Log(
-                    $"{_logPrefix} Initialized: {totalRobots} robots found. Mode: {config.coordinationMode}"
+                    $"{_logPrefix} Initialized: {totalRobots} robots found"
                 );
 
                 if (config.autoStart)
@@ -238,96 +224,14 @@ namespace Simulation
         }
 
         /// <summary>
-        /// Updates robot coordination each frame when simulation is running.
+        /// Unity Update callback - guards against bad initialization state.
         /// </summary>
         private void Update()
         {
-            if (_initializationFailed || !IsRunning || _coordinationStrategy == null || _robotControllers == null)
+            if (_initializationFailed || !IsRunning || _robotControllers == null)
             {
                 return;
             }
-
-            UpdateRobotCoordination();
-        }
-
-        /// <summary>
-        /// Initializes the coordination strategy based on the current configuration.
-        /// </summary>
-        private void InitializeCoordinationStrategy()
-        {
-            if (
-                _coordinationConfig == null
-                && config.coordinationMode == RobotCoordinationMode.Collaborative
-            )
-            {
-                Debug.LogWarning(
-                    $"{_logPrefix} CoordinationConfig not assigned. Creating default configuration."
-                );
-                _coordinationConfig = ScriptableObject.CreateInstance<CoordinationConfig>();
-            }
-
-            _coordinationStrategy = config.coordinationMode switch
-            {
-                RobotCoordinationMode.Sequential => new SequentialStrategy(),
-                RobotCoordinationMode.Independent => new IndependentStrategy(),
-                RobotCoordinationMode.Collaborative => new CollaborativeStrategy(
-                    _coordinationConfig
-                ),
-                RobotCoordinationMode.MasterSlave => LogFallbackAndReturn(
-                    "MasterSlave coordination mode is not implemented. Falling back to Independent.",
-                    new IndependentStrategy()
-                ),
-                RobotCoordinationMode.Distributed => LogFallbackAndReturn(
-                    "Distributed coordination mode is not implemented. Falling back to Independent.",
-                    new IndependentStrategy()
-                ),
-                RobotCoordinationMode.Negotiated => new NegotiatedStrategy(),
-                _ => new IndependentStrategy(),
-            };
-
-            if (config.coordinationMode == RobotCoordinationMode.Collaborative)
-            {
-                if (WorkspaceManager.Instance != null)
-                {
-                    Debug.Log(
-                        $"{_logPrefix} WorkspaceManager active for collaborative coordination"
-                    );
-                }
-                else
-                {
-                    Debug.LogWarning(
-                        $"{_logPrefix} WorkspaceManager not found! "
-                            + "Collaborative mode will operate without workspace management. "
-                            + "Add WorkspaceManager GameObject to scene for full features."
-                    );
-                }
-            }
-        }
-
-        /// <summary>
-        /// Emits a warning log and returns the given strategy. Used in switch expressions
-        /// where unimplemented modes fall back to IndependentStrategy.
-        /// </summary>
-        private ICoordinationStrategy LogFallbackAndReturn(string message, ICoordinationStrategy fallback)
-        {
-            Debug.LogWarning($"{_logPrefix} {message}");
-            return fallback;
-        }
-
-        /// <summary>
-        /// Updates robot coordination using the current strategy.
-        /// </summary>
-        private void UpdateRobotCoordination()
-        {
-            if (
-                !IsRunning
-                || _robotControllers == null
-                || _robotControllers.Length == 0
-                || _coordinationStrategy == null
-            )
-                return;
-
-            _coordinationStrategy.Update(_robotControllers, _robotTargetReached);
         }
 
         /// <summary>
@@ -375,9 +279,6 @@ namespace Simulation
                 );
                 return;
             }
-
-            // Re-initialize coordination strategy in case the mode was changed after Initialize()
-            InitializeCoordinationStrategy();
 
             ChangeState(SimulationState.Running);
         }
@@ -473,8 +374,6 @@ namespace Simulation
 
             yield return new WaitForFixedUpdate();
 
-            _coordinationStrategy?.Reset();
-
             Debug.Log($"{_logPrefix} Reset completed");
 
             _activeResetCoroutine = null;
@@ -490,31 +389,6 @@ namespace Simulation
         }
 
         /// <summary>
-        /// Gets the ID of the currently active robot based on the coordination strategy.
-        /// </summary>
-        /// <returns>The active robot ID, or "None" if no active robot</returns>
-        public string GetActiveRobotId()
-        {
-            if (_coordinationStrategy == null)
-                return "None";
-
-            return _coordinationStrategy.GetActiveRobotId();
-        }
-
-        /// <summary>
-        /// Checks if a specific robot is allowed to move based on the coordination strategy.
-        /// </summary>
-        /// <param name="robotId">The robot identifier to check</param>
-        /// <returns>True if the robot is allowed to move, false otherwise</returns>
-        public bool IsRobotActive(string robotId)
-        {
-            if (!IsRunning || _coordinationStrategy == null)
-                return false;
-
-            return _coordinationStrategy.IsRobotActive(robotId);
-        }
-
-        /// <summary>
         /// Notifies the manager that a robot has reached or is moving towards its target.
         /// Works for both Unity IK and ROS trajectory paths.
         /// </summary>
@@ -523,11 +397,6 @@ namespace Simulation
         public void NotifyTargetReached(string robotId, bool reached)
         {
             _robotTargetReached[robotId] = reached;
-
-            if (reached && config.coordinationMode == RobotCoordinationMode.Sequential)
-            {
-                Debug.Log($"{_logPrefix} Robot {robotId} reached target in sequential mode");
-            }
         }
 
         /// <summary>

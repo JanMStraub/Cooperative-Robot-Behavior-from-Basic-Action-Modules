@@ -9,11 +9,11 @@ using Simulation;
 namespace Tests.PlayMode
 {
     /// <summary>
-    /// Tests for PythonCommandHandler Phase 4 additions.
-    /// Validates movement verification with workspace management and collision detection.
+    /// Tests for PythonCommandHandler geometry-based verification with WorkspaceManager.
     ///
-    /// Note: These tests focus on the verification logic. Full command execution tests
-    /// require RobotManager and network components which are tested separately.
+    /// Note: Allocation/collision-zone logic has been removed — all coordination decisions
+    /// are made by Python via signal/wait. These tests verify the remaining pure geometry
+    /// queries (safe separation) that WorkspaceManager still provides.
     /// </summary>
     public class PythonCommandHandlerPhase4Tests
     {
@@ -53,9 +53,6 @@ namespace Tests.PlayMode
             _handlerObject = new GameObject("TestPythonCommandHandler");
             _handler = _handlerObject.AddComponent<PythonCommandHandler>();
 
-            // Expect warning from PythonCommandHandler when CoordinationConfig is not assigned
-            LogAssert.Expect(LogType.Warning, new System.Text.RegularExpressions.Regex(".*CoordinationConfig.*|.*[Cc]oordination.*[Cc]onfig.*"));
-
             yield return null; // Wait for Start() to complete
         }
 
@@ -91,9 +88,6 @@ namespace Tests.PlayMode
             // Initialize required fields
             controller.robotJoints = new ArticulationBody[0];
 
-            // Note: Expected log assertions should be set BEFORE calling this method
-            // since Start() is called immediately during robot creation
-
             // Register the robot using the proper API
             _robotManager.RegisterRobot(robotId, robotObj);
         }
@@ -108,112 +102,14 @@ namespace Tests.PlayMode
         }
 
         [Test]
-        public void PythonCommandHandler_VerificationEnabled_ByDefault()
+        public void PythonCommandHandler_IsNotNull_AfterCreation()
         {
-            // Verification should be enabled by default
-            // We can't directly test the private field, but we can test behavior
             Assert.IsNotNull(_handler);
-        }
-
-        [Test]
-        public void SetPythonVerificationEnabled_EnablesVerification()
-        {
-            Assert.DoesNotThrow(() => _handler.SetPythonVerificationEnabled(true));
-        }
-
-        [Test]
-        public void SetPythonVerificationEnabled_DisablesVerification()
-        {
-            Assert.DoesNotThrow(() => _handler.SetPythonVerificationEnabled(false));
         }
 
         #endregion
 
-        #region Verification Scenario Tests
-
-        [UnityTest]
-        public IEnumerator VerificationWithWorkspaceManager_RobotInAllocatedRegion_Succeeds()
-        {
-            // Setup: Create robot in left workspace
-            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
-            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
-
-            CreateAndRegisterTestRobot("Robot1", new Vector3(-0.5f, 0f, 0.2f));
-
-            // Allocate left workspace to Robot1
-            _workspaceManager.AllocateRegion("Robot1", "left_workspace");
-            yield return null;
-
-            // Target is also in left workspace (should be allowed)
-            // Left workspace bounds: min(-0.65, 0.0, -0.5) to max(-0.1, 0.7, 0.5)
-            // Center region: min(-0.3, 0.0, -0.3) to max(0.3, 0.3, 0.3)
-            // Use position outside center but inside left_workspace
-            Vector3 targetInLeftWorkspace = new Vector3(-0.4f, 0.15f, 0.1f);
-
-            // Verification should pass (we can't directly test private method,
-            // but we verify setup is correct)
-            var region = _workspaceManager.GetRegionAtPosition(targetInLeftWorkspace);
-            Assert.IsNotNull(region);
-            Assert.AreEqual("left_workspace", region.regionName);
-            Assert.IsTrue(_workspaceManager.IsRegionAvailable("left_workspace", "Robot1"));
-
-            // Cleanup
-            var robot1 = _robotManager.RobotInstances["Robot1"];
-            Object.DestroyImmediate(robot1.robotGameObject);
-        }
-
-        [UnityTest]
-        public IEnumerator VerificationWithWorkspaceManager_RobotTargetingOccupiedRegion_Fails()
-        {
-            // Setup: Two robots, one has allocated a region
-            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
-            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
-            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot2");
-            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
-
-            CreateAndRegisterTestRobot("Robot1", new Vector3(-0.5f, 0f, 0.2f));
-            CreateAndRegisterTestRobot("Robot2", new Vector3(0.5f, 0f, 0.2f));
-
-            // Robot1 allocates left workspace
-            _workspaceManager.AllocateRegion("Robot1", "left_workspace");
-            yield return null;
-
-            // Robot2 tries to target left workspace (should fail)
-            Vector3 targetInLeftWorkspace = new Vector3(-0.6f, 0.15f, 0.1f);
-
-            // Verify region is not available to Robot2
-            Assert.IsFalse(_workspaceManager.IsRegionAvailable("left_workspace", "Robot2"));
-
-            // Cleanup
-            var robot1 = _robotManager.RobotInstances["Robot1"];
-            var robot2 = _robotManager.RobotInstances["Robot2"];
-            Object.DestroyImmediate(robot1.robotGameObject);
-            Object.DestroyImmediate(robot2.robotGameObject);
-        }
-
-        [UnityTest]
-        public IEnumerator VerificationWithCollisionZone_RobotTargetingActiveZone_Fails()
-        {
-            // Setup: Robot targeting a region marked as collision zone
-            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
-            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
-
-            CreateAndRegisterTestRobot("Robot1", new Vector3(-0.5f, 0f, 0.2f));
-
-            // Mark left workspace as collision zone
-            _workspaceManager.MarkCollisionZone("left_workspace");
-            yield return null;
-
-            // Robot tries to target left workspace (should fail due to collision zone)
-            Vector3 targetInLeftWorkspace = new Vector3(-0.6f, 0.15f, 0.1f);
-
-            // Verify collision zone is marked
-            Assert.IsTrue(_workspaceManager.IsCollisionZone("left_workspace"));
-
-            // Cleanup
-            var robot1 = _robotManager.RobotInstances["Robot1"];
-            Object.DestroyImmediate(robot1.robotGameObject);
-        }
+        #region Safe Separation Tests
 
         [UnityTest]
         public IEnumerator VerificationSafeSeparation_RobotsTooClose_Fails()
@@ -309,6 +205,33 @@ namespace Tests.PlayMode
 
         #endregion
 
+        #region Region Geometry Tests
+
+        [UnityTest]
+        public IEnumerator GetRegionAtPosition_LeftWorkspace_ReturnsCorrectRegion()
+        {
+            // Setup: robot in left workspace
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
+            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+
+            CreateAndRegisterTestRobot("Robot1", new Vector3(-0.5f, 0f, 0.2f));
+
+            yield return null;
+
+            // Use position inside left_workspace but outside center
+            Vector3 targetInLeftWorkspace = new Vector3(-0.4f, 0.15f, 0.1f);
+            var region = _workspaceManager.GetRegionAtPosition(targetInLeftWorkspace);
+
+            Assert.IsNotNull(region);
+            Assert.AreEqual("left_workspace", region.regionName);
+
+            // Cleanup
+            var robot1 = _robotManager.RobotInstances["Robot1"];
+            Object.DestroyImmediate(robot1.robotGameObject);
+        }
+
+        #endregion
+
         #region Verification Without WorkspaceManager Tests
 
         [UnityTest]
@@ -358,10 +281,9 @@ namespace Tests.PlayMode
         #region Integration Scenario Tests
 
         [UnityTest]
-        public IEnumerator Scenario_DualRobotIndependentWorkspaces_BothSucceed()
+        public IEnumerator Scenario_DualRobotIndependentWorkspaces_SafeSeparation()
         {
             // Scenario: Two robots moving in their respective workspaces (no conflict)
-            // Expect warnings for both robots
             LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
             LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
             LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot2");
@@ -370,19 +292,11 @@ namespace Tests.PlayMode
             CreateAndRegisterTestRobot("Robot1", new Vector3(-0.5f, 0f, 0.2f));
             CreateAndRegisterTestRobot("Robot2", new Vector3(0.5f, 0f, 0.2f));
 
-            // Allocate workspaces
-            _workspaceManager.AllocateRegion("Robot1", "left_workspace");
-            _workspaceManager.AllocateRegion("Robot2", "right_workspace");
-
             yield return null;
 
             // Both robots target their own workspaces
             Vector3 robot1Target = new Vector3(-0.6f, 0.15f, 0.1f); // Left
             Vector3 robot2Target = new Vector3(0.6f, 0.15f, 0.1f);  // Right
-
-            // Verify both regions are available to their respective robots
-            Assert.IsTrue(_workspaceManager.IsRegionAvailable("left_workspace", "Robot1"));
-            Assert.IsTrue(_workspaceManager.IsRegionAvailable("right_workspace", "Robot2"));
 
             // Verify safe separation
             bool safeSeparation = _workspaceManager.IsSafeSeparation(robot1Target, robot2Target);
@@ -396,55 +310,9 @@ namespace Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator Scenario_SharedZoneAccess_Serialized()
-        {
-            // Scenario: Two robots want to access shared zone (must be serialized)
-            // Expect warnings for both robots
-            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
-            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
-            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot2");
-            LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
-
-            CreateAndRegisterTestRobot("Robot1", new Vector3(-0.5f, 0f, 0.2f));
-            CreateAndRegisterTestRobot("Robot2", new Vector3(0.5f, 0f, 0.2f));
-
-            yield return null;
-
-            // Robot1 enters shared zone first
-            _workspaceManager.AllocateRegion("Robot1", "shared_zone");
-            _workspaceManager.MarkCollisionZone("shared_zone");
-
-            Vector3 sharedTarget1 = new Vector3(0.05f, 0.15f, 0.1f);
-
-            // Verify Robot1 has access
-            Assert.IsTrue(_workspaceManager.IsRegionAvailable("shared_zone", "Robot1"));
-
-            // Verify Robot2 is blocked
-            Assert.IsFalse(_workspaceManager.IsRegionAvailable("shared_zone", "Robot2"));
-            Assert.IsTrue(_workspaceManager.IsCollisionZone("shared_zone"));
-
-            // Robot1 completes movement
-            _workspaceManager.ClearCollisionZone("shared_zone");
-            _workspaceManager.ReleaseRegion("Robot1", "shared_zone");
-
-            yield return null;
-
-            // Now Robot2 can enter
-            Vector3 sharedTarget2 = new Vector3(-0.05f, 0.15f, 0.1f);
-            Assert.IsTrue(_workspaceManager.IsRegionAvailable("shared_zone", "Robot2"));
-
-            // Cleanup
-            var robot1 = _robotManager.RobotInstances["Robot1"];
-            var robot2 = _robotManager.RobotInstances["Robot2"];
-            Object.DestroyImmediate(robot1.robotGameObject);
-            Object.DestroyImmediate(robot2.robotGameObject);
-        }
-
-        [UnityTest]
         public IEnumerator Scenario_CollisionPrevention_TargetsTooClose()
         {
-            // Scenario: Verification prevents collision when targets are too close
-            // Expect warnings for both robots
+            // Scenario: Verification catches collision when targets are too close
             LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot1");
             LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
             LogAssert.Expect(LogType.Warning, "[ROBOT_CONTROLLER] No GripperController found in children of Robot2");

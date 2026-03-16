@@ -471,7 +471,7 @@ class TestPerceptionOps:
             timeout=90.0,
             request_id=502,
         )
-        error = result.get("error", "")
+        error = result.get("error") or ""
         lm_unavailable = any(
             kw in error
             for kw in (
@@ -480,6 +480,7 @@ class TestPerceptionOps:
                 "LM Studio",
                 "NO_IMAGES",
                 "LMSTUDIO",
+                "No images available",
             )
         )
         if lm_unavailable:

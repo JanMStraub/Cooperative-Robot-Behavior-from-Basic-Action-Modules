@@ -148,20 +148,6 @@ namespace PythonCommunication
         [SerializeField]
         private bool _applySpeedMultiplier = true;
 
-        [Tooltip("Enable Python CoordinationVerifier checks before executing movements (Phase 4)")]
-        [SerializeField]
-        private bool _enablePythonVerification = true;
-
-        [Tooltip("Coordination configuration for verification and collision avoidance")]
-        [SerializeField]
-        private Configuration.CoordinationConfig _coordinationConfig;
-
-        [Tooltip("Workspace Manager for coordination (Phase 4)")]
-        private Simulation.WorkspaceManager _workspaceManager;
-
-        // Coordination verifier (initialized based on config)
-        private ICoordinationVerifier _coordinationVerifier;
-
         [Header("Runtime Info")]
         [Tooltip("Number of commands processed successfully")]
         [SerializeField]
@@ -274,69 +260,7 @@ namespace PythonCommunication
                 return;
             }
 
-            _workspaceManager = Simulation.WorkspaceManager.Instance;
-            if (_workspaceManager == null && _enablePythonVerification)
-            {
-                Debug.LogWarning(
-                    $"{_logPrefix} WorkspaceManager.Instance is null! "
-                        + "Workspace coordination will be disabled. "
-                        + "Add WorkspaceManager GameObject to enable Phase 4 features."
-                );
-            }
-
-            InitializeCoordinationVerifier();
-
             Debug.Log($"{_logPrefix} Initialized and listening for Python commands");
-        }
-
-        /// <summary>
-        /// Initialize coordination verifier based on configuration mode.
-        /// </summary>
-        private void InitializeCoordinationVerifier()
-        {
-            if (_coordinationConfig == null)
-            {
-                Debug.LogWarning(
-                    $"{_logPrefix} CoordinationConfig not assigned, using Unity-only verification"
-                );
-                _coordinationVerifier = new UnityCoordinationVerifier(0.2f);
-                return;
-            }
-
-            float minSafeSeparation = _coordinationConfig.minSafeSeparation;
-
-            switch (_coordinationConfig.verificationMode)
-            {
-                case Configuration.VerificationMode.UnityOnly:
-                    _coordinationVerifier = new UnityCoordinationVerifier(minSafeSeparation);
-                    Debug.Log($"{_logPrefix} Coordination verification mode: Unity-only (fast)");
-                    break;
-
-                case Configuration.VerificationMode.PythonVerified:
-                    _coordinationVerifier = new PythonCoordinationVerifier(
-                        _coordinationConfig.pythonVerificationTimeout,
-                        _coordinationConfig.fallbackToUnityOnTimeout,
-                        minSafeSeparation
-                    );
-                    Debug.Log($"{_logPrefix} Coordination verification mode: Python-verified");
-                    break;
-
-                case Configuration.VerificationMode.Hybrid:
-                    // Hybrid mode: Use Unity for initial check, Python for conflicts
-                    // For now, use Unity-only as hybrid implementation requires more complex logic
-                    _coordinationVerifier = new UnityCoordinationVerifier(minSafeSeparation);
-                    Debug.Log(
-                        $"{_logPrefix} Coordination verification mode: Hybrid (using Unity for now)"
-                    );
-                    break;
-
-                default:
-                    _coordinationVerifier = new UnityCoordinationVerifier(minSafeSeparation);
-                    Debug.LogWarning(
-                        $"{_logPrefix} Unknown verification mode, defaulting to Unity-only"
-                    );
-                    break;
-            }
         }
 
         #endregion
@@ -603,27 +527,6 @@ namespace PythonCommunication
                     command.parameters.target_position
                 );
 
-                // Phase 4: Check Python CoordinationVerifier before executing
-                if (_enablePythonVerification)
-                {
-                    if (!VerifyMovementSafety(command.robot_id, targetPosition))
-                    {
-                        Debug.LogWarning(
-                            $"{_logPrefix} [Phase 4] Movement verification failed for {command.robot_id} "
-                                + $"to ({targetPosition.x:F3}, {targetPosition.y:F3}, {targetPosition.z:F3}). "
-                                + "Movement blocked by coordination check."
-                        );
-                        SendCommandCompletion(
-                            command.robot_id,
-                            "move_to_coordinate",
-                            false,
-                            command.request_id
-                        );
-                        _failedCommands++;
-                        return;
-                    }
-                }
-
                 if (_applySpeedMultiplier && command.parameters.speed_multiplier > 0)
                 {
                     if (_verboseLogging)
@@ -670,16 +573,6 @@ namespace PythonCommunication
                             command.request_id
                         );
                     }
-
-                    // Phase 4: Release workspace region after movement completes
-                    if (_workspaceManager != null)
-                    {
-                        var region = _workspaceManager.GetRegionAtPosition(targetPosition);
-                        if (region != null && region.allocatedRobotId == command.robot_id)
-                        {
-                            _workspaceManager.ClearCollisionZone(region.regionName);
-                        }
-                    }
                 };
 
                 _activeMoveListeners.Register(robotListenerKey, onComplete);
@@ -691,16 +584,6 @@ namespace PythonCommunication
                 else if (robotInstance.simpleController != null)
                 {
                     robotInstance.simpleController.OnTargetReached += onComplete;
-                }
-
-                if (_workspaceManager != null)
-                {
-                    var region = _workspaceManager.GetRegionAtPosition(targetPosition);
-                    if (region != null)
-                    {
-                        _workspaceManager.AllocateRegion(command.robot_id, region.regionName);
-                        _workspaceManager.MarkCollisionZone(region.regionName);
-                    }
                 }
 
                 if (controller != null)
@@ -2906,91 +2789,6 @@ namespace PythonCommunication
             }
 
             return UnifiedPythonReceiver.Instance.SendCompletion(statusJson, requestId);
-        }
-
-        #endregion
-
-        #region Phase 4: Python Verification Integration
-
-        /// <summary>
-        /// Verify movement safety using workspace manager and coordination checks
-        /// Phase 4: Integration with Python CoordinationVerifier
-        /// Supports both RobotController and SimpleRobotController
-        /// </summary>
-        /// <param name="robotId">Robot requesting movement</param>
-        /// <param name="targetPosition">Target position</param>
-        /// <returns>True if movement is safe, false if blocked</returns>
-        private bool VerifyMovementSafety(string robotId, Vector3 targetPosition)
-        {
-            // Early exit if verification is disabled
-            if (!_enablePythonVerification || _coordinationVerifier == null)
-            {
-                return true;
-            }
-
-            // Get current robot position
-            Vector3 currentPosition = Vector3.zero;
-            if (
-                _robotManager != null
-                && _robotManager.RobotInstances.TryGetValue(robotId, out var robotInstance)
-            )
-            {
-                if (robotInstance.controller != null)
-                {
-                    currentPosition = robotInstance.controller.GetCurrentEndEffectorPosition();
-                }
-                else if (robotInstance.simpleController != null)
-                {
-                    currentPosition =
-                        robotInstance.simpleController.GetCurrentEndEffectorPosition();
-                }
-            }
-
-            // Use coordination verifier
-            var result = _coordinationVerifier.VerifyMovement(
-                robotId,
-                targetPosition,
-                currentPosition
-            );
-
-            // Log warnings if any
-            if (_verboseLogging && result.warnings != null && result.warnings.Count > 0)
-            {
-                foreach (var warning in result.warnings)
-                {
-                    Debug.LogWarning($"{_logPrefix} [Verification] {warning}");
-                }
-            }
-
-            // Log result
-            if (_verboseLogging)
-            {
-                if (result.isSafe)
-                {
-                    Debug.Log(
-                        $"{_logPrefix} [Verification] Movement safe for {robotId} using {_coordinationVerifier.VerifierName}: {result.reason}"
-                    );
-                }
-                else
-                {
-                    Debug.LogWarning(
-                        $"{_logPrefix} [Verification] Movement blocked for {robotId} using {_coordinationVerifier.VerifierName}: {result.reason}"
-                    );
-                }
-            }
-
-            return result.isSafe;
-        }
-
-        /// <summary>
-        /// Enable or disable Python verification
-        /// </summary>
-        public void SetPythonVerificationEnabled(bool enabled)
-        {
-            _enablePythonVerification = enabled;
-            Debug.Log(
-                $"{_logPrefix} [Phase 4] Python verification {(enabled ? "enabled" : "disabled")}"
-            );
         }
 
         #endregion

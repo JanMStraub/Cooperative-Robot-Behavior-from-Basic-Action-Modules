@@ -303,6 +303,10 @@ def detect_object_stereo(
     Returns:
         OperationResult with 3D coordinates and detection info
     """
+    # Normalize string "None" from LLM output to Python None
+    if color == "None":
+        color = None
+
     # Set defaults from config
     if baseline is None:
         baseline = DEFAULT_STEREO_BASELINE

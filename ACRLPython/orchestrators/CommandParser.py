@@ -260,7 +260,9 @@ class _PromptBuilder:
         for p in parameters:
             param_str = f"{p.name}: {p.type}"
             if hasattr(p, "valid_values") and p.valid_values:
-                valid_vals = ", ".join([f"'{v}'" for v in p.valid_values])
+                valid_vals = ", ".join(
+                    ["null" if v is None else f"'{v}'" for v in p.valid_values]
+                )
                 param_str += f" (valid: {valid_vals})"
             param_strs.append(param_str)
         return ", ".join(param_strs)

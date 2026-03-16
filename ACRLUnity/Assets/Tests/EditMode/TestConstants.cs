@@ -211,17 +211,6 @@ namespace Tests.EditMode
         public const float MIN_SAFE_SEPARATION = 0.2f; // 20cm
 
         /// <summary>
-        /// Coordination check interval (seconds)
-        /// CollaborativeStrategy checks for conflicts every 500ms
-        /// </summary>
-        public const float COORDINATION_CHECK_INTERVAL = 0.5f;
-
-        /// <summary>
-        /// Wait time for coordination tests (slightly above check interval)
-        /// </summary>
-        public const float COORDINATION_WAIT = 0.6f;
-
-        /// <summary>
         /// Waypoint collision avoidance offset (meters)
         /// Vertical/lateral offset when replanning to avoid collisions
         /// </summary>

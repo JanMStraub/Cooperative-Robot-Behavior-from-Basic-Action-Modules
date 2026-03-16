@@ -234,37 +234,6 @@ namespace Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator Coordination_SequentialTimeout_SwitchesRobot()
-        {
-            // Create coordination config with short timeout
-            var coordConfig = TestHelpers.CreateTestCoordinationConfig();
-            coordConfig.robotTimeout = 1f; // 1 second timeout
-
-            yield return null; // The test only verifies config value, not actual timeout
-
-            // Sequential strategy should switch to next robot after timeout
-            Assert.AreEqual(1f, coordConfig.robotTimeout, 0.1f, "Timeout should be 1 second");
-
-            Object.DestroyImmediate(coordConfig);
-        }
-
-        [Test]
-        public void Coordination_PythonVerificationUnavailable_FallsBackToUnity()
-        {
-            // Create coordination config with Python verification
-            var coordConfig = TestHelpers.CreateTestCoordinationConfig(VerificationMode.PythonVerified);
-            coordConfig.fallbackToUnityOnTimeout = true;
-            coordConfig.pythonVerificationTimeout = 0.5f;
-
-            // With Python unavailable, should fallback to Unity verification
-            Assert.IsTrue(coordConfig.fallbackToUnityOnTimeout, "Should enable fallback");
-            Assert.AreEqual(VerificationMode.PythonVerified, coordConfig.verificationMode,
-                "Should initially use Python verification");
-
-            Object.DestroyImmediate(coordConfig);
-        }
-
-        [UnityTest]
         public IEnumerator Coordination_InvalidRobotId_LogsError()
         {
             // Attempt to move robot with invalid ID

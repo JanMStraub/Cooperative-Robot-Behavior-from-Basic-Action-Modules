@@ -7,8 +7,8 @@ using Simulation;
 namespace Tests.PlayMode
 {
     /// <summary>
-    /// Tests for WorkspaceManager (Phase 4).
-    /// Validates workspace allocation, region management, and collision zone tracking.
+    /// Tests for WorkspaceManager.
+    /// Validates workspace geometry queries, region management, and safe separation.
     /// </summary>
     public class WorkspaceManagerTests
     {
@@ -82,131 +82,6 @@ namespace Tests.PlayMode
             Assert.IsNotNull(_manager.GetRegion("center"));
         }
 
-        [Test]
-        public void WorkspaceManager_DefaultRegions_AreUnallocated()
-        {
-            var leftRegion = _manager.GetRegion("left_workspace");
-            var rightRegion = _manager.GetRegion("right_workspace");
-
-            Assert.IsFalse(leftRegion.IsAllocated());
-            Assert.IsFalse(rightRegion.IsAllocated());
-        }
-
-        #endregion
-
-        #region Region Allocation Tests
-
-        [Test]
-        public void AllocateRegion_ValidRegion_ReturnsTrue()
-        {
-            bool result = _manager.AllocateRegion("Robot1", "left_workspace");
-            Assert.IsTrue(result);
-        }
-
-        [Test]
-        public void AllocateRegion_InvalidRegion_ReturnsFalse()
-        {
-            bool result = _manager.AllocateRegion("Robot1", "nonexistent_region");
-            Assert.IsFalse(result);
-        }
-
-        [Test]
-        public void AllocateRegion_AlreadyAllocated_ReturnsFalse()
-        {
-            _manager.AllocateRegion("Robot1", "left_workspace");
-            bool result = _manager.AllocateRegion("Robot2", "left_workspace");
-            Assert.IsFalse(result);
-        }
-
-        [Test]
-        public void AllocateRegion_SameRobotTwice_ReturnsTrue()
-        {
-            _manager.AllocateRegion("Robot1", "left_workspace");
-            bool result = _manager.AllocateRegion("Robot1", "left_workspace");
-            Assert.IsTrue(result); // Same robot can "reallocate" its own region
-        }
-
-        [Test]
-        public void AllocateRegion_SetsAllocatedRobotId()
-        {
-            _manager.AllocateRegion("Robot1", "left_workspace");
-            var region = _manager.GetRegion("left_workspace");
-            Assert.AreEqual("Robot1", region.allocatedRobotId);
-        }
-
-        #endregion
-
-        #region Region Release Tests
-
-        [Test]
-        public void ReleaseRegion_AllocatedRegion_ReleasesSuccessfully()
-        {
-            _manager.AllocateRegion("Robot1", "left_workspace");
-            _manager.ReleaseRegion("Robot1", "left_workspace");
-
-            var region = _manager.GetRegion("left_workspace");
-            Assert.IsFalse(region.IsAllocated());
-        }
-
-        [Test]
-        public void ReleaseRegion_WrongRobot_DoesNotRelease()
-        {
-            _manager.AllocateRegion("Robot1", "left_workspace");
-            _manager.ReleaseRegion("Robot2", "left_workspace");
-
-            var region = _manager.GetRegion("left_workspace");
-            Assert.IsTrue(region.IsAllocated());
-            Assert.AreEqual("Robot1", region.allocatedRobotId);
-        }
-
-        [Test]
-        public void ReleaseAllRegions_MultipleRegions_ReleasesAll()
-        {
-            _manager.AllocateRegion("Robot1", "left_workspace");
-            _manager.AllocateRegion("Robot1", "center");
-            _manager.ReleaseAllRegions("Robot1");
-
-            var leftRegion = _manager.GetRegion("left_workspace");
-            var centerRegion = _manager.GetRegion("center");
-
-            Assert.IsFalse(leftRegion.IsAllocated());
-            Assert.IsFalse(centerRegion.IsAllocated());
-        }
-
-        #endregion
-
-        #region Region Availability Tests
-
-        [Test]
-        public void IsRegionAvailable_UnallocatedRegion_ReturnsTrue()
-        {
-            bool available = _manager.IsRegionAvailable("left_workspace");
-            Assert.IsTrue(available);
-        }
-
-        [Test]
-        public void IsRegionAvailable_AllocatedRegion_ReturnsFalse()
-        {
-            _manager.AllocateRegion("Robot1", "left_workspace");
-            bool available = _manager.IsRegionAvailable("left_workspace", "Robot2");
-            Assert.IsFalse(available);
-        }
-
-        [Test]
-        public void IsRegionAvailable_AllocatedToSameRobot_ReturnsTrue()
-        {
-            _manager.AllocateRegion("Robot1", "left_workspace");
-            bool available = _manager.IsRegionAvailable("left_workspace", "Robot1");
-            Assert.IsTrue(available);
-        }
-
-        [Test]
-        public void IsRegionAvailable_InvalidRegion_ReturnsFalse()
-        {
-            bool available = _manager.IsRegionAvailable("nonexistent_region");
-            Assert.IsFalse(available);
-        }
-
         #endregion
 
         #region Position-based Region Tests
@@ -252,27 +127,6 @@ namespace Tests.PlayMode
             Assert.IsNull(region);
         }
 
-        [Test]
-        public void IsInRobotWorkspace_NoAllocation_ReturnsTrue()
-        {
-            Vector3 anyPosition = new Vector3(0.5f, 0f, 0.2f);
-            bool inWorkspace = _manager.IsInRobotWorkspace("Robot1", anyPosition);
-
-            Assert.IsTrue(inWorkspace); // No allocation, allow any position
-        }
-
-        [Test]
-        public void IsInRobotWorkspace_WithAllocation_ChecksCorrectly()
-        {
-            _manager.AllocateRegion("Robot1", "left_workspace");
-
-            Vector3 leftPosition = new Vector3(-0.5f, 0f, 0.2f);
-            Vector3 rightPosition = new Vector3(0.5f, 0f, 0.2f);
-
-            Assert.IsTrue(_manager.IsInRobotWorkspace("Robot1", leftPosition));
-            Assert.IsFalse(_manager.IsInRobotWorkspace("Robot1", rightPosition));
-        }
-
         #endregion
 
         #region Safety Separation Tests
@@ -309,81 +163,28 @@ namespace Tests.PlayMode
 
         #endregion
 
-        #region Collision Zone Tests
+        #region Robot Base Position Tests
 
         [Test]
-        public void MarkCollisionZone_ValidRegion_IsMarked()
+        public void GetRobotBasePosition_Robot1_ReturnsCorrectPosition()
         {
-            _manager.MarkCollisionZone("left_workspace");
-            bool isCollisionZone = _manager.IsCollisionZone("left_workspace");
-
-            Assert.IsTrue(isCollisionZone);
+            var pos = _manager.GetRobotBasePosition("Robot1");
+            Assert.AreEqual(new Vector3(-0.475f, 0f, 0f), pos);
         }
 
         [Test]
-        public void ClearCollisionZone_MarkedRegion_IsCleared()
+        public void GetRobotBasePosition_Robot2_ReturnsCorrectPosition()
         {
-            _manager.MarkCollisionZone("left_workspace");
-            _manager.ClearCollisionZone("left_workspace");
-            bool isCollisionZone = _manager.IsCollisionZone("left_workspace");
-
-            Assert.IsFalse(isCollisionZone);
+            var pos = _manager.GetRobotBasePosition("Robot2");
+            Assert.AreEqual(new Vector3(0.475f, 0f, 0f), pos);
         }
 
         [Test]
-        public void IsCollisionZone_UnmarkedRegion_ReturnsFalse()
+        public void GetRobotBasePosition_UnknownRobot_ReturnsZero()
         {
-            bool isCollisionZone = _manager.IsCollisionZone("left_workspace");
-            Assert.IsFalse(isCollisionZone);
-        }
-
-        [Test]
-        public void MarkCollisionZone_MultipleRegions_TrackedIndependently()
-        {
-            _manager.MarkCollisionZone("left_workspace");
-            _manager.MarkCollisionZone("right_workspace");
-
-            Assert.IsTrue(_manager.IsCollisionZone("left_workspace"));
-            Assert.IsTrue(_manager.IsCollisionZone("right_workspace"));
-            Assert.IsFalse(_manager.IsCollisionZone("center"));
-        }
-
-        #endregion
-
-        #region State Management Tests
-
-        [Test]
-        public void GetAllocationState_MultipleAllocations_ReturnsCorrectState()
-        {
-            _manager.AllocateRegion("Robot1", "left_workspace");
-            _manager.AllocateRegion("Robot2", "right_workspace");
-
-            var state = _manager.GetAllocationState();
-
-            Assert.AreEqual(2, state.Count);
-            // GetAllocationState returns Dictionary<string, HashSet<string>>
-            // Each robot can have multiple allocated regions
-            Assert.IsTrue(state["Robot1"].Contains("left_workspace"));
-            Assert.IsTrue(state["Robot2"].Contains("right_workspace"));
-        }
-
-        [Test]
-        public void ResetAllocations_ClearsAllState()
-        {
-            _manager.AllocateRegion("Robot1", "left_workspace");
-            _manager.AllocateRegion("Robot2", "right_workspace");
-            _manager.MarkCollisionZone("center");
-
-            _manager.ResetAllocations();
-
-            var leftRegion = _manager.GetRegion("left_workspace");
-            var rightRegion = _manager.GetRegion("right_workspace");
-            var state = _manager.GetAllocationState();
-
-            Assert.IsFalse(leftRegion.IsAllocated());
-            Assert.IsFalse(rightRegion.IsAllocated());
-            Assert.IsFalse(_manager.IsCollisionZone("center"));
-            Assert.AreEqual(0, state.Count);
+            LogAssert.Expect(LogType.Warning, "[WORKSPACE_MANAGER] Unknown robotId 'RobotX' in GetRobotBasePosition");
+            var pos = _manager.GetRobotBasePosition("RobotX");
+            Assert.AreEqual(Vector3.zero, pos);
         }
 
         #endregion
@@ -414,74 +215,6 @@ namespace Tests.PlayMode
 
             Vector3 center = region.GetCenter();
             Assert.AreEqual(new Vector3(0f, 0f, 0.25f), center);
-        }
-
-        [Test]
-        public void WorkspaceRegion_IsAllocated_ChecksAllocationStatus()
-        {
-            var region = new WorkspaceRegion("test_region", Vector3.zero, Vector3.one);
-
-            Assert.IsFalse(region.IsAllocated());
-
-            region.allocatedRobotId = "Robot1";
-            Assert.IsTrue(region.IsAllocated());
-
-            region.allocatedRobotId = null;
-            Assert.IsFalse(region.IsAllocated());
-        }
-
-        #endregion
-
-        #region Integration Scenario Tests
-
-        [UnityTest]
-        public IEnumerator Scenario_DualRobotCoordination_AllocatesCorrectly()
-        {
-            // Scenario: Robot1 enters left workspace, Robot2 enters right workspace
-            _manager.AllocateRegion("Robot1", "left_workspace");
-            yield return null;
-
-            Assert.IsTrue(_manager.IsRegionAvailable("left_workspace", "Robot1"));
-            Assert.IsFalse(_manager.IsRegionAvailable("left_workspace", "Robot2"));
-
-            _manager.AllocateRegion("Robot2", "right_workspace");
-            yield return null;
-
-            Assert.IsTrue(_manager.IsRegionAvailable("right_workspace", "Robot2"));
-            Assert.IsFalse(_manager.IsRegionAvailable("right_workspace", "Robot1"));
-
-            // Both robots should succeed in their own workspaces
-            Vector3 leftPos = new Vector3(-0.5f, 0f, 0.2f);
-            Vector3 rightPos = new Vector3(0.5f, 0f, 0.2f);
-
-            Assert.IsTrue(_manager.IsInRobotWorkspace("Robot1", leftPos));
-            Assert.IsTrue(_manager.IsInRobotWorkspace("Robot2", rightPos));
-        }
-
-        [UnityTest]
-        public IEnumerator Scenario_SharedZoneAccess_RequiresCoordination()
-        {
-            // Scenario: Both robots want to access shared zone
-            Vector3 sharedPos = new Vector3(0f, 0f, 0.2f);
-
-            _manager.AllocateRegion("Robot1", "shared_zone");
-            _manager.MarkCollisionZone("shared_zone");
-            yield return null;
-
-            // Robot1 has access
-            Assert.IsTrue(_manager.IsRegionAvailable("shared_zone", "Robot1"));
-
-            // Robot2 blocked by collision zone
-            Assert.IsFalse(_manager.IsRegionAvailable("shared_zone", "Robot2"));
-            Assert.IsTrue(_manager.IsCollisionZone("shared_zone"));
-
-            // Robot1 completes movement
-            _manager.ClearCollisionZone("shared_zone");
-            _manager.ReleaseRegion("Robot1", "shared_zone");
-            yield return null;
-
-            // Now Robot2 can access
-            Assert.IsTrue(_manager.IsRegionAvailable("shared_zone", "Robot2"));
         }
 
         #endregion

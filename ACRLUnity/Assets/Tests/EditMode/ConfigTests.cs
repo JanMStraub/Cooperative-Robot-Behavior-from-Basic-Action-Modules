@@ -7,8 +7,8 @@ namespace Tests.EditMode
 {
     /// <summary>
     /// Tests for ScriptableObject configuration system.
-    /// Validates all 6 config types: RobotConfig, SimulationConfig, IKConfig,
-    /// GripperConfig, TrajectoryConfig, CoordinationConfig.
+    /// Validates config types: RobotConfig, SimulationConfig, IKConfig,
+    /// GripperConfig, TrajectoryConfig.
     /// Ensures default creation, value ranges, and serialization work correctly.
     /// </summary>
     public class ConfigTests
@@ -143,8 +143,6 @@ namespace Tests.EditMode
             Assert.AreEqual(1f, _simulationConfig.timeScale, "Default time scale should be 1.0");
             Assert.AreEqual(false, _simulationConfig.autoStart, "Auto-start should be false by default");
             Assert.AreEqual(true, _simulationConfig.resetOnError, "Reset on error should be true by default");
-            Assert.AreEqual(RobotCoordinationMode.Independent, _simulationConfig.coordinationMode,
-                "Default coordination mode should be Independent");
         }
 
         [Test]
@@ -181,26 +179,6 @@ namespace Tests.EditMode
             _simulationConfig.targetFrameRate = 200;
             onValidateMethod?.Invoke(_simulationConfig, null);
             Assert.LessOrEqual(_simulationConfig.targetFrameRate, 120, "Should clamp to maximum 120 FPS");
-        }
-
-        [Test]
-        public void SimulationConfig_AllCoordinationModes_AreValid()
-        {
-            // Test all coordination modes can be set
-            _simulationConfig.coordinationMode = RobotCoordinationMode.Independent;
-            Assert.AreEqual(RobotCoordinationMode.Independent, _simulationConfig.coordinationMode);
-
-            _simulationConfig.coordinationMode = RobotCoordinationMode.Sequential;
-            Assert.AreEqual(RobotCoordinationMode.Sequential, _simulationConfig.coordinationMode);
-
-            _simulationConfig.coordinationMode = RobotCoordinationMode.Collaborative;
-            Assert.AreEqual(RobotCoordinationMode.Collaborative, _simulationConfig.coordinationMode);
-
-            _simulationConfig.coordinationMode = RobotCoordinationMode.MasterSlave;
-            Assert.AreEqual(RobotCoordinationMode.MasterSlave, _simulationConfig.coordinationMode);
-
-            _simulationConfig.coordinationMode = RobotCoordinationMode.Distributed;
-            Assert.AreEqual(RobotCoordinationMode.Distributed, _simulationConfig.coordinationMode);
         }
 
         #endregion
@@ -446,108 +424,6 @@ namespace Tests.EditMode
 
         #endregion
 
-        #region CoordinationConfig Tests
-
-        private CoordinationConfig _coordinationConfig;
-
-        [SetUp]
-        public void SetUp_CoordinationConfig()
-        {
-            _coordinationConfig = ScriptableObject.CreateInstance<CoordinationConfig>();
-        }
-
-        [TearDown]
-        public void TearDown_CoordinationConfig()
-        {
-            if (_coordinationConfig != null)
-            {
-                Object.DestroyImmediate(_coordinationConfig);
-            }
-        }
-
-        [Test]
-        public void CoordinationConfig_DefaultCreation_HasValidDefaults()
-        {
-            Assert.IsNotNull(_coordinationConfig, "CoordinationConfig should be created");
-
-            // Verification settings
-            Assert.AreEqual(VerificationMode.UnityOnly, _coordinationConfig.verificationMode,
-                "Default verification mode should be UnityOnly");
-            Assert.AreEqual(true, _coordinationConfig.fallbackToUnityOnTimeout,
-                "Fallback to Unity should be true by default");
-            Assert.AreEqual(1f, _coordinationConfig.pythonVerificationTimeout, 0.01f,
-                "Default Python verification timeout should be 1s");
-
-            // Collision detection
-            Assert.AreEqual(0.2f, _coordinationConfig.minSafeSeparation, 0.01f,
-                "Default min safe separation should be 0.2m");
-            Assert.AreEqual(true, _coordinationConfig.enablePathReplanning,
-                "Path replanning should be enabled by default");
-
-            // Timeouts
-            Assert.AreEqual(30f, _coordinationConfig.robotTimeout, 0.1f,
-                "Default robot timeout should be 30s");
-        }
-
-        [Test]
-        public void CoordinationConfig_AllVerificationModes_AreValid()
-        {
-            // Test all verification modes can be set
-            _coordinationConfig.verificationMode = VerificationMode.UnityOnly;
-            Assert.AreEqual(VerificationMode.UnityOnly, _coordinationConfig.verificationMode);
-
-            _coordinationConfig.verificationMode = VerificationMode.PythonVerified;
-            Assert.AreEqual(VerificationMode.PythonVerified, _coordinationConfig.verificationMode);
-
-            _coordinationConfig.verificationMode = VerificationMode.Hybrid;
-            Assert.AreEqual(VerificationMode.Hybrid, _coordinationConfig.verificationMode);
-        }
-
-        [Test]
-        public void CoordinationConfig_PathReplanningParameters_AreValid()
-        {
-            Assert.GreaterOrEqual(_coordinationConfig.verticalOffset, 0.05f, "Vertical offset should be >= 0.05");
-            Assert.LessOrEqual(_coordinationConfig.verticalOffset, 0.5f, "Vertical offset should be <= 0.5");
-            Assert.GreaterOrEqual(_coordinationConfig.lateralOffset, 0.05f, "Lateral offset should be >= 0.05");
-            Assert.LessOrEqual(_coordinationConfig.lateralOffset, 0.3f, "Lateral offset should be <= 0.3");
-            Assert.GreaterOrEqual(_coordinationConfig.maxWaypoints, 2, "Max waypoints should be >= 2");
-            Assert.LessOrEqual(_coordinationConfig.maxWaypoints, 10, "Max waypoints should be <= 10");
-        }
-
-        [Test]
-        public void CoordinationConfig_OnValidate_ClampsMinSafeSeparation()
-        {
-            var onValidateMethod = typeof(CoordinationConfig).GetMethod("OnValidate",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-            // Test minimum clamp
-            _coordinationConfig.minSafeSeparation = 0.01f;
-            onValidateMethod?.Invoke(_coordinationConfig, null);
-            Assert.GreaterOrEqual(_coordinationConfig.minSafeSeparation, 0.05f,
-                "Min safe separation should be clamped to >= 0.05");
-        }
-
-        [Test]
-        public void CoordinationConfig_OnValidate_ClampsTimeouts()
-        {
-            var onValidateMethod = typeof(CoordinationConfig).GetMethod("OnValidate",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-            // Test robot timeout minimum clamp
-            _coordinationConfig.robotTimeout = 1f;
-            onValidateMethod?.Invoke(_coordinationConfig, null);
-            Assert.GreaterOrEqual(_coordinationConfig.robotTimeout, 5f,
-                "Robot timeout should be clamped to >= 5s");
-
-            // Test Python verification timeout minimum clamp
-            _coordinationConfig.pythonVerificationTimeout = 0.01f;
-            onValidateMethod?.Invoke(_coordinationConfig, null);
-            Assert.GreaterOrEqual(_coordinationConfig.pythonVerificationTimeout, 0.1f,
-                "Python verification timeout should be clamped to >= 0.1s");
-        }
-
-        #endregion
-
         #region Config Serialization Tests
 
         [Test]
@@ -590,16 +466,12 @@ namespace Tests.EditMode
             var trajectoryConfig = ScriptableObject.CreateInstance<TrajectoryConfig>();
             Assert.IsNotNull(trajectoryConfig, "TrajectoryConfig should be creatable");
 
-            var coordinationConfig = ScriptableObject.CreateInstance<CoordinationConfig>();
-            Assert.IsNotNull(coordinationConfig, "CoordinationConfig should be creatable");
-
             // Cleanup
             Object.DestroyImmediate(robotConfig);
             Object.DestroyImmediate(simulationConfig);
             Object.DestroyImmediate(ikConfig);
             Object.DestroyImmediate(gripperConfig);
             Object.DestroyImmediate(trajectoryConfig);
-            Object.DestroyImmediate(coordinationConfig);
         }
 
         #endregion

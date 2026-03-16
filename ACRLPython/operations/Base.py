@@ -82,6 +82,10 @@ class OperationParameter:
             return False, f"Parameter '{self.name}' is required"
 
         # Check valid values (enum-like validation)
+        # Normalize the string "None" to Python None (LLMs sometimes emit the
+        # string literal instead of JSON null when the prompt uses repr()).
+        if value == "None":
+            value = None
         if self.valid_values and value is not None:
             if value not in self.valid_values:
                 valid_str = ", ".join([f"'{v}'" for v in self.valid_values])

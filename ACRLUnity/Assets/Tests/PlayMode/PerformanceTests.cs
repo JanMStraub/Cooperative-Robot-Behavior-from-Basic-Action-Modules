@@ -398,7 +398,7 @@ namespace Tests.PlayMode
             // (Important for responsive multi-robot coordination)
 
             var manager = TestHelpers.CreateSimulationManager().manager;
-            var config = TestHelpers.CreateTestSimulationConfig(RobotCoordinationMode.Sequential);
+            var config = TestHelpers.CreateTestSimulationConfig();
             manager.config = config;
 
             yield return null; // Initialize manager
