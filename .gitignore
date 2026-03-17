@@ -194,3 +194,4 @@ documents/
 # Unity Test Results
 ACRLUnity/TestResults-*.xml
 ACRLUnity/unity-*-test.log
+ACRLPython/acrl/
