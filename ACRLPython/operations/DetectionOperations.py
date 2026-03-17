@@ -257,15 +257,19 @@ def estimate_distance_to_object(
         # Calculate Euclidean distance
         import math
 
-        robot_pos = robot_state.get("end_effector_position", robot_state.get("position"))  # type: ignore[union-attr]
-        object_pos = obj_state.get("position")  # type: ignore[union-attr]
-
-        if not robot_pos or not object_pos:
+        # RobotState is a dataclass with position as Optional[Tuple[float, float, float]]
+        robot_pos_tuple = robot_state.position  # type: ignore[union-attr]
+        if not robot_pos_tuple:
             return OperationResult.error_result(
                 "POSITION_DATA_MISSING",
-                "Robot or object position data missing",
+                "Robot position data missing",
                 ["Ensure WorldStatePublisher is sending position data"],
             )
+        robot_pos = {"x": robot_pos_tuple[0], "y": robot_pos_tuple[1], "z": robot_pos_tuple[2]}
+
+        # ObjectState is a dataclass with position as Tuple[float, float, float]
+        object_pos_tuple = obj_state.position  # type: ignore[union-attr]
+        object_pos = {"x": object_pos_tuple[0], "y": object_pos_tuple[1], "z": object_pos_tuple[2]}
 
         distance = math.sqrt(
             (robot_pos["x"] - object_pos["x"]) ** 2
@@ -298,6 +302,7 @@ def estimate_distance_to_object(
 def estimate_distance_between_objects(
     object_id1: str,
     object_id2: str,
+    robot_id: str = "",
     request_id: int = 0,
 ) -> OperationResult:
     """

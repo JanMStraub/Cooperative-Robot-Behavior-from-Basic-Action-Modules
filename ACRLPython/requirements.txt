@@ -4,9 +4,6 @@
 # OpenAI SDK for LM Studio compatibility
 openai>=1.0.0
 
-# Anthropic Claude API SDK
-anthropic>=0.39.0
-
 # Environment variable management
 python-dotenv>=1.0.0
 
@@ -16,3 +13,21 @@ matplotlib==3.9.2
 open3d==0.19.0
 torch
 tqdm
+ultralytics
+
+# Web UI server
+fastapi>=0.100.0
+uvicorn>=0.23.0
+
+# Core testing frameworks
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.1
+pytest-asyncio>=0.21.0
+pytest-timeout>=2.1.0
+
+# For mocking
+mock>=5.1.0
+
+# For test reporting
+pytest-html>=4.0.0

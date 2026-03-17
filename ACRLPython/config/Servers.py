@@ -84,8 +84,10 @@ WORLDSTATE_CHECK_INTERVAL = float(os.environ.get("WORLDSTATE_CHECK_INTERVAL", "5
 # LLM Configuration
 # ============================================================================
 
-_lmstudio_raw = os.environ.get("LMSTUDIO_BASE_URL", "http://192.168.178.53:1234").rstrip("/")
-LMSTUDIO_BASE_URL = _lmstudio_raw if _lmstudio_raw.endswith("/v1") else _lmstudio_raw + "/v1"
+_lmstudio_raw = os.environ.get("LMSTUDIO_BASE_URL", "http://127.0.0.1:1234").rstrip("/")
+LMSTUDIO_BASE_URL = (
+    _lmstudio_raw if _lmstudio_raw.endswith("/v1") else _lmstudio_raw + "/v1"
+)
 
 # ============================================================================
 # VGN (Volumetric Grasp Network) — Local Mac Inference
@@ -113,7 +115,7 @@ VGN_USE_VLM_REFINEMENT = os.environ.get("VGN_USE_VLM_REFINEMENT", "false").lower
 )
 
 DEFAULT_LMSTUDIO_MODEL = os.environ.get(
-    "DEFAULT_LMSTUDIO_MODEL", "ministral-3-14b-reasoning"
+    "DEFAULT_LMSTUDIO_MODEL", "mistralai/ministral-3-14b-reasoning"
 )
 DEFAULT_TEMPERATURE = float(os.environ.get("DEFAULT_TEMPERATURE", "0.1"))
 
@@ -123,7 +125,7 @@ VISION_MODELS = [
     "llama-3.2-vision",
     "qwen3-vl-8b",
     "mistral-3-3b",
-    "ministral-3-14b-reasoning",
+    "mistralai/ministral-3-14b-reasoning",
 ]
 
 # ============================================================================

@@ -188,15 +188,15 @@ class TestDistanceEstimation(unittest.TestCase):
         mock_instance = MagicMock()
         mock_world_state.return_value = mock_instance
 
-        # Mock robot state
-        mock_instance.get_robot_state.return_value = {
-            "end_effector_position": {"x": 0.0, "y": 0.0, "z": 0.3}
-        }
+        # Mock robot state as RobotState dataclass (has .position tuple)
+        mock_robot = MagicMock()
+        mock_robot.position = (0.0, 0.0, 0.3)
+        mock_instance.get_robot_state.return_value = mock_robot
 
-        # Mock object state
-        mock_instance.get_object_state.return_value = {
-            "position": {"x": 0.3, "y": 0.0, "z": 0.1}
-        }
+        # Mock object state as ObjectState dataclass (has .position tuple)
+        mock_object = MagicMock()
+        mock_object.position = (0.3, 0.0, 0.1)
+        mock_instance.get_object_state.return_value = mock_object
 
         result = estimate_distance_to_object("Robot1", "RedCube")
 

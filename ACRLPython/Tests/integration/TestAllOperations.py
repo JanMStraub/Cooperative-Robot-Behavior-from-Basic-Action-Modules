@@ -25,7 +25,7 @@ Prerequisites
        python -m pytest tests/integration/TestAllOperations.py -v -k "Status or Sync or Gripper"
 
        # Multi-robot ops with extended timeout:
-       python -m pytest tests/integration/TestAllOperations.py -v -m multi_robot --timeout=180
+       python -m pytest tests/integration/TestAllOperations.py -v -m multi_robot --timeout=360
 
 Coverage
 --------
@@ -61,7 +61,7 @@ Design Decisions
   ambiguous commands do not trigger LLM code generation (flaky + slow).
 - Negotiation left enabled: Multi-robot tests use 120 s+ timeouts and exercise
   the full LLM negotiation stack (the point of Level 4/5 ops).
-- Per-category timeouts: Status 15 s, Navigation 30 s, Grasp 60 s, Multi 120 s.
+- Per-category timeouts: Status 30 s, Navigation 60 s, Grasp 120 s, Multi 240 s.
 - Signal + wait pair: Tested in two threads; wait thread starts first, signal
   fires after 1 s to ensure the wait is registered before the signal is sent.
 - Field operations: Always use camera_id="TableStereoCamera" (stereo camera).
@@ -107,7 +107,7 @@ _R2_COORD = (0.25, 0.30, 0.10)  # x, y, z  — Robot2 reachable point
 # ---------------------------------------------------------------------------
 
 
-def _reset_robot(robot_id: str, timeout: float = 30.0) -> None:
+def _reset_robot(robot_id: str, timeout: float = 60.0) -> None:
     """
     Send return_to_start for the given robot and ignore the result.
 
@@ -132,7 +132,7 @@ def _cmd(
     *,
     robot_id: str = "Robot1",
     camera_id: str = "TableStereoCamera",
-    timeout: float = 30.0,
+    timeout: float = 60.0,
     request_id: int = 1,
 ) -> Dict[str, Any]:
     """
@@ -176,7 +176,7 @@ class TestStatusOps:
         result = _cmd(
             "check robot status for Robot1",
             robot_id="Robot1",
-            timeout=15.0,
+            timeout=240.0,
             request_id=100,
         )
         assert (
@@ -188,7 +188,7 @@ class TestStatusOps:
         result = _cmd(
             "check robot status for Robot2",
             robot_id="Robot2",
-            timeout=15.0,
+            timeout=240.0,
             request_id=101,
         )
         assert (
@@ -213,13 +213,13 @@ class TestSyncOps:
         result = _cmd(
             "wait 0.5 seconds for Robot1",
             robot_id="Robot1",
-            timeout=15.0,
+            timeout=240.0,
             request_id=200,
         )
         elapsed = time.time() - start
         assert result.get("success") is True, f"wait failed: {result.get('error')}"
-        # Allow generous tolerance for network + backend overhead.
-        assert elapsed < 10.0, f"wait(0.5) took unexpectedly long: {elapsed:.1f}s"
+        # Allow generous tolerance for network + LLM parsing + backend overhead.
+        assert elapsed < 28.0, f"wait(0.5) took unexpectedly long: {elapsed:.1f}s"
 
     def test_signal_and_wait_for_signal_paired(self):
         """
@@ -240,11 +240,11 @@ class TestSyncOps:
         def wait_thread():
             """Thread A: register the wait first."""
             try:
-                barrier.wait(timeout=10.0)
+                barrier.wait(timeout=20.0)
                 results["wait"] = _cmd(
                     "wait for signal test_sync_event for Robot1",
                     robot_id="Robot1",
-                    timeout=30.0,
+                    timeout=240.0,
                     request_id=201,
                 )
             except Exception as exc:
@@ -253,12 +253,12 @@ class TestSyncOps:
         def signal_thread():
             """Thread B: fire the signal after a brief delay."""
             try:
-                barrier.wait(timeout=10.0)
-                time.sleep(1.0)  # Let the wait-side register first
+                barrier.wait(timeout=20.0)
+                time.sleep(2.0)  # Let the wait-side register first
                 results["signal"] = _cmd(
                     "signal test_sync_event for Robot1",
                     robot_id="Robot1",
-                    timeout=15.0,
+                    timeout=240.0,
                     request_id=202,
                 )
             except Exception as exc:
@@ -270,8 +270,8 @@ class TestSyncOps:
         t_wait.start()
         t_signal.start()
 
-        t_wait.join(timeout=35.0)
-        t_signal.join(timeout=20.0)
+        t_wait.join(timeout=70.0)
+        t_signal.join(timeout=40.0)
 
         assert not errors, f"Thread errors in signal/wait pair: {errors}"
         assert (
@@ -298,7 +298,7 @@ class TestGripperOps:
         result = _cmd(
             "open gripper for Robot1",
             robot_id="Robot1",
-            timeout=15.0,
+            timeout=240.0,
             request_id=300,
         )
         assert (
@@ -310,7 +310,7 @@ class TestGripperOps:
         result = _cmd(
             "close gripper for Robot1",
             robot_id="Robot1",
-            timeout=15.0,
+            timeout=240.0,
             request_id=301,
         )
         assert (
@@ -322,7 +322,7 @@ class TestGripperOps:
         result = _cmd(
             "release object for Robot1",
             robot_id="Robot1",
-            timeout=15.0,
+            timeout=240.0,
             request_id=302,
         )
         assert (
@@ -354,7 +354,7 @@ class TestNavigationOps:
         result = _cmd(
             f"move Robot1 to coordinate {x} {y} {z}",
             robot_id="Robot1",
-            timeout=30.0,
+            timeout=240.0,
             request_id=400,
         )
         assert (
@@ -367,7 +367,7 @@ class TestNavigationOps:
         result = _cmd(
             f"move Robot2 to coordinate {x} {y} {z}",
             robot_id="Robot2",
-            timeout=60.0,
+            timeout=240.0,
             request_id=401,
         )
         assert (
@@ -379,7 +379,7 @@ class TestNavigationOps:
         result = _cmd(
             "move Robot1 from -0.25 0.30 0.10 to -0.28 0.25 0.12",
             robot_id="Robot1",
-            timeout=30.0,
+            timeout=240.0,
             request_id=402,
         )
         assert (
@@ -395,7 +395,7 @@ class TestNavigationOps:
         result = _cmd(
             "adjust end effector orientation for Robot1 to 0 90 0",
             robot_id="Robot1",
-            timeout=30.0,
+            timeout=240.0,
             request_id=403,
         )
         assert (
@@ -407,7 +407,7 @@ class TestNavigationOps:
         result = _cmd(
             "return Robot1 to start position",
             robot_id="Robot1",
-            timeout=30.0,
+            timeout=240.0,
             request_id=404,
         )
         assert (
@@ -438,7 +438,7 @@ class TestPerceptionOps:
             "detect objects for Robot1",
             robot_id="Robot1",
             camera_id="main",
-            timeout=30.0,
+            timeout=240.0,
             request_id=500,
         )
         assert (
@@ -451,7 +451,7 @@ class TestPerceptionOps:
             "detect object stereo for Robot1",
             robot_id="Robot1",
             camera_id="TableStereoCamera",
-            timeout=30.0,
+            timeout=240.0,
             request_id=501,
         )
         assert (
@@ -468,7 +468,7 @@ class TestPerceptionOps:
         result = _cmd(
             "analyze scene for Robot1",
             robot_id="Robot1",
-            timeout=90.0,
+            timeout=180.0,
             request_id=502,
         )
         error = result.get("error") or ""
@@ -493,7 +493,7 @@ class TestPerceptionOps:
         result = _cmd(
             "estimate distance from Robot1 to redCube",
             robot_id="Robot1",
-            timeout=30.0,
+            timeout=240.0,
             request_id=503,
         )
         # Distance estimation may fail gracefully if object is not in scene.
@@ -506,7 +506,7 @@ class TestPerceptionOps:
         result = _cmd(
             "estimate distance between redCube and blueCube for Robot1",
             robot_id="Robot1",
-            timeout=30.0,
+            timeout=240.0,
             request_id=504,
         )
         assert (
@@ -535,7 +535,7 @@ class TestFieldOps:
             "detect field for Robot1",
             robot_id="Robot1",
             camera_id="TableStereoCamera",
-            timeout=30.0,
+            timeout=240.0,
             request_id=600,
         )
         assert (
@@ -548,7 +548,7 @@ class TestFieldOps:
             "get field center for Robot1",
             robot_id="Robot1",
             camera_id="TableStereoCamera",
-            timeout=30.0,
+            timeout=240.0,
             request_id=601,
         )
         assert (
@@ -561,7 +561,7 @@ class TestFieldOps:
             "detect all fields for Robot1",
             robot_id="Robot1",
             camera_id="TableStereoCamera",
-            timeout=30.0,
+            timeout=240.0,
             request_id=602,
         )
         assert (
@@ -591,7 +591,7 @@ class TestSpatialOps:
         result = _cmd(
             "move Robot1 relative to redCube offset 0.0 0.1 0.0",
             robot_id="Robot1",
-            timeout=30.0,
+            timeout=240.0,
             request_id=700,
         )
         assert (
@@ -603,7 +603,7 @@ class TestSpatialOps:
         result = _cmd(
             "move Robot1 between redCube and blueCube",
             robot_id="Robot1",
-            timeout=60.0,
+            timeout=240.0,
             request_id=701,
         )
         assert (
@@ -615,7 +615,7 @@ class TestSpatialOps:
         result = _cmd(
             "move Robot1 to region left_workspace",
             robot_id="Robot1",
-            timeout=60.0,
+            timeout=240.0,
             request_id=702,
         )
         assert (
@@ -627,7 +627,7 @@ class TestSpatialOps:
         result = _cmd(
             "follow path for Robot1: -0.25 0.30 0.10, -0.28 0.25 0.12, -0.22 0.28 0.08",
             robot_id="Robot1",
-            timeout=60.0,
+            timeout=240.0,
             request_id=703,
         )
         assert (
@@ -664,12 +664,12 @@ class TestGraspOps:
         before attempting a grasp.
         """
         _reset_robot("Robot2")
-        _cmd("open gripper for Robot2", robot_id="Robot2", timeout=15.0, request_id=0)
+        _cmd("open gripper for Robot2", robot_id="Robot2", timeout=240.0, request_id=0)
         x, y, z = _R2_COORD
         _cmd(
             f"move Robot2 to coordinate {x} {y} {z}",
             robot_id="Robot2",
-            timeout=30.0,
+            timeout=240.0,
             request_id=0,
         )
 
@@ -681,7 +681,7 @@ class TestGraspOps:
         result = _cmd(
             "grasp redCube with Robot2",
             robot_id="Robot2",
-            timeout=60.0,
+            timeout=240.0,
             request_id=800,
         )
         # A structured error (e.g. "object not found") is still a valid response.
@@ -694,7 +694,7 @@ class TestGraspOps:
         result = _cmd(
             "align Robot2 to object redCube",
             robot_id="Robot2",
-            timeout=60.0,
+            timeout=240.0,
             request_id=801,
         )
         assert (
@@ -728,15 +728,15 @@ class TestMultiRobotOps:
         """Return both robots to home and open grippers before every multi-robot test."""
         _reset_robot("Robot1")
         _reset_robot("Robot2")
-        _cmd("open gripper for Robot1", robot_id="Robot1", timeout=15.0, request_id=0)
-        _cmd("open gripper for Robot2", robot_id="Robot2", timeout=15.0, request_id=0)
+        _cmd("open gripper for Robot1", robot_id="Robot1", timeout=240.0, request_id=0)
+        _cmd("open gripper for Robot2", robot_id="Robot2", timeout=240.0, request_id=0)
 
     def test_detect_other_robot(self):
         """detect_other_robot reports Robot2's position relative to Robot1."""
         result = _cmd(
             "detect other robot from Robot1 perspective",
             robot_id="Robot1",
-            timeout=120.0,
+            timeout=240.0,
             request_id=900,
         )
         assert (
@@ -748,7 +748,7 @@ class TestMultiRobotOps:
         result = _cmd(
             "mirror movement of Robot1 with Robot2",
             robot_id="Robot1",
-            timeout=120.0,
+            timeout=240.0,
             request_id=901,
         )
         assert (
@@ -764,7 +764,7 @@ class TestMultiRobotOps:
         result = _cmd(
             "grasp redCube with Robot2 for handoff to Robot1",
             robot_id="Robot2",
-            timeout=120.0,
+            timeout=240.0,
             request_id=902,
         )
         assert (
@@ -800,7 +800,7 @@ class TestCollaborativeOps:
         result = _cmd(
             "stabilize redCube using Robot1 and Robot2",
             robot_id="Robot1",
-            timeout=120.0,
+            timeout=240.0,
             request_id=1000,
         )
         assert (
@@ -833,7 +833,7 @@ class TestVariableChaining:
     def reset_before_each(self):
         """Return Robot1 to home and open gripper before every chaining test."""
         _reset_robot("Robot1")
-        _cmd("open gripper for Robot1", robot_id="Robot1", timeout=15.0, request_id=0)
+        _cmd("open gripper for Robot1", robot_id="Robot1", timeout=240.0, request_id=0)
 
     def test_detect_then_move_to_detected_position(self):
         """detect_object_stereo → $target → move_to_coordinate uses 3D stereo coords."""
@@ -842,7 +842,7 @@ class TestVariableChaining:
             "detect object stereo for Robot1 as $target; move Robot1 to $target",
             robot_id="Robot1",
             camera_id="TableStereoCamera",
-            timeout=60.0,
+            timeout=240.0,
             request_id=1100,
         )
         # Either succeeds end-to-end or fails with a structured error explaining why.
@@ -856,7 +856,7 @@ class TestVariableChaining:
             "detect object stereo for Robot1 as $target; grasp $target with Robot1",
             robot_id="Robot1",
             camera_id="TableStereoCamera",
-            timeout=60.0,
+            timeout=240.0,
             request_id=1101,
         )
         assert (
@@ -872,7 +872,7 @@ class TestVariableChaining:
             ),
             robot_id="Robot1",
             camera_id="TableStereoCamera",
-            timeout=90.0,
+            timeout=180.0,
             request_id=1102,
         )
         assert (

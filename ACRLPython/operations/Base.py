@@ -336,6 +336,20 @@ class BasicOperation:
                 recovery_suggestions=["Contact developer to implement this operation"],
             )
 
+        # Clamp numeric parameters to valid_range before validation so that
+        # sub-millimeter floating-point noise from stereo detection does not
+        # cause spurious range errors (e.g. y=-0.0007 when range is [0.0, 0.7]).
+        CLAMP_EPSILON = 1e-4  # 0.1 mm tolerance
+        for param in self.parameters:
+            if param.valid_range and param.name in kwargs:
+                value = kwargs[param.name]
+                if isinstance(value, (int, float)):
+                    min_val, max_val = param.valid_range
+                    if min_val - CLAMP_EPSILON <= value < min_val:
+                        kwargs[param.name] = min_val
+                    elif max_val < value <= max_val + CLAMP_EPSILON:
+                        kwargs[param.name] = max_val
+
         # Validate parameters
         validation_error = self.validate_parameters(kwargs)
         if validation_error:

@@ -167,9 +167,13 @@ class VectorStore:
                     f"Query embedding dimension mismatch: expected {self.embedding_dimension}, got {len(query_embedding)}"
                 )
 
-            # Compute cosine similarity
+            # Compute cosine similarity; suppress divide/overflow warnings that
+            # arise from zero-norm TF-IDF vectors (e.g. all-stopword documents).
+            # nan_to_num converts those NaN scores to 0.0 (no match).
             query = query_embedding.reshape(1, -1)
-            similarities = cosine_similarity(query, self.vectors)[0]
+            with np.errstate(divide="ignore", over="ignore", invalid="ignore"):
+                similarities = cosine_similarity(query, self.vectors)[0]
+            similarities = np.nan_to_num(similarities, nan=0.0, posinf=1.0, neginf=0.0)
 
             # Create results with metadata
             results = []
