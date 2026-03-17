@@ -151,9 +151,30 @@ def return_to_start_position(
                             _use_ros = False
 
                 if _use_ros:
-                    result = bridge.plan_return_to_start(robot_id=robot_id)
+                    # Read the Unity start joint targets from WorldState so MoveIt plans
+                    # to the same pose the TCP path uses, not the URDF all-zeros pose.
+                    start_joint_angles = None
+                    try:
+                        from core.Imports import get_world_state
+                        ws = get_world_state()
+                        robot_state = ws.get_robot_state(robot_id) if ws else None
+                        if robot_state and robot_state.start_joint_angles:
+                            start_joint_angles = robot_state.start_joint_angles
+                    except Exception:
+                        pass
+                    result = bridge.plan_return_to_start(
+                        robot_id=robot_id, target_joint_angles=start_joint_angles
+                    )
                     if result and result.get("success"):
                         logger.info(f"ROS return to start completed for {robot_id}")
+                        # Open gripper via TCP after the arm has settled at start position.
+                        # ROSTrajectorySubscriber has no semantic context about return-to-start,
+                        # so the gripper open must be triggered here in the operation layer.
+                        try:
+                            from .GripperOperations import control_gripper
+                            control_gripper(robot_id, open_gripper=True)
+                        except Exception as gripper_err:
+                            logger.warning(f"Gripper open after ROS return-to-start failed: {gripper_err}")
                         return OperationResult.success_result(
                             {
                                 "robot_id": robot_id,

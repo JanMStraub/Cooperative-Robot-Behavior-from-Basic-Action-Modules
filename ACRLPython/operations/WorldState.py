@@ -104,6 +104,7 @@ class RobotState:
     is_moving: bool = False
     is_initialized: bool = False
     joint_angles: Optional[list[float]] = None
+    start_joint_angles: Optional[list[float]] = None  # Saved at registration; radians, ROS convention
     timestamp: float = field(default_factory=time.time)
 
 
@@ -393,6 +394,7 @@ class WorldState(SingletonBase):
                 "is_initialized", state.is_initialized
             )
             state.joint_angles = state_data.get("joint_angles", state.joint_angles)
+            state.start_joint_angles = state_data.get("start_joint_angles", state.start_joint_angles)
             state.timestamp = time.time()
 
             logger.debug(f"Updated robot state for {robot_id}")

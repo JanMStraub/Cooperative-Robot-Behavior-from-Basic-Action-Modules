@@ -129,6 +129,7 @@ namespace PythonCommunication
     /// - control_gripper: Open or close the gripper
     /// - check_robot_status: Get current robot state
     /// - return_to_start_position: Move robot back to initial position
+    /// - pick_object_at_coordinate: Hover → descent → grasp sequence at known coordinates
     ///
     /// Usage:
     /// 1. Attach this component to a GameObject in your scene
@@ -335,6 +336,10 @@ namespace PythonCommunication
 
                 case "release_object":
                     ExecuteReleaseObject(command);
+                    break;
+
+                case "pick_object_at_coordinate":
+                    ExecutePickObjectAtCoordinate(command);
                     break;
 
                 case "move_from_a_to_b":
@@ -1116,6 +1121,234 @@ namespace PythonCommunication
                 );
                 _failedCommands++;
             }
+        }
+
+        /// <summary>
+        /// Execute pick_object_at_coordinate command.
+        /// Encodes the hover → descent → grasp sequence that prevents the gripper
+        /// from closing while still above the object.
+        /// Sequence: open gripper → move to hover (target + approach_offset) →
+        ///           descend to contact (target) → close gripper.
+        /// </summary>
+        private void ExecutePickObjectAtCoordinate(RobotCommand command)
+        {
+            try
+            {
+                if (
+                    !ValidateAndGetRobot(
+                        command.robot_id,
+                        "pick_object_at_coordinate",
+                        out RobotInstance robotInstance,
+                        out RobotController controller
+                    )
+                )
+                {
+                    return;
+                }
+
+                if (
+                    ShouldSkipForROSMode(
+                        controller,
+                        command.robot_id,
+                        "pick_object_at_coordinate",
+                        command.request_id
+                    )
+                )
+                    return;
+
+                if (command.parameters == null || command.parameters.target_position == null)
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} pick_object_at_coordinate: Missing parameters or target_position"
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                // Contact position (object centre) and hover position (+ approach_offset along Y).
+                Vector3 contactPos = TargetPositionToVector3(command.parameters.target_position);
+                float hoverHeight =
+                    command.parameters.approach_offset > 0f
+                        ? command.parameters.approach_offset
+                        : 0.10f;
+                Vector3 hoverPos = contactPos + new Vector3(0f, hoverHeight, 0f);
+
+                GripperController gripperController =
+                    robotInstance.robotGameObject.GetComponentInChildren<GripperController>();
+                if (gripperController == null)
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} pick_object_at_coordinate: Robot '{command.robot_id}' has no GripperController"
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                StartCoroutine(
+                    PickObjectAtCoordinateCoroutine(
+                        controller,
+                        robotInstance.simpleController,
+                        gripperController,
+                        hoverPos,
+                        contactPos,
+                        command.robot_id,
+                        command.request_id
+                    )
+                );
+
+                if (_verboseLogging)
+                {
+                    Debug.Log(
+                        $"{_logPrefix} pick_object_at_coordinate: {command.robot_id} "
+                            + $"hover=({hoverPos.x:F3},{hoverPos.y:F3},{hoverPos.z:F3}) "
+                            + $"contact=({contactPos.x:F3},{contactPos.y:F3},{contactPos.z:F3})"
+                    );
+                }
+
+                _successfulCommands++;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"{_logPrefix} Error executing pick_object_at_coordinate: {ex.Message}\n{ex.StackTrace}"
+                );
+                _failedCommands++;
+            }
+        }
+
+        /// <summary>
+        /// Coroutine for pick_object_at_coordinate.
+        /// Steps: open gripper → move to hover → descend to contact → close gripper.
+        /// Each movement step has a 15-second timeout; gripper actions wait 0.5 s.
+        /// </summary>
+        private IEnumerator PickObjectAtCoordinateCoroutine(
+            RobotController controller,
+            SimpleRobotController simpleController,
+            GripperController gripperController,
+            Vector3 hoverPos,
+            Vector3 contactPos,
+            string robotId,
+            uint requestId
+        )
+        {
+            const float segmentTimeout = 15.0f;
+            bool usingSimple = (controller == null && simpleController != null);
+
+            // Step 1: Open gripper so fingers clear the object during approach.
+            gripperController.OpenGrippers();
+            yield return new WaitForSeconds(0.5f);
+
+            // Step 2: Move to hover position.
+            if (controller != null)
+                controller.SetTarget(hoverPos);
+            else if (simpleController != null)
+                simpleController.SetTarget(hoverPos);
+
+            float timer = 0f;
+            if (usingSimple)
+            {
+                while (!simpleController.HasReachedTarget)
+                {
+                    timer += 0.1f;
+                    if (timer > segmentTimeout)
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} pick_object_at_coordinate: Timeout reaching hover position."
+                        );
+                        SendCommandCompletion(
+                            robotId,
+                            "pick_object_at_coordinate",
+                            false,
+                            requestId
+                        );
+                        yield break;
+                    }
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+            else
+            {
+                while (
+                    controller != null
+                    && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD
+                )
+                {
+                    timer += 0.1f;
+                    if (timer > segmentTimeout)
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} pick_object_at_coordinate: Timeout reaching hover position."
+                        );
+                        SendCommandCompletion(
+                            robotId,
+                            "pick_object_at_coordinate",
+                            false,
+                            requestId
+                        );
+                        yield break;
+                    }
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+
+            // Step 3: Descend straight to contact position.
+            if (controller != null)
+                controller.SetTarget(contactPos);
+            else if (simpleController != null)
+                simpleController.SetTarget(contactPos);
+
+            timer = 0f;
+            if (usingSimple)
+            {
+                while (!simpleController.HasReachedTarget)
+                {
+                    timer += 0.1f;
+                    if (timer > segmentTimeout)
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} pick_object_at_coordinate: Timeout reaching contact position."
+                        );
+                        SendCommandCompletion(
+                            robotId,
+                            "pick_object_at_coordinate",
+                            false,
+                            requestId
+                        );
+                        yield break;
+                    }
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+            else
+            {
+                while (
+                    controller != null
+                    && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD
+                )
+                {
+                    timer += 0.1f;
+                    if (timer > segmentTimeout)
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} pick_object_at_coordinate: Timeout reaching contact position."
+                        );
+                        SendCommandCompletion(
+                            robotId,
+                            "pick_object_at_coordinate",
+                            false,
+                            requestId
+                        );
+                        yield break;
+                    }
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+
+            // Step 4: Close gripper to grasp the object.
+            gripperController.CloseGrippers();
+            yield return new WaitForSeconds(0.5f);
+
+            SendCommandCompletion(robotId, "pick_object_at_coordinate", true, requestId);
         }
 
         /// <summary>
@@ -2222,6 +2455,12 @@ namespace PythonCommunication
                     );
                 }
 
+                // Compute duration from speed_multiplier (speed=2.0 → 1s, speed=0.5 → 4s)
+                float speedMult = _applySpeedMultiplier && command.parameters.speed_multiplier > 0f
+                    ? Mathf.Clamp(command.parameters.speed_multiplier, 0.1f, 2.0f)
+                    : 1.0f;
+                float duration = 2.0f / speedMult;
+
                 // Start coroutine based on controller type
                 if (controller != null)
                 {
@@ -2232,7 +2471,7 @@ namespace PythonCommunication
                             robotInstance.startJointTargets,
                             command.robot_id,
                             command.request_id,
-                            2.0f
+                            duration
                         )
                     );
                 }
@@ -2245,7 +2484,7 @@ namespace PythonCommunication
                             robotInstance.startJointTargets,
                             command.robot_id,
                             command.request_id,
-                            2.0f
+                            duration
                         )
                     );
                 }
@@ -2278,16 +2517,26 @@ namespace PythonCommunication
                 yield break;
             }
 
+            // Open gripper before moving so any held object is released at the current
+            // position rather than being dragged along the return trajectory.
+            var gripperController = controller.GetComponentInChildren<GripperController>();
+            gripperController?.OpenGrippers();
+
             // FIX #5: DISABLE IK during manual joint interpolation
             controller.IsManuallyDriven = true;
 
             try
             {
-                // Store initial joint positions from the actual drive targets
+                // Read the physical joint position (radians → degrees) so the lerp starts
+                // exactly where the arm currently is, not where IK last commanded it to be.
+                // Using xDrive.target can cause an impulse at t=0 if IK was still moving.
                 float[] startJoints = new float[controller.robotJoints.Length];
                 for (int i = 0; i < controller.robotJoints.Length && i < startJoints.Length; i++)
                 {
-                    startJoints[i] = controller.robotJoints[i].xDrive.target;
+                    var j = controller.robotJoints[i];
+                    startJoints[i] = j.jointPosition.dofCount > 0
+                        ? j.jointPosition[0] * Mathf.Rad2Deg
+                        : j.xDrive.target;
                 }
 
                 float elapsed = 0f;
@@ -2333,46 +2582,48 @@ namespace PythonCommunication
                     yield return new WaitForFixedUpdate();
                 }
 
-                // Ensure final positions are exact
+                // Pin drive targets to exact final values (no teleport — just drive target).
+                // The ArticulationBody PD drive will settle the joints from here.
+                // Critically: do NOT write jointPosition/jointVelocity/jointForce here.
+                // Writing them causes a discontinuity that re-excites the under-damped
+                // wrist joint. The IK system never writes these fields either — it only
+                // ever updates xDrive.target and lets the physics drive settle naturally.
                 for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
                 {
                     controller.jointDriveTargets[i] = targetJoints[i];
 
                     var joint = controller.robotJoints[i];
-                    if (joint != null)
-                    {
-                        var drive = joint.xDrive;
-                        drive.target = targetJoints[i];
-                        joint.xDrive = drive;
-                    }
+                    if (joint == null) continue;
+
+                    var drive = joint.xDrive;
+                    drive.target = targetJoints[i];
+                    joint.xDrive = drive;
                 }
 
-                // Wait for joint velocities to fall below threshold before releasing
-                // manual drive. ArticulationBody joints carry inertia from the
-                // interpolation — releasing too early causes a sway/overshoot.
-                const float settleVelThreshold = 2.0f; // deg/s
-                const int maxSettleFrames = 60;         // ~1 s safety cap
-                int settleFrames = 0;
-                while (settleFrames < maxSettleFrames)
+                // Wait for the PD drive to settle: poll joint velocities each physics
+                // frame, matching the same isSettled pattern in RobotController.
+                // IsManuallyDriven stays true throughout so IK does not interfere.
+                // Cap at MAX_SETTLE_FRAMES to avoid hanging if a joint is truly stuck.
+                const int MAX_SETTLE_FRAMES = 120; // 2s at 60 Hz physics
+                const float SETTLE_THRESHOLD_RAD_S = 0.01f;
+
+                for (int frame = 0; frame < MAX_SETTLE_FRAMES; frame++)
                 {
+                    yield return new WaitForFixedUpdate();
+
                     bool allSettled = true;
                     for (int i = 0; i < controller.robotJoints.Length; i++)
                     {
                         var joint = controller.robotJoints[i];
-                        if (joint != null && joint.jointVelocity.dofCount > 0)
+                        if (joint == null || joint.jointVelocity.dofCount == 0) continue;
+                        if (Mathf.Abs(joint.jointVelocity[0]) > SETTLE_THRESHOLD_RAD_S)
                         {
-                            float velDegPerSec = Mathf.Abs(joint.jointVelocity[0]) * Mathf.Rad2Deg;
-                            if (velDegPerSec > settleVelThreshold)
-                            {
-                                allSettled = false;
-                                break;
-                            }
+                            allSettled = false;
+                            break;
                         }
                     }
-                    if (allSettled)
-                        break;
-                    settleFrames++;
-                    yield return new WaitForFixedUpdate();
+
+                    if (allSettled) break;
                 }
 
                 // FIX #5: Clear the target and mark as reached to allow IK to run again
@@ -2388,8 +2639,13 @@ namespace PythonCommunication
             }
             finally
             {
-                // FIX #5: ALWAYS re-enable IK, even if something fails
+                // Re-enable IK before opening gripper so the drive releases torque before
+                // the gripper reaction force hits the wrist joints.
                 controller.IsManuallyDriven = false;
+                // Open gripper at the final start position so the robot is ready to grasp.
+                // (The earlier OpenGrippers call at the top only releases objects before
+                // the arm moves; this call ensures the gripper is open on arrival.)
+                gripperController?.OpenGrippers();
             }
         }
 

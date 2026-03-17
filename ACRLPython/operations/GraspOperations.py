@@ -435,6 +435,11 @@ def _grasp_via_ros_position_only(
     pre_grasp_position = _vec_to_pos(object_position, PRE_GRASP_HOVER_OFFSET)
     grasp_position = _vec_to_pos(object_position, GRASP_TCP_OFFSET)
 
+    logger.info(
+        f"[GRASP_DEBUG] {robot_id} object_position={object_position}, "
+        f"pre_grasp_y={pre_grasp_position['y']:.3f}, grasp_y={grasp_position['y']:.3f}"
+    )
+
     # Step 1: Move to pre-grasp hover position
     logger.info(f"Moving to pre-grasp position for {robot_id}")
     pre_result = bridge.plan_and_execute(
@@ -458,7 +463,10 @@ def _grasp_via_ros_position_only(
     time.sleep(0.3)
 
     # Step 2: Straight-line Cartesian descent to grasp position
-    logger.info(f"Descending to grasp position for {robot_id}")
+    logger.info(
+        f"[GRASP_DEBUG] {robot_id} starting Cartesian descent to "
+        f"Unity y={grasp_position['y']:.3f} (object_y + {GRASP_TCP_OFFSET}m)"
+    )
     result = bridge.plan_cartesian_descent(
         position=grasp_position,
         orientation=top_down_orientation,

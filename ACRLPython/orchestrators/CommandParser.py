@@ -119,11 +119,10 @@ class _PromptBuilder:
 
         Example for multi-robot handoff:
         {{
-        "reasoning": "Robot1 detects red cube, moves to it, and grips. Robot2 waits for signal, then both move to handoff position. Robot2 grips, then Robot1 releases.",
+        "reasoning": "Robot1 detects and grasps the red cube using grasp_object. It then signals Robot2, both move to handoff position. Robot2 grips, then Robot1 releases.",
         "plan": [
             {{"parallel_group": 1, "robot": "Robot1", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "capture_var": "target"}},
-            {{"parallel_group": 2, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "position": "$target"}}}},
-            {{"parallel_group": 3, "robot": "Robot1", "operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": false}}}},
+            {{"parallel_group": 2, "robot": "Robot1", "operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "red_cube"}}}},
             {{"parallel_group": 3, "robot": "Robot1", "operation": "signal", "params": {{"event_name": "r1_gripped"}}}},
             {{"parallel_group": 3, "robot": "Robot2", "operation": "wait_for_signal", "params": {{"event_name": "r1_gripped"}}}},
             {{"parallel_group": 4, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": 0.0, "y": 0.3, "z": 0.15}}}},
@@ -144,11 +143,19 @@ class _PromptBuilder:
         - wait(duration_ms): Simple time-based pause
         * Example: {{"operation": "wait", "params": {{"duration_ms": 500}}}}
 
+        === GRASP RULE (CRITICAL) ===
+
+        When the task involves picking up, grabbing, or grasping an object:
+        - ALWAYS use grasp_object (NOT move_to_coordinate + control_gripper)
+        - grasp_object handles the full approach, descent, and grip internally
+        - Example: {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "blue_cube"}}}}
+        - Only use control_gripper directly for explicit open/close commands unrelated to picking
+
         === SINGLE-ROBOT RULES ===
 
         1. Extract each distinct action as a separate operation
         2. Parse coordinates from text like "(0.3, 0.2, 0.1)" or "x=0.3, y=0.2, z=0.1"
-        3. "close gripper" or "grasp" means control_gripper with open_gripper=false
+        3. "close gripper" or "grip" (not during a pick task) means control_gripper with open_gripper=false
         4. "open gripper" or "release" means control_gripper with open_gripper=true
         5. Include robot_id in every operation's params
         6. Preserve the order of operations as specified in the command

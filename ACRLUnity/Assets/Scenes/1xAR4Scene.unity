@@ -225,7 +225,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   config: {fileID: 11400000, guid: 1c6ca8dd9c7e2451aba210581aa5f7bc, type: 2}
-  _coordinationConfig: {fileID: 11400000, guid: 39e329affb765483096203bdbd1b6df1, type: 2}
 --- !u!114 &1032633148
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -242,28 +241,23 @@ MonoBehaviour:
   - regionName: Left_Workspace
     minBounds: {x: -0.65, y: 0, z: -0.5}
     maxBounds: {x: -0.1, y: 0.7, z: 0.5}
-    allocatedRobotId: Robot1
     debugColor: {r: 0.7529412, g: 0.21176471, b: 0.24488194, a: 0}
   - regionName: Right_Workspace
     minBounds: {x: 0.1, y: 0, z: -0.5}
     maxBounds: {x: 0.65, y: 0.7, z: 0.5}
-    allocatedRobotId: Robot2
     debugColor: {r: 0.16731933, g: 0.5732999, b: 0.754717, a: 0}
   - regionName: Shared_Workspace
     minBounds: {x: -0.1, y: 0, z: -0.5}
     maxBounds: {x: 0.1, y: 0.7, z: 0.5}
-    allocatedRobotId: 
     debugColor: {r: 0.7529412, g: 0.74099845, b: 0.16862744, a: 0}
   - regionName: Center_Workspace
     minBounds: {x: -0.3, y: 0, z: -0.3}
     maxBounds: {x: 0.3, y: 0.3, z: 0.3}
-    allocatedRobotId: 
     debugColor: {r: 0.7529412, g: 0.74099845, b: 0.16862744, a: 0}
   _minRobotSeparation: 0.2
   _collisionSafetyMargin: 0.01
   _robot1BasePosition: {x: -0.475, y: 0, z: 0}
   _robot2BasePosition: {x: 0.475, y: 0, z: 0}
-  _allowMovementInVoid: 1
   _enableDebugVisualization: 0
 --- !u!1 &1168411245
 GameObject:
@@ -524,8 +518,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PythonCommunication.PythonCommandHandler
   _verboseLogging: 0
   _applySpeedMultiplier: 1
-  _enablePythonVerification: 1
-  _coordinationConfig: {fileID: 11400000, guid: 39e329affb765483096203bdbd1b6df1, type: 2}
   _successfulCommands: 0
   _failedCommands: 0
 --- !u!114 &1595579026
@@ -721,9 +713,9 @@ Camera:
     height: 1
   near clip plane: 0.3
   far clip plane: 2
-  field of view: 90
+  field of view: 70
   orthographic: 0
-  orthographic size: 5
+  orthographic size: 1
   m_Depth: 0
   m_CullingMask:
     serializedVersion: 2
@@ -747,13 +739,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1800216808}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.19936788, y: 0, z: 0, w: 0.97992474}
-  m_LocalPosition: {x: 0, y: 0.5, z: -0.5}
+  m_LocalRotation: {x: 0.2164396, y: 0, z: 0, w: 0.97629607}
+  m_LocalPosition: {x: 0, y: 0.5, z: -0.7}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 1
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 23, y: 0, z: 0}
+  m_LocalEulerAnglesHint: {x: 25, y: 0, z: 0}
 --- !u!1 &1931604902 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 5985811518645940055, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
@@ -823,11 +815,11 @@ PrefabInstance:
       objectReference: {fileID: 2107300034}
     - target: {fileID: 3861989622656847497, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: _settleTimeoutSeconds
-      value: 2
+      value: 4
       objectReference: {fileID: 0}
     - target: {fileID: 3861989622656847497, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: _settleVelocityThresholdDegPerSec
-      value: 5
+      value: 2
       objectReference: {fileID: 0}
     - target: {fileID: 5271878870994714299, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.x
@@ -869,6 +861,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5567977826561441543, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: field of view
+      value: 60
+      objectReference: {fileID: 0}
     - target: {fileID: 5699709490432778825, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Enabled
       value: 1
@@ -880,6 +876,22 @@ PrefabInstance:
     - target: {fileID: 6897178052544332906, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
       value: Environment
+      objectReference: {fileID: 0}
+    - target: {fileID: 7507869540839737869, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -0.7
+      objectReference: {fileID: 0}
+    - target: {fileID: 7507869540839737869, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.9848078
+      objectReference: {fileID: 0}
+    - target: {fileID: 7507869540839737869, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0.17364816
+      objectReference: {fileID: 0}
+    - target: {fileID: 7507869540839737869, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 20
       objectReference: {fileID: 0}
     - target: {fileID: 7753383895358973258, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Enabled
@@ -895,11 +907,15 @@ PrefabInstance:
       objectReference: {fileID: 2048469486}
     - target: {fileID: 7753383895358973258, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: _settleTimeoutSeconds
-      value: 2
+      value: 4
       objectReference: {fileID: 0}
     - target: {fileID: 7753383895358973258, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: _settleVelocityThresholdDegPerSec
-      value: 5
+      value: 2
+      objectReference: {fileID: 0}
+    - target: {fileID: 9086981115628272307, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -0.7
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

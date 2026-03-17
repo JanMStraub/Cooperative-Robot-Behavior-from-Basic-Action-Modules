@@ -20,6 +20,7 @@ from .MoveOperations import (
     MOVE_TO_COORDINATE_OPERATION,
     MOVE_FROM_A_TO_B_OPERATION,
     ADJUST_END_EFFECTOR_ORIENTATION_OPERATION,
+    PICK_OBJECT_AT_COORDINATE_OPERATION,
 )
 from .StatusOperations import CHECK_ROBOT_STATUS_OPERATION
 from .GripperOperations import (
@@ -92,6 +93,7 @@ class OperationRegistry:
             MOVE_FROM_A_TO_B_OPERATION,
             ADJUST_END_EFFECTOR_ORIENTATION_OPERATION,
             RETURN_TO_START_POSITION_OPERATION,
+            PICK_OBJECT_AT_COORDINATE_OPERATION,
             # Gripper Control
             CONTROL_GRIPPER_OPERATION,
             RELEASE_OBJECT_OPERATION,

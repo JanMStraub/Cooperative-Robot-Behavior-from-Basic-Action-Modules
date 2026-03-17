@@ -1419,12 +1419,24 @@ class ROSMotionServer:
             start_state.joint_state = filtered_js
             goal.request.start_state = start_state
 
-        # Joint-space goal: all 6 arm joints at 0 rad (URDF home pose)
+        # Joint-space goal: use provided target angles or fall back to URDF zero pose.
+        # Callers should pass the actual Unity start joint targets (in radians) so MoveIt
+        # plans to the same configuration the TCP path uses — not the URDF all-zeros pose,
+        # which may be singular or differ from the scene's initial robot position.
+        target_joint_angles = request.get("target_joint_angles")
+        joint_names = list(_ARM_JOINT_LIMITS.keys())
         constraints = Constraints()
-        for joint_name in _ARM_JOINT_LIMITS:
+        for i, joint_name in enumerate(joint_names):
+            target_rad = (
+                target_joint_angles[i]
+                if target_joint_angles is not None and i < len(target_joint_angles)
+                else 0.0
+            )
+            lower, upper = _ARM_JOINT_LIMITS[joint_name]
+            target_rad = max(lower, min(upper, target_rad))
             jc = JointConstraint()
             jc.joint_name = joint_name
-            jc.position = 0.0
+            jc.position = target_rad
             jc.tolerance_above = 0.01
             jc.tolerance_below = 0.01
             jc.weight = 1.0

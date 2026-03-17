@@ -29,6 +29,7 @@ namespace PythonCommunication
         public bool is_moving;
         public bool is_initialized;
         public float[] joint_angles;
+        public float[] start_joint_angles; // Saved at registration time; used by ROS return-to-start
         public string control_mode; // "unity", "ros", "hybrid" (null if no ROSControlModeManager)
     }
 
@@ -329,6 +330,15 @@ namespace PythonCommunication
                     controlMode = rosControlMode.CurrentMode.ToString().ToLower();
                 }
 
+                // Convert startJointTargets (degrees, Unity) → radians for ROS consumers
+                float[] startJointAnglesRad = null;
+                if (robotInstance.startJointTargets != null && robotInstance.startJointTargets.Length > 0)
+                {
+                    startJointAnglesRad = new float[robotInstance.startJointTargets.Length];
+                    for (int i = 0; i < robotInstance.startJointTargets.Length; i++)
+                        startJointAnglesRad[i] = robotInstance.startJointTargets[i] * Mathf.Deg2Rad;
+                }
+
                 var robotState = new RobotStateData
                 {
                     robot_id = robotId,
@@ -339,6 +349,7 @@ namespace PythonCommunication
                     is_moving = isMoving,
                     is_initialized = true,
                     joint_angles = jointAngles,
+                    start_joint_angles = startJointAnglesRad,
                     control_mode = controlMode,
                 };
 

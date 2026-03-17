@@ -415,13 +415,15 @@ class ROSBridge:
         }
         return self._send_command(cmd, timeout=planning_time + 10)
 
-    def plan_return_to_start(self, robot_id="Robot1", planning_time=5.0):
+    def plan_return_to_start(self, robot_id="Robot1", planning_time=5.0, target_joint_angles=None):
         """
         Plan and execute a return to the robot's start/home configuration.
 
         Args:
             robot_id: Robot namespace (e.g., "Robot1", "Robot2").
             planning_time: Max planning time in seconds.
+            target_joint_angles: List of 6 joint angles in radians (ROS convention).
+                If None, the motion client falls back to all-zeros (URDF home pose).
 
         Returns:
             Dict with success status and details.
@@ -431,6 +433,8 @@ class ROSBridge:
             "robot_id": robot_id,
             "planning_time": planning_time,
         }
+        if target_joint_angles is not None:
+            cmd["target_joint_angles"] = target_joint_angles
         return self._send_command(cmd, timeout=self._execution_timeout)
 
     def ping(self):
