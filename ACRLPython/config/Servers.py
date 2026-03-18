@@ -119,6 +119,35 @@ DEFAULT_LMSTUDIO_MODEL = os.environ.get(
 )
 DEFAULT_TEMPERATURE = float(os.environ.get("DEFAULT_TEMPERATURE", "0.1"))
 
+# Maximum thinking tokens for reasoning models (e.g. ministral-3-14b-reasoning).
+# LM Studio exposes this as `budget_tokens` inside the `thinking` block.
+# Set to 0 to disable thinking entirely (fastest); increase for harder tasks.
+# Has no effect on non-reasoning models.
+LLM_THINKING_BUDGET = int(os.environ.get("LLM_THINKING_BUDGET", "1024"))
+
+# Set to True to enable thinking for reasoning models (e.g. ministral-3-14b-reasoning).
+# Requires max_tokens to be large enough to cover both thinking + actual response.
+LLM_THINKING_ENABLED = os.environ.get("LLM_THINKING_ENABLED", "true").lower() == "true"
+
+# ============================================================================
+# Shared LLM System Prompt
+# ============================================================================
+
+# A concise domain preamble injected into every LLM call as the system message.
+# Individual role-specific prompts (CommandParser, RobotLLMAgent, etc.) extend
+# this with their own instructions — they should NOT repeat this context.
+SYSTEM_PROMPT_BASE = (
+    "You are an AI controller for a dual-arm AR4 robotic system running inside a "
+    "Unity simulation. The workspace is a table-top environment with two 6-DOF robot "
+    "arms: Robot1 (left side, base at x≈-0.4) and Robot2 (right side, base at x≈+0.4). "
+    "Workspace bounds: X ∈ [-0.6, 0.6], Y ∈ [0.0, 0.6], Z ∈ [-0.6, 0.6]. "
+    "Operations are executed sequentially or in named parallel_groups. "
+    "Robots communicate via signal/wait_for_signal events. "
+    "You must ONLY use operations, object IDs, and coordinate values explicitly provided "
+    "in the user message — never invent names, IDs, or positions. "
+    "Output only valid JSON. Never include markdown fences, reasoning text, or [THINK] tags."
+)
+
 # Popular vision models (for reference)
 VISION_MODELS = [
     "gemma-3-12b",

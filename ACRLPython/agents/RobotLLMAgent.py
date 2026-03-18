@@ -14,13 +14,13 @@ as CommandParser._parse_with_llm().
 
 import json
 import logging
-import re
 from dataclasses import dataclass, field
 from typing import Dict, Any, List, Optional
 
 import requests
 
-from config.Servers import LMSTUDIO_BASE_URL, DEFAULT_LMSTUDIO_MODEL
+from config.Servers import LMSTUDIO_BASE_URL, DEFAULT_LMSTUDIO_MODEL, LLM_THINKING_BUDGET, LLM_THINKING_ENABLED, SYSTEM_PROMPT_BASE
+from core.LLMUtils import extract_json as _extract_json_util
 from config.Negotiation import (
     AGENT_LLM_TIMEOUT,
     NEGOTIATION_TEMPERATURE,
@@ -170,9 +170,12 @@ class RobotLLMAgent:
         context = self._build_agent_context(world_state_snapshot)
         ops_str = ", ".join(available_operations)
 
+        workspace_side = "left (X < 0)" if "1" in self.robot_id else "right (X > 0)"
         system_prompt = (
-            f"You are {self.robot_id}, a robot arm analyzing a task. "
-            f"Respond with a JSON object describing your assessment."
+            SYSTEM_PROMPT_BASE
+            + f" You are {self.robot_id}, the {workspace_side} robot arm. "
+            f"Analyze tasks from your own spatial perspective — only claim capabilities "
+            f"within your workspace bounds. Respond only with a JSON object."
         )
         user_prompt = f"""Analyze this task from your perspective as {self.robot_id}.
 
@@ -248,9 +251,13 @@ Output only valid JSON."""
                 f"constraints={analysis.constraints}"
             )
 
+        workspace_side = "left (X < 0)" if "1" in self.robot_id else "right (X > 0)"
         system_prompt = (
-            f"You are {self.robot_id}, proposing a multi-robot coordination plan. "
-            f"Output a JSON plan that all robots can execute."
+            SYSTEM_PROMPT_BASE
+            + f" You are {self.robot_id}, the {workspace_side} robot arm, proposing a "
+            f"multi-robot coordination plan. Assign operations to robots based on workspace "
+            f"proximity. Every signal must have a matching wait_for_signal. "
+            f"Respond only with a JSON object."
         )
         user_prompt = f"""Propose a plan for this task. This is negotiation round {round_number}.
 
@@ -325,9 +332,13 @@ Output only valid JSON."""
 
         commands_json = json.dumps(proposal.commands, indent=2)
 
+        workspace_side = "left (X < 0)" if "1" in self.robot_id else "right (X > 0)"
         system_prompt = (
-            f"You are {self.robot_id}, evaluating a plan proposed by {proposal.proposer_id}. "
-            f"Determine if the plan is safe and effective for your role."
+            SYSTEM_PROMPT_BASE
+            + f" You are {self.robot_id}, the {workspace_side} robot arm, evaluating a plan "
+            f"proposed by {proposal.proposer_id}. Be conservative: flag any operation that "
+            f"exceeds your workspace bounds or creates collision risk. "
+            f"Respond only with a JSON object."
         )
         user_prompt = f"""Evaluate this plan from your perspective as {self.robot_id}.
 
@@ -454,7 +465,8 @@ Max reach: {self.max_reach}m"""
                     {"role": "user", "content": user_prompt},
                 ],
                 "temperature": self.temperature,
-                "max_tokens": 3000,
+                "max_tokens": 8192,  # Must cover thinking budget + actual JSON response
+                **({"thinking": {"type": "enabled", "budget_tokens": LLM_THINKING_BUDGET}} if LLM_THINKING_ENABLED else {}),
             }
             # Structured output forces the model to emit valid JSON directly,
             # eliminating prose wrapping and Markdown fences.  Kept as opt-in
@@ -495,7 +507,7 @@ Max reach: {self.max_reach}m"""
 
     def _extract_json(self, content: str) -> Optional[Dict]:
         """
-        Extract JSON from LLM response text.
+        Extract JSON from LLM response text. Delegates to core.LLMUtils.
 
         Args:
             content: Raw LLM response
@@ -503,27 +515,7 @@ Max reach: {self.max_reach}m"""
         Returns:
             Parsed JSON dict or None
         """
-        # Try direct parse
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            pass
-
-        # Try markdown code block
-        json_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", content, re.DOTALL)
-        if json_match:
-            try:
-                return json.loads(json_match.group(1).strip())
-            except json.JSONDecodeError:
-                pass
-
-        # Try finding JSON object in text
-        json_match = re.search(r"\{.*\}", content, re.DOTALL)
-        if json_match:
-            try:
-                return json.loads(json_match.group(0))
-            except json.JSONDecodeError:
-                pass
-
-        logger.error(f"[{self.robot_id}] Failed to extract JSON from response")
-        return None
+        result = _extract_json_util(content)
+        if result is None:
+            logger.error(f"[{self.robot_id}] Failed to extract JSON from response")
+        return result

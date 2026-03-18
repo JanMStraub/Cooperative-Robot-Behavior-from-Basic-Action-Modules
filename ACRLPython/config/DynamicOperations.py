@@ -91,6 +91,16 @@ RESTRICTED_BUILTINS = [
 SANDBOX_TIMEOUT = float(os.environ.get("SANDBOX_TIMEOUT", "30.0"))
 
 # ============================================================================
+# LLM Generation Parameters
+# ============================================================================
+
+# Low temperature → deterministic code generation; higher values increase
+# creative variation at the cost of reliability.
+OPERATION_GENERATION_TEMPERATURE = float(
+    os.environ.get("OPERATION_GENERATION_TEMPERATURE", "0.2")
+)
+
+# ============================================================================
 # Generated Operations Directory
 # ============================================================================
 

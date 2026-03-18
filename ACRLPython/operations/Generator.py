@@ -31,8 +31,9 @@ try:
         REQUIRE_USER_REVIEW,
         AUTO_REBUILD_INDEX,
         GENERATED_OPERATIONS_DIR,
+        OPERATION_GENERATION_TEMPERATURE,
     )
-    from config.Servers import LMSTUDIO_BASE_URL, DEFAULT_LMSTUDIO_MODEL
+    from config.Servers import LMSTUDIO_BASE_URL, DEFAULT_LMSTUDIO_MODEL, SYSTEM_PROMPT_BASE
 except ImportError:
     from ..config.DynamicOperations import (
         ENABLE_DYNAMIC_OPERATIONS,
@@ -40,8 +41,9 @@ except ImportError:
         REQUIRE_USER_REVIEW,
         AUTO_REBUILD_INDEX,
         GENERATED_OPERATIONS_DIR,
+        OPERATION_GENERATION_TEMPERATURE,
     )
-    from ..config.Servers import LMSTUDIO_BASE_URL, DEFAULT_LMSTUDIO_MODEL
+    from ..config.Servers import LMSTUDIO_BASE_URL, DEFAULT_LMSTUDIO_MODEL, SYSTEM_PROMPT_BASE
 
 
 class OperationGenerator:
@@ -71,6 +73,7 @@ class OperationGenerator:
         """
         self.lm_studio_url = lm_studio_url or LMSTUDIO_BASE_URL
         self.model = model or DEFAULT_LMSTUDIO_MODEL
+        self.temperature = OPERATION_GENERATION_TEMPERATURE
 
     def generate_operation(
         self, command_text: str, context: Optional[Dict[str, Any]] = None
@@ -263,11 +266,18 @@ Start directly with the module docstring."""
                     "messages": [
                         {
                             "role": "system",
-                            "content": "You are a Python code generator. Output only valid Python code, no markdown formatting.",
+                            "content": (
+                                SYSTEM_PROMPT_BASE
+                                + " You are a Python code generator for this robotics framework. "
+                                "Output only raw Python source code — no markdown fences, no "
+                                "explanations. The generated code will be sandboxed and validated "
+                                "before execution. Only use the imports explicitly listed in the "
+                                "user message."
+                            ),
                         },
                         {"role": "user", "content": prompt},
                     ],
-                    "temperature": 0.2,
+                    "temperature": self.temperature,
                     "max_tokens": 4000,
                 },
                 timeout=120,

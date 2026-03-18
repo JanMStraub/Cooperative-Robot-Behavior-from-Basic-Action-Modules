@@ -13,6 +13,10 @@ LM_STUDIO_URL = os.environ.get("AUTORT_LM_STUDIO_URL", LMSTUDIO_BASE_URL)
 TASK_GENERATION_MODEL = os.environ.get("AUTORT_TASK_MODEL", DEFAULT_LMSTUDIO_MODEL)
 SAFETY_VALIDATION_MODEL = os.environ.get("AUTORT_SAFETY_MODEL", DEFAULT_LMSTUDIO_MODEL)
 
+# LLM temperature settings (configurable via env vars)
+TASK_GENERATION_TEMPERATURE = float(os.environ.get("AUTORT_TASK_GENERATION_TEMPERATURE", "0.7"))
+SAFETY_VALIDATION_TEMPERATURE = float(os.environ.get("AUTORT_SAFETY_VALIDATION_TEMPERATURE", "0.0"))
+
 # AutoRT loop settings
 MAX_TASK_CANDIDATES = int(os.environ.get("AUTORT_MAX_TASKS", "3"))
 LOOP_DELAY_SECONDS = float(os.environ.get("AUTORT_LOOP_DELAY", "5.0"))
@@ -50,7 +54,8 @@ ROBOT_SPATIAL_LAYOUT = {
 }
 
 # JSON parsing
-MAX_JSON_RETRIES = 1
+# 3 attempts matches MAX_NEGOTIATION_ROUNDS — the retry loop injects previous error context
+MAX_JSON_RETRIES = int(os.environ.get("AUTORT_MAX_JSON_RETRIES", "3"))
 
 # Unity integration settings
 UNITY_INTEGRATION_ENABLED = (

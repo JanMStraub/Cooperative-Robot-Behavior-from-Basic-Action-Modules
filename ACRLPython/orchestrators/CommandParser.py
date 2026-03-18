@@ -33,7 +33,11 @@ try:
         DEFAULT_LMSTUDIO_MODEL,
         DEFAULT_TEMPERATURE,
         LLM_REQUEST_TIMEOUT,
+        LLM_THINKING_BUDGET,
+        LLM_THINKING_ENABLED,
+        SYSTEM_PROMPT_BASE,
     )
+    from ..config.Negotiation import USE_STRUCTURED_OUTPUT
     from ..operations.WorkflowPatterns import WorkflowPatternRegistry, WorkflowPattern
 except ImportError:
     from rag import RAGSystem
@@ -42,11 +46,16 @@ except ImportError:
         DEFAULT_LMSTUDIO_MODEL,
         DEFAULT_TEMPERATURE,
         LLM_REQUEST_TIMEOUT,
+        LLM_THINKING_BUDGET,
+        LLM_THINKING_ENABLED,
+        SYSTEM_PROMPT_BASE,
     )
+    from config.Negotiation import USE_STRUCTURED_OUTPUT
     from operations.WorkflowPatterns import WorkflowPatternRegistry, WorkflowPattern
 
 # Configure logging
 from core.LoggingSetup import setup_logging
+from core.LLMUtils import extract_json as _extract_json_util
 
 setup_logging(__name__)
 logger = logging.getLogger(__name__)
@@ -483,20 +492,33 @@ class CommandParser:
     def _do_llm_request(self, prompt: str, command_text: str) -> Dict[str, Any]:
         """Actual HTTP request to LLM, separated for caching purposes."""
         try:
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            SYSTEM_PROMPT_BASE
+                            + " Map natural language variations to canonical parameter "
+                            "values (e.g., 'leftmost' → 'left', 'rightmost' → 'right', "
+                            "'nearest' → 'closest', 'grab' → grasp_object). "
+                            "Preserve the exact operation names from the registry — never "
+                            "invent new operation names."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": DEFAULT_TEMPERATURE,  # Low temperature for deterministic parsing
+                "max_tokens": 8192,  # Must cover thinking budget + actual JSON response
+                **({"thinking": {"type": "enabled", "budget_tokens": LLM_THINKING_BUDGET}} if LLM_THINKING_ENABLED else {}),
+            }
+            # Structured output forces the model to emit valid JSON at the inference layer.
+            # Set USE_STRUCTURED_OUTPUT=false for models that don't support response_format.
+            if USE_STRUCTURED_OUTPUT:
+                payload["response_format"] = {"type": "json_object"}
             response = self._session.post(
                 f"{self.lm_studio_url}/chat/completions",
-                json={
-                    "model": self.model,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "You are a robot command parser. Map natural language variations to valid parameter values (e.g., 'leftmost' → 'left', 'rightmost' → 'right', 'nearest' → 'closest'). Output only valid JSON.",
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    "temperature": DEFAULT_TEMPERATURE,  # Low temperature for deterministic parsing
-                    "max_tokens": 5000,  # Increased for multi-robot coordination (was 1000)
-                },
+                json=payload,
                 timeout=LLM_REQUEST_TIMEOUT,
             )
 
@@ -656,51 +678,8 @@ class CommandParser:
         return self._prompt_builder.format_workflow_pattern(pattern)
 
     def _extract_json_from_response(self, content: str) -> Optional[Dict]:
-        """Extract JSON object from LLM response text."""
-        # Try direct JSON parse
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError as e:
-            logger.debug(f"Direct JSON parse failed: {e}")
-
-        # Try to find JSON in markdown code block
-        json_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", content, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(1).strip()
-            try:
-                return json.loads(json_str)
-            except json.JSONDecodeError as e:
-                logger.warning(
-                    f"Markdown JSON parse failed: {e}. Content length: {len(json_str)}, preview: {json_str[:200]}"
-                )
-            # Retry after stripping JS-style // comments (LLMs often emit these)
-            json_str_clean = re.sub(r"//[^\n]*", "", json_str)
-            try:
-                return json.loads(json_str_clean)
-            except json.JSONDecodeError:
-                pass
-
-        # Try to find JSON object in text
-        json_match = re.search(r"\{.*?\}", content, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(0)
-            try:
-                return json.loads(json_str)
-            except json.JSONDecodeError as e:
-                logger.warning(
-                    f"Regex JSON parse failed: {e}. Content length: {len(json_str)}"
-                )
-            # Retry after stripping JS-style // comments
-            json_str_clean = re.sub(r"//[^\n]*", "", json_str)
-            try:
-                return json.loads(json_str_clean)
-            except json.JSONDecodeError:
-                pass
-
-        logger.error(
-            f"All JSON extraction methods failed. Response length: {len(content)}, preview: {content[:500]}"
-        )
-        return None
+        """Extract JSON object from LLM response text. Delegates to core.LLMUtils."""
+        return _extract_json_util(content)
 
     def _validate_commands(
         self, commands: List[Dict], default_robot_id: str
