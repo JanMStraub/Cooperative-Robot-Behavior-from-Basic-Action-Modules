@@ -330,6 +330,10 @@ namespace PythonCommunication
                     ExecuteReturnToStartPosition(command);
                     break;
 
+                case "set_clear_target_on_complete":
+                    ExecuteSetClearTargetOnComplete(command);
+                    break;
+
                 case "grasp_object":
                     ExecuteGraspObject(command);
                     break;
@@ -2405,11 +2409,35 @@ namespace PythonCommunication
         }
 
         /// <summary>
-        /// Execute return_to_start_position command - move robot joints back to initial positions
-        /// Supports both RobotController and SimpleRobotController
+        /// Set ClearTargetOnComplete on the ROSTrajectorySubscriber for a robot.
+        /// Called by Python before publishing a return-to-start ROS trajectory so the
+        /// subscriber calls ClearTarget() instead of SyncIKTargetToCurrentPose().
+        /// </summary>
+        private void ExecuteSetClearTargetOnComplete(RobotCommand command)
+        {
+            if (!ValidateAndGetRobot(command.robot_id, "set_clear_target_on_complete",
+                    out _, out RobotController controller))
+                return;
+
+            var subscriber = controller?.GetComponentInChildren<ROSTrajectorySubscriber>();
+            if (subscriber != null)
+            {
+                subscriber.ClearTargetOnComplete = true;
+                Debug.Log($"[PythonCommandHandler] ClearTargetOnComplete=true set for {command.robot_id}");
+            }
+            SendCommandCompletion(command.robot_id, "set_clear_target_on_complete", true, command.request_id);
+        }
+
+        /// <summary>
+        /// Execute return_to_start_position command. In Unity mode, smoothly interpolates
+        /// joint drive targets back to the saved start position while IK is suspended.
+        /// In ROS mode, exits immediately — Python must call set_clear_target_on_complete
+        /// and push a return-to-start trajectory via MoveIt.
         /// </summary>
         private void ExecuteReturnToStartPosition(RobotCommand command)
         {
+            // DEBUG: always log entry so we know the command reached Unity
+            Debug.Log($"[ReturnToStart] ExecuteReturnToStartPosition called for robot='{command.robot_id}' req={command.request_id}");
             try
             {
                 // Validate robot and get controller
@@ -2422,6 +2450,7 @@ namespace PythonCommunication
                     )
                 )
                 {
+                    Debug.LogWarning($"[ReturnToStart] ValidateAndGetRobot FAILED for '{command.robot_id}'");
                     return;
                 }
                 if (
@@ -2432,7 +2461,12 @@ namespace PythonCommunication
                         command.request_id
                     )
                 )
+                {
+                    // In ROS mode Unity skips execution. Python must call set_clear_target_on_complete
+                    // separately before pushing the return-to-start trajectory to MoveIt.
+                    Debug.Log($"[ReturnToStart] ROS mode — skipping Unity execution for '{command.robot_id}'");
                     return;
+                }
 
                 // Validate start joint targets exist
                 if (
@@ -2465,6 +2499,7 @@ namespace PythonCommunication
                 if (controller != null)
                 {
                     // RobotController
+                    Debug.Log($"[ReturnToStart] Starting RobotController coroutine for '{command.robot_id}', duration={duration:F2}s, joints={robotInstance.startJointTargets.Length}");
                     StartCoroutine(
                         ReturnToStartPositionCoroutine(
                             controller,
@@ -2478,6 +2513,7 @@ namespace PythonCommunication
                 else if (robotInstance.simpleController != null)
                 {
                     // SimpleRobotController
+                    Debug.Log($"[ReturnToStart] Starting SimpleRobotController coroutine for '{command.robot_id}', duration={duration:F2}s");
                     StartCoroutine(
                         ReturnToStartPositionSimpleCoroutine(
                             robotInstance.simpleController,
@@ -2487,6 +2523,10 @@ namespace PythonCommunication
                             duration
                         )
                     );
+                }
+                else
+                {
+                    Debug.LogError($"[ReturnToStart] No controller found for '{command.robot_id}' — neither RobotController nor SimpleRobotController");
                 }
 
                 _successfulCommands++;
@@ -2517,11 +2557,6 @@ namespace PythonCommunication
                 yield break;
             }
 
-            // Open gripper before moving so any held object is released at the current
-            // position rather than being dragged along the return trajectory.
-            var gripperController = controller.GetComponentInChildren<GripperController>();
-            gripperController?.OpenGrippers();
-
             // FIX #5: DISABLE IK during manual joint interpolation
             controller.IsManuallyDriven = true;
 
@@ -2539,7 +2574,26 @@ namespace PythonCommunication
                         : j.xDrive.target;
                 }
 
+                // DEBUG: log per-joint start vs target so we can see which joints move
+                // and whether start/target agree in units (both should be degrees here).
+                var dbgSB = new System.Text.StringBuilder();
+                dbgSB.AppendLine($"[ReturnToStart] {robotId} — joint diagnostics (degrees):");
+                for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
+                {
+                    var j = controller.robotJoints[i];
+                    float physDeg = j.jointPosition.dofCount > 0
+                        ? j.jointPosition[0] * Mathf.Rad2Deg
+                        : float.NaN;
+                    float driveDeg = j.xDrive.target;
+                    float delta = targetJoints[i] - startJoints[i];
+                    dbgSB.AppendLine(
+                        $"  J{i}: phys={physDeg:F2}° drive={driveDeg:F2}° start={startJoints[i]:F2}° target={targetJoints[i]:F2}° Δ={delta:F2}°"
+                    );
+                }
+                Debug.Log(dbgSB.ToString());
+
                 float elapsed = 0f;
+                int _debugFrameCounter = 0;
 
                 while (elapsed < duration)
                 {
@@ -2558,14 +2612,16 @@ namespace PythonCommunication
                     // Smooth interpolation using ease-in-out
                     float smoothT = t * t * (3f - 2f * t);
 
-                    // Interpolate each joint
+                    // Interpolate each joint. targetJoints are the saved jointDriveTargets
+                    // (absolute degree values, not wrapped). Use plain Lerp so the arm
+                    // tracks the same absolute degree values IK used during operation —
+                    // DeltaAngle would incorrectly wrap targets outside (-180,180].
                     for (
                         int i = 0;
                         i < controller.robotJoints.Length && i < targetJoints.Length;
                         i++
                     )
                     {
-                        // startJointTargets are cloned from jointDriveTargets which stores degrees
                         float currentTarget = Mathf.Lerp(startJoints[i], targetJoints[i], smoothT);
 
                         controller.jointDriveTargets[i] = currentTarget;
@@ -2577,6 +2633,29 @@ namespace PythonCommunication
                             drive.target = currentTarget;
                             joint.xDrive = drive;
                         }
+                    }
+
+                    // DEBUG: log mid-motion state every 20 fixed frames (~0.33s at 60Hz)
+                    _debugFrameCounter++;
+                    if (_debugFrameCounter % 20 == 0)
+                    {
+                        var midSB = new System.Text.StringBuilder();
+                        midSB.AppendLine($"[ReturnToStart] {robotId} t={t:F2} smoothT={smoothT:F2}");
+                        for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
+                        {
+                            var j = controller.robotJoints[i];
+                            float physNow = j.jointPosition.dofCount > 0
+                                ? j.jointPosition[0] * Mathf.Rad2Deg
+                                : float.NaN;
+                            float driveNow = j.xDrive.target;
+                            float velNow = j.jointVelocity.dofCount > 0
+                                ? j.jointVelocity[0] * Mathf.Rad2Deg
+                                : float.NaN;
+                            midSB.AppendLine(
+                                $"  J{i}: phys={physNow:F2}° drive={driveNow:F2}° vel={velNow:F2}°/s"
+                            );
+                        }
+                        Debug.Log(midSB.ToString());
                     }
 
                     yield return new WaitForFixedUpdate();
@@ -2599,6 +2678,22 @@ namespace PythonCommunication
                     drive.target = targetJoints[i];
                     joint.xDrive = drive;
                 }
+
+                // DEBUG: log final pinned state
+                var endSB = new System.Text.StringBuilder();
+                endSB.AppendLine($"[ReturnToStart] {robotId} FINAL — pinned drive targets (degrees):");
+                for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
+                {
+                    var j = controller.robotJoints[i];
+                    float physEnd = j.jointPosition.dofCount > 0
+                        ? j.jointPosition[0] * Mathf.Rad2Deg
+                        : float.NaN;
+                    float err = physEnd - targetJoints[i];
+                    endSB.AppendLine(
+                        $"  J{i}: phys={physEnd:F2}° target={targetJoints[i]:F2}° err={err:F2}°"
+                    );
+                }
+                Debug.Log(endSB.ToString());
 
                 // Wait for the PD drive to settle: poll joint velocities each physics
                 // frame, matching the same isSettled pattern in RobotController.
@@ -2639,13 +2734,7 @@ namespace PythonCommunication
             }
             finally
             {
-                // Re-enable IK before opening gripper so the drive releases torque before
-                // the gripper reaction force hits the wrist joints.
                 controller.IsManuallyDriven = false;
-                // Open gripper at the final start position so the robot is ready to grasp.
-                // (The earlier OpenGrippers call at the top only releases objects before
-                // the arm moves; this call ensures the gripper is open on arrival.)
-                gripperController?.OpenGrippers();
             }
         }
 

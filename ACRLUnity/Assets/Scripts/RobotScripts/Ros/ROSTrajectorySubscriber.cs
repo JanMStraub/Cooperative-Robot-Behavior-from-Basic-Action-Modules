@@ -79,12 +79,26 @@ namespace Robotics
         private string _resolvedFeedbackTopic;
         private bool _abortingForPreempt; // Suppresses OnTrajectoryComplete(false) on preempt
 
+        // Pre-allocated fields to avoid per-trajectory GC pressure
+        private double[] _startPositions;
+#if UNITY_EDITOR
+        private System.Text.StringBuilder _debugStringBuilder = new System.Text.StringBuilder(512);
+#endif
+
         private const string _logPrefix = "[ROS_TRAJECTORY_SUBSCRIBER]";
 
         /// <summary>
         /// True while a trajectory is being executed.
         /// </summary>
         public bool IsExecutingTrajectory { get; private set; }
+
+        /// <summary>
+        /// When true, the next trajectory completion calls ClearTarget() instead of
+        /// SyncIKTargetToCurrentPose(). Set this before publishing a return-to-start
+        /// trajectory so IK does not re-engage and oscillate against the PD drive.
+        /// Automatically reset to false after each trajectory completes.
+        /// </summary>
+        public bool ClearTargetOnComplete { get; set; }
 
         /// <summary>
         /// Fired when a trajectory completes execution (success or abort).
@@ -304,15 +318,39 @@ namespace Robotics
             PublishFeedback("executing", $"Starting {msg.points.Length}-point trajectory");
             float startTime = Time.time;
 
+#if UNITY_EDITOR
+            // DEBUG: log initial physical state vs first trajectory point
+            {
+                _debugStringBuilder.Clear();
+                _debugStringBuilder.AppendLine($"[ROSTraj] {_robotController.robotId} — {msg.points.Length} waypoints, jointMap={_jointIndexMap.Length}");
+                _debugStringBuilder.AppendLine("  Joint-name → idx | phys(°) | drive(°) | first-waypoint(°)");
+                double[] firstWaypoint = msg.points.Length > 0 ? msg.points[0].positions : null;
+                for (int j = 0; j < _jointIndexMap.Length; j++)
+                {
+                    int idx = _jointIndexMap[j];
+                    float physDeg = _joints[idx].jointPosition.dofCount > 0
+                        ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg : float.NaN;
+                    float driveDeg = _joints[idx].xDrive.target;
+                    float firstDeg = (firstWaypoint != null && j < firstWaypoint.Length)
+                        ? (float)(firstWaypoint[j] * Mathf.Rad2Deg) : float.NaN;
+                    string jointName = j < msg.joint_names.Length ? msg.joint_names[j] : $"j{j}";
+                    _debugStringBuilder.AppendLine($"  {jointName}→{idx} | phys={physDeg:F2} | drive={driveDeg:F2} | wp0={firstDeg:F2}");
+                }
+                Debug.Log(_debugStringBuilder.ToString());
+            }
+#endif
+
             // Read actual joint positions as the trajectory start to avoid a jump
             // when the arm hasn't fully settled at the end of a previous trajectory.
             // Using planned positions as fromPositions would cause a discontinuity
             // if physics lag left the joints a few degrees off.
-            double[] startPositions = new double[_jointIndexMap.Length];
+            // Reuse the pre-allocated array (resized only when joint count changes).
+            if (_startPositions == null || _startPositions.Length != _jointIndexMap.Length)
+                _startPositions = new double[_jointIndexMap.Length];
             for (int j = 0; j < _jointIndexMap.Length; j++)
             {
                 int idx = _jointIndexMap[j];
-                startPositions[j] =
+                _startPositions[j] =
                     _joints[idx].jointPosition.dofCount > 0 ? _joints[idx].jointPosition[0] : 0.0;
             }
 
@@ -333,7 +371,7 @@ namespace Robotics
                 if (prevPoint != null && prevPoint.positions != null)
                     fromPositions = prevPoint.positions;
                 else
-                    fromPositions = startPositions;
+                    fromPositions = _startPositions;
 
                 double rawSegmentDuration = targetTime - prevPointTime;
                 if (rawSegmentDuration <= 0)
@@ -427,6 +465,26 @@ namespace Robotics
                     yield return new WaitForFixedUpdate();
                 }
 
+#if UNITY_EDITOR
+                // DEBUG: log physical vs planned position at the end of each waypoint
+                {
+                    _debugStringBuilder.Clear();
+                    _debugStringBuilder.AppendLine($"[ROSTraj] {_robotController.robotId} waypoint {p}/{msg.points.Length - 1} done");
+                    for (int j = 0; j < _jointIndexMap.Length; j++)
+                    {
+                        int idx = _jointIndexMap[j];
+                        float physDeg = _joints[idx].jointPosition.dofCount > 0
+                            ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg : float.NaN;
+                        float driveDeg = _joints[idx].xDrive.target;
+                        float plannedDeg = (targetPoint.positions != null && j < targetPoint.positions.Length)
+                            ? (float)(targetPoint.positions[j] * Mathf.Rad2Deg) : float.NaN;
+                        float err = physDeg - plannedDeg;
+                        _debugStringBuilder.AppendLine($"  J{idx}: phys={physDeg:F2}° drive={driveDeg:F2}° planned={plannedDeg:F2}° err={err:F2}°");
+                    }
+                    Debug.Log(_debugStringBuilder.ToString());
+                }
+#endif
+
                 prevPoint = targetPoint;
                 prevPointTime = targetTime;
             }
@@ -440,9 +498,11 @@ namespace Robotics
             float effectiveSettleTimeout = _settleTimeoutSeconds / Mathf.Max(0.1f, _speedScaling);
             float settleStartTime = Time.time;
             bool settled = false;
+            int consecutiveSettledFrames = 0;
+            const int REQUIRED_SETTLED_FRAMES = 3; // require 3 consecutive quiet frames
             while (Time.time - settleStartTime < effectiveSettleTimeout)
             {
-                settled = true;
+                bool allQuiet = true;
                 for (int j = 0; j < _jointIndexMap.Length; j++)
                 {
                     int idx = _jointIndexMap[j];
@@ -452,12 +512,20 @@ namespace Robotics
                             : 0f;
                     if (velDegPerSec > _settleVelocityThresholdDegPerSec)
                     {
-                        settled = false;
+                        allQuiet = false;
                         break;
                     }
                 }
-                if (settled)
+                if (allQuiet)
+                    consecutiveSettledFrames++;
+                else
+                    consecutiveSettledFrames = 0;
+
+                if (consecutiveSettledFrames >= REQUIRED_SETTLED_FRAMES)
+                {
+                    settled = true;
                     break;
+                }
                 yield return new WaitForFixedUpdate();
             }
 
@@ -471,25 +539,75 @@ namespace Robotics
             else
                 Debug.LogWarning(logMessage);
 
-            // Only sync the IK target when the control mode is ROS or Hybrid.
-            // In those modes Unity IK is normally suppressed; when it re-engages it must
-            // start from the current pose (zero error) or it will fight the ROS position.
-            // In Unity mode the IK owns motion end-to-end and manages its own target, so
-            // we must NOT overwrite it here.
+#if UNITY_EDITOR
+            // DEBUG: final physical state after settling
+            {
+                _debugStringBuilder.Clear();
+                _debugStringBuilder.AppendLine($"[ROSTraj] {_robotController.robotId} FINAL (settle={settleStatus})");
+                JointTrajectoryPointMsg lastPoint = msg.points.Length > 0 ? msg.points[msg.points.Length - 1] : null;
+                for (int j = 0; j < _jointIndexMap.Length; j++)
+                {
+                    int idx = _jointIndexMap[j];
+                    float physDeg = _joints[idx].jointPosition.dofCount > 0
+                        ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg : float.NaN;
+                    float driveDeg = _joints[idx].xDrive.target;
+                    float velDeg = _joints[idx].jointVelocity.dofCount > 0
+                        ? _joints[idx].jointVelocity[0] * Mathf.Rad2Deg : float.NaN;
+                    float plannedDeg = (lastPoint?.positions != null && j < lastPoint.positions.Length)
+                        ? (float)(lastPoint.positions[j] * Mathf.Rad2Deg) : float.NaN;
+                    _debugStringBuilder.AppendLine($"  J{idx}: phys={physDeg:F2}° drive={driveDeg:F2}° planned={plannedDeg:F2}° vel={velDeg:F2}°/s");
+                }
+                Debug.Log(_debugStringBuilder.ToString());
+            }
+#endif
+
+            // If settle timed out, wait until every joint is within 5° of its drive
+            // target before releasing IK. Without this, SyncIKTargetToCurrentPose locks
+            // the IK target to the mid-swing position and IK immediately fights the PD
+            // drive, causing the arm to swing past the target.
+            if (!settled)
+            {
+                const float NEAR_TARGET_DEG = 5f;
+                const float NEAR_TARGET_TIMEOUT = 10f;
+                float nearTargetStart = Time.time;
+                while (Time.time - nearTargetStart < NEAR_TARGET_TIMEOUT)
+                {
+                    bool allNear = true;
+                    for (int j = 0; j < _jointIndexMap.Length; j++)
+                    {
+                        int idx = _jointIndexMap[j];
+                        float physDeg = _joints[idx].jointPosition.dofCount > 0
+                            ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg : 0f;
+                        float err = Mathf.Abs(physDeg - _joints[idx].xDrive.target);
+                        if (err > NEAR_TARGET_DEG) { allNear = false; break; }
+                    }
+                    if (allNear) break;
+                    yield return new WaitForFixedUpdate();
+                }
+            }
+
+            // Only sync/clear the IK target when the control mode is ROS or Hybrid.
             bool isROSControlled =
                 _controlModeManager == null || _controlModeManager.CurrentMode != ControlMode.Unity;
 
             if (isROSControlled)
             {
-                // Sync the IK solver's target to the current end-effector position BEFORE
-                // re-enabling Unity IK (IsManuallyDriven = false). Without this, the IK wakes
-                // up with a stale _targetTransform pointing to wherever the arm was going before
-                // the ROS trajectory started, and immediately drives the arm away from the
-                // ROS-delivered pose — the main cause of post-grasp jitter.
-                // Also clears moving-target tracking so a kinematic held object doesn't
-                // create a feedback loop (object moves → tracker re-arms IK → arm moves → repeat).
-                _robotController.SyncIKTargetToCurrentPose();
+                if (ClearTargetOnComplete)
+                {
+                    // Return-to-start: clear the IK target entirely so the PD drive holds
+                    // the home pose undisturbed. SyncIKTargetToCurrentPose would set a
+                    // target at the current (still-moving) EE pose, causing IK to re-engage
+                    // and oscillate J3/J4 against the PD drive.
+                    _robotController.ClearTarget();
+                }
+                else
+                {
+                    // Normal trajectory: sync IK target to current EE pose so IK starts
+                    // with zero error and doesn't fight the ROS-delivered position.
+                    _robotController.SyncIKTargetToCurrentPose();
+                }
             }
+            ClearTargetOnComplete = false;
 
             IsExecutingTrajectory = false;
             _robotController.IsManuallyDriven = false;
@@ -542,6 +660,21 @@ namespace Robotics
             };
 
             _ros.Publish(_resolvedFeedbackTopic, feedback);
+        }
+
+        /// <summary>
+        /// Wraps an angle in radians to the range [-π, π].
+        /// Used to find the shortest arc between two joint positions before interpolating,
+        /// preventing wrist joints from spinning through the full joint range when a
+        /// MoveIt plan crosses the ±π boundary (e.g. +2.8 rad → -2.8 rad).
+        /// </summary>
+        private static double NormalizeAngleRad(double angle)
+        {
+            while (angle > Math.PI)
+                angle -= 2.0 * Math.PI;
+            while (angle < -Math.PI)
+                angle += 2.0 * Math.PI;
+            return angle;
         }
 
         /// <summary>

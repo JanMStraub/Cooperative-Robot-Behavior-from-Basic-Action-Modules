@@ -43,6 +43,14 @@ namespace Robotics
         private string _resolvedCommandTopic;
         private string _resolvedStateTopic;
 
+        // Pre-allocated buffer for OverlapSphere to avoid per-call Collider[] allocation
+        private readonly Collider[] _overlapBuffer = new Collider[32];
+        // Reusable timestamp to avoid DateTime/TimeSpan/TimeMsg allocations at 10Hz
+        private readonly TimeMsg _rosTimestamp = new TimeMsg();
+        private static readonly System.DateTime _unixEpoch = new System.DateTime(
+            1970, 1, 1, 0, 0, 0, System.DateTimeKind.Utc
+        );
+
         private const string _logPrefix = "[ROS_GRIPPER_SUBSCRIBER]";
 
         /// <summary>
@@ -202,14 +210,15 @@ namespace Robotics
             // exclude adjacent cubes in dense scenes while still reliably catching the
             // target object that the gripper has descended onto.
             const float searchRadius = 0.10f;
-            Collider[] hits = Physics.OverlapSphere(searchOrigin, searchRadius);
+            int hitCount = Physics.OverlapSphereNonAlloc(searchOrigin, searchRadius, _overlapBuffer);
 
             GameObject nearest = null;
             float nearestDist = float.MaxValue;
             int candidateCount = 0;
 
-            foreach (var hit in hits)
+            for (int i = 0; i < hitCount; i++)
             {
+                var hit = _overlapBuffer[i];
                 if (!hit.CompareTag("Target"))
                     continue;
 
@@ -269,22 +278,14 @@ namespace Robotics
         /// </summary>
         private void PublishGripperState()
         {
-            // Use system clock (Unix epoch) for ROS 2 time synchronization
-            System.DateTime epoch = new System.DateTime(
-                1970,
-                1,
-                1,
-                0,
-                0,
-                0,
-                System.DateTimeKind.Utc
-            );
-            System.TimeSpan timeSinceEpoch = System.DateTime.UtcNow - epoch;
-            double t = timeSinceEpoch.TotalSeconds;
+            // Update reusable timestamp in-place — avoids DateTime/TimeSpan/TimeMsg
+            // allocations on every 10Hz publish call.
+            double t = (System.DateTime.UtcNow - _unixEpoch).TotalSeconds;
             int sec = (int)t;
-            uint nsec = (uint)((t - sec) * 1e9);
+            _rosTimestamp.sec = sec;
+            _rosTimestamp.nanosec = (uint)((t - sec) * 1e9);
 
-            _stateMsg.header.stamp = new TimeMsg { sec = sec, nanosec = nsec };
+            _stateMsg.header.stamp = _rosTimestamp;
 
             // Read actual joint positions from ArticulationBody
             if (_gripperController.leftGripper != null)

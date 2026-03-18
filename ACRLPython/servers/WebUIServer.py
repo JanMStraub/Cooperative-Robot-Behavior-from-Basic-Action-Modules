@@ -133,6 +133,7 @@ manager = ConnectionManager()
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
 WEBUI_DIR = os.path.join(PROJECT_ROOT, "ACRLDashboard")
+UNITY_URDF_DIR = os.path.join(PROJECT_ROOT, "ACRLUnity", "Assets", "Prefabs", "ar4_urdf")
 
 # Ensure webui dir exists
 os.makedirs(WEBUI_DIR, exist_ok=True)
@@ -140,6 +141,8 @@ os.makedirs(WEBUI_DIR, exist_ok=True)
 # Mount static files — only when fastapi is available
 if _FASTAPI_AVAILABLE:
     app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="static")
+    if os.path.exists(UNITY_URDF_DIR):
+        app.mount("/urdf", StaticFiles(directory=UNITY_URDF_DIR), name="urdf")
 
 
 @app.get("/")
@@ -168,7 +171,9 @@ def _check_unity_connected() -> bool:
     """Return True if at least one Unity client is connected to CommandServer."""
     try:
         broadcaster = get_command_broadcaster()
-        return getattr(broadcaster, "_connected", False)
+        if hasattr(broadcaster, "_robot_clients"):
+            return len(broadcaster._robot_clients) > 0
+        return False
     except Exception:
         return False
 

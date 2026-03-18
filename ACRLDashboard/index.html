@@ -1,250 +1,408 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>ACRL Mission Control</title>
+		<!-- Modern Typography -->
+		<link
+			href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap"
+			rel="stylesheet"
+		/>
+		<!-- Font Awesome for Icons -->
+		<link
+			rel="stylesheet"
+			href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+		/>
+		<!-- Three.js for 3D rendering via CDN -->
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/urdf-loader@0.12.1/URDFLoader.js"></script>
+		<link rel="stylesheet" href="/static/css/variables.css" />
+		<link rel="stylesheet" href="/static/css/layout.css" />
+		<link rel="stylesheet" href="/static/css/components.css" />
+	</head>
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ACRL Mission Control</title>
-    <!-- Modern Typography -->
-    <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap"
-        rel="stylesheet">
-    <!-- Font Awesome for Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Three.js for 3D rendering via CDN -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <link rel="stylesheet" href="/static/style.css">
-</head>
+	<body class="dark-theme">
+		<div class="app-container">
+			<!-- Disconnect Banner -->
+			<div
+				id="disconnect-banner"
+				class="disconnect-banner"
+				style="display: none"
+			>
+				<i class="fa-solid fa-triangle-exclamation"></i> WebSocket
+				disconnected — attempting to reconnect...
+			</div>
 
-<body class="dark-theme">
-    <div class="app-container">
-        <!-- Disconnect Banner -->
-        <div id="disconnect-banner" class="disconnect-banner" style="display: none;">
-            <i class="fa-solid fa-triangle-exclamation"></i> WebSocket disconnected — attempting to reconnect...
-        </div>
+			<!-- Header -->
+			<header class="glass-header">
+				<div class="logo">
+					<i class="fa-solid fa-robot"></i>
+					<div class="title-group">
+						<h1>ACRL Mission Control</h1>
+						<span class="subtitle"
+							>Sim-to-Real Operations Dashboard</span
+						>
+					</div>
+				</div>
+				<div class="system-status">
+					<div class="status-indicator">
+						<span
+							class="dot badge-offline"
+							id="badge-backend"
+						></span>
+						<span class="label">Backend Gateway</span>
+					</div>
+					<div class="status-indicator">
+						<span class="dot badge-offline" id="badge-ros"></span>
+						<span class="label">ROS Bridge</span>
+					</div>
+					<div class="status-indicator">
+						<span class="dot badge-offline" id="badge-llm"></span>
+						<span class="label">LLM Studio</span>
+					</div>
+					<div class="status-indicator">
+						<span class="dot badge-offline" id="badge-unity"></span>
+						<span class="label">Unity</span>
+					</div>
+					<!-- Theme toggle -->
+					<button
+						class="btn-icon"
+						id="btn-theme"
+						title="Toggle light/dark mode"
+					>
+						<i class="fa-solid fa-circle-half-stroke"></i>
+					</button>
+					<!-- Stop button -->
+					<button class="btn btn-estop" id="btn-estop">
+						<i class="fa-solid fa-stop"></i> Stop
+					</button>
+				</div>
+			</header>
 
-        <!-- Header -->
-        <header class="glass-header">
-            <div class="logo">
-                <i class="fa-solid fa-robot"></i>
-                <div class="title-group">
-                    <h1>ACRL Mission Control</h1>
-                    <span class="subtitle">Sim-to-Real Operations Dashboard</span>
-                </div>
-            </div>
-            <div class="system-status">
-                <div class="status-indicator">
-                    <span class="dot badge-offline" id="badge-backend"></span>
-                    <span class="label">Backend Gateway</span>
-                </div>
-                <div class="status-indicator">
-                    <span class="dot badge-offline" id="badge-ros"></span>
-                    <span class="label">ROS Bridge</span>
-                </div>
-                <div class="status-indicator">
-                    <span class="dot badge-offline" id="badge-llm"></span>
-                    <span class="label">LLM Studio</span>
-                </div>
-                <div class="status-indicator">
-                    <span class="dot badge-offline" id="badge-unity"></span>
-                    <span class="label">Unity</span>
-                </div>
-                <!-- Theme toggle -->
-                <button class="btn-icon" id="btn-theme" title="Toggle light/dark mode">
-                    <i class="fa-solid fa-circle-half-stroke"></i>
-                </button>
-                <!-- Stop button -->
-                <button class="btn btn-estop" id="btn-estop">
-                    <i class="fa-solid fa-stop"></i> Stop
-                </button>
-            </div>
-        </header>
+			<!-- Main Content -->
+			<main class="dashboard-grid">
+				<!-- Left Column: Command & Logs -->
+				<section class="panel command-panel">
+					<div class="panel-header">
+						<h2>
+							<i class="fa-solid fa-terminal"></i> Command &
+							Control
+						</h2>
+						<div class="panel-actions">
+							<button class="btn-icon" title="Toggle AutoRT">
+								<i class="fa-solid fa-robot"></i> AutoRT
+							</button>
+						</div>
+					</div>
 
-        <!-- Main Content -->
-        <main class="dashboard-grid">
-            <!-- Left Column: Command & Logs -->
-            <section class="panel command-panel">
-                <div class="panel-header">
-                    <h2><i class="fa-solid fa-terminal"></i> Command & Control</h2>
-                    <div class="panel-actions">
-                        <button class="btn-icon" title="Toggle AutoRT"><i class="fa-solid fa-robot"></i> AutoRT</button>
-                    </div>
-                </div>
+					<div class="chat-history glass-box" id="chat-history">
+						<div class="message system">
+							<div class="msg-icon">
+								<i class="fa-solid fa-server"></i>
+							</div>
+							<div class="msg-content">
+								System initialized. Awaiting commands...
+							</div>
+						</div>
+					</div>
 
-                <div class="chat-history glass-box" id="chat-history">
-                    <div class="message system">
-                        <div class="msg-icon"><i class="fa-solid fa-server"></i></div>
-                        <div class="msg-content">System initialized. Awaiting commands...</div>
-                    </div>
-                </div>
+					<div class="command-input">
+						<textarea
+							id="prompt-input"
+							rows="3"
+							placeholder="Enter natural language sequence... (e.g. 'Robot1: Grab the red cube')"
+						></textarea>
+						<div
+							id="thinking-indicator"
+							class="thinking-indicator"
+							style="display: none"
+						>
+							<span class="thinking-spinner"></span>
+							<span>Processing...</span>
+						</div>
+						<div class="input-actions">
+							<button class="btn btn-secondary" id="btn-clear">
+								<i class="fa-solid fa-eraser"></i> Clear
+							</button>
+							<button class="btn btn-primary" id="btn-send">
+								<i class="fa-solid fa-paper-plane"></i> Execute
+							</button>
+						</div>
+					</div>
+				</section>
 
-                <div class="command-input">
-                    <textarea id="prompt-input" rows="3"
-                        placeholder="Enter natural language sequence... (e.g. 'Robot1: Grab the red cube')"></textarea>
-                    <div id="thinking-indicator" class="thinking-indicator" style="display: none;">
-                        <span class="thinking-spinner"></span>
-                        <span>Processing...</span>
-                    </div>
-                    <div class="input-actions">
-                        <button class="btn btn-secondary" id="btn-clear"><i class="fa-solid fa-eraser"></i>
-                            Clear</button>
-                        <button class="btn btn-primary" id="btn-send"><i class="fa-solid fa-paper-plane"></i>
-                            Execute</button>
-                    </div>
-                </div>
-            </section>
+				<!-- Middle Column: 3D Visualization & Teleop -->
+				<section class="panel visualization-panel">
+					<div class="panel-header">
+						<h2>
+							<i class="fa-solid fa-vr-cardboard"></i> Spatial
+							Visualization
+						</h2>
+						<div class="panel-actions">
+							<select class="glass-select">
+								<option>WorldState View</option>
+								<option>Point Cloud View</option>
+								<option>Ghost Trajectory View</option>
+							</select>
+						</div>
+					</div>
 
-            <!-- Middle Column: 3D Visualization & Teleop -->
-            <section class="panel visualization-panel">
-                <div class="panel-header">
-                    <h2><i class="fa-solid fa-vr-cardboard"></i> Spatial Visualization</h2>
-                    <div class="panel-actions">
-                        <select class="glass-select">
-                            <option>WorldState View</option>
-                            <option>Point Cloud View</option>
-                            <option>Ghost Trajectory View</option>
-                        </select>
-                    </div>
-                </div>
+					<!-- 3D Canvas Container -->
+					<div
+						class="canvas-container glass-box"
+						id="threejs-container"
+					>
+						<!-- ThreeJS injects here -->
+						<div class="canvas-overlay">
+							<div class="overlay-badge">Live WorldState</div>
+						</div>
+					</div>
 
-                <!-- 3D Canvas Container -->
-                <div class="canvas-container glass-box" id="threejs-container">
-                    <!-- ThreeJS injects here -->
-                    <div class="canvas-overlay">
-                        <div class="overlay-badge">Live WorldState</div>
-                    </div>
-                </div>
+					<!-- Teleoperation / Manual Override -->
+					<div class="teleop-panel glass-box" id="teleop-panel">
+						<div class="panel-header">
+							<h3>
+								<i class="fa-solid fa-gamepad"></i> Manual
+								Override
+							</h3>
+							<div class="panel-actions">
+								<button
+									class="btn-icon-small"
+									id="btn-teleop-collapse"
+									title="Collapse"
+								>
+									<i class="fa-solid fa-chevron-up"></i>
+								</button>
+							</div>
+						</div>
+						<div class="teleop-content">
+							<div class="teleop-grid">
+								<div class="control-group">
+									<label>Robot ID:</label>
+									<select
+										class="glass-select"
+										id="teleop-robot-id"
+									>
+										<option>Robot1</option>
+										<option>Robot2</option>
+									</select>
+								</div>
+								<div class="control-group">
+									<label>Inverse Kinematics (XYZ)</label>
+									<div class="xyz-controls">
+										<button
+											class="btn btn-icon-small"
+											title="X+"
+										>
+											<i class="fa-solid fa-arrow-up"></i>
+										</button>
+										<button
+											class="btn btn-icon-small"
+											title="X-"
+										>
+											<i
+												class="fa-solid fa-arrow-down"
+											></i>
+										</button>
+										<button
+											class="btn btn-icon-small"
+											title="Y+"
+										>
+											<i
+												class="fa-solid fa-arrow-left"
+											></i>
+										</button>
+										<button
+											class="btn btn-icon-small"
+											title="Y-"
+										>
+											<i
+												class="fa-solid fa-arrow-right"
+											></i>
+										</button>
+										<button
+											class="btn btn-icon-small"
+											title="Z+"
+										>
+											<i class="fa-solid fa-up-long"></i>
+										</button>
+										<button
+											class="btn btn-icon-small"
+											title="Z-"
+										>
+											<i
+												class="fa-solid fa-down-long"
+											></i>
+										</button>
+									</div>
+								</div>
+								<div class="control-group">
+									<label>Gripper</label>
+									<div class="gripper-controls">
+										<button class="btn btn-secondary">
+											Open
+										</button>
+										<button class="btn btn-secondary">
+											Close
+										</button>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</section>
 
-                <!-- Teleoperation / Manual Override -->
-                <div class="teleop-panel glass-box expanded" id="teleop-panel">
-                    <div class="panel-header">
-                        <h3><i class="fa-solid fa-gamepad"></i> Manual Override</h3>
-                        <div class="panel-actions">
-                            <button class="btn-icon-small" id="btn-teleop-collapse" title="Collapse">
-                                <i class="fa-solid fa-chevron-down"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="teleop-content">
-                        <div class="teleop-grid">
-                            <div class="control-group">
-                                <label>Robot ID:</label>
-                                <select class="glass-select" id="teleop-robot-id">
-                                    <option>Robot1</option>
-                                    <option>Robot2</option>
-                                </select>
-                            </div>
-                            <div class="control-group">
-                                <label>Inverse Kinematics (XYZ)</label>
-                                <div class="xyz-controls">
-                                    <button class="btn btn-icon-small" title="X+"><i
-                                            class="fa-solid fa-arrow-up"></i></button>
-                                    <button class="btn btn-icon-small" title="X-"><i
-                                            class="fa-solid fa-arrow-down"></i></button>
-                                    <button class="btn btn-icon-small" title="Y+"><i
-                                            class="fa-solid fa-arrow-left"></i></button>
-                                    <button class="btn btn-icon-small" title="Y-"><i
-                                            class="fa-solid fa-arrow-right"></i></button>
-                                    <button class="btn btn-icon-small" title="Z+"><i
-                                            class="fa-solid fa-up-long"></i></button>
-                                    <button class="btn btn-icon-small" title="Z-"><i
-                                            class="fa-solid fa-down-long"></i></button>
-                                </div>
-                            </div>
-                            <div class="control-group">
-                                <label>Gripper</label>
-                                <div class="gripper-controls">
-                                    <button class="btn btn-secondary" onclick="sendCmd('open')">Open</button>
-                                    <button class="btn btn-secondary" onclick="sendCmd('close')">Close</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </section>
+				<!-- Right Column: Perception & Telemetry -->
+				<section class="panel right-panel">
+					<!-- AutoRT Task Approval -->
+					<div class="autort-panel" id="autort-panel">
+						<div class="panel-header">
+							<h2>
+								<i class="fa-solid fa-wand-magic-sparkles"></i>
+								AutoRT Tasks
+								<span
+									class="autort-badge"
+									id="autort-task-count"
+									style="display: none"
+									>0</span
+								>
+							</h2>
+							<div class="panel-actions">
+								<span
+									class="autort-loop-badge"
+									id="autort-loop-badge"
+									>STOPPED</span
+								>
+								<button
+									class="btn-icon-small"
+									id="btn-autort-collapse"
+									title="Collapse"
+								>
+									<i class="fa-solid fa-chevron-down"></i>
+								</button>
+							</div>
+						</div>
+						<div
+							class="autort-task-list glass-box"
+							id="autort-task-list"
+						>
+							<div class="autort-empty" id="autort-empty">
+								<i class="fa-solid fa-inbox"></i>
+								<span>No pending tasks</span>
+							</div>
+						</div>
+					</div>
 
-            <!-- Right Column: Perception & Telemetry -->
-            <section class="panel right-panel">
-                <!-- AutoRT Task Approval -->
-                <div class="autort-panel" id="autort-panel">
-                    <div class="panel-header">
-                        <h2>
-                            <i class="fa-solid fa-wand-magic-sparkles"></i>
-                            AutoRT Tasks
-                            <span class="autort-badge" id="autort-task-count" style="display:none">0</span>
-                        </h2>
-                        <div class="panel-actions">
-                            <span class="autort-loop-badge" id="autort-loop-badge">STOPPED</span>
-                            <button class="btn-icon-small" id="btn-autort-generate" title="Generate tasks now">
-                                <i class="fa-solid fa-bolt"></i>
-                            </button>
-                            <button class="btn-icon-small" id="btn-autort-collapse" title="Collapse">
-                                <i class="fa-solid fa-chevron-down"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="autort-task-list glass-box" id="autort-task-list">
-                        <div class="autort-empty" id="autort-empty">
-                            <i class="fa-solid fa-inbox"></i>
-                            <span>No pending tasks</span>
-                        </div>
-                    </div>
-                </div>
+					<!-- Camera Streams -->
+					<div
+						class="perception-panel expanded"
+						id="perception-panel"
+					>
+						<div class="panel-header">
+							<h2>
+								<i class="fa-solid fa-camera"></i> Live
+								Perception
+							</h2>
+							<div class="panel-actions">
+								<button
+									class="btn-icon-small"
+									id="btn-perception-collapse"
+									title="Collapse"
+								>
+									<i class="fa-solid fa-chevron-up"></i>
+								</button>
+							</div>
+						</div>
+						<div class="camera-grid">
+							<div class="camera-feed glass-box">
+								<img
+									src="/api/stream/rgb"
+									data-src-base="/api/stream/rgb"
+									alt="RGB Stream"
+									onerror="
+										this.style.display = 'none';
+										this.nextElementSibling.style.display =
+											'flex';
+									"
+									style="
+										width: 100%;
+										height: 100%;
+										object-fit: cover;
+									"
+								/>
+								<div
+									class="feed-placeholder"
+									style="display: none"
+								>
+									<i class="fa-solid fa-video-slash"></i>
+									<span>Camera 1 (Offline)</span>
+								</div>
+								<div class="feed-overlay">RGB + YOLO</div>
+							</div>
+							<div class="camera-feed glass-box">
+								<img
+									src="/api/stream/depth"
+									data-src-base="/api/stream/depth"
+									alt="Depth Stream"
+									onerror="
+										this.style.display = 'none';
+										this.nextElementSibling.style.display =
+											'flex';
+									"
+									style="
+										width: 100%;
+										height: 100%;
+										object-fit: cover;
+									"
+								/>
+								<div
+									class="feed-placeholder"
+									style="display: none"
+								>
+									<i class="fa-solid fa-video-slash"></i>
+									<span>Camera 2 (Offline)</span>
+								</div>
+								<div class="feed-overlay">
+									Stereo Right (Depth proxy)
+								</div>
+							</div>
+						</div>
+					</div>
 
-                <!-- Camera Streams -->
-                <div class="perception-panel expanded" id="perception-panel">
-                    <div class="panel-header">
-                        <h2><i class="fa-solid fa-camera"></i> Live Perception</h2>
-                        <div class="panel-actions">
-                            <button class="btn-icon-small" id="btn-perception-collapse" title="Collapse">
-                                <i class="fa-solid fa-chevron-up"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="camera-grid">
-                        <div class="camera-feed glass-box">
-                            <img src="/api/stream/rgb" data-src-base="/api/stream/rgb" alt="RGB Stream"
-                                onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
-                                style="width: 100%; height: 100%; object-fit: cover;">
-                            <div class="feed-placeholder" style="display: none;">
-                                <i class="fa-solid fa-video-slash"></i>
-                                <span>Camera 1 (Offline)</span>
-                            </div>
-                            <div class="feed-overlay">RGB + YOLO</div>
-                        </div>
-                        <div class="camera-feed glass-box">
-                            <img src="/api/stream/depth" data-src-base="/api/stream/depth" alt="Depth Stream"
-                                onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
-                                style="width: 100%; height: 100%; object-fit: cover;">
-                            <div class="feed-placeholder" style="display: none;">
-                                <i class="fa-solid fa-video-slash"></i>
-                                <span>Camera 2 (Offline)</span>
-                            </div>
-                            <div class="feed-overlay">Stereo Right (Depth proxy)</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Server Logs -->
-                <div class="logs-panel">
-                    <div class="panel-header">
-                        <h2><i class="fa-solid fa-align-left"></i> Server Logs</h2>
-                        <button class="btn-icon-small" id="btn-download-logs" title="Download logs"><i
-                                class="fa-solid fa-download"></i></button>
-                    </div>
-                    <div class="console-output glass-box" id="console-output">
-                        <div class="log-line info">[INFO] Backend Gateway Started on port 8000</div>
-                        <div class="log-line warning">[WARN] Failed to connect to local ROS Bridge.</div>
-                        <!-- Logs injected here -->
-                    </div>
-                </div>
-
-
-            </section>
-        </main>
-    </div>
-    <script src="/static/script.js"></script>
-</body>
-
+					<!-- Server Logs -->
+					<div class="logs-panel">
+						<div class="panel-header">
+							<h2>
+								<i class="fa-solid fa-align-left"></i> Server
+								Logs
+							</h2>
+							<button
+								class="btn-icon-small"
+								id="btn-download-logs"
+								title="Download logs"
+							>
+								<i class="fa-solid fa-download"></i>
+							</button>
+						</div>
+						<div
+							class="console-output glass-box"
+							id="console-output"
+						>
+							<div class="log-line info">
+								[INFO] Backend Gateway Started on port 8000
+							</div>
+							<div class="log-line warning">
+								[WARN] Failed to connect to local ROS Bridge.
+							</div>
+							<!-- Logs injected here -->
+						</div>
+					</div>
+				</section>
+			</main>
+		</div>
+		<script type="module" src="/static/js/main.js"></script>
+	</body>
 </html>

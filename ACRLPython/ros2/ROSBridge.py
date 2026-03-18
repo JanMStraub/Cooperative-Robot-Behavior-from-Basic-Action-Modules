@@ -192,6 +192,9 @@ class ROSBridge:
                 logger.error(
                     f"Timeout waiting for response to {command.get('command')}"
                 )
+                # Clear the buffer so stale partial JSON from this response does
+                # not corrupt the next command's response parsing.
+                self._recv_buffer = ""
                 return None
             except Exception as e:
                 logger.error(f"Error sending command: {e}")

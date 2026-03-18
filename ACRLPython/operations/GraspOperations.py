@@ -10,18 +10,19 @@ collision checking, and scoring.
 
 import logging
 import time
-from typing import Optional, List
+from typing import List, Optional
+
+# Configure logging
+from core.LoggingSetup import setup_logging
+
 from .Base import (
     BasicOperation,
     OperationCategory,
     OperationComplexity,
     OperationParameter,
-    OperationResult,
     OperationRelationship,
+    OperationResult,
 )
-
-# Configure logging
-from core.LoggingSetup import setup_logging
 
 setup_logging(__name__)
 logger = logging.getLogger(__name__)
@@ -45,8 +46,9 @@ PRE_GRASP_HOVER_OFFSET: float = 0.15  # 15 cm above object centre
 # TCP offset at the final grasp position.
 # Placing ee_link this far above the object centre lets the fingers (which
 # extend ~5 cm beyond ee_link) wrap around the object rather than collide
-# with its top surface.  Lower values = fingers engage more of the object.
-GRASP_TCP_OFFSET: float = 0.03  # 3 cm above object centre
+# with its top surface or the ground plane.
+# Increased from 0.03 to 0.08 to prevent gripper from slamming into ground.
+GRASP_TCP_OFFSET: float = 0.055  # 5,5 cm above object centre
 
 
 # ============================================================================
@@ -121,12 +123,12 @@ def _execute_grasp_with_follow_target(
 
             if drift <= FOLLOW_TARGET_DRIFT_THRESHOLD:
                 logger.info(
-                    f"[follow_target] {robot_id}: object drift {drift*100:.1f} cm — within threshold, ready to close"
+                    f"[follow_target] {robot_id}: object drift {drift * 100:.1f} cm — within threshold, ready to close"
                 )
                 break
 
             logger.info(
-                f"[follow_target] {robot_id}: object drifted {drift*100:.1f} cm "
+                f"[follow_target] {robot_id}: object drifted {drift * 100:.1f} cm "
                 f"(correction {correction + 1}/{FOLLOW_TARGET_MAX_CORRECTIONS}), re-planning"
             )
 
@@ -314,11 +316,21 @@ def _grasp_via_ros_planned(
         f"score={best_grasp.total_score:.3f}"
     )
 
+    # The Python grasp planner produces quaternions in Unity world space (Y-up,
+    # left-handed, matching Unity's Quaternion.Euler ZYX convention). MoveIt expects
+    # orientations in ROS base_link space (Z-up, right-handed). Without this conversion,
+    # MoveIt plans a trajectory to a misinterpreted orientation and joint 4 spins
+    # extensively near the pre-grasp waypoint before settling.
+    #
+    # Conversion: (x,y,z,w)_unity → (z,-x,y,-w)_ros
+    # This matches the axis relabeling Unity(X,Y,Z)→ROS(Z,-X,Y) plus w-negation for
+    # the left→right handedness change (same formula used by ros_tcp_endpoint).
+    unity_q = best_grasp.grasp_rotation  # (x, y, z, w) in Unity frame
     grasp_orientation = {
-        "x": best_grasp.grasp_rotation[0],
-        "y": best_grasp.grasp_rotation[1],
-        "z": best_grasp.grasp_rotation[2],
-        "w": best_grasp.grasp_rotation[3],
+        "x": unity_q[2],  # unity z → ros x
+        "y": -unity_q[0],  # unity x → ros -y
+        "z": unity_q[1],  # unity y → ros z
+        "w": -unity_q[3],  # w-negation for handedness flip
     }
 
     grasp_pos = _vec_to_pos(best_grasp.grasp_position)
@@ -568,9 +580,9 @@ def _grasp_via_vgn(
     except ImportError:
         VGN_TOP_K = 20
 
+    from operations.GraspFrameTransform import transform_grasp_poses_to_unity
     from operations.PointCloudOperations import generate_point_cloud
     from operations.VGNClient import VGNClient
-    from operations.GraspFrameTransform import transform_grasp_poses_to_unity
 
     client = VGNClient()
     if not client.is_available():
@@ -687,8 +699,10 @@ def _grasp_via_vgn(
             ]
             world_grasps = aligned if aligned else world_grasps
             world_grasps.sort(
-                key=lambda g: g.get("score", 0.0)
-                * np.dot(np.array(g["approach_direction"]), cav_unit),
+                key=lambda g: (
+                    g.get("score", 0.0)
+                    * np.dot(np.array(g["approach_direction"]), cav_unit)
+                ),
                 reverse=True,
             )
             logger.info(
@@ -830,9 +844,9 @@ def _grasp_via_vgn_with_ros(
     except ImportError:
         VGN_TOP_K = 20
 
+    from operations.GraspFrameTransform import transform_grasp_poses_to_unity
     from operations.PointCloudOperations import generate_point_cloud
     from operations.VGNClient import VGNClient
-    from operations.GraspFrameTransform import transform_grasp_poses_to_unity
 
     # 1. Availability check
     client = VGNClient()
@@ -941,8 +955,10 @@ def _grasp_via_vgn_with_ros(
             ]
             world_grasps = aligned if aligned else world_grasps
             world_grasps.sort(
-                key=lambda g: g.get("score", 0.0)
-                * np.dot(np.array(g["approach_direction"]), cav_unit),
+                key=lambda g: (
+                    g.get("score", 0.0)
+                    * np.dot(np.array(g["approach_direction"]), cav_unit)
+                ),
                 reverse=True,
             )
             logger.info(
@@ -963,7 +979,10 @@ def _grasp_via_vgn_with_ros(
         "z": pos[2] + approach[2] * hover,
     }
     grasp_pos = {"x": pos[0], "y": pos[1], "z": pos[2]}
-    orientation = {"x": rot[0], "y": rot[1], "z": rot[2], "w": rot[3]}
+    # VGN produces orientations in Unity world frame (Y-up, left-handed).
+    # Convert to ROS base_link frame (Z-up, right-handed) before sending to MoveIt.
+    # Conversion: (x,y,z,w)_unity → (z,-x,y,-w)_ros
+    orientation = {"x": rot[2], "y": -rot[0], "z": rot[1], "w": -rot[3]}
 
     # 7. MoveIt pre-grasp move
     logger.info(f"[VGN+ROS] Moving to pre-grasp for {robot_id}: {pre_grasp_pos}")
@@ -1178,7 +1197,7 @@ def grasp_object(
         _use_ros = use_ros
         if _use_ros is None:
             try:
-                from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+                from config.ROS import DEFAULT_CONTROL_MODE, ROS_ENABLED
 
                 _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
             except ImportError:
