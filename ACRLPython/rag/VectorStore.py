@@ -320,9 +320,6 @@ class VectorStore:
         """
         Merge new fields into the metadata of an existing operation.
 
-        Used by OutcomeTracker to record success/failure counts without
-        re-embedding the operation.
-
         Args:
             operation_id: Operation identifier to update
             metadata_update: Dict of fields to merge into the existing metadata

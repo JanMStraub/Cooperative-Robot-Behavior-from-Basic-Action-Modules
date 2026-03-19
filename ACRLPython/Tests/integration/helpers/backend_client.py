@@ -15,7 +15,7 @@ Why route through the SequenceServer (not direct operation calls)?
   an uninitialised CommandBroadcaster singleton in that test process, which
   has no active Unity connection.  By sending commands over the network to
   the already-running backend process we re-use its correctly-initialised
-  singletons (CommandBroadcaster, WorldStateManager, OutcomeTracker, etc.).
+  singletons (CommandBroadcaster, WorldStateManager, etc.).
 
 Protocol V2 framing (little-endian):
     Request:  [type:1 = 0x08][request_id:4][cmd_len:4][cmd:N]

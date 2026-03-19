@@ -57,8 +57,6 @@ All 30 operations registered in operations/Registry.py (plus variable chaining):
 
 Design Decisions
 ----------------
-- Dynamic operations disabled: Tests set ENABLE_DYNAMIC_OPERATIONS=false so
-  ambiguous commands do not trigger LLM code generation (flaky + slow).
 - Negotiation left enabled: Multi-robot tests use 120 s+ timeouts and exercise
   the full LLM negotiation stack (the point of Level 4/5 ops).
 - Per-category timeouts: Status 30 s, Navigation 60 s, Grasp 120 s, Multi 240 s.
@@ -73,11 +71,6 @@ import time
 from typing import Any, Dict
 
 import pytest
-
-# Disable dynamic operation generation before any config module is imported
-# in this process.  The backend process is unaffected (its config is already
-# loaded), but this protects against accidental config-module imports here.
-os.environ.setdefault("ENABLE_DYNAMIC_OPERATIONS", "false")
 
 from backend_client import (  # type: ignore[import]
     BackendClient,

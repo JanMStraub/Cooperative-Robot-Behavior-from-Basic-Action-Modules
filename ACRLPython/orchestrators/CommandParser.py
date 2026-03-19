@@ -354,10 +354,6 @@ class CommandParser:
         else:
             self._parse_cache = self._do_llm_request
 
-        # Optional FeedbackCollector for self-improvement anti-pattern warnings.
-        # Set to a FeedbackCollector instance to enable; None disables the feature.
-        self.feedback_collector = None
-
         # Initialize RAG system for semantic operation search
         self.rag = None
         if use_rag:
@@ -415,11 +411,6 @@ class CommandParser:
         if regex_result["success"]:
             return regex_result
 
-        # If both LLM and regex failed, try generating a new operation
-        generated = self._try_generate_operation(command_text, robot_id)
-        if generated:
-            return generated
-
         return regex_result
 
     def _parse_with_llm(self, command_text: str, robot_id: str) -> Dict[str, Any]:
@@ -434,12 +425,10 @@ class CommandParser:
             Parsed command structure
         """
         # Build prompt for LLM using _PromptBuilder
-        anti_pattern_section = self._get_anti_pattern_warnings(command_text)
         spatial_section = self._get_spatial_context(robot_id)
         prompt = self._prompt_builder.build(
             command_text,
             robot_id,
-            anti_pattern_section=anti_pattern_section,
             spatial_section=spatial_section,
         )
 
@@ -565,32 +554,6 @@ class CommandParser:
         except Exception as e:
             raise
 
-    def _get_anti_pattern_warnings(self, command_text: str) -> str:
-        """
-        Retrieve formatted anti-pattern warnings from FeedbackCollector.
-
-        Returns an empty string when FeedbackCollector is unavailable or no
-        high-failure patterns exist so the prompt remains clean by default.
-
-        Args:
-            command_text: The command being parsed (passed through for future
-                context-sensitive filtering).
-
-        Returns:
-            Formatted warning block string, or empty string if no warnings.
-        """
-        try:
-            from config.Memory import MEMORY_ENABLED
-
-            if not MEMORY_ENABLED:
-                return ""
-            from agents.FeedbackCollector import get_feedback_collector
-
-            return get_feedback_collector().get_anti_pattern_warnings(command_text)
-        except Exception as e:
-            logger.debug(f"FeedbackCollector unavailable: {e}")
-            return ""
-
     def _get_spatial_context(self, robot_id: str) -> str:
         """
         Retrieve formatted spatial context from the Knowledge Graph for the given robot.
@@ -656,12 +619,10 @@ class CommandParser:
         self, command_text: str, robot_id: str, available_ops: str
     ) -> str:
         """Build the prompt for LLM command parsing. Delegates to _PromptBuilder."""
-        anti_pattern_section = self._get_anti_pattern_warnings(command_text)
         spatial_section = self._get_spatial_context(robot_id)
         return self._prompt_builder.build(
             command_text,
             robot_id,
-            anti_pattern_section=anti_pattern_section,
             spatial_section=spatial_section,
         )
 
@@ -789,121 +750,6 @@ class CommandParser:
             )
 
         return len(errors) == 0, errors
-
-    def _check_generation_needed(self, rag_results: List[Dict]) -> Tuple[bool, str]:
-        """
-        Check if RAG scores are too low, indicating no good operation match exists.
-
-        Args:
-            rag_results: Results from RAG search
-
-        Returns:
-            Tuple of (should_generate, reason)
-        """
-        try:
-            from config.DynamicOperations import (
-                ENABLE_DYNAMIC_OPERATIONS,
-                GENERATION_TRIGGER_THRESHOLD,
-            )
-        except ImportError:
-            return False, "Dynamic operations config not available"
-
-        if not ENABLE_DYNAMIC_OPERATIONS:
-            return False, "Dynamic operations disabled"
-
-        if not rag_results:
-            return True, "No RAG results found"
-
-        # Check best score
-        best_score = max(
-            r.get("similarity_score", r.get("score", 0)) for r in rag_results
-        )
-
-        if best_score < GENERATION_TRIGGER_THRESHOLD:
-            return (
-                True,
-                f"Best RAG score {best_score:.2f} below threshold {GENERATION_TRIGGER_THRESHOLD}",
-            )
-
-        return False, ""
-
-    def _try_generate_operation(
-        self, command_text: str, robot_id: str
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Attempt to generate a new operation when no existing operation matches.
-
-        Args:
-            command_text: The command that could not be parsed
-            robot_id: Default robot ID
-
-        Returns:
-            Parsed command structure if generation succeeded and retry worked, None otherwise
-        """
-        # Check if RAG scores warrant generation
-        if self.rag:
-            try:
-                rag_results = self.rag.search(command_text, top_k=3)
-                should_generate, reason = self._check_generation_needed(rag_results)
-                if not should_generate:
-                    return None
-                logger.info(f"Dynamic operation generation triggered: {reason}")
-            except Exception as e:
-                logger.warning(f"RAG check for generation failed: {e}")
-                return None
-        else:
-            return None
-
-        # Generate the operation
-        try:
-            from operations.Generator import OperationGenerator
-
-            generator = OperationGenerator()
-            success, message, file_path = generator.generate_operation(
-                command_text,
-                context={"robot_id": robot_id},
-            )
-
-            if not success:
-                logger.warning(f"Operation generation failed: {message}")
-                return None
-
-            logger.info(f"Operation generated: {message}")
-
-            # When review is required the operation is PENDING — it is not registered
-            # yet, so retrying the LLM parse would fail or match the wrong operation.
-            # Return a structured pending-review payload instead.
-            try:
-                from config.DynamicOperations import REQUIRE_USER_REVIEW
-            except ImportError:
-                REQUIRE_USER_REVIEW = True
-
-            if REQUIRE_USER_REVIEW:
-                logger.info(
-                    f"Operation pending human review before activation: {file_path}"
-                )
-                return {
-                    "success": False,
-                    "pending_review": True,
-                    "file_path": file_path,
-                    "message": (
-                        "A new operation was generated but requires human review "
-                        "before it can be used. Approve it with: "
-                        "python -m tools.ReviewOperations approve <id>"
-                    ),
-                }
-
-            # Retry parsing with the new operation now registered and active
-            result = self._parse_with_llm(command_text, robot_id)
-            if result["success"]:
-                result["generated_operation"] = file_path
-                return result
-
-            return None
-
-        except Exception as e:
-            logger.warning(f"Dynamic operation generation error: {e}")
-            return None
 
     def _parse_with_regex(self, command_text: str, robot_id: str) -> Dict[str, Any]:
         """

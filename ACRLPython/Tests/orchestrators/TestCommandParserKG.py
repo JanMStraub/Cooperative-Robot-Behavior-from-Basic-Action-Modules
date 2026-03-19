@@ -20,19 +20,11 @@ class TestCommandParserKG(unittest.TestCase):
 
     def _make_parser(self):
         """Create a CommandParser with all heavy dependencies mocked out."""
-        with (
-            patch("orchestrators.CommandParser.RAGSystem", MagicMock()),
-            patch(
-                "orchestrators.CommandParser.FeedbackCollector",
-                MagicMock(),
-                create=True,
-            ),
-        ):
+        with patch("orchestrators.CommandParser.RAGSystem", MagicMock()):
             from orchestrators.CommandParser import CommandParser
 
             parser = CommandParser.__new__(CommandParser)
             parser.rag = None
-            parser.feedback_collector = None
             return parser
 
     def test_spatial_context_returns_empty_when_kg_disabled(self):

@@ -694,7 +694,11 @@ class TestGraspViaVGNWithROSHappyPath:
                 world_state=None,
             )
         call_kwargs = ctx.mock_bridge.plan_and_execute.call_args.kwargs
-        assert call_kwargs["orientation"] == {"x": 0.1, "y": 0.2, "z": 0.3, "w": 0.9}
+        # VGN rotation [x=0.1, y=0.2, z=0.3, w=0.9] is converted from Unity (Y-up,
+        # left-handed) to ROS base_link (Z-up, right-handed) via (z,-x,y,w):
+        assert call_kwargs["orientation"] == pytest.approx(
+            {"x": 0.3, "y": -0.1, "z": 0.2, "w": 0.9}
+        )
 
     def test_cartesian_descent_called_at_grasp_position(self):
         """plan_cartesian_descent is called at grasp position (not pre-grasp)."""
