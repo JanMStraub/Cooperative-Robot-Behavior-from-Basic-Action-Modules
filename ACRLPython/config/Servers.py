@@ -22,26 +22,26 @@ STREAMING_SERVER_PORT = int(
 STEREO_DETECTION_PORT = int(
     os.environ.get("STEREO_DETECTION_PORT", "5006")
 )  # Receives stereo image pairs
-LLM_RESULTS_PORT = int(
-    os.environ.get("LLM_RESULTS_PORT", "5010")
-)  # Sends LLM analysis results
+COMMAND_SERVER_PORT = int(
+    os.environ.get("COMMAND_SERVER_PORT", "5007")
+)  # Bidirectional command server (commands & results)
 DEPTH_RESULTS_PORT = int(
-    os.environ.get("DEPTH_RESULTS_PORT", "5007")
+    os.environ.get("DEPTH_RESULTS_PORT", "5008")
 )  # Sends depth detection results
 RAG_SERVER_PORT = int(
-    os.environ.get("RAG_SERVER_PORT", "5011")
+    os.environ.get("RAG_SERVER_PORT", "5009")
 )  # RAG semantic search server
 STATUS_SERVER_PORT = int(
-    os.environ.get("STATUS_SERVER_PORT", "5012")
+    os.environ.get("STATUS_SERVER_PORT", "5010")
 )  # Status query server
 SEQUENCE_SERVER_PORT = int(
-    os.environ.get("SEQUENCE_SERVER_PORT", "5013")
+    os.environ.get("SEQUENCE_SERVER_PORT", "5011")
 )  # Sequence server
 WORLD_STATE_PORT = int(
-    os.environ.get("WORLD_STATE_PORT", "5014")
+    os.environ.get("WORLD_STATE_PORT", "5012")
 )  # World state streaming (Unity → Python)
 AUTORT_SERVER_PORT = int(
-    os.environ.get("AUTORT_SERVER_PORT", "5015")
+    os.environ.get("AUTORT_SERVER_PORT", "5013")
 )  # AutoRT task generation server
 
 

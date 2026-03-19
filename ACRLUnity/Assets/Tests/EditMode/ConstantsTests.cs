@@ -98,8 +98,8 @@ namespace Tests.EditMode
         public void CommunicationConstants_Ports_AreValid()
         {
             // Valid port range is 1-65535
-            Assert.Greater(CommunicationConstants.LLM_RESULTS_PORT, 0);
-            Assert.LessOrEqual(CommunicationConstants.LLM_RESULTS_PORT, 65535);
+            Assert.Greater(CommunicationConstants.COMMAND_SERVER_PORT, 0);
+            Assert.LessOrEqual(CommunicationConstants.COMMAND_SERVER_PORT, 65535);
 
             Assert.Greater(CommunicationConstants.SEQUENCE_SERVER_PORT, 0);
             Assert.LessOrEqual(CommunicationConstants.SEQUENCE_SERVER_PORT, 65535);
@@ -110,7 +110,7 @@ namespace Tests.EditMode
         {
             var ports = new[]
             {
-                CommunicationConstants.LLM_RESULTS_PORT,
+                CommunicationConstants.COMMAND_SERVER_PORT,
                 CommunicationConstants.SEQUENCE_SERVER_PORT
             };
 

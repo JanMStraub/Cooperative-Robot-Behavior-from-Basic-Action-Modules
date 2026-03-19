@@ -53,7 +53,7 @@ namespace PythonCommunication
         protected override void Awake()
         {
             base.Awake();
-            _serverPort = CommunicationConstants.LLM_RESULTS_PORT; // Port 5010
+            _serverPort = CommunicationConstants.COMMAND_SERVER_PORT;
             _autoConnect = true; // Auto-connect on start
         }
 

@@ -76,7 +76,7 @@ class TestCommandServerInitialization:
         with patch("socket.socket"):
             from core.TCPServerBase import ServerConfig
 
-            config = ServerConfig(host="localhost", port=5010)
+            config = ServerConfig(host="localhost", port=5007)
             server = CommandServer(config=config)
             yield server
 

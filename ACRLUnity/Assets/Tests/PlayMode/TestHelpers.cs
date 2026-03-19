@@ -251,7 +251,7 @@ namespace Tests.PlayMode
         /// <summary>
         /// Checks if Python backend is available by attempting to connect to SequenceServer.
         /// </summary>
-        /// <returns>True if Python backend is listening on port 5013</returns>
+        /// <returns>True if Python backend is listening on port 5011</returns>
         public static bool IsPythonBackendAvailable()
         {
             try

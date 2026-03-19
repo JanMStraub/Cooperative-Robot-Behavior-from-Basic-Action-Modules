@@ -2,11 +2,11 @@
 """
 AutoRTServer.py - Dedicated TCP server for AutoRT Unity integration
 
-Listens on port 5015 for AutoRT commands from Unity's AutoRTManager.
+Listens on AUTORT_SERVER_PORT (config/Servers.py) for AutoRT commands from Unity's AutoRTManager.
 Handles task generation, loop control, and task execution approval workflow.
 
 Architecture:
-- Dedicated port (5015) to avoid conflicts with SequenceServer
+- Dedicated port to avoid conflicts with SequenceServer
 - Thread-safe AutoRTHandler singleton
 - Protocol V2 with AUTORT_COMMAND/AUTORT_RESPONSE message types
 """
@@ -32,11 +32,11 @@ logger = logging.getLogger(__name__)
 try:
     from core.TCPServerBase import TCPServerBase, ServerConfig
     from core.UnityProtocol import UnityProtocol, MessageType
-    from config.Servers import DEFAULT_HOST
+    from config.Servers import DEFAULT_HOST, AUTORT_SERVER_PORT
 except ImportError:
     from ..core.TCPServerBase import TCPServerBase, ServerConfig
     from ..core.UnityProtocol import UnityProtocol, MessageType
-    from ..config.Servers import DEFAULT_HOST
+    from ..config.Servers import DEFAULT_HOST, AUTORT_SERVER_PORT
 
 # AutoRT integration
 try:
@@ -44,8 +44,6 @@ try:
 except ImportError:
     from .AutoRTIntegration import AutoRTHandler
 
-# Constants
-AUTORT_SERVER_PORT = 5015
 MAX_STRING_LENGTH = 1024 * 1024  # 1MB
 
 
@@ -53,7 +51,7 @@ class AutoRTServer(TCPServerBase):
     """
     TCP server for AutoRT task generation and execution management.
 
-    Listens on port 5015 for AUTORT_COMMAND messages from Unity.
+    Listens on AUTORT_SERVER_PORT for AUTORT_COMMAND messages from Unity.
     Routes commands to AutoRTHandler singleton and returns AUTORT_RESPONSE.
     """
 
@@ -62,7 +60,7 @@ class AutoRTServer(TCPServerBase):
         Initialize AutoRT server.
 
         Args:
-            config: Server configuration (defaults to port 5015)
+            config: Server configuration (defaults to AUTORT_SERVER_PORT from config/Servers.py)
         """
         if config is None:
             config = ServerConfig(host=DEFAULT_HOST, port=AUTORT_SERVER_PORT)

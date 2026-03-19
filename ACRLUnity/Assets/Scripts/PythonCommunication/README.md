@@ -1417,7 +1417,7 @@ public static class CommunicationConstants
     // Python Backend Ports (Protocol V2 - handled by this directory)
     public const int IMAGE_SERVER_PORT = 5005;           // Single image streaming
     public const int STEREO_DETECTION_PORT = 5006;       // Stereo image pairs
-    public const int LLM_RESULTS_PORT = 5010;            // CommandServer (bidirectional)
+    public const int COMMAND_SERVER_PORT = 5007;          // CommandServer (bidirectional)
     public const int SEQUENCE_SERVER_PORT = 5013;        // Multi-command sequences + AutoRT
     public const int WORLD_STATE_PORT = 5014;            // World state streaming
 

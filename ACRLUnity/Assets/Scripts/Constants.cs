@@ -146,24 +146,24 @@ namespace Core
         public const int STEREO_DETECTION_PORT = 5006;
 
         /// <summary>
-        /// CommandServer port - receives all results (LLM and depth) and bidirectional commands
+        /// CommandServer port - bidirectional commands and results
         /// </summary>
-        public const int LLM_RESULTS_PORT = 5010;
+        public const int COMMAND_SERVER_PORT = 5007;
 
         /// <summary>
         /// Sequence server port (multi-command sequence execution) - primary communication port
         /// </summary>
-        public const int SEQUENCE_SERVER_PORT = 5013;
+        public const int SEQUENCE_SERVER_PORT = 5011;
 
         /// <summary>
         /// AutoRT server port (autonomous task generation)
         /// </summary>
-        public const int AUTORT_SERVER_PORT = 5015;
+        public const int AUTORT_SERVER_PORT = 5013;
 
         /// <summary>
         /// World state streaming port (one-way broadcast of robot/object states)
         /// </summary>
-        public const int WORLD_STATE_PORT = 5014;
+        public const int WORLD_STATE_PORT = 5012;
 
         /// <summary>
         /// Maximum JSON message size (10MB)

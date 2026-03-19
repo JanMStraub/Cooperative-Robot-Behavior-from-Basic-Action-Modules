@@ -23,7 +23,7 @@ from queue import Queue, Empty
 try:
     from config.Servers import (
         DEFAULT_HOST,
-        LLM_RESULTS_PORT,
+        COMMAND_SERVER_PORT,
         MAX_RESULT_QUEUE_SIZE,
         MAX_STRING_LENGTH,
     )
@@ -31,7 +31,7 @@ try:
 except ImportError:
     from ..config.Servers import (
         DEFAULT_HOST,
-        LLM_RESULTS_PORT,
+        COMMAND_SERVER_PORT,
         MAX_RESULT_QUEUE_SIZE,
         MAX_STRING_LENGTH,
     )
@@ -359,7 +359,7 @@ class CommandServer(TCPServerBase):
 
     def __init__(self, config: Optional[ServerConfig] = None):
         if config is None:
-            config = ServerConfig(host=DEFAULT_HOST, port=LLM_RESULTS_PORT)
+            config = ServerConfig(host=DEFAULT_HOST, port=COMMAND_SERVER_PORT)
         super().__init__(config)
 
         # Initialize broadcaster
@@ -594,7 +594,7 @@ def get_command_broadcaster() -> CommandBroadcaster:
 
 
 def run_command_server_background(
-    port: int = LLM_RESULTS_PORT, host: str = DEFAULT_HOST
+    port: int = COMMAND_SERVER_PORT, host: str = DEFAULT_HOST
 ) -> CommandServer:
     """
     Start the CommandServer in the background.
@@ -618,7 +618,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Command Server")
     parser.add_argument("--host", default=DEFAULT_HOST)
-    parser.add_argument("--port", type=int, default=LLM_RESULTS_PORT)
+    parser.add_argument("--port", type=int, default=COMMAND_SERVER_PORT)
     args = parser.parse_args()
 
     config = ServerConfig(host=args.host, port=args.port)
