@@ -1616,11 +1616,18 @@ class ROSMotionServer:
         goal.request.goal_constraints.append(constraints)
 
         # Path constraints: keep each joint within ±150° of its current position so
-        # RRTConnect cannot route J3/J6 the long way around (same fix as plan_and_execute).
+        # RRTConnect cannot route J3 the long way around.
+        # joint_4 and joint_6 are excluded — their ±π range makes windowing unreliable:
+        # when near the boundary the constraint center lands at ~0 while the goal target
+        # is also ~0, causing MoveIt to report "incompatible constraints" and discard them.
+        # The goal JointConstraint (tolerance ±0.01) already constrains them tightly.
+        _FULL_ROTATION_JOINTS = {"joint_4", "joint_6"}
         if joint_state is not None:
             _PATH_CONSTRAINT_WINDOW = 2.618  # ±150° in radians
             path_constraints = Constraints()
             for name, (lower, upper) in ARM_JOINT_LIMITS.items():
+                if name in _FULL_ROTATION_JOINTS:
+                    continue
                 if name in joint_state.name:
                     idx = list(joint_state.name).index(name)
                     current_rad = joint_state.position[idx]

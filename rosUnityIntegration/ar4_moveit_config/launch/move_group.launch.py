@@ -54,6 +54,7 @@ def generate_launch_description():
     kinematics_yaml = os.path.join(pkg_dir, "config", "kinematics.yaml")
     joint_limits_yaml = os.path.join(pkg_dir, "config", "joint_limits.yaml")
     ompl_planning_yaml = os.path.join(pkg_dir, "config", "ompl_planning.yaml")
+    moveit_controllers_yaml = os.path.join(pkg_dir, "config", "moveit_controllers.yaml")
 
     return LaunchDescription([
         robot_id_arg,
@@ -69,6 +70,7 @@ def generate_launch_description():
                 kinematics_yaml,
                 joint_limits_yaml,
                 ompl_planning_yaml,
+                moveit_controllers_yaml,
                 {
                     # planning_pipelines is a string_array — it must come from the YAML
                     # file below (ompl_planning.yaml), not from this inline dict.
@@ -113,12 +115,9 @@ def generate_launch_description():
                         "move_group/MoveGroupPlanService"
                     ),
 
-                    # No controller manager - plan-only mode; trajectories go directly to Unity.
-                    # Set controller_names explicitly to suppress the "No controller_names
-                    # specified" ERROR from moveit_simple_controller_manager at startup.
-                    # Empty string is the only scalar representation of an empty list
-                    # accepted by the ROS 2 launch parameter API.
-                    "moveit_simple_controller_manager.controller_names": "",
+                    # controller_names and moveit_controller_manager are set via
+                    # moveit_controllers.yaml (loaded above) since they require string
+                    # array types not expressible in the inline launch dict.
 
                     # Explicitly declare no 3D sensors so MoveIt does not attempt to
                     # load an octomap sensor plugin and log an ERROR on startup.
