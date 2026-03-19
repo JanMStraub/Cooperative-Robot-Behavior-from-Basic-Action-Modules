@@ -185,8 +185,32 @@ export class Renderer {
             this.meshCache[id] = mesh;
         }
 
-        if (data.position && Array.isArray(data.position) && data.position.length >= 3) {
-            mesh.position.set(data.position[0], data.position[1], data.position[2]);
+        if (data.position) {
+            if (Array.isArray(data.position) && data.position.length >= 3) {
+                mesh.position.set(data.position[0], data.position[1], data.position[2]);
+            } else if (data.position.x !== undefined && data.position.y !== undefined && data.position.z !== undefined) {
+                mesh.position.set(data.position.x, data.position.y, data.position.z);
+            }
+        }
+
+        if (data.rotation) {
+            if (Array.isArray(data.rotation) && data.rotation.length >= 3) {
+                mesh.rotation.set(
+                    THREE.MathUtils.degToRad(data.rotation[0]),
+                    THREE.MathUtils.degToRad(data.rotation[1]),
+                    THREE.MathUtils.degToRad(data.rotation[2])
+                );
+            } else if (data.rotation.x !== undefined && data.rotation.w !== undefined) {
+                mesh.quaternion.set(data.rotation.x, data.rotation.y, data.rotation.z, data.rotation.w);
+            }
+        }
+
+        if (type === 'object' && data.dimensions) {
+            if (Array.isArray(data.dimensions) && data.dimensions.length >= 3) {
+                mesh.scale.set(data.dimensions[0] / 0.1, data.dimensions[1] / 0.1, data.dimensions[2] / 0.1);
+            } else if (data.dimensions.x !== undefined) {
+                mesh.scale.set(data.dimensions.x / 0.1, data.dimensions.y / 0.1, data.dimensions.z / 0.1);
+            }
         }
 
         if (type === 'robot' && data.joint_angles && mesh.children.length > 0) {

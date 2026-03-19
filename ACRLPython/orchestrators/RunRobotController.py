@@ -253,11 +253,29 @@ class RobotController:
                         if robot_id:
                             world_state.update_robot_state(robot_id, robot)
 
-                    # Trigger confidence decay based on currently visible objects
+                    # Forward object states (position, dimensions, rotation) into WorldState
                     objects = state_data.get("objects", [])
-                    seen_object_ids = {
-                        obj.get("object_id") for obj in objects if obj.get("object_id")
-                    }
+                    seen_object_ids = set()
+                    for obj in objects:
+                        obj_id = obj.get("object_id")
+                        if not obj_id:
+                            continue
+                        seen_object_ids.add(obj_id)
+                        pos = world_state._to_position_tuple(obj.get("position"))
+                        if pos:
+                            dims = world_state._to_position_tuple(obj.get("dimensions"))
+                            rot = world_state._to_rotation_tuple(obj.get("rotation"))
+                            world_state.update_object_position(
+                                obj_id,
+                                pos,
+                                color=obj.get("color", "unknown"),
+                                object_type=obj.get("object_type", "unknown"),
+                                confidence=obj.get("confidence", 1.0),
+                                dimensions=dims,
+                                rotation=rot,
+                            )
+
+                    # Trigger confidence decay based on currently visible objects
                     world_state.decay_object_confidence(seen_object_ids)
 
                 except Exception as e:

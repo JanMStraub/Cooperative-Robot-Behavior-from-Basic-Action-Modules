@@ -1,37 +1,20 @@
-# OMPL planning configuration for AR4 mk3
-# Force OMPL as the default planning plugin (supports pose goals, unlike CHOMP)
+# OMPL planner configs for AR4 mk3
 #
-# NOTE on namespace: In MoveIt 2 (Humble), planning pipeline parameters (plugin,
-# adapters) must live under move_group: ros__parameters: (node-specific namespace),
-# NOT under /**:. Using /**:  causes the adapters to be silently ignored, which
-# means FixStartStateBounds never runs and any start state slightly outside joint
-# limits causes "invalid start state" / OMPL initialisation failure.
-move_group:
-  ros__parameters:
-    planning_plugin: ompl_interface/OMPLPlanner
-    # MoveIt 2 (Humble) separates adapters into request (pre-planning) and response
-    # (post-planning). AddTimeOptimalParameterization is a RESPONSE adapter that runs
-    # after OMPL returns a path and stamps it with velocity/acceleration-consistent
-    # time parameters — which is what makes max_velocity_scaling_factor effective.
-    request_adapters: >-
-      default_planning_request_adapters/ResolveConstraintFrames
-      default_planning_request_adapters/FixWorkspaceBounds
-      default_planning_request_adapters/FixStartStateBounds
-      default_planning_request_adapters/FixStartStateCollision
-      default_planning_request_adapters/FixStartStatePathConstraints
-    response_adapters: >-
-      default_planning_response_adapters/AddTimeOptimalParameterization
-      default_planning_response_adapters/ValidateSolution
-      default_planning_response_adapters/DisplayMotionPath
-    # Tolerance for clamping start state joint positions back within URDF limits.
-    # 0.5 rad (~28°) is generous enough to handle Unity ArticulationBody numerical
-    # noise and normal resting poses near joint boundaries, without allowing truly
-    # invalid configurations (full limit violations are ~1-3 rad for this robot).
-    start_state_max_bounds_error: 0.5
-
+# Contains the nested planner_configs/arm/gripper blocks which cannot be
+# expressed as ROS 2 launch parameter scalars.
+# Uses /**:  so params apply to any namespaced move_group node (Robot1, Robot2).
+# The "ompl." prefix matches the named pipeline declared in move_group.launch.py
+# via planning_pipelines: "ompl".
 /**:
   ros__parameters:
-    planner_configs:
+    # Declare the named planning pipeline. move_group reads this as a string_array
+    # and registers a pipeline named "ompl", which MotionPlanRequest.pipeline_id
+    # can then reference. Must live in a YAML file — the ROS 2 launch inline dict
+    # only accepts scalar types and cannot represent string_array.
+    planning_pipelines:
+      - ompl
+
+    ompl.planner_configs:
       RRTConnect:
         type: geometric::RRTConnect
         range: 0.0
@@ -46,7 +29,7 @@ move_group:
         range: 0.0
         goal_bias: 0.05
 
-    arm:
+    ompl.arm:
       default_planner_config: RRTConnect
       planner_configs:
         - RRTConnect
@@ -56,7 +39,7 @@ move_group:
       projection_evaluator: joints(joint_1, joint_2)
       longest_valid_segment_fraction: 0.015
 
-    gripper:
+    ompl.gripper:
       default_planner_config: RRTConnect
       planner_configs:
         - RRTConnect

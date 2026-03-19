@@ -32,6 +32,13 @@ RUN for i in 1 2 3 4 5; do \
         (echo "Clone attempt $i failed, retrying in 10s..." && sleep 10); \
     done
 
+# Patch ROS-TCP-Endpoint bug: send_topic_list crashes with AttributeError when
+# any registered node has msg=None (not yet initialized at topic-list request time).
+# Guard the list comprehension so None-msg nodes are silently skipped.
+RUN sed -i \
+    's/else self\.parse_message_name(node\.msg)/else (self.parse_message_name(node.msg) if node is not None and node.msg is not None else "")/' \
+    /ros_ws/src/ROS-TCP-Endpoint/ros_tcp_endpoint/tcp_sender.py
+
 # 3. Copy AR4 URDF and meshes
 COPY ar4_moveit_config /ros_ws/src/ar4_moveit_config
 

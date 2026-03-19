@@ -346,11 +346,11 @@ GENERAL RULES:
 13. Only use parameter names and values shown in AVAILABLE OPERATIONS schemas
 14. Pay close attention to valid_values constraints in parameter schemas - violating these will cause operation failures
 
-COORDINATE GUIDELINES:
-- X range: -0.6 to 0.6 (left/right)
-- Y range: 0.0 to 0.6 (height)
-- Z range: -0.6 to 0.6 (forward/back)
-- Keep movements within workspace bounds
+COORDINATE GUIDELINES (ROS base_link frame — robot-local, Z-up):
+- X: forward from robot base, range -0.5 to 0.5
+- Y: left from robot base, range -0.5 to 0.5
+- Z: height above robot base, range 0.0 to 0.6
+- Typical reachable positions: x in [-0.4, 0.4], y in [-0.3, 0.3], z in [0.05, 0.5]
 
 COMMON TASK PATTERNS:
 1. Detection + Grasp:
@@ -358,13 +358,13 @@ COMMON TASK PATTERNS:
    - grasp_object(object_id="red_cube")
 
 2. Navigation + Detection:
-   - move_to_coordinate(x=0.2, y=0.3, z=0.1)
+   - move_to_coordinate(x=0.2, y=0.0, z=0.3)
    - detect_object_stereo(color=null, selection="all")
 
 3. Multi-step manipulation:
    - detect_object_stereo(color="blue", selection="first")
    - grasp_object(object_id="blue_cube")
-   - move_to_coordinate(x=0.0, y=0.2, z=0.0)
+   - move_to_coordinate(x=0.0, y=0.2, z=0.3)
    - release_object()
 
 IMPORTANT: Output the JSON array immediately without any preamble, reasoning, or explanatory text.

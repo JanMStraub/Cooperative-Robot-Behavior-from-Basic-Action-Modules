@@ -12,7 +12,7 @@ Example:
     {
         "success": True,
         "commands": [
-            {"operation": "move_to_coordinate", "params": {"robot_id": "Robot1", "x": 0.3, "y": 0.2, "z": 0.1}},
+            {"operation": "move_to_coordinate", "params": {"robot_id": "Robot1", "x": -0.3, "y": 0.2, "z": 0.1}},
             {"operation": "control_gripper", "params": {"robot_id": "Robot1", "open_gripper": False}}
         ]
     }
@@ -134,8 +134,8 @@ class _PromptBuilder:
             {{"parallel_group": 2, "robot": "Robot1", "operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "red_cube"}}}},
             {{"parallel_group": 3, "robot": "Robot1", "operation": "signal", "params": {{"event_name": "r1_gripped"}}}},
             {{"parallel_group": 3, "robot": "Robot2", "operation": "wait_for_signal", "params": {{"event_name": "r1_gripped"}}}},
-            {{"parallel_group": 4, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": 0.0, "y": 0.3, "z": 0.15}}}},
-            {{"parallel_group": 4, "robot": "Robot2", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot2", "x": 0.0, "y": 0.3, "z": 0.15}}}},
+            {{"parallel_group": 4, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": -0.15, "y": 0.3, "z": 0.15}}}},
+            {{"parallel_group": 4, "robot": "Robot2", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot2", "x": 0.15, "y": 0.3, "z": 0.15}}}},
             {{"parallel_group": 5, "robot": "Robot2", "operation": "control_gripper", "params": {{"robot_id": "Robot2", "open_gripper": false}}}},
             {{"parallel_group": 6, "robot": "Robot1", "operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": true}}}}
         ]

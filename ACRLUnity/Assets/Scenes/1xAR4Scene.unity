@@ -417,7 +417,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   robotProfile: {fileID: 11400000, guid: 6f9a683789da5455a80584df8ee3cbbc, type: 2}
-  globalSpeedMultiplier: 0.1
+  globalSpeedMultiplier: 1
   _enableTargetChangeDetection: 1
   _targetChangeCheckInterval: 0.1
 --- !u!4 &1170887387
@@ -536,7 +536,7 @@ MonoBehaviour:
   _autoReconnect: 1
   _serverPort: 0
   _serverHost: 127.0.0.1
-  _prompt: Robot1 and Robot2 perform a handoff of the red cube
+  _prompt: Move robot to position x=0, y=0.3, z=0
   _defaultRobotId: Robot1
   _cameraId: TableStereoCamera
   _logCommands: 1
@@ -810,6 +810,10 @@ PrefabInstance:
       value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 3861989622656847497, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: _speedScaling
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3861989622656847497, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: _controlModeManager
       value: 
       objectReference: {fileID: 2107300034}
@@ -899,7 +903,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7753383895358973258, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: _speedScaling
-      value: 0.5
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7753383895358973258, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: _controlModeManager

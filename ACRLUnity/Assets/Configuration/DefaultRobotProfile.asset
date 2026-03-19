@@ -32,17 +32,17 @@ MonoBehaviour:
     lowerLimit: -89
   - stiffness: 2500
     damping: 500
-    forceLimit: 500
+    forceLimit: 2000
     upperLimit: 180
     lowerLimit: -180
   - stiffness: 2000
     damping: 400
-    forceLimit: 500
+    forceLimit: 1500
     upperLimit: 105
     lowerLimit: -105
   - stiffness: 1500
     damping: 300
-    forceLimit: 500
+    forceLimit: 1500
     upperLimit: 180
     lowerLimit: -180
   adjustmentSpeed: 0.2

@@ -155,7 +155,14 @@ cleanup() {
         wait "$CONTROLLER_PID" 2>/dev/null || true
     fi
 
-    echo "Server stopped. (ROS Docker containers left running)"
+    # Stop ROS Docker containers if ROS integration was enabled
+    if "$ROS_INTEGRATION" && [ -d "$ROS_DIR" ] && command -v docker &>/dev/null; then
+        echo "Stopping ROS Docker containers..."
+        "$ROS_DIR/start_ros_endpoint.sh" down
+        echo "  ✓ ROS Docker containers stopped."
+    fi
+
+    echo "Server stopped."
     exit 0
 }
 

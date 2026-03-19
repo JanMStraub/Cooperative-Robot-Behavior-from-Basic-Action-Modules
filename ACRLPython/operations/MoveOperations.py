@@ -72,9 +72,9 @@ def move_to_coordinate(
 
     Args:
         robot_id: ID of the robot to move (e.g., "AR4_Robot", "Robot1")
-        x: X coordinate in meters (forward/back from robot base), range: [-1.0, 1.0]
-        y: Y coordinate in meters (left/right from robot base), range: [-1.0, 1.0]
-        z: Z coordinate in meters (height above robot base), range: [-0.5, 0.6]
+        x: X coordinate in meters in ROS base_link frame (forward from robot base). Typical range: -0.5 to 0.5.
+        y: Y coordinate in meters in ROS base_link frame (left from robot base). Typical range: -0.5 to 0.5.
+        z: Z coordinate in meters in ROS base_link frame (up from robot base). Typical range: 0.0 to 0.6.
         speed: Speed multiplier (0.1=slow, 1.0=normal, 2.0=fast), range: [0.1, 2.0]
         approach_offset: Lift above target in meters along Unity Y (up-axis), range: [0.0, 0.1]
         use_advanced_planning: Use full grasp planning pipeline (generates 15 candidates), default: True
@@ -105,16 +105,16 @@ def move_to_coordinate(
         }
 
     Example:
-        >>> # Move to detected object position
-        >>> result = move_to_coordinate("Robot1", 0.3, 0.15, 0.1)
+        >>> # Move Robot1 (base at x=-0.475) to an object at world position (-0.3, 0.1, 0.1)
+        >>> result = move_to_coordinate("Robot1", -0.3, 0.1, 0.1)
         >>> if result["success"]:
         ...     print(f"Command sent at {result['result']['timestamp']}")
 
-        >>> # Move slowly to precise position
-        >>> result = move_to_coordinate("Robot1", 0.0, 0.0, 0.3, speed=0.2)
+        >>> # Move Robot1 slowly to a position on its left side of the table
+        >>> result = move_to_coordinate("Robot1", -0.5, 0.0, 0.2, speed=0.2)
 
-        >>> # Approach with offset (stop 5cm before target)
-        >>> result = move_to_coordinate("Robot1", 0.3, 0.0, 0.1, approach_offset=0.05)
+        >>> # Move Robot2 (base at x=0.475) to an object at world position (0.3, 0.1, 0.0)
+        >>> result = move_to_coordinate("Robot2", 0.3, 0.1, 0.0, approach_offset=0.05)
 
     Note:
         This operation is asynchronous - it sends the command to Unity and returns immediately. Unity executes the movement in the background. For synchronous execution (waiting for completion), use move_to_coordinate_sync() instead.
@@ -143,6 +143,7 @@ def move_to_coordinate(
             result = bridge.plan_and_execute(
                 position={"x": actual_x, "y": actual_y, "z": actual_z},
                 robot_id=robot_id,
+                coordinate_space="unity_world",  # LLM generates Unity world coords (Y-up); transform to base_link applied in ROSMotionClient
             )
             if result and result.get("success"):
                 logger.info(f"ROS motion completed for {robot_id}")

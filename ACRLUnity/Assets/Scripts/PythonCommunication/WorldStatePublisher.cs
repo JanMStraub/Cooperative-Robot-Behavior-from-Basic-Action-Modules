@@ -25,6 +25,7 @@ namespace PythonCommunication
         public PositionData position;
         public RotationData rotation;
         public PositionData target_position;
+        public RotationData target_rotation;
         public string gripper_state; // "open", "closed", "unknown"
         public bool is_moving;
         public bool is_initialized;
@@ -70,6 +71,8 @@ namespace PythonCommunication
     {
         public string object_id;
         public PositionData position;
+        public PositionData dimensions; // Object size (x=width, y=height, z=depth) in meters
+        public RotationData rotation;
         public string color;
         public string object_type;
         public float confidence;
@@ -307,6 +310,7 @@ namespace PythonCommunication
                         : Quaternion.identity;
 
                 Vector3 targetPosition = controller.GetCurrentTarget() ?? Vector3.zero;
+                Quaternion? targetRotation = controller.GetCurrentTargetRotation();
                 float distanceToTarget = controller.GetDistanceToTarget();
                 bool isMoving = distanceToTarget > RobotConstants.MOVEMENT_THRESHOLD;
 
@@ -345,6 +349,7 @@ namespace PythonCommunication
                     position = new PositionData(position),
                     rotation = new RotationData(rotation),
                     target_position = new PositionData(targetPosition),
+                    target_rotation = targetRotation.HasValue ? new RotationData(targetRotation.Value) : null,
                     gripper_state = gripperState,
                     is_moving = isMoving,
                     is_initialized = true,
@@ -394,10 +399,16 @@ namespace PythonCommunication
                 if (obj == null)
                     continue;
 
+                // Infer dimensions from collider bounds; fall back to uniform 1m cube
+                var col = obj.GetComponent<Collider>();
+                Vector3 size = col != null ? col.bounds.size : Vector3.one;
+
                 var objectState = new ObjectStateData
                 {
                     object_id = obj.name,
                     position = new PositionData(obj.transform.position),
+                    dimensions = new PositionData(size),
+                    rotation = new RotationData(obj.transform.rotation),
                     color = InferColorFromName(obj.name),
                     object_type = InferTypeFromName(obj.name),
                     confidence = 1.0f,
@@ -457,18 +468,24 @@ namespace PythonCommunication
         /// <param name="color">Object color</param>
         /// <param name="objectType">Object type</param>
         /// <param name="confidence">Detection confidence (0-1)</param>
+        /// <param name="rotation">Optional object rotation (null if unknown)</param>
+        /// <param name="dimensions">Optional object size (x=width, y=height, z=depth) in meters</param>
         public void RegisterDetectedObject(
             string objectId,
             Vector3 position,
             string color = "unknown",
             string objectType = "cube",
-            float confidence = 1.0f
+            float confidence = 1.0f,
+            Quaternion? rotation = null,
+            Vector3? dimensions = null
         )
         {
             var objectState = new ObjectStateData
             {
                 object_id = objectId,
                 position = new PositionData(position),
+                dimensions = dimensions.HasValue ? new PositionData(dimensions.Value) : null,
+                rotation = rotation.HasValue ? new RotationData(rotation.Value) : null,
                 color = color,
                 object_type = objectType,
                 confidence = confidence,

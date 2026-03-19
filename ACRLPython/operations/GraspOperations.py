@@ -322,15 +322,16 @@ def _grasp_via_ros_planned(
     # MoveIt plans a trajectory to a misinterpreted orientation and joint 4 spins
     # extensively near the pre-grasp waypoint before settling.
     #
-    # Conversion: (x,y,z,w)_unity → (z,-x,y,-w)_ros
-    # This matches the axis relabeling Unity(X,Y,Z)→ROS(Z,-X,Y) plus w-negation for
-    # the left→right handedness change (same formula used by ros_tcp_endpoint).
+    # Conversion: (x,y,z,w)_unity → (z,-x,y,w)_ros
+    # Axis relabeling Unity(X,Y,Z)→ROS(Z,-X,Y) applied to vector components.
+    # w is preserved — negating it would invert the rotation (conjugate), not
+    # just change the handedness representation.
     unity_q = best_grasp.grasp_rotation  # (x, y, z, w) in Unity frame
     grasp_orientation = {
-        "x": unity_q[2],  # unity z → ros x
+        "x": unity_q[2],   # unity z → ros x
         "y": -unity_q[0],  # unity x → ros -y
-        "z": unity_q[1],  # unity y → ros z
-        "w": -unity_q[3],  # w-negation for handedness flip
+        "z": unity_q[1],   # unity y → ros z
+        "w": unity_q[3],   # w preserved
     }
 
     grasp_pos = _vec_to_pos(best_grasp.grasp_position)
@@ -981,8 +982,8 @@ def _grasp_via_vgn_with_ros(
     grasp_pos = {"x": pos[0], "y": pos[1], "z": pos[2]}
     # VGN produces orientations in Unity world frame (Y-up, left-handed).
     # Convert to ROS base_link frame (Z-up, right-handed) before sending to MoveIt.
-    # Conversion: (x,y,z,w)_unity → (z,-x,y,-w)_ros
-    orientation = {"x": rot[2], "y": -rot[0], "z": rot[1], "w": -rot[3]}
+    # Conversion: (x,y,z,w)_unity → (z,-x,y,w)_ros — w preserved (negating inverts rotation)
+    orientation = {"x": rot[2], "y": -rot[0], "z": rot[1], "w": rot[3]}
 
     # 7. MoveIt pre-grasp move
     logger.info(f"[VGN+ROS] Moving to pre-grasp for {robot_id}: {pre_grasp_pos}")
