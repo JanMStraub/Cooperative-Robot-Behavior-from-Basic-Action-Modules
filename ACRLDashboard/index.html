@@ -14,14 +14,10 @@
 			rel="stylesheet"
 			href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
 		/>
-		<!-- Three.js for 3D rendering via CDN -->
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-		<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
-		<script src="https://cdn.jsdelivr.net/npm/urdf-loader@0.12.1/URDFLoader.js"></script>
-		<link rel="stylesheet" href="/static/css/variables.css" />
-		<link rel="stylesheet" href="/static/css/layout.css" />
-		<link rel="stylesheet" href="/static/css/components.css" />
+
+		<link rel="stylesheet" href="/static/css/variables.css?v=20260320_0001" />
+		<link rel="stylesheet" href="/static/css/layout.css?v=20260320_0001" />
+		<link rel="stylesheet" href="/static/css/components.css?v=20260320_0001" />
 	</head>
 
 	<body class="dark-theme">
@@ -134,124 +130,65 @@
 					</div>
 				</section>
 
-				<!-- Middle Column: 3D Visualization & Teleop -->
+				<!-- Middle Column: Cameras + World State -->
 				<section class="panel visualization-panel">
-					<div class="panel-header">
-						<h2>
-							<i class="fa-solid fa-vr-cardboard"></i> Spatial
-							Visualization
-						</h2>
-						<div class="panel-actions">
-							<select class="glass-select">
-								<option>WorldState View</option>
-								<option>Point Cloud View</option>
-								<option>Ghost Trajectory View</option>
-							</select>
-						</div>
-					</div>
-
-					<!-- 3D Canvas Container -->
-					<div
-						class="canvas-container glass-box"
-						id="threejs-container"
-					>
-						<!-- ThreeJS injects here -->
-						<div class="canvas-overlay">
-							<div class="overlay-badge">Live WorldState</div>
-						</div>
-					</div>
-
-					<!-- Teleoperation / Manual Override -->
-					<div class="teleop-panel glass-box" id="teleop-panel">
+					<!-- Camera Streams -->
+					<div class="perception-panel expanded" id="perception-panel">
 						<div class="panel-header">
-							<h3>
-								<i class="fa-solid fa-gamepad"></i> Manual
-								Override
-							</h3>
+							<h2>
+								<i class="fa-solid fa-camera"></i> Live Perception
+							</h2>
 							<div class="panel-actions">
-								<button
-									class="btn-icon-small"
-									id="btn-teleop-collapse"
-									title="Collapse"
-								>
+								<button class="btn-icon-small" id="btn-perception-collapse" title="Collapse">
 									<i class="fa-solid fa-chevron-up"></i>
 								</button>
 							</div>
 						</div>
-						<div class="teleop-content">
-							<div class="teleop-grid">
-								<div class="control-group">
-									<label>Robot ID:</label>
-									<select
-										class="glass-select"
-										id="teleop-robot-id"
-									>
-										<option>Robot1</option>
-										<option>Robot2</option>
-									</select>
+						<div class="camera-grid">
+							<div class="camera-feed glass-box">
+								<img id="stream-rgb" alt="RGB Stream"
+									style="width:100%;height:100%;object-fit:cover;"
+									onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+								<div class="feed-placeholder" style="display:none;">
+									<i class="fa-solid fa-video-slash"></i>
+									<span>Camera 1 (Offline)</span>
 								</div>
-								<div class="control-group">
-									<label>Inverse Kinematics (XYZ)</label>
-									<div class="xyz-controls">
-										<button
-											class="btn btn-icon-small"
-											title="X+"
-										>
-											<i class="fa-solid fa-arrow-up"></i>
-										</button>
-										<button
-											class="btn btn-icon-small"
-											title="X-"
-										>
-											<i
-												class="fa-solid fa-arrow-down"
-											></i>
-										</button>
-										<button
-											class="btn btn-icon-small"
-											title="Y+"
-										>
-											<i
-												class="fa-solid fa-arrow-left"
-											></i>
-										</button>
-										<button
-											class="btn btn-icon-small"
-											title="Y-"
-										>
-											<i
-												class="fa-solid fa-arrow-right"
-											></i>
-										</button>
-										<button
-											class="btn btn-icon-small"
-											title="Z+"
-										>
-											<i class="fa-solid fa-up-long"></i>
-										</button>
-										<button
-											class="btn btn-icon-small"
-											title="Z-"
-										>
-											<i
-												class="fa-solid fa-down-long"
-											></i>
-										</button>
-									</div>
+								<div class="feed-overlay">RGB + YOLO</div>
+							</div>
+							<div class="camera-feed glass-box">
+								<img id="stream-depth" alt="Depth Stream"
+									style="width:100%;height:100%;object-fit:cover;"
+									onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+								<div class="feed-placeholder" style="display:none;">
+									<i class="fa-solid fa-video-slash"></i>
+									<span>Camera 2 (Offline)</span>
 								</div>
-								<div class="control-group">
-									<label>Gripper</label>
-									<div class="gripper-controls">
-										<button class="btn btn-secondary">
-											Open
-										</button>
-										<button class="btn btn-secondary">
-											Close
-										</button>
-									</div>
-								</div>
+								<div class="feed-overlay">Stereo Right (Depth proxy)</div>
 							</div>
 						</div>
+					</div>
+
+					<div class="panel-header">
+						<h2>
+							<i class="fa-solid fa-robot"></i> World State
+						</h2>
+						<span class="ws-timestamp" id="ws-timestamp" style="font-size:0.75rem;opacity:0.5;">–</span>
+					</div>
+
+					<!-- Robot Cards -->
+					<div class="ws-robot-list glass-box" id="ws-robot-list">
+						<div class="ws-empty">
+							<i class="fa-solid fa-circle-notch fa-spin"></i>
+							<span>Waiting for Unity…</span>
+						</div>
+					</div>
+
+					<!-- Object Cards -->
+					<div class="ws-object-section" id="ws-object-section" style="display:none;">
+						<h3 class="ws-section-title">
+							<i class="fa-solid fa-cubes"></i> Detected Objects
+						</h3>
+						<div class="ws-object-list glass-box" id="ws-object-list"></div>
 					</div>
 				</section>
 
@@ -296,82 +233,6 @@
 						</div>
 					</div>
 
-					<!-- Camera Streams -->
-					<div
-						class="perception-panel expanded"
-						id="perception-panel"
-					>
-						<div class="panel-header">
-							<h2>
-								<i class="fa-solid fa-camera"></i> Live
-								Perception
-							</h2>
-							<div class="panel-actions">
-								<button
-									class="btn-icon-small"
-									id="btn-perception-collapse"
-									title="Collapse"
-								>
-									<i class="fa-solid fa-chevron-up"></i>
-								</button>
-							</div>
-						</div>
-						<div class="camera-grid">
-							<div class="camera-feed glass-box">
-								<img
-									src="/api/stream/rgb"
-									data-src-base="/api/stream/rgb"
-									alt="RGB Stream"
-									onerror="
-										this.style.display = 'none';
-										this.nextElementSibling.style.display =
-											'flex';
-									"
-									style="
-										width: 100%;
-										height: 100%;
-										object-fit: cover;
-									"
-								/>
-								<div
-									class="feed-placeholder"
-									style="display: none"
-								>
-									<i class="fa-solid fa-video-slash"></i>
-									<span>Camera 1 (Offline)</span>
-								</div>
-								<div class="feed-overlay">RGB + YOLO</div>
-							</div>
-							<div class="camera-feed glass-box">
-								<img
-									src="/api/stream/depth"
-									data-src-base="/api/stream/depth"
-									alt="Depth Stream"
-									onerror="
-										this.style.display = 'none';
-										this.nextElementSibling.style.display =
-											'flex';
-									"
-									style="
-										width: 100%;
-										height: 100%;
-										object-fit: cover;
-									"
-								/>
-								<div
-									class="feed-placeholder"
-									style="display: none"
-								>
-									<i class="fa-solid fa-video-slash"></i>
-									<span>Camera 2 (Offline)</span>
-								</div>
-								<div class="feed-overlay">
-									Stereo Right (Depth proxy)
-								</div>
-							</div>
-						</div>
-					</div>
-
 					<!-- Server Logs -->
 					<div class="logs-panel">
 						<div class="panel-header">
@@ -403,6 +264,6 @@
 				</section>
 			</main>
 		</div>
-		<script type="module" src="/static/js/main.js"></script>
+		<script type="module" src="/static/js/main.js?v=20260320_0001"></script>
 	</body>
 </html>

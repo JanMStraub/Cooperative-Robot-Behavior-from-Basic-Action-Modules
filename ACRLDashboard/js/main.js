@@ -1,7 +1,7 @@
-import { UIManager } from './ui.js';
-import { Renderer } from './renderer.js';
-import { AutoRTManager } from './autort.js';
-import { NetworkManager } from './network.js';
+import { UIManager } from './ui.js?v=20260320_0001';
+import { Renderer } from './renderer.js?v=20260320_0001';
+import { AutoRTManager } from './autort.js?v=20260320_0001';
+import { NetworkManager } from './network.js?v=20260320_0001';
 
 document.addEventListener('DOMContentLoaded', () => {
     const ui = new UIManager();

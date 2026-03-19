@@ -327,12 +327,17 @@ def _grasp_via_ros_planned(
     # w is preserved — negating it would invert the rotation (conjugate), not
     # just change the handedness representation.
     unity_q = best_grasp.grasp_rotation  # (x, y, z, w) in Unity frame
-    grasp_orientation = {
-        "x": unity_q[2],   # unity z → ros x
-        "y": -unity_q[0],  # unity x → ros -y
-        "z": unity_q[1],   # unity y → ros z
-        "w": unity_q[3],   # w preserved
-    }
+    ros_x = unity_q[2]    # unity z → ros x
+    ros_y = -unity_q[0]   # unity x → ros -y
+    ros_z = unity_q[1]    # unity y → ros z
+    ros_w = unity_q[3]    # w preserved
+    # Canonicalize to w >= 0 hemisphere. The two quaternion representations
+    # (x,y,z,w) and (-x,-y,-z,-w) encode identical orientations, but MoveIt's
+    # IK solver may pick a wrist solution requiring an extra ±360° rotation when
+    # w < 0 (especially for Top grasps where Euler(180,0,90) puts w near zero).
+    if ros_w < 0.0:
+        ros_x, ros_y, ros_z, ros_w = -ros_x, -ros_y, -ros_z, -ros_w
+    grasp_orientation = {"x": ros_x, "y": ros_y, "z": ros_z, "w": ros_w}
 
     grasp_pos = _vec_to_pos(best_grasp.grasp_position)
 
@@ -443,7 +448,11 @@ def _grasp_via_ros_position_only(
     # Top-down grasp orientation.  roll=pi (180° around X) flips ee_link Z
     # downward.  No Z-rotation needed here because MoveIt's tip_link (ee_link)
     # does not include the URDF gripper_base_joint rpy compensation.
-    top_down_orientation = {"x": 1.0, "y": 0.0, "z": 0.0, "w": 0.0}
+    # w=0.0 is exactly on the quaternion equator — MoveIt's IK solver is
+    # ambiguous about which hemisphere to use, sometimes spinning the wrist
+    # 360°. A small positive w bias (≈0.5° tilt) canonicalizes to w>0 and
+    # gives the solver a consistent, minimal-rotation path.
+    top_down_orientation = {"x": 0.9999, "y": 0.0, "z": 0.0, "w": 0.0087}  # ~179.0°
 
     pre_grasp_position = _vec_to_pos(object_position, PRE_GRASP_HOVER_OFFSET)
     grasp_position = _vec_to_pos(object_position, GRASP_TCP_OFFSET)
@@ -983,7 +992,10 @@ def _grasp_via_vgn_with_ros(
     # VGN produces orientations in Unity world frame (Y-up, left-handed).
     # Convert to ROS base_link frame (Z-up, right-handed) before sending to MoveIt.
     # Conversion: (x,y,z,w)_unity → (z,-x,y,w)_ros — w preserved (negating inverts rotation)
-    orientation = {"x": rot[2], "y": -rot[0], "z": rot[1], "w": rot[3]}
+    _rx, _ry, _rz, _rw = rot[2], -rot[0], rot[1], rot[3]
+    if _rw < 0.0:
+        _rx, _ry, _rz, _rw = -_rx, -_ry, -_rz, -_rw
+    orientation = {"x": _rx, "y": _ry, "z": _rz, "w": _rw}
 
     # 7. MoveIt pre-grasp move
     logger.info(f"[VGN+ROS] Moving to pre-grasp for {robot_id}: {pre_grasp_pos}")

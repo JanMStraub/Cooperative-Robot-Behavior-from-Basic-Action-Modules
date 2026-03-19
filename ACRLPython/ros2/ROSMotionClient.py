@@ -716,8 +716,11 @@ class ROSMotionServer:
         # collapse every segment to a single FixedUpdate frame (0.02s).
         # Default to 0.5 so MoveIt always produces a timed trajectory; callers can
         # override to 1.0 for full speed or lower for slow approach phases.
-        vel_scaling = request.get("max_velocity_scaling", 0.5)
-        acc_scaling = request.get("max_acceleration_scaling", 0.5)
+        vel_scaling = request.get("max_velocity_scaling", 0.75)
+        # Acceleration scaling kept lower than velocity scaling so TOTG allocates
+        # longer ramp-up/ramp-down phases. Unity's ArticulationBody needs sufficient
+        # deceleration time to shed kinetic energy within its forceLimit budget.
+        acc_scaling = request.get("max_acceleration_scaling", 0.4)
         goal.request.max_velocity_scaling_factor = vel_scaling
         goal.request.max_acceleration_scaling_factor = acc_scaling
 
@@ -1416,6 +1419,24 @@ class ROSMotionServer:
         req.max_step = 0.05  # 5cm maximum interpolation step — 1cm produced 150+ waypoints for short descents
         req.jump_threshold = 0.0  # Disable jump detection; non-zero values prematurely terminate descent at workspace edges
         req.avoid_collisions = True
+
+        # Lock wrist orientation throughout the descent so MoveIt's IK solver
+        # cannot flip to a redundant wrist solution mid-path (which would cause
+        # the gripper to visibly rotate around its own axis during descent).
+        # Without this constraint, GetCartesianPath solves each waypoint
+        # independently and may choose a different J4/J6 configuration each time.
+        if OrientationConstraint is not None:
+            orient_constraint = OrientationConstraint()
+            orient_constraint.header.frame_id = "base_link"
+            orient_constraint.link_name = "ee_link"
+            orient_constraint.orientation = target_pose.pose.orientation
+            orient_constraint.absolute_x_axis_tolerance = 0.05  # ~3 deg
+            orient_constraint.absolute_y_axis_tolerance = 0.05
+            orient_constraint.absolute_z_axis_tolerance = 0.05
+            orient_constraint.weight = 1.0
+            path_constraints = Constraints()
+            path_constraints.orientation_constraints.append(orient_constraint)
+            req.path_constraints = path_constraints
         # max_velocity/acceleration_scaling_factor were added to GetCartesianPath in
         # moveit_msgs ~2.3. _CARTESIAN_HAS_SCALING is set once at import time.
         if _CARTESIAN_HAS_SCALING:

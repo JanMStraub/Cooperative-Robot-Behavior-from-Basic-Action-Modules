@@ -243,7 +243,7 @@ class StereoImageServer(TCPServerBase):
                     )
 
                     if not ENABLE_VISION_STREAMING:
-                        logger.info(
+                        logger.debug(
                             f"[req={request_id}] Received stereo '{camera_pair_id}' "
                             f"(L: {img_L_len/1024:.1f}KB, R: {img_R_len/1024:.1f}KB)"
                         )

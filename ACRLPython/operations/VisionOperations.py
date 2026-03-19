@@ -322,6 +322,10 @@ def detect_object_stereo(
         storage = get_unified_image_storage()
         broadcaster = get_command_broadcaster()
 
+        # If vision streaming is enabled, images in storage are already continuously fresh
+        if ENABLE_VISION_STREAMING:
+            request_fresh_capture = False
+
         # Get stereo images
         if request_fresh_capture:
             # Request fresh capture from Unity

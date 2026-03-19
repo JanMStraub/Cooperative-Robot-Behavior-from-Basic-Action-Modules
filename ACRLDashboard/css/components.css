@@ -219,3 +219,126 @@
 
 .autort-empty { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; padding: 1rem; color: var(--text-muted); font-size: 0.85rem; text-align: center; }
 .autort-empty i { font-size: 1.4rem; opacity: 0.5; }
+
+/* ══ World State Panel ════════════════════════════════════ */
+.ws-robot-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.5rem;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.ws-empty {
+    display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+    padding: 2rem; color: var(--text-muted); font-size: 0.85rem; text-align: center;
+}
+.ws-empty i { font-size: 1.5rem; opacity: 0.4; }
+
+/* Robot card */
+.ws-robot-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md);
+    border-left: 3px solid var(--primary);
+    padding: 0.45rem 0.7rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    transition: var(--transition);
+}
+.ws-robot-card:hover { background: rgba(255,255,255,0.06); }
+.ws-robot-card.moving { border-left-color: var(--warning); }
+
+.ws-robot-header {
+    display: flex; align-items: center; justify-content: space-between;
+}
+.ws-robot-name {
+    font-weight: 600; font-size: 0.95rem; color: var(--text-main);
+    display: flex; align-items: center; gap: 0.5rem;
+}
+.ws-robot-name i { color: var(--primary); font-size: 0.85rem; }
+
+.ws-status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--success); box-shadow: 0 0 6px var(--success);
+    flex-shrink: 0;
+    transition: background 0.3s, box-shadow 0.3s;
+}
+.ws-status-dot.moving {
+    background: var(--warning); box-shadow: 0 0 6px var(--warning);
+    animation: ws-pulse 1s ease-in-out infinite alternate;
+}
+.ws-status-dot.offline { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+
+@keyframes ws-pulse { from { opacity: 1; } to { opacity: 0.4; } }
+
+.ws-pos-row {
+    font-family: var(--font-mono); font-size: 0.78rem;
+    color: var(--text-muted); display: flex; gap: 0.6rem;
+    flex-wrap: wrap;
+}
+.ws-pos-label { color: var(--accent); font-weight: 600; }
+
+.ws-gripper-row {
+    display: flex; align-items: center; gap: 0.5rem;
+    font-size: 0.78rem;
+}
+.ws-gripper-badge {
+    padding: 0.15rem 0.55rem; border-radius: 20px; font-size: 0.7rem; font-weight: 700;
+}
+.ws-gripper-badge.open  { background: rgba(46,196,182,0.15); color: var(--success); border: 1px solid var(--success); }
+.ws-gripper-badge.closed { background: rgba(231,29,54,0.15); color: var(--danger); border: 1px solid var(--danger); }
+
+/* Control mode badge on robot card */
+.ws-mode-badge {
+    font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    background: rgba(67,97,238,0.15); color: var(--primary); border: 1px solid var(--primary);
+    border-radius: 4px; padding: 0.05rem 0.35rem; vertical-align: middle;
+}
+
+/* Joint angles row — smaller font */
+.ws-joint-row { font-size: 0.7rem; flex-wrap: wrap; opacity: 0.7; }
+
+/* Object section */
+.ws-object-section { display: flex; flex-direction: column; gap: 0.5rem; }
+.ws-section-title { font-size: 0.85rem; font-weight: 500; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; }
+.ws-object-list {
+    display: flex; flex-direction: column;
+    gap: 0.4rem; padding: 0.4rem;
+}
+
+/* Object card — replaces chip */
+.ws-object-card {
+    background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+    border-radius: var(--radius-md); padding: 0.4rem 0.6rem;
+    display: flex; flex-direction: column; gap: 0.25rem;
+    font-family: var(--font-mono); font-size: 0.75rem;
+}
+.ws-object-header {
+    display: flex; align-items: center; gap: 0.4rem;
+}
+.ws-object-name { font-weight: 600; color: var(--text-main); font-family: var(--font-main); font-size: 0.8rem; }
+
+/* Color dot */
+.ws-color-dot {
+    width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+}
+.ws-color-dot.ws-color-red    { background: #e71d36; }
+.ws-color-dot.ws-color-blue   { background: #4361ee; }
+.ws-color-dot.ws-color-green  { background: #2ec4b6; }
+.ws-color-dot.ws-color-yellow { background: #ff9f1c; }
+.ws-color-dot.ws-color-orange { background: #f58231; }
+.ws-color-dot.ws-color-purple { background: #9b5de5; }
+.ws-color-dot.ws-color-white  { background: #ffffff; border: 1px solid var(--glass-border); }
+.ws-color-dot.ws-color-black  { background: #333; border: 1px solid var(--glass-border); }
+
+/* Grasped badge */
+.ws-grasped-badge {
+    font-size: 0.65rem; font-weight: 600; color: var(--warning);
+    background: rgba(255,159,28,0.12); border: 1px solid var(--warning);
+    border-radius: 4px; padding: 0.05rem 0.35rem; margin-left: auto;
+    font-family: var(--font-main);
+}
+

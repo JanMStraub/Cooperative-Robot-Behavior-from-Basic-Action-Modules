@@ -78,33 +78,125 @@ export class Renderer {
     }
 
     updateWorldState(data) {
-        if (!this.scene) return;
-        const now = Date.now();
+        // ── DOM world state panel ──────────────────────────────────
+        const robotList = document.getElementById('ws-robot-list');
+        const objectSection = document.getElementById('ws-object-section');
+        const objectList = document.getElementById('ws-object-list');
+        const tsEl = document.getElementById('ws-timestamp');
 
-        if (data.objects) {
-            data.objects.forEach(obj => {
-                const id = obj.object_id;
-                this.meshTimestamps[id] = now;
-                this.updateOrCreateMesh(id, obj, 'object');
-            });
+        // Timestamp
+        if (tsEl) {
+            const now = new Date();
+            tsEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         }
 
-        if (data.robots) {
+        // Robot cards
+        if (robotList && data.robots && data.robots.length > 0) {
+            robotList.innerHTML = '';
             data.robots.forEach(robot => {
-                const id = robot.robot_id;
-                this.meshTimestamps[id] = now;
-                this.updateOrCreateMesh(id, robot, 'robot');
+                const pos  = robot.position || {};
+                const tgt  = robot.target_position || {};
+                const f = v => (v != null ? Number(v).toFixed(3) : '–');
+                const px = f(Array.isArray(pos) ? pos[0] : pos.x);
+                const py = f(Array.isArray(pos) ? pos[1] : pos.y);
+                const pz = f(Array.isArray(pos) ? pos[2] : pos.z);
+                const tx = f(Array.isArray(tgt) ? tgt[0] : tgt.x);
+                const ty = f(Array.isArray(tgt) ? tgt[1] : tgt.y);
+                const tz = f(Array.isArray(tgt) ? tgt[2] : tgt.z);
+                const moving  = robot.is_moving;
+                const gripper = (robot.gripper_state || 'unknown').toLowerCase();
+                const mode    = robot.control_mode;
+                const joints  = robot.joint_angles;
+
+                const modeTag  = mode  ? `<span class="ws-mode-badge">${mode}</span>` : '';
+                const jointStr = joints && joints.length
+                    ? joints.map((j, i) => `<span><span class="ws-pos-label">J${i+1}</span> ${Number(j).toFixed(2)}</span>`).join('')
+                    : '';
+
+                const card = document.createElement('div');
+                card.className = `ws-robot-card${moving ? ' moving' : ''}`;
+                card.innerHTML = `
+                    <div class="ws-robot-header">
+                        <span class="ws-robot-name">
+                            <i class="fa-solid fa-robot"></i>
+                            ${robot.robot_id}
+                            ${modeTag}
+                        </span>
+                        <div style="display:flex;align-items:center;gap:0.5rem;">
+                            <span style="font-size:0.72rem;color:var(--text-muted)">${moving ? 'Moving…' : 'Idle'}</span>
+                            <span class="ws-status-dot${moving ? ' moving' : ''}"></span>
+                        </div>
+                    </div>
+                    <div class="ws-pos-row">
+                        <span style="color:var(--text-muted);font-size:0.7rem;min-width:2rem">EE</span>
+                        <span><span class="ws-pos-label">X</span> ${px}</span>
+                        <span><span class="ws-pos-label">Y</span> ${py}</span>
+                        <span><span class="ws-pos-label">Z</span> ${pz}</span>
+                    </div>
+                    <div class="ws-pos-row">
+                        <span style="color:var(--text-muted);font-size:0.7rem;min-width:2rem">Tgt</span>
+                        <span><span class="ws-pos-label">X</span> ${tx}</span>
+                        <span><span class="ws-pos-label">Y</span> ${ty}</span>
+                        <span><span class="ws-pos-label">Z</span> ${tz}</span>
+                    </div>
+                    <div class="ws-gripper-row">
+                        <span style="color:var(--text-muted);font-size:0.78rem">Gripper:</span>
+                        <span class="ws-gripper-badge ${gripper}">${gripper}</span>
+                    </div>
+                    ${jointStr ? `<div class="ws-pos-row ws-joint-row">${jointStr}</div>` : ''}`;
+                robotList.appendChild(card);
             });
+        } else if (robotList && (!data.robots || data.robots.length === 0)) {
+            robotList.innerHTML = `<div class="ws-empty"><i class="fa-solid fa-circle-notch fa-spin"></i><span>Waiting for Unity…</span></div>`;
         }
 
-        Object.keys(this.meshCache).forEach(id => {
-            const lastSeen = this.meshTimestamps[id] || 0;
-            if (now - lastSeen > 2000) {
-                this.scene.remove(this.meshCache[id]);
-                delete this.meshCache[id];
-                delete this.meshTimestamps[id];
+        // Object cards
+        if (objectSection && objectList && data.objects) {
+            if (data.objects.length > 0) {
+                objectSection.style.display = '';
+                objectList.innerHTML = '';
+                data.objects.forEach(obj => {
+                    const p = obj.position || {};
+                    const d = obj.dimensions || {};
+                    const f = v => (v != null ? Number(v).toFixed(3) : '–');
+                    const ox = f(Array.isArray(p) ? p[0] : p.x);
+                    const oy = f(Array.isArray(p) ? p[1] : p.y);
+                    const oz = f(Array.isArray(p) ? p[2] : p.z);
+                    const dw = f(Array.isArray(d) ? d[0] : d.x);
+                    const dh = f(Array.isArray(d) ? d[1] : d.y);
+                    const dd = f(Array.isArray(d) ? d[2] : d.z);
+                    const color = (obj.color || 'unknown').toLowerCase();
+                    const grasped = obj.grasped_by;
+                    const colorDot = color !== 'unknown'
+                        ? `<span class="ws-color-dot ws-color-${color}"></span>`
+                        : '';
+                    const graspedTag = grasped
+                        ? `<span class="ws-grasped-badge"><i class="fa-solid fa-hand"></i> ${grasped}</span>`
+                        : '';
+
+                    const card = document.createElement('div');
+                    card.className = 'ws-object-card';
+                    card.innerHTML = `
+                        <div class="ws-object-header">
+                            ${colorDot}
+                            <span class="ws-object-name">${obj.object_id || 'Object'}</span>
+                            ${graspedTag}
+                        </div>
+                        <div class="ws-pos-row">
+                            <span><span class="ws-pos-label">X</span> ${ox}</span>
+                            <span><span class="ws-pos-label">Y</span> ${oy}</span>
+                            <span><span class="ws-pos-label">Z</span> ${oz}</span>
+                        </div>
+                        <div class="ws-pos-row" style="opacity:0.6">
+                            <span style="color:var(--text-muted);font-size:0.7rem;min-width:2rem">dim</span>
+                            <span>${dw} × ${dh} × ${dd}</span>
+                        </div>`;
+                    objectList.appendChild(card);
+                });
+            } else {
+                objectSection.style.display = 'none';
             }
-        });
+        }
     }
 
     updateOrCreateMesh(id, data, type) {
@@ -114,70 +206,87 @@ export class Renderer {
             if (type === 'robot') {
                 mesh = new THREE.Group();
 
-                if (!this.urdfLoader && window.URDFLoader) {
-                    this.urdfLoader = new window.URDFLoader(new THREE.LoadingManager());
-                    // Update package URLs to point to our mounted /urdf route
-                    // and correctly handle case sensitivity for .STL files
-                    this.urdfLoader.parsePackageUrl = (url) => {
-                        let replaced = url.replace('package://ar4_stl/', '/urdf/ar4_stl/');
-                        if (/(base_link|link_[1-6])\.stl$/.test(replaced)) {
-                           replaced = replaced.replace(/\.stl$/, '.STL');
-                        }
-                        return replaced;
-                    };
-                }
+                // ---- Base disc ----
+                const baseGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.04, 32);
+                const baseMat = new THREE.MeshStandardMaterial({ color: 0x222244, roughness: 0.5, metalness: 0.6 });
+                const base = new THREE.Mesh(baseGeo, baseMat);
+                base.position.y = 0.02;
+                base.castShadow = true;
+                mesh.add(base);
 
-                if (this.urdfLoader) {
-                    this.urdfLoader.load('/urdf/ar4.urdf', (robot) => {
-                        robot.rotation.x = -Math.PI / 2; // Convert Z-up to Y-up
-                        
-                        // Scale the robot appropriately for the world view
-                        robot.scale.set(1, 1, 1);
-                        
-                        // Apply shadows and simple materials since STL lacks them
-                        const bodyMaterial = new THREE.MeshStandardMaterial({ 
-                            color: 0xdddddd, 
-                            roughness: 0.5, 
-                            metalness: 0.2 
-                        });
-                        const jointMaterial = new THREE.MeshStandardMaterial({ 
-                            color: 0x333333, 
-                            roughness: 0.7, 
-                            metalness: 0.1 
-                        });
+                // ---- Arm column ----
+                const armGeo = new THREE.CylinderGeometry(0.04, 0.07, 0.28, 16);
+                const armMat = new THREE.MeshStandardMaterial({ color: 0xff6a00, roughness: 0.4, metalness: 0.5 });
+                const arm = new THREE.Mesh(armGeo, armMat);
+                arm.position.y = 0.18;
+                arm.castShadow = true;
+                mesh.add(arm);
 
-                        robot.traverse(child => {
-                            if (child.isMesh) {
-                                child.castShadow = true;
-                                child.receiveShadow = true;
-                                // Basic heuristic: if the link name contains 'link' it's body, otherwise joint/gripper
-                                if (child.parent && child.parent.name.includes('link')) {
-                                    child.material = bodyMaterial.clone();
-                                } else {
-                                    child.material = jointMaterial.clone();
-                                }
-                            }
-                        });
-                        mesh.add(robot);
-                    });
-                }
+                // ---- Shoulder joint ----
+                const shoulderGeo = new THREE.SphereGeometry(0.055, 16, 16);
+                const jointMat = new THREE.MeshStandardMaterial({ color: 0x333355, roughness: 0.5, metalness: 0.7 });
+                const shoulder = new THREE.Mesh(shoulderGeo, jointMat);
+                shoulder.position.y = 0.33;
+                shoulder.castShadow = true;
+                mesh.add(shoulder);
+
+                // ---- Forearm ----
+                const forearmGeo = new THREE.CylinderGeometry(0.03, 0.04, 0.22, 16);
+                const forearm = new THREE.Mesh(forearmGeo, armMat.clone());
+                forearm.position.y = 0.46;
+                forearm.castShadow = true;
+                mesh.add(forearm);
+
+                // ---- End-effector ----
+                const eeGeo = new THREE.SphereGeometry(0.04, 16, 16);
+                const eeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.8 });
+                const ee = new THREE.Mesh(eeGeo, eeMat);
+                ee.position.y = 0.59;
+                ee.castShadow = true;
+                mesh.add(ee);
+                // Store reference for gripper state color change
+                mesh.userData.endEffector = ee;
+                mesh.userData.eeMat = eeMat;
             } else {
-                let colorHex = 0xe71d36; 
+                let colorHex = 0xaaaaaa; // Default gray for unknown objects
+                let isTransparent = false;
+                let opacity = 1.0;
+
                 if (data.color) {
-                    if (data.color.toLowerCase().includes('blue')) colorHex = 0x4361ee;
-                    else if (data.color.toLowerCase().includes('green')) colorHex = 0x2ec4b6;
-                    else if (data.color.toLowerCase().includes('yellow')) colorHex = 0xff9f1c;
-                    else if (data.color.toLowerCase().includes('orange')) colorHex = 0xf58231;
-                    else if (data.color.toLowerCase().includes('field')) colorHex = 0x888888;
+                    const col = data.color.toLowerCase();
+                    if (col.includes('blue')) colorHex = 0x4361ee;
+                    else if (col.includes('green')) colorHex = 0x2ec4b6;
+                    else if (col.includes('yellow')) colorHex = 0xff9f1c;
+                    else if (col.includes('orange')) colorHex = 0xf58231;
+                    else if (col.includes('red')) colorHex = 0xe71d36;
+                    else if (col.includes('purple')) colorHex = 0x9b5de5;
+                    else if (col.includes('white')) colorHex = 0xffffff;
+                    else if (col.includes('black')) colorHex = 0x222222;
+                    else if (col.includes('field') || col.includes('table')) {
+                        colorHex = 0xcccccc;
+                        isTransparent = true;
+                        opacity = 0.3;
+                    }
                 }
+
+                if (data.object_id) {
+                    const id = data.object_id.toLowerCase();
+                    if (id.includes('table') || id.includes('workspace') || id.includes('floor') || id.includes('plane') || id.includes('base')) {
+                        isTransparent = true;
+                        opacity = 0.3;
+                    }
+                }
+
                 const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
                 const mat = new THREE.MeshStandardMaterial({ 
                     color: colorHex,
                     roughness: 0.7,
-                    metalness: 0.1
+                    metalness: 0.1,
+                    transparent: isTransparent,
+                    opacity: opacity
                 });
                 mesh = new THREE.Mesh(geo, mat);
-                mesh.castShadow = true;
+                mesh.castShadow = !isTransparent;
                 mesh.receiveShadow = true;
             }
 
@@ -213,23 +322,9 @@ export class Renderer {
             }
         }
 
-        if (type === 'robot' && data.joint_angles && mesh.children.length > 0) {
-            const urdfRobot = mesh.children[0];
-            if (urdfRobot.isURDFRobot) {
-                // The URDF joints are named joint_1 to joint_6 and gripper_jaw1_joint/gripper_jaw2_joint
-                for (let i = 0; i < data.joint_angles.length; i++) {
-                    const jointName = `joint_${i + 1}`;
-                    if (urdfRobot.joints[jointName]) {
-                        urdfRobot.setJointValue(jointName, data.joint_angles[i]);
-                    }
-                }
-                // Handle Gripper
-                if (data.gripper_state !== undefined) {
-                    const gripperPos = data.gripper_state === 'open' ? 0.014 : 0;
-                    if (urdfRobot.joints['gripper_jaw1_joint']) urdfRobot.setJointValue('gripper_jaw1_joint', gripperPos);
-                    if (urdfRobot.joints['gripper_jaw2_joint']) urdfRobot.setJointValue('gripper_jaw2_joint', gripperPos);
-                }
-            }
+        if (type === 'robot' && data.gripper_state !== undefined && mesh.userData.eeMat) {
+            // Visualize gripper state via end-effector color: green=open, red=closed
+            mesh.userData.eeMat.color.set(data.gripper_state === 'open' ? 0x2ec4b6 : 0xe71d36);
         }
     }
 }

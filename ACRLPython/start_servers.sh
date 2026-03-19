@@ -16,6 +16,7 @@ SEQUENCE_SERVER_PATTERN="orchestrators.RunSequenceServer"
 ROS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/rosUnityIntegration"
 CONTROLLER_PID=""
 ROS_INTEGRATION=true
+STOP_DOCKER_ON_EXIT=false
 WEB_PORT="8000"
 ENV_FLAG="sim"
 
@@ -155,8 +156,8 @@ cleanup() {
         wait "$CONTROLLER_PID" 2>/dev/null || true
     fi
 
-    # Stop ROS Docker containers if ROS integration was enabled
-    if "$ROS_INTEGRATION" && [ -d "$ROS_DIR" ] && command -v docker &>/dev/null; then
+    # Stop ROS Docker containers if ROS integration was enabled and stop-on-exit is active
+    if "$ROS_INTEGRATION" && "$STOP_DOCKER_ON_EXIT" && [ -d "$ROS_DIR" ] && command -v docker &>/dev/null; then
         echo "Stopping ROS Docker containers..."
         "$ROS_DIR/start_ros_endpoint.sh" down
         echo "  ✓ ROS Docker containers stopped."
@@ -172,6 +173,10 @@ main() {
         case "$1" in
             --without-ros)
                 ROS_INTEGRATION=false
+                shift
+                ;;
+            --no-stop-docker)
+                STOP_DOCKER_ON_EXIT=false
                 shift
                 ;;
             --web)
@@ -192,7 +197,7 @@ main() {
                 ;;
             *)
                 echo "Unknown option: $1" >&2
-                echo "Usage: $0 [--without-ros] [--web PORT] [--no-web] [--env sim|real]" >&2
+                echo "Usage: $0 [--without-ros] [--no-stop-docker] [--web PORT] [--no-web] [--env sim|real]" >&2
                 exit 1
                 ;;
         esac

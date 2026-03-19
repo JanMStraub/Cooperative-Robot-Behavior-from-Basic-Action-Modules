@@ -171,8 +171,8 @@ def _check_unity_connected() -> bool:
     """Return True if at least one Unity client is connected to CommandServer."""
     try:
         broadcaster = get_command_broadcaster()
-        if hasattr(broadcaster, "_robot_clients"):
-            return len(broadcaster._robot_clients) > 0
+        if hasattr(broadcaster, "_server") and broadcaster._server is not None:
+            return broadcaster._server.get_client_count() > 0
         return False
     except Exception:
         return False
@@ -234,8 +234,19 @@ async def api_world_state():
         return {"error": str(e)}
 
 
-async def frame_generator(stream_type="left"):
+def _make_placeholder_frame(text="Waiting for Unity..."):
+    """Return a minimal JPEG bytes placeholder frame for MJPEG streams."""
+    import cv2
+    import numpy as np
+    img = np.zeros((240, 320, 3), dtype=np.uint8)
+    cv2.putText(img, text, (20, 125), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (80, 80, 80), 1)
+    _, encoded = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 50])
+    return encoded.tobytes()
+
+
+def frame_generator(stream_type="left"):
     """Generator for MJPEG streaming from UnifiedImageStorage"""
+    import time
     try:
         from servers.ImageStorageCore import UnifiedImageStorage
         import cv2
@@ -244,6 +255,7 @@ async def frame_generator(stream_type="left"):
         return
 
     storage = UnifiedImageStorage()
+    _placeholder = _make_placeholder_frame()
 
     # Lazy load global detector for RGB stream annotations
     _detector = None
@@ -342,13 +354,12 @@ async def frame_generator(stream_type="left"):
                 _, encoded = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 80])
                 frame_bytes = encoded.tobytes()
 
-        if frame_bytes:
-            yield (
-                b"--frame\r\n"
-                b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n"
-            )
+        yield (
+            b"--frame\r\n"
+            b"Content-Type: image/jpeg\r\n\r\n" + (frame_bytes or _placeholder) + b"\r\n"
+        )
 
-        await asyncio.sleep(0.06)  # ~15 fps
+        time.sleep(0.06)  # ~15 fps
 
 
 @app.get("/api/stream/rgb")
@@ -363,7 +374,7 @@ async def stream_rgb():
 async def stream_depth():
     """Stream right/secondary camera feed as MJPEG"""
     return StreamingResponse(
-        frame_generator("right"), media_type="multipart/x-mixed-replace; boundary=frame"
+        frame_generator("depth"), media_type="multipart/x-mixed-replace; boundary=frame"
     )
 
 

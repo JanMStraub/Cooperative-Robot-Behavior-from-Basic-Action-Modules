@@ -40,8 +40,15 @@ export class UIManager {
 
     /* --- CAMERA STREAM RETRY --- */
     initCameraRetry() {
-        document.querySelectorAll('.camera-feed img').forEach(img => {
-            const baseSrc = img.src;
+        const streams = [
+            { id: 'stream-rgb',   url: '/api/stream/rgb' },
+            { id: 'stream-depth', url: '/api/stream/depth' },
+        ];
+        streams.forEach(({ id, url }) => {
+            const img = document.getElementById(id);
+            if (!img) return;
+            // Set src with cache-busting timestamp on first load
+            img.src = `${url}?_t=${Date.now()}`;
             img.addEventListener('error', () => {
                 setTimeout(() => {
                     img.style.display = '';
@@ -49,7 +56,7 @@ export class UIManager {
                     if (placeholder && placeholder.classList.contains('feed-placeholder')) {
                         placeholder.style.display = 'none';
                     }
-                    img.src = `${baseSrc.split('?')[0]}?_t=${Date.now()}`;
+                    img.src = `${url}?_t=${Date.now()}`;
                 }, 5000);
             });
         });

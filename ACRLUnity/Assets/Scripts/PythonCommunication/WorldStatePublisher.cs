@@ -430,14 +430,24 @@ namespace PythonCommunication
         /// </summary>
         private string InferColorFromName(string name)
         {
-            if (name.IndexOf("red", StringComparison.OrdinalIgnoreCase) >= 0)
-                return "red";
-            if (name.IndexOf("blue", StringComparison.OrdinalIgnoreCase) >= 0)
-                return "blue";
-            if (name.IndexOf("green", StringComparison.OrdinalIgnoreCase) >= 0)
-                return "green";
-            if (name.IndexOf("yellow", StringComparison.OrdinalIgnoreCase) >= 0)
-                return "yellow";
+            string lower = name.ToLowerInvariant();
+            
+            // Prevent false positives from words containing "red"
+            lower = lower.Replace("shared", "")
+                         .Replace("desired", "")
+                         .Replace("colored", "")
+                         .Replace("ignored", "")
+                         .Replace("measured", "");
+
+            if (lower.Contains("red")) return "red";
+            if (lower.Contains("blue")) return "blue";
+            if (lower.Contains("green")) return "green";
+            if (lower.Contains("yellow")) return "yellow";
+            if (lower.Contains("orange")) return "orange";
+            if (lower.Contains("purple")) return "purple";
+            if (lower.Contains("black")) return "black";
+            if (lower.Contains("white")) return "white";
+            
             return "unknown";
         }
 

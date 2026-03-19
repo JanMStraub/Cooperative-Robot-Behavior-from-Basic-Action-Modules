@@ -40,8 +40,8 @@ namespace Vision
 
         [Header("Streaming Mode")]
         [SerializeField]
-        [Tooltip("Enable continuous streaming mode (default: false for Python VisionProcessor)")]
-        private bool _enableStreaming = false;
+        [Tooltip("Enable continuous streaming mode (default: true for Dashboard)")]
+        private bool _enableStreaming = true;
 
         [SerializeField]
         [Tooltip("Streaming rate in FPS (frames per second)")]
@@ -56,6 +56,10 @@ namespace Vision
         private Camera _leftCamera;
         private Camera _rightCamera;
         private string _cameraPairId;
+
+        // Persistent TCP connection to avoid closing/opening 5 times a second
+        private TcpClient _tcpClient;
+        private NetworkStream _tcpStream;
 
         // Pre-allocated shared textures to avoid per-frame GPU memory churn
         private RenderTexture _sharedRT;
@@ -120,6 +124,9 @@ namespace Vision
 
         private void Start()
         {
+            // Force streaming on so the Web Dashboard receives continuous video feeds
+            _enableStreaming = true;
+
             FindCameras();
 
             if (_leftCamera == null || _rightCamera == null)
@@ -187,23 +194,32 @@ namespace Vision
         {
             try
             {
-                using (TcpClient client = new TcpClient())
+                // Re-establish connection if it doesn't exist or is broken
+                if (_tcpClient == null || !_tcpClient.Connected)
                 {
-                    client.Connect(
+                    if (_tcpClient != null) { _tcpClient.Close(); }
+                    _tcpClient = new TcpClient();
+                    _tcpClient.Connect(
                         CommunicationConstants.SERVER_HOST,
                         CommunicationConstants.STEREO_DETECTION_PORT
                     );
-                    NetworkStream stream = client.GetStream();
-
-                    byte[] message = EncodeStereoMessage(cameraPairId, leftImage, rightImage);
-
-                    stream.Write(message, 0, message.Length);
-                    stream.Flush();
+                    _tcpStream = _tcpClient.GetStream();
                 }
+
+                byte[] message = EncodeStereoMessage(cameraPairId, leftImage, rightImage);
+
+                _tcpStream.Write(message, 0, message.Length);
+                _tcpStream.Flush();
             }
             catch (Exception ex)
             {
                 Debug.LogError($"{_logPrefix} TCP send failed: {ex.Message}");
+                // Disconnect so it re-attempts next frame
+                if (_tcpClient != null)
+                {
+                    _tcpClient.Close();
+                    _tcpClient = null;
+                }
             }
         }
 
@@ -379,6 +395,12 @@ namespace Vision
             if (_captureCounter > 0)
             {
                 Debug.Log($"{_logPrefix} Destroyed after {_captureCounter} captures");
+            }
+
+            if (_tcpClient != null)
+            {
+                _tcpClient.Close();
+                _tcpClient = null;
             }
 
             if (_sharedRT != null)

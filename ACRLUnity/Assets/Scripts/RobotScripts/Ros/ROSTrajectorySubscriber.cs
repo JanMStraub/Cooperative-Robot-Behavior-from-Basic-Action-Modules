@@ -347,7 +347,12 @@ namespace Robotics
                     float firstDeg = (firstWaypoint != null && j < firstWaypoint.Length)
                         ? (float)(firstWaypoint[j] * Mathf.Rad2Deg) : float.NaN;
                     string jointName = j < msg.joint_names.Length ? msg.joint_names[j] : $"j{j}";
-                    _debugStringBuilder.AppendLine($"  {jointName}→{idx} | phys={physDeg:F2} | drive={driveDeg:F2} | wp0={firstDeg:F2}");
+                    float lo = _joints[idx].xDrive.lowerLimit;
+                    float hi = _joints[idx].xDrive.upperLimit;
+                    int dof = _joints[idx].jointPosition.dofCount;
+                    bool immovable = _joints[idx].immovable;
+                    var jtype = _joints[idx].jointType;
+                    _debugStringBuilder.AppendLine($"  {jointName}→{idx} | phys={physDeg:F2} | drive={driveDeg:F2} | wp0={firstDeg:F2} | limits=[{lo:F2},{hi:F2}] | dof={dof} type={jtype} immovable={immovable}");
                 }
                 Debug.Log(_debugStringBuilder.ToString());
             }
@@ -456,6 +461,14 @@ namespace Robotics
                                         + (t3 - 2 * t2 + t) * v0
                                         + (-2 * t3 + 3 * t2) * p1
                                         + (t3 - t2) * v1;
+                                    // Clamp to segment endpoints so Hermite overshoot
+                                    // (caused by large mid-trajectory velocities) never
+                                    // drives the joint outside [p0, p1]. Without this,
+                                    // the physics chases the overshooting drive target
+                                    // and accumulates error it cannot recover from.
+                                    double segMin = System.Math.Min(p0, p1);
+                                    double segMax = System.Math.Max(p0, p1);
+                                    interpRad = System.Math.Max(segMin, System.Math.Min(segMax, interpRad));
                                 }
                                 else
                                 {
@@ -491,8 +504,12 @@ namespace Robotics
                             float driveDeg = _joints[idx].xDrive.target;
                             float plannedDeg = (targetPoint.positions != null && j < targetPoint.positions.Length)
                                 ? (float)(targetPoint.positions[j] * Mathf.Rad2Deg) : float.NaN;
+                            float plannedVelDeg = (targetPoint.velocities != null && j < targetPoint.velocities.Length)
+                                ? (float)(targetPoint.velocities[j] * Mathf.Rad2Deg) : float.NaN;
+                            float physVelDeg = _joints[idx].jointVelocity.dofCount > 0
+                                ? _joints[idx].jointVelocity[0] * Mathf.Rad2Deg : float.NaN;
                             float err = physDeg - plannedDeg;
-                            _debugStringBuilder.AppendLine($"  J{idx}: phys={physDeg:F2}° drive={driveDeg:F2}° planned={plannedDeg:F2}° err={err:F2}°");
+                            _debugStringBuilder.AppendLine($"  J{idx}: phys={physDeg:F2}° physVel={physVelDeg:F2}°/s drive={driveDeg:F2}° planned={plannedDeg:F2}° planVel={plannedVelDeg:F2}°/s err={err:F2}°");
                         }
                         Debug.Log(_debugStringBuilder.ToString());
                     }
@@ -646,7 +663,7 @@ namespace Robotics
             // This catches the stall case that velocity-only settle misses.
             // Use the same near-target logic but always run it — even on velocity-settle success.
             {
-                const float NEAR_TARGET_DEG = 5f;
+                const float NEAR_TARGET_DEG = 2f;
                 const float NEAR_TARGET_TIMEOUT = 10f;
                 float nearTargetStart = Time.time;
                 while (Time.time - nearTargetStart < NEAR_TARGET_TIMEOUT)
