@@ -324,6 +324,12 @@ def estimate_distance_between_objects(
         ...     print(f"Distance: {result['result']['distance']:.3f}m")
     """
     try:
+        # Coerce dict arguments (e.g. variable-resolved detection results) to their string id
+        if isinstance(object_id1, dict):
+            object_id1 = object_id1.get("color") or object_id1.get("object_id") or str(object_id1)
+        if isinstance(object_id2, dict):
+            object_id2 = object_id2.get("color") or object_id2.get("object_id") or str(object_id2)
+
         # Import WorldState
         try:
             from .WorldState import WorldState

@@ -1240,8 +1240,8 @@ class SequenceExecutor:
                             resolved["x"] = var_value.get("x", 0.0)
                             resolved["y"] = var_value.get("y", 0.0)
                             resolved["z"] = var_value.get("z", 0.0)
-                        # Special handling for object_id parameter with detection result
-                        elif key == "object_id" and isinstance(var_value, dict):
+                        # Special handling for object_id / object_id1 / object_id2 with detection result
+                        elif key.startswith("object_id") and isinstance(var_value, dict):
                             # Extract object identifier from detection result
                             # Detection results have 'color' field (e.g., "blue_cube")
                             if "color" in var_value:

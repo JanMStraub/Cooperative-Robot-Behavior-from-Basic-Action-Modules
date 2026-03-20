@@ -106,6 +106,7 @@ try:
     )
     from moveit_msgs.srv import (  # type: ignore[import-not-found]
         GetCartesianPath,
+        GetPositionFK,
         GetPositionIK,
     )
     from rclpy.action import ActionClient  # type: ignore[import-not-found]
@@ -139,6 +140,7 @@ except ImportError:
     CollisionObject: Any = None
     JointConstraint: Any = None
     GetPositionIK: Any = None
+    GetPositionFK: Any = None
     GetCartesianPath: Any = None
     PoseStamped: Any = None
     Point: Any = None
@@ -183,6 +185,7 @@ class ROSMotionServer:
         # Multi-robot support: dict of robot_id -> clients/publishers
         self._move_group_clients = {}  # robot_id -> ActionClient
         self._ik_service_clients = {}  # robot_id -> Service Client for IK
+        self._fk_service_clients = {}  # robot_id -> Service Client for FK
         self._cartesian_path_clients = {}  # robot_id -> Service Client for Cartesian paths
         self._trajectory_pubs = {}  # robot_id -> Publisher
         self._gripper_pubs = {}  # robot_id -> Publisher
@@ -234,6 +237,11 @@ class ROSMotionServer:
         # MoveIt IK service client (for grasp candidate validation)
         self._ik_service_clients[robot_id] = self._node.create_client(
             GetPositionIK, f"/{robot_id}/compute_ik"
+        )
+
+        # MoveIt FK service client (for computing Cartesian pose from joint states)
+        self._fk_service_clients[robot_id] = self._node.create_client(
+            GetPositionFK, f"/{robot_id}/compute_fk"
         )
 
         # MoveIt Cartesian path service client (for straight-line descents)
@@ -1238,10 +1246,58 @@ class ROSMotionServer:
             "status": "published_to_unity",
         }
 
+    def _compute_fk(self, robot_id: str, timeout: float = 3.0) -> dict:
+        """Compute the Cartesian end-effector pose from current joint states via FK.
+
+        Calls MoveIt's compute_fk service with the current joint state snapshot
+        to obtain the real Cartesian position of ee_link in base_link frame.
+
+        Args:
+            robot_id: Robot namespace.
+            timeout: Service call timeout in seconds.
+
+        Returns:
+            Dict with "success" bool and "position" dict (x, y, z) on success,
+            or "success": False and "error" string on failure.
+        """
+        fk_client = self._fk_service_clients.get(robot_id)
+        if fk_client is None:
+            return {"success": False, "error": f"No FK client for {robot_id}"}
+
+        with self._joint_states_lock:
+            joint_state = self._current_joint_states.get(robot_id)
+        if joint_state is None:
+            return {"success": False, "error": f"No joint state for {robot_id}"}
+
+        req = GetPositionFK.Request()
+        req.header.frame_id = "base_link"
+        req.fk_link_names = ["ee_link"]
+        req.robot_state.joint_state = joint_state
+
+        if not fk_client.wait_for_service(timeout_sec=timeout):
+            return {"success": False, "error": "FK service not available"}
+
+        future = fk_client.call_async(req)
+        deadline = time.time() + timeout
+        while not future.done():
+            if time.time() > deadline:
+                return {"success": False, "error": "FK service call timed out"}
+            time.sleep(0.01)
+
+        response = future.result()
+        if response is None or len(response.pose_stamped) == 0:
+            return {"success": False, "error": "FK returned no poses"}
+
+        pos = response.pose_stamped[0].pose.position
+        return {
+            "success": True,
+            "position": {"x": pos.x, "y": pos.y, "z": pos.z},
+        }
+
     def _plan_orientation_change(self, request, robot_id):
         """Plan and publish a trajectory for orientation change at current position.
 
-        Gets current end-effector position, then plans to same position with
+        Gets current end-effector position via FK, then plans to same position with
         new orientation converted from RPY to quaternion.
 
         Args:
@@ -1274,20 +1330,26 @@ class ROSMotionServer:
         qy = cr * sp * cy + sr * cp * sy
         qz = cr * cp * sy - sr * sp * cy
 
-        # Get current position from joint states to maintain it
-        current_pose = self._get_current_pose(robot_id)
-        if not current_pose.get("success"):
+        # Get current Cartesian EE position via FK to maintain it during orientation change
+        fk_result = self._compute_fk(robot_id)
+        if not fk_result.get("success"):
+            logger.error(
+                f"{robot_id}: FK failed for orientation change: {fk_result.get('error')}"
+            )
             return {
                 "success": False,
-                "error": "Cannot get current pose for orientation change",
+                "error": f"Cannot get current EE pose via FK: {fk_result.get('error')}",
                 "robot_id": robot_id,
             }
 
-        # Use plan_and_execute with current position and new orientation
+        # Use plan_and_execute with current FK position and new orientation.
+        # coordinate_space="base_link" prevents _build_move_group_goal from applying
+        # the unity_world -> base_link transform to a position that is already in base_link.
         orient_request = {
-            "position": current_pose.get("position", {"x": 0.0, "y": 0.0, "z": 0.3}),
+            "position": fk_result["position"],
             "orientation": {"x": qx, "y": qy, "z": qz, "w": qw},
             "planning_time": planning_time,
+            "coordinate_space": "base_link",
         }
         return self._plan_and_publish(orient_request, robot_id)
 

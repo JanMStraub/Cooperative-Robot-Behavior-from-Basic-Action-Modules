@@ -266,6 +266,36 @@ namespace EditorScripts
             }
             EditorGUILayout.EndHorizontal();
 
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("Estimate Distance", _buttonStyle))
+            {
+                Undo.RecordObject(client, "Change Prompt");
+                client.Prompt = "Calculate the distance between the blue and the red cube";
+                EditorUtility.SetDirty(client);
+            }
+            if (GUILayout.Button("Move from a to b", _buttonStyle))
+            {
+                Undo.RecordObject(client, "Change Prompt");
+                client.Prompt = "Move from x=0, y=0.3, z=0 to x=0.1, y=0.1, z=0.1";
+                EditorUtility.SetDirty(client);
+            }
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("Rotate robot", _buttonStyle))
+            {
+                Undo.RecordObject(client, "Change Prompt");
+                client.Prompt = "Rotate the gripper 90 degrees";
+                EditorUtility.SetDirty(client);
+            }
+            if (GUILayout.Button("Close Gripper", _buttonStyle))
+            {
+                Undo.RecordObject(client, "Change Prompt");
+                client.Prompt = "Close gripper";
+                EditorUtility.SetDirty(client);
+            }
+            EditorGUILayout.EndHorizontal();
+
             EditorGUILayout.Space(5);
 
             // Pick & Place
