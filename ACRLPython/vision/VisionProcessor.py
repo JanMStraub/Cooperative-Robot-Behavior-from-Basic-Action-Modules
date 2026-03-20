@@ -40,6 +40,7 @@ import platform
 import time
 import threading
 from typing import Optional, Callable, List, Any
+import numpy as np
 
 cv2: Any = None
 try:
@@ -83,6 +84,9 @@ try:
         DEFAULT_STEREO_FOV,
         DEFAULT_STEREO_CAMERA_POSITION,
         DEFAULT_STEREO_CAMERA_ROTATION,
+        YOLO_INPUT_SIZE,
+        SCENE_DIFF_THUMB_SIZE,
+        SCENE_DIFF_THRESHOLD,
     )
 except ImportError:
     from ..config.Vision import (
@@ -92,6 +96,9 @@ except ImportError:
         DEFAULT_STEREO_FOV,
         DEFAULT_STEREO_CAMERA_POSITION,
         DEFAULT_STEREO_CAMERA_ROTATION,
+        YOLO_INPUT_SIZE,
+        SCENE_DIFF_THUMB_SIZE,
+        SCENE_DIFF_THRESHOLD,
     )
 
 from core.LoggingSetup import get_logger
@@ -160,6 +167,8 @@ class VisionProcessor:
         self.tracker: Optional[ObjectTracker] = None
         self.on_result_callback: Optional[Callable[[DetectionResult], None]] = None
         self.viz_window_name = "VisionProcessor - Live Detection"
+        # Only enable input resize if OpenCV is available
+        self._yolo_input_size: Optional[int] = YOLO_INPUT_SIZE if CV2_AVAILABLE else None
 
         # Initialize tracker if enabled
         if self.enable_tracking:
@@ -201,10 +210,11 @@ class VisionProcessor:
                 logger.warning("OpenCV not available - visualization disabled")
                 self.enable_visualization = False
 
+        resize_str = f"{self._yolo_input_size}px" if self._yolo_input_size else "disabled"
         logger.info(
             f"VisionProcessor initialized: fps={fps}, tracking={enable_tracking}, "
             f"shared_state={enable_shared_state}, visualization={enable_visualization}, "
-            f"main_thread={use_main_thread}"
+            f"main_thread={use_main_thread}, input_resize={resize_str}"
         )
 
     def start(self):
@@ -281,12 +291,13 @@ class VisionProcessor:
         Main processing loop (runs in background thread).
 
         Process flow:
-        1. Poll ImageServer for latest stereo images
-        2. Run YOLO detection + depth estimation
-        3. Apply object tracking if enabled
-        4. Publish to SharedVisionState if enabled
-        5. Invoke callback if set
-        6. Sleep to maintain target FPS
+        1. Cheap timestamp poll — skip frame copy if Unity hasn't sent a new frame
+        2. Copy stereo images from storage
+        3. Optionally resize to YOLO_INPUT_SIZE before inference
+        4. Run YOLO detection (+ depth only when a consumer actually needs it)
+        5. Apply object tracking if enabled
+        6. Publish to SharedVisionState / invoke callback
+        7. Sleep to maintain target FPS
         """
         try:
             storage = _get_storage()
@@ -301,49 +312,82 @@ class VisionProcessor:
 
         frame_interval = 1.0 / self.fps
         last_processed_timestamp = 0.0
+        last_thumb: Optional[Any] = None  # previous frame thumbnail for scene-change comparison
 
-        logger.info(f"VisionProcessor loop started (target: {self.fps} FPS)")
+        # Depth/world-position is only useful when something consumes it.
+        # If neither shared state nor a callback is registered we run 2D-only,
+        # skipping the expensive SGBM disparity step entirely.
+        needs_depth = self.enable_shared_state or (self.on_result_callback is not None)
+
+        scene_diff_enabled = bool(SCENE_DIFF_THUMB_SIZE)
+        logger.info(
+            f"VisionProcessor loop started (target: {self.fps} FPS, "
+            f"depth={'enabled' if needs_depth else 'disabled — no consumer'}, "
+            f"scene_diff={'enabled (thresh={})'.format(SCENE_DIFF_THRESHOLD) if scene_diff_enabled else 'disabled'})"
+        )
 
         while self.running:
             loop_start_time = time.time()
 
             try:
-                # Get latest stereo images from UnifiedImageStorage
-                stereo_data = storage.get_latest_stereo_image()
+                # --- Gate 1: cheap timestamp + thumbnail poll (single lock acquisition) ---
+                latest_ts, thumb = storage.get_latest_stereo_poll()
 
+                if latest_ts <= last_processed_timestamp:
+                    time.sleep(frame_interval * 0.5)
+                    continue
+
+                # --- Gate 2: scene-change check using pre-computed thumbnail ---
+                if scene_diff_enabled and thumb is not None and last_thumb is not None:
+                    diff = float(np.mean(np.abs(thumb - last_thumb)))
+                    if diff < SCENE_DIFF_THRESHOLD:
+                        logger.debug(
+                            f"VisionProcessor: Scene unchanged (MAD={diff:.2f} < {SCENE_DIFF_THRESHOLD}), skipping"
+                        )
+                        last_processed_timestamp = latest_ts  # advance so we don't re-check same frame
+                        time.sleep(frame_interval * 0.5)
+                        continue
+
+                # New, visually distinct frame — pay the full copy cost now
+                stereo_data = storage.get_latest_stereo_image()
                 if stereo_data is None:
-                    # No stereo images available yet
-                    if self.enable_visualization:
-                        logger.debug("Waiting for stereo images from Unity...")
                     time.sleep(frame_interval)
                     continue
 
                 imgL, imgR, prompt, timestamp, metadata = stereo_data
 
-                # Skip if we already processed this frame
+                # Guard against a race between the poll and the copy
                 if timestamp <= last_processed_timestamp:
-                    logger.debug(
-                        f"VisionProcessor: Skipping duplicate frame "
-                        f"(timestamp {timestamp:.3f} <= {last_processed_timestamp:.3f})"
-                    )
-                    time.sleep(frame_interval * 0.5)  # Short sleep
+                    time.sleep(frame_interval * 0.5)
                     continue
+
+                last_thumb = thumb  # update reference for next iteration
 
                 logger.debug(
                     f"VisionProcessor: Processing new frame (timestamp: {timestamp:.3f}, "
                     f"delta: {timestamp - last_processed_timestamp:.3f}s)"
                 )
 
-                # Extract camera config from metadata
+                # --- Resize to cap YOLO input resolution ---
+                # YOLO internally letterboxes to 640×640 anyway; sending a large image
+                # only wastes preprocessing time. Cap the long edge at YOLO_INPUT_SIZE.
+                if self._yolo_input_size is not None:
+                    h, w = imgL.shape[:2]
+                    if max(h, w) > self._yolo_input_size:
+                        scale = self._yolo_input_size / max(h, w)
+                        new_w = int(w * scale)
+                        new_h = int(h * scale)
+                        imgL = cv2.resize(imgL, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+                        imgR = cv2.resize(imgR, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+
+                # --- Extract camera config from metadata ---
                 camera_config = None
                 camera_position = None
                 camera_rotation = None
-
                 if metadata:
                     baseline = metadata.get("baseline", DEFAULT_STEREO_BASELINE)
                     fov = metadata.get("fov", DEFAULT_STEREO_FOV)
                     camera_config = CameraConfig(fov=fov, baseline=baseline)
-
                     camera_position = metadata.get(
                         "camera_position", DEFAULT_STEREO_CAMERA_POSITION
                     )
@@ -351,17 +395,25 @@ class VisionProcessor:
                         "camera_rotation", DEFAULT_STEREO_CAMERA_ROTATION
                     )
 
-                # Process with YOLO + depth
-                result = self.detector.detect_objects_stereo(
-                    imgL,
-                    imgR,
-                    camera_id="stereo_stream",
-                    camera_config=camera_config,
-                    camera_position=camera_position,
-                    camera_rotation=camera_rotation,
-                )
+                # --- Re-evaluate depth need each iteration (callback may be added later) ---
+                needs_depth = self.enable_shared_state or (self.on_result_callback is not None)
 
-                # Apply object tracking if enabled
+                if needs_depth:
+                    result = self.detector.detect_objects_stereo(
+                        imgL,
+                        imgR,
+                        camera_id="stereo_stream",
+                        camera_config=camera_config,
+                        camera_position=camera_position,
+                        camera_rotation=camera_rotation,
+                    )
+                else:
+                    # 2D-only path: skip SGBM disparity entirely
+                    result = self.detector.detect_objects(
+                        imgL, camera_id="stereo_stream"
+                    )
+
+                # --- Object tracking ---
                 if self.tracker and len(result.detections) > 0:
                     tracked_detections = self.tracker.update(result.detections)
                     result = DetectionResult(
@@ -371,7 +423,7 @@ class VisionProcessor:
                         tracked_detections,
                     )
 
-                # Publish to SharedVisionState if enabled
+                # --- Publish / callback ---
                 if self.enable_shared_state and len(result.detections) > 0:
                     try:
                         self.shared_state.update_detections(result.detections)
@@ -381,28 +433,24 @@ class VisionProcessor:
                     except Exception as e:
                         logger.error(f"Failed to publish to SharedVisionState: {e}")
 
-                # Invoke callback if set
                 if self.on_result_callback:
                     try:
                         self.on_result_callback(result)
                     except Exception as e:
                         logger.error(f"Error in result callback: {e}")
 
-                # Display visualization if enabled
+                # --- Visualization ---
                 if self.enable_visualization:
                     try:
-                        # Initialize window on first use (must be in same thread as imshow)
                         if (
                             not hasattr(self, "_viz_initialized")
                             or not self._viz_initialized
                         ):
-                            # macOS-specific: Try to start with COCOA backend
                             if platform.system() == "Darwin":
                                 try:
                                     cv2.startWindowThread()
                                 except:
-                                    pass  # May already be started
-
+                                    pass
                             cv2.namedWindow(self.viz_window_name, cv2.WINDOW_NORMAL)
                             cv2.resizeWindow(self.viz_window_name, 400, 300)
                             self._viz_initialized = True
@@ -412,19 +460,12 @@ class VisionProcessor:
 
                         vis_image = self._draw_detections(imgL, result.detections)
                         cv2.imshow(self.viz_window_name, vis_image)
-
-                        # Increased waitKey time for macOS compatibility
-                        key = cv2.waitKey(
-                            10
-                        )  # Process window events (10ms for better macOS support)
-
-                        # Check for 'q' key to quit
-                        if key == ord("q") or key == 27:  # 'q' or ESC
+                        key = cv2.waitKey(10)
+                        if key == ord("q") or key == 27:
                             logger.info("User requested quit via keyboard")
                             self.running = False
                     except Exception as e:
                         logger.error(f"Error displaying visualization: {e}")
-                        # Disable visualization after repeated failures
                         if not hasattr(self, "_viz_error_count"):
                             self._viz_error_count = 0
                         self._viz_error_count += 1
@@ -434,25 +475,16 @@ class VisionProcessor:
                             )
                             self.enable_visualization = False
 
-                # Update last processed timestamp
                 last_processed_timestamp = timestamp
 
-                # Log processing stats
                 processing_time = time.time() - loop_start_time
-                if len(result.detections) > 0:
-                    logger.info(
-                        f"VisionProcessor: Detected {len(result.detections)} objects "
-                        f"in {processing_time*1000:.1f}ms (timestamp: {timestamp:.3f})"
-                    )
-                else:
-                    logger.debug(
-                        f"VisionProcessor: No detections in {processing_time*1000:.1f}ms "
-                        f"(timestamp: {timestamp:.3f})"
-                    )
+                logger.debug(
+                    f"VisionProcessor: Detected {len(result.detections)} objects "
+                    f"in {processing_time*1000:.1f}ms (timestamp: {timestamp:.3f})"
+                )
 
             except Exception as e:
                 logger.error(f"Error in VisionProcessor loop: {e}", exc_info=True)
-                # Continue running despite errors
                 time.sleep(frame_interval)
                 continue
 

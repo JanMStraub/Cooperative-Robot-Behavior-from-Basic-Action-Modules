@@ -339,7 +339,7 @@ namespace Tests.PlayMode
             // Wait for connection
             yield return new WaitForSeconds(1f);
 
-            bool sent = _sequenceClient.ExecuteSequence("move to (0.3, 0.2, 0.1)", "TestRobot");
+            bool sent = _sequenceClient.ExecuteSequence("move to (0.3, 0.2, 0.1)");
             Assert.IsTrue(sent, "Command should be sent successfully");
 
             // Wait for response
@@ -366,8 +366,7 @@ namespace Tests.PlayMode
             yield return new WaitForSeconds(1f);
 
             bool sent = _sequenceClient.ExecuteSequence(
-                "detect the blue cube -> $target, then move to $target",
-                "TestRobot"
+                "detect the blue cube -> $target, then move to $target"
             );
             Assert.IsTrue(sent, "Command should be sent successfully");
 
@@ -393,7 +392,7 @@ namespace Tests.PlayMode
             yield return new WaitForSeconds(1f);
 
             // Pick operation
-            bool sent = _sequenceClient.Pick(0.3f, 0.2f, 0.1f, 0.1f, "TestRobot");
+            bool sent = _sequenceClient.Pick(0.3f, 0.2f, 0.1f, 0.1f);
             Assert.IsTrue(sent, "Pick command should be sent successfully");
 
             yield return new WaitForSeconds(4f);
@@ -408,7 +407,7 @@ namespace Tests.PlayMode
             yield return new WaitForSeconds(1f);
 
             // Place operation
-            sent = _sequenceClient.Place(0.4f, 0.3f, 0.1f, 0.1f, "TestRobot");
+            sent = _sequenceClient.Place(0.4f, 0.3f, 0.1f, 0.1f);
             Assert.IsTrue(sent, "Place command should be sent successfully");
 
             yield return new WaitForSeconds(4f);
@@ -434,8 +433,7 @@ namespace Tests.PlayMode
 
             // Robot1 signals when ready
             bool sent1 = _sequenceClient.ExecuteSequence(
-                "move to (0.3, 0.2, 0.1), then signal ready",
-                "Robot1"
+                "Robot1: move to (0.3, 0.2, 0.1), then signal ready"
             );
             Assert.IsTrue(sent1, "Robot1 command should be sent");
 
@@ -443,8 +441,7 @@ namespace Tests.PlayMode
 
             // Robot2 waits for signal
             bool sent2 = _sequenceClient.ExecuteSequence(
-                "wait for signal ready, then move to (0.4, 0.3, 0.1)",
-                "Robot2"
+                "Robot2: wait for signal ready, then move to (0.4, 0.3, 0.1)"
             );
             Assert.IsTrue(sent2, "Robot2 command should be sent");
 

@@ -21,14 +21,6 @@ namespace PythonCommunication
         [SerializeField]
         private string _prompt = "move to (0.3, 0.2, 0.1) and close the gripper";
 
-        [Tooltip("Default robot ID for commands")]
-        [SerializeField]
-        private string _defaultRobotId = "Robot1";
-
-        [Tooltip("Camera ID to use for perception operations")]
-        [SerializeField]
-        private string _cameraId = "TableStereoCamera";
-
         [Header("Settings")]
         [Tooltip("Log all commands and responses to console")]
         [SerializeField]
@@ -105,7 +97,7 @@ namespace PythonCommunication
                 return;
             }
 
-            bool success = ExecuteSequence(_prompt, _defaultRobotId);
+            bool success = ExecuteSequence(_prompt);
 
             if (success)
             {
@@ -127,11 +119,12 @@ namespace PythonCommunication
 
         /// <summary>
         /// Execute a compound command sequence.
+        /// Robot ID and camera ID are omitted from the wire message; the Python backend
+        /// extracts the robot from the prompt text (via LLM) and uses its own camera default.
         /// </summary>
         /// <param name="command">Natural language command (e.g., "move to (0.3, 0.2, 0.1) and close the gripper")</param>
-        /// <param name="robotId">Robot ID to execute commands on (optional, uses default)</param>
         /// <returns>True if command was sent successfully</returns>
-        public bool ExecuteSequence(string command, string robotId = null)
+        public bool ExecuteSequence(string command)
         {
             if (string.IsNullOrEmpty(command))
             {
@@ -145,22 +138,19 @@ namespace PythonCommunication
                 return false;
             }
 
-            string robot = robotId ?? _defaultRobotId;
             uint requestId = GenerateRequestId();
 
             try
             {
                 // Encode message using Protocol V2
-                byte[] message = EncodeSequenceMessage(command, robot, requestId);
+                byte[] message = EncodeSequenceMessage(command, requestId);
 
                 // Send using base class method (handles locking internally)
                 bool sent = SendRequest(message, requestId);
 
                 if (sent && _logCommands)
                 {
-                    Debug.Log(
-                        $"{LogPrefix} [req={requestId}] Sent sequence: '{command}' (robot={robot}, camera={_cameraId})"
-                    );
+                    Debug.Log($"{LogPrefix} [req={requestId}] Sent sequence: '{command}'");
                 }
 
                 return sent;
@@ -175,33 +165,33 @@ namespace PythonCommunication
         /// <summary>
         /// Execute a move command followed by a gripper action.
         /// </summary>
-        public bool MoveAndGrip(float x, float y, float z, bool closeGripper, string robotId = null)
+        public bool MoveAndGrip(float x, float y, float z, bool closeGripper)
         {
             string gripperAction = closeGripper ? "close the gripper" : "open the gripper";
             string command = $"move to ({x}, {y}, {z}) and {gripperAction}";
-            return ExecuteSequence(command, robotId);
+            return ExecuteSequence(command);
         }
 
         /// <summary>
         /// Execute a pick operation: move to position, close gripper, move up.
         /// </summary>
-        public bool Pick(float x, float y, float z, float liftHeight = 0.1f, string robotId = null)
+        public bool Pick(float x, float y, float z, float liftHeight = 0.1f)
         {
             float liftZ = z + liftHeight;
             string command =
                 $"move to ({x}, {y}, {z}), then close the gripper, then move to ({x}, {y}, {liftZ})";
-            return ExecuteSequence(command, robotId);
+            return ExecuteSequence(command);
         }
 
         /// <summary>
         /// Execute a place operation: move to position, open gripper, move up.
         /// </summary>
-        public bool Place(float x, float y, float z, float liftHeight = 0.1f, string robotId = null)
+        public bool Place(float x, float y, float z, float liftHeight = 0.1f)
         {
             float liftZ = z + liftHeight;
             string command =
                 $"move to ({x}, {y}, {z}), then open the gripper, then move to ({x}, {y}, {liftZ})";
-            return ExecuteSequence(command, robotId);
+            return ExecuteSequence(command);
         }
 
         #endregion
@@ -313,22 +303,20 @@ namespace PythonCommunication
 
         /// <summary>
         /// Encode a sequence query message using Protocol V2.
-        /// Format: [Type:1][ReqID:4] + [CmdLen:4][Cmd:N] + [RobotLen:4][Robot:N] + [CamLen:4][Cam:N] + [AutoExec:1]
+        /// Format: [Type:1][ReqID:4] + [CmdLen:4][Cmd:N] + [0x00000000] + [0x00000000] + [AutoExec:1]
+        /// Robot ID and camera ID are sent as length=0; the Python backend uses its own defaults
+        /// (LLM extracts robot from prompt text; camera defaults to "TableStereoCamera").
         /// </summary>
-        private byte[] EncodeSequenceMessage(string command, string robotId, uint requestId)
+        private byte[] EncodeSequenceMessage(string command, uint requestId)
         {
             byte[] cmdBytes = Encoding.UTF8.GetBytes(command);
-            byte[] robBytes = Encoding.UTF8.GetBytes(robotId);
-            byte[] camBytes = Encoding.UTF8.GetBytes(_cameraId);
 
             int size =
                 UnityProtocol.HEADER_SIZE
                 + 4
                 + cmdBytes.Length
-                + 4
-                + robBytes.Length
-                + 4
-                + camBytes.Length
+                + 4   // robot_id length=0
+                + 4   // camera_id length=0
                 + 1;
 
             byte[] packet = new byte[size];
@@ -342,18 +330,16 @@ namespace PythonCommunication
             packet[4] = (byte)(requestId >> 24);
             offset += UnityProtocol.HEADER_SIZE;
 
-            // Body: all integers in little-endian to match Python protocol
+            // Command bytes
             WriteInt32LE(packet, ref offset, cmdBytes.Length);
             Buffer.BlockCopy(cmdBytes, 0, packet, offset, cmdBytes.Length);
             offset += cmdBytes.Length;
 
-            WriteInt32LE(packet, ref offset, robBytes.Length);
-            Buffer.BlockCopy(robBytes, 0, packet, offset, robBytes.Length);
-            offset += robBytes.Length;
+            // robot_id: length=0 (Python LLM extracts robot from prompt text)
+            WriteInt32LE(packet, ref offset, 0);
 
-            WriteInt32LE(packet, ref offset, camBytes.Length);
-            Buffer.BlockCopy(camBytes, 0, packet, offset, camBytes.Length);
-            offset += camBytes.Length;
+            // camera_id: length=0 (Python defaults to "TableStereoCamera")
+            WriteInt32LE(packet, ref offset, 0);
 
             packet[offset] = _autoExecuteResult ? (byte)1 : (byte)0;
 

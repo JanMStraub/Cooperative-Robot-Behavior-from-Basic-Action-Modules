@@ -54,6 +54,7 @@ try:
         MAX_STRING_LENGTH,
         DEFAULT_LMSTUDIO_MODEL,
     )
+    from config.Vision import DEFAULT_CAMERA_ID
 except ImportError:
     from ..config.Servers import (
         DEFAULT_HOST,
@@ -61,6 +62,7 @@ except ImportError:
         MAX_STRING_LENGTH,
         DEFAULT_LMSTUDIO_MODEL,
     )
+    from ..config.Vision import DEFAULT_CAMERA_ID
 
 logger = get_logger(__name__)
 
@@ -116,7 +118,7 @@ class SequenceQueryHandler(SingletonBase):
         self,
         command_text: str,
         robot_id: str = "Robot1",
-        camera_id: str = "TableStereoCamera",
+        camera_id: str = DEFAULT_CAMERA_ID,
         auto_execute: bool = True,
         timeout: float = 30.0,
     ) -> Dict[str, Any]:
@@ -165,11 +167,12 @@ class SequenceQueryHandler(SingletonBase):
                 "commands": [],
             }
 
-        # Add camera_id to commands that need it (perception operations)
+        # Add camera_id to commands that need it (perception operations).
+        # detect_objects is intentionally excluded: it reads from single-camera
+        # storage (port 5005) using its own "main" default, not the stereo camera.
         perception_ops = [
-            "detect_object_stereo",  # Unified stereo detection operation
-            "detect_objects",  # 2D detection only
-            "analyze_scene",  # LLM vision analysis
+            "detect_object_stereo",  # Stereo detection with depth (port 5006)
+            "analyze_scene",         # LLM vision analysis (single camera)
         ]
         for cmd in commands:
             if cmd.get("operation") in perception_ops:
@@ -320,8 +323,8 @@ class SequenceServer(TCPServerBase):
                     break
                 camera_id_len = struct.unpack("<I", camera_id_len_bytes)[0]
 
-                # Read camera_id
-                camera_id = "TableStereoCamera"
+                # Read camera_id; fall back to configured default when Unity sends length=0
+                camera_id = DEFAULT_CAMERA_ID
                 if camera_id_len > 0:
                     camera_id_bytes = self._recv_exact(client, camera_id_len)
                     if camera_id_bytes:

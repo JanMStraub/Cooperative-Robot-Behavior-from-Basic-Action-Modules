@@ -8,6 +8,7 @@ YOLO detection, color-based detection, stereo vision, and image processing confi
 
 import os
 from pathlib import Path
+from typing import Optional
 
 # Get the parent directory (ACRLPython/)
 _CONFIG_DIR = Path(__file__).parent.parent.absolute()
@@ -89,6 +90,37 @@ SAVE_DEBUG_POINT_CLOUDS = os.environ.get(
 DEBUG_POINT_CLOUD_DIR = os.environ.get(
     "DEBUG_POINT_CLOUD_DIR", str(_CONFIG_DIR / "debug_point_clouds")
 )
+
+# ============================================================================
+# Camera Identity
+# ============================================================================
+
+# Default camera used for perception operations when Unity sends no camera_id.
+# Override with the DEFAULT_CAMERA_ID env var to match your scene's camera name.
+DEFAULT_CAMERA_ID = os.environ.get("DEFAULT_CAMERA_ID", "TableStereoCamera")
+
+# Maximum long-edge resolution fed to YOLO. Images larger than this are
+# downscaled before inference (YOLO letterboxes to 640×640 internally anyway,
+# so sending e.g. a 1280×960 image just wastes preprocessing time).
+# Set to 0 or "" to disable resizing and pass full-resolution images.
+_yolo_size_raw = os.environ.get("YOLO_INPUT_SIZE", "640")
+YOLO_INPUT_SIZE: Optional[int] = int(_yolo_size_raw) if _yolo_size_raw.strip().isdigit() and int(_yolo_size_raw) > 0 else None
+
+# Scene-change detection for VisionProcessor.
+# A downsampled thumbnail (SCENE_DIFF_THUMB_SIZE × SCENE_DIFF_THUMB_SIZE pixels)
+# is computed once on store and compared cheaply each poll iteration.
+# If the mean absolute difference is below SCENE_DIFF_THRESHOLD the frame is
+# skipped — saving a full YOLO inference + SGBM disparity pass.
+#
+# Threshold calibration (pixel values 0-255, measured on this scene):
+#   Static scene noise floor (JPEG Q75): MAD ≈ 0.6
+#   Small object motion (robot joint):   MAD ≈ 15–50
+#   Large motion (arm sweep):            MAD ≈ 80–200
+# Default of 8.0 gives a 13× safety margin over the measured noise floor.
+# Set SCENE_DIFF_THUMB_SIZE=0 to disable scene-change detection entirely.
+_thumb_raw = os.environ.get("SCENE_DIFF_THUMB_SIZE", "64")
+SCENE_DIFF_THUMB_SIZE: Optional[int] = int(_thumb_raw) if _thumb_raw.strip().isdigit() and int(_thumb_raw) > 0 else None
+SCENE_DIFF_THRESHOLD = float(os.environ.get("SCENE_DIFF_THRESHOLD", "8.0"))
 
 # ============================================================================
 # Stereo Camera Configuration

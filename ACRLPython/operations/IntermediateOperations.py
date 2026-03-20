@@ -32,6 +32,7 @@ try:
         OperationResult,
         OperationRelationship,
     )
+    from .ROSDispatcher import execute_with_ros_fallback
 except ImportError:
     from operations.Base import (
         BasicOperation,
@@ -41,6 +42,7 @@ except ImportError:
         OperationResult,
         OperationRelationship,
     )
+    from operations.ROSDispatcher import execute_with_ros_fallback
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -109,120 +111,61 @@ def align_object(
                 ["Use 'gripper' to align gripper, 'object' to align held object"],
             )
 
-        # Determine whether to use ROS or TCP path
-        _use_ros = use_ros
-        if _use_ros is None:
-            try:
-                from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+        def _ros_path():
+            from ros2.ROSBridge import ROSBridge
 
-                _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
-            except ImportError:
-                _use_ros = False
+            bridge = ROSBridge.get_instance()
+            result = bridge.plan_orientation_change(
+                orientation=target_orientation,
+                robot_id=robot_id,
+            )
+            if result and result.get("success"):
+                logger.info(f"ROS alignment completed for {robot_id}")
+                return OperationResult.success_result(
+                    {
+                        "robot_id": robot_id,
+                        "target_orientation": target_orientation,
+                        "alignment_type": alignment_type,
+                        "status": "ros_executed",
+                        "planning_time": result.get("planning_time", 0),
+                        "timestamp": time.time(),
+                    }
+                )
+            return None  # signal failure to ROSDispatcher
 
-        # Route via ROS if enabled
-        if _use_ros:
-            try:
-                from ros2.ROSBridge import ROSBridge
-
-                bridge = ROSBridge.get_instance()
-                if not bridge.is_connected:
-                    if not bridge.connect():
-                        # Fall back to TCP if hybrid mode
-                        try:
-                            from config.ROS import DEFAULT_CONTROL_MODE
-
-                            if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning(
-                                    "ROS bridge unavailable, falling back to TCP"
-                                )
-                                _use_ros = False
-                            else:
-                                return OperationResult.error_result(
-                                    "ROS_CONNECTION_FAILED",
-                                    "Failed to connect to ROS bridge (port 5020)",
-                                    ["Ensure Docker ROS services are running"],
-                                )
-                        except ImportError:
-                            _use_ros = False
-
-                if _use_ros:
-                    result = bridge.plan_orientation_change(
-                        orientation=target_orientation,
-                        robot_id=robot_id,
-                    )
-                    if result and result.get("success"):
-                        logger.info(f"ROS alignment completed for {robot_id}")
-                        return OperationResult.success_result(
-                            {
-                                "robot_id": robot_id,
-                                "target_orientation": target_orientation,
-                                "alignment_type": alignment_type,
-                                "status": "ros_executed",
-                                "planning_time": result.get("planning_time", 0),
-                                "timestamp": time.time(),
-                            }
-                        )
-                    else:
-                        error_msg = (
-                            result.get("error", "Unknown") if result else "No response"
-                        )
-                        try:
-                            from config.ROS import DEFAULT_CONTROL_MODE
-
-                            if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning(
-                                    f"ROS planning failed ({error_msg}), falling back to TCP"
-                                )
-                                _use_ros = False
-                            else:
-                                return OperationResult.error_result(
-                                    "ROS_PLANNING_FAILED",
-                                    f"MoveIt planning failed: {error_msg}",
-                                    [
-                                        "Check MoveIt logs",
-                                        "Verify orientation is reachable",
-                                    ],
-                                )
-                        except ImportError:
-                            _use_ros = False
-            except ImportError:
-                logger.warning("ros2 module not available, falling back to TCP")
-                _use_ros = False
-
-        # Construct command (TCP path)
-        command = {
-            "command_type": "align_object",
-            "robot_id": robot_id,
-            "parameters": {
-                "target_orientation": target_orientation,
-                "alignment_type": alignment_type,
-            },
-            "timestamp": time.time(),
-            "request_id": request_id,
-        }
-
-        logger.info(f"Sending align_object command to {robot_id}: {target_orientation}")
-
-        success = _get_command_broadcaster().send_command(command, request_id)
-
-        if not success:
-            return OperationResult.error_result(
-                "COMMUNICATION_FAILED",
-                "Failed to send command to Unity",
-                ["Ensure Unity is running"],
+        def _tcp_path():
+            command = {
+                "command_type": "align_object",
+                "robot_id": robot_id,
+                "parameters": {
+                    "target_orientation": target_orientation,
+                    "alignment_type": alignment_type,
+                },
+                "timestamp": time.time(),
+                "request_id": request_id,
+            }
+            logger.info(
+                f"Sending align_object command to {robot_id}: {target_orientation}"
+            )
+            success = _get_command_broadcaster().send_command(command, request_id)
+            if not success:
+                return OperationResult.error_result(
+                    "COMMUNICATION_FAILED",
+                    "Failed to send command to Unity",
+                    ["Ensure Unity is running"],
+                )
+            logger.info(f"Successfully sent align_object command to {robot_id}")
+            return OperationResult.success_result(
+                {
+                    "robot_id": robot_id,
+                    "target_orientation": target_orientation,
+                    "alignment_type": alignment_type,
+                    "status": "command_sent",
+                    "timestamp": time.time(),
+                }
             )
 
-        logger.info(f"Successfully sent align_object command to {robot_id}")
-
-        return OperationResult.success_result(
-            {
-                "robot_id": robot_id,
-                "target_orientation": target_orientation,
-                "alignment_type": alignment_type,
-                "status": "command_sent",
-                "timestamp": time.time(),
-            }
-        )
+        return execute_with_ros_fallback(_ros_path, _tcp_path, use_ros)
 
     except Exception as e:
         logger.error(f"Unexpected error in align_object: {e}", exc_info=True)
@@ -304,124 +247,63 @@ def follow_path(
                 ["Use speed between 0.1 (slow) and 2.0 (fast)"],
             )
 
-        # Determine whether to use ROS or TCP path
-        _use_ros = use_ros
-        if _use_ros is None:
-            try:
-                from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+        def _ros_path():
+            from ros2.ROSBridge import ROSBridge
 
-                _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
-            except ImportError:
-                _use_ros = False
+            bridge = ROSBridge.get_instance()
+            result = bridge.plan_multi_waypoint(
+                waypoints=waypoints,
+                robot_id=robot_id,
+            )
+            if result and result.get("success"):
+                logger.info(f"ROS multi-waypoint path completed for {robot_id}")
+                return OperationResult.success_result(
+                    {
+                        "robot_id": robot_id,
+                        "waypoints": waypoints,
+                        "waypoint_count": len(waypoints),
+                        "speed": speed,
+                        "status": "ros_executed",
+                        "planning_time": result.get("planning_time", 0),
+                        "timestamp": time.time(),
+                    }
+                )
+            return None  # signal failure to ROSDispatcher
 
-        # Route via ROS if enabled
-        if _use_ros:
-            try:
-                from ros2.ROSBridge import ROSBridge
-
-                bridge = ROSBridge.get_instance()
-                if not bridge.is_connected:
-                    if not bridge.connect():
-                        # Fall back to TCP if hybrid mode
-                        try:
-                            from config.ROS import DEFAULT_CONTROL_MODE
-
-                            if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning(
-                                    "ROS bridge unavailable, falling back to TCP"
-                                )
-                                _use_ros = False
-                            else:
-                                return OperationResult.error_result(
-                                    "ROS_CONNECTION_FAILED",
-                                    "Failed to connect to ROS bridge (port 5020)",
-                                    ["Ensure Docker ROS services are running"],
-                                )
-                        except ImportError:
-                            _use_ros = False
-
-                if _use_ros:
-                    result = bridge.plan_multi_waypoint(
-                        waypoints=waypoints,
-                        robot_id=robot_id,
-                    )
-                    if result and result.get("success"):
-                        logger.info(f"ROS multi-waypoint path completed for {robot_id}")
-                        return OperationResult.success_result(
-                            {
-                                "robot_id": robot_id,
-                                "waypoints": waypoints,
-                                "waypoint_count": len(waypoints),
-                                "speed": speed,
-                                "status": "ros_executed",
-                                "planning_time": result.get("planning_time", 0),
-                                "timestamp": time.time(),
-                            }
-                        )
-                    else:
-                        error_msg = (
-                            result.get("error", "Unknown") if result else "No response"
-                        )
-                        try:
-                            from config.ROS import DEFAULT_CONTROL_MODE
-
-                            if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning(
-                                    f"ROS planning failed ({error_msg}), falling back to TCP"
-                                )
-                                _use_ros = False
-                            else:
-                                return OperationResult.error_result(
-                                    "ROS_PLANNING_FAILED",
-                                    f"MoveIt planning failed: {error_msg}",
-                                    [
-                                        "Check MoveIt logs",
-                                        "Verify all waypoints are reachable",
-                                    ],
-                                )
-                        except ImportError:
-                            _use_ros = False
-            except ImportError:
-                logger.warning("ros2 module not available, falling back to TCP")
-                _use_ros = False
-
-        # Construct command (TCP path)
-        command = {
-            "command_type": "follow_path",
-            "robot_id": robot_id,
-            "parameters": {
-                "waypoints": waypoints,
-                "speed_multiplier": speed,
-            },
-            "timestamp": time.time(),
-            "request_id": request_id,
-        }
-
-        logger.info(
-            f"Sending follow_path command to {robot_id} with {len(waypoints)} waypoints"
-        )
-
-        success = _get_command_broadcaster().send_command(command, request_id)
-
-        if not success:
-            return OperationResult.error_result(
-                "COMMUNICATION_FAILED",
-                "Failed to send command to Unity",
-                ["Ensure Unity is running"],
+        def _tcp_path():
+            command = {
+                "command_type": "follow_path",
+                "robot_id": robot_id,
+                "parameters": {
+                    "waypoints": waypoints,
+                    "speed_multiplier": speed,
+                },
+                "timestamp": time.time(),
+                "request_id": request_id,
+            }
+            logger.info(
+                f"Sending follow_path command to {robot_id} with {len(waypoints)} waypoints"
+            )
+            success = _get_command_broadcaster().send_command(command, request_id)
+            if not success:
+                return OperationResult.error_result(
+                    "COMMUNICATION_FAILED",
+                    "Failed to send command to Unity",
+                    ["Ensure Unity is running"],
+                )
+            logger.info(f"Successfully sent follow_path command to {robot_id}")
+            return OperationResult.success_result(
+                {
+                    "robot_id": robot_id,
+                    "waypoints": waypoints,
+                    "waypoint_count": len(waypoints),
+                    "speed": speed,
+                    "status": "command_sent",
+                    "timestamp": time.time(),
+                }
             )
 
-        logger.info(f"Successfully sent follow_path command to {robot_id}")
-
-        return OperationResult.success_result(
-            {
-                "robot_id": robot_id,
-                "waypoints": waypoints,
-                "waypoint_count": len(waypoints),
-                "speed": speed,
-                "status": "command_sent",
-                "timestamp": time.time(),
-            }
-        )
+        return execute_with_ros_fallback(_ros_path, _tcp_path, use_ros)
 
     except Exception as e:
         logger.error(f"Unexpected error in follow_path: {e}", exc_info=True)
@@ -520,132 +402,70 @@ def draw_with_pen(
                 [f"Use one of: {', '.join(valid_shapes)}"],
             )
 
-        # Determine whether to use ROS or TCP path
-        _use_ros = use_ros
-        if _use_ros is None:
-            try:
-                from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+        def _ros_path():
+            from ros2.ROSBridge import ROSBridge
 
-                _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
-            except ImportError:
-                _use_ros = False
+            bridge = ROSBridge.get_instance()
+            # Simplified: move pen to paper using two-waypoint planning.
+            # Full shape-specific path generation would expand this list.
+            ros_waypoints = [pen_position, paper_position]
+            result = bridge.plan_multi_waypoint(
+                waypoints=ros_waypoints,
+                robot_id=robot_id,
+            )
+            if result and result.get("success"):
+                logger.info(f"ROS drawing motion completed for {robot_id}")
+                return OperationResult.success_result(
+                    {
+                        "robot_id": robot_id,
+                        "pen_position": pen_position,
+                        "paper_position": paper_position,
+                        "shape": shape,
+                        "shape_params": shape_params,
+                        "status": "ros_executed",
+                        "planning_time": result.get("planning_time", 0),
+                        "timestamp": time.time(),
+                    }
+                )
+            return None  # signal failure to ROSDispatcher
 
-        # Route via ROS if enabled - draw operations involve complex paths
-        if _use_ros:
-            try:
-                from ros2.ROSBridge import ROSBridge
-
-                bridge = ROSBridge.get_instance()
-                if not bridge.is_connected:
-                    if not bridge.connect():
-                        # Fall back to TCP if hybrid mode
-                        try:
-                            from config.ROS import DEFAULT_CONTROL_MODE
-
-                            if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning(
-                                    "ROS bridge unavailable, falling back to TCP"
-                                )
-                                _use_ros = False
-                            else:
-                                return OperationResult.error_result(
-                                    "ROS_CONNECTION_FAILED",
-                                    "Failed to connect to ROS bridge (port 5020)",
-                                    ["Ensure Docker ROS services are running"],
-                                )
-                        except ImportError:
-                            _use_ros = False
-
-                if _use_ros:
-                    # For drawing, generate waypoints based on shape and use multi-waypoint planning
-                    # This is a simplified approach - full implementation would generate shape-specific paths
-                    waypoints = [
-                        pen_position,
-                        paper_position,
-                    ]  # Simplified: pick up pen, move to paper
-                    result = bridge.plan_multi_waypoint(
-                        waypoints=waypoints,
-                        robot_id=robot_id,
-                    )
-                    if result and result.get("success"):
-                        logger.info(f"ROS drawing motion completed for {robot_id}")
-                        return OperationResult.success_result(
-                            {
-                                "robot_id": robot_id,
-                                "pen_position": pen_position,
-                                "paper_position": paper_position,
-                                "shape": shape,
-                                "shape_params": shape_params,
-                                "status": "ros_executed",
-                                "planning_time": result.get("planning_time", 0),
-                                "timestamp": time.time(),
-                            }
-                        )
-                    else:
-                        error_msg = (
-                            result.get("error", "Unknown") if result else "No response"
-                        )
-                        try:
-                            from config.ROS import DEFAULT_CONTROL_MODE
-
-                            if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning(
-                                    f"ROS planning failed ({error_msg}), falling back to TCP"
-                                )
-                                _use_ros = False
-                            else:
-                                return OperationResult.error_result(
-                                    "ROS_PLANNING_FAILED",
-                                    f"MoveIt planning failed: {error_msg}",
-                                    [
-                                        "Check MoveIt logs",
-                                        "Verify positions are reachable",
-                                    ],
-                                )
-                        except ImportError:
-                            _use_ros = False
-            except ImportError:
-                logger.warning("ros2 module not available, falling back to TCP")
-                _use_ros = False
-
-        # Construct command (TCP path)
-        command = {
-            "command_type": "draw_with_pen",
-            "robot_id": robot_id,
-            "parameters": {
-                "pen_position": pen_position,
-                "paper_position": paper_position,
-                "shape": shape,
-                "shape_params": shape_params or {},
-            },
-            "timestamp": time.time(),
-            "request_id": request_id,
-        }
-
-        logger.info(f"Sending draw_with_pen command to {robot_id}: shape={shape}")
-
-        success = _get_command_broadcaster().send_command(command, request_id)
-
-        if not success:
-            return OperationResult.error_result(
-                "COMMUNICATION_FAILED",
-                "Failed to send command to Unity",
-                ["Ensure Unity is running"],
+        def _tcp_path():
+            command = {
+                "command_type": "draw_with_pen",
+                "robot_id": robot_id,
+                "parameters": {
+                    "pen_position": pen_position,
+                    "paper_position": paper_position,
+                    "shape": shape,
+                    "shape_params": shape_params or {},
+                },
+                "timestamp": time.time(),
+                "request_id": request_id,
+            }
+            logger.info(
+                f"Sending draw_with_pen command to {robot_id}: shape={shape}"
+            )
+            success = _get_command_broadcaster().send_command(command, request_id)
+            if not success:
+                return OperationResult.error_result(
+                    "COMMUNICATION_FAILED",
+                    "Failed to send command to Unity",
+                    ["Ensure Unity is running"],
+                )
+            logger.info(f"Successfully sent draw_with_pen command to {robot_id}")
+            return OperationResult.success_result(
+                {
+                    "robot_id": robot_id,
+                    "pen_position": pen_position,
+                    "paper_position": paper_position,
+                    "shape": shape,
+                    "shape_params": shape_params,
+                    "status": "command_sent",
+                    "timestamp": time.time(),
+                }
             )
 
-        logger.info(f"Successfully sent draw_with_pen command to {robot_id}")
-
-        return OperationResult.success_result(
-            {
-                "robot_id": robot_id,
-                "pen_position": pen_position,
-                "paper_position": paper_position,
-                "shape": shape,
-                "shape_params": shape_params,
-                "status": "command_sent",
-                "timestamp": time.time(),
-            }
-        )
+        return execute_with_ros_fallback(_ros_path, _tcp_path, use_ros)
 
     except Exception as e:
         logger.error(f"Unexpected error in draw_with_pen: {e}", exc_info=True)

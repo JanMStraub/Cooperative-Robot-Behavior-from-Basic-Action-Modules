@@ -48,9 +48,9 @@ MAX_STORED_IMAGES = 20
 
 # Import config
 try:
-    from config.Vision import ENABLE_VISION_STREAMING
+    from config.Vision import ENABLE_VISION_STREAMING, SCENE_DIFF_THUMB_SIZE
 except ImportError:
-    from ..config.Vision import ENABLE_VISION_STREAMING
+    from ..config.Vision import ENABLE_VISION_STREAMING, SCENE_DIFF_THUMB_SIZE
 
 from core.LoggingSetup import get_logger
 
@@ -82,9 +82,11 @@ class UnifiedImageStorage:
         self._single_images: OrderedDict[str, Tuple[np.ndarray, float, str]] = (
             OrderedDict()
         )
-        # Stereo: (imgL, imgR, prompt, timestamp, metadata)
+        # Stereo: (imgL, imgR, prompt, timestamp, metadata, thumb_L)
+        # thumb_L is a small grayscale thumbnail of imgL used for cheap scene-change
+        # detection; None when SCENE_DIFF_THUMB_SIZE is disabled.
         self._stereo_images: OrderedDict[
-            str, Tuple[np.ndarray, np.ndarray, str, float, dict]
+            str, Tuple[np.ndarray, np.ndarray, str, float, dict, Optional[np.ndarray]]
         ] = OrderedDict()
         self._data_lock = threading.Lock()
 
@@ -131,6 +133,21 @@ class UnifiedImageStorage:
             img, _, prompt = self._single_images[latest_id]
             return latest_id, img.copy(), prompt
 
+    @staticmethod
+    def _make_thumbnail(img: np.ndarray, size: int) -> np.ndarray:
+        """
+        Produce a tiny grayscale thumbnail used for cheap scene-change detection.
+
+        Computed once at store time so the comparison in VisionProcessor is free.
+        Uses nearest-neighbour resize (fastest) — quality doesn't matter here.
+        """
+        gray = img[:, :, 0] if len(img.shape) == 3 else img  # take one channel, no cvtColor alloc
+        h, w = gray.shape
+        # Nearest-neighbour via stride-based subsampling (zero extra allocation)
+        row_step = max(1, h // size)
+        col_step = max(1, w // size)
+        return gray[::row_step, ::col_step][:size, :size].astype(np.float32)
+
     # Stereo camera methods
     def store_stereo_pair(
         self,
@@ -141,6 +158,11 @@ class UnifiedImageStorage:
         metadata: Optional[dict] = None,
     ):
         """Store a stereo image pair with optional metadata, evicting oldest if cap is reached."""
+        thumb = (
+            self._make_thumbnail(imgL, SCENE_DIFF_THUMB_SIZE)
+            if SCENE_DIFF_THUMB_SIZE
+            else None
+        )
         with self._data_lock:
             self._stereo_images.pop(camera_pair_id, None)
             self._stereo_images[camera_pair_id] = (
@@ -149,6 +171,7 @@ class UnifiedImageStorage:
                 prompt,
                 time.time(),
                 metadata or {},
+                thumb,
             )
             while len(self._stereo_images) > MAX_STORED_IMAGES:
                 self._stereo_images.popitem(last=False)
@@ -165,7 +188,7 @@ class UnifiedImageStorage:
         """Get a stereo image pair."""
         with self._data_lock:
             if camera_pair_id in self._stereo_images:
-                imgL, imgR, prompt, _, _ = self._stereo_images[camera_pair_id]
+                imgL, imgR, prompt, _, _, _ = self._stereo_images[camera_pair_id]
                 return imgL.copy(), imgR.copy(), prompt
             return None
 
@@ -198,8 +221,40 @@ class UnifiedImageStorage:
             latest_id = max(
                 self._stereo_images.keys(), key=lambda k: self._stereo_images[k][3]
             )
-            imgL, imgR, prompt, _, _ = self._stereo_images[latest_id]
+            imgL, imgR, prompt, _, _, _ = self._stereo_images[latest_id]
             return latest_id, imgL.copy(), imgR.copy(), prompt
+
+    def get_latest_stereo_timestamp(self) -> float:
+        """
+        Return the timestamp of the most recently stored stereo pair without copying images.
+
+        Used by VisionProcessor as the first cheap gate before the scene-change check.
+
+        Returns:
+            Timestamp (float) or 0.0 if no stereo images are stored.
+        """
+        with self._data_lock:
+            if not self._stereo_images:
+                return 0.0
+            return max(v[3] for v in self._stereo_images.values())
+
+    def get_latest_stereo_poll(self) -> Tuple[float, Optional[np.ndarray]]:
+        """
+        Return (timestamp, thumbnail) for the most recently stored stereo pair.
+
+        Lets VisionProcessor perform both the timestamp check and the scene-change
+        comparison in a single lock acquisition, without copying the full images.
+        The thumbnail is the pre-computed downsampled grayscale float32 array stored
+        at write time; it is returned as-is (no copy needed — read-only comparison).
+
+        Returns:
+            (timestamp, thumbnail) — thumbnail is None when SCENE_DIFF_THUMB_SIZE=0.
+        """
+        with self._data_lock:
+            if not self._stereo_images:
+                return 0.0, None
+            latest = max(self._stereo_images.values(), key=lambda v: v[3])
+            return latest[3], latest[5]
 
     def get_latest_stereo_image(
         self,
@@ -216,7 +271,7 @@ class UnifiedImageStorage:
             latest_id = max(
                 self._stereo_images.keys(), key=lambda k: self._stereo_images[k][3]
             )
-            imgL, imgR, prompt, timestamp, metadata = self._stereo_images[latest_id]
+            imgL, imgR, prompt, timestamp, metadata, _ = self._stereo_images[latest_id]
             return imgL.copy(), imgR.copy(), prompt, timestamp, metadata
 
     def get_all_stereo_ids(self) -> List[str]:

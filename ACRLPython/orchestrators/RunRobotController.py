@@ -17,10 +17,18 @@ Usage:
 """
 
 import argparse
+import os
 import signal
+import sys
 import threading
 import logging
 from typing import Optional
+
+# When --web is passed, enable vision streaming so detect_object_stereo uses
+# cached images instead of requesting a fresh Unity round-trip capture.
+# This must be set before config modules are imported (they read env vars at import time).
+if "--web" in sys.argv:
+    os.environ.setdefault("ENABLE_VISION_STREAMING", "true")
 
 # Import config
 try:
@@ -461,10 +469,18 @@ class RobotController:
         # All servers started — now safe to open the log file
         enable_file_logging()
 
+        # When the Web UI is active, images are already being streamed into ImageStorage
+        # continuously, so vision operations can skip the Unity round-trip capture.
+        enable_streaming = ENABLE_VISION_STREAMING or bool(self._web_port)
+        if self._web_port and not ENABLE_VISION_STREAMING:
+            logger.info(
+                "Web UI active — enabling vision streaming mode "
+                "(detect_object_stereo will use cached images)"
+            )
+
         # Initialize vision streaming if enabled
-        if ENABLE_VISION_STREAMING:
+        if enable_streaming:
             try:
-                import os
                 import platform
                 from vision.YOLODetector import YOLODetector
                 from vision.VisionProcessor import VisionProcessor
@@ -541,7 +557,7 @@ class RobotController:
             logger.info(
                 f"  Web UI:                 http://{self._host}:{self._web_port}"
             )
-        if ENABLE_VISION_STREAMING and self._vision_processor:
+        if enable_streaming and self._vision_processor:
             logger.info(f"  Vision Streaming:       Enabled ({VISION_STREAM_FPS} FPS)")
             if ENABLE_VISION_VISUALIZATION:
                 logger.info(f"  Visualization:          Enabled (press 'q' to close)")

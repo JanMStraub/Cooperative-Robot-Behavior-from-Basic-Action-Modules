@@ -58,26 +58,39 @@ def detect_objects(
     Retrieves the latest image from ImageStorage and runs YOLO detection.
     Returns pixel coordinates of detected objects.
 
+    Lookup order:
+      1. Single-camera storage (port 5005) under the given camera_id
+      2. Stereo left image (port 5006) — used when only stereo cameras are active
+
     Args:
         robot_id: Robot identifier (for context, not used in detection)
-        camera_id: Camera ID to retrieve image from ImageStorage
+        camera_id: Camera ID to retrieve image from single-camera storage
 
     Returns:
         OperationResult with detection data
     """
     try:
-        # Get image from storage
         image_storage = get_unified_image_storage()
         image = image_storage.get_single_image(camera_id)
+
+        if image is None:
+            # Port 5005 not in use or camera_id not matching — fall back to stereo left image
+            stereo = image_storage.get_latest_stereo_image()
+            if stereo is not None:
+                image = stereo[0]  # imgL
+                logger.debug(
+                    f"detect_objects: no single image for '{camera_id}', "
+                    f"using stereo left image as fallback"
+                )
 
         if image is None:
             return OperationResult.error_result(
                 "NO_IMAGE",
                 f"No image available from camera '{camera_id}'",
                 [
-                    "Ensure Unity is sending images to ImageServer",
-                    "Check that ImageServer is running (port 5005)",
-                    f"Verify camera_id '{camera_id}' is correct",
+                    "Ensure Unity is sending images to ImageServer (port 5005) "
+                    "or StereoImageServer (port 5006)",
+                    f"Verify camera_id '{camera_id}' matches what Unity sends",
                 ],
             )
 

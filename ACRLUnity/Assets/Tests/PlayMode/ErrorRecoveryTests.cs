@@ -265,7 +265,7 @@ namespace Tests.PlayMode
             var client = clientObject.AddComponent<SequenceClient>();
 
             // Attempt to send command without backend
-            bool sent = client.ExecuteSequence("test command", "TestRobot");
+            bool sent = client.ExecuteSequence("test command");
 
             // Should return false (not connected), but not crash
             if (!client.IsConnected)
@@ -284,7 +284,7 @@ namespace Tests.PlayMode
 
             // Send null command
             LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"));
-            bool sent = client.ExecuteSequence(null, "TestRobot");
+            bool sent = client.ExecuteSequence(null);
 
             Assert.IsFalse(sent, "Should reject null command");
 
@@ -299,7 +299,7 @@ namespace Tests.PlayMode
 
             // Send empty command
             LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"));
-            bool sent = client.ExecuteSequence("", "TestRobot");
+            bool sent = client.ExecuteSequence("");
 
             Assert.IsFalse(sent, "Should reject empty command");
 

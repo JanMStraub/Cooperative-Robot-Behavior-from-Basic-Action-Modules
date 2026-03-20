@@ -128,13 +128,16 @@ namespace EditorScripts
                 GUI.backgroundColor = _successColor;
                 if (GUILayout.Button("Send Prompt", _successButtonStyle))
                 {
-                    client.SendSequence();
+                    // Defer past the current GUI frame to avoid corrupting the
+                    // GUILayout state if a response arrives and triggers a repaint
+                    // before EndHorizontal/EndVertical have been called.
+                    EditorApplication.delayCall += () => client.SendSequence();
                 }
 
                 GUI.backgroundColor = _warningColor;
                 if (GUILayout.Button("Clear Prompt", _warningButtonStyle))
                 {
-                    client.ClearPrompt();
+                    EditorApplication.delayCall += () => client.ClearPrompt();
                 }
                 GUI.backgroundColor = _originalBgColor;
 
@@ -288,10 +291,25 @@ namespace EditorScripts
                 client.Prompt = "Rotate the gripper 90 degrees";
                 EditorUtility.SetDirty(client);
             }
-            if (GUILayout.Button("Close Gripper", _buttonStyle))
+            if (GUILayout.Button("Pick object from position", _buttonStyle))
             {
                 Undo.RecordObject(client, "Change Prompt");
-                client.Prompt = "Close gripper";
+                client.Prompt = "Pick the object from (-0.2, 0, 0.05)";
+                EditorUtility.SetDirty(client);
+            }
+            EditorGUILayout.EndHorizontal();
+
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("Release object", _buttonStyle))
+            {
+                Undo.RecordObject(client, "Change Prompt");
+                client.Prompt = "Release object";
+                EditorUtility.SetDirty(client);
+            }
+            if (GUILayout.Button("Pick object from position", _buttonStyle))
+            {
+                Undo.RecordObject(client, "Change Prompt");
+                client.Prompt = "Pick the object from (-0.2, 0, 0.05)";
                 EditorUtility.SetDirty(client);
             }
             EditorGUILayout.EndHorizontal();

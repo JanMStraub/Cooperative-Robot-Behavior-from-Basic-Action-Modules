@@ -24,7 +24,7 @@ MOVEIT_GOAL_TOLERANCE = 0.01  # Position goal tolerance in meters
 # - "ros": All movement routed through MoveIt (requires Docker running)
 # - "unity": All movement via existing TCP to Unity IK (default, existing behavior)
 # - "hybrid": Try ROS first, fall back to Unity on failure
-DEFAULT_CONTROL_MODE = "ros"
+DEFAULT_CONTROL_MODE = "hybrid"
 
 # Auto-connect to ROS bridge on startup (wired into RunRobotController._auto_connect_ros)
 AUTO_CONNECT_ROS = True

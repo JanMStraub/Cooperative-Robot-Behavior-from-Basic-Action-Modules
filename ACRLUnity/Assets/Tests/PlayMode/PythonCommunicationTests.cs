@@ -355,7 +355,7 @@ namespace Tests.PlayMode
         public void SequenceClient_SendWithoutConnection_ReturnsFalse()
         {
             // Attempt to send when not connected
-            bool sent = _client.ExecuteSequence("test command", "TestRobot");
+            bool sent = _client.ExecuteSequence("test command");
 
             if (!_client.IsConnected)
             {
@@ -367,7 +367,7 @@ namespace Tests.PlayMode
         public void SequenceClient_NullCommand_ReturnsFalse()
         {
             LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"));
-            bool sent = _client.ExecuteSequence(null, "TestRobot");
+            bool sent = _client.ExecuteSequence(null);
             Assert.IsFalse(sent, "Should reject null command");
         }
 
@@ -375,7 +375,7 @@ namespace Tests.PlayMode
         public void SequenceClient_EmptyCommand_ReturnsFalse()
         {
             LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex(".*[Cc]ommand.*null.*empty|.*null.*empty.*[Cc]ommand"));
-            bool sent = _client.ExecuteSequence("", "TestRobot");
+            bool sent = _client.ExecuteSequence("");
             Assert.IsFalse(sent, "Should reject empty command");
         }
 
@@ -383,7 +383,7 @@ namespace Tests.PlayMode
         public IEnumerator SequenceClient_Timeout_HandledGracefully()
         {
             // Send command and wait for potential timeout
-            _client.ExecuteSequence("test command", "TestRobot");
+            _client.ExecuteSequence("test command");
 
             yield return new WaitForSeconds(TestConstants.SHORT_TIMEOUT);
 
@@ -493,7 +493,7 @@ namespace Tests.PlayMode
             yield return new WaitForSeconds(1f);
 
             // Send test sequence
-            bool sent = _client.ExecuteSequence("move to (0.3, 0.2, 0.1)", "TestRobot");
+            bool sent = _client.ExecuteSequence("move to (0.3, 0.2, 0.1)");
             Assert.IsTrue(sent, "Command should be sent");
 
             // Wait for response
@@ -515,13 +515,13 @@ namespace Tests.PlayMode
             yield return new WaitForSeconds(1f);
 
             // Send multiple requests
-            _client.ExecuteSequence("move to (0.3, 0.2, 0.1)", "Robot1");
+            _client.ExecuteSequence("Robot1: move to (0.3, 0.2, 0.1)");
             yield return new WaitForSeconds(0.1f);
 
-            _client.ExecuteSequence("close the gripper", "Robot1");
+            _client.ExecuteSequence("Robot1: close the gripper");
             yield return new WaitForSeconds(0.1f);
 
-            _client.ExecuteSequence("move to (0.4, 0.3, 0.2)", "Robot1");
+            _client.ExecuteSequence("Robot1: move to (0.4, 0.3, 0.2)");
 
             // Wait for all responses
             yield return new WaitForSeconds(TestConstants.MEDIUM_TIMEOUT);

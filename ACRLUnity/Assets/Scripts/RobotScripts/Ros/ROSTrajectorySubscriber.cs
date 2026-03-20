@@ -761,6 +761,22 @@ namespace Robotics
                 _executionCoroutine = null;
             }
 
+            // Reset return-to-start flag so a preempting trajectory doesn't
+            // inherit it and incorrectly clear the IK target on completion.
+            ClearTargetOnComplete = false;
+
+            // When aborting outside of a preempt (i.e., a genuine abort with no
+            // successor trajectory), sync the IK target so re-engagement drives
+            // toward the current pose rather than a stale pre-abort goal.
+            if (!_abortingForPreempt)
+            {
+                bool isROSControlled =
+                    _controlModeManager == null
+                    || _controlModeManager.CurrentMode != ControlMode.Unity;
+                if (isROSControlled)
+                    _robotController.SyncIKTargetToCurrentPose();
+            }
+
             IsExecutingTrajectory = false;
             _robotController.IsManuallyDriven = false;
 

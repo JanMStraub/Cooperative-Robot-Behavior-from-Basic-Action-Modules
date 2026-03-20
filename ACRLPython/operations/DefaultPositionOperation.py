@@ -19,6 +19,7 @@ from .Base import (
     OperationRelationship,
     OperationResult,
 )
+from .ROSDispatcher import execute_with_ros_fallback
 
 # Configure logging
 from core.LoggingSetup import get_logger
@@ -115,129 +116,75 @@ def return_to_start_position(
                 ],
             )
 
-        # Determine whether to use ROS or TCP path
-        _use_ros = use_ros
-        if _use_ros is None:
+        def _ros_path():
+            from ros2.ROSBridge import ROSBridge
+
+            bridge = ROSBridge.get_instance()
+            # Read the Unity start joint targets from WorldState so MoveIt plans
+            # to the same pose the TCP path uses, not the URDF all-zeros pose.
+            start_joint_angles = None
             try:
-                from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+                from core.Imports import get_world_state
 
-                _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
-            except ImportError:
-                _use_ros = False
+                ws = get_world_state()
+                robot_state = ws.get_robot_state(robot_id) if ws else None
+                if robot_state and robot_state.start_joint_angles:
+                    start_joint_angles = robot_state.start_joint_angles
+            except Exception:
+                pass
+            result = bridge.plan_return_to_start(
+                robot_id=robot_id, target_joint_angles=start_joint_angles
+            )
+            if result and result.get("success"):
+                logger.info(f"ROS return to start completed for {robot_id}")
+                return OperationResult.success_result(
+                    {
+                        "robot_id": robot_id,
+                        "speed": speed,
+                        "status": "ros_executed",
+                        "planning_time": result.get("planning_time", 0),
+                        "timestamp": time.time(),
+                    }
+                )
+            return None  # signal failure to ROSDispatcher
 
-        # Route via ROS if enabled
-        if _use_ros:
-            try:
-                from ros2.ROSBridge import ROSBridge
-
-                bridge = ROSBridge.get_instance()
-                if not bridge.is_connected:
-                    if not bridge.connect():
-                        try:
-                            from config.ROS import DEFAULT_CONTROL_MODE
-
-                            if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning(
-                                    "ROS bridge unavailable, falling back to TCP"
-                                )
-                                _use_ros = False
-                            else:
-                                return OperationResult.error_result(
-                                    "ROS_CONNECTION_FAILED",
-                                    "Failed to connect to ROS bridge (port 5020)",
-                                    ["Ensure Docker ROS services are running"],
-                                )
-                        except ImportError:
-                            _use_ros = False
-
-                if _use_ros:
-                    # Read the Unity start joint targets from WorldState so MoveIt plans
-                    # to the same pose the TCP path uses, not the URDF all-zeros pose.
-                    start_joint_angles = None
-                    try:
-                        from core.Imports import get_world_state
-                        ws = get_world_state()
-                        robot_state = ws.get_robot_state(robot_id) if ws else None
-                        if robot_state and robot_state.start_joint_angles:
-                            start_joint_angles = robot_state.start_joint_angles
-                    except Exception:
-                        pass
-                    result = bridge.plan_return_to_start(
-                        robot_id=robot_id, target_joint_angles=start_joint_angles
-                    )
-                    if result and result.get("success"):
-                        logger.info(f"ROS return to start completed for {robot_id}")
-                        return OperationResult.success_result(
-                            {
-                                "robot_id": robot_id,
-                                "speed": speed,
-                                "status": "ros_executed",
-                                "planning_time": result.get("planning_time", 0),
-                                "timestamp": time.time(),
-                            }
-                        )
-                    else:
-                        error_msg = (
-                            result.get("error", "Unknown") if result else "No response"
-                        )
-                        try:
-                            from config.ROS import DEFAULT_CONTROL_MODE
-
-                            if DEFAULT_CONTROL_MODE == "hybrid":
-                                logger.warning(
-                                    f"ROS planning failed ({error_msg}), falling back to TCP"
-                                )
-                                _use_ros = False
-                            else:
-                                return OperationResult.error_result(
-                                    "ROS_PLANNING_FAILED",
-                                    f"MoveIt planning failed: {error_msg}",
-                                    ["Check MoveIt logs"],
-                                )
-                        except ImportError:
-                            _use_ros = False
-            except ImportError:
-                logger.warning("ros2 module not available, falling back to TCP")
-                _use_ros = False
-
-        # Construct command for Unity (TCP path)
-        command = {
-            "command_type": "return_to_start_position",
-            "robot_id": robot_id,
-            "parameters": {
-                "speed_multiplier": speed,
-            },
-            "timestamp": time.time(),
-            "request_id": request_id,
-        }
-
-        # Send to Unity via CommandBroadcaster
-        logger.info(f"Sending return_to_start_position command to {robot_id}")
-
-        success = _get_command_broadcaster().send_command(command, request_id)
-
-        if not success:
-            return OperationResult.error_result(
-                "COMMUNICATION_FAILED",
-                "Failed to send command to Unity - no clients connected",
-                [
-                    "Ensure Unity is running with UnifiedPythonReceiver active",
-                    "Verify CommandServer is running (port 5010)",
-                    "Check Unity console for connection errors",
-                ],
+        def _tcp_path():
+            command = {
+                "command_type": "return_to_start_position",
+                "robot_id": robot_id,
+                "parameters": {
+                    "speed_multiplier": speed,
+                },
+                "timestamp": time.time(),
+                "request_id": request_id,
+            }
+            logger.info(
+                f"Sending return_to_start_position command to {robot_id}"
+            )
+            success = _get_command_broadcaster().send_command(command, request_id)
+            if not success:
+                return OperationResult.error_result(
+                    "COMMUNICATION_FAILED",
+                    "Failed to send command to Unity - no clients connected",
+                    [
+                        "Ensure Unity is running with UnifiedPythonReceiver active",
+                        "Verify CommandServer is running (port 5010)",
+                        "Check Unity console for connection errors",
+                    ],
+                )
+            logger.info(
+                f"Successfully sent return_to_start_position command to {robot_id}"
+            )
+            return OperationResult.success_result(
+                {
+                    "robot_id": robot_id,
+                    "speed": speed,
+                    "status": "command_sent",
+                    "timestamp": time.time(),
+                }
             )
 
-        # Return success
-        logger.info(f"Successfully sent return_to_start_position command to {robot_id}")
-
-        return OperationResult.success_result(
-            {
-                "robot_id": robot_id,
-                "speed": speed,
-                "status": "command_sent",
-                "timestamp": time.time(),
-            }
-        )
+        return execute_with_ros_fallback(_ros_path, _tcp_path, use_ros)
 
     except Exception as e:
         logger.error(
