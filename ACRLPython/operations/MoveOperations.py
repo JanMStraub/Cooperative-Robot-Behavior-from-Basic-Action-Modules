@@ -72,11 +72,11 @@ def move_to_coordinate(
 
     Args:
         robot_id: ID of the robot to move (e.g., "AR4_Robot", "Robot1")
-        x: X coordinate in meters (forward/back from robot base), range: [-1.0, 1.0]
-        y: Y coordinate in meters (left/right from robot base), range: [-1.0, 1.0]
-        z: Z coordinate in meters (height above robot base), range: [-0.5, 0.6]
+        x: X coordinate in meters in ROS base_link frame (forward from robot base). Typical range: -0.5 to 0.5.
+        y: Y coordinate in meters in ROS base_link frame (left from robot base). Typical range: -0.5 to 0.5.
+        z: Z coordinate in meters in ROS base_link frame (up from robot base). Typical range: 0.0 to 0.6.
         speed: Speed multiplier (0.1=slow, 1.0=normal, 2.0=fast), range: [0.1, 2.0]
-        approach_offset: Stop distance before target in meters, range: [0.0, 0.1]
+        approach_offset: Lift above target in meters along Unity Y (up-axis), range: [0.0, 0.1]
         use_advanced_planning: Use full grasp planning pipeline (generates 15 candidates), default: True
 
     Returns:
@@ -105,16 +105,16 @@ def move_to_coordinate(
         }
 
     Example:
-        >>> # Move to detected object position
-        >>> result = move_to_coordinate("Robot1", 0.3, 0.15, 0.1)
+        >>> # Move Robot1 (base at x=-0.475) to an object at world position (-0.3, 0.1, 0.1)
+        >>> result = move_to_coordinate("Robot1", -0.3, 0.1, 0.1)
         >>> if result["success"]:
         ...     print(f"Command sent at {result['result']['timestamp']}")
 
-        >>> # Move slowly to precise position
-        >>> result = move_to_coordinate("Robot1", 0.0, 0.0, 0.3, speed=0.2)
+        >>> # Move Robot1 slowly to a position on its left side of the table
+        >>> result = move_to_coordinate("Robot1", -0.5, 0.0, 0.2, speed=0.2)
 
-        >>> # Approach with offset (stop 5cm before target)
-        >>> result = move_to_coordinate("Robot1", 0.3, 0.0, 0.1, approach_offset=0.05)
+        >>> # Move Robot2 (base at x=0.475) to an object at world position (0.3, 0.1, 0.0)
+        >>> result = move_to_coordinate("Robot2", 0.3, 0.1, 0.0, approach_offset=0.05)
 
     Note:
         This operation is asynchronous - it sends the command to Unity and returns immediately. Unity executes the movement in the background. For synchronous execution (waiting for completion), use move_to_coordinate_sync() instead.
@@ -130,9 +130,11 @@ def move_to_coordinate(
             return err
 
         # Apply approach offset to target position
+        # Unity uses Y-up coordinate system; approach_offset lifts the target above
+        # the object along Unity's Y axis (height), not Z (depth/forward).
         actual_x = x
-        actual_y = y
-        actual_z = z + approach_offset  # Add offset to height for safety
+        actual_y = y + approach_offset  # Add offset to height (Unity Y = up)
+        actual_z = z
 
         def _ros_path():
             from ros2.ROSBridge import ROSBridge
@@ -141,6 +143,7 @@ def move_to_coordinate(
             result = bridge.plan_and_execute(
                 position={"x": actual_x, "y": actual_y, "z": actual_z},
                 robot_id=robot_id,
+                coordinate_space="unity_world",  # LLM generates Unity world coords (Y-up); transform to base_link applied in ROSMotionClient
             )
             if result and result.get("success"):
                 logger.info(f"ROS motion completed for {robot_id}")
@@ -296,7 +299,7 @@ def create_move_to_coordinate_operation() -> BasicOperation:
             OperationParameter(
                 name="approach_offset",
                 type="float",
-                description="Stop this many meters before target (useful for approaching)",
+                description="Lift above target by this many meters along Unity Y (up-axis) before grasping",
                 required=False,
                 default=0.0,
                 valid_range=(0.0, 0.1),
@@ -327,11 +330,18 @@ def create_move_to_coordinate_operation() -> BasicOperation:
                 "perception_stereo_detect_001",
                 "manipulation_control_gripper_001",
                 "status_check_robot_001",
+                "motion_pick_at_coord_004",
             ],
             pairing_reasons={
                 "perception_stereo_detect_001": "Move to detected object coordinates after detection",
-                "manipulation_control_gripper_001": "Position gripper before grasping or after releasing",
+                "manipulation_control_gripper_001": (
+                    "IMPORTANT: Never call control_gripper immediately after move_to_coordinate "
+                    "with approach_offset > 0 — the gripper will close in mid-air. "
+                    "Always add a second move_to_coordinate(approach_offset=0) descent step first, "
+                    "or use pick_object_at_coordinate which encodes the full hover→descent→grasp pattern."
+                ),
                 "status_check_robot_001": "Verify arrival at target position after movement",
+                "motion_pick_at_coord_004": "Use pick_object_at_coordinate when the goal is grasping at known coords",
             },
             typical_before=["manipulation_control_gripper_001"],
             typical_after=["perception_stereo_detect_001", "spatial_move_relative_001"],
@@ -717,3 +727,260 @@ def create_adjust_end_effector_orientation_operation() -> BasicOperation:
 ADJUST_END_EFFECTOR_ORIENTATION_OPERATION = (
     create_adjust_end_effector_orientation_operation()
 )
+
+
+# ============================================================================
+# Implementation: Pick Object at Coordinate (Approach → Descent → Grasp)
+# ============================================================================
+
+
+def pick_object_at_coordinate(
+    robot_id: str,
+    x: float,
+    y: float,
+    z: float,
+    approach_height: float = 0.10,
+    speed: float = 0.5,
+    request_id: int = 0,
+    use_ros: Optional[bool] = None,
+) -> OperationResult:
+    """
+    Pick an object at a known 3D coordinate using a hover → descent → grasp sequence.
+
+    This operation encodes the correct three-step pick pattern that prevents the
+    gripper from closing while still above the object:
+
+    1. Open gripper (ensure fingers clear the object during approach).
+    2. Move to hover position (target + approach_height above along Unity Y).
+    3. Descend straight down to contact position (approach_offset=0).
+    4. Close gripper.
+
+    Use this instead of manually chaining move_to_coordinate + control_gripper,
+    which causes the gripper to fire 10 cm above the cube.  For object-name-based
+    grasping use grasp_object instead (it runs the full GraspPlanningPipeline).
+
+    Args:
+        robot_id: ID of the robot to control (e.g., "Robot1", "AR4_Robot").
+        x: X coordinate of the object centre in metres.
+        y: Y coordinate of the object centre in metres (Unity Y = up).
+        z: Z coordinate of the object centre in metres.
+        approach_height: Distance above the object for the hover position in metres,
+            range: [0.02, 0.20].  Default 0.10 m (10 cm).
+        speed: Speed multiplier used for both moves, range: [0.1, 2.0].
+        request_id: Optional request ID for tracking.
+        use_ros: Whether to use ROS for motion planning (None = auto-detect).
+
+    Returns:
+        OperationResult indicating success or the first failure in the sequence.
+
+    Example:
+        >>> # Pick a cube sitting at world position (0.3, 0.05, 0.1)
+        >>> result = pick_object_at_coordinate("Robot1", 0.3, 0.05, 0.1)
+
+        >>> # Pick with a taller approach clearance
+        >>> result = pick_object_at_coordinate("Robot1", 0.3, 0.05, 0.1, approach_height=0.15)
+    """
+    try:
+        if err := validate_robot_id(robot_id):
+            return err
+        if err := validate_xyz(x, y, z):
+            return err
+        if err := validate_speed(speed):
+            return err
+        if not isinstance(approach_height, (int, float)) or not (
+            0.02 <= approach_height <= 0.20
+        ):
+            return OperationResult.error_result(
+                "INVALID_APPROACH_HEIGHT",
+                f"approach_height must be between 0.02 and 0.20 m, got: {approach_height}",
+                ["Use a value between 0.02 m (2 cm) and 0.20 m (20 cm)"],
+            )
+
+        # Import here to avoid circular dependency — GripperOperations → Base only.
+        try:
+            from operations.GripperOperations import control_gripper
+        except ImportError:
+            from .GripperOperations import control_gripper
+
+        # Step 1: Open gripper so fingers don't knock the object during approach.
+        open_result = control_gripper(
+            robot_id=robot_id,
+            open_gripper=True,
+            request_id=request_id,
+            use_ros=use_ros,
+        )
+        if not open_result["success"]:
+            return open_result
+
+        # Step 2: Move to hover position (approach_height above object).
+        hover_result = move_to_coordinate(
+            robot_id=robot_id,
+            x=x,
+            y=y,
+            z=z,
+            speed=speed,
+            approach_offset=approach_height,
+            request_id=request_id,
+            use_ros=use_ros,
+        )
+        if not hover_result["success"]:
+            return hover_result
+
+        # Step 3: Descend straight to contact position (approach_offset=0).
+        descent_result = move_to_coordinate(
+            robot_id=robot_id,
+            x=x,
+            y=y,
+            z=z,
+            speed=min(speed, 0.3),  # Slow down for the final contact move.
+            approach_offset=0.0,
+            request_id=request_id,
+            use_ros=use_ros,
+        )
+        if not descent_result["success"]:
+            return descent_result
+
+        # Step 4: Close gripper to grasp the object.
+        close_result = control_gripper(
+            robot_id=robot_id,
+            open_gripper=False,
+            request_id=request_id,
+            use_ros=use_ros,
+        )
+        if not close_result["success"]:
+            return close_result
+
+        logger.info(
+            f"pick_object_at_coordinate: {robot_id} successfully picked at "
+            f"({x:.3f}, {y:.3f}, {z:.3f})"
+        )
+        return OperationResult.success_result(
+            {
+                "robot_id": robot_id,
+                "target_position": {"x": x, "y": y, "z": z},
+                "approach_height": approach_height,
+                "speed": speed,
+                "status": "picked",
+                "timestamp": __import__("time").time(),
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Unexpected error in pick_object_at_coordinate: {e}", exc_info=True)
+        return OperationResult.error_result(
+            "UNEXPECTED_ERROR",
+            f"Unexpected error occurred: {str(e)}",
+            [
+                "Check logs for detailed error information",
+                "Verify all parameters are correct types",
+                "Retry the operation",
+            ],
+        )
+
+
+def create_pick_object_at_coordinate_operation() -> BasicOperation:
+    """Create the BasicOperation definition for pick_object_at_coordinate."""
+    return BasicOperation(
+        operation_id="motion_pick_at_coord_004",
+        name="pick_object_at_coordinate",
+        category=OperationCategory.NAVIGATION,
+        complexity=OperationComplexity.INTERMEDIATE,
+        description=(
+            "Pick an object at a known 3D coordinate using hover → descent → grasp sequence"
+        ),
+        long_description="""
+            Encodes the correct three-step pick pattern:
+            1. Open gripper (clear fingers during approach)
+            2. Move to hover position (approach_height above the object)
+            3. Descend straight down to contact position
+            4. Close gripper
+
+            Use this instead of manually chaining move_to_coordinate + control_gripper.
+            That naive pattern closes the gripper while the arm is still approach_height
+            above the object, missing the cube entirely.
+
+            For picking by object name (with full GraspPlanningPipeline, IK validation,
+            and collision filtering) use grasp_object instead.
+        """,
+        usage_examples=[
+            "pick_object_at_coordinate('Robot1', 0.3, 0.05, 0.1) - Pick cube at known coords",
+            "pick_object_at_coordinate('Robot1', x, y, z, approach_height=0.15) - Taller clearance",
+            "Use after detect_object_stereo returns a position to pick without object-name lookup",
+        ],
+        parameters=[
+            OperationParameter(
+                name="robot_id", type="str", description="Robot ID", required=True
+            ),
+            OperationParameter(
+                name="x",
+                type="float",
+                description="X coordinate of object centre in metres",
+                required=True,
+                valid_range=(-0.65, 0.65),
+            ),
+            OperationParameter(
+                name="y",
+                type="float",
+                description="Y coordinate of object centre in metres (Unity Y = up)",
+                required=True,
+                valid_range=(0.0, 0.7),
+            ),
+            OperationParameter(
+                name="z",
+                type="float",
+                description="Z coordinate of object centre in metres",
+                required=True,
+                valid_range=(-0.5, 0.5),
+            ),
+            OperationParameter(
+                name="approach_height",
+                type="float",
+                description="Height above object for hover position in metres (default 0.10)",
+                required=False,
+                default=0.10,
+                valid_range=(0.02, 0.20),
+            ),
+            OperationParameter(
+                name="speed",
+                type="float",
+                description="Speed multiplier (0.1=slow, 1.0=normal)",
+                required=False,
+                default=0.5,
+                valid_range=(0.1, 2.0),
+            ),
+        ],
+        preconditions=[
+            "robot_is_initialized(robot_id)",
+            "target_within_reach(robot_id, x, y, z)",
+        ],
+        postconditions=["gripper_holding_object(robot_id)"],
+        average_duration_ms=3600.0,
+        success_rate=0.90,
+        failure_modes=[
+            "Object not at specified coordinates (use grasp_object for name-based picking)",
+            "Descent position unreachable",
+            "Gripper fails to close (object not in contact)",
+            "Communication failed - Unity not connected",
+        ],
+        relationships=OperationRelationship(
+            operation_id="motion_pick_at_coord_004",
+            required_operations=["status_check_robot_001"],
+            required_reasons={
+                "status_check_robot_001": "Verify robot is ready before executing multi-step pick",
+            },
+            commonly_paired_with=[
+                "perception_stereo_detect_001",
+                "motion_move_to_coord_001",
+            ],
+            pairing_reasons={
+                "perception_stereo_detect_001": "Detect object position first, then pick at detected coords",
+                "motion_move_to_coord_001": "Use move_to_coordinate for navigation; pick_object_at_coordinate for grasping",
+            },
+            typical_before=["motion_move_to_coord_001"],
+            typical_after=["perception_stereo_detect_001"],
+        ),
+        implementation=pick_object_at_coordinate,
+    )
+
+
+PICK_OBJECT_AT_COORDINATE_OPERATION = create_pick_object_at_coordinate_operation()

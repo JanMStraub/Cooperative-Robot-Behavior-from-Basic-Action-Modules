@@ -44,7 +44,19 @@ namespace Robotics
         )]
         [SerializeField]
         [Range(0.1f, 2.0f)]
-        private float _speedScaling = 0.5f; // Default to 50% speed for slower, more visible motion
+        private float _speedScaling = 1.0f;
+
+        [Tooltip(
+            "Only execute every Nth waypoint for TIMED trajectories (real timestamps from TOTG). "
+                + "MoveIt sends waypoints at 50Hz (0.02s each), giving ArticulationBody only one "
+                + "FixedUpdate to track each step. Stride=5 merges 5 waypoints into one 0.1s segment. "
+                + "Stride=1 = use all waypoints. "
+                + "NOTE: Zero-timestamp trajectories always use the global timeline path (all waypoints, "
+                + "no stops), so this setting has no effect on those."
+        )]
+        [SerializeField]
+        [Range(1, 20)]
+        private int _waypointStride = 5;
 
         [Header("Settle Detection")]
         [Tooltip(
@@ -79,12 +91,27 @@ namespace Robotics
         private string _resolvedFeedbackTopic;
         private bool _abortingForPreempt; // Suppresses OnTrajectoryComplete(false) on preempt
 
+        // Pre-allocated fields to avoid per-trajectory GC pressure
+        private double[] _startPositions;
+        private double[] _synthCumDurations; // pre-allocated cumulative durations for zero-timestamp path
+#if UNITY_EDITOR
+        private System.Text.StringBuilder _debugStringBuilder = new System.Text.StringBuilder(512);
+#endif
+
         private const string _logPrefix = "[ROS_TRAJECTORY_SUBSCRIBER]";
 
         /// <summary>
         /// True while a trajectory is being executed.
         /// </summary>
         public bool IsExecutingTrajectory { get; private set; }
+
+        /// <summary>
+        /// When true, the next trajectory completion calls ClearTarget() instead of
+        /// SyncIKTargetToCurrentPose(). Set this before publishing a return-to-start
+        /// trajectory so IK does not re-engage and oscillate against the PD drive.
+        /// Automatically reset to false after each trajectory completes.
+        /// </summary>
+        public bool ClearTargetOnComplete { get; set; }
 
         /// <summary>
         /// Fired when a trajectory completes execution (success or abort).
@@ -304,131 +331,290 @@ namespace Robotics
             PublishFeedback("executing", $"Starting {msg.points.Length}-point trajectory");
             float startTime = Time.time;
 
+#if UNITY_EDITOR
+            // DEBUG: log initial physical state vs first trajectory point
+            {
+                _debugStringBuilder.Clear();
+                _debugStringBuilder.AppendLine($"[ROSTraj] {_robotController.robotId} — {msg.points.Length} waypoints, jointMap={_jointIndexMap.Length}");
+                _debugStringBuilder.AppendLine("  Joint-name → idx | phys(°) | drive(°) | first-waypoint(°)");
+                double[] firstWaypoint = msg.points.Length > 0 ? msg.points[0].positions : null;
+                for (int j = 0; j < _jointIndexMap.Length; j++)
+                {
+                    int idx = _jointIndexMap[j];
+                    float physDeg = _joints[idx].jointPosition.dofCount > 0
+                        ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg : float.NaN;
+                    float driveDeg = _joints[idx].xDrive.target;
+                    float firstDeg = (firstWaypoint != null && j < firstWaypoint.Length)
+                        ? (float)(firstWaypoint[j] * Mathf.Rad2Deg) : float.NaN;
+                    string jointName = j < msg.joint_names.Length ? msg.joint_names[j] : $"j{j}";
+                    float lo = _joints[idx].xDrive.lowerLimit;
+                    float hi = _joints[idx].xDrive.upperLimit;
+                    int dof = _joints[idx].jointPosition.dofCount;
+                    bool immovable = _joints[idx].immovable;
+                    var jtype = _joints[idx].jointType;
+                    _debugStringBuilder.AppendLine($"  {jointName}→{idx} | phys={physDeg:F2} | drive={driveDeg:F2} | wp0={firstDeg:F2} | limits=[{lo:F2},{hi:F2}] | dof={dof} type={jtype} immovable={immovable}");
+                }
+                Debug.Log(_debugStringBuilder.ToString());
+            }
+#endif
+
             // Read actual joint positions as the trajectory start to avoid a jump
             // when the arm hasn't fully settled at the end of a previous trajectory.
-            // Using planned positions as fromPositions would cause a discontinuity
-            // if physics lag left the joints a few degrees off.
-            double[] startPositions = new double[_jointIndexMap.Length];
+            if (_startPositions == null || _startPositions.Length != _jointIndexMap.Length)
+                _startPositions = new double[_jointIndexMap.Length];
             for (int j = 0; j < _jointIndexMap.Length; j++)
             {
                 int idx = _jointIndexMap[j];
-                startPositions[j] =
+                _startPositions[j] =
                     _joints[idx].jointPosition.dofCount > 0 ? _joints[idx].jointPosition[0] : 0.0;
             }
 
             JointTrajectoryPointMsg prevPoint = null;
             double prevPointTime = 0;
 
-            for (int p = 0; p < msg.points.Length; p++)
+            // Detect whether MoveIt provided real time parameterization.
+            // When timestamps are all zero, stride is needed to merge many tiny displacement
+            // steps into longer synthesized segments. When timestamps are real (e.g. 0.5s each),
+            // each segment already has a proper duration; applying stride would skip waypoints
+            // that define the collision-free path shape MoveIt planned.
+            bool hasRealTimestamps = msg.points.Length > 1 &&
+                (msg.points[msg.points.Length - 1].time_from_start.sec > 0 ||
+                 msg.points[msg.points.Length - 1].time_from_start.nanosec > 0);
+            int effectiveStride = hasRealTimestamps ? 1 : _waypointStride;
+
+            if (hasRealTimestamps)
             {
-                var targetPoint = msg.points[p];
-                double targetTime =
-                    targetPoint.time_from_start.sec + targetPoint.time_from_start.nanosec * 1e-9;
-
-                // Always interpolate from actual physics state for the first segment.
-                // For subsequent segments use the previous planned point so the overall
-                // timing matches MoveIt's plan; the first-segment correction absorbs any
-                // residual physics lag from the previous trajectory.
-                double[] fromPositions;
-                if (prevPoint != null && prevPoint.positions != null)
-                    fromPositions = prevPoint.positions;
-                else
-                    fromPositions = startPositions;
-
-                double rawSegmentDuration = targetTime - prevPointTime;
-                if (rawSegmentDuration <= 0)
-                    rawSegmentDuration = Time.fixedDeltaTime;
-
-                // Wall-clock duration after applying speed scaling (e.g. 0.5x → 2x wall time).
-                double segmentDuration = rawSegmentDuration / _speedScaling;
-
-                // Collect from/to velocities for cubic Hermite interpolation.
-                // MoveIt plans velocity-continuous trajectories; using these velocities
-                // gives C1-continuous motion (no velocity jumps at waypoints).
-                double[] fromVelocities = prevPoint?.velocities;
-                double[] toVelocities = targetPoint.velocities;
-
-                // Interpolate from previous point to current
-                float segmentStart = Time.time;
-                while (true)
+                // TIMED PATH: MoveIt ran TOTG — each waypoint has a real time_from_start.
+                // Every waypoint carries collision-free path shape; stride=1 preserves all of them.
+                // Uses cubic Hermite interpolation within each segment for C1-continuous motion.
+                for (int p = 0; p < msg.points.Length; p++)
                 {
-                    float elapsed = Time.time - segmentStart;
-                    float t = Mathf.Clamp01((float)(elapsed / segmentDuration));
+                    bool isLast = p == msg.points.Length - 1;
+                    if (!isLast && effectiveStride > 1 && p % effectiveStride != 0)
+                        continue;
 
-                    // Set joint drive targets
-                    if (targetPoint.positions != null)
+                    var targetPoint = msg.points[p];
+                    double targetTime =
+                        targetPoint.time_from_start.sec + targetPoint.time_from_start.nanosec * 1e-9;
+
+                    double rawSegmentDuration = targetTime - prevPointTime;
+
+                    // Timed trajectory: interpolate from previous planned point so overall
+                    // timing matches MoveIt's plan. The first-segment correction (using actual
+                    // physics state at coroutine start) absorbs residual lag from the previous
+                    // trajectory.
+                    double[] fromPositions = (prevPoint != null && prevPoint.positions != null)
+                        ? prevPoint.positions
+                        : _startPositions;
+
+                    // Wall-clock duration after applying speed scaling (e.g. 0.5x → 2x wall time).
+                    double segmentDuration = rawSegmentDuration / _speedScaling;
+
+                    // MoveIt often includes a start-state duplicate at waypoint 0 with
+                    // time_from_start = 0.0, giving rawSegmentDuration = 0. Skip interpolation
+                    // for zero-duration segments and commit the target positions directly to avoid
+                    // t = elapsed/0 = NaN propagating into the Hermite formula and drive targets.
+                    if (segmentDuration <= 0.0)
                     {
+                        if (targetPoint.positions != null)
+                            SetDriveTargets(targetPoint.positions);
+                        prevPoint = targetPoint;
+                        prevPointTime = targetTime;
+                        continue;
+                    }
+
+                    // Cubic Hermite interpolation uses MoveIt's planned velocities for C1-continuity.
+                    double[] fromVelocities = prevPoint?.velocities;
+                    double[] toVelocities = targetPoint.velocities;
+
+                    float segmentStart = Time.time;
+                    while (true)
+                    {
+                        float elapsed = Time.time - segmentStart;
+                        float t = Mathf.Clamp01((float)(elapsed / segmentDuration));
+
+                        if (targetPoint.positions != null)
+                        {
+                            for (int j = 0; j < _jointIndexMap.Length; j++)
+                            {
+                                if (j >= targetPoint.positions.Length || j >= fromPositions.Length)
+                                    break;
+
+                                int idx = _jointIndexMap[j];
+                                double p0 = fromPositions[j];
+                                double p1 = targetPoint.positions[j];
+                                double interpRad;
+
+                                if (
+                                    fromVelocities != null
+                                    && toVelocities != null
+                                    && j < fromVelocities.Length
+                                    && j < toVelocities.Length
+                                )
+                                {
+                                    double v0 = fromVelocities[j] * rawSegmentDuration;
+                                    double v1 = toVelocities[j] * rawSegmentDuration;
+                                    double t2 = t * t;
+                                    double t3 = t2 * t;
+                                    interpRad =
+                                        (2 * t3 - 3 * t2 + 1) * p0
+                                        + (t3 - 2 * t2 + t) * v0
+                                        + (-2 * t3 + 3 * t2) * p1
+                                        + (t3 - t2) * v1;
+                                    // Clamp to segment endpoints so Hermite overshoot
+                                    // (caused by large mid-trajectory velocities) never
+                                    // drives the joint outside [p0, p1]. Without this,
+                                    // the physics chases the overshooting drive target
+                                    // and accumulates error it cannot recover from.
+                                    double segMin = System.Math.Min(p0, p1);
+                                    double segMax = System.Math.Max(p0, p1);
+                                    interpRad = System.Math.Max(segMin, System.Math.Min(segMax, interpRad));
+                                }
+                                else
+                                {
+                                    interpRad = p0 + (p1 - p0) * t;
+                                }
+
+                                float targetDeg = (float)interpRad * Mathf.Rad2Deg;
+                                // Guard against NaN/Inf from degenerate interpolation inputs.
+                                if (!float.IsFinite(targetDeg)) continue;
+                                ArticulationDrive drive = _joints[idx].xDrive;
+                                drive.target = Mathf.Clamp(targetDeg, drive.lowerLimit, drive.upperLimit);
+                                _joints[idx].xDrive = drive;
+                                if (idx < _robotController.jointDriveTargets.Length)
+                                    _robotController.jointDriveTargets[idx] = drive.target;
+                            }
+                        }
+
+                        if (t >= 1f)
+                            break;
+
+                        yield return new WaitForFixedUpdate();
+                    }
+
+#if UNITY_EDITOR
+                    {
+                        _debugStringBuilder.Clear();
+                        _debugStringBuilder.AppendLine($"[ROSTraj] {_robotController.robotId} waypoint {p}/{msg.points.Length - 1} done  seg={rawSegmentDuration:F3}s raw → {segmentDuration:F3}s wall");
                         for (int j = 0; j < _jointIndexMap.Length; j++)
                         {
-                            if (j >= targetPoint.positions.Length || j >= fromPositions.Length)
-                                break;
-
                             int idx = _jointIndexMap[j];
+                            float physDeg = _joints[idx].jointPosition.dofCount > 0
+                                ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg : float.NaN;
+                            float driveDeg = _joints[idx].xDrive.target;
+                            float plannedDeg = (targetPoint.positions != null && j < targetPoint.positions.Length)
+                                ? (float)(targetPoint.positions[j] * Mathf.Rad2Deg) : float.NaN;
+                            float plannedVelDeg = (targetPoint.velocities != null && j < targetPoint.velocities.Length)
+                                ? (float)(targetPoint.velocities[j] * Mathf.Rad2Deg) : float.NaN;
+                            float physVelDeg = _joints[idx].jointVelocity.dofCount > 0
+                                ? _joints[idx].jointVelocity[0] * Mathf.Rad2Deg : float.NaN;
+                            float err = physDeg - plannedDeg;
+                            _debugStringBuilder.AppendLine($"  J{idx}: phys={physDeg:F2}° physVel={physVelDeg:F2}°/s drive={driveDeg:F2}° planned={plannedDeg:F2}° planVel={plannedVelDeg:F2}°/s err={err:F2}°");
+                        }
+                        Debug.Log(_debugStringBuilder.ToString());
+                    }
+#endif
 
-                            double p0 = fromPositions[j];
-                            double p1 = targetPoint.positions[j];
-                            double interpRad;
+                    prevPoint = targetPoint;
+                    prevPointTime = targetTime;
+                }
+            }
+            else
+            {
+                // ZERO-TIMESTAMP GLOBAL TIMELINE PATH
+                //
+                // MoveIt did not run TOTG — all time_from_start are zero.
+                // Pre-compute cumulative synthesized durations for all N waypoints,
+                // then sweep through them in one continuous WaitForFixedUpdate pass.
+                // This eliminates the per-stride stop caused by per-segment loop completion.
 
-                            // Use cubic Hermite when velocity data is available on both ends.
-                            // This matches MoveIt's trajectory intent and eliminates velocity
-                            // discontinuities at waypoints (the main source of visible jerks).
-                            if (
-                                fromVelocities != null
-                                && toVelocities != null
-                                && j < fromVelocities.Length
-                                && j < toVelocities.Length
-                            )
-                            {
-                                // Convert MoveIt rad/s velocities to normalised-time tangents.
-                                // The Hermite curve is parameterised over t ∈ [0,1] mapping to
-                                // rawSegmentDuration seconds of MoveIt time. The tangent at each
-                                // endpoint must equal velocity_rad_s * rawSegmentDuration (the
-                                // positional change at that velocity over the MoveIt segment).
-                                // Speed scaling stretches wall-clock time but does NOT change the
-                                // shape of the position curve — only when t reaches 1.0. Using
-                                // rawSegmentDuration (not the scaled wall-clock value) keeps the
-                                // curve shape identical to MoveIt's intent.
-                                double v0 = fromVelocities[j] * rawSegmentDuration;
-                                double v1 = toVelocities[j] * rawSegmentDuration;
-                                double t2 = t * t;
-                                double t3 = t2 * t;
-                                // Standard cubic Hermite basis functions
-                                interpRad =
-                                    (2 * t3 - 3 * t2 + 1) * p0
-                                    + (t3 - 2 * t2 + t) * v0
-                                    + (-2 * t3 + 3 * t2) * p1
-                                    + (t3 - t2) * v1;
-                            }
-                            else
-                            {
-                                // Fallback: linear interpolation
-                                interpRad = p0 + (p1 - p0) * t;
-                            }
+                int N = msg.points.Length;
 
-                            // Convert radians to degrees for ArticulationBody drive targets
+                // Ensure _synthCumDurations is large enough (reuse across trajectories)
+                if (_synthCumDurations == null || _synthCumDurations.Length < N)
+                    _synthCumDurations = new double[N];
+
+                // Snapshot physical start positions for segment 0 baseline
+                if (_startPositions == null || _startPositions.Length != _jointIndexMap.Length)
+                    _startPositions = new double[_jointIndexMap.Length];
+                for (int j = 0; j < _jointIndexMap.Length; j++)
+                {
+                    int idx = _jointIndexMap[j];
+                    _startPositions[j] = _joints[idx].jointPosition.dofCount > 0
+                        ? _joints[idx].jointPosition[0] : 0.0;
+                }
+
+                // Build cumulative wall-clock end-times for each segment i.
+                // Segment i goes from waypoint[i-1] (or physical start) to waypoint[i].
+                // Duration = maxJointDisp / (maxVelocity * 0.8) / speedScaling,
+                // clamped to at least fixedDeltaTime.
+                double cumulative = 0.0;
+                for (int i = 0; i < N; i++)
+                {
+                    double[] fromPos = (i == 0) ? _startPositions : msg.points[i - 1].positions;
+                    double[] toPos = msg.points[i].positions;
+                    double maxDisp = 0.0;
+                    if (toPos != null && fromPos != null)
+                    {
+                        for (int j = 0; j < _jointIndexMap.Length && j < toPos.Length && j < fromPos.Length; j++)
+                            maxDisp = Math.Max(maxDisp, Math.Abs(toPos[j] - fromPos[j]));
+                    }
+                    double segDur = maxDisp > 1e-6
+                        ? maxDisp / (_maxJointVelocity * 0.8)
+                        : Time.fixedDeltaTime;
+                    segDur /= _speedScaling;
+                    cumulative += segDur;
+                    _synthCumDurations[i] = cumulative;
+                }
+                double totalDurationSynth = cumulative;
+
+                // Single global start — sweep all segments without stopping
+                float globalStart = Time.time;
+
+                while (true)
+                {
+                    float globalElapsed = Time.time - globalStart;
+                    if (globalElapsed >= (float)totalDurationSynth)
+                        break;
+
+                    // Find current segment: smallest i where _synthCumDurations[i] > globalElapsed
+                    int seg = N - 1;
+                    for (int i = 0; i < N; i++)
+                    {
+                        if (_synthCumDurations[i] > globalElapsed) { seg = i; break; }
+                    }
+
+                    double segEnd = _synthCumDurations[seg];
+                    double segStart = seg == 0 ? 0.0 : _synthCumDurations[seg - 1];
+                    double segDurLocal = segEnd - segStart;
+                    float t = segDurLocal > 1e-9
+                        ? Mathf.Clamp01((float)((globalElapsed - segStart) / segDurLocal))
+                        : 1f;
+
+                    double[] fromPositions = (seg == 0) ? _startPositions : msg.points[seg - 1].positions;
+                    double[] toPositions = msg.points[seg].positions;
+
+                    // Linear interpolation (Hermite skipped — velocities were for original 0.02s segments)
+                    if (toPositions != null && fromPositions != null)
+                    {
+                        for (int j = 0; j < _jointIndexMap.Length && j < toPositions.Length && j < fromPositions.Length; j++)
+                        {
+                            int idx = _jointIndexMap[j];
+                            double interpRad = fromPositions[j] + (toPositions[j] - fromPositions[j]) * t;
                             float targetDeg = (float)interpRad * Mathf.Rad2Deg;
-
                             ArticulationDrive drive = _joints[idx].xDrive;
-                            drive.target = Mathf.Clamp(
-                                targetDeg,
-                                drive.lowerLimit,
-                                drive.upperLimit
-                            );
+                            drive.target = Mathf.Clamp(targetDeg, drive.lowerLimit, drive.upperLimit);
                             _joints[idx].xDrive = drive;
-
                             if (idx < _robotController.jointDriveTargets.Length)
                                 _robotController.jointDriveTargets[idx] = drive.target;
                         }
                     }
 
-                    if (t >= 1f)
-                        break;
-
                     yield return new WaitForFixedUpdate();
                 }
 
-                prevPoint = targetPoint;
-                prevPointTime = targetTime;
+                // Commit final waypoint exactly (avoids float precision leaving t slightly < 1.0)
+                SetDriveTargets(msg.points[N - 1].positions);
             }
 
             // Wait for all joint velocities to physically settle below the threshold.
@@ -440,9 +626,11 @@ namespace Robotics
             float effectiveSettleTimeout = _settleTimeoutSeconds / Mathf.Max(0.1f, _speedScaling);
             float settleStartTime = Time.time;
             bool settled = false;
+            int consecutiveSettledFrames = 0;
+            const int REQUIRED_SETTLED_FRAMES = 3; // require 3 consecutive quiet frames
             while (Time.time - settleStartTime < effectiveSettleTimeout)
             {
-                settled = true;
+                bool allQuiet = true;
                 for (int j = 0; j < _jointIndexMap.Length; j++)
                 {
                     int idx = _jointIndexMap[j];
@@ -452,13 +640,46 @@ namespace Robotics
                             : 0f;
                     if (velDegPerSec > _settleVelocityThresholdDegPerSec)
                     {
-                        settled = false;
+                        allQuiet = false;
                         break;
                     }
                 }
-                if (settled)
+                if (allQuiet)
+                    consecutiveSettledFrames++;
+                else
+                    consecutiveSettledFrames = 0;
+
+                if (consecutiveSettledFrames >= REQUIRED_SETTLED_FRAMES)
+                {
+                    settled = true;
                     break;
+                }
                 yield return new WaitForFixedUpdate();
+            }
+
+            // After the velocity settle, also wait for position convergence.
+            // The arm may have stopped moving but still be several degrees from its
+            // drive target (PD lag at trajectory end, or stall during return-to-home).
+            // This catches the stall case that velocity-only settle misses.
+            // Use the same near-target logic but always run it — even on velocity-settle success.
+            {
+                const float NEAR_TARGET_DEG = 2f;
+                const float NEAR_TARGET_TIMEOUT = 10f;
+                float nearTargetStart = Time.time;
+                while (Time.time - nearTargetStart < NEAR_TARGET_TIMEOUT)
+                {
+                    bool allNear = true;
+                    for (int j = 0; j < _jointIndexMap.Length; j++)
+                    {
+                        int idx = _jointIndexMap[j];
+                        float physDeg = _joints[idx].jointPosition.dofCount > 0
+                            ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg : 0f;
+                        float err = Mathf.Abs(physDeg - _joints[idx].xDrive.target);
+                        if (err > NEAR_TARGET_DEG) { allNear = false; break; }
+                    }
+                    if (allNear) break;
+                    yield return new WaitForFixedUpdate();
+                }
             }
 
             float totalDuration = Time.time - startTime;
@@ -471,25 +692,52 @@ namespace Robotics
             else
                 Debug.LogWarning(logMessage);
 
-            // Only sync the IK target when the control mode is ROS or Hybrid.
-            // In those modes Unity IK is normally suppressed; when it re-engages it must
-            // start from the current pose (zero error) or it will fight the ROS position.
-            // In Unity mode the IK owns motion end-to-end and manages its own target, so
-            // we must NOT overwrite it here.
+#if UNITY_EDITOR
+            // DEBUG: final physical state after settling
+            {
+                _debugStringBuilder.Clear();
+                _debugStringBuilder.AppendLine($"[ROSTraj] {_robotController.robotId} FINAL (settle={settleStatus})");
+                JointTrajectoryPointMsg lastPoint = msg.points.Length > 0 ? msg.points[msg.points.Length - 1] : null;
+                for (int j = 0; j < _jointIndexMap.Length; j++)
+                {
+                    int idx = _jointIndexMap[j];
+                    float physDeg = _joints[idx].jointPosition.dofCount > 0
+                        ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg : float.NaN;
+                    float driveDeg = _joints[idx].xDrive.target;
+                    float velDeg = _joints[idx].jointVelocity.dofCount > 0
+                        ? _joints[idx].jointVelocity[0] * Mathf.Rad2Deg : float.NaN;
+                    float plannedDeg = (lastPoint?.positions != null && j < lastPoint.positions.Length)
+                        ? (float)(lastPoint.positions[j] * Mathf.Rad2Deg) : float.NaN;
+                    _debugStringBuilder.AppendLine($"  J{idx}: phys={physDeg:F2}° drive={driveDeg:F2}° planned={plannedDeg:F2}° vel={velDeg:F2}°/s");
+                }
+                Debug.Log(_debugStringBuilder.ToString());
+            }
+#endif
+
+
+
+            // Only sync/clear the IK target when the control mode is ROS or Hybrid.
             bool isROSControlled =
                 _controlModeManager == null || _controlModeManager.CurrentMode != ControlMode.Unity;
 
             if (isROSControlled)
             {
-                // Sync the IK solver's target to the current end-effector position BEFORE
-                // re-enabling Unity IK (IsManuallyDriven = false). Without this, the IK wakes
-                // up with a stale _targetTransform pointing to wherever the arm was going before
-                // the ROS trajectory started, and immediately drives the arm away from the
-                // ROS-delivered pose — the main cause of post-grasp jitter.
-                // Also clears moving-target tracking so a kinematic held object doesn't
-                // create a feedback loop (object moves → tracker re-arms IK → arm moves → repeat).
-                _robotController.SyncIKTargetToCurrentPose();
+                if (ClearTargetOnComplete)
+                {
+                    // Return-to-start: clear the IK target entirely so the PD drive holds
+                    // the home pose undisturbed. SyncIKTargetToCurrentPose would set a
+                    // target at the current (still-moving) EE pose, causing IK to re-engage
+                    // and oscillate J3/J4 against the PD drive.
+                    _robotController.ClearTarget();
+                }
+                else
+                {
+                    // Normal trajectory: sync IK target to current EE pose so IK starts
+                    // with zero error and doesn't fight the ROS-delivered position.
+                    _robotController.SyncIKTargetToCurrentPose();
+                }
             }
+            ClearTargetOnComplete = false;
 
             IsExecutingTrajectory = false;
             _robotController.IsManuallyDriven = false;
@@ -542,6 +790,40 @@ namespace Robotics
             };
 
             _ros.Publish(_resolvedFeedbackTopic, feedback);
+        }
+
+        /// <summary>
+        /// Wraps an angle in radians to the range [-π, π].
+        /// Used to find the shortest arc between two joint positions before interpolating,
+        /// preventing wrist joints from spinning through the full joint range when a
+        /// MoveIt plan crosses the ±π boundary (e.g. +2.8 rad → -2.8 rad).
+        /// </summary>
+        private static double NormalizeAngleRad(double angle)
+        {
+            while (angle > Math.PI)
+                angle -= 2.0 * Math.PI;
+            while (angle < -Math.PI)
+                angle += 2.0 * Math.PI;
+            return angle;
+        }
+
+        /// <summary>
+        /// Sets ArticulationBody xDrive targets for all mapped joints from a radians position array.
+        /// Converts to degrees and clamps to joint limits. Also updates jointDriveTargets cache.
+        /// </summary>
+        private void SetDriveTargets(double[] positions)
+        {
+            if (positions == null) return;
+            for (int j = 0; j < _jointIndexMap.Length && j < positions.Length; j++)
+            {
+                int idx = _jointIndexMap[j];
+                float targetDeg = (float)positions[j] * Mathf.Rad2Deg;
+                ArticulationDrive drive = _joints[idx].xDrive;
+                drive.target = Mathf.Clamp(targetDeg, drive.lowerLimit, drive.upperLimit);
+                _joints[idx].xDrive = drive;
+                if (idx < _robotController.jointDriveTargets.Length)
+                    _robotController.jointDriveTargets[idx] = drive.target;
+            }
         }
 
         /// <summary>

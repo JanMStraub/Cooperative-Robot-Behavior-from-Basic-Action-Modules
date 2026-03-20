@@ -22,7 +22,7 @@ namespace ACRLEditor
 
         private void OnEnable()
         {
-            _manager = (AutoRTManager)target;
+            _manager = target as AutoRTManager;
         }
 
         public override void OnInspectorGUI()

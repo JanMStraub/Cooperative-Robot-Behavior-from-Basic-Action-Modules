@@ -129,6 +129,7 @@ namespace PythonCommunication
     /// - control_gripper: Open or close the gripper
     /// - check_robot_status: Get current robot state
     /// - return_to_start_position: Move robot back to initial position
+    /// - pick_object_at_coordinate: Hover → descent → grasp sequence at known coordinates
     ///
     /// Usage:
     /// 1. Attach this component to a GameObject in your scene
@@ -147,20 +148,6 @@ namespace PythonCommunication
         [Tooltip("Apply speed multiplier from commands")]
         [SerializeField]
         private bool _applySpeedMultiplier = true;
-
-        [Tooltip("Enable Python CoordinationVerifier checks before executing movements (Phase 4)")]
-        [SerializeField]
-        private bool _enablePythonVerification = true;
-
-        [Tooltip("Coordination configuration for verification and collision avoidance")]
-        [SerializeField]
-        private Configuration.CoordinationConfig _coordinationConfig;
-
-        [Tooltip("Workspace Manager for coordination (Phase 4)")]
-        private Simulation.WorkspaceManager _workspaceManager;
-
-        // Coordination verifier (initialized based on config)
-        private ICoordinationVerifier _coordinationVerifier;
 
         [Header("Runtime Info")]
         [Tooltip("Number of commands processed successfully")]
@@ -274,69 +261,7 @@ namespace PythonCommunication
                 return;
             }
 
-            _workspaceManager = Simulation.WorkspaceManager.Instance;
-            if (_workspaceManager == null && _enablePythonVerification)
-            {
-                Debug.LogWarning(
-                    $"{_logPrefix} WorkspaceManager.Instance is null! "
-                        + "Workspace coordination will be disabled. "
-                        + "Add WorkspaceManager GameObject to enable Phase 4 features."
-                );
-            }
-
-            InitializeCoordinationVerifier();
-
             Debug.Log($"{_logPrefix} Initialized and listening for Python commands");
-        }
-
-        /// <summary>
-        /// Initialize coordination verifier based on configuration mode.
-        /// </summary>
-        private void InitializeCoordinationVerifier()
-        {
-            if (_coordinationConfig == null)
-            {
-                Debug.LogWarning(
-                    $"{_logPrefix} CoordinationConfig not assigned, using Unity-only verification"
-                );
-                _coordinationVerifier = new UnityCoordinationVerifier(0.2f);
-                return;
-            }
-
-            float minSafeSeparation = _coordinationConfig.minSafeSeparation;
-
-            switch (_coordinationConfig.verificationMode)
-            {
-                case Configuration.VerificationMode.UnityOnly:
-                    _coordinationVerifier = new UnityCoordinationVerifier(minSafeSeparation);
-                    Debug.Log($"{_logPrefix} Coordination verification mode: Unity-only (fast)");
-                    break;
-
-                case Configuration.VerificationMode.PythonVerified:
-                    _coordinationVerifier = new PythonCoordinationVerifier(
-                        _coordinationConfig.pythonVerificationTimeout,
-                        _coordinationConfig.fallbackToUnityOnTimeout,
-                        minSafeSeparation
-                    );
-                    Debug.Log($"{_logPrefix} Coordination verification mode: Python-verified");
-                    break;
-
-                case Configuration.VerificationMode.Hybrid:
-                    // Hybrid mode: Use Unity for initial check, Python for conflicts
-                    // For now, use Unity-only as hybrid implementation requires more complex logic
-                    _coordinationVerifier = new UnityCoordinationVerifier(minSafeSeparation);
-                    Debug.Log(
-                        $"{_logPrefix} Coordination verification mode: Hybrid (using Unity for now)"
-                    );
-                    break;
-
-                default:
-                    _coordinationVerifier = new UnityCoordinationVerifier(minSafeSeparation);
-                    Debug.LogWarning(
-                        $"{_logPrefix} Unknown verification mode, defaulting to Unity-only"
-                    );
-                    break;
-            }
         }
 
         #endregion
@@ -405,12 +330,20 @@ namespace PythonCommunication
                     ExecuteReturnToStartPosition(command);
                     break;
 
+                case "set_clear_target_on_complete":
+                    ExecuteSetClearTargetOnComplete(command);
+                    break;
+
                 case "grasp_object":
                     ExecuteGraspObject(command);
                     break;
 
                 case "release_object":
                     ExecuteReleaseObject(command);
+                    break;
+
+                case "pick_object_at_coordinate":
+                    ExecutePickObjectAtCoordinate(command);
                     break;
 
                 case "move_from_a_to_b":
@@ -603,27 +536,6 @@ namespace PythonCommunication
                     command.parameters.target_position
                 );
 
-                // Phase 4: Check Python CoordinationVerifier before executing
-                if (_enablePythonVerification)
-                {
-                    if (!VerifyMovementSafety(command.robot_id, targetPosition))
-                    {
-                        Debug.LogWarning(
-                            $"{_logPrefix} [Phase 4] Movement verification failed for {command.robot_id} "
-                                + $"to ({targetPosition.x:F3}, {targetPosition.y:F3}, {targetPosition.z:F3}). "
-                                + "Movement blocked by coordination check."
-                        );
-                        SendCommandCompletion(
-                            command.robot_id,
-                            "move_to_coordinate",
-                            false,
-                            command.request_id
-                        );
-                        _failedCommands++;
-                        return;
-                    }
-                }
-
                 if (_applySpeedMultiplier && command.parameters.speed_multiplier > 0)
                 {
                     if (_verboseLogging)
@@ -670,16 +582,6 @@ namespace PythonCommunication
                             command.request_id
                         );
                     }
-
-                    // Phase 4: Release workspace region after movement completes
-                    if (_workspaceManager != null)
-                    {
-                        var region = _workspaceManager.GetRegionAtPosition(targetPosition);
-                        if (region != null && region.allocatedRobotId == command.robot_id)
-                        {
-                            _workspaceManager.ClearCollisionZone(region.regionName);
-                        }
-                    }
                 };
 
                 _activeMoveListeners.Register(robotListenerKey, onComplete);
@@ -691,16 +593,6 @@ namespace PythonCommunication
                 else if (robotInstance.simpleController != null)
                 {
                     robotInstance.simpleController.OnTargetReached += onComplete;
-                }
-
-                if (_workspaceManager != null)
-                {
-                    var region = _workspaceManager.GetRegionAtPosition(targetPosition);
-                    if (region != null)
-                    {
-                        _workspaceManager.AllocateRegion(command.robot_id, region.regionName);
-                        _workspaceManager.MarkCollisionZone(region.regionName);
-                    }
                 }
 
                 if (controller != null)
@@ -1233,6 +1125,234 @@ namespace PythonCommunication
                 );
                 _failedCommands++;
             }
+        }
+
+        /// <summary>
+        /// Execute pick_object_at_coordinate command.
+        /// Encodes the hover → descent → grasp sequence that prevents the gripper
+        /// from closing while still above the object.
+        /// Sequence: open gripper → move to hover (target + approach_offset) →
+        ///           descend to contact (target) → close gripper.
+        /// </summary>
+        private void ExecutePickObjectAtCoordinate(RobotCommand command)
+        {
+            try
+            {
+                if (
+                    !ValidateAndGetRobot(
+                        command.robot_id,
+                        "pick_object_at_coordinate",
+                        out RobotInstance robotInstance,
+                        out RobotController controller
+                    )
+                )
+                {
+                    return;
+                }
+
+                if (
+                    ShouldSkipForROSMode(
+                        controller,
+                        command.robot_id,
+                        "pick_object_at_coordinate",
+                        command.request_id
+                    )
+                )
+                    return;
+
+                if (command.parameters == null || command.parameters.target_position == null)
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} pick_object_at_coordinate: Missing parameters or target_position"
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                // Contact position (object centre) and hover position (+ approach_offset along Y).
+                Vector3 contactPos = TargetPositionToVector3(command.parameters.target_position);
+                float hoverHeight =
+                    command.parameters.approach_offset > 0f
+                        ? command.parameters.approach_offset
+                        : 0.10f;
+                Vector3 hoverPos = contactPos + new Vector3(0f, hoverHeight, 0f);
+
+                GripperController gripperController =
+                    robotInstance.robotGameObject.GetComponentInChildren<GripperController>();
+                if (gripperController == null)
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} pick_object_at_coordinate: Robot '{command.robot_id}' has no GripperController"
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                StartCoroutine(
+                    PickObjectAtCoordinateCoroutine(
+                        controller,
+                        robotInstance.simpleController,
+                        gripperController,
+                        hoverPos,
+                        contactPos,
+                        command.robot_id,
+                        command.request_id
+                    )
+                );
+
+                if (_verboseLogging)
+                {
+                    Debug.Log(
+                        $"{_logPrefix} pick_object_at_coordinate: {command.robot_id} "
+                            + $"hover=({hoverPos.x:F3},{hoverPos.y:F3},{hoverPos.z:F3}) "
+                            + $"contact=({contactPos.x:F3},{contactPos.y:F3},{contactPos.z:F3})"
+                    );
+                }
+
+                _successfulCommands++;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"{_logPrefix} Error executing pick_object_at_coordinate: {ex.Message}\n{ex.StackTrace}"
+                );
+                _failedCommands++;
+            }
+        }
+
+        /// <summary>
+        /// Coroutine for pick_object_at_coordinate.
+        /// Steps: open gripper → move to hover → descend to contact → close gripper.
+        /// Each movement step has a 15-second timeout; gripper actions wait 0.5 s.
+        /// </summary>
+        private IEnumerator PickObjectAtCoordinateCoroutine(
+            RobotController controller,
+            SimpleRobotController simpleController,
+            GripperController gripperController,
+            Vector3 hoverPos,
+            Vector3 contactPos,
+            string robotId,
+            uint requestId
+        )
+        {
+            const float segmentTimeout = 15.0f;
+            bool usingSimple = (controller == null && simpleController != null);
+
+            // Step 1: Open gripper so fingers clear the object during approach.
+            gripperController.OpenGrippers();
+            yield return new WaitForSeconds(0.5f);
+
+            // Step 2: Move to hover position.
+            if (controller != null)
+                controller.SetTarget(hoverPos);
+            else if (simpleController != null)
+                simpleController.SetTarget(hoverPos);
+
+            float timer = 0f;
+            if (usingSimple)
+            {
+                while (!simpleController.HasReachedTarget)
+                {
+                    timer += 0.1f;
+                    if (timer > segmentTimeout)
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} pick_object_at_coordinate: Timeout reaching hover position."
+                        );
+                        SendCommandCompletion(
+                            robotId,
+                            "pick_object_at_coordinate",
+                            false,
+                            requestId
+                        );
+                        yield break;
+                    }
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+            else
+            {
+                while (
+                    controller != null
+                    && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD
+                )
+                {
+                    timer += 0.1f;
+                    if (timer > segmentTimeout)
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} pick_object_at_coordinate: Timeout reaching hover position."
+                        );
+                        SendCommandCompletion(
+                            robotId,
+                            "pick_object_at_coordinate",
+                            false,
+                            requestId
+                        );
+                        yield break;
+                    }
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+
+            // Step 3: Descend straight to contact position.
+            if (controller != null)
+                controller.SetTarget(contactPos);
+            else if (simpleController != null)
+                simpleController.SetTarget(contactPos);
+
+            timer = 0f;
+            if (usingSimple)
+            {
+                while (!simpleController.HasReachedTarget)
+                {
+                    timer += 0.1f;
+                    if (timer > segmentTimeout)
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} pick_object_at_coordinate: Timeout reaching contact position."
+                        );
+                        SendCommandCompletion(
+                            robotId,
+                            "pick_object_at_coordinate",
+                            false,
+                            requestId
+                        );
+                        yield break;
+                    }
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+            else
+            {
+                while (
+                    controller != null
+                    && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD
+                )
+                {
+                    timer += 0.1f;
+                    if (timer > segmentTimeout)
+                    {
+                        Debug.LogWarning(
+                            $"{_logPrefix} pick_object_at_coordinate: Timeout reaching contact position."
+                        );
+                        SendCommandCompletion(
+                            robotId,
+                            "pick_object_at_coordinate",
+                            false,
+                            requestId
+                        );
+                        yield break;
+                    }
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+
+            // Step 4: Close gripper to grasp the object.
+            gripperController.CloseGrippers();
+            yield return new WaitForSeconds(0.5f);
+
+            SendCommandCompletion(robotId, "pick_object_at_coordinate", true, requestId);
         }
 
         /// <summary>
@@ -2289,11 +2409,35 @@ namespace PythonCommunication
         }
 
         /// <summary>
-        /// Execute return_to_start_position command - move robot joints back to initial positions
-        /// Supports both RobotController and SimpleRobotController
+        /// Set ClearTargetOnComplete on the ROSTrajectorySubscriber for a robot.
+        /// Called by Python before publishing a return-to-start ROS trajectory so the
+        /// subscriber calls ClearTarget() instead of SyncIKTargetToCurrentPose().
+        /// </summary>
+        private void ExecuteSetClearTargetOnComplete(RobotCommand command)
+        {
+            if (!ValidateAndGetRobot(command.robot_id, "set_clear_target_on_complete",
+                    out _, out RobotController controller))
+                return;
+
+            var subscriber = controller?.GetComponentInChildren<ROSTrajectorySubscriber>();
+            if (subscriber != null)
+            {
+                subscriber.ClearTargetOnComplete = true;
+                Debug.Log($"[PythonCommandHandler] ClearTargetOnComplete=true set for {command.robot_id}");
+            }
+            SendCommandCompletion(command.robot_id, "set_clear_target_on_complete", true, command.request_id);
+        }
+
+        /// <summary>
+        /// Execute return_to_start_position command. In Unity mode, smoothly interpolates
+        /// joint drive targets back to the saved start position while IK is suspended.
+        /// In ROS mode, exits immediately — Python must call set_clear_target_on_complete
+        /// and push a return-to-start trajectory via MoveIt.
         /// </summary>
         private void ExecuteReturnToStartPosition(RobotCommand command)
         {
+            // DEBUG: always log entry so we know the command reached Unity
+            Debug.Log($"[ReturnToStart] ExecuteReturnToStartPosition called for robot='{command.robot_id}' req={command.request_id}");
             try
             {
                 // Validate robot and get controller
@@ -2306,6 +2450,7 @@ namespace PythonCommunication
                     )
                 )
                 {
+                    Debug.LogWarning($"[ReturnToStart] ValidateAndGetRobot FAILED for '{command.robot_id}'");
                     return;
                 }
                 if (
@@ -2316,7 +2461,12 @@ namespace PythonCommunication
                         command.request_id
                     )
                 )
+                {
+                    // In ROS mode Unity skips execution. Python must call set_clear_target_on_complete
+                    // separately before pushing the return-to-start trajectory to MoveIt.
+                    Debug.Log($"[ReturnToStart] ROS mode — skipping Unity execution for '{command.robot_id}'");
                     return;
+                }
 
                 // Validate start joint targets exist
                 if (
@@ -2339,32 +2489,44 @@ namespace PythonCommunication
                     );
                 }
 
+                // Compute duration from speed_multiplier (speed=2.0 → 1s, speed=0.5 → 4s)
+                float speedMult = _applySpeedMultiplier && command.parameters.speed_multiplier > 0f
+                    ? Mathf.Clamp(command.parameters.speed_multiplier, 0.1f, 2.0f)
+                    : 1.0f;
+                float duration = 2.0f / speedMult;
+
                 // Start coroutine based on controller type
                 if (controller != null)
                 {
                     // RobotController
+                    Debug.Log($"[ReturnToStart] Starting RobotController coroutine for '{command.robot_id}', duration={duration:F2}s, joints={robotInstance.startJointTargets.Length}");
                     StartCoroutine(
                         ReturnToStartPositionCoroutine(
                             controller,
                             robotInstance.startJointTargets,
                             command.robot_id,
                             command.request_id,
-                            2.0f
+                            duration
                         )
                     );
                 }
                 else if (robotInstance.simpleController != null)
                 {
                     // SimpleRobotController
+                    Debug.Log($"[ReturnToStart] Starting SimpleRobotController coroutine for '{command.robot_id}', duration={duration:F2}s");
                     StartCoroutine(
                         ReturnToStartPositionSimpleCoroutine(
                             robotInstance.simpleController,
                             robotInstance.startJointTargets,
                             command.robot_id,
                             command.request_id,
-                            2.0f
+                            duration
                         )
                     );
+                }
+                else
+                {
+                    Debug.LogError($"[ReturnToStart] No controller found for '{command.robot_id}' — neither RobotController nor SimpleRobotController");
                 }
 
                 _successfulCommands++;
@@ -2400,14 +2562,38 @@ namespace PythonCommunication
 
             try
             {
-                // Store initial joint positions from the actual drive targets
+                // Read the physical joint position (radians → degrees) so the lerp starts
+                // exactly where the arm currently is, not where IK last commanded it to be.
+                // Using xDrive.target can cause an impulse at t=0 if IK was still moving.
                 float[] startJoints = new float[controller.robotJoints.Length];
                 for (int i = 0; i < controller.robotJoints.Length && i < startJoints.Length; i++)
                 {
-                    startJoints[i] = controller.robotJoints[i].xDrive.target;
+                    var j = controller.robotJoints[i];
+                    startJoints[i] = j.jointPosition.dofCount > 0
+                        ? j.jointPosition[0] * Mathf.Rad2Deg
+                        : j.xDrive.target;
                 }
 
+                // DEBUG: log per-joint start vs target so we can see which joints move
+                // and whether start/target agree in units (both should be degrees here).
+                var dbgSB = new System.Text.StringBuilder();
+                dbgSB.AppendLine($"[ReturnToStart] {robotId} — joint diagnostics (degrees):");
+                for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
+                {
+                    var j = controller.robotJoints[i];
+                    float physDeg = j.jointPosition.dofCount > 0
+                        ? j.jointPosition[0] * Mathf.Rad2Deg
+                        : float.NaN;
+                    float driveDeg = j.xDrive.target;
+                    float delta = targetJoints[i] - startJoints[i];
+                    dbgSB.AppendLine(
+                        $"  J{i}: phys={physDeg:F2}° drive={driveDeg:F2}° start={startJoints[i]:F2}° target={targetJoints[i]:F2}° Δ={delta:F2}°"
+                    );
+                }
+                Debug.Log(dbgSB.ToString());
+
                 float elapsed = 0f;
+                int _debugFrameCounter = 0;
 
                 while (elapsed < duration)
                 {
@@ -2426,14 +2612,16 @@ namespace PythonCommunication
                     // Smooth interpolation using ease-in-out
                     float smoothT = t * t * (3f - 2f * t);
 
-                    // Interpolate each joint
+                    // Interpolate each joint. targetJoints are the saved jointDriveTargets
+                    // (absolute degree values, not wrapped). Use plain Lerp so the arm
+                    // tracks the same absolute degree values IK used during operation —
+                    // DeltaAngle would incorrectly wrap targets outside (-180,180].
                     for (
                         int i = 0;
                         i < controller.robotJoints.Length && i < targetJoints.Length;
                         i++
                     )
                     {
-                        // startJointTargets are cloned from jointDriveTargets which stores degrees
                         float currentTarget = Mathf.Lerp(startJoints[i], targetJoints[i], smoothT);
 
                         controller.jointDriveTargets[i] = currentTarget;
@@ -2447,49 +2635,90 @@ namespace PythonCommunication
                         }
                     }
 
+                    // DEBUG: log mid-motion state every 20 fixed frames (~0.33s at 60Hz)
+                    _debugFrameCounter++;
+                    if (_debugFrameCounter % 20 == 0)
+                    {
+                        var midSB = new System.Text.StringBuilder();
+                        midSB.AppendLine($"[ReturnToStart] {robotId} t={t:F2} smoothT={smoothT:F2}");
+                        for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
+                        {
+                            var j = controller.robotJoints[i];
+                            float physNow = j.jointPosition.dofCount > 0
+                                ? j.jointPosition[0] * Mathf.Rad2Deg
+                                : float.NaN;
+                            float driveNow = j.xDrive.target;
+                            float velNow = j.jointVelocity.dofCount > 0
+                                ? j.jointVelocity[0] * Mathf.Rad2Deg
+                                : float.NaN;
+                            midSB.AppendLine(
+                                $"  J{i}: phys={physNow:F2}° drive={driveNow:F2}° vel={velNow:F2}°/s"
+                            );
+                        }
+                        Debug.Log(midSB.ToString());
+                    }
+
                     yield return new WaitForFixedUpdate();
                 }
 
-                // Ensure final positions are exact
+                // Pin drive targets to exact final values (no teleport — just drive target).
+                // The ArticulationBody PD drive will settle the joints from here.
+                // Critically: do NOT write jointPosition/jointVelocity/jointForce here.
+                // Writing them causes a discontinuity that re-excites the under-damped
+                // wrist joint. The IK system never writes these fields either — it only
+                // ever updates xDrive.target and lets the physics drive settle naturally.
                 for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
                 {
                     controller.jointDriveTargets[i] = targetJoints[i];
 
                     var joint = controller.robotJoints[i];
-                    if (joint != null)
-                    {
-                        var drive = joint.xDrive;
-                        drive.target = targetJoints[i];
-                        joint.xDrive = drive;
-                    }
+                    if (joint == null) continue;
+
+                    var drive = joint.xDrive;
+                    drive.target = targetJoints[i];
+                    joint.xDrive = drive;
                 }
 
-                // Wait for joint velocities to fall below threshold before releasing
-                // manual drive. ArticulationBody joints carry inertia from the
-                // interpolation — releasing too early causes a sway/overshoot.
-                const float settleVelThreshold = 2.0f; // deg/s
-                const int maxSettleFrames = 60;         // ~1 s safety cap
-                int settleFrames = 0;
-                while (settleFrames < maxSettleFrames)
+                // DEBUG: log final pinned state
+                var endSB = new System.Text.StringBuilder();
+                endSB.AppendLine($"[ReturnToStart] {robotId} FINAL — pinned drive targets (degrees):");
+                for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
                 {
+                    var j = controller.robotJoints[i];
+                    float physEnd = j.jointPosition.dofCount > 0
+                        ? j.jointPosition[0] * Mathf.Rad2Deg
+                        : float.NaN;
+                    float err = physEnd - targetJoints[i];
+                    endSB.AppendLine(
+                        $"  J{i}: phys={physEnd:F2}° target={targetJoints[i]:F2}° err={err:F2}°"
+                    );
+                }
+                Debug.Log(endSB.ToString());
+
+                // Wait for the PD drive to settle: poll joint velocities each physics
+                // frame, matching the same isSettled pattern in RobotController.
+                // IsManuallyDriven stays true throughout so IK does not interfere.
+                // Cap at MAX_SETTLE_FRAMES to avoid hanging if a joint is truly stuck.
+                const int MAX_SETTLE_FRAMES = 120; // 2s at 60 Hz physics
+                const float SETTLE_THRESHOLD_RAD_S = 0.01f;
+
+                for (int frame = 0; frame < MAX_SETTLE_FRAMES; frame++)
+                {
+                    yield return new WaitForFixedUpdate();
+
                     bool allSettled = true;
                     for (int i = 0; i < controller.robotJoints.Length; i++)
                     {
                         var joint = controller.robotJoints[i];
-                        if (joint != null && joint.jointVelocity.dofCount > 0)
+                        if (joint == null || joint.jointVelocity.dofCount == 0) continue;
+                        if (Mathf.Abs(joint.jointVelocity[0]) > SETTLE_THRESHOLD_RAD_S)
                         {
-                            float velDegPerSec = Mathf.Abs(joint.jointVelocity[0]) * Mathf.Rad2Deg;
-                            if (velDegPerSec > settleVelThreshold)
-                            {
-                                allSettled = false;
-                                break;
-                            }
+                            allSettled = false;
+                            break;
                         }
                     }
-                    if (allSettled)
-                        break;
-                    settleFrames++;
-                    yield return new WaitForFixedUpdate();
+
+                    if (allSettled) break;
                 }
 
                 // FIX #5: Clear the target and mark as reached to allow IK to run again
@@ -2505,7 +2734,6 @@ namespace PythonCommunication
             }
             finally
             {
-                // FIX #5: ALWAYS re-enable IK, even if something fails
                 controller.IsManuallyDriven = false;
             }
         }
@@ -2906,91 +3134,6 @@ namespace PythonCommunication
             }
 
             return UnifiedPythonReceiver.Instance.SendCompletion(statusJson, requestId);
-        }
-
-        #endregion
-
-        #region Phase 4: Python Verification Integration
-
-        /// <summary>
-        /// Verify movement safety using workspace manager and coordination checks
-        /// Phase 4: Integration with Python CoordinationVerifier
-        /// Supports both RobotController and SimpleRobotController
-        /// </summary>
-        /// <param name="robotId">Robot requesting movement</param>
-        /// <param name="targetPosition">Target position</param>
-        /// <returns>True if movement is safe, false if blocked</returns>
-        private bool VerifyMovementSafety(string robotId, Vector3 targetPosition)
-        {
-            // Early exit if verification is disabled
-            if (!_enablePythonVerification || _coordinationVerifier == null)
-            {
-                return true;
-            }
-
-            // Get current robot position
-            Vector3 currentPosition = Vector3.zero;
-            if (
-                _robotManager != null
-                && _robotManager.RobotInstances.TryGetValue(robotId, out var robotInstance)
-            )
-            {
-                if (robotInstance.controller != null)
-                {
-                    currentPosition = robotInstance.controller.GetCurrentEndEffectorPosition();
-                }
-                else if (robotInstance.simpleController != null)
-                {
-                    currentPosition =
-                        robotInstance.simpleController.GetCurrentEndEffectorPosition();
-                }
-            }
-
-            // Use coordination verifier
-            var result = _coordinationVerifier.VerifyMovement(
-                robotId,
-                targetPosition,
-                currentPosition
-            );
-
-            // Log warnings if any
-            if (_verboseLogging && result.warnings != null && result.warnings.Count > 0)
-            {
-                foreach (var warning in result.warnings)
-                {
-                    Debug.LogWarning($"{_logPrefix} [Verification] {warning}");
-                }
-            }
-
-            // Log result
-            if (_verboseLogging)
-            {
-                if (result.isSafe)
-                {
-                    Debug.Log(
-                        $"{_logPrefix} [Verification] Movement safe for {robotId} using {_coordinationVerifier.VerifierName}: {result.reason}"
-                    );
-                }
-                else
-                {
-                    Debug.LogWarning(
-                        $"{_logPrefix} [Verification] Movement blocked for {robotId} using {_coordinationVerifier.VerifierName}: {result.reason}"
-                    );
-                }
-            }
-
-            return result.isSafe;
-        }
-
-        /// <summary>
-        /// Enable or disable Python verification
-        /// </summary>
-        public void SetPythonVerificationEnabled(bool enabled)
-        {
-            _enablePythonVerification = enabled;
-            Debug.Log(
-                $"{_logPrefix} [Phase 4] Python verification {(enabled ? "enabled" : "disabled")}"
-            );
         }
 
         #endregion

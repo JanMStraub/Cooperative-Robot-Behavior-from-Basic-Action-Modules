@@ -47,8 +47,6 @@ _ALL_SINGLETONS = [
     ("servers.CommandServer", "CommandBroadcaster"),
     ("operations.WorldState", "WorldState"),
     ("operations.SyncOperations", "EventBus"),
-    ("orchestrators.OutcomeTracker", "OutcomeTracker"),
-    ("agents.FeedbackCollector", "FeedbackCollector"),
     ("servers.NegotiationHub", "NegotiationHub"),
 ]
 

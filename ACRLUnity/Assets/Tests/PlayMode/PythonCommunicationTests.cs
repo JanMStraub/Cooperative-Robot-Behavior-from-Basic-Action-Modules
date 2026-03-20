@@ -457,8 +457,8 @@ namespace Tests.PlayMode
         {
             var ports = new int[]
             {
-                CommunicationConstants.LLM_RESULTS_PORT,        // 5010
-                CommunicationConstants.SEQUENCE_SERVER_PORT     // 5013
+                CommunicationConstants.COMMAND_SERVER_PORT,        // 5007
+                CommunicationConstants.SEQUENCE_SERVER_PORT     // 5011
             };
 
             var uniquePorts = new System.Collections.Generic.HashSet<int>(ports);
@@ -469,15 +469,15 @@ namespace Tests.PlayMode
         [Test]
         public void CommunicationConstants_SequenceServerPort_IsCorrect()
         {
-            Assert.AreEqual(5013, CommunicationConstants.SEQUENCE_SERVER_PORT,
-                "Sequence server should be on port 5013");
+            Assert.AreEqual(5011, CommunicationConstants.SEQUENCE_SERVER_PORT,
+                "Sequence server should be on port 5011");
         }
 
         [Test]
-        public void CommunicationConstants_ResultsPort_IsCorrect()
+        public void CommunicationConstants_CommandServerPort_IsCorrect()
         {
-            Assert.AreEqual(5010, CommunicationConstants.LLM_RESULTS_PORT,
-                "Results server should be on port 5010");
+            Assert.AreEqual(5007, CommunicationConstants.COMMAND_SERVER_PORT,
+                "Command server should be on port 5007");
         }
 
         #endregion

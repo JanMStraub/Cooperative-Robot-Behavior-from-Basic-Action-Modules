@@ -77,7 +77,7 @@ def validate_config(config_dict: Optional[Dict[str, Any]] = None) -> Dict[str, l
     port_configs = [
         "STREAMING_SERVER_PORT",
         "STEREO_DETECTION_PORT",
-        "LLM_RESULTS_PORT",
+        "COMMAND_SERVER_PORT",
         "DEPTH_RESULTS_PORT",
         "RAG_SERVER_PORT",
         "STATUS_SERVER_PORT",

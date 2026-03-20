@@ -17,7 +17,7 @@ namespace Tests.PlayMode
     /// Tests cover:
     /// - Publisher: Robot state publishing, object state publishing, update frequency
     /// - Server Integration: Data reception, state storage, workspace region tracking
-    /// - Coordination Integration: CollaborativeStrategy, WorkspaceManager, minimum separation
+    /// - Coordination Integration: WorkspaceManager, minimum separation
     /// </summary>
     public class WorldStateIntegrationTests
     {
@@ -418,18 +418,17 @@ namespace Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator Coordination_CollaborativeMode_UsesWorldState()
+        public IEnumerator Coordination_PythonDriven_SimulationRunsCorrectly()
         {
-            // Create SimulationManager with Collaborative mode
+            // All coordination is Python-driven via signal/wait.
+            // Verify the simulation manager initializes with a valid config.
             var (simObj, simManager) = TestHelpers.CreateSimulationManager();
-            var config = TestHelpers.CreateTestSimulationConfig(Configuration.RobotCoordinationMode.Collaborative);
+            var config = TestHelpers.CreateTestSimulationConfig();
             simManager.config = config;
 
             yield return null;
 
-            // Collaborative mode should be set
-            Assert.AreEqual(Configuration.RobotCoordinationMode.Collaborative,
-                config.coordinationMode, "Should use Collaborative coordination mode");
+            Assert.IsNotNull(simManager.config, "SimulationConfig should be assigned");
 
             Object.Destroy(simObj);
             Object.DestroyImmediate(config);

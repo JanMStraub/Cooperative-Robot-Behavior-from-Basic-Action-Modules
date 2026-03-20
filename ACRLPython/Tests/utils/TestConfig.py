@@ -12,48 +12,47 @@ Tests configuration constants from the modular config system:
 import os
 
 from config.Servers import (
+    COMMAND_SERVER_PORT,
     DEFAULT_HOST,
-    STREAMING_SERVER_PORT,
-    STEREO_DETECTION_PORT,
-    DEPTH_RESULTS_PORT,
-    LLM_RESULTS_PORT,
-    RAG_SERVER_PORT,
-    STATUS_SERVER_PORT,
-    SEQUENCE_SERVER_PORT,
-    MAX_CONNECTIONS_BACKLOG,
-    MAX_CLIENT_THREADS,
-    SOCKET_ACCEPT_TIMEOUT,
-    MAX_STRING_LENGTH,
-    MAX_IMAGE_SIZE,
     DEFAULT_LMSTUDIO_MODEL,
+    DEFAULT_OUTPUT_DIR,
     DEFAULT_TEMPERATURE,
-    VISION_MODELS,
+    DEPTH_RESULTS_PORT,
+    LLM_REQUEST_TIMEOUT,
     LMSTUDIO_BASE_URL,
-    MAX_RESULT_QUEUE_SIZE,
     LOG_FORMAT,
     LOG_LEVEL,
-    DEFAULT_OUTPUT_DIR,
+    MAX_CLIENT_THREADS,
+    MAX_CONNECTIONS_BACKLOG,
+    MAX_IMAGE_SIZE,
+    MAX_RESULT_QUEUE_SIZE,
+    MAX_STRING_LENGTH,
+    RAG_SERVER_PORT,
+    SEQUENCE_SERVER_PORT,
     SERVER_INIT_WAIT_TIME,
-    LLM_REQUEST_TIMEOUT,
+    SOCKET_ACCEPT_TIMEOUT,
+    STATUS_SERVER_PORT,
+    STEREO_DETECTION_PORT,
+    STREAMING_SERVER_PORT,
+    VISION_MODELS,
     WORLDSTATE_CHECK_INTERVAL,
 )
-
 from config.Vision import (
-    MIN_IMAGE_AGE,
-    MAX_IMAGE_AGE,
-    IMAGE_CHECK_INTERVAL,
-    DUPLICATE_TIME_THRESHOLD,
-    RED_HSV_LOWER_1,
-    RED_HSV_UPPER_1,
     BLUE_HSV_LOWER,
     BLUE_HSV_UPPER,
-    MIN_CUBE_AREA_PX,
-    MAX_CUBE_AREA_PX,
-    MIN_ASPECT_RATIO,
-    MAX_ASPECT_RATIO,
-    MIN_CONFIDENCE,
     DEFAULT_STEREO_BASELINE,
     DEFAULT_STEREO_FOV,
+    DUPLICATE_TIME_THRESHOLD,
+    IMAGE_CHECK_INTERVAL,
+    MAX_ASPECT_RATIO,
+    MAX_CUBE_AREA_PX,
+    MAX_IMAGE_AGE,
+    MIN_ASPECT_RATIO,
+    MIN_CONFIDENCE,
+    MIN_CUBE_AREA_PX,
+    MIN_IMAGE_AGE,
+    RED_HSV_LOWER_1,
+    RED_HSV_UPPER_1,
     VISION_OPERATION_TIMEOUT,
 )
 
@@ -66,11 +65,11 @@ class TestConfigConstants:
         assert DEFAULT_HOST == "127.0.0.1"
         assert STREAMING_SERVER_PORT == 5005
         assert STEREO_DETECTION_PORT == 5006
-        assert DEPTH_RESULTS_PORT == 5007
-        assert LLM_RESULTS_PORT == 5010
-        assert RAG_SERVER_PORT == 5011
-        assert STATUS_SERVER_PORT == 5012
-        assert SEQUENCE_SERVER_PORT == 5013
+        assert COMMAND_SERVER_PORT == 5007
+        assert DEPTH_RESULTS_PORT == 5008
+        assert RAG_SERVER_PORT == 5009
+        assert STATUS_SERVER_PORT == 5010
+        assert SEQUENCE_SERVER_PORT == 5011
         assert MAX_CONNECTIONS_BACKLOG > 0
         assert MAX_CLIENT_THREADS > 0
         assert SOCKET_ACCEPT_TIMEOUT > 0
@@ -122,9 +121,9 @@ class TestConfigConstants:
             importlib.reload(servers_mod)
             url = servers_mod.LMSTUDIO_BASE_URL
 
-        assert url.startswith(
-            "http"
-        ), f"Default LMSTUDIO_BASE_URL must be an http URL, got: {url!r}"
+        assert url.startswith("http"), (
+            f"Default LMSTUDIO_BASE_URL must be an http URL, got: {url!r}"
+        )
 
     def test_queue_config(self):
         """Test queue configuration"""

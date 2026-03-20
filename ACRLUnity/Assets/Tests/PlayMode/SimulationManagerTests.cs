@@ -4,7 +4,6 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using Simulation;
 using Robotics;
-using Configuration;
 
 namespace Tests.PlayMode
 {
@@ -238,124 +237,6 @@ namespace Tests.PlayMode
                 _manager.NotifyTargetReached("Robot2", false);
                 _manager.NotifyTargetReached("Robot3", true);
             }, "Should handle multiple robot notifications");
-        }
-
-        #endregion
-
-        #region Coordination Mode Fallback Tests
-
-        [UnityTest]
-        public IEnumerator CoordinationMode_MasterSlave_FallsBackToIndependent()
-        {
-            yield return null;
-
-            // Set coordination mode to MasterSlave (not implemented)
-            if (_manager.config != null)
-            {
-                _manager.config.coordinationMode = RobotCoordinationMode.MasterSlave;
-            }
-
-            // With no robots in the scene, StartSimulation() returns early from Error state.
-            // Verify the call doesn't throw — mode validation only runs when robots are present.
-            Assert.DoesNotThrow(() => _manager.StartSimulation(),
-                "StartSimulation() must not throw even when already in Error state");
-            yield return null;
-        }
-
-        [UnityTest]
-        public IEnumerator CoordinationMode_Distributed_FallsBackToIndependent()
-        {
-            yield return null;
-
-            // Set coordination mode to Distributed (not implemented)
-            if (_manager.config != null)
-            {
-                _manager.config.coordinationMode = RobotCoordinationMode.Distributed;
-            }
-
-            // With no robots in the scene, StartSimulation() returns early from Error state.
-            Assert.DoesNotThrow(() => _manager.StartSimulation(),
-                "StartSimulation() must not throw even when already in Error state");
-            yield return null;
-        }
-
-        [UnityTest]
-        public IEnumerator CoordinationMode_Independent_InitializesCorrectly()
-        {
-            yield return null;
-
-            if (_manager.config != null)
-            {
-                _manager.config.coordinationMode = RobotCoordinationMode.Independent;
-            }
-
-            // No robots: StartSimulation() stays in Error. Verify it doesn't throw.
-            Assert.DoesNotThrow(() => _manager.StartSimulation(),
-                "StartSimulation() must not throw for Independent mode without robots");
-            yield return null;
-        }
-
-        [UnityTest]
-        public IEnumerator CoordinationMode_Sequential_InitializesCorrectly()
-        {
-            yield return null;
-
-            if (_manager.config != null)
-            {
-                _manager.config.coordinationMode = RobotCoordinationMode.Sequential;
-            }
-
-            // No robots: StartSimulation() stays in Error. Verify it doesn't throw.
-            Assert.DoesNotThrow(() => _manager.StartSimulation(),
-                "StartSimulation() must not throw for Sequential mode without robots");
-            yield return null;
-        }
-
-        [UnityTest]
-        public IEnumerator CoordinationMode_Collaborative_InitializesCorrectly()
-        {
-            yield return null;
-
-            if (_manager.config != null)
-            {
-                _manager.config.coordinationMode = RobotCoordinationMode.Collaborative;
-            }
-
-            // No robots: StartSimulation() stays in Error. Verify it doesn't throw.
-            Assert.DoesNotThrow(() => _manager.StartSimulation(),
-                "StartSimulation() must not throw for Collaborative mode without robots");
-            yield return null;
-        }
-
-        #endregion
-
-        #region IsRobotActive Tests
-
-        [UnityTest]
-        public IEnumerator IsRobotActive_WithNoRobots_ReturnsFalse()
-        {
-            yield return null;
-
-            bool isActive = _manager.IsRobotActive("NonExistentRobot");
-            Assert.IsFalse(isActive, "Should return false for non-existent robot");
-        }
-
-        [UnityTest]
-        public IEnumerator IsRobotActive_WithEmptyRobotId_ReturnsFalse()
-        {
-            yield return null;
-
-            bool isActive = _manager.IsRobotActive("");
-            Assert.IsFalse(isActive, "Should return false for empty robot ID");
-        }
-
-        [UnityTest]
-        public IEnumerator IsRobotActive_WithNullRobotId_ReturnsFalse()
-        {
-            yield return null;
-
-            bool isActive = _manager.IsRobotActive(null);
-            Assert.IsFalse(isActive, "Should return false for null robot ID");
         }
 
         #endregion

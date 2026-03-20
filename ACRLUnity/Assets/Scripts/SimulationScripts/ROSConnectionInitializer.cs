@@ -151,16 +151,21 @@ namespace Simulation
             {
                 yield return wait;
 
-                if (_rosConnection == null)
+                // Only reconnect if we had a connection before but lost it.
+                // _rosConnection is set once in Awake and never cleared, so checking
+                // for null here would never trigger. Check HasConnectionError instead.
+                if (
+                    _autoReconnect
+                    && _rosConnection != null
+                    && _rosConnection.HasConnectionThread
+                    && _rosConnection.HasConnectionError
+                )
                 {
-                    if (_autoReconnect)
-                    {
-                        _reconnectAttempts++;
-                        Debug.LogWarning(
-                            $"{_logPrefix} ROS connection lost. Reconnect attempt #{_reconnectAttempts}"
-                        );
-                        InitializeConnection();
-                    }
+                    _reconnectAttempts++;
+                    Debug.LogWarning(
+                        $"{_logPrefix} ROS connection error detected. Reconnect attempt #{_reconnectAttempts}"
+                    );
+                    InitializeConnection();
                 }
             }
         }

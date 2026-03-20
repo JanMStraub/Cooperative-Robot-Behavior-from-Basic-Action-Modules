@@ -12,7 +12,7 @@ Example:
     {
         "success": True,
         "commands": [
-            {"operation": "move_to_coordinate", "params": {"robot_id": "Robot1", "x": 0.3, "y": 0.2, "z": 0.1}},
+            {"operation": "move_to_coordinate", "params": {"robot_id": "Robot1", "x": -0.3, "y": 0.2, "z": 0.1}},
             {"operation": "control_gripper", "params": {"robot_id": "Robot1", "open_gripper": False}}
         ]
     }
@@ -33,7 +33,11 @@ try:
         DEFAULT_LMSTUDIO_MODEL,
         DEFAULT_TEMPERATURE,
         LLM_REQUEST_TIMEOUT,
+        LLM_THINKING_BUDGET,
+        LLM_THINKING_ENABLED,
+        SYSTEM_PROMPT_BASE,
     )
+    from ..config.Negotiation import USE_STRUCTURED_OUTPUT
     from ..operations.WorkflowPatterns import WorkflowPatternRegistry, WorkflowPattern
 except ImportError:
     from rag import RAGSystem
@@ -42,11 +46,16 @@ except ImportError:
         DEFAULT_LMSTUDIO_MODEL,
         DEFAULT_TEMPERATURE,
         LLM_REQUEST_TIMEOUT,
+        LLM_THINKING_BUDGET,
+        LLM_THINKING_ENABLED,
+        SYSTEM_PROMPT_BASE,
     )
+    from config.Negotiation import USE_STRUCTURED_OUTPUT
     from operations.WorkflowPatterns import WorkflowPatternRegistry, WorkflowPattern
 
 # Configure logging
 from core.LoggingSetup import setup_logging
+from core.LLMUtils import extract_json as _extract_json_util
 
 setup_logging(__name__)
 logger = logging.getLogger(__name__)
@@ -119,15 +128,14 @@ class _PromptBuilder:
 
         Example for multi-robot handoff:
         {{
-        "reasoning": "Robot1 detects red cube, moves to it, and grips. Robot2 waits for signal, then both move to handoff position. Robot2 grips, then Robot1 releases.",
+        "reasoning": "Robot1 detects and grasps the red cube using grasp_object. It then signals Robot2, both move to handoff position. Robot2 grips, then Robot1 releases.",
         "plan": [
             {{"parallel_group": 1, "robot": "Robot1", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "capture_var": "target"}},
-            {{"parallel_group": 2, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "position": "$target"}}}},
-            {{"parallel_group": 3, "robot": "Robot1", "operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": false}}}},
+            {{"parallel_group": 2, "robot": "Robot1", "operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "red_cube"}}}},
             {{"parallel_group": 3, "robot": "Robot1", "operation": "signal", "params": {{"event_name": "r1_gripped"}}}},
             {{"parallel_group": 3, "robot": "Robot2", "operation": "wait_for_signal", "params": {{"event_name": "r1_gripped"}}}},
-            {{"parallel_group": 4, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": 0.0, "y": 0.3, "z": 0.15}}}},
-            {{"parallel_group": 4, "robot": "Robot2", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot2", "x": 0.0, "y": 0.3, "z": 0.15}}}},
+            {{"parallel_group": 4, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": -0.15, "y": 0.3, "z": 0.15}}}},
+            {{"parallel_group": 4, "robot": "Robot2", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot2", "x": 0.15, "y": 0.3, "z": 0.15}}}},
             {{"parallel_group": 5, "robot": "Robot2", "operation": "control_gripper", "params": {{"robot_id": "Robot2", "open_gripper": false}}}},
             {{"parallel_group": 6, "robot": "Robot1", "operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": true}}}}
         ]
@@ -144,11 +152,19 @@ class _PromptBuilder:
         - wait(duration_ms): Simple time-based pause
         * Example: {{"operation": "wait", "params": {{"duration_ms": 500}}}}
 
+        === GRASP RULE (CRITICAL) ===
+
+        When the task involves picking up, grabbing, or grasping an object:
+        - ALWAYS use grasp_object (NOT move_to_coordinate + control_gripper)
+        - grasp_object handles the full approach, descent, and grip internally
+        - Example: {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "blue_cube"}}}}
+        - Only use control_gripper directly for explicit open/close commands unrelated to picking
+
         === SINGLE-ROBOT RULES ===
 
         1. Extract each distinct action as a separate operation
         2. Parse coordinates from text like "(0.3, 0.2, 0.1)" or "x=0.3, y=0.2, z=0.1"
-        3. "close gripper" or "grasp" means control_gripper with open_gripper=false
+        3. "close gripper" or "grip" (not during a pick task) means control_gripper with open_gripper=false
         4. "open gripper" or "release" means control_gripper with open_gripper=true
         5. Include robot_id in every operation's params
         6. Preserve the order of operations as specified in the command
@@ -260,7 +276,9 @@ class _PromptBuilder:
         for p in parameters:
             param_str = f"{p.name}: {p.type}"
             if hasattr(p, "valid_values") and p.valid_values:
-                valid_vals = ", ".join([f"'{v}'" for v in p.valid_values])
+                valid_vals = ", ".join(
+                    ["null" if v is None else f"'{v}'" for v in p.valid_values]
+                )
                 param_str += f" (valid: {valid_vals})"
             param_strs.append(param_str)
         return ", ".join(param_strs)
@@ -336,10 +354,6 @@ class CommandParser:
         else:
             self._parse_cache = self._do_llm_request
 
-        # Optional FeedbackCollector for self-improvement anti-pattern warnings.
-        # Set to a FeedbackCollector instance to enable; None disables the feature.
-        self.feedback_collector = None
-
         # Initialize RAG system for semantic operation search
         self.rag = None
         if use_rag:
@@ -397,11 +411,6 @@ class CommandParser:
         if regex_result["success"]:
             return regex_result
 
-        # If both LLM and regex failed, try generating a new operation
-        generated = self._try_generate_operation(command_text, robot_id)
-        if generated:
-            return generated
-
         return regex_result
 
     def _parse_with_llm(self, command_text: str, robot_id: str) -> Dict[str, Any]:
@@ -416,12 +425,10 @@ class CommandParser:
             Parsed command structure
         """
         # Build prompt for LLM using _PromptBuilder
-        anti_pattern_section = self._get_anti_pattern_warnings(command_text)
         spatial_section = self._get_spatial_context(robot_id)
         prompt = self._prompt_builder.build(
             command_text,
             robot_id,
-            anti_pattern_section=anti_pattern_section,
             spatial_section=spatial_section,
         )
 
@@ -474,20 +481,33 @@ class CommandParser:
     def _do_llm_request(self, prompt: str, command_text: str) -> Dict[str, Any]:
         """Actual HTTP request to LLM, separated for caching purposes."""
         try:
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            SYSTEM_PROMPT_BASE
+                            + " Map natural language variations to canonical parameter "
+                            "values (e.g., 'leftmost' → 'left', 'rightmost' → 'right', "
+                            "'nearest' → 'closest', 'grab' → grasp_object). "
+                            "Preserve the exact operation names from the registry — never "
+                            "invent new operation names."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": DEFAULT_TEMPERATURE,  # Low temperature for deterministic parsing
+                "max_tokens": 8192,  # Must cover thinking budget + actual JSON response
+                **({"thinking": {"type": "enabled", "budget_tokens": LLM_THINKING_BUDGET}} if LLM_THINKING_ENABLED else {}),
+            }
+            # Structured output forces the model to emit valid JSON at the inference layer.
+            # Set USE_STRUCTURED_OUTPUT=false for models that don't support response_format.
+            if USE_STRUCTURED_OUTPUT:
+                payload["response_format"] = {"type": "json_object"}
             response = self._session.post(
                 f"{self.lm_studio_url}/chat/completions",
-                json={
-                    "model": self.model,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "You are a robot command parser. Map natural language variations to valid parameter values (e.g., 'leftmost' → 'left', 'rightmost' → 'right', 'nearest' → 'closest'). Output only valid JSON.",
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    "temperature": DEFAULT_TEMPERATURE,  # Low temperature for deterministic parsing
-                    "max_tokens": 5000,  # Increased for multi-robot coordination (was 1000)
-                },
+                json=payload,
                 timeout=LLM_REQUEST_TIMEOUT,
             )
 
@@ -533,32 +553,6 @@ class CommandParser:
             raise
         except Exception as e:
             raise
-
-    def _get_anti_pattern_warnings(self, command_text: str) -> str:
-        """
-        Retrieve formatted anti-pattern warnings from FeedbackCollector.
-
-        Returns an empty string when FeedbackCollector is unavailable or no
-        high-failure patterns exist so the prompt remains clean by default.
-
-        Args:
-            command_text: The command being parsed (passed through for future
-                context-sensitive filtering).
-
-        Returns:
-            Formatted warning block string, or empty string if no warnings.
-        """
-        try:
-            from config.Memory import MEMORY_ENABLED
-
-            if not MEMORY_ENABLED:
-                return ""
-            from agents.FeedbackCollector import get_feedback_collector
-
-            return get_feedback_collector().get_anti_pattern_warnings(command_text)
-        except Exception as e:
-            logger.debug(f"FeedbackCollector unavailable: {e}")
-            return ""
 
     def _get_spatial_context(self, robot_id: str) -> str:
         """
@@ -625,12 +619,10 @@ class CommandParser:
         self, command_text: str, robot_id: str, available_ops: str
     ) -> str:
         """Build the prompt for LLM command parsing. Delegates to _PromptBuilder."""
-        anti_pattern_section = self._get_anti_pattern_warnings(command_text)
         spatial_section = self._get_spatial_context(robot_id)
         return self._prompt_builder.build(
             command_text,
             robot_id,
-            anti_pattern_section=anti_pattern_section,
             spatial_section=spatial_section,
         )
 
@@ -647,51 +639,8 @@ class CommandParser:
         return self._prompt_builder.format_workflow_pattern(pattern)
 
     def _extract_json_from_response(self, content: str) -> Optional[Dict]:
-        """Extract JSON object from LLM response text."""
-        # Try direct JSON parse
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError as e:
-            logger.debug(f"Direct JSON parse failed: {e}")
-
-        # Try to find JSON in markdown code block
-        json_match = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", content, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(1).strip()
-            try:
-                return json.loads(json_str)
-            except json.JSONDecodeError as e:
-                logger.warning(
-                    f"Markdown JSON parse failed: {e}. Content length: {len(json_str)}, preview: {json_str[:200]}"
-                )
-            # Retry after stripping JS-style // comments (LLMs often emit these)
-            json_str_clean = re.sub(r"//[^\n]*", "", json_str)
-            try:
-                return json.loads(json_str_clean)
-            except json.JSONDecodeError:
-                pass
-
-        # Try to find JSON object in text
-        json_match = re.search(r"\{.*?\}", content, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(0)
-            try:
-                return json.loads(json_str)
-            except json.JSONDecodeError as e:
-                logger.warning(
-                    f"Regex JSON parse failed: {e}. Content length: {len(json_str)}"
-                )
-            # Retry after stripping JS-style // comments
-            json_str_clean = re.sub(r"//[^\n]*", "", json_str)
-            try:
-                return json.loads(json_str_clean)
-            except json.JSONDecodeError:
-                pass
-
-        logger.error(
-            f"All JSON extraction methods failed. Response length: {len(content)}, preview: {content[:500]}"
-        )
-        return None
+        """Extract JSON object from LLM response text. Delegates to core.LLMUtils."""
+        return _extract_json_util(content)
 
     def _validate_commands(
         self, commands: List[Dict], default_robot_id: str
@@ -801,121 +750,6 @@ class CommandParser:
             )
 
         return len(errors) == 0, errors
-
-    def _check_generation_needed(self, rag_results: List[Dict]) -> Tuple[bool, str]:
-        """
-        Check if RAG scores are too low, indicating no good operation match exists.
-
-        Args:
-            rag_results: Results from RAG search
-
-        Returns:
-            Tuple of (should_generate, reason)
-        """
-        try:
-            from config.DynamicOperations import (
-                ENABLE_DYNAMIC_OPERATIONS,
-                GENERATION_TRIGGER_THRESHOLD,
-            )
-        except ImportError:
-            return False, "Dynamic operations config not available"
-
-        if not ENABLE_DYNAMIC_OPERATIONS:
-            return False, "Dynamic operations disabled"
-
-        if not rag_results:
-            return True, "No RAG results found"
-
-        # Check best score
-        best_score = max(
-            r.get("similarity_score", r.get("score", 0)) for r in rag_results
-        )
-
-        if best_score < GENERATION_TRIGGER_THRESHOLD:
-            return (
-                True,
-                f"Best RAG score {best_score:.2f} below threshold {GENERATION_TRIGGER_THRESHOLD}",
-            )
-
-        return False, ""
-
-    def _try_generate_operation(
-        self, command_text: str, robot_id: str
-    ) -> Optional[Dict[str, Any]]:
-        """
-        Attempt to generate a new operation when no existing operation matches.
-
-        Args:
-            command_text: The command that could not be parsed
-            robot_id: Default robot ID
-
-        Returns:
-            Parsed command structure if generation succeeded and retry worked, None otherwise
-        """
-        # Check if RAG scores warrant generation
-        if self.rag:
-            try:
-                rag_results = self.rag.search(command_text, top_k=3)
-                should_generate, reason = self._check_generation_needed(rag_results)
-                if not should_generate:
-                    return None
-                logger.info(f"Dynamic operation generation triggered: {reason}")
-            except Exception as e:
-                logger.warning(f"RAG check for generation failed: {e}")
-                return None
-        else:
-            return None
-
-        # Generate the operation
-        try:
-            from operations.Generator import OperationGenerator
-
-            generator = OperationGenerator()
-            success, message, file_path = generator.generate_operation(
-                command_text,
-                context={"robot_id": robot_id},
-            )
-
-            if not success:
-                logger.warning(f"Operation generation failed: {message}")
-                return None
-
-            logger.info(f"Operation generated: {message}")
-
-            # When review is required the operation is PENDING — it is not registered
-            # yet, so retrying the LLM parse would fail or match the wrong operation.
-            # Return a structured pending-review payload instead.
-            try:
-                from config.DynamicOperations import REQUIRE_USER_REVIEW
-            except ImportError:
-                REQUIRE_USER_REVIEW = True
-
-            if REQUIRE_USER_REVIEW:
-                logger.info(
-                    f"Operation pending human review before activation: {file_path}"
-                )
-                return {
-                    "success": False,
-                    "pending_review": True,
-                    "file_path": file_path,
-                    "message": (
-                        "A new operation was generated but requires human review "
-                        "before it can be used. Approve it with: "
-                        "python -m tools.ReviewOperations approve <id>"
-                    ),
-                }
-
-            # Retry parsing with the new operation now registered and active
-            result = self._parse_with_llm(command_text, robot_id)
-            if result["success"]:
-                result["generated_operation"] = file_path
-                return result
-
-            return None
-
-        except Exception as e:
-            logger.warning(f"Dynamic operation generation error: {e}")
-            return None
 
     def _parse_with_regex(self, command_text: str, robot_id: str) -> Dict[str, Any]:
         """

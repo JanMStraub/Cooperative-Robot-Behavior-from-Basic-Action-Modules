@@ -43,6 +43,12 @@ namespace Robotics
         private JointStateMsg _jointStateMsg;
         private string _resolvedTopicName;
 
+        // Reusable timestamp to avoid allocating DateTime/TimeSpan/TimeMsg at 50Hz
+        private readonly TimeMsg _rosTimestamp = new TimeMsg();
+        private static readonly System.DateTime _unixEpoch = new System.DateTime(
+            1970, 1, 1, 0, 0, 0, System.DateTimeKind.Utc
+        );
+
         /// <summary>
         /// URDF joint names for the 6-DOF AR4 arm.
         /// </summary>
@@ -164,8 +170,9 @@ namespace Robotics
             if (joints == null || joints.Length == 0)
                 return;
 
-            // Update header timestamp
-            _jointStateMsg.header.stamp = RosTimestamp();
+            // Update header timestamp in-place (no allocation)
+            UpdateRosTimestamp();
+            _jointStateMsg.header.stamp = _rosTimestamp;
 
             // Read arm joint data
             int armCount = Mathf.Min(joints.Length, ArmJointNames.Length);
@@ -217,28 +224,18 @@ namespace Robotics
         }
 
         /// <summary>
-        /// Create a ROS timestamp from system clock (Unix epoch time).
+        /// Update the reusable ROS timestamp in-place from system clock (Unix epoch time).
         /// CRITICAL: Must use system time, NOT Unity simulation time,
         /// for compatibility with ROS 2 time synchronization.
+        /// Mutates _rosTimestamp instead of allocating a new TimeMsg every call,
+        /// eliminating 3 short-lived heap allocations per publish at 50Hz.
         /// </summary>
-        private static TimeMsg RosTimestamp()
+        private void UpdateRosTimestamp()
         {
-            // Use system clock (Unix epoch) instead of Unity simulation time
-            // ROS expects seconds since 1970-01-01 00:00:00 UTC
-            System.DateTime epoch = new System.DateTime(
-                1970,
-                1,
-                1,
-                0,
-                0,
-                0,
-                System.DateTimeKind.Utc
-            );
-            System.TimeSpan timeSinceEpoch = System.DateTime.UtcNow - epoch;
-            double t = timeSinceEpoch.TotalSeconds;
+            double t = (System.DateTime.UtcNow - _unixEpoch).TotalSeconds;
             int sec = (int)t;
-            uint nsec = (uint)((t - sec) * 1e9);
-            return new TimeMsg { sec = sec, nanosec = nsec };
+            _rosTimestamp.sec = sec;
+            _rosTimestamp.nanosec = (uint)((t - sec) * 1e9);
         }
 
         /// <summary>

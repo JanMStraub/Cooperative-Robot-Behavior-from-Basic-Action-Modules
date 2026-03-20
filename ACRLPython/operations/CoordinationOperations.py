@@ -267,12 +267,12 @@ def mirror_movement_of_other_robot(
                 [f"Use one of: {', '.join(valid_axes)}"],
             )
 
-        # Validate scale_factor
-        if not (0.1 <= scale_factor <= 2.0):
+        # Validate scale_factor (negative values are valid for mirroring/reflection)
+        if not (0.1 <= abs(scale_factor) <= 2.0):
             return OperationResult.error_result(
                 "INVALID_SCALE_FACTOR",
-                f"scale_factor must be in range [0.1, 2.0], got: {scale_factor}",
-                ["Use scale between 0.1 (10%) and 2.0 (200%)"],
+                f"scale_factor magnitude must be in range [0.1, 2.0], got: {scale_factor}",
+                ["Use scale between 0.1 (10%) and 2.0 (200%), negative values invert direction"],
             )
 
         # Determine whether to use ROS or TCP path

@@ -56,14 +56,23 @@ except ImportError:
 
 try:
     from config.ROS import (
-        MOVEIT_PLANNING_TIME,
-        MOVEIT_PLANNING_ATTEMPTS,
+        ARM_JOINT_LIMITS,
         MOVEIT_GOAL_TOLERANCE,
+        MOVEIT_PLANNING_ATTEMPTS,
+        MOVEIT_PLANNING_TIME,
     )
 except ImportError:
     MOVEIT_PLANNING_TIME = 5.0
     MOVEIT_PLANNING_ATTEMPTS = 10
     MOVEIT_GOAL_TOLERANCE = 0.01
+    ARM_JOINT_LIMITS = {
+        "joint_1": (-2.9670597283903604, 2.9670597283903604),
+        "joint_2": (-0.7330382858376184, 1.5707963267948966),
+        "joint_3": (-1.5533430342749532, 0.9075712110370514),
+        "joint_4": (-3.1405926535897932, 3.1405926535897932),  # inset 0.001 rad from ±π
+        "joint_5": (-1.8325957145940461, 1.8325957145940461),
+        "joint_6": (-3.1405926535897932, 3.1405926535897932),  # inset 0.001 rad from ±π
+    }
 
 try:
     from config.Robot import ROBOT_BASE_POSITIONS
@@ -76,26 +85,35 @@ except ImportError:
 # ROS 2 imports - only available inside Docker
 try:
     import rclpy  # type: ignore[import-not-found]
-    from rclpy.node import Node  # type: ignore[import-not-found]
-    from rclpy.action import ActionClient  # type: ignore[import-not-found]
+    from geometry_msgs.msg import (  # type: ignore[import-not-found]
+        Point,
+        Pose,
+        PoseStamped,
+        Quaternion,
+        Vector3,
+    )
     from moveit_msgs.action import MoveGroup  # type: ignore[import-not-found]
     from moveit_msgs.msg import (  # type: ignore[import-not-found]
-        MotionPlanRequest,
+        BoundingVolume,
+        CollisionObject,
         Constraints,
         JointConstraint,
-        PositionConstraint,
+        MotionPlanRequest,
         OrientationConstraint,
-        BoundingVolume,
-        RobotState,
         PlanningScene,
-        CollisionObject,
+        PositionConstraint,
+        RobotState,
     )
-    from moveit_msgs.srv import GetPositionIK, GetCartesianPath  # type: ignore[import-not-found]
-    from geometry_msgs.msg import PoseStamped, Point, Quaternion, Vector3, Pose  # type: ignore[import-not-found]
-    from shape_msgs.msg import SolidPrimitive  # type: ignore[import-not-found]
-    from trajectory_msgs.msg import JointTrajectory  # type: ignore[import-not-found]
+    from moveit_msgs.srv import (  # type: ignore[import-not-found]
+        GetCartesianPath,
+        GetPositionIK,
+    )
+    from rclpy.action import ActionClient  # type: ignore[import-not-found]
+    from rclpy.node import Node  # type: ignore[import-not-found]
     from sensor_msgs.msg import JointState  # type: ignore[import-not-found]
+    from shape_msgs.msg import SolidPrimitive  # type: ignore[import-not-found]
     from std_msgs.msg import String  # type: ignore[import-not-found]
+    from trajectory_msgs.msg import JointTrajectory  # type: ignore[import-not-found]
 
     HAS_ROS = True
     # GetCartesianPath gained velocity/acceleration scaling fields in moveit_msgs ~2.3.
@@ -165,13 +183,13 @@ class ROSMotionServer:
         # Multi-robot support: dict of robot_id -> clients/publishers
         self._move_group_clients = {}  # robot_id -> ActionClient
         self._ik_service_clients = {}  # robot_id -> Service Client for IK
-        self._cartesian_path_clients = (
-            {}
-        )  # robot_id -> Service Client for Cartesian paths
+        self._cartesian_path_clients = {}  # robot_id -> Service Client for Cartesian paths
         self._trajectory_pubs = {}  # robot_id -> Publisher
         self._gripper_pubs = {}  # robot_id -> Publisher
         self._joint_state_subs = {}  # robot_id -> Subscription
         self._current_joint_states = {}  # robot_id -> JointState msg
+        self._move_group_server_ready = {}  # robot_id -> bool, cached server availability
+        self._joint_states_lock = threading.Lock()  # guards _current_joint_states (writer: ROS spin thread, readers: TCP handler threads)
         self._last_planned_trajectories = {}  # robot_id -> JointTrajectory
         self._trajectory_feedback = {}  # robot_id -> last feedback status string
         self._trajectory_feedback_event = {}  # robot_id -> threading.Event
@@ -252,6 +270,9 @@ class ROSMotionServer:
 
         # Cache the last planned trajectory for inspection
         self._last_planned_trajectories[robot_id] = None
+
+        # Server readiness cache: False until confirmed available for first time
+        self._move_group_server_ready[robot_id] = False
 
         # Execution feedback from Unity's ROSTrajectorySubscriber
         self._trajectory_feedback[robot_id] = None
@@ -390,6 +411,82 @@ class ROSMotionServer:
 
         return local_position
 
+    def _transform_orientation_to_ros(
+        self, unity_orientation: dict, robot_id: str
+    ) -> dict:
+        """Transform a Unity quaternion to ROS base_link frame.
+
+        Unity is left-handed (Y-up) and ROS is right-handed (Z-up). The axis
+        relabeling that transforms positions — (X,Y,Z)_unity → (Z,-X,Y)_ros —
+        applies component-wise to the quaternion vector part, with a w-sign flip
+        for the handedness change:
+
+            ros_x = unity_z
+            ros_y = -unity_x
+            ros_z = unity_y
+            ros_w = unity_w   (w is preserved — negating it inverts the rotation)
+
+        This is the same conversion used by Unity Robotics Hub / ros_tcp_endpoint.
+
+        Additionally, Robot2 is mounted facing 180° opposite to Robot1. Its joint
+        states are published in Robot2's local frame, but MoveIt's base_link for
+        Robot2 is rotated 180° around Y relative to Robot1's base_link. We apply
+        this extra Y-rotation after the Unity→ROS axis relabeling.
+
+        Without this transform, orientation quaternions from the Python grasp
+        planner (which produces Unity-frame quaternions) are passed raw to MoveIt,
+        which interprets them in ROS base_link space — a completely different
+        physical orientation. MoveIt then plans a trajectory to satisfy the
+        misinterpreted orientation, causing joint 4 and the gripper to spin
+        extensively before settling near the pre-grasp waypoint.
+
+        Args:
+            unity_orientation: Dict with x, y, z, w quaternion in Unity world frame.
+            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
+
+        Returns:
+            Dict with x, y, z, w quaternion in ROS base_link frame.
+        """
+        import math
+
+        qx = unity_orientation.get("x", 0.0)
+        qy = unity_orientation.get("y", 0.0)
+        qz = unity_orientation.get("z", 0.0)
+        qw = unity_orientation.get("w", 1.0)
+
+        # Step 1: Unity (Y-up, left-handed) → ROS (Z-up, right-handed) axis relabeling.
+        # Component mapping mirrors position transform: Unity(X,Y,Z) → ROS(Z,-X,Y).
+        # w is preserved: the sign of w only encodes which of the two antipodal
+        # representations of the rotation is used; negating it would invert the
+        # rotation (equivalent to conjugate), not just change the representation.
+        rx = qz
+        ry = -qx
+        rz = qy
+        rw = qw
+
+        # Step 2: Apply robot Yaw-rotation for Robot2 (mounted opposite to Robot1).
+        # We are now in ROS space, so the vertical (yaw) axis is Z.
+        # To transform a world pose into a local base frame, we multiply by the
+        # INVERSE of the base rotation (hence -y_deg).
+        if robot_id in self.ROBOT_BASE_TRANSFORMS:
+            yaw_deg = self.ROBOT_BASE_TRANSFORMS[robot_id].get("y_rotation", 0.0)
+            if abs(yaw_deg) > 1e-6:
+                # Use inverse angle to transform INTO the local frame
+                half = math.radians(-yaw_deg / 2.0)
+
+                # Z-axis rotation quaternion in ROS: (0, 0, sin(half), cos(half))
+                rz2_x, rz2_y, rz2_z, rz2_w = 0.0, 0.0, math.sin(half), math.cos(half)
+
+                # Multiply rz2 * ros_q (apply local frame inverse rotation)
+                rx, ry, rz, rw = (
+                    rz2_w * rx + rz2_x * rw + rz2_y * rz - rz2_z * ry,
+                    rz2_w * ry - rz2_x * rz + rz2_y * rw + rz2_z * rx,
+                    rz2_w * rz + rz2_x * ry - rz2_y * rx + rz2_z * rw,
+                    rz2_w * rw - rz2_x * rx - rz2_y * ry - rz2_z * rz,
+                )
+
+        return {"x": rx, "y": ry, "z": rz, "w": rw}
+
     def _joint_state_callback(self, robot_id: str, msg):
         """Cache latest joint state from Unity for a specific robot.
 
@@ -397,13 +494,14 @@ class ROSMotionServer:
             robot_id: Robot namespace
             msg: JointState message
         """
-        # First time receiving joint states for this robot
-        if self._current_joint_states[robot_id] is None:
-            logger.info(
-                f"Received first joint state from {robot_id}: "
-                f"{len(msg.name)} joints ({', '.join(msg.name[:6])}...)"
-            )
-        self._current_joint_states[robot_id] = msg
+        with self._joint_states_lock:
+            # First time receiving joint states for this robot
+            if self._current_joint_states[robot_id] is None:
+                logger.info(
+                    f"Received first joint state from {robot_id}: "
+                    f"{len(msg.name)} joints ({', '.join(msg.name[:6])}...)"
+                )
+            self._current_joint_states[robot_id] = msg
 
     def _feedback_callback(self, robot_id: str, msg):
         """Handle trajectory execution feedback from Unity's ROSTrajectorySubscriber.
@@ -434,7 +532,6 @@ class ROSMotionServer:
             True if completed successfully, False if aborted/rejected/timed out.
         """
         event = self._trajectory_feedback_event[robot_id]
-        event.clear()
         signalled = event.wait(timeout=timeout)
         if not signalled:
             logger.warning(f"{robot_id}: Timed out waiting for trajectory completion")
@@ -587,35 +684,49 @@ class ROSMotionServer:
         position = request.get("position", {})
         orientation = request.get("orientation")
         planning_time = request.get("planning_time", MOVEIT_PLANNING_TIME)
-
-        # Log incoming world position for debugging coordinate transform issues
-        logger.info(
-            f"[GRASP_DEBUG] {robot_id} raw Unity world position: "
-            f"x={position.get('x',0):.3f}, y={position.get('y',0):.3f}, z={position.get('z',0):.3f}"
-        )
-
-        # Transform world coordinates to robot-local base_link coordinates
-        position = self._transform_world_to_local(position, robot_id)
+        # coordinate_space: "base_link" means the caller already supplies ROS base_link
+        # coords (LLM-generated, move_to_coordinate). "unity_world" means Unity world
+        # coords that must be transformed (grasp planner, detection-derived positions).
+        coordinate_space = request.get("coordinate_space", "unity_world")
 
         logger.info(
-            f"[GRASP_DEBUG] {robot_id} ROS base_link position: "
-            f"x={position.get('x',0):.3f}, y={position.get('y',0):.3f}, z={position.get('z',0):.3f}"
+            f"[GRASP_DEBUG] {robot_id} incoming position ({coordinate_space}): "
+            f"x={position.get('x', 0):.3f}, y={position.get('y', 0):.3f}, z={position.get('z', 0):.3f}"
         )
+
+        if coordinate_space == "unity_world":
+            position = self._transform_world_to_local(position, robot_id)
+            logger.info(
+                f"[GRASP_DEBUG] {robot_id} ROS base_link position: "
+                f"x={position.get('x', 0):.3f}, y={position.get('y', 0):.3f}, z={position.get('z', 0):.3f}"
+            )
 
         goal = MoveGroup.Goal()
         goal.request = MotionPlanRequest()
         goal.request.group_name = "arm"
+        # Explicitly select OMPL pipeline and RRTConnect planner.
+        # Without pipeline_id, MoveIt 2 Humble may pick CHOMP (also installed) as
+        # the default pipeline, which does not support pose goals and fails with
+        # "Start state violates joint limits" / INVALID_GOAL_CONSTRAINTS.
+        goal.request.pipeline_id = "ompl"
+        goal.request.planner_id = "RRTConnect"
         goal.request.num_planning_attempts = MOVEIT_PLANNING_ATTEMPTS
         goal.request.allowed_planning_time = planning_time
 
-        # Optional velocity/acceleration scaling (0.0 = MoveIt default = no scaling).
-        # Use values < 1.0 for the descent phase to produce slow, smooth approach trajectories.
-        vel_scaling = request.get("max_velocity_scaling", 0.0)
-        acc_scaling = request.get("max_acceleration_scaling", 0.0)
-        if vel_scaling > 0.0:
-            goal.request.max_velocity_scaling_factor = vel_scaling
-        if acc_scaling > 0.0:
-            goal.request.max_acceleration_scaling_factor = acc_scaling
+        # Velocity/acceleration scaling for time parameterization.
+        # MoveIt's TOTG uses these to assign time_from_start and velocities to each
+        # waypoint. Without non-zero values, some MoveIt builds skip time parameterization
+        # and return timestamps of 0 for all waypoints, making Unity's interpolation
+        # collapse every segment to a single FixedUpdate frame (0.02s).
+        # Default to 0.5 so MoveIt always produces a timed trajectory; callers can
+        # override to 1.0 for full speed or lower for slow approach phases.
+        vel_scaling = request.get("max_velocity_scaling", 1.0)
+        # Acceleration scaling kept lower than velocity scaling so TOTG allocates
+        # longer ramp-up/ramp-down phases. Unity's ArticulationBody needs sufficient
+        # deceleration time to shed kinetic energy within its forceLimit budget.
+        acc_scaling = request.get("max_acceleration_scaling", 0.6)
+        goal.request.max_velocity_scaling_factor = vel_scaling
+        goal.request.max_acceleration_scaling_factor = acc_scaling
 
         # Set workspace bounds so OMPL knows the planning volume
         goal.request.workspace_parameters.header.frame_id = "base_link"
@@ -639,19 +750,12 @@ class ROSMotionServer:
         # a trajectory (especially after settle timeout), causing OMPL to reject
         # the start state entirely with "invalid bounds" even for sub-milliradian
         # violations — which aborts planning with error code 99999.
-        _ARM_JOINT_LIMITS = {
-            "joint_1": (-2.9670597283903604, 2.9670597283903604),
-            "joint_2": (-0.7330382858376184, 1.5707963267948966),
-            "joint_3": (-1.5533430342749532, 0.9075712110370514),
-            "joint_4": (-3.141592653589793, 3.141592653589793),
-            "joint_5": (-1.8325957145940461, 1.8325957145940461),
-            "joint_6": (-3.141592653589793, 3.141592653589793),
-        }
-        joint_state = self._current_joint_states.get(robot_id)
+        with self._joint_states_lock:
+            joint_state = self._current_joint_states.get(robot_id)
         if joint_state is not None:
             filtered_js = JointState()
             filtered_js.header = joint_state.header
-            for name, (lower, upper) in _ARM_JOINT_LIMITS.items():
+            for name, (lower, upper) in ARM_JOINT_LIMITS.items():
                 if name in joint_state.name:
                     idx = list(joint_state.name).index(name)
                     raw = joint_state.position[idx]
@@ -685,7 +789,10 @@ class ROSMotionServer:
             z=position.get("z", 0.0),
         )
 
-        # Use provided orientation or default for pose
+        # Use provided orientation or default for pose.
+        # Orientation is expected already in ROS base_link frame.
+        # Callers that pass Unity-space quaternions must convert via
+        # _transform_orientation_to_ros() before calling this method.
         if orientation:
             pose_goal.pose.orientation = Quaternion(
                 x=orientation.get("x", 0.0),
@@ -744,8 +851,9 @@ class ROSMotionServer:
         """
         start_time = time.time()
         while time.time() - start_time < timeout:
-            if self._current_joint_states.get(robot_id) is not None:
-                return True
+            with self._joint_states_lock:
+                if self._current_joint_states.get(robot_id) is not None:
+                    return True
             time.sleep(0.1)
         return False
 
@@ -763,19 +871,19 @@ class ROSMotionServer:
         """
         move_group_client = self._move_group_clients[robot_id]
 
-        # Re-publish ground plane before each planning call.
-        # MoveIt may reset its planning scene on reconnect or after a long idle,
-        # so we ensure the table collision object is always present.
-        self._publish_ground_plane(robot_id)
-
         # Wait for joint states before planning
         if not self._wait_for_joint_states(robot_id, timeout=10.0):
             logger.warning(
                 f"No joint states received for {robot_id} yet, planning may fail"
             )
 
-        if not move_group_client.wait_for_server(timeout_sec=15.0):
-            return None, 0, f"MoveGroup action server not available for {robot_id}"
+        # Check server availability once; skip the blocking wait on subsequent calls.
+        if not self._move_group_server_ready.get(robot_id, False):
+            if not move_group_client.wait_for_server(timeout_sec=15.0):
+                return None, 0, f"MoveGroup action server not available for {robot_id}"
+            self._move_group_server_ready[robot_id] = True
+            # Publish ground plane on first confirmed connection only
+            self._publish_ground_plane(robot_id)
 
         # Send goal asynchronously and poll for completion.
         # NOTE: We must NOT call rclpy.spin_until_future_complete() here because
@@ -845,6 +953,23 @@ class ROSMotionServer:
             logger.info(
                 f"Planning succeeded for {robot_id}: {len(trajectory.points)} waypoints"
             )
+
+            # Diagnostic: warn if TOTG did not produce timestamps (silent failure).
+            if trajectory.points:
+                last_ts = (trajectory.points[-1].time_from_start.sec
+                           + trajectory.points[-1].time_from_start.nanosec * 1e-9)
+                if last_ts < 1e-9:
+                    logger.warning(
+                        f"{robot_id}: MoveIt returned zero timestamps on all "
+                        f"{len(trajectory.points)} waypoints — TOTG did not run. "
+                        "Check move_group trajectory_processing pipeline and "
+                        "velocity/acceleration scaling config. "
+                        "Unity will use synthesized durations (smooth but not time-optimal)."
+                    )
+                else:
+                    logger.debug(
+                        f"{robot_id}: TOTG OK — last waypoint at {last_ts:.3f}s"
+                    )
 
             return trajectory, result.planning_time, None
         else:
@@ -956,22 +1081,27 @@ class ROSMotionServer:
         )
 
         # Estimate execution timeout: trajectory duration * speed_scale_factor + buffer.
-        # Unity's ROSTrajectorySubscriber runs at 0.5x speed scaling by default,
-        # so actual wall time ≈ 2x the trajectory time_from_start of the last point.
-        # Add 10s fixed buffer to cover:
+        # Unity's ROSTrajectorySubscriber runs at 1.0x speed scaling by default,
+        # so actual wall time ≈ 1x the trajectory time_from_start of the last point.
+        # Add 15s fixed buffer to cover:
         #   - Unity physics settle wait (up to 1.5s per ROSTrajectorySubscriber)
         #   - ROS topic round-trip latency for feedback message
         #   - Short MoveIt plans (near-zero traj_duration) that still take several
         #     seconds to execute due to speed scaling and settle
-        # Minimum 15s ensures even instantaneous-plan trajectories have enough time.
+        # Minimum 30s ensures even zero-timestamp trajectories have enough time.
         if trajectory.points:
             last_pt = trajectory.points[-1]
             traj_duration = (
                 last_pt.time_from_start.sec + last_pt.time_from_start.nanosec * 1e-9
             )
+            if traj_duration < 1e-9:
+                # Zero timestamps: synthesize timeout from waypoint count.
+                # Unity's global-timeline path allocates ~0.3s per waypoint on average
+                # (0.5 rad max disp / (1.05 rad/s * 0.8) / 1.0x speed ≈ 0.6s worst case).
+                traj_duration = len(trajectory.points) * 0.5
         else:
             traj_duration = 5.0
-        execution_timeout = max(15.0, traj_duration * 2.5 + 10.0)
+        execution_timeout = max(30.0, traj_duration * 2.5 + 15.0)
 
         completed = self._wait_for_trajectory_completion(
             robot_id, timeout=execution_timeout
@@ -999,7 +1129,8 @@ class ROSMotionServer:
         Returns:
             Dict with joint positions and names.
         """
-        joint_state = self._current_joint_states.get(robot_id)
+        with self._joint_states_lock:
+            joint_state = self._current_joint_states.get(robot_id)
 
         if joint_state is None:
             return {
@@ -1160,6 +1291,61 @@ class ROSMotionServer:
         }
         return self._plan_and_publish(orient_request, robot_id)
 
+    def _apply_time_parameterization(self, trajectory, vel_scaling, acc_scaling, robot_id):
+        """Apply time parameterization to an untimed JointTrajectory using TOTG.
+
+        Used when GetCartesianPath returns a trajectory with all time_from_start = 0
+        because the moveit_msgs version predates the velocity/acceleration scaling fields
+        (moveit_msgs < 2.3, as shipped with ROS Humble). Constructs a RobotTrajectory,
+        runs TimeOptimalTrajectoryGeneration, and returns the re-stamped trajectory.
+
+        Falls back to the original trajectory (with a warning) if trajectory_processing
+        is unavailable or parameterization fails, so the caller always gets a usable
+        trajectory.
+
+        Args:
+            trajectory: JointTrajectory message from GetCartesianPath (untimed).
+            vel_scaling: Velocity scaling factor (0.0–1.0).
+            acc_scaling: Acceleration scaling factor (0.0–1.0).
+            robot_id: Robot namespace string (used only for log messages).
+
+        Returns:
+            JointTrajectory with time_from_start populated, or the original if TOTG fails.
+        """
+        try:
+            from moveit.trajectory_processing import TimeOptimalTrajectoryGeneration  # type: ignore[import-not-found]
+            from moveit_msgs.msg import RobotTrajectory  # type: ignore[import-not-found]
+
+            robot_traj = RobotTrajectory()
+            robot_traj.joint_trajectory = trajectory
+
+            totg = TimeOptimalTrajectoryGeneration()
+            success = totg.compute_time_stamps(
+                robot_traj,
+                max_velocity_scaling_factor=vel_scaling,
+                max_acceleration_scaling_factor=acc_scaling,
+            )
+            if success:
+                last_ts = (
+                    robot_traj.joint_trajectory.points[-1].time_from_start.sec
+                    + robot_traj.joint_trajectory.points[-1].time_from_start.nanosec * 1e-9
+                )
+                logger.info(
+                    f"{robot_id}: Manual TOTG applied to Cartesian trajectory — "
+                    f"last waypoint at {last_ts:.3f}s"
+                )
+                return robot_traj.joint_trajectory
+            else:
+                logger.warning(
+                    f"{robot_id}: Manual TOTG failed — publishing untimed Cartesian trajectory"
+                )
+                return trajectory
+        except Exception as e:
+            logger.warning(
+                f"{robot_id}: Manual TOTG unavailable ({e}) — publishing untimed Cartesian trajectory"
+            )
+            return trajectory
+
     def _plan_cartesian_descent(self, request, robot_id):
         """Plan and publish a straight-line Cartesian descent to a target position.
 
@@ -1200,8 +1386,8 @@ class ROSMotionServer:
 
         position = request.get("position", {})
         orientation = request.get("orientation")
-        vel_scaling = request.get("max_velocity_scaling", 0.3)
-        acc_scaling = request.get("max_acceleration_scaling", 0.3)
+        vel_scaling = request.get("max_velocity_scaling", 0.6)
+        acc_scaling = request.get("max_acceleration_scaling", 0.4)
 
         # Transform Unity world coords → ROS base_link frame
         local_position = self._transform_world_to_local(position, robot_id)
@@ -1234,34 +1420,42 @@ class ROSMotionServer:
         req.group_name = "arm"
         req.link_name = "ee_link"
         req.waypoints = [target_pose.pose]
-        req.max_step = 0.01  # 1cm maximum interpolation step along the path
-        req.jump_threshold = 0.0  # Disable jump detection (causes false failures)
+        req.max_step = 0.10  # 10cm maximum interpolation step — reduces waypoints for short descents (5cm → 150 pts, 10cm → ~75 pts)
+        req.jump_threshold = 0.0  # Disable jump detection; non-zero values prematurely terminate descent at workspace edges
         req.avoid_collisions = True
+
+        # Lock wrist orientation throughout the descent so MoveIt's IK solver
+        # cannot flip to a redundant wrist solution mid-path (which would cause
+        # the gripper to visibly rotate around its own axis during descent).
+        # Without this constraint, GetCartesianPath solves each waypoint
+        # independently and may choose a different J4/J6 configuration each time.
+        if OrientationConstraint is not None:
+            orient_constraint = OrientationConstraint()
+            orient_constraint.header.frame_id = "base_link"
+            orient_constraint.link_name = "ee_link"
+            orient_constraint.orientation = target_pose.pose.orientation
+            orient_constraint.absolute_x_axis_tolerance = 0.05  # ~3 deg
+            orient_constraint.absolute_y_axis_tolerance = 0.05
+            orient_constraint.absolute_z_axis_tolerance = 0.05
+            orient_constraint.weight = 1.0
+            path_constraints = Constraints()
+            path_constraints.orientation_constraints.append(orient_constraint)
+            req.path_constraints = path_constraints
         # max_velocity/acceleration_scaling_factor were added to GetCartesianPath in
         # moveit_msgs ~2.3. _CARTESIAN_HAS_SCALING is set once at import time.
         if _CARTESIAN_HAS_SCALING:
             req.max_velocity_scaling_factor = vel_scaling
             req.max_acceleration_scaling_factor = acc_scaling
-        else:
-            logger.warning(
-                "moveit_msgs lacks velocity/acceleration scaling fields on GetCartesianPath — "
-                "running Cartesian descent at default MoveIt speed"
-            )
+        # else: scaling fields unavailable in this moveit_msgs version; TOTG will be
+        # applied manually after GetCartesianPath returns (see below).
 
         # Set current joint state as start (clamped to URDF bounds, is_diff=True)
-        joint_state = self._current_joint_states.get(robot_id)
+        with self._joint_states_lock:
+            joint_state = self._current_joint_states.get(robot_id)
         if joint_state is not None:
-            _ARM_JOINT_LIMITS_CART = {
-                "joint_1": (-2.9670597283903604, 2.9670597283903604),
-                "joint_2": (-0.7330382858376184, 1.5707963267948966),
-                "joint_3": (-1.5533430342749532, 0.9075712110370514),
-                "joint_4": (-3.141592653589793, 3.141592653589793),
-                "joint_5": (-1.8325957145940461, 1.8325957145940461),
-                "joint_6": (-3.141592653589793, 3.141592653589793),
-            }
             filtered_js = JointState()
             filtered_js.header = joint_state.header
-            for name, (lower, upper) in _ARM_JOINT_LIMITS_CART.items():
+            for name, (lower, upper) in ARM_JOINT_LIMITS.items():
                 if name in joint_state.name:
                     idx = list(joint_state.name).index(name)
                     raw = joint_state.position[idx]
@@ -1304,17 +1498,17 @@ class ROSMotionServer:
                 # free-space planning (OMPL will also fail with "Unable to sample
                 # any valid states for goal tree").
                 logger.error(
-                    f"{robot_id}: Cartesian path only {fraction*100:.0f}% complete — "
+                    f"{robot_id}: Cartesian path only {fraction * 100:.0f}% complete — "
                     "goal likely unreachable or in collision, skipping free-space fallback"
                 )
                 return {
                     "success": False,
-                    "error": f"Cartesian descent failed ({fraction*100:.0f}% complete) — goal unreachable",
+                    "error": f"Cartesian descent failed ({fraction * 100:.0f}% complete) — goal unreachable",
                     "robot_id": robot_id,
                 }
 
             logger.warning(
-                f"{robot_id}: Cartesian path only {fraction*100:.0f}% complete — "
+                f"{robot_id}: Cartesian path only {fraction * 100:.0f}% complete — "
                 "falling back to free-space plan"
             )
             # Fall back to free-space planning if Cartesian path is mostly blocked
@@ -1329,9 +1523,17 @@ class ROSMotionServer:
             }
 
         logger.info(
-            f"{robot_id}: Cartesian path {fraction*100:.0f}% complete, "
+            f"{robot_id}: Cartesian path {fraction * 100:.0f}% complete, "
             f"{len(trajectory.points)} points"
         )
+
+        # When moveit_msgs < 2.3, GetCartesianPath does not accept scaling factors
+        # and returns an untimed trajectory (all time_from_start = 0). Apply TOTG
+        # manually so Unity receives a properly timed trajectory.
+        if not _CARTESIAN_HAS_SCALING:
+            trajectory = self._apply_time_parameterization(
+                trajectory, vel_scaling, acc_scaling, robot_id
+            )
 
         # Publish and wait for completion (same as _plan_and_publish)
         trajectory_pub = self._trajectory_pubs[robot_id]
@@ -1383,6 +1585,8 @@ class ROSMotionServer:
         goal = MoveGroup.Goal()
         goal.request = MotionPlanRequest()
         goal.request.group_name = "arm"
+        goal.request.pipeline_id = "ompl"
+        goal.request.planner_id = "RRTConnect"
         goal.request.num_planning_attempts = MOVEIT_PLANNING_ATTEMPTS
         goal.request.allowed_planning_time = planning_time
         goal.planning_options.plan_only = True
@@ -1393,19 +1597,12 @@ class ROSMotionServer:
         goal.request.workspace_parameters.max_corner = Vector3(x=1.0, y=1.0, z=1.0)
 
         # Set start state from cached joint states (same clamping logic as _build_move_group_goal)
-        _ARM_JOINT_LIMITS = {
-            "joint_1": (-2.9670597283903604, 2.9670597283903604),
-            "joint_2": (-0.7330382858376184, 1.5707963267948966),
-            "joint_3": (-1.5533430342749532, 0.9075712110370514),
-            "joint_4": (-3.141592653589793, 3.141592653589793),
-            "joint_5": (-1.8325957145940461, 1.8325957145940461),
-            "joint_6": (-3.141592653589793, 3.141592653589793),
-        }
-        joint_state = self._current_joint_states.get(robot_id)
+        with self._joint_states_lock:
+            joint_state = self._current_joint_states.get(robot_id)
         if joint_state is not None:
             filtered_js = JointState()
             filtered_js.header = joint_state.header
-            for name, (lower, upper) in _ARM_JOINT_LIMITS.items():
+            for name, (lower, upper) in ARM_JOINT_LIMITS.items():
                 if name in joint_state.name:
                     idx = list(joint_state.name).index(name)
                     raw = joint_state.position[idx]
@@ -1419,17 +1616,57 @@ class ROSMotionServer:
             start_state.joint_state = filtered_js
             goal.request.start_state = start_state
 
-        # Joint-space goal: all 6 arm joints at 0 rad (URDF home pose)
+        # Joint-space goal: use provided target angles or fall back to URDF zero pose.
+        # Callers should pass the actual Unity start joint targets (in radians) so MoveIt
+        # plans to the same configuration the TCP path uses — not the URDF all-zeros pose,
+        # which may be singular or differ from the scene's initial robot position.
+        target_joint_angles = request.get("target_joint_angles")
+        joint_names = list(ARM_JOINT_LIMITS.keys())
         constraints = Constraints()
-        for joint_name in _ARM_JOINT_LIMITS:
+        for i, joint_name in enumerate(joint_names):
+            target_rad = (
+                target_joint_angles[i]
+                if target_joint_angles is not None and i < len(target_joint_angles)
+                else 0.0
+            )
+            lower, upper = ARM_JOINT_LIMITS[joint_name]
+            target_rad = max(lower, min(upper, target_rad))
             jc = JointConstraint()
             jc.joint_name = joint_name
-            jc.position = 0.0
+            jc.position = target_rad
             jc.tolerance_above = 0.01
             jc.tolerance_below = 0.01
             jc.weight = 1.0
             constraints.joint_constraints.append(jc)
         goal.request.goal_constraints.append(constraints)
+
+        # Path constraints: keep each joint within ±150° of its current position so
+        # RRTConnect cannot route J3 the long way around.
+        # joint_4 and joint_6 are excluded — their ±π range makes windowing unreliable:
+        # when near the boundary the constraint center lands at ~0 while the goal target
+        # is also ~0, causing MoveIt to report "incompatible constraints" and discard them.
+        # The goal JointConstraint (tolerance ±0.01) already constrains them tightly.
+        _FULL_ROTATION_JOINTS = {"joint_4", "joint_6"}
+        if joint_state is not None:
+            _PATH_CONSTRAINT_WINDOW = 2.618  # ±150° in radians
+            path_constraints = Constraints()
+            for name, (lower, upper) in ARM_JOINT_LIMITS.items():
+                if name in _FULL_ROTATION_JOINTS:
+                    continue
+                if name in joint_state.name:
+                    idx = list(joint_state.name).index(name)
+                    current_rad = joint_state.position[idx]
+                    window_lower = max(lower, current_rad - _PATH_CONSTRAINT_WINDOW)
+                    window_upper = min(upper, current_rad + _PATH_CONSTRAINT_WINDOW)
+                    jc = JointConstraint()
+                    jc.joint_name = name
+                    jc.position = (window_lower + window_upper) / 2.0
+                    jc.tolerance_below = jc.position - window_lower
+                    jc.tolerance_above = window_upper - jc.position
+                    jc.weight = 1.0
+                    path_constraints.joint_constraints.append(jc)
+            if path_constraints.joint_constraints:
+                goal.request.path_constraints = path_constraints
 
         logger.info(
             f"Planning return-to-start for {robot_id} (joint-space, all joints→0)"
@@ -1440,6 +1677,12 @@ class ROSMotionServer:
 
         if trajectory is None:
             return {"success": False, "error": error, "robot_id": robot_id}
+
+        # Tell Unity to call ClearTarget() instead of SyncIKTargetToCurrentPose() when
+        # Note: ClearTargetOnComplete cannot be set from inside Docker (no access to
+        # the Python host's CommandServer). Unity's ROSTrajectorySubscriber will
+        # SyncIKTargetToCurrentPose after the trajectory completes, which is acceptable
+        # for return-to-start since the home pose has near-zero IK error.
 
         # Publish trajectory to Unity and wait for completion (same as _plan_and_publish)
         trajectory_pub = self._trajectory_pubs[robot_id]
@@ -1566,7 +1809,8 @@ class ROSMotionServer:
                 )
 
                 # Set current robot state as starting point
-                joint_state = self._current_joint_states.get(robot_id)
+                with self._joint_states_lock:
+                    joint_state = self._current_joint_states.get(robot_id)
                 if joint_state is not None:
                     # Filter to arm joints only
                     arm_joint_names = [

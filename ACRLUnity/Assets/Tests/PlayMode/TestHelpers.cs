@@ -158,14 +158,13 @@ namespace Tests.PlayMode
         }
 
         /// <summary>
-        /// Creates a test SimulationConfig.
+        /// Creates a test SimulationConfig with default settings.
+        /// All coordination is Python-driven via signal/wait operations.
         /// </summary>
-        /// <param name="mode">Coordination mode to use</param>
         /// <returns>SimulationConfig instance for testing</returns>
-        public static SimulationConfig CreateTestSimulationConfig(RobotCoordinationMode mode = RobotCoordinationMode.Independent)
+        public static SimulationConfig CreateTestSimulationConfig()
         {
             var config = ScriptableObject.CreateInstance<SimulationConfig>();
-            config.coordinationMode = mode;
             config.autoStart = false;
             config.resetOnError = true;
             config.timeScale = 1f;
@@ -202,20 +201,6 @@ namespace Tests.PlayMode
         {
             var config = ScriptableObject.CreateInstance<TrajectoryConfig>();
             // Uses default values set in TrajectoryConfig class
-            return config;
-        }
-
-        /// <summary>
-        /// Creates a test CoordinationConfig with default settings.
-        /// </summary>
-        /// <param name="mode">Verification mode to use</param>
-        /// <returns>CoordinationConfig instance for testing</returns>
-        public static CoordinationConfig CreateTestCoordinationConfig(VerificationMode mode = VerificationMode.UnityOnly)
-        {
-            var config = ScriptableObject.CreateInstance<CoordinationConfig>();
-            config.verificationMode = mode;
-            config.minSafeSeparation = 0.2f;
-            config.enablePathReplanning = true;
             return config;
         }
 
@@ -266,7 +251,7 @@ namespace Tests.PlayMode
         /// <summary>
         /// Checks if Python backend is available by attempting to connect to SequenceServer.
         /// </summary>
-        /// <returns>True if Python backend is listening on port 5013</returns>
+        /// <returns>True if Python backend is listening on port 5011</returns>
         public static bool IsPythonBackendAvailable()
         {
             try

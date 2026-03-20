@@ -19,7 +19,7 @@ _CONFIG_DIR = Path(__file__).parent.parent.absolute()
 from config.Servers import LMSTUDIO_BASE_URL as _LMSTUDIO_BASE_URL
 
 RAG_LM_STUDIO_URL = os.environ.get("RAG_LM_STUDIO_URL", _LMSTUDIO_BASE_URL)
-RAG_LM_STUDIO_MODEL = os.environ.get("RAG_LM_STUDIO_MODEL", "nomic-embed-text")
+RAG_LM_STUDIO_MODEL = os.environ.get("RAG_LM_STUDIO_MODEL", "text-embedding-nomic-embed-text-v1.5")
 RAG_LM_STUDIO_API_KEY = os.environ.get("RAG_LM_STUDIO_API_KEY", "lm-studio")
 
 # ============================================================================

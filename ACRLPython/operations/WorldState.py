@@ -104,6 +104,7 @@ class RobotState:
     is_moving: bool = False
     is_initialized: bool = False
     joint_angles: Optional[list[float]] = None
+    start_joint_angles: Optional[list[float]] = None  # Saved at registration; radians, ROS convention
     timestamp: float = field(default_factory=time.time)
 
 
@@ -121,6 +122,7 @@ class ObjectState:
         grasped_by: Robot ID if currently grasped, None otherwise
         confidence: Detection confidence (0.0 - 1.0)
         dimensions: Object dimensions (width, height, depth) in meters
+        rotation: Object rotation (roll, pitch, yaw) in degrees
         timestamp: Time of last detection
         last_seen: Time when object was last seen (for liveness tracking)
         stale: True if confidence < threshold (indicates potentially outdated state)
@@ -134,6 +136,7 @@ class ObjectState:
     grasped_by: Optional[str] = None
     confidence: float = 1.0
     dimensions: Optional[Tuple[float, float, float]] = None
+    rotation: Optional[Tuple[float, float, float]] = None
     timestamp: float = field(default_factory=time.time)
     last_seen: float = field(default_factory=time.time)
     stale: bool = False
@@ -364,6 +367,36 @@ class WorldState(SingletonBase):
             return (float(value[0]), float(value[1]), float(value[2]))
         return None
 
+    @staticmethod
+    def _to_rotation_tuple(value) -> Optional[Tuple[float, float, float]]:
+        """
+        Normalize a rotation value to a (roll, pitch, yaw) tuple in degrees.
+
+        Unity serializes Quaternion as {"x":..., "y":..., "z":..., "w":...}.
+        This helper converts that to Euler angles using pure-math intrinsic
+        ZXY decomposition (roll=X, pitch=Y, yaw=Z), which matches Unity's
+        convention.  Plain tuples/lists of length ≥ 3 are passed through as-is
+        (assumed to already be in Euler-degree form).
+
+        Args:
+            value: Rotation as dict {"x","y","z","w"}, list, tuple, or None.
+
+        Returns:
+            (roll, pitch, yaw) tuple in degrees, or None if not convertible.
+        """
+        if isinstance(value, dict) and "w" in value:
+            x = float(value.get("x", 0.0))
+            y = float(value.get("y", 0.0))
+            z = float(value.get("z", 0.0))
+            w = float(value.get("w", 1.0))
+            roll = math.degrees(math.atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y)))
+            pitch = math.degrees(math.asin(max(-1.0, min(1.0, 2.0 * (w * y - z * x)))))
+            yaw = math.degrees(math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z)))
+            return (roll, pitch, yaw)
+        if isinstance(value, (list, tuple)) and len(value) >= 3:
+            return (float(value[0]), float(value[1]), float(value[2]))
+        return None
+
     def update_robot_state(self, robot_id: str, state_data: Dict[str, Any]):
         """
         Update robot state from Unity response.
@@ -380,12 +413,14 @@ class WorldState(SingletonBase):
             state.position = self._to_position_tuple(
                 state_data.get("position", state.position)
             )
-            state.rotation = state_data.get("rotation", state.rotation)
+            state.rotation = self._to_rotation_tuple(
+                state_data.get("rotation", state.rotation)
+            )
             state.target_position = self._to_position_tuple(
                 state_data.get("target_position", state.target_position)
             )
-            state.target_rotation = state_data.get(
-                "target_rotation", state.target_rotation
+            state.target_rotation = self._to_rotation_tuple(
+                state_data.get("target_rotation", state.target_rotation)
             )
             state.gripper_state = state_data.get("gripper_state", state.gripper_state)
             state.is_moving = state_data.get("is_moving", state.is_moving)
@@ -393,6 +428,7 @@ class WorldState(SingletonBase):
                 "is_initialized", state.is_initialized
             )
             state.joint_angles = state_data.get("joint_angles", state.joint_angles)
+            state.start_joint_angles = state_data.get("start_joint_angles", state.start_joint_angles)
             state.timestamp = time.time()
 
             logger.debug(f"Updated robot state for {robot_id}")
@@ -455,6 +491,7 @@ class WorldState(SingletonBase):
         object_type: str = "unknown",
         confidence: float = 1.0,
         dimensions: Optional[Tuple[float, float, float]] = None,
+        rotation: Optional[Tuple[float, float, float]] = None,
     ):
         """
         Update object position from detection results.
@@ -466,6 +503,7 @@ class WorldState(SingletonBase):
             object_type: Object type
             confidence: Detection confidence
             dimensions: Optional object dimensions (width, height, depth) in meters
+            rotation: Optional object rotation (roll, pitch, yaw) in degrees
         """
         with self._lock:
             if object_id not in self._objects:
@@ -476,6 +514,7 @@ class WorldState(SingletonBase):
                     object_type=object_type,
                     confidence=confidence,
                     dimensions=dimensions,
+                    rotation=rotation,
                 )
             else:
                 obj = self._objects[object_id]
@@ -484,6 +523,7 @@ class WorldState(SingletonBase):
                 obj.object_type = object_type
                 obj.confidence = confidence
                 obj.dimensions = dimensions
+                obj.rotation = rotation
                 obj.timestamp = time.time()
 
             logger.debug(f"Updated object {object_id} at {position}")

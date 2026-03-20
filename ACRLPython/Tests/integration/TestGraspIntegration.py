@@ -14,11 +14,11 @@ from operations.GraspOperations import grasp_object
 
 
 def _is_unity_available() -> bool:
-    """Check if Unity backend is reachable on port 5010."""
+    """Check if Unity backend is reachable on port 5007."""
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(1.0)
-        result = sock.connect_ex(("localhost", 5010))
+        result = sock.connect_ex(("localhost", 5007))
         sock.close()
         return result == 0
     except Exception:
@@ -236,15 +236,15 @@ class TestGraspEndToEnd:
 
 
 def _is_sequence_server_available() -> bool:
-    """Check if the SequenceServer (port 5013) is reachable."""
+    """Check if the SequenceServer (port 5011) is reachable."""
     from backend_client import port_open  # type: ignore[import]
 
-    return port_open(5013, timeout=1.0)
+    return port_open(5011, timeout=1.0)
 
 
 _SEQUENCE_AVAILABLE = _is_sequence_server_available()
 _SKIP_REASON_SEQ = (
-    "SequenceServer not running on port 5013. Start backend servers to run these tests."
+    "SequenceServer not running on port 5011. Start backend servers to run these tests."
 )
 
 # Import the shared BackendClient from the helpers package.

@@ -59,8 +59,8 @@ namespace Tests.EditMode
 
         // Communication Ports
         public const int STEREO_DETECTION_PORT = Core.CommunicationConstants.STEREO_DETECTION_PORT; // 5006
-        public const int LLM_RESULTS_PORT = Core.CommunicationConstants.LLM_RESULTS_PORT; // 5010
-        public const int SEQUENCE_SERVER_PORT = Core.CommunicationConstants.SEQUENCE_SERVER_PORT; // 5013
+        public const int COMMAND_SERVER_PORT = Core.CommunicationConstants.COMMAND_SERVER_PORT; // 5007
+        public const int SEQUENCE_SERVER_PORT = Core.CommunicationConstants.SEQUENCE_SERVER_PORT; // 5011
 
         #endregion
 
@@ -211,17 +211,6 @@ namespace Tests.EditMode
         public const float MIN_SAFE_SEPARATION = 0.2f; // 20cm
 
         /// <summary>
-        /// Coordination check interval (seconds)
-        /// CollaborativeStrategy checks for conflicts every 500ms
-        /// </summary>
-        public const float COORDINATION_CHECK_INTERVAL = 0.5f;
-
-        /// <summary>
-        /// Wait time for coordination tests (slightly above check interval)
-        /// </summary>
-        public const float COORDINATION_WAIT = 0.6f;
-
-        /// <summary>
         /// Waypoint collision avoidance offset (meters)
         /// Vertical/lateral offset when replanning to avoid collisions
         /// </summary>
@@ -283,14 +272,14 @@ namespace Tests.EditMode
         #region Test Ports (Offset from production ports for isolated testing)
 
         /// <summary>
-        /// Test port for CommandServer (offset from production 5010)
+        /// Test port for CommandServer (offset from production 5007)
         /// </summary>
-        public const int TEST_COMMAND_SERVER_PORT = 6010;
+        public const int TEST_COMMAND_SERVER_PORT = 6007;
 
         /// <summary>
-        /// Test port for SequenceServer (offset from production 5013)
+        /// Test port for SequenceServer (offset from production 5011)
         /// </summary>
-        public const int TEST_SEQUENCE_SERVER_PORT = 6013;
+        public const int TEST_SEQUENCE_SERVER_PORT = 6011;
 
         /// <summary>
         /// Test port for ImageServer single camera (offset from production 5005)

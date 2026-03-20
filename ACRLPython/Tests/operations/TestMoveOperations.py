@@ -58,10 +58,11 @@ class TestMoveOperations:
         assert result.success is True
         assert result.result is not None
         assert result.result["approach_offset"] == 0.05
-        # Z coordinate should be offset (use approx for floating point comparison)
-        assert result.result["target_position"]["z"] == pytest.approx(
-            0.15
-        )  # 0.1 + 0.05
+        # Y coordinate should be offset — approach_offset lifts along Unity Y (up-axis)
+        assert result.result["target_position"]["y"] == pytest.approx(
+            0.25
+        )  # 0.2 + 0.05
+        assert result.result["target_position"]["z"] == pytest.approx(0.1)  # unchanged
 
     def test_move_command_structure(self, patch_command_broadcaster):
         """Test that move command has correct structure."""

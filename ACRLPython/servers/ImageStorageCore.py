@@ -154,7 +154,7 @@ class UnifiedImageStorage:
                 self._stereo_images.popitem(last=False)
 
             if not ENABLE_VISION_STREAMING:
-                logger.info(
+                logger.debug(
                     f"Stored stereo pair '{camera_pair_id}' "
                     f"(L: {imgL.shape}, R: {imgR.shape})"
                 )

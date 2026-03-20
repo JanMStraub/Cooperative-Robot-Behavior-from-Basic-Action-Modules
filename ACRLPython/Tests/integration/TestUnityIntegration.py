@@ -34,8 +34,8 @@ def _port_open(port: int, timeout: float = 2.0) -> bool:
 
 def is_unity_available() -> bool:
     """
-    Check whether both the Python backend SequenceServer (port 5013) and the
-    CommandServer (port 5010, where Unity connects) are reachable.
+    Check whether both the Python backend SequenceServer (port 5011) and the
+    CommandServer (port 5007, where Unity connects) are reachable.
 
     We probe via raw sockets so the check works from any process, regardless of
     whether the backend singleton is initialised in this process.
@@ -64,12 +64,12 @@ class TestUnityCommandExecution:
     """Test real command execution with Unity via SequenceServer."""
 
     def test_connection_to_command_server(self):
-        """Verify direct TCP connection to the CommandServer (port 5010)."""
-        assert _port_open(5010), "Could not connect to CommandServer on port 5010"
+        """Verify direct TCP connection to the CommandServer (port 5007)."""
+        assert _port_open(5007), "Could not connect to CommandServer on port 5007"
 
     def test_connection_to_sequence_server(self):
-        """Verify direct TCP connection to the SequenceServer (port 5013)."""
-        assert _port_open(5013), "Could not connect to SequenceServer on port 5013"
+        """Verify direct TCP connection to the SequenceServer (port 5011)."""
+        assert _port_open(5011), "Could not connect to SequenceServer on port 5011"
 
     def test_real_robot_status_query(self):
         """Query real robot status through the backend SequenceServer."""

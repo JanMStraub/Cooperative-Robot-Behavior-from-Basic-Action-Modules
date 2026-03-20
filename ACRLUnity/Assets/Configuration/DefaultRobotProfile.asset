@@ -25,24 +25,24 @@ MonoBehaviour:
     forceLimit: 2000
     upperLimit: 90
     lowerLimit: -42
-  - stiffness: 3000
-    damping: 800
-    forceLimit: 1000
+  - stiffness: 5000
+    damping: 1000
+    forceLimit: 2000
     upperLimit: 52
     lowerLimit: -89
   - stiffness: 2500
-    damping: 500
-    forceLimit: 500
+    damping: 900
+    forceLimit: 2000
     upperLimit: 180
     lowerLimit: -180
-  - stiffness: 2000
-    damping: 400
-    forceLimit: 500
+  - stiffness: 2500
+    damping: 600
+    forceLimit: 1500
     upperLimit: 105
     lowerLimit: -105
-  - stiffness: 1500
-    damping: 300
-    forceLimit: 500
+  - stiffness: 3500
+    damping: 700
+    forceLimit: 1500
     upperLimit: 180
     lowerLimit: -180
   adjustmentSpeed: 0.2

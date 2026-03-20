@@ -58,12 +58,12 @@ namespace Tests.PlayMode
         }
 
         /// <summary>
-        /// Check if Python backend is running (port 5013 listening)
+        /// Check if Python backend is running (port 5011 listening)
         /// </summary>
         private bool IsPythonBackendAvailable()
         {
             // Check if SequenceClient successfully connected
-            // The SequenceClient auto-connects to port 5013 on Start()
+            // The SequenceClient auto-connects to port 5011 on Start()
             return _sequenceClient != null && _sequenceClient.IsConnected;
         }
 

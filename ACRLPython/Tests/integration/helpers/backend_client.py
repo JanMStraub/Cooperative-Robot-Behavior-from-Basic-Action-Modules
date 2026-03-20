@@ -4,7 +4,7 @@ Backend Client Helper
 =====================
 
 Shared Protocol V2 TCP client for integration tests that communicate with
-the live ACRL Python backend over the SequenceServer (port 5013).
+the live ACRL Python backend over the SequenceServer (port 5011).
 
 This module is the single source of truth for the BackendClient class.
 Both TestUnityIntegration.py and TestAllOperations.py import from here to
@@ -15,7 +15,7 @@ Why route through the SequenceServer (not direct operation calls)?
   an uninitialised CommandBroadcaster singleton in that test process, which
   has no active Unity connection.  By sending commands over the network to
   the already-running backend process we re-use its correctly-initialised
-  singletons (CommandBroadcaster, WorldStateManager, OutcomeTracker, etc.).
+  singletons (CommandBroadcaster, WorldStateManager, etc.).
 
 Protocol V2 framing (little-endian):
     Request:  [type:1 = 0x08][request_id:4][cmd_len:4][cmd:N]
@@ -57,17 +57,17 @@ def port_open(port: int, timeout: float = 2.0) -> bool:
 
 def backend_available() -> bool:
     """
-    Return True when both the CommandServer (5010) and SequenceServer (5013)
+    Return True when both the CommandServer (5007) and SequenceServer (5011)
     are reachable.
 
-    We probe port 5010 as a proxy for Unity being connected — that port is
-    only active once Unity has registered with the backend.  Port 5013 is
+    We probe port 5007 as a proxy for Unity being connected — that port is
+    only active once Unity has registered with the backend.  Port 5011 is
     the SequenceServer that tests actually send commands to.
 
     Returns:
         True if both ports are reachable, False otherwise.
     """
-    return port_open(5010) and port_open(5013)
+    return port_open(5007) and port_open(5011)
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +76,7 @@ def backend_available() -> bool:
 
 class BackendClient:
     """
-    Minimal Protocol V2 TCP client that talks to the SequenceServer (port 5013).
+    Minimal Protocol V2 TCP client that talks to the SequenceServer (port 5011).
 
     The SequenceServer receives natural-language or structured commands,
     executes them through the full operations pipeline
@@ -95,7 +95,7 @@ class BackendClient:
 
     SEQUENCE_QUERY: int = 0x08
     RESULT: int = 0x02
-    PORT: int = 5013
+    PORT: int = 5011
 
     def __init__(self, timeout: float = 30.0) -> None:
         """

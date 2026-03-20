@@ -10,18 +10,19 @@ collision checking, and scoring.
 
 import logging
 import time
-from typing import Optional, List
+from typing import List, Optional
+
+# Configure logging
+from core.LoggingSetup import setup_logging
+
 from .Base import (
     BasicOperation,
     OperationCategory,
     OperationComplexity,
     OperationParameter,
-    OperationResult,
     OperationRelationship,
+    OperationResult,
 )
-
-# Configure logging
-from core.LoggingSetup import setup_logging
 
 setup_logging(__name__)
 logger = logging.getLogger(__name__)
@@ -45,8 +46,9 @@ PRE_GRASP_HOVER_OFFSET: float = 0.15  # 15 cm above object centre
 # TCP offset at the final grasp position.
 # Placing ee_link this far above the object centre lets the fingers (which
 # extend ~5 cm beyond ee_link) wrap around the object rather than collide
-# with its top surface.  Lower values = fingers engage more of the object.
-GRASP_TCP_OFFSET: float = 0.03  # 3 cm above object centre
+# with its top surface or the ground plane.
+# Increased from 0.03 to 0.08 to prevent gripper from slamming into ground.
+GRASP_TCP_OFFSET: float = 0.055  # 5,5 cm above object centre
 
 
 # ============================================================================
@@ -121,12 +123,12 @@ def _execute_grasp_with_follow_target(
 
             if drift <= FOLLOW_TARGET_DRIFT_THRESHOLD:
                 logger.info(
-                    f"[follow_target] {robot_id}: object drift {drift*100:.1f} cm — within threshold, ready to close"
+                    f"[follow_target] {robot_id}: object drift {drift * 100:.1f} cm — within threshold, ready to close"
                 )
                 break
 
             logger.info(
-                f"[follow_target] {robot_id}: object drifted {drift*100:.1f} cm "
+                f"[follow_target] {robot_id}: object drifted {drift * 100:.1f} cm "
                 f"(correction {correction + 1}/{FOLLOW_TARGET_MAX_CORRECTIONS}), re-planning"
             )
 
@@ -314,12 +316,28 @@ def _grasp_via_ros_planned(
         f"score={best_grasp.total_score:.3f}"
     )
 
-    grasp_orientation = {
-        "x": best_grasp.grasp_rotation[0],
-        "y": best_grasp.grasp_rotation[1],
-        "z": best_grasp.grasp_rotation[2],
-        "w": best_grasp.grasp_rotation[3],
-    }
+    # The Python grasp planner produces quaternions in Unity world space (Y-up,
+    # left-handed, matching Unity's Quaternion.Euler ZYX convention). MoveIt expects
+    # orientations in ROS base_link space (Z-up, right-handed). Without this conversion,
+    # MoveIt plans a trajectory to a misinterpreted orientation and joint 4 spins
+    # extensively near the pre-grasp waypoint before settling.
+    #
+    # Conversion: (x,y,z,w)_unity → (z,-x,y,w)_ros
+    # Axis relabeling Unity(X,Y,Z)→ROS(Z,-X,Y) applied to vector components.
+    # w is preserved — negating it would invert the rotation (conjugate), not
+    # just change the handedness representation.
+    unity_q = best_grasp.grasp_rotation  # (x, y, z, w) in Unity frame
+    ros_x = unity_q[2]    # unity z → ros x
+    ros_y = -unity_q[0]   # unity x → ros -y
+    ros_z = unity_q[1]    # unity y → ros z
+    ros_w = unity_q[3]    # w preserved
+    # Canonicalize to w >= 0 hemisphere. The two quaternion representations
+    # (x,y,z,w) and (-x,-y,-z,-w) encode identical orientations, but MoveIt's
+    # IK solver may pick a wrist solution requiring an extra ±360° rotation when
+    # w < 0 (especially for Top grasps where Euler(180,0,90) puts w near zero).
+    if ros_w < 0.0:
+        ros_x, ros_y, ros_z, ros_w = -ros_x, -ros_y, -ros_z, -ros_w
+    grasp_orientation = {"x": ros_x, "y": ros_y, "z": ros_z, "w": ros_w}
 
     grasp_pos = _vec_to_pos(best_grasp.grasp_position)
 
@@ -430,10 +448,19 @@ def _grasp_via_ros_position_only(
     # Top-down grasp orientation.  roll=pi (180° around X) flips ee_link Z
     # downward.  No Z-rotation needed here because MoveIt's tip_link (ee_link)
     # does not include the URDF gripper_base_joint rpy compensation.
-    top_down_orientation = {"x": 1.0, "y": 0.0, "z": 0.0, "w": 0.0}
+    # w=0.0 is exactly on the quaternion equator — MoveIt's IK solver is
+    # ambiguous about which hemisphere to use, sometimes spinning the wrist
+    # 360°. A small positive w bias (≈0.5° tilt) canonicalizes to w>0 and
+    # gives the solver a consistent, minimal-rotation path.
+    top_down_orientation = {"x": 0.9999, "y": 0.0, "z": 0.0, "w": 0.0087}  # ~179.0°
 
     pre_grasp_position = _vec_to_pos(object_position, PRE_GRASP_HOVER_OFFSET)
     grasp_position = _vec_to_pos(object_position, GRASP_TCP_OFFSET)
+
+    logger.info(
+        f"[GRASP_DEBUG] {robot_id} object_position={object_position}, "
+        f"pre_grasp_y={pre_grasp_position['y']:.3f}, grasp_y={grasp_position['y']:.3f}"
+    )
 
     # Step 1: Move to pre-grasp hover position
     logger.info(f"Moving to pre-grasp position for {robot_id}")
@@ -458,7 +485,10 @@ def _grasp_via_ros_position_only(
     time.sleep(0.3)
 
     # Step 2: Straight-line Cartesian descent to grasp position
-    logger.info(f"Descending to grasp position for {robot_id}")
+    logger.info(
+        f"[GRASP_DEBUG] {robot_id} starting Cartesian descent to "
+        f"Unity y={grasp_position['y']:.3f} (object_y + {GRASP_TCP_OFFSET}m)"
+    )
     result = bridge.plan_cartesian_descent(
         position=grasp_position,
         orientation=top_down_orientation,
@@ -560,9 +590,9 @@ def _grasp_via_vgn(
     except ImportError:
         VGN_TOP_K = 20
 
+    from operations.GraspFrameTransform import transform_grasp_poses_to_unity
     from operations.PointCloudOperations import generate_point_cloud
     from operations.VGNClient import VGNClient
-    from operations.GraspFrameTransform import transform_grasp_poses_to_unity
 
     client = VGNClient()
     if not client.is_available():
@@ -679,8 +709,10 @@ def _grasp_via_vgn(
             ]
             world_grasps = aligned if aligned else world_grasps
             world_grasps.sort(
-                key=lambda g: g.get("score", 0.0)
-                * np.dot(np.array(g["approach_direction"]), cav_unit),
+                key=lambda g: (
+                    g.get("score", 0.0)
+                    * np.dot(np.array(g["approach_direction"]), cav_unit)
+                ),
                 reverse=True,
             )
             logger.info(
@@ -822,9 +854,9 @@ def _grasp_via_vgn_with_ros(
     except ImportError:
         VGN_TOP_K = 20
 
+    from operations.GraspFrameTransform import transform_grasp_poses_to_unity
     from operations.PointCloudOperations import generate_point_cloud
     from operations.VGNClient import VGNClient
-    from operations.GraspFrameTransform import transform_grasp_poses_to_unity
 
     # 1. Availability check
     client = VGNClient()
@@ -933,8 +965,10 @@ def _grasp_via_vgn_with_ros(
             ]
             world_grasps = aligned if aligned else world_grasps
             world_grasps.sort(
-                key=lambda g: g.get("score", 0.0)
-                * np.dot(np.array(g["approach_direction"]), cav_unit),
+                key=lambda g: (
+                    g.get("score", 0.0)
+                    * np.dot(np.array(g["approach_direction"]), cav_unit)
+                ),
                 reverse=True,
             )
             logger.info(
@@ -955,7 +989,13 @@ def _grasp_via_vgn_with_ros(
         "z": pos[2] + approach[2] * hover,
     }
     grasp_pos = {"x": pos[0], "y": pos[1], "z": pos[2]}
-    orientation = {"x": rot[0], "y": rot[1], "z": rot[2], "w": rot[3]}
+    # VGN produces orientations in Unity world frame (Y-up, left-handed).
+    # Convert to ROS base_link frame (Z-up, right-handed) before sending to MoveIt.
+    # Conversion: (x,y,z,w)_unity → (z,-x,y,w)_ros — w preserved (negating inverts rotation)
+    _rx, _ry, _rz, _rw = rot[2], -rot[0], rot[1], rot[3]
+    if _rw < 0.0:
+        _rx, _ry, _rz, _rw = -_rx, -_ry, -_rz, -_rw
+    orientation = {"x": _rx, "y": _ry, "z": _rz, "w": _rw}
 
     # 7. MoveIt pre-grasp move
     logger.info(f"[VGN+ROS] Moving to pre-grasp for {robot_id}: {pre_grasp_pos}")
@@ -1170,7 +1210,7 @@ def grasp_object(
         _use_ros = use_ros
         if _use_ros is None:
             try:
-                from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
+                from config.ROS import DEFAULT_CONTROL_MODE, ROS_ENABLED
 
                 _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
             except ImportError:

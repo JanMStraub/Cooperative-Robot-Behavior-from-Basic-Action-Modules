@@ -16,8 +16,8 @@ ROS_BRIDGE_HOST = "127.0.0.1"
 ROS_BRIDGE_PORT = 5020
 
 # MoveIt planning settings — used in ros2/ROSMotionClient.py planning requests
-MOVEIT_PLANNING_TIME = 5.0  # Max planning time in seconds
-MOVEIT_PLANNING_ATTEMPTS = 10  # Number of planning attempts
+MOVEIT_PLANNING_TIME = 2.0  # Max planning time in seconds (RRTConnect typically plans in <0.5s)
+MOVEIT_PLANNING_ATTEMPTS = 3  # Number of planning attempts (RRTConnect usually succeeds on first try)
 MOVEIT_GOAL_TOLERANCE = 0.01  # Position goal tolerance in meters
 
 # Default control mode: "ros", "unity", or "hybrid"
@@ -35,3 +35,15 @@ ROS_EXECUTION_TIMEOUT = 30.0
 # Grasp validation timeout: base + per-candidate increment
 ROS_TIMEOUT_BASE = 5.0
 ROS_TIMEOUT_PER_CANDIDATE = 0.5
+
+# URDF joint limits for the 6-DOF AR4 arm (radians).
+# Used by ROSMotionClient to clamp start states before submitting to MoveIt and to
+# build path constraints. Values match the URDF joint limit tags in ar4.urdf.
+ARM_JOINT_LIMITS = {
+    "joint_1": (-2.9670597283903604, 2.9670597283903604),
+    "joint_2": (-0.7330382858376184, 1.5707963267948966),
+    "joint_3": (-1.5533430342749532, 0.9075712110370514),
+    "joint_4": (-3.1405926535897932, 3.1405926535897932),  # inset 0.001 rad from ±π
+    "joint_5": (-1.8325957145940461, 1.8325957145940461),
+    "joint_6": (-3.1405926535897932, 3.1405926535897932),  # inset 0.001 rad from ±π
+}

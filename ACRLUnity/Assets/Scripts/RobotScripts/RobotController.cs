@@ -25,9 +25,6 @@ namespace Robotics
         private Transform _ikFrame;
         private JointInfo[] _cachedJointInfos;
         private ArticulationDrive[] _cachedDriveUpdates;
-        private bool _cachedIsRobotActive = true;
-        private float _lastActiveCheckTime = 0f;
-        private const float ACTIVE_CHECK_CACHE_INTERVAL = 0.1f;
 
         [Header("IK Parameters")]
         [SerializeField]
@@ -122,7 +119,6 @@ namespace Robotics
         private const string _logPrefix = "[ROBOT_CONTROLLER]";
 
         public event System.Action OnTargetReached;
-        public event System.Action<bool> OnCoordinationStateChanged;
 
         private void Start()
         {
@@ -308,8 +304,6 @@ namespace Robotics
         private void FixedUpdate()
         {
             if (_simulationManager != null && _simulationManager.ShouldStopRobots)
-                return;
-            if (_simulationManager != null && !GetCachedIsRobotActive())
                 return;
 
             if (_isManuallyDriven)
@@ -933,20 +927,6 @@ namespace Robotics
                 if (i < jointDriveTargets.Length)
                     jointDriveTargets[i] = 0;
             }
-        }
-
-        private bool GetCachedIsRobotActive()
-        {
-            float t = Time.time;
-            if (t - _lastActiveCheckTime >= ACTIVE_CHECK_CACHE_INTERVAL)
-            {
-                bool newState = _simulationManager.IsRobotActive(robotId);
-                if (newState != _cachedIsRobotActive)
-                    OnCoordinationStateChanged?.Invoke(newState);
-                _cachedIsRobotActive = newState;
-                _lastActiveCheckTime = t;
-            }
-            return _cachedIsRobotActive;
         }
 
         private void DrawDebugVisualization()

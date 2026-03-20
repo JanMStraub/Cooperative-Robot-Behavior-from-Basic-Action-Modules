@@ -32,6 +32,45 @@ RUN for i in 1 2 3 4 5; do \
         (echo "Clone attempt $i failed, retrying in 10s..." && sleep 10); \
     done
 
+# Patch 1 – tcp_sender.py: send_topic_list crashes with AttributeError when a
+# registered node has msg=None (not yet initialized at topic-list request time).
+# Guard the list comprehension so None-msg nodes are silently skipped.
+RUN sed -i \
+    's/else self\.parse_message_name(node\.msg)/else (self.parse_message_name(node.msg) if node is not None and node.msg is not None else "")/' \
+    /ros_ws/src/ROS-TCP-Endpoint/ros_tcp_endpoint/tcp_sender.py
+
+# Patch 2 – server.py: RegisterPublisher is idempotent — skip destroy/recreate
+# when the same topic+class is already registered. Without this, Unity's
+# ROS-TCP-Connector re-sends all RegisterPublisher calls on every connection
+# attempt, causing rcl to emit "Publisher already registered" WARNs and
+# creating unnecessary node churn.
+RUN python3 - <<'EOF'
+import re, pathlib
+
+path = pathlib.Path("/ros_ws/src/ROS-TCP-Endpoint/ros_tcp_endpoint/server.py")
+src = path.read_text()
+
+old = (
+    "        old_node = self.tcp_server.publishers_table.get(topic)\n"
+    "        if old_node is not None:\n"
+    "            self.tcp_server.unregister_node(old_node)\n"
+)
+new = (
+    "        old_node = self.tcp_server.publishers_table.get(topic)\n"
+    "        if old_node is not None:\n"
+    "            # Skip re-registration if topic+class unchanged — avoids rcl WARN\n"
+    "            # 'Publisher already registered' and unnecessary node churn.\n"
+    "            if type(old_node.msg) == message_class:\n"
+    "                self.tcp_server.loginfo(\"RegisterPublisher({}, {}) OK (already registered)\".format(topic, message_class))\n"
+    "                return\n"
+    "            self.tcp_server.unregister_node(old_node)\n"
+)
+
+assert old in src, "Patch target not found in server.py — upstream may have changed"
+path.write_text(src.replace(old, new, 1))
+print("server.py patched OK")
+EOF
+
 # 3. Copy AR4 URDF and meshes
 COPY ar4_moveit_config /ros_ws/src/ar4_moveit_config
 

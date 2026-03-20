@@ -28,7 +28,7 @@ try:
         DEFAULT_HOST,
         STREAMING_SERVER_PORT,
         STEREO_DETECTION_PORT,
-        LLM_RESULTS_PORT,
+        COMMAND_SERVER_PORT,
         SEQUENCE_SERVER_PORT,
         WORLD_STATE_PORT,
         AUTORT_SERVER_PORT,
@@ -58,7 +58,7 @@ except ImportError:
         DEFAULT_HOST,
         STREAMING_SERVER_PORT,
         STEREO_DETECTION_PORT,
-        LLM_RESULTS_PORT,
+        COMMAND_SERVER_PORT,
         SEQUENCE_SERVER_PORT,
         WORLD_STATE_PORT,
         AUTORT_SERVER_PORT,
@@ -121,7 +121,7 @@ class RobotController:
         host: str = DEFAULT_HOST,
         single_port: int = STREAMING_SERVER_PORT,
         stereo_port: int = STEREO_DETECTION_PORT,
-        command_port: int = LLM_RESULTS_PORT,
+        command_port: int = COMMAND_SERVER_PORT,
         sequence_port: int = SEQUENCE_SERVER_PORT,
         world_state_port: int = WORLD_STATE_PORT,
         autort_port: int = AUTORT_SERVER_PORT,
@@ -253,11 +253,29 @@ class RobotController:
                         if robot_id:
                             world_state.update_robot_state(robot_id, robot)
 
-                    # Trigger confidence decay based on currently visible objects
+                    # Forward object states (position, dimensions, rotation) into WorldState
                     objects = state_data.get("objects", [])
-                    seen_object_ids = {
-                        obj.get("object_id") for obj in objects if obj.get("object_id")
-                    }
+                    seen_object_ids = set()
+                    for obj in objects:
+                        obj_id = obj.get("object_id")
+                        if not obj_id:
+                            continue
+                        seen_object_ids.add(obj_id)
+                        pos = world_state._to_position_tuple(obj.get("position"))
+                        if pos:
+                            dims = world_state._to_position_tuple(obj.get("dimensions"))
+                            rot = world_state._to_rotation_tuple(obj.get("rotation"))
+                            world_state.update_object_position(
+                                obj_id,
+                                pos,
+                                color=obj.get("color", "unknown"),
+                                object_type=obj.get("object_type", "unknown"),
+                                confidence=obj.get("confidence", 1.0),
+                                dimensions=dims,
+                                rotation=rot,
+                            )
+
+                    # Trigger confidence decay based on currently visible objects
                     world_state.decay_object_confidence(seen_object_ids)
 
                 except Exception as e:

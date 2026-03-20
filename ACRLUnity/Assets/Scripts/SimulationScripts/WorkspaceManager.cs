@@ -5,7 +5,8 @@ using UnityEngine;
 namespace Simulation
 {
     /// <summary>
-    /// Workspace region definition for multi-robot coordination.
+    /// Workspace region definition for multi-robot spatial geometry.
+    /// Allocation decisions belong in Python's WorldState — this class is geometry only.
     /// </summary>
     [Serializable]
     public class WorkspaceRegion
@@ -13,7 +14,6 @@ namespace Simulation
         public string regionName;
         public Vector3 minBounds;
         public Vector3 maxBounds;
-        public string allocatedRobotId;
         public Color debugColor = Color.white;
 
         public WorkspaceRegion(string name, Vector3 min, Vector3 max)
@@ -21,7 +21,6 @@ namespace Simulation
             regionName = name;
             minBounds = Vector3.Min(min, max);
             maxBounds = Vector3.Max(min, max);
-            allocatedRobotId = null;
         }
 
         /// <summary>
@@ -43,14 +42,6 @@ namespace Simulation
         public Vector3 GetCenter()
         {
             return (minBounds + maxBounds) / 2f;
-        }
-
-        /// <summary>
-        /// Check if region is currently allocated.
-        /// </summary>
-        public bool IsAllocated()
-        {
-            return !string.IsNullOrEmpty(allocatedRobotId);
         }
 
         /// <summary>
@@ -77,21 +68,16 @@ namespace Simulation
     }
 
     /// <summary>
-    /// Manages workspace allocation and coordination for multi-robot systems.
+    /// Manages workspace geometry for multi-robot systems.
     ///
-    /// This manager tracks workspace regions and their allocation to robots,
-    /// syncs with Python WorldState, and prevents workspace conflicts.
-    ///
-    /// Features:
-    /// - Workspace region definition and allocation
-    /// - Collision zone tracking
-    /// - Python WorldState synchronization
-    /// - Debug visualization
+    /// Provides pure read-only geometry queries (region lookup, safe separation check)
+    /// and debug visualization. All coordination decisions (who may move where) are
+    /// made by Python via signal/wait operations.
     ///
     /// Usage:
     /// 1. Add to scene alongside SimulationManager
     /// 2. Configure workspace regions in inspector or programmatically
-    /// 3. Query via WorkspaceManager.Instance for allocation decisions
+    /// 3. Query via WorkspaceManager.Instance for geometry data
     /// </summary>
     public class WorkspaceManager : MonoBehaviour
     {
@@ -120,25 +106,11 @@ namespace Simulation
         [SerializeField]
         private Vector3 _robot2BasePosition = new Vector3(0.475f, 0f, 0f);
 
-        [Tooltip(
-            "Allow robot movement outside defined regions (void space). "
-                + "FALSE = strict confinement (industrial safety mode), TRUE = permissive (development mode)"
-        )]
-        [SerializeField]
-        private bool _allowMovementInVoid = true;
-
         [Header("Debug Visualization")]
         [SerializeField]
         private bool _enableDebugVisualization = true;
 
-        private Dictionary<string, HashSet<string>> _robotWorkspaceAllocation = new();
-        private HashSet<string> _collisionZones = new();
-        private float _lastValidationTime;
-        private const float VALIDATION_INTERVAL = 5f;
         private const string LOG_PREFIX = "[WORKSPACE_MANAGER]";
-
-        // Pre-allocated buffer for the diagnostic out-overload of IsPositionAllowedForRobot
-        private readonly List<WorkspaceRegion> _regionQueryBuffer = new List<WorkspaceRegion>();
 
         /// <summary>
         /// Initialize singleton instance.
@@ -150,7 +122,6 @@ namespace Simulation
                 Instance = this;
                 DontDestroyOnLoad(gameObject);
                 InitializeWorkspaces();
-                _lastValidationTime = Time.time;
             }
             else
             {
@@ -167,18 +138,6 @@ namespace Simulation
             ValidateAllRegionBounds();
         }
 #endif
-
-        /// <summary>
-        /// Periodic validation of allocation consistency.
-        /// </summary>
-        private void Update()
-        {
-            if (Time.time - _lastValidationTime >= VALIDATION_INTERVAL)
-            {
-                ValidateAndRepairAllocations();
-                _lastValidationTime = Time.time;
-            }
-        }
 
         /// <summary>
         /// Validate and fix all region bounds.
@@ -209,7 +168,6 @@ namespace Simulation
 
         /// <summary>
         /// Initialize default workspace regions if none configured.
-        /// Also syncs allocation dictionary from any pre-allocated regions (serialized in scene).
         /// </summary>
         private void InitializeWorkspaces()
         {
@@ -258,159 +216,6 @@ namespace Simulation
                     $"{LOG_PREFIX} Created {_workspaceRegions.Count} default workspace regions"
                 );
             }
-
-            // Sync allocation dictionary from any pre-allocated regions (serialized in scene)
-            SyncAllocationDictionaryFromRegions();
-        }
-
-        /// <summary>
-        /// Sync the allocation dictionary from serialized region allocations.
-        /// This prevents desync warnings when regions are pre-allocated in the Unity scene.
-        /// Called during initialization to ensure consistency.
-        /// </summary>
-        private void SyncAllocationDictionaryFromRegions()
-        {
-            int syncedCount = 0;
-
-            foreach (var region in _workspaceRegions)
-            {
-                if (region.IsAllocated())
-                {
-                    string robotId = region.allocatedRobotId;
-
-                    // Add to dictionary if not already present
-                    if (!_robotWorkspaceAllocation.ContainsKey(robotId))
-                    {
-                        _robotWorkspaceAllocation[robotId] = new HashSet<string>();
-                    }
-
-                    if (!_robotWorkspaceAllocation[robotId].Contains(region.regionName))
-                    {
-                        _robotWorkspaceAllocation[robotId].Add(region.regionName);
-                        syncedCount++;
-                    }
-                }
-            }
-
-            if (syncedCount > 0)
-            {
-                Debug.Log(
-                    $"{LOG_PREFIX} Synced {syncedCount} pre-allocated region(s) to allocation dictionary"
-                );
-            }
-        }
-
-        /// <summary>
-        /// Allocate a workspace region to a robot.
-        /// </summary>
-        /// <param name="robotId">Robot requesting allocation</param>
-        /// <param name="regionName">Name of region to allocate</param>
-        /// <returns>True if allocation successful</returns>
-        public bool AllocateRegion(string robotId, string regionName)
-        {
-            var region = GetRegion(regionName);
-            if (region == null)
-            {
-                Debug.LogWarning($"{LOG_PREFIX} Region '{regionName}' not found");
-                return false;
-            }
-
-            if (region.IsAllocated() && region.allocatedRobotId != robotId)
-            {
-                Debug.LogWarning(
-                    $"{LOG_PREFIX} Region '{regionName}' already allocated to {region.allocatedRobotId}"
-                );
-                return false;
-            }
-
-            region.allocatedRobotId = robotId;
-
-            if (!_robotWorkspaceAllocation.ContainsKey(robotId))
-            {
-                _robotWorkspaceAllocation[robotId] = new HashSet<string>();
-            }
-
-            _robotWorkspaceAllocation[robotId].Add(regionName);
-            Debug.Log($"{LOG_PREFIX} Allocated region '{regionName}' to {robotId}");
-            return true;
-        }
-
-        /// <summary>
-        /// Release a specific workspace region allocation.
-        /// </summary>
-        /// <param name="robotId">Robot releasing the region</param>
-        /// <param name="regionName">Name of region to release</param>
-        public void ReleaseRegion(string robotId, string regionName)
-        {
-            var region = GetRegion(regionName);
-            if (region == null)
-                return;
-
-            bool wasAllocatedInRegion = region.allocatedRobotId == robotId;
-            bool wasAllocatedInDict =
-                _robotWorkspaceAllocation.ContainsKey(robotId)
-                && _robotWorkspaceAllocation[robotId].Contains(regionName);
-
-            if (wasAllocatedInRegion || wasAllocatedInDict)
-            {
-                region.allocatedRobotId = null;
-
-                if (_robotWorkspaceAllocation.ContainsKey(robotId))
-                {
-                    _robotWorkspaceAllocation[robotId].Remove(regionName);
-                    if (_robotWorkspaceAllocation[robotId].Count == 0)
-                    {
-                        _robotWorkspaceAllocation.Remove(robotId);
-                    }
-                }
-
-                Debug.Log($"{LOG_PREFIX} Released region '{regionName}' from {robotId}");
-
-                if (wasAllocatedInRegion != wasAllocatedInDict)
-                {
-                    Debug.LogWarning(
-                        $"{LOG_PREFIX} Detected allocation desync for {robotId} in '{regionName}' "
-                            + $"(Region: {wasAllocatedInRegion}, Dict: {wasAllocatedInDict}). Fixed."
-                    );
-                }
-            }
-        }
-
-        /// <summary>
-        /// Release all regions allocated to a robot
-        /// </summary>
-        /// <param name="robotId">Robot to release all regions from</param>
-        public void ReleaseAllRegions(string robotId)
-        {
-            foreach (var region in _workspaceRegions)
-            {
-                if (region.allocatedRobotId == robotId)
-                {
-                    region.allocatedRobotId = null;
-                }
-            }
-            _robotWorkspaceAllocation.Remove(robotId);
-            Debug.Log($"{LOG_PREFIX} Released all regions from {robotId}");
-        }
-
-        /// <summary>
-        /// Check if a region is available (not allocated to another robot)
-        /// </summary>
-        /// <param name="regionName">Region to check</param>
-        /// <param name="requestingRobotId">Robot making the request (optional)</param>
-        /// <returns>True if available or allocated to requesting robot</returns>
-        public bool IsRegionAvailable(string regionName, string requestingRobotId = null)
-        {
-            var region = GetRegion(regionName);
-            if (region == null)
-                return false;
-
-            if (!region.IsAllocated())
-                return true;
-            if (requestingRobotId != null && region.allocatedRobotId == requestingRobotId)
-                return true;
-
-            return false;
         }
 
         /// <summary>
@@ -510,98 +315,6 @@ namespace Simulation
         }
 
         /// <summary>
-        /// Check if position is in any of robot's allocated workspaces.
-        /// </summary>
-        /// <param name="robotId">Robot to check</param>
-        /// <param name="position">Target position</param>
-        /// <returns>True if position is in any of robot's allocated regions</returns>
-        public bool IsInRobotWorkspace(string robotId, Vector3 position)
-        {
-            if (!_robotWorkspaceAllocation.ContainsKey(robotId))
-            {
-                return true;
-            }
-
-            foreach (string regionName in _robotWorkspaceAllocation[robotId])
-            {
-                var region = GetRegion(regionName);
-                if (region != null && region.ContainsPosition(position))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Check if position is allowed for robot.
-        /// Checks robot permission for allocated regions.
-        /// Free regions allowed.
-        /// Allocates - use overload for hot paths.
-        /// </summary>
-        /// <param name="robotId">Robot attempting to move to position</param>
-        /// <param name="position">Target position</param>
-        /// <param name="violatedRegions">Output list of regions robot doesn't have access to</param>
-        /// <returns>True if robot has access to ALL overlapping regions at position</returns>
-        public bool IsPositionAllowedForRobot(
-            string robotId,
-            Vector3 position,
-            out List<WorkspaceRegion> violatedRegions
-        )
-        {
-            // Use class-level buffer to avoid allocating a temporary list for the region query
-            GetRegionsAtPosition(position, _regionQueryBuffer);
-
-            if (_regionQueryBuffer.Count == 0)
-            {
-                violatedRegions = new List<WorkspaceRegion>();
-                return _allowMovementInVoid;
-            }
-
-            // Allocate the output list only when there are regions to inspect (diagnostic path)
-            violatedRegions = new List<WorkspaceRegion>();
-            foreach (var region in _regionQueryBuffer)
-            {
-                if (region.IsAllocated() && region.allocatedRobotId != robotId)
-                {
-                    violatedRegions.Add(region);
-                }
-            }
-
-            return violatedRegions.Count == 0;
-        }
-
-        /// <summary>
-        /// Check if position is allowed for robot.
-        /// Zero allocations.
-        /// Optimized for pathfinding.
-        /// Respects void movement setting.
-        /// </summary>
-        /// <param name="robotId">Robot attempting to move to position</param>
-        /// <param name="position">Target position</param>
-        /// <returns>True if robot has access to ALL overlapping regions at position</returns>
-        public bool IsPositionAllowedForRobot(string robotId, Vector3 position)
-        {
-            bool foundAnyRegion = false;
-
-            foreach (var region in _workspaceRegions)
-            {
-                if (region.ContainsPosition(position))
-                {
-                    foundAnyRegion = true;
-
-                    if (region.IsAllocated() && region.allocatedRobotId != robotId)
-                    {
-                        return false;
-                    }
-                }
-            }
-
-            return foundAnyRegion || _allowMovementInVoid;
-        }
-
-        /// <summary>
         /// Check if two positions maintain minimum safe separation.
         /// </summary>
         /// <param name="pos1">First position</param>
@@ -611,156 +324,6 @@ namespace Simulation
         {
             float distance = Vector3.Distance(pos1, pos2);
             return distance >= _minRobotSeparation;
-        }
-
-        /// <summary>
-        /// Mark a region as a collision zone.
-        /// </summary>
-        /// <param name="regionName">Region to mark</param>
-        public void MarkCollisionZone(string regionName)
-        {
-            _collisionZones.Add(regionName);
-        }
-
-        /// <summary>
-        /// Clear a region from collision zones.
-        /// </summary>
-        /// <param name="regionName">Region to clear</param>
-        public void ClearCollisionZone(string regionName)
-        {
-            _collisionZones.Remove(regionName);
-        }
-
-        /// <summary>
-        /// Check if a region is currently a collision zone.
-        /// </summary>
-        /// <param name="regionName">Region to check</param>
-        /// <returns>True if region is marked as collision zone</returns>
-        public bool IsCollisionZone(string regionName)
-        {
-            return _collisionZones.Contains(regionName);
-        }
-
-        /// <summary>
-        /// Get current workspace allocation state.
-        /// </summary>
-        /// <returns>Dictionary mapping robotId to set of allocated region names</returns>
-        public Dictionary<string, HashSet<string>> GetAllocationState()
-        {
-            var stateCopy = new Dictionary<string, HashSet<string>>();
-            foreach (var kvp in _robotWorkspaceAllocation)
-            {
-                stateCopy[kvp.Key] = new HashSet<string>(kvp.Value);
-            }
-            return stateCopy;
-        }
-
-        /// <summary>
-        /// Get all regions currently allocated to a robot.
-        /// </summary>
-        /// <param name="robotId">Robot to query</param>
-        /// <returns>Set of region names</returns>
-        public HashSet<string> GetRobotAllocations(string robotId)
-        {
-            if (_robotWorkspaceAllocation.ContainsKey(robotId))
-            {
-                return new HashSet<string>(_robotWorkspaceAllocation[robotId]);
-            }
-            return new HashSet<string>();
-        }
-
-        /// <summary>
-        /// Reset all workspace allocations.
-        /// </summary>
-        public void ResetAllocations()
-        {
-            foreach (var region in _workspaceRegions)
-            {
-                region.allocatedRobotId = null;
-            }
-            _robotWorkspaceAllocation.Clear();
-            _collisionZones.Clear();
-            Debug.Log($"{LOG_PREFIX} Reset all workspace allocations");
-        }
-
-        /// <summary>
-        /// Validate and fix allocation consistency.
-        /// </summary>
-        /// <returns>True if allocations were consistent</returns>
-        public bool ValidateAndRepairAllocations()
-        {
-            bool isConsistent = true;
-            int repairedCount = 0;
-
-            foreach (var region in _workspaceRegions)
-            {
-                if (region.IsAllocated())
-                {
-                    string robotId = region.allocatedRobotId;
-
-                    if (
-                        !_robotWorkspaceAllocation.ContainsKey(robotId)
-                        || !_robotWorkspaceAllocation[robotId].Contains(region.regionName)
-                    )
-                    {
-                        Debug.LogWarning(
-                            $"{LOG_PREFIX} Desync detected: Region '{region.regionName}' allocated to {robotId} "
-                                + "but not in allocation dictionary. Adding to dictionary."
-                        );
-
-                        if (!_robotWorkspaceAllocation.ContainsKey(robotId))
-                        {
-                            _robotWorkspaceAllocation[robotId] = new HashSet<string>();
-                        }
-                        _robotWorkspaceAllocation[robotId].Add(region.regionName);
-
-                        isConsistent = false;
-                        repairedCount++;
-                    }
-                }
-            }
-
-            List<string> robotsToClean = new List<string>();
-            foreach (var kvp in _robotWorkspaceAllocation)
-            {
-                string robotId = kvp.Key;
-                HashSet<string> allocatedRegions = new HashSet<string>(kvp.Value);
-
-                foreach (string regionName in allocatedRegions)
-                {
-                    var region = GetRegion(regionName);
-                    if (region == null || region.allocatedRobotId != robotId)
-                    {
-                        Debug.LogWarning(
-                            $"{LOG_PREFIX} Desync detected: Robot {robotId} has '{regionName}' in dictionary "
-                                + "but region is not allocated to it. Removing from dictionary."
-                        );
-
-                        _robotWorkspaceAllocation[robotId].Remove(regionName);
-                        isConsistent = false;
-                        repairedCount++;
-                    }
-                }
-
-                if (_robotWorkspaceAllocation[robotId].Count == 0)
-                {
-                    robotsToClean.Add(robotId);
-                }
-            }
-
-            foreach (string robotId in robotsToClean)
-            {
-                _robotWorkspaceAllocation.Remove(robotId);
-            }
-
-            if (!isConsistent)
-            {
-                Debug.LogWarning(
-                    $"{LOG_PREFIX} Allocation validation completed: {repairedCount} inconsistencies repaired"
-                );
-            }
-
-            return isConsistent;
         }
 
         /// <summary>
@@ -799,14 +362,7 @@ namespace Simulation
                     Vector3 size = region.maxBounds - region.minBounds;
 
                     Color regionColor = region.debugColor;
-                    if (region.IsAllocated())
-                    {
-                        regionColor.a = 0.5f;
-                    }
-                    else
-                    {
-                        regionColor.a = 0.2f;
-                    }
+                    regionColor.a = 0.2f;
 
                     Gizmos.color = regionColor;
                     Gizmos.DrawCube(center, size);
@@ -826,7 +382,7 @@ namespace Simulation
                     labelStyle.fontSize = 11;
                     UnityEditor.Handles.Label(
                         center + Vector3.up * (size.y / 2 + 0.05f),
-                        $"{region.regionName}\n{(region.IsAllocated() ? $"[{region.allocatedRobotId}]" : "[Free]")}",
+                        region.regionName,
                         labelStyle
                     );
 #endif

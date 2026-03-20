@@ -192,6 +192,9 @@ class ROSBridge:
                 logger.error(
                     f"Timeout waiting for response to {command.get('command')}"
                 )
+                # Clear the buffer so stale partial JSON from this response does
+                # not corrupt the next command's response parsing.
+                self._recv_buffer = ""
                 return None
             except Exception as e:
                 logger.error(f"Error sending command: {e}")
@@ -206,19 +209,24 @@ class ROSBridge:
         robot_id="Robot1",
         max_velocity_scaling=0.0,
         max_acceleration_scaling=0.0,
+        coordinate_space="unity_world",
     ):
         """
         Plan and execute a motion to target pose for a specific robot.
 
         Args:
-            position: Dict with x, y, z coordinates (Unity world space).
-            orientation: Dict with x, y, z, w quaternion. If None, MoveIt plans
-                         to the position with any feasible orientation.
+            position: Dict with x, y, z coordinates.
+            orientation: Dict with x, y, z, w quaternion in ROS base_link frame. If None,
+                         MoveIt plans to the position with any feasible orientation.
             planning_time: Max planning time in seconds.
             robot_id: Robot namespace (e.g., "Robot1", "Robot2").
             max_velocity_scaling: MoveIt velocity scaling factor (0.0 = default = 1.0).
                 Use values < 1.0 for slow, smooth descent motions (e.g. 0.3 for grasp approach).
             max_acceleration_scaling: MoveIt acceleration scaling factor (0.0 = default = 1.0).
+            coordinate_space: "base_link" if position is already in ROS base_link frame
+                (LLM-generated, move_to_coordinate). "unity_world" if position is in Unity
+                world space and needs the world→base_link transform applied (grasp planner,
+                detection-derived positions). Default: "unity_world".
 
         Returns:
             Dict with success status and details.
@@ -228,6 +236,7 @@ class ROSBridge:
             "robot_id": robot_id,
             "position": position,
             "planning_time": planning_time,
+            "coordinate_space": coordinate_space,
         }
         if orientation is not None:
             cmd["orientation"] = orientation
@@ -415,13 +424,15 @@ class ROSBridge:
         }
         return self._send_command(cmd, timeout=planning_time + 10)
 
-    def plan_return_to_start(self, robot_id="Robot1", planning_time=5.0):
+    def plan_return_to_start(self, robot_id="Robot1", planning_time=5.0, target_joint_angles=None):
         """
         Plan and execute a return to the robot's start/home configuration.
 
         Args:
             robot_id: Robot namespace (e.g., "Robot1", "Robot2").
             planning_time: Max planning time in seconds.
+            target_joint_angles: List of 6 joint angles in radians (ROS convention).
+                If None, the motion client falls back to all-zeros (URDF home pose).
 
         Returns:
             Dict with success status and details.
@@ -431,6 +442,8 @@ class ROSBridge:
             "robot_id": robot_id,
             "planning_time": planning_time,
         }
+        if target_joint_angles is not None:
+            cmd["target_joint_angles"] = target_joint_angles
         return self._send_command(cmd, timeout=self._execution_timeout)
 
     def ping(self):

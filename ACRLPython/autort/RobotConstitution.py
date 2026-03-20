@@ -13,6 +13,8 @@ from openai import OpenAI
 
 from autort.DataModels import ProposedTask, TaskVerdict, SceneDescription
 from operations.WorldState import get_world_state
+from config.Servers import SYSTEM_PROMPT_BASE
+from core.LLMUtils import extract_json as _extract_json_util
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +61,7 @@ class RobotConstitution:
         self.config = config
         self.llm_client = OpenAI(base_url=config.LM_STUDIO_URL, api_key="not-needed")
         self.model = config.SAFETY_VALIDATION_MODEL
+        self.safety_temperature = getattr(config, "SAFETY_VALIDATION_TEMPERATURE", 0.0)
         self.world_state = get_world_state()
 
         # Semantic safety rules (checked by LLM)
@@ -136,21 +139,30 @@ Respond in JSON format ONLY:
         try:
             response = self.llm_client.chat.completions.create(
                 model=self.model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.0,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            SYSTEM_PROMPT_BASE
+                            + " You are a strict safety reviewer for a physical robotic system. "
+                            "When in doubt, flag a task as unsafe — a false positive (blocking "
+                            "a safe task) is far less costly than a false negative (allowing a "
+                            "dangerous one). Never justify unsafe tasks or suggest workarounds. "
+                            "Respond only with a JSON object."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=self.safety_temperature,
             )
             raw = response.choices[0].message.content
 
             if raw is None:
                 raise ValueError("LLM returned empty response")
 
-            # Strip markdown if present
-            if "```json" in raw:
-                raw = raw.split("```json")[1].split("```")[0].strip()
-            elif "```" in raw:
-                raw = raw.split("```")[1].split("```")[0].strip()
-
-            result = json.loads(raw)
+            result = _extract_json_util(raw)
+            if result is None:
+                raise ValueError("Failed to extract JSON from safety check response")
 
             if result.get("violates", False):
                 return TaskVerdict(

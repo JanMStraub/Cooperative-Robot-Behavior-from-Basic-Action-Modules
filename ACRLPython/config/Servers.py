@@ -22,26 +22,26 @@ STREAMING_SERVER_PORT = int(
 STEREO_DETECTION_PORT = int(
     os.environ.get("STEREO_DETECTION_PORT", "5006")
 )  # Receives stereo image pairs
-LLM_RESULTS_PORT = int(
-    os.environ.get("LLM_RESULTS_PORT", "5010")
-)  # Sends LLM analysis results
+COMMAND_SERVER_PORT = int(
+    os.environ.get("COMMAND_SERVER_PORT", "5007")
+)  # Bidirectional command server (commands & results)
 DEPTH_RESULTS_PORT = int(
-    os.environ.get("DEPTH_RESULTS_PORT", "5007")
+    os.environ.get("DEPTH_RESULTS_PORT", "5008")
 )  # Sends depth detection results
 RAG_SERVER_PORT = int(
-    os.environ.get("RAG_SERVER_PORT", "5011")
+    os.environ.get("RAG_SERVER_PORT", "5009")
 )  # RAG semantic search server
 STATUS_SERVER_PORT = int(
-    os.environ.get("STATUS_SERVER_PORT", "5012")
+    os.environ.get("STATUS_SERVER_PORT", "5010")
 )  # Status query server
 SEQUENCE_SERVER_PORT = int(
-    os.environ.get("SEQUENCE_SERVER_PORT", "5013")
+    os.environ.get("SEQUENCE_SERVER_PORT", "5011")
 )  # Sequence server
 WORLD_STATE_PORT = int(
-    os.environ.get("WORLD_STATE_PORT", "5014")
+    os.environ.get("WORLD_STATE_PORT", "5012")
 )  # World state streaming (Unity → Python)
 AUTORT_SERVER_PORT = int(
-    os.environ.get("AUTORT_SERVER_PORT", "5015")
+    os.environ.get("AUTORT_SERVER_PORT", "5013")
 )  # AutoRT task generation server
 
 
@@ -84,7 +84,10 @@ WORLDSTATE_CHECK_INTERVAL = float(os.environ.get("WORLDSTATE_CHECK_INTERVAL", "5
 # LLM Configuration
 # ============================================================================
 
-LMSTUDIO_BASE_URL = os.environ.get("LMSTUDIO_BASE_URL", "http://192.168.178.53:1234")
+_lmstudio_raw = os.environ.get("LMSTUDIO_BASE_URL", "http://127.0.0.1:1234").rstrip("/")
+LMSTUDIO_BASE_URL = (
+    _lmstudio_raw if _lmstudio_raw.endswith("/v1") else _lmstudio_raw + "/v1"
+)
 
 # ============================================================================
 # VGN (Volumetric Grasp Network) — Local Mac Inference
@@ -112,9 +115,38 @@ VGN_USE_VLM_REFINEMENT = os.environ.get("VGN_USE_VLM_REFINEMENT", "false").lower
 )
 
 DEFAULT_LMSTUDIO_MODEL = os.environ.get(
-    "DEFAULT_LMSTUDIO_MODEL", "ministral-3-14b-reasoning"
+    "DEFAULT_LMSTUDIO_MODEL", "mistralai/ministral-3-14b-reasoning"
 )
 DEFAULT_TEMPERATURE = float(os.environ.get("DEFAULT_TEMPERATURE", "0.1"))
+
+# Maximum thinking tokens for reasoning models (e.g. ministral-3-14b-reasoning).
+# LM Studio exposes this as `budget_tokens` inside the `thinking` block.
+# Set to 0 to disable thinking entirely (fastest); increase for harder tasks.
+# Has no effect on non-reasoning models.
+LLM_THINKING_BUDGET = int(os.environ.get("LLM_THINKING_BUDGET", "1024"))
+
+# Set to True to enable thinking for reasoning models (e.g. ministral-3-14b-reasoning).
+# Requires max_tokens to be large enough to cover both thinking + actual response.
+LLM_THINKING_ENABLED = os.environ.get("LLM_THINKING_ENABLED", "true").lower() == "true"
+
+# ============================================================================
+# Shared LLM System Prompt
+# ============================================================================
+
+# A concise domain preamble injected into every LLM call as the system message.
+# Individual role-specific prompts (CommandParser, RobotLLMAgent, etc.) extend
+# this with their own instructions — they should NOT repeat this context.
+SYSTEM_PROMPT_BASE = (
+    "You are an AI controller for a dual-arm AR4 robotic system running inside a "
+    "Unity simulation. The workspace is a table-top environment with two 6-DOF robot "
+    "arms: Robot1 (left side, base at x≈-0.4) and Robot2 (right side, base at x≈+0.4). "
+    "Workspace bounds: X ∈ [-0.6, 0.6], Y ∈ [0.0, 0.6], Z ∈ [-0.6, 0.6]. "
+    "Operations are executed sequentially or in named parallel_groups. "
+    "Robots communicate via signal/wait_for_signal events. "
+    "You must ONLY use operations, object IDs, and coordinate values explicitly provided "
+    "in the user message — never invent names, IDs, or positions. "
+    "Output only valid JSON. Never include markdown fences, reasoning text, or [THINK] tags."
+)
 
 # Popular vision models (for reference)
 VISION_MODELS = [
@@ -122,7 +154,7 @@ VISION_MODELS = [
     "llama-3.2-vision",
     "qwen3-vl-8b",
     "mistral-3-3b",
-    "ministral-3-14b-reasoning",
+    "mistralai/ministral-3-14b-reasoning",
 ]
 
 # ============================================================================

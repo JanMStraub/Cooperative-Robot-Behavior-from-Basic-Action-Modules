@@ -1,13 +1,19 @@
 # MoveIt controller configuration for AR4 mk3
 #
-# NOTE: This project uses MoveIt in PLAN-ONLY mode.
-# We do NOT use MoveIt's execution pipeline (no ros2_control, no action servers).
-# Instead, planned trajectories are published directly to a ROS topic
-# that Unity's ROSTrajectorySubscriber picks up and executes.
+# This project uses MoveIt in PLAN-ONLY mode — no execution pipeline.
+# Planned trajectories are published directly to a ROS topic that
+# Unity's ROSTrajectorySubscriber picks up and executes.
 #
-# This file is kept for reference / future use if ros2_control is added.
-# The move_group launch does NOT load this file.
+# Rather than registering an empty controller list (which RCL rejects
+# as an untyped empty array), we disable the execution capabilities
+# entirely. This suppresses both the controller_manager WARN and the
+# controller_names ERROR without requiring ros2_control.
 /**:
   ros__parameters:
-    moveit_simple_controller_manager:
-      controller_names: []
+    # Explicitly name the controller manager plugin to suppress the
+    # "Parameter '~moveit_controller_manager' not specified" WARN.
+    moveit_controller_manager: moveit_simple_controller_manager/MoveItSimpleControllerManager
+    # Disable MoveGroupExecuteTrajectoryAction — the only capability that
+    # requires a controller manager. This prevents move_group from trying to
+    # use the controller manager for execution, suppressing the controller_names ERROR.
+    disable_capabilities: "move_group/MoveGroupExecuteTrajectoryAction"

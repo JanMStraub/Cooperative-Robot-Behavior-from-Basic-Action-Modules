@@ -133,7 +133,11 @@ def detect_field(
             )
 
         # Run YOLO detection with field class filter
-        detector = YOLODetector()
+        try:
+            from config.Vision import YOLO_MODEL_PATH
+        except ImportError:
+            from ..config.Vision import YOLO_MODEL_PATH
+        detector = YOLODetector(model_path=YOLO_MODEL_PATH)
         detector.conf_threshold = confidence_threshold
         detections = detector.detect_objects_stereo(
             imgL=left_image,
@@ -360,7 +364,11 @@ def detect_all_fields(
         # Run YOLO detection with all field classes (fielda-fieldi)
         field_classes = [f"field{chr(ord('a') + i)}" for i in range(9)]  # fielda-fieldi
 
-        detector = YOLODetector()
+        try:
+            from config.Vision import YOLO_MODEL_PATH
+        except ImportError:
+            from ..config.Vision import YOLO_MODEL_PATH
+        detector = YOLODetector(model_path=YOLO_MODEL_PATH)
         detector.conf_threshold = confidence_threshold
         detections = detector.detect_objects_stereo(
             imgL=left_image,

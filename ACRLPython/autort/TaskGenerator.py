@@ -14,6 +14,8 @@ from openai import OpenAI
 
 from autort.DataModels import ProposedTask, SceneDescription
 from operations.Registry import get_global_registry
+from config.Servers import LLM_THINKING_BUDGET, LLM_THINKING_ENABLED, SYSTEM_PROMPT_BASE
+from config.Negotiation import USE_STRUCTURED_OUTPUT
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +34,7 @@ class TaskGenerator:
         self.llm_client = OpenAI(base_url=config.LM_STUDIO_URL, api_key="not-needed")
         self.model = config.TASK_GENERATION_MODEL
         self.max_retries = config.MAX_JSON_RETRIES
+        self.temperature = getattr(config, "TASK_GENERATION_TEMPERATURE", 0.7)
         self.registry = get_global_registry()
 
         # Cache operations summary (build once, reuse)
@@ -160,17 +163,30 @@ Please fix these issues and generate valid tasks following the parameter schemas
             messages = [
                 {
                     "role": "system",
-                    "content": "Output ONLY valid JSON. Do not include reasoning, explanations, or [THINK] tags. Return the JSON array directly.",
+                    "content": (
+                        SYSTEM_PROMPT_BASE
+                        + " You are an autonomous task planner. Generate grounded, executable "
+                        "task plans using ONLY the objects and operations listed in the user "
+                        "message. Never invent object IDs, operation names, camera IDs, or "
+                        "coordinates outside the specified workspace bounds. "
+                        "Return a JSON array directly — no preamble, no [THINK] tags."
+                    ),
                 },
                 {"role": "user", "content": prompt},
             ]
 
-            response = self.llm_client.chat.completions.create(
-                model=self.model,
-                messages=messages,  # type: ignore[arg-type]
-                temperature=0.7,
-                max_tokens=4096,  # Ensure enough tokens for full JSON response
-            )
+            create_kwargs: dict = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": self.temperature,
+                "max_tokens": 8192,  # Must cover thinking budget + actual JSON response
+                **({"thinking": {"type": "enabled", "budget_tokens": LLM_THINKING_BUDGET}} if LLM_THINKING_ENABLED else {}),
+            }
+            # Structured output forces valid JSON at the inference layer.
+            # Set USE_STRUCTURED_OUTPUT=false for models that don't support response_format.
+            if USE_STRUCTURED_OUTPUT:
+                create_kwargs["response_format"] = {"type": "json_object"}
+            response = self.llm_client.chat.completions.create(**create_kwargs)  # type: ignore[arg-type]
             content = response.choices[0].message.content
             if content is None:
                 raise ValueError("LLM returned empty response")
@@ -233,9 +249,7 @@ Use 'signal' and 'wait_for_signal' for coordination between robots.
         if not include_collaborative or len(robot_ids) == 1:
             spatial_hints = f"\n{robot_layout}\n" if robot_layout else ""
 
-        return f"""You are an autonomous robot task generator.
-
-SCENE ANALYSIS:
+        return f"""SCENE ANALYSIS:
 {scene.scene_summary if scene.scene_summary else "No VLM analysis available."}
 
 DETECTED OBJECTS:
@@ -332,11 +346,11 @@ GENERAL RULES:
 13. Only use parameter names and values shown in AVAILABLE OPERATIONS schemas
 14. Pay close attention to valid_values constraints in parameter schemas - violating these will cause operation failures
 
-COORDINATE GUIDELINES:
-- X range: -0.6 to 0.6 (left/right)
-- Y range: 0.0 to 0.6 (height)
-- Z range: -0.6 to 0.6 (forward/back)
-- Keep movements within workspace bounds
+COORDINATE GUIDELINES (ROS base_link frame — robot-local, Z-up):
+- X: forward from robot base, range -0.5 to 0.5
+- Y: left from robot base, range -0.5 to 0.5
+- Z: height above robot base, range 0.0 to 0.6
+- Typical reachable positions: x in [-0.4, 0.4], y in [-0.3, 0.3], z in [0.05, 0.5]
 
 COMMON TASK PATTERNS:
 1. Detection + Grasp:
@@ -344,13 +358,13 @@ COMMON TASK PATTERNS:
    - grasp_object(object_id="red_cube")
 
 2. Navigation + Detection:
-   - move_to_coordinate(x=0.2, y=0.3, z=0.1)
+   - move_to_coordinate(x=0.2, y=0.0, z=0.3)
    - detect_object_stereo(color=null, selection="all")
 
 3. Multi-step manipulation:
    - detect_object_stereo(color="blue", selection="first")
    - grasp_object(object_id="blue_cube")
-   - move_to_coordinate(x=0.0, y=0.2, z=0.0)
+   - move_to_coordinate(x=0.0, y=0.2, z=0.3)
    - release_object()
 
 IMPORTANT: Output the JSON array immediately without any preamble, reasoning, or explanatory text.

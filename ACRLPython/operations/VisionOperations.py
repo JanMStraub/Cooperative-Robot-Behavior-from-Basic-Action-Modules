@@ -303,6 +303,10 @@ def detect_object_stereo(
     Returns:
         OperationResult with 3D coordinates and detection info
     """
+    # Normalize string "None" from LLM output to Python None
+    if color == "None":
+        color = None
+
     # Set defaults from config
     if baseline is None:
         baseline = DEFAULT_STEREO_BASELINE
@@ -317,6 +321,10 @@ def detect_object_stereo(
         # Get image storage and command broadcaster using centralized imports
         storage = get_unified_image_storage()
         broadcaster = get_command_broadcaster()
+
+        # If vision streaming is enabled, images in storage are already continuously fresh
+        if ENABLE_VISION_STREAMING:
+            request_fresh_capture = False
 
         # Get stereo images
         if request_fresh_capture:
