@@ -188,6 +188,7 @@ class ROSMotionServer:
         self._gripper_pubs = {}  # robot_id -> Publisher
         self._joint_state_subs = {}  # robot_id -> Subscription
         self._current_joint_states = {}  # robot_id -> JointState msg
+        self._move_group_server_ready = {}  # robot_id -> bool, cached server availability
         self._joint_states_lock = threading.Lock()  # guards _current_joint_states (writer: ROS spin thread, readers: TCP handler threads)
         self._last_planned_trajectories = {}  # robot_id -> JointTrajectory
         self._trajectory_feedback = {}  # robot_id -> last feedback status string
@@ -269,6 +270,9 @@ class ROSMotionServer:
 
         # Cache the last planned trajectory for inspection
         self._last_planned_trajectories[robot_id] = None
+
+        # Server readiness cache: False until confirmed available for first time
+        self._move_group_server_ready[robot_id] = False
 
         # Execution feedback from Unity's ROSTrajectorySubscriber
         self._trajectory_feedback[robot_id] = None
@@ -716,11 +720,11 @@ class ROSMotionServer:
         # collapse every segment to a single FixedUpdate frame (0.02s).
         # Default to 0.5 so MoveIt always produces a timed trajectory; callers can
         # override to 1.0 for full speed or lower for slow approach phases.
-        vel_scaling = request.get("max_velocity_scaling", 0.75)
+        vel_scaling = request.get("max_velocity_scaling", 1.0)
         # Acceleration scaling kept lower than velocity scaling so TOTG allocates
         # longer ramp-up/ramp-down phases. Unity's ArticulationBody needs sufficient
         # deceleration time to shed kinetic energy within its forceLimit budget.
-        acc_scaling = request.get("max_acceleration_scaling", 0.4)
+        acc_scaling = request.get("max_acceleration_scaling", 0.6)
         goal.request.max_velocity_scaling_factor = vel_scaling
         goal.request.max_acceleration_scaling_factor = acc_scaling
 
@@ -867,19 +871,19 @@ class ROSMotionServer:
         """
         move_group_client = self._move_group_clients[robot_id]
 
-        # Re-publish ground plane before each planning call.
-        # MoveIt may reset its planning scene on reconnect or after a long idle,
-        # so we ensure the table collision object is always present.
-        self._publish_ground_plane(robot_id)
-
         # Wait for joint states before planning
         if not self._wait_for_joint_states(robot_id, timeout=10.0):
             logger.warning(
                 f"No joint states received for {robot_id} yet, planning may fail"
             )
 
-        if not move_group_client.wait_for_server(timeout_sec=15.0):
-            return None, 0, f"MoveGroup action server not available for {robot_id}"
+        # Check server availability once; skip the blocking wait on subsequent calls.
+        if not self._move_group_server_ready.get(robot_id, False):
+            if not move_group_client.wait_for_server(timeout_sec=15.0):
+                return None, 0, f"MoveGroup action server not available for {robot_id}"
+            self._move_group_server_ready[robot_id] = True
+            # Publish ground plane on first confirmed connection only
+            self._publish_ground_plane(robot_id)
 
         # Send goal asynchronously and poll for completion.
         # NOTE: We must NOT call rclpy.spin_until_future_complete() here because
@@ -1077,8 +1081,8 @@ class ROSMotionServer:
         )
 
         # Estimate execution timeout: trajectory duration * speed_scale_factor + buffer.
-        # Unity's ROSTrajectorySubscriber runs at 0.5x speed scaling by default,
-        # so actual wall time ≈ 2x the trajectory time_from_start of the last point.
+        # Unity's ROSTrajectorySubscriber runs at 1.0x speed scaling by default,
+        # so actual wall time ≈ 1x the trajectory time_from_start of the last point.
         # Add 15s fixed buffer to cover:
         #   - Unity physics settle wait (up to 1.5s per ROSTrajectorySubscriber)
         #   - ROS topic round-trip latency for feedback message
@@ -1093,7 +1097,7 @@ class ROSMotionServer:
             if traj_duration < 1e-9:
                 # Zero timestamps: synthesize timeout from waypoint count.
                 # Unity's global-timeline path allocates ~0.3s per waypoint on average
-                # (0.5 rad max disp / (1.05 rad/s * 0.8) / 0.5x speed ≈ 1.19s worst case).
+                # (0.5 rad max disp / (1.05 rad/s * 0.8) / 1.0x speed ≈ 0.6s worst case).
                 traj_duration = len(trajectory.points) * 0.5
         else:
             traj_duration = 5.0
@@ -1382,8 +1386,8 @@ class ROSMotionServer:
 
         position = request.get("position", {})
         orientation = request.get("orientation")
-        vel_scaling = request.get("max_velocity_scaling", 0.3)
-        acc_scaling = request.get("max_acceleration_scaling", 0.3)
+        vel_scaling = request.get("max_velocity_scaling", 0.6)
+        acc_scaling = request.get("max_acceleration_scaling", 0.4)
 
         # Transform Unity world coords → ROS base_link frame
         local_position = self._transform_world_to_local(position, robot_id)
@@ -1416,7 +1420,7 @@ class ROSMotionServer:
         req.group_name = "arm"
         req.link_name = "ee_link"
         req.waypoints = [target_pose.pose]
-        req.max_step = 0.05  # 5cm maximum interpolation step — 1cm produced 150+ waypoints for short descents
+        req.max_step = 0.10  # 10cm maximum interpolation step — reduces waypoints for short descents (5cm → 150 pts, 10cm → ~75 pts)
         req.jump_threshold = 0.0  # Disable jump detection; non-zero values prematurely terminate descent at workspace edges
         req.avoid_collisions = True
 
