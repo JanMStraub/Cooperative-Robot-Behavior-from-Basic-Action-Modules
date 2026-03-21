@@ -76,7 +76,7 @@ COLLISION_SAFETY_MARGIN = float(
     os.environ.get("COLLISION_SAFETY_MARGIN", "0.01")
 )  # meters
 MIN_ROBOT_SEPARATION = float(os.environ.get("MIN_ROBOT_SEPARATION", "0.2"))  # meters
-MAX_ROBOT_REACH = float(os.environ.get("MAX_ROBOT_REACH", "0.8"))  # meters
+MAX_ROBOT_REACH = float(os.environ.get("MAX_ROBOT_REACH", "0.64"))  # meters (AR4 kinematic limit)
 
 # ============================================================================
 # State Caching Configuration

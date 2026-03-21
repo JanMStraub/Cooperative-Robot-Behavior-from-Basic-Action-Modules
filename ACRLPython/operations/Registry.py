@@ -26,6 +26,7 @@ from .StatusOperations import CHECK_ROBOT_STATUS_OPERATION
 from .GripperOperations import (
     CONTROL_GRIPPER_OPERATION,
     RELEASE_OBJECT_OPERATION,
+    PLACE_OBJECT_OPERATION,
 )
 from .GraspOperations import GRASP_OBJECT_OPERATION, GRASP_OBJECT_FOR_HANDOFF_OPERATION
 from .DefaultPositionOperation import RETURN_TO_START_POSITION_OPERATION
@@ -95,6 +96,7 @@ class OperationRegistry:
             # Gripper Control
             CONTROL_GRIPPER_OPERATION,
             RELEASE_OBJECT_OPERATION,
+            PLACE_OBJECT_OPERATION,
             # Perception & Detection
             DETECT_OBJECTS_OPERATION,
             DETECT_OBJECT_STEREO_OPERATION,

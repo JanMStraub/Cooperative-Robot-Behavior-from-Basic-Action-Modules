@@ -22,6 +22,7 @@ from .Base import (
     OperationParameter,
     OperationRelationship,
     OperationResult,
+    ParameterFlow,
 )
 
 setup_logging(__name__)
@@ -341,7 +342,10 @@ def _grasp_via_ros_planned(
 
     grasp_pos = _vec_to_pos(best_grasp.grasp_position)
 
-    # Step 1: Pre-grasp hover
+    # Step 1: Pre-grasp hover.
+    # TODO: remove orientation=grasp_orientation once VGN is implemented — VGN poses
+    #       are accurate enough that the pre-grasp orientation constraint is not needed
+    #       and only shrinks the IK solution space at borderline reach distances.
     logger.info(f"Moving to pre-grasp position for {robot_id}")
     pre_result = bridge.plan_and_execute(
         position=_vec_to_pos(best_grasp.pre_grasp_position),
@@ -462,7 +466,11 @@ def _grasp_via_ros_position_only(
         f"pre_grasp_y={pre_grasp_position['y']:.3f}, grasp_y={grasp_position['y']:.3f}"
     )
 
-    # Step 1: Move to pre-grasp hover position
+    # Step 1: Move to pre-grasp hover position.
+    # TODO: remove orientation=top_down_orientation once VGN is implemented — VGN will
+    #       supply approach-aligned orientations, making this heuristic unnecessary.
+    #       The top-down constraint shrinks the IK solution space at borderline reach
+    #       distances and can cause OMPL to fail before planning even starts.
     logger.info(f"Moving to pre-grasp position for {robot_id}")
     pre_result = bridge.plan_and_execute(
         position=pre_grasp_position,
@@ -997,7 +1005,10 @@ def _grasp_via_vgn_with_ros(
         _rx, _ry, _rz, _rw = -_rx, -_ry, -_rz, -_rw
     orientation = {"x": _rx, "y": _ry, "z": _rz, "w": _rw}
 
-    # 7. MoveIt pre-grasp move
+    # 7. MoveIt pre-grasp move.
+    # TODO: remove orientation=orientation once VGN is implemented — VGN approach
+    #       vectors make this constraint redundant, and it shrinks the IK solution
+    #       space at borderline reach distances.
     logger.info(f"[VGN+ROS] Moving to pre-grasp for {robot_id}: {pre_grasp_pos}")
     pre_result = bridge.plan_and_execute(
         position=pre_grasp_pos,
@@ -1805,6 +1816,22 @@ GRASP_OBJECT_FOR_HANDOFF_OPERATION = BasicOperation(
             "peer_robot_param": "receiving_robot_id",
             "coordination_pattern": "handoff",
         },
+        parameter_flows=[
+            ParameterFlow(
+                source_operation="detect_object_stereo",
+                source_output_key="color",
+                target_operation="coordination_grasp_object_for_handoff_001",
+                target_input_param="object_id",
+                description="Object color/ID from stereo detection auto-injected as object_id",
+            ),
+            ParameterFlow(
+                source_operation="detect_objects",
+                source_output_key="color",
+                target_operation="coordination_grasp_object_for_handoff_001",
+                target_input_param="object_id",
+                description="Object color/ID from detection auto-injected as object_id",
+            ),
+        ],
     ),
     implementation=grasp_object_for_handoff,
 )

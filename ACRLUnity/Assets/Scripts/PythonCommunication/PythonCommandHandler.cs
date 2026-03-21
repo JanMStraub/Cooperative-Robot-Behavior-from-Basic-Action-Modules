@@ -61,6 +61,10 @@ namespace PythonCommunication
         public int duration_ms; // For stabilize_object
         public float force_limit; // For stabilize_object
 
+        // place_object parameters
+        public float hover_offset; // Hover height above target before descent (metres)
+        public float tcp_offset;   // Gripper-open height above target surface (metres)
+
         // GraspNet: optional pre-computed neural grasp candidates.
         // When non-empty, GraspPlanningPipeline skips geometric candidate generation
         // and feeds these directly into IK/collision filtering.
@@ -344,6 +348,10 @@ namespace PythonCommunication
 
                 case "pick_object_at_coordinate":
                     ExecutePickObjectAtCoordinate(command);
+                    break;
+
+                case "place_object":
+                    ExecutePlaceObject(command);
                     break;
 
                 case "move_from_a_to_b":
@@ -1353,6 +1361,225 @@ namespace PythonCommunication
             yield return new WaitForSeconds(0.5f);
 
             SendCommandCompletion(robotId, "pick_object_at_coordinate", true, requestId);
+        }
+
+        /// <summary>
+        /// Execute place_object command.
+        /// Performs a controlled hover → descent → open gripper → ascent sequence
+        /// so the held object is set down gently at the target position instead of
+        /// dropping from the current end-effector height.
+        /// </summary>
+        private void ExecutePlaceObject(RobotCommand command)
+        {
+            try
+            {
+                if (
+                    !ValidateAndGetRobot(
+                        command.robot_id,
+                        "place_object",
+                        out RobotInstance robotInstance,
+                        out RobotController controller
+                    )
+                )
+                {
+                    return;
+                }
+
+                if (
+                    ShouldSkipForROSMode(
+                        controller,
+                        command.robot_id,
+                        "place_object",
+                        command.request_id
+                    )
+                )
+                    return;
+
+                if (command.parameters == null || command.parameters.target_position == null)
+                {
+                    Debug.LogError($"{_logPrefix} place_object: Missing parameters or target_position");
+                    _failedCommands++;
+                    return;
+                }
+
+                GripperController gripperController =
+                    robotInstance.robotGameObject.GetComponentInChildren<GripperController>();
+                if (gripperController == null)
+                {
+                    Debug.LogError(
+                        $"{_logPrefix} place_object: Robot '{command.robot_id}' has no GripperController"
+                    );
+                    _failedCommands++;
+                    return;
+                }
+
+                float hoverOffset = command.parameters.hover_offset > 0f
+                    ? command.parameters.hover_offset
+                    : 0.15f;
+                float tcpOffset = command.parameters.tcp_offset > 0f
+                    ? command.parameters.tcp_offset
+                    : 0.055f;
+
+                Vector3 targetPos  = TargetPositionToVector3(command.parameters.target_position);
+                Vector3 hoverPos   = targetPos + new Vector3(0f, hoverOffset, 0f);
+                Vector3 placePos   = targetPos + new Vector3(0f, tcpOffset,   0f);
+
+                StartCoroutine(
+                    PlaceObjectCoroutine(
+                        controller,
+                        robotInstance.simpleController,
+                        gripperController,
+                        hoverPos,
+                        placePos,
+                        command.robot_id,
+                        command.request_id
+                    )
+                );
+
+                if (_verboseLogging)
+                {
+                    Debug.Log(
+                        $"{_logPrefix} place_object: {command.robot_id} "
+                            + $"target=({targetPos.x:F3},{targetPos.y:F3},{targetPos.z:F3}) "
+                            + $"hover=({hoverPos.x:F3},{hoverPos.y:F3},{hoverPos.z:F3}) "
+                            + $"place=({placePos.x:F3},{placePos.y:F3},{placePos.z:F3})"
+                    );
+                }
+
+                _successfulCommands++;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError(
+                    $"{_logPrefix} Error executing place_object: {ex.Message}\n{ex.StackTrace}"
+                );
+                _failedCommands++;
+            }
+        }
+
+        /// <summary>
+        /// Coroutine for place_object.
+        /// Steps: move to hover → descend to place height → open gripper → ascend to hover.
+        /// Each movement segment has a 15-second timeout.
+        /// </summary>
+        private IEnumerator PlaceObjectCoroutine(
+            RobotController controller,
+            SimpleRobotController simpleController,
+            GripperController gripperController,
+            Vector3 hoverPos,
+            Vector3 placePos,
+            string robotId,
+            uint requestId
+        )
+        {
+            const float segmentTimeout = 15.0f;
+            bool usingSimple = (controller == null && simpleController != null);
+
+            // Step 1: Move to hover position above target.
+            if (controller != null)
+                controller.SetTarget(hoverPos);
+            else if (simpleController != null)
+                simpleController.SetTarget(hoverPos);
+
+            float timer = 0f;
+            if (usingSimple)
+            {
+                while (!simpleController.HasReachedTarget)
+                {
+                    timer += 0.1f;
+                    if (timer > segmentTimeout)
+                    {
+                        Debug.LogWarning($"{_logPrefix} place_object: Timeout reaching hover position.");
+                        SendCommandCompletion(robotId, "place_object", false, requestId);
+                        yield break;
+                    }
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+            else
+            {
+                while (controller != null && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD)
+                {
+                    timer += 0.1f;
+                    if (timer > segmentTimeout)
+                    {
+                        Debug.LogWarning($"{_logPrefix} place_object: Timeout reaching hover position.");
+                        SendCommandCompletion(robotId, "place_object", false, requestId);
+                        yield break;
+                    }
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+
+            // Step 2: Descend straight down to place height.
+            if (controller != null)
+                controller.SetTarget(placePos);
+            else if (simpleController != null)
+                simpleController.SetTarget(placePos);
+
+            timer = 0f;
+            if (usingSimple)
+            {
+                while (!simpleController.HasReachedTarget)
+                {
+                    timer += 0.1f;
+                    if (timer > segmentTimeout)
+                    {
+                        Debug.LogWarning($"{_logPrefix} place_object: Timeout reaching place position.");
+                        SendCommandCompletion(robotId, "place_object", false, requestId);
+                        yield break;
+                    }
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+            else
+            {
+                while (controller != null && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD)
+                {
+                    timer += 0.1f;
+                    if (timer > segmentTimeout)
+                    {
+                        Debug.LogWarning($"{_logPrefix} place_object: Timeout reaching place position.");
+                        SendCommandCompletion(robotId, "place_object", false, requestId);
+                        yield break;
+                    }
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+
+            // Step 3: Open gripper to release the object onto the surface.
+            gripperController.OpenGrippers();
+            yield return new WaitForSeconds(0.5f);
+
+            // Step 4: Ascend back to hover height to clear the placed object.
+            if (controller != null)
+                controller.SetTarget(hoverPos);
+            else if (simpleController != null)
+                simpleController.SetTarget(hoverPos);
+
+            timer = 0f;
+            if (usingSimple)
+            {
+                while (!simpleController.HasReachedTarget)
+                {
+                    timer += 0.1f;
+                    if (timer > segmentTimeout)
+                        break; // Non-fatal: object is already placed; ascent timeout is advisory.
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+            else
+            {
+                while (controller != null && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD)
+                {
+                    timer += 0.1f;
+                    if (timer > segmentTimeout)
+                        break;
+                    yield return new WaitForSeconds(0.1f);
+                }
+            }
+
+            SendCommandCompletion(robotId, "place_object", true, requestId);
         }
 
         /// <summary>

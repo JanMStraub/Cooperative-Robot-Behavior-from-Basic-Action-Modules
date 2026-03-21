@@ -157,8 +157,23 @@ class _PromptBuilder:
         When the task involves picking up, grabbing, or grasping an object:
         - ALWAYS use grasp_object (NOT move_to_coordinate + control_gripper)
         - grasp_object handles the full approach, descent, and grip internally
-        - Example: {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "blue_cube"}}}}
+        - With a known object name: {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "blue_cube"}}}}
+        - After detect_object_stereo with capture_var "target": {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "$target.color"}}}}
+        - The object_id field in grasp_object ALWAYS uses ".color" from the detection result — NEVER ".id", ".name", or any other field
         - Only use control_gripper directly for explicit open/close commands unrelated to picking
+        - NEVER use grasp_object_for_handoff for single-robot pick-and-place tasks
+        - grasp_object_for_handoff is ONLY for multi-robot handoffs where one robot must leave the near end of an elongated object clear for a second robot to approach simultaneously
+        - grasp_object_for_handoff REQUIRES object_id — if omitted the operation will fail immediately
+
+        === PLACE RULE (CRITICAL) ===
+
+        When the task involves placing, dropping, depositing, or setting down a held object at a location:
+        - ALWAYS use place_object with the target coordinates (NOT release_object, NOT control_gripper)
+        - place_object performs: hover above target → controlled descent → open gripper → ascend
+        - Example: {{"operation": "place_object", "params": {{"robot_id": "Robot1", "x": -0.18, "y": 0.06, "z": 0.05}}}}
+        - A typical pick-and-place sequence: detect_field → place_object (using $field.x/y/z)
+        - Only use release_object for an explicit immediate gripper-open at the current position (e.g. emergency drop or handoff transfer)
+        - Only use control_gripper with open_gripper=true for explicit open commands unrelated to placing
 
         === SINGLE-ROBOT RULES ===
 
@@ -175,6 +190,18 @@ class _PromptBuilder:
         - Use "capture_var": "target" on detect_object_stereo to store the result
         - Use "$target" in LATER operations to reference the stored result
         - NEVER use a $variable before it has been captured by a previous operation
+        - NEVER hardcode coordinates when a detection operation can provide them
+
+        detect_object_stereo result fields: x, y, z, color, confidence
+        - Position: "$target.x", "$target.y", "$target.z"
+        - Object identifier for grasp_object: "$target.color"  ← ALWAYS .color, NEVER .id or .name
+
+        Full pick-and-place example (detect → grasp → detect field → place):
+        {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "blue"}}, "capture_var": "target"}}
+        {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "$target.color"}}}}
+        {{"operation": "detect_field", "params": {{"robot_id": "Robot1", "field_label": "G"}}, "capture_var": "field"}}
+        {{"operation": "place_object", "params": {{"robot_id": "Robot1", "x": "$field.x", "y": "$field.y", "z": "$field.z"}}}}
+        Note: detect_field stores center coordinates directly under the capture variable — use "$field.x" NOT "$field.center.x"
 {spatial_block}{anti_pattern_block}Output only valid JSON, no explanation, no comments."""
 
     def get_available_operations_summary(self, command_text: str = "") -> str:

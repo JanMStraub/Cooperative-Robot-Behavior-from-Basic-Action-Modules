@@ -28,6 +28,7 @@ try:
         OperationParameter,
         OperationRelationship,
         OperationResult,
+        ParameterFlow,
     )
 except ImportError:
     from operations.Base import (
@@ -37,6 +38,7 @@ except ImportError:
         OperationParameter,
         OperationRelationship,
         OperationResult,
+        ParameterFlow,
     )
 
 # Configure logging
@@ -99,7 +101,7 @@ def detect_field(
                 ["Provide field label as 'A', 'B', 'C', etc."],
             )
 
-        # Construct YOLO class name: "field" + lowercase letter
+        # Construct YOLO class name: "field" + lowercase letter (matches trained model, e.g. "fielda")
         yolo_class = f"field{field_label_lower}"
 
         # Import YOLO detector
@@ -132,6 +134,17 @@ def detect_field(
                 ["Check both stereo cameras are sending images"],
             )
 
+        # Extract typed camera config + pose from Unity stereo metadata
+        try:
+            from .StereoUtils import camera_config_from_metadata
+        except ImportError:
+            from operations.StereoUtils import camera_config_from_metadata
+
+        stereo_params = camera_config_from_metadata(stereo_metadata)
+        camera_config = stereo_params.camera_config
+        camera_position = stereo_params.camera_position
+        camera_rotation = stereo_params.camera_rotation
+
         # Run YOLO detection with field class filter
         try:
             from config.Vision import YOLO_MODEL_PATH
@@ -142,9 +155,9 @@ def detect_field(
         detections = detector.detect_objects_stereo(
             imgL=left_image,
             imgR=right_image,
-            camera_config=(
-                stereo_metadata.get("camera_params") if stereo_metadata else None
-            ),
+            camera_config=camera_config,
+            camera_position=camera_position,
+            camera_rotation=camera_rotation,
             filter_classes=[yolo_class],
         )
 
@@ -173,7 +186,7 @@ def detect_field(
                 ["Verify YOLO model is correct field detector model"],
             )
 
-        detected_letter = detected_class[5:].upper()  # "fielda"[5:] = "a" → "A"
+        detected_letter = detected_class[5:].upper()  # "fieldg"[5:] = "g" → "G"
 
         # Get 3D world position from stereo detection
         world_position = detection.world_position
@@ -361,6 +374,14 @@ def detect_all_fields(
                 ["Check both stereo cameras are active"],
             )
 
+        # Extract typed camera config + pose from Unity stereo metadata
+        try:
+            from .StereoUtils import camera_config_from_metadata
+        except ImportError:
+            from operations.StereoUtils import camera_config_from_metadata
+
+        stereo_params = camera_config_from_metadata(stereo_metadata)
+
         # Run YOLO detection with all field classes (fielda-fieldi)
         field_classes = [f"field{chr(ord('a') + i)}" for i in range(9)]  # fielda-fieldi
 
@@ -373,9 +394,9 @@ def detect_all_fields(
         detections = detector.detect_objects_stereo(
             imgL=left_image,
             imgR=right_image,
-            camera_config=(
-                stereo_metadata.get("camera_params") if stereo_metadata else None
-            ),
+            camera_config=stereo_params.camera_config,
+            camera_position=stereo_params.camera_position,
+            camera_rotation=stereo_params.camera_rotation,
             filter_classes=field_classes,
         )
 
@@ -527,6 +548,29 @@ def create_detect_field_operation() -> BasicOperation:
             typical_before=[
                 "motion_move_to_coord_001",
                 "manipulation_grasp_object_001",
+            ],
+            parameter_flows=[
+                ParameterFlow(
+                    source_operation="detect_field",
+                    source_output_key="center.x",
+                    target_operation="motion_move_to_coord_001",
+                    target_input_param="x",
+                    description="Field center X coordinate for move_to_coordinate",
+                ),
+                ParameterFlow(
+                    source_operation="detect_field",
+                    source_output_key="center.y",
+                    target_operation="motion_move_to_coord_001",
+                    target_input_param="y",
+                    description="Field center Y coordinate for move_to_coordinate",
+                ),
+                ParameterFlow(
+                    source_operation="detect_field",
+                    source_output_key="center.z",
+                    target_operation="motion_move_to_coord_001",
+                    target_input_param="z",
+                    description="Field center Z coordinate for move_to_coordinate",
+                ),
             ],
         ),
         implementation=detect_field,

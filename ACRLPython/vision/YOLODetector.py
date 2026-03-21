@@ -173,26 +173,21 @@ class YOLODetector:
         )
     """
 
-    # Class name mapping for all detected object types
-    # Configured based on trained model (cube_dataset.yaml)
-    # Default: map YOLO class IDs to object class names
+    # Class name mapping for all detected object types.
+    # Mirrors the class list embedded in field_detector.onnx (the authoritative source).
+    # This fallback is only used when the model file has no embedded metadata.
     DEFAULT_CLASS_MAPPING = {
         0: "red_cube",
         1: "blue_cube",
-        2: "fielda",
-        3: "fieldb",
-        4: "fieldc",
-        5: "robot",
-        6: "plate",
-        7: "base",
-        8: "shoulder",
-        9: "elbow",
-        10: "wrist1",
-        11: "wrist2",
-        12: "gipperjoint",
-        13: "gripperbase",
-        14: "gripperjawleft",
-        15: "gripperjawright",
+        2: "field_a",
+        3: "field_b",
+        4: "field_c",
+        5: "field_d",
+        6: "field_e",
+        7: "field_f",
+        8: "field_g",
+        9: "field_h",
+        10: "field_i",
     }
 
     def __init__(

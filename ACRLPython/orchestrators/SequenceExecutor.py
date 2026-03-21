@@ -313,8 +313,7 @@ class SequenceExecutor:
 
                     # Capture result to variable if specified (manual capture)
                     if capture_var and cmd_result.get("result"):
-                        self._variables[capture_var] = cmd_result["result"]
-                        logger.debug(f"Captured result to ${capture_var}")
+                        self._capture_result_to_var(capture_var, cmd_result["result"])
 
                     # Automatically capture outputs based on ParameterFlow definitions
                     self._auto_capture_outputs(operation, cmd_result.get("result", {}))
@@ -506,8 +505,7 @@ class SequenceExecutor:
 
                         # Capture variables (thread-safe write)
                         if capture_var and cmd_result.get("result"):
-                            self._variables[capture_var] = cmd_result["result"]
-                            logger.debug(f"Captured result to ${capture_var}")
+                            self._capture_result_to_var(capture_var, cmd_result["result"])
 
                         # Auto-capture outputs
                         self._auto_capture_outputs(
@@ -1078,6 +1076,32 @@ class SequenceExecutor:
             logger.debug(f"KG spatial feasibility check skipped: {e}")
             return {"safe": True, "warning": f"KG check skipped: {e}"}
 
+    def _capture_result_to_var(self, capture_var: str, result: Dict[str, Any]) -> None:
+        """
+        Store an operation result under a named variable for later $ references.
+
+        If the result contains a "center" dict (field detection pattern), the center
+        coordinates are stored directly as the variable value so that existing
+        coordinate resolution logic ($var.x / $var with x/y/z params) works without
+        requiring the LLM to know the nested "center" key.  The full result is also
+        stored under "<capture_var>_result" for callers that need field_label etc.
+
+        Args:
+            capture_var: Variable name (the "capture_var" key from the command).
+            result: The operation result dict (cmd_result["result"]).
+        """
+        if isinstance(result.get("center"), dict):
+            # Field-detection result: expose center coordinates at the top level
+            # so $field_g.x / $field_g resolve correctly via existing coord logic.
+            self._variables[capture_var] = result["center"]
+            self._variables[f"{capture_var}_result"] = result
+            logger.debug(
+                f"Captured field center to ${capture_var} and full result to ${capture_var}_result"
+            )
+        else:
+            self._variables[capture_var] = result
+            logger.debug(f"Captured result to ${capture_var}")
+
     def _auto_capture_outputs(self, operation_name: str, result: Dict[str, Any]):
         """
         Automatically capture operation outputs based on ParameterFlow definitions.
@@ -1104,19 +1128,36 @@ class SequenceExecutor:
         # Capture each output defined in parameter flows
         for flow in param_flows:
             output_key = flow.source_output_key
-            if output_key in result:
-                # Store with a namespaced variable name: {operation}_{key}
-                var_name = f"{operation_name}_{output_key}"
-                self._variables[var_name] = result[output_key]
-                logger.debug(
-                    f"Auto-captured {output_key}={result[output_key]} to ${var_name} (from {operation_name})"
-                )
 
-                # Also store in operation-level dict for easier access
-                op_result_var = f"{operation_name}_result"
-                if op_result_var not in self._variables:
-                    self._variables[op_result_var] = {}
-                self._variables[op_result_var][output_key] = result[output_key]
+            # Resolve dotted keys (e.g. "center.x" → result["center"]["x"])
+            if "." in output_key:
+                parts = output_key.split(".", 1)
+                parent_val = result.get(parts[0])
+                value = (
+                    parent_val.get(parts[1])
+                    if isinstance(parent_val, dict)
+                    else None
+                )
+            else:
+                value = result.get(output_key)
+
+            if value is None:
+                continue
+
+            # Store with a namespaced variable name: {operation}_{key}
+            # Dots are replaced with underscores so the name stays a valid key.
+            safe_key = output_key.replace(".", "_")
+            var_name = f"{operation_name}_{safe_key}"
+            self._variables[var_name] = value
+            logger.debug(
+                f"Auto-captured {output_key}={value} to ${var_name} (from {operation_name})"
+            )
+
+            # Also store in operation-level dict for easier access
+            op_result_var = f"{operation_name}_result"
+            if op_result_var not in self._variables:
+                self._variables[op_result_var] = {}
+            self._variables[op_result_var][safe_key] = value
 
     def _auto_inject_parameters(
         self, operation_name: str, params: Dict[str, Any]
@@ -1163,7 +1204,9 @@ class SequenceExecutor:
                 continue
 
             # Try to get value from captured variables
-            source_var_name = f"{flow.source_operation}_{flow.source_output_key}"
+            # Dots in source_output_key are stored as underscores (see _auto_capture_outputs)
+            safe_key = flow.source_output_key.replace(".", "_")
+            source_var_name = f"{flow.source_operation}_{safe_key}"
             if source_var_name in self._variables:
                 var_value = self._variables[source_var_name]
 
@@ -1192,12 +1235,106 @@ class SequenceExecutor:
 
         return enhanced_params
 
+    def _resolve_single_value(self, key: str, value: Any) -> Any:
+        """
+        Resolve a single parameter value that may contain a $ variable reference.
+
+        Handles arithmetic expressions, dotted notation, and simple variable
+        references.  Called by _resolve_variables for both top-level params and
+        individual elements inside list/tuple values.
+
+        Args:
+            key: Parameter name (used for coordinate/object_id special-casing).
+            value: The value to resolve — must be a str containing "$".
+
+        Returns:
+            Resolved value, or the original string if resolution fails.
+        """
+        # Handle expressions with arithmetic (e.g., "$target.z + 0.05")
+        if any(op in value for op in ["+", "-", "*", "/"]):
+            resolved_value = self._resolve_expression(value)
+            if resolved_value is not None:
+                return resolved_value
+            logger.warning(f"Could not resolve expression: {value}")
+            return value
+
+        # Handle dotted notation (e.g., "$target.x") — resolves to a scalar directly
+        if "." in value and value.startswith("$"):
+            resolved_value = self._resolve_dotted_variable(value)
+            if resolved_value is not None:
+                return resolved_value
+
+            # Dotted resolution failed — try known fallback patterns.
+            parts = value[1:].split(".")  # strip "$", split by dots
+            base_var = parts[0]
+            base_val = self._variables.get(base_var)
+
+            # Pattern: "$field.center.x" where detect_field already stored the center
+            # dict directly under the capture variable (i.e. $field == {"x":…,"y":…,"z":…}).
+            # The LLM may still emit ".center." — strip that level and retry.
+            if (
+                len(parts) == 3
+                and parts[1] == "center"
+                and parts[2] in ("x", "y", "z")
+                and isinstance(base_val, dict)
+                and parts[2] in base_val
+            ):
+                recovered = base_val[parts[2]]
+                logger.warning(
+                    f"Variable {value} not found — recovered as ${base_var}.{parts[2]}={recovered}"
+                )
+                return recovered
+
+            # Pattern: "$target.id" / "$target.name" used instead of "$target.color"
+            # for object_id parameters in grasp operations.
+            if key.startswith("object_id") and isinstance(base_val, dict) and "color" in base_val:
+                logger.warning(
+                    f"Variable {value} not found for object_id — "
+                    f"falling back to ${base_var}.color='{base_val['color']}'"
+                )
+                return base_val["color"]
+
+            logger.warning(f"Variable {value} not found")
+            return value
+
+        # Handle simple variable reference (e.g., "$target")
+        if value.startswith("$"):
+            var_name = value[1:]
+            if var_name in self._variables:
+                var_value = self._variables[var_name]
+
+                # Special handling for position/coordinate parameters
+                if key in ["x", "y", "z"] and isinstance(var_value, dict):
+                    return var_value.get(key, 0.0)
+                if key == "position" and isinstance(var_value, dict):
+                    # Caller handles the dict → x/y/z expansion in _resolve_variables
+                    return var_value
+                # Special handling for object_id / object_id1 / object_id2
+                if key.startswith("object_id") and isinstance(var_value, dict):
+                    if "color" in var_value:
+                        logger.info(
+                            f"Extracted object_id='{var_value['color']}' from detection result"
+                        )
+                        return var_value["color"]
+                    logger.warning(
+                        "Detection result missing 'color' field, cannot extract object_id"
+                    )
+                    return value
+                return var_value
+
+            logger.warning(f"Variable ${var_name} not found")
+            return value
+
+        return value
+
     def _resolve_variables(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """
         Resolve variable references in parameters.
 
         Variables are referenced with $ prefix (e.g., $target).
-        Supports dotted notation (e.g., $target.x) and arithmetic expressions (e.g., $target.z + 0.05).
+        Supports dotted notation (e.g., $target.x), arithmetic expressions
+        (e.g., $target.z + 0.05), and list/tuple values whose elements may
+        themselves be variable references (e.g., object_ref: ["$p.x", "$p.y", "$p.z"]).
 
         Args:
             params: Parameters that may contain variable references
@@ -1208,59 +1345,25 @@ class SequenceExecutor:
         resolved = {}
         for key, value in params.items():
             if isinstance(value, str) and "$" in value:
-                # Handle expressions with arithmetic (e.g., "$target.z + 0.05")
-                if any(op in value for op in ["+", "-", "*", "/"]):
-                    resolved_value = self._resolve_expression(value)
-                    if resolved_value is not None:
-                        resolved[key] = resolved_value
-                    else:
-                        logger.warning(f"Could not resolve expression: {value}")
-                        resolved[key] = value
-                # Handle dotted notation (e.g., "$target.x")
-                elif "." in value and value.startswith("$"):
-                    resolved_value = self._resolve_dotted_variable(value)
-                    if resolved_value is not None:
-                        resolved[key] = resolved_value
-                    else:
-                        logger.warning(f"Variable {value} not found")
-                        resolved[key] = value
-                # Handle simple variable reference (e.g., "$target")
-                elif value.startswith("$"):
-                    var_name = value[1:]  # Remove $ prefix
-
-                    if var_name in self._variables:
-                        var_value = self._variables[var_name]
-
-                        # Special handling for position/coordinate parameters
-                        if key in ["x", "y", "z"] and isinstance(var_value, dict):
-                            # Extract coordinate from detection result
-                            resolved[key] = var_value.get(key, 0.0)
-                        elif key == "position" and isinstance(var_value, dict):
-                            # Expand position variable to x, y, z
-                            resolved["x"] = var_value.get("x", 0.0)
-                            resolved["y"] = var_value.get("y", 0.0)
-                            resolved["z"] = var_value.get("z", 0.0)
-                        # Special handling for object_id / object_id1 / object_id2 with detection result
-                        elif key.startswith("object_id") and isinstance(var_value, dict):
-                            # Extract object identifier from detection result
-                            # Detection results have 'color' field (e.g., "blue_cube")
-                            if "color" in var_value:
-                                resolved[key] = var_value["color"]
-                                logger.info(
-                                    f"Extracted object_id='{var_value['color']}' from detection result"
-                                )
-                            else:
-                                logger.warning(
-                                    f"Detection result missing 'color' field, cannot extract object_id"
-                                )
-                                resolved[key] = value
-                        else:
-                            resolved[key] = var_value
-                    else:
-                        logger.warning(f"Variable ${var_name} not found")
-                        resolved[key] = value
+                result = self._resolve_single_value(key, value)
+                # Special case: simple $var that resolved to a position dict
+                if key == "position" and isinstance(result, dict):
+                    resolved["x"] = result.get("x", 0.0)
+                    resolved["y"] = result.get("y", 0.0)
+                    resolved["z"] = result.get("z", 0.0)
                 else:
-                    resolved[key] = value
+                    resolved[key] = result
+            elif isinstance(value, (list, tuple)):
+                # Resolve any $ references inside list/tuple elements (e.g., object_ref)
+                resolved_list = []
+                for element in value:
+                    if isinstance(element, str) and "$" in element:
+                        # Use a neutral key so coordinate/object_id special-casing
+                        # doesn't fire — dotted refs like "$p.x" already yield scalars.
+                        resolved_list.append(self._resolve_single_value("", element))
+                    else:
+                        resolved_list.append(element)
+                resolved[key] = type(value)(resolved_list) if isinstance(value, tuple) else resolved_list
             else:
                 resolved[key] = value
 

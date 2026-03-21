@@ -35,20 +35,12 @@ except ImportError:
 # Import config
 try:
     from config.Vision import (
-        DEFAULT_STEREO_BASELINE,
-        DEFAULT_STEREO_FOV,
-        DEFAULT_STEREO_CAMERA_POSITION,
-        DEFAULT_STEREO_CAMERA_ROTATION,
         ENABLE_VISION_STREAMING,
         VISION_OPERATION_TIMEOUT,
     )
     from config.Servers import DEFAULT_LMSTUDIO_MODEL
 except ImportError:
     from ..config.Vision import (
-        DEFAULT_STEREO_BASELINE,
-        DEFAULT_STEREO_FOV,
-        DEFAULT_STEREO_CAMERA_POSITION,
-        DEFAULT_STEREO_CAMERA_ROTATION,
         ENABLE_VISION_STREAMING,
         VISION_OPERATION_TIMEOUT,
     )
@@ -307,16 +299,6 @@ def detect_object_stereo(
     if color == "None":
         color = None
 
-    # Set defaults from config
-    if baseline is None:
-        baseline = DEFAULT_STEREO_BASELINE
-    if fov is None:
-        fov = DEFAULT_STEREO_FOV
-    if camera_position is None:
-        camera_position = DEFAULT_STEREO_CAMERA_POSITION
-    if camera_rotation is None:
-        camera_rotation = DEFAULT_STEREO_CAMERA_ROTATION
-
     try:
         # Get image storage and command broadcaster using centralized imports
         storage = get_unified_image_storage()
@@ -396,22 +378,20 @@ def detect_object_stereo(
         # Get metadata from storage (contains camera pose from Unity)
         metadata = storage.get_stereo_metadata(camera_id)
         logger.info(f"Metadata for {camera_id}: {metadata}")
+
+        from operations.StereoUtils import camera_config_from_metadata
+        stereo_params = camera_config_from_metadata(
+            metadata,
+            baseline=baseline,
+            fov=fov,
+            camera_position=camera_position,
+            camera_rotation=camera_rotation,
+        )
+        baseline = stereo_params.camera_config.baseline
+        fov = stereo_params.camera_config.fov
+        camera_position = stereo_params.camera_position
+        camera_rotation = stereo_params.camera_rotation
         if metadata:
-            # Use values from Unity metadata (override defaults)
-            if "baseline" in metadata and metadata["baseline"] is not None:
-                baseline = float(metadata["baseline"])
-            if "fov" in metadata and metadata["fov"] is not None:
-                fov = float(metadata["fov"])
-            if (
-                "camera_position" in metadata
-                and metadata["camera_position"] is not None
-            ):
-                camera_position = metadata["camera_position"]
-            if (
-                "camera_rotation" in metadata
-                and metadata["camera_rotation"] is not None
-            ):
-                camera_rotation = metadata["camera_rotation"]
             logger.info(
                 f"Using metadata from Unity: pos={camera_position}, rot={camera_rotation}"
             )

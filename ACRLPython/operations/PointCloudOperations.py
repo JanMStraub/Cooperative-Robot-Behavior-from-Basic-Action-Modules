@@ -239,18 +239,16 @@ def generate_point_cloud(
             )
 
         # --- Extract camera intrinsics / extrinsics from metadata ---
-        camera_params = metadata.get("camera_params", metadata)
-        fov = float(camera_params.get("fov", 60.0))
-        baseline = float(
-            camera_params.get("baseline", camera_params.get("cam_dist", 0.1))
-        )
+        try:
+            from .StereoUtils import camera_config_from_metadata
+        except ImportError:
+            from operations.StereoUtils import camera_config_from_metadata
 
-        cam_pos_raw = camera_params.get("camera_position", [0.0, 0.0, 0.0])
-        cam_rot_raw = camera_params.get("camera_rotation", [0.0, 0.0, 0.0, 1.0])
-
-        # Normalise to plain lists for JSON serialisation safety
-        camera_position = [float(v) for v in cam_pos_raw]
-        camera_rotation = [float(v) for v in cam_rot_raw]
+        stereo_params = camera_config_from_metadata(metadata)
+        fov = stereo_params.camera_config.fov
+        baseline = stereo_params.camera_config.baseline
+        camera_position = [float(v) for v in stereo_params.camera_position]
+        camera_rotation = [float(v) for v in stereo_params.camera_rotation]
 
         # --- Stereo reconstruction ---
         logger.info(
@@ -405,12 +403,9 @@ GENERATE_POINT_CLOUD_OPERATION = BasicOperation(
         ),
     ],
     preconditions=[
-        "Stereo images must have been captured and stored in UnifiedImageStorage",
-        "Stereo camera rig must be active in Unity (port 5006)",
+        "stereo_images_available(max_age_seconds)",
     ],
-    postconditions=[
-        "Returns 3D point cloud in camera frame ready for neural grasp planning",
-    ],
+    postconditions=[],
     average_duration_ms=300.0,
     success_rate=0.85,
     failure_modes=[

@@ -29,12 +29,12 @@ Prerequisites
 
 Coverage
 --------
-All 30 operations registered in operations/Registry.py (plus variable chaining):
+All 31 operations registered in operations/Registry.py (plus variable chaining):
 
     Level 1-2 Basic (18):
         Navigation:   move_to_coordinate, move_from_a_to_b,
                       adjust_end_effector_orientation, return_to_start
-        Gripper:      control_gripper, release_object
+        Gripper:      control_gripper, release_object, place_object
         Perception:   detect_objects, detect_object_stereo, analyze_scene,
                       estimate_distance_to_object, estimate_distance_between_objects
         Field:        detect_field, get_field_center, detect_all_fields
@@ -681,6 +681,32 @@ class TestGraspOps:
         assert (
             result.get("success") is True or result.get("error") is not None
         ), "grasp_object returned an unexpected response"
+
+    def test_place_object(self):
+        """place_object performs hover → descent → gripper open → ascent at a target position.
+
+        Robot2 first grasps redCube, then places it at a nearby coordinate.
+        The test accepts a structured error (e.g. IK infeasible) as a valid
+        response — the important thing is that the operation is dispatched and
+        returns a well-formed result rather than crashing or timing out.
+        """
+        # Grasp first so there is something to place.
+        _cmd(
+            "grasp redCube with Robot2",
+            robot_id="Robot2",
+            timeout=240.0,
+            request_id=0,
+        )
+        x, y, z = _R2_COORD
+        result = _cmd(
+            f"place object at coordinate {x} {y + 0.05} {z} with Robot2",
+            robot_id="Robot2",
+            timeout=240.0,
+            request_id=802,
+        )
+        assert (
+            result.get("success") is True or result.get("error") is not None
+        ), "place_object returned an unexpected response"
 
     def test_align_object(self):
         """align_object aligns Robot2's end effector to match redCube's orientation."""

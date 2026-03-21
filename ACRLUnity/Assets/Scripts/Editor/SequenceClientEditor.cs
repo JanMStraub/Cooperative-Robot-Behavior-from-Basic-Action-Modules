@@ -243,13 +243,13 @@ namespace EditorScripts
             if (GUILayout.Button("Move to Position", _buttonStyle))
             {
                 Undo.RecordObject(client, "Change Prompt");
-                client.Prompt = "Move robot to position x=0, y=0.3, z=0";
+                client.Prompt = "Move robot 1 to position x=0, y=0.3, z=0";
                 EditorUtility.SetDirty(client);
             }
             if (GUILayout.Button("Start Position", _buttonStyle))
             {
                 Undo.RecordObject(client, "Change Prompt");
-                client.Prompt = "Move the robot to the start position";
+                client.Prompt = "Move robot 1 to the start position";
                 EditorUtility.SetDirty(client);
             }
             EditorGUILayout.EndHorizontal();
@@ -258,13 +258,13 @@ namespace EditorScripts
             if (GUILayout.Button("Open Gripper", _buttonStyle))
             {
                 Undo.RecordObject(client, "Change Prompt");
-                client.Prompt = "Open gripper";
+                client.Prompt = "Robot 1: Open gripper";
                 EditorUtility.SetDirty(client);
             }
             if (GUILayout.Button("Close Gripper", _buttonStyle))
             {
                 Undo.RecordObject(client, "Change Prompt");
-                client.Prompt = "Close gripper";
+                client.Prompt = "Robot1: Close gripper";
                 EditorUtility.SetDirty(client);
             }
             EditorGUILayout.EndHorizontal();
@@ -279,7 +279,7 @@ namespace EditorScripts
             if (GUILayout.Button("Move from a to b", _buttonStyle))
             {
                 Undo.RecordObject(client, "Change Prompt");
-                client.Prompt = "Move from x=0, y=0.3, z=0 to x=0.1, y=0.1, z=0.1";
+                client.Prompt = "Move robot 1 from x=0, y=0.3, z=0 to x=0.1, y=0.1, z=0.1";
                 EditorUtility.SetDirty(client);
             }
             EditorGUILayout.EndHorizontal();
@@ -288,13 +288,13 @@ namespace EditorScripts
             if (GUILayout.Button("Rotate robot", _buttonStyle))
             {
                 Undo.RecordObject(client, "Change Prompt");
-                client.Prompt = "Rotate the gripper 90 degrees";
+                client.Prompt = "Rotate the gripper of robot 2 90 degrees";
                 EditorUtility.SetDirty(client);
             }
             if (GUILayout.Button("Pick object from position", _buttonStyle))
             {
                 Undo.RecordObject(client, "Change Prompt");
-                client.Prompt = "Pick the object from (-0.2, 0, 0.05)";
+                client.Prompt = "Robot 1: Pick the object from (-0.2, 0, 0.05)";
                 EditorUtility.SetDirty(client);
             }
             EditorGUILayout.EndHorizontal();
@@ -303,7 +303,7 @@ namespace EditorScripts
             if (GUILayout.Button("Release object", _buttonStyle))
             {
                 Undo.RecordObject(client, "Change Prompt");
-                client.Prompt = "Release object";
+                client.Prompt = "Robot 1: Release object";
                 EditorUtility.SetDirty(client);
             }
             if (GUILayout.Button("Pick object from position", _buttonStyle))
@@ -322,13 +322,13 @@ namespace EditorScripts
             if (GUILayout.Button("Pick Sequence", _buttonStyle))
             {
                 Undo.RecordObject(client, "Change Prompt");
-                client.Prompt = "Grab the blue cube on the left";
+                client.Prompt = "Robot 1: Grab the blue cube on the left";
                 EditorUtility.SetDirty(client);
             }
             if (GUILayout.Button("Place Sequence", _buttonStyle))
             {
                 Undo.RecordObject(client, "Change Prompt");
-                client.Prompt = "Move to field a and place the object there";
+                client.Prompt = "Robot 1: Move to field g and place the object there";
                 EditorUtility.SetDirty(client);
             }
             EditorGUILayout.EndHorizontal();

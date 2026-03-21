@@ -181,6 +181,7 @@ class TestDetectionErrors:
         """Test detection when no image is available from ImageStorage."""
         mock_storage = Mock()
         mock_storage.get_single_image = Mock(return_value=None)
+        mock_storage.get_latest_stereo_image = Mock(return_value=None)
         mock_storage.get_instance = Mock(return_value=mock_storage)
 
         with patch(

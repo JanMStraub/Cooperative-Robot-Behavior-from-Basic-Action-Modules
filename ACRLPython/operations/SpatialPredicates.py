@@ -734,6 +734,80 @@ def region_available_for_robot(
 
 
 # ============================================================================
+# Gripper and Image Availability Predicates
+# ============================================================================
+
+
+@register_predicate("gripper_holding_object")
+def gripper_holding_object(robot_id: str, world_state=None) -> Tuple[bool, str]:
+    """
+    Check if the robot's gripper is currently closed (holding an object).
+
+    Uses the gripper_state field from WorldState RobotState, which is updated
+    from Unity via WorldStateServer messages.
+
+    Args:
+        robot_id: Robot identifier
+        world_state: Optional WorldState instance
+
+    Returns:
+        (is_valid, reason_if_invalid)
+    """
+    if world_state is None:
+        try:
+            from .WorldState import get_world_state
+        except ImportError:
+            from operations.WorldState import get_world_state
+        world_state = get_world_state()
+
+    state = world_state._robot_states.get(robot_id)
+    if state is None:
+        return False, f"Robot '{robot_id}' not found in world state"
+
+    if state.gripper_state == "closed":
+        return True, ""
+
+    return False, f"Robot '{robot_id}' gripper is '{state.gripper_state}', expected 'closed'"
+
+
+@register_predicate("stereo_images_available")
+def stereo_images_available(max_age_seconds: float = 30.0, world_state=None) -> Tuple[bool, str]:
+    """
+    Check if a recent stereo image pair is available in UnifiedImageStorage.
+
+    Queries the image storage singleton for the latest stereo pair timestamp
+    and rejects pairs older than max_age_seconds.
+
+    Args:
+        max_age_seconds: Maximum acceptable age of stereo images in seconds
+        world_state: Unused; accepted for predicate system compatibility
+
+    Returns:
+        (is_valid, reason_if_invalid)
+    """
+    import time
+
+    try:
+        from servers.ImageStorageCore import UnifiedImageStorage
+    except ImportError:
+        return False, "ImageStorageCore unavailable — cannot verify stereo images"
+
+    storage = UnifiedImageStorage()
+    if storage is None:
+        return False, "UnifiedImageStorage not initialized"
+
+    latest_ts = storage.get_latest_stereo_timestamp()
+    if latest_ts == 0.0:
+        return False, "No stereo images in storage"
+
+    age = time.time() - latest_ts
+    if age > max_age_seconds:
+        return False, f"Stereo images are stale ({age:.1f}s old, max {max_age_seconds}s)"
+
+    return True, ""
+
+
+# ============================================================================
 # Utility Functions
 # ============================================================================
 

@@ -2792,7 +2792,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5e40cb458152e449392e9d9edbd0dcfa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSControlModeManager
-  _initialMode: 1
+  _initialMode: 0
   _robotController: {fileID: 1440759134938604137}
   _jointStatePublisher: {fileID: 384678295724699492}
   _trajectorySubscriber: {fileID: 3861989622656847497}
@@ -9900,7 +9900,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5e40cb458152e449392e9d9edbd0dcfa, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSControlModeManager
-  _initialMode: 1
+  _initialMode: 0
   _robotController: {fileID: 1782900251721025928}
   _jointStatePublisher: {fileID: 5824589639710925805}
   _trajectorySubscriber: {fileID: 7753383895358973258}
