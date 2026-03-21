@@ -5,47 +5,50 @@ using Robotics;
 using UnityEngine;
 
 /// <summary>
-/// Captures screenshots of cubes from various angles by rotating camera around them
-/// Automatically generates YOLO format labels
+/// Generates a YOLO training dataset by capturing screenshots from a fixed stereo camera position.
+/// Randomizes scene contents (object positions, robot joint poses) between captures while keeping
+/// the camera at its real mounting position with small jitter for augmentation.
 /// </summary>
 public class SaveScreenshots : MonoBehaviour
 {
-    public int numScreenshots = 10;
+    public int numScreenshots = 3000;
     public string outputDir = "YOLODataset/images";
     public string labelsDir = "YOLODataset/labels";
-    public GameObject[] objectsToLabel; // Assign all objects to label (cubes, robot parts, etc.)
-    public RobotController[] robots; // Assign robot controllers for joint randomization
+    public GameObject[] objectsToLabel;
+    public RobotController[] robots;
 
     [Header("Dataset Split Settings")]
     [Range(0f, 1f)]
-    public float trainSplit = 0.8f; // 80% for training
+    public float trainSplit = 0.8f;
 
     [Range(0f, 1f)]
-    public float testSplit = 0.1f; // 10% for testing
+    public float testSplit = 0.1f;
 
     [Range(0f, 1f)]
-    public float validSplit = 0.1f; // 10% for validation
+    public float validSplit = 0.1f;
 
-    [Header("Camera Orbit Settings")]
-    public float orbitRadius = 0.8f; // Distance from center point
-    public float minElevation = 15f; // Minimum camera elevation angle
-    public float maxElevation = 45f; // Maximum camera elevation angle
-    public Vector3 orbitCenter = new Vector3(0f, 0.3f, 0f); // Center point to orbit around
+    [Header("Camera Jitter (augmentation around fixed mount position)")]
+    [Tooltip("Max random position offset in meters per axis")]
+    public float positionJitter = 0.02f;
 
-    [Header("Random Angle Variation")]
-    public float pitchVariation = 5f; // Random pitch offset
-    public float yawVariation = 5f; // Random yaw offset
+    [Tooltip("Max random rotation offset in degrees per axis")]
+    public float rotationJitter = 2f;
+
+    [Header("Object Randomization")]
+    [Tooltip("Min/max bounds for randomizing Target-tagged object positions (matches robot workspace)")]
+    public Vector3 objectSpawnMin = new Vector3(-0.35f, 0.0f, -0.35f);
+    public Vector3 objectSpawnMax = new Vector3(0.35f, 0.4f, 0.35f);
 
     [Header("Capture Settings")]
-    public int captureWidth = 640; // Image width (YOLO standard)
-    public int captureHeight = 640; // Image height (YOLO standard)
+    public int captureWidth = 640;
+    public int captureHeight = 640;
 
     [Range(0, 100)]
-    public int jpegQuality = 85; // JPEG compression quality
+    public int jpegQuality = 85;
 
     [Header("YOLO Label Settings")]
-    public bool generateLabels = true; // Auto-generate YOLO labels
-    public string[] classNames; // Class names for mapping (e.g., "red", "blue", "green")
+    public bool generateLabels = true;
+    public string[] classNames;
 
     [Range(0f, 1f)]
     [Tooltip(
@@ -71,26 +74,26 @@ public class SaveScreenshots : MonoBehaviour
     )]
     public float occlusionVisibilityThreshold = 0.3f;
 
+    public Camera cam;
+
     private int captureCount = 0;
     private Dictionary<string, int> classNameToId;
-
-    // Caches (classId, className) per object instance ID to avoid repeated ExtractClassName allocations
     private Dictionary<int, (int classId, string className)> _objectClassCache;
-
-    public Camera cam;
     private RenderTexture renderTexture;
     private Texture2D screenShot;
 
+    // Stored on Start() from the camera's actual scene transform
+    private Vector3 baseCameraPosition;
+    private Quaternion baseCameraRotation;
+
     void Start()
     {
-        // Create train/test/valid subdirectories for images
         Directory.CreateDirectory(Path.Combine(outputDir, "train"));
         Directory.CreateDirectory(Path.Combine(outputDir, "test"));
         Directory.CreateDirectory(Path.Combine(outputDir, "valid"));
 
         if (generateLabels)
         {
-            // Create train/test/valid subdirectories for labels
             Directory.CreateDirectory(Path.Combine(labelsDir, "train"));
             Directory.CreateDirectory(Path.Combine(labelsDir, "test"));
             Directory.CreateDirectory(Path.Combine(labelsDir, "valid"));
@@ -98,7 +101,6 @@ public class SaveScreenshots : MonoBehaviour
             InitializeClassMapping();
             CreateClassesFile();
 
-            // Pre-build per-object cache to avoid repeated ExtractClassName allocations at label time
             _objectClassCache = new Dictionary<int, (int, string)>();
             foreach (var obj in objectsToLabel)
             {
@@ -110,7 +112,6 @@ public class SaveScreenshots : MonoBehaviour
             }
         }
 
-        // Validate split ratios
         float totalSplit = trainSplit + testSplit + validSplit;
         if (Mathf.Abs(totalSplit - 1f) > 0.01f)
         {
@@ -122,23 +123,54 @@ public class SaveScreenshots : MonoBehaviour
             validSplit /= totalSplit;
         }
 
-        // Get camera component
         if (cam == null)
         {
-            Debug.LogError("SaveScreenshots: No Camera component found!");
+            Debug.LogError("SaveScreenshots: No Camera assigned!");
             enabled = false;
             return;
         }
 
-        // Create RenderTexture for fixed resolution capture
+        // Store the camera's real mounting position/rotation from the scene
+        baseCameraPosition = cam.transform.position;
+        baseCameraRotation = cam.transform.rotation;
+
         renderTexture = new RenderTexture(captureWidth, captureHeight, 24);
         screenShot = new Texture2D(captureWidth, captureHeight, TextureFormat.RGB24, false);
 
-        InvokeRepeating("CaptureRandomScene", 1f, 0.2f);
+        Debug.Log(
+            $"SaveScreenshots: Starting capture of {numScreenshots} images. "
+            + $"Camera base position: {baseCameraPosition}, rotation: {baseCameraRotation.eulerAngles}"
+        );
+
+        StartCoroutine(CaptureLoop());
     }
 
     /// <summary>
-    /// Initializes the class name to ID mapping
+    /// Coroutine that captures screenshots, waiting for physics to settle between each capture.
+    /// </summary>
+    IEnumerator CaptureLoop()
+    {
+        yield return new WaitForSeconds(1f);
+
+        while (captureCount < numScreenshots)
+        {
+            SetupRandomScene();
+
+            // Wait for physics to settle after repositioning objects and joints
+            for (int i = 0; i < 10; i++)
+                yield return new WaitForFixedUpdate();
+
+            CaptureToFile();
+            captureCount++;
+
+            yield return null;
+        }
+
+        Debug.Log($"Dataset generation complete: captured {captureCount} screenshots");
+    }
+
+    /// <summary>
+    /// Initializes the class name to ID mapping.
     /// </summary>
     void InitializeClassMapping()
     {
@@ -146,7 +178,6 @@ public class SaveScreenshots : MonoBehaviour
 
         if (classNames != null && classNames.Length > 0)
         {
-            // Use provided class names
             for (int i = 0; i < classNames.Length; i++)
             {
                 classNameToId[classNames[i].ToLower()] = i;
@@ -154,7 +185,6 @@ public class SaveScreenshots : MonoBehaviour
         }
         else
         {
-            // Auto-detect class names from labeled objects
             HashSet<string> uniqueNames = new HashSet<string>();
             foreach (var obj in objectsToLabel)
             {
@@ -179,7 +209,7 @@ public class SaveScreenshots : MonoBehaviour
     }
 
     /// <summary>
-    /// Creates classes.txt file for YOLO training
+    /// Creates classes.txt file for YOLO training.
     /// </summary>
     void CreateClassesFile()
     {
@@ -189,11 +219,10 @@ public class SaveScreenshots : MonoBehaviour
     }
 
     /// <summary>
-    /// Extracts class name from GameObject name (e.g., "RedCube" -> "red", "BlueCube_01" -> "blue")
+    /// Extracts class name from GameObject name (e.g., "RedCube" -> "red_cube", "GripperBase_01" -> "gripperbase").
     /// </summary>
     string ExtractClassName(string objectName)
     {
-        // Remove numbers and underscores, get the color/type part
         string cleaned = objectName.ToLower();
 
         // IMPORTANT: Check more specific patterns FIRST to avoid substring conflicts
@@ -225,9 +254,9 @@ public class SaveScreenshots : MonoBehaviour
         if (cleaned.Contains("plate"))
             return "plate";
         if (cleaned.Contains("base"))
-            return "base"; // After gripperbase check
+            return "base";
         if (cleaned.Contains("joint"))
-            return "joint"; // After gripperjoint check
+            return "joint";
 
         // Generic robot
         if (cleaned.Contains("robot"))
@@ -235,17 +264,41 @@ public class SaveScreenshots : MonoBehaviour
 
         // Field objects
         if (cleaned.Contains("fielda"))
-            return "fielda";
+            return "field_a";
         if (cleaned.Contains("fieldb"))
-            return "fieldb";
+            return "field_b";
         if (cleaned.Contains("fieldc"))
-            return "fieldc";
+            return "field_c";
+        if (cleaned.Contains("fieldd"))
+            return "field_d";
+        if (cleaned.Contains("fielde"))
+            return "field_e";
+        if (cleaned.Contains("fieldf"))
+            return "field_f";
+        if (cleaned.Contains("fieldg"))
+            return "field_g";
+        if (cleaned.Contains("fieldh"))
+            return "field_h";
+        if (cleaned.Contains("fieldi"))
+            return "field_i";
 
-        // Cube colors (check last to avoid conflicts with robot parts)
-        if (cleaned.Contains("red"))
-            return "red";
+        // Cube colors — check multi-word colors before short ones
+        if (cleaned.Contains("magenta"))
+            return "magenta_cube";
+        if (cleaned.Contains("orange"))
+            return "orange_cube";
+        if (cleaned.Contains("purple"))
+            return "purple_cube";
+        if (cleaned.Contains("yellow"))
+            return "yellow_cube";
+        if (cleaned.Contains("green"))
+            return "green_cube";
+        if (cleaned.Contains("cyan"))
+            return "cyan_cube";
         if (cleaned.Contains("blue"))
-            return "blue";
+            return "blue_cube";
+        if (cleaned.Contains("red"))
+            return "red_cube";
 
         // Fallback: return first word
         string[] parts = objectName.Split('_', ' ');
@@ -253,7 +306,7 @@ public class SaveScreenshots : MonoBehaviour
     }
 
     /// <summary>
-    /// Gets class ID from GameObject name
+    /// Gets class ID from GameObject name.
     /// </summary>
     int GetClassId(string objectName)
     {
@@ -262,12 +315,11 @@ public class SaveScreenshots : MonoBehaviour
         {
             return classId;
         }
-        return 0; // Default to class 0 if not found
+        return 0;
     }
 
     void OnDestroy()
     {
-        // Clean up resources
         if (renderTexture != null)
         {
             renderTexture.Release();
@@ -280,26 +332,21 @@ public class SaveScreenshots : MonoBehaviour
     }
 
     /// <summary>
-    /// Captures a screenshot with randomized cube positions and camera angle
+    /// Randomizes scene contents and applies small camera jitter around the fixed mount position.
     /// </summary>
-    void CaptureRandomScene()
+    void SetupRandomScene()
     {
-        if (captureCount >= numScreenshots)
-        {
-            CancelInvoke();
-            Debug.Log($"Captured {captureCount} screenshots");
-            return;
-        }
-
-        // Randomize only Target-tagged object positions
+        // Randomize only Target-tagged object positions within table bounds
         foreach (var obj in objectsToLabel)
         {
+            if (obj == null)
+                continue;
             if (obj.CompareTag("Target"))
             {
                 obj.transform.position = new Vector3(
-                    Random.Range(-0.35f, 0.35f),
-                    Random.Range(0.0f, 0.35f),
-                    Random.Range(-0.35f, 0.35f)
+                    Random.Range(objectSpawnMin.x, objectSpawnMax.x),
+                    Random.Range(objectSpawnMin.y, objectSpawnMax.y),
+                    Random.Range(objectSpawnMin.z, objectSpawnMax.z)
                 );
                 obj.transform.rotation = Random.rotation;
             }
@@ -308,24 +355,34 @@ public class SaveScreenshots : MonoBehaviour
         // Randomize robot joint targets
         RandomizeRobotJointTargets();
 
-        // Position camera in orbit around cubes
-        PositionCameraInOrbit();
-
-        // Add slight random angle variation
-        transform.Rotate(
-            Random.Range(-pitchVariation, pitchVariation), // Pitch
-            Random.Range(-yawVariation, yawVariation), // Yaw
-            0f,
-            Space.Self
-        );
-
-        CaptureToFile();
-
-        captureCount++;
+        // Apply small jitter around the real camera mount position
+        ApplyCameraJitter();
     }
 
     /// <summary>
-    /// Determines which dataset split (train/test/valid) to use for the current capture
+    /// Applies small random position and rotation offsets to the camera around its fixed mount pose.
+    /// Simulates minor mounting tolerance and provides augmentation diversity.
+    /// </summary>
+    void ApplyCameraJitter()
+    {
+        Vector3 posOffset = new Vector3(
+            Random.Range(-positionJitter, positionJitter),
+            Random.Range(-positionJitter, positionJitter),
+            Random.Range(-positionJitter, positionJitter)
+        );
+        cam.transform.position = baseCameraPosition + posOffset;
+
+        cam.transform.rotation = baseCameraRotation;
+        cam.transform.Rotate(
+            Random.Range(-rotationJitter, rotationJitter),
+            Random.Range(-rotationJitter, rotationJitter),
+            0f,
+            Space.Self
+        );
+    }
+
+    /// <summary>
+    /// Determines which dataset split (train/test/valid) to use for the current capture.
     /// </summary>
     string GetDatasetSplit()
     {
@@ -340,47 +397,42 @@ public class SaveScreenshots : MonoBehaviour
     }
 
     /// <summary>
-    /// Captures camera view to file at specified resolution
+    /// Captures camera view to file at specified resolution.
     /// </summary>
     void CaptureToFile()
     {
-        // Set camera to render to our RenderTexture
         RenderTexture currentRT = RenderTexture.active;
         cam.targetTexture = renderTexture;
 
-        // Render the camera
         cam.Render();
 
-        // Determine which dataset split to use
         string split = GetDatasetSplit();
 
         // Generate YOLO labels WHILE camera is targeting RenderTexture
-        // This ensures WorldToViewportPoint uses correct projection
+        // so WorldToViewportPoint uses the correct projection
         string imageFilename = $"image_{captureCount:D4}.jpg";
         if (generateLabels)
         {
             GenerateYOLOLabels(imageFilename, split);
         }
 
-        // Read pixels from RenderTexture
         RenderTexture.active = renderTexture;
         screenShot.ReadPixels(new Rect(0, 0, captureWidth, captureHeight), 0, 0);
         screenShot.Apply();
 
-        // Restore camera settings
         cam.targetTexture = null;
         RenderTexture.active = currentRT;
 
-        // Encode to JPEG and save
         byte[] bytes = screenShot.EncodeToJPG(jpegQuality);
         string imagePath = Path.Combine(outputDir, split, imageFilename);
         File.WriteAllBytes(imagePath, bytes);
 
-        Debug.Log($"Saved {imageFilename} to {split} set");
+        if (captureCount % 100 == 0)
+            Debug.Log($"Progress: {captureCount}/{numScreenshots} ({split})");
     }
 
     /// <summary>
-    /// Generates YOLO format label file for current scene with proper visibility filtering
+    /// Generates YOLO format label file for current scene with proper visibility filtering.
     /// </summary>
     void GenerateYOLOLabels(string imageFilename, string split)
     {
@@ -391,12 +443,10 @@ public class SaveScreenshots : MonoBehaviour
             if (obj == null || !obj.activeInHierarchy)
                 continue;
 
-            // Get world-space points (mesh vertices for tight bbox on rotated objects)
             Vector3[] worldPoints = GetObjectWorldPoints(obj);
             if (worldPoints.Length == 0)
                 continue;
 
-            // Check occlusion - skip if object is hidden behind other objects
             if (enableOcclusionDetection && IsObjectOccluded(obj, worldPoints))
                 continue;
 
@@ -409,17 +459,14 @@ public class SaveScreenshots : MonoBehaviour
 
             foreach (var worldPoint in worldPoints)
             {
-                // WorldToViewportPoint now uses RenderTexture projection (camera.targetTexture is set)
                 Vector3 viewportPoint = cam.WorldToViewportPoint(worldPoint);
 
-                // Check if any point is behind camera
                 if (viewportPoint.z < 0)
                 {
                     anyBehindCamera = true;
                     break;
                 }
 
-                // Count points actually inside viewport [0,1]
                 if (
                     viewportPoint.x >= 0f
                     && viewportPoint.x <= 1f
@@ -430,22 +477,18 @@ public class SaveScreenshots : MonoBehaviour
                     cornersInViewport++;
                 }
 
-                // Accumulate min/max for tight 2D bounding box (before clipping)
                 min.x = Mathf.Min(min.x, viewportPoint.x);
                 min.y = Mathf.Min(min.y, viewportPoint.y);
                 max.x = Mathf.Max(max.x, viewportPoint.x);
                 max.y = Mathf.Max(max.y, viewportPoint.y);
             }
 
-            // Skip if any point is behind camera (object spans camera near plane)
             if (anyBehindCamera)
                 continue;
 
             // Skip if all points are completely outside viewport on the same side
-            // This filters objects that are entirely off-screen but would create slivers after clipping
             if (cornersInViewport == 0)
             {
-                // Check if all points are on the same side (completely outside)
                 bool allLeft = max.x < 0f;
                 bool allRight = min.x > 1f;
                 bool allBelow = max.y < 0f;
@@ -455,10 +498,23 @@ public class SaveScreenshots : MonoBehaviour
                     continue;
             }
 
-            // Calculate unclipped area for visibility threshold
             float unclippedWidth = max.x - min.x;
             float unclippedHeight = max.y - min.y;
             float unclippedArea = unclippedWidth * unclippedHeight;
+
+            // Check unclipped center before clamping (post-clamp center is always in [0,1])
+            if (requireCenterInViewport)
+            {
+                float unclippedCenterX = (min.x + max.x) / 2f;
+                float unclippedCenterY = (min.y + max.y) / 2f;
+                if (
+                    unclippedCenterX < 0f
+                    || unclippedCenterX > 1f
+                    || unclippedCenterY < 0f
+                    || unclippedCenterY > 1f
+                )
+                    continue;
+            }
 
             // Clip bounding box to viewport bounds [0,1]
             min.x = Mathf.Clamp(min.x, 0f, 1f);
@@ -466,83 +522,51 @@ public class SaveScreenshots : MonoBehaviour
             max.x = Mathf.Clamp(max.x, 0f, 1f);
             max.y = Mathf.Clamp(max.y, 0f, 1f);
 
-            // Calculate clipped dimensions in Unity viewport space
             float width_unity = max.x - min.x;
             float height_unity = max.y - min.y;
 
-            // Skip if bbox has no area after clipping
             if (width_unity <= 0.001f || height_unity <= 0.001f)
                 continue;
 
-            // Filter out tiny slivers (absolute size check)
             if (width_unity < minBBoxSize || height_unity < minBBoxSize)
                 continue;
 
-            // Calculate visible area fraction
             float clippedArea = width_unity * height_unity;
             float visibleFraction = (unclippedArea > 0) ? (clippedArea / unclippedArea) : 0f;
 
-            // Apply visibility threshold filter (relative size check)
             if (visibleFraction < minVisibleAreaThreshold)
                 continue;
 
-            // Calculate center in Unity viewport space (bottom-left origin)
+            // Calculate center in Unity viewport space (bottom-left origin, post-clip)
             float x_center_unity = (min.x + max.x) / 2f;
             float y_center_unity = (min.y + max.y) / 2f;
 
-            // Optional: require center to be in viewport
-            if (requireCenterInViewport)
-            {
-                if (
-                    x_center_unity < 0f
-                    || x_center_unity > 1f
-                    || y_center_unity < 0f
-                    || y_center_unity > 1f
-                )
-                    continue;
-            }
-
-            // Transform to YOLO coordinate system (top-left origin)
-            // YOLO uses top-left origin, Unity viewport uses bottom-left
-            // Flip Y-axis: y_yolo = 1 - y_unity
+            // Transform to YOLO coordinate system (top-left origin): flip Y
             float x_center_yolo = x_center_unity;
             float y_center_yolo = 1f - y_center_unity;
             float width_yolo = width_unity;
             float height_yolo = height_unity;
 
-            // Get class ID and name from cache (avoids duplicate ExtractClassName allocations)
             var (classId, className) = _objectClassCache.TryGetValue(obj.GetInstanceID(), out var info)
                 ? info
                 : (0, ExtractClassName(obj.name));
 
-            // Debug: log what we're detecting
-            Debug.Log(
-                $"Labeled {className} object '{obj.name}': center=({x_center_yolo:F3}, {y_center_yolo:F3}), size=({width_yolo:F3}, {height_yolo:F3}), visible={visibleFraction:F2}"
-            );
-
-            // Format: class_id x_center y_center width height
             string label =
                 $"{classId} {x_center_yolo:F6} {y_center_yolo:F6} {width_yolo:F6} {height_yolo:F6}";
             labels.Add(label);
         }
 
-        // Save label file in the appropriate split directory
-        if (labels.Count > 0)
-        {
-            string labelFilename = Path.GetFileNameWithoutExtension(imageFilename) + ".txt";
-            string labelPath = Path.Combine(labelsDir, split, labelFilename);
-            File.WriteAllLines(labelPath, labels.ToArray());
-        }
+        // Always write label file (empty file = explicit negative sample for YOLO)
+        string labelFilename = Path.GetFileNameWithoutExtension(imageFilename) + ".txt";
+        string labelPath = Path.Combine(labelsDir, split, labelFilename);
+        File.WriteAllLines(labelPath, labels.ToArray());
     }
 
     /// <summary>
     /// Gets world-space points for bounding box calculation using the 8 local AABB corners.
-    /// Transforms only 8 corners instead of every mesh vertex (O(8) vs O(N vertices)).
-    /// Slightly looser than per-vertex bbox for rotated meshes, acceptable for YOLO labels.
     /// </summary>
     Vector3[] GetObjectWorldPoints(GameObject obj)
     {
-        // Try primary MeshFilter first (not children)
         MeshFilter meshFilter = obj.GetComponent<MeshFilter>();
 
         if (meshFilter != null && meshFilter.sharedMesh != null)
@@ -550,14 +574,12 @@ public class SaveScreenshots : MonoBehaviour
             return GetLocalBoundsCorners(meshFilter);
         }
 
-        // Fallback: first child MeshFilter
         MeshFilter[] childFilters = obj.GetComponentsInChildren<MeshFilter>();
         if (childFilters.Length > 0 && childFilters[0].sharedMesh != null)
         {
             return GetLocalBoundsCorners(childFilters[0]);
         }
 
-        // Last fallback: world-space renderer bounds corners
         Renderer renderer = obj.GetComponent<Renderer>();
         if (renderer == null)
             renderer = obj.GetComponentInChildren<Renderer>();
@@ -572,7 +594,6 @@ public class SaveScreenshots : MonoBehaviour
 
     /// <summary>
     /// Returns the 8 world-space corners of a mesh's local AABB.
-    /// Avoids iterating every vertex by operating on the precomputed bounds only.
     /// </summary>
     Vector3[] GetLocalBoundsCorners(MeshFilter meshFilter)
     {
@@ -595,7 +616,7 @@ public class SaveScreenshots : MonoBehaviour
     }
 
     /// <summary>
-    /// Gets the 8 corners of a bounding box
+    /// Gets the 8 corners of a bounding box.
     /// </summary>
     Vector3[] GetBoundsCorners(Bounds bounds)
     {
@@ -616,14 +637,13 @@ public class SaveScreenshots : MonoBehaviour
     }
 
     /// <summary>
-    /// Checks if an object is occluded (hidden behind other objects) from the camera
+    /// Checks if an object is occluded (hidden behind other objects) from the camera.
     /// </summary>
     bool IsObjectOccluded(GameObject obj, Vector3[] worldPoints)
     {
         if (worldPoints.Length == 0)
             return true;
 
-        // Sample a subset of points for performance
         int sampleCount = Mathf.Min(12, worldPoints.Length);
         int step = Mathf.Max(1, worldPoints.Length / sampleCount);
 
@@ -639,7 +659,6 @@ public class SaveScreenshots : MonoBehaviour
             Vector3 directionToCamera = cam.transform.position - worldPoint;
             float distanceToCamera = directionToCamera.magnitude;
 
-            // Raycast from point towards camera
             if (
                 Physics.Raycast(
                     worldPoint,
@@ -649,7 +668,6 @@ public class SaveScreenshots : MonoBehaviour
                 )
             )
             {
-                // Check if the hit object is part of our target object or its children
                 if (
                     hit.collider.gameObject == obj
                     || hit.collider.transform.IsChildOf(obj.transform)
@@ -657,7 +675,6 @@ public class SaveScreenshots : MonoBehaviour
                 {
                     visiblePoints++;
                 }
-                // Also check if we hit a parent of our object (robot arm with child parts)
                 else if (obj.transform.IsChildOf(hit.collider.transform))
                 {
                     visiblePoints++;
@@ -665,23 +682,19 @@ public class SaveScreenshots : MonoBehaviour
             }
             else
             {
-                // No hit means direct line of sight to camera
                 visiblePoints++;
             }
 
             totalSampled++;
         }
 
-        // Calculate visibility ratio
         float visibilityRatio = totalSampled > 0 ? (float)visiblePoints / totalSampled : 0f;
 
-        // Object is occluded if visibility is below threshold
         return visibilityRatio < occlusionVisibilityThreshold;
     }
 
     /// <summary>
-    /// Randomizes all robot joint targets within their safe limits
-    /// Uses middle 50% of range for more natural/stable poses
+    /// Randomizes all robot joint targets within the middle 50% of their safe limits.
     /// </summary>
     void RandomizeRobotJointTargets()
     {
@@ -700,53 +713,20 @@ public class SaveScreenshots : MonoBehaviour
                 var joint = robotController.robotJoints[i];
                 var drive = joint.xDrive;
 
-                // Get safe range from joint limits (in degrees)
                 float lowerLimit = drive.lowerLimit;
                 float upperLimit = drive.upperLimit;
 
-                // Calculate middle 50% of the range for more natural poses
+                // Middle 50% of range for more natural poses
                 float center = (lowerLimit + upperLimit) / 2f;
                 float fullRange = upperLimit - lowerLimit;
-                float halfMiddleRange = fullRange * 0.25f; // 50% / 2 = 25% on each side
+                float halfMiddleRange = fullRange * 0.25f;
 
                 float restrictedMin = center - halfMiddleRange;
                 float restrictedMax = center + halfMiddleRange;
 
-                // Randomize within restricted range
-                float randomTarget = Random.Range(restrictedMin, restrictedMax);
-
-                // Apply the new target
-                drive.target = randomTarget;
+                drive.target = Random.Range(restrictedMin, restrictedMax);
                 joint.xDrive = drive;
             }
         }
-    }
-
-    /// <summary>
-    /// Positions camera in a random orbital position around the center point
-    /// </summary>
-    void PositionCameraInOrbit()
-    {
-        // Random azimuth angle (0-360 degrees around Y axis)
-        float azimuth = Random.Range(0f, 360f);
-
-        // Random elevation angle (looking down at cubes)
-        float elevation = Random.Range(minElevation, maxElevation);
-
-        // Convert spherical coordinates to Cartesian
-        float elevationRad = elevation * Mathf.Deg2Rad;
-        float azimuthRad = azimuth * Mathf.Deg2Rad;
-
-        Vector3 offset = new Vector3(
-            orbitRadius * Mathf.Cos(elevationRad) * Mathf.Cos(azimuthRad),
-            orbitRadius * Mathf.Sin(elevationRad),
-            orbitRadius * Mathf.Cos(elevationRad) * Mathf.Sin(azimuthRad)
-        );
-
-        // Set camera position
-        transform.position = orbitCenter + offset;
-
-        // Make camera look at center point
-        transform.LookAt(orbitCenter);
     }
 }

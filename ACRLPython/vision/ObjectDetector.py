@@ -132,7 +132,7 @@ except Exception as e:
     ReconstructionConfig = type("ReconstructionConfig", (), {})
 
     # Define dummy functions when stereo is not available
-    def estimate_depth_from_bbox(*args, **kwargs) -> None:
+    def estimate_depth_from_bbox(*args, **kwargs) -> Optional[Tuple[float, float, int]]:
         """Dummy function when stereo depth estimation is not available"""
         return None
 
@@ -633,14 +633,14 @@ class CubeDetector:
 
         # Color map for visualization
         color_map = {
-            "red": (0, 0, 255),
-            "blue": (255, 0, 0),
-            "green": (0, 255, 0),
-            "yellow": (0, 255, 255),
-            "purple": (128, 0, 128),
-            "orange": (0, 165, 255),
-            "cyan": (255, 255, 0),
-            "magenta": (255, 0, 255),
+            "red": (0, 0, 255),       # BGR
+            "blue": (255, 0, 0),      # BGR
+            "green": (0, 255, 0),     # BGR
+            "yellow": (0, 255, 255),  # BGR
+            "purple": (128, 0, 128),  # BGR
+            "orange": (0, 165, 255),  # BGR
+            "cyan": (255, 255, 0),    # BGR
+            "magenta": (255, 0, 255), # BGR
         }
 
         # Draw bounding boxes

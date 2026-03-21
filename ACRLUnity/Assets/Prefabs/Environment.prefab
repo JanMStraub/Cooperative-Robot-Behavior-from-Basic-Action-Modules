@@ -13665,6 +13665,7 @@ GameObject:
   - component: {fileID: 7507869540839737869}
   - component: {fileID: 1924621710956839310}
   - component: {fileID: 2466235137003102114}
+  - component: {fileID: 5103033064079529390}
   m_Layer: 0
   m_Name: LeftCamera
   m_TagString: Untagged
@@ -13783,6 +13784,77 @@ MonoBehaviour:
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
   m_Version: 2
+--- !u!114 &5103033064079529390
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7271900281173631597}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6cf9fb73ded1443c28e365199dfc4302, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::SaveScreenshots
+  numScreenshots: 3000
+  outputDir: YOLODataset/images
+  labelsDir: YOLODataset/labels
+  objectsToLabel:
+  - {fileID: 3369921039827679538}
+  - {fileID: 5985811518645940055}
+  - {fileID: 4699154504404944203}
+  - {fileID: 526609850944652542}
+  - {fileID: 2297682068063052943}
+  - {fileID: 5232535901379417394}
+  - {fileID: 1074344561378000880}
+  - {fileID: 6179772147469832828}
+  - {fileID: 724044030211774738}
+  - {fileID: 6010296060648620106}
+  - {fileID: 7321787983054000499}
+  - {fileID: 8089259179925191094}
+  - {fileID: 1390263129166398193}
+  - {fileID: 8551235259843544395}
+  - {fileID: 240051077821224847}
+  - {fileID: 9022166157412028997}
+  - {fileID: 1249087451279245037}
+  robots:
+  - {fileID: 1782900251721025928}
+  - {fileID: 1440759134938604137}
+  trainSplit: 0.8
+  testSplit: 0.1
+  validSplit: 0.1
+  positionJitter: 0.02
+  rotationJitter: 2
+  objectSpawnMin: {x: -0.4, y: 0, z: -0.4}
+  objectSpawnMax: {x: 0.4, y: 0.5, z: 0.4}
+  captureWidth: 640
+  captureHeight: 640
+  jpegQuality: 85
+  generateLabels: 1
+  classNames:
+  - red_cube
+  - blue_cube
+  - green_cube
+  - yellow_cube
+  - purple_cube
+  - orange_cube
+  - cyan_cube
+  - magenta_cube
+  - field_a
+  - field_b
+  - field_c
+  - field_d
+  - field_e
+  - field_f
+  - field_g
+  - field_h
+  - field_i
+  minVisibleAreaThreshold: 0.1
+  minBBoxSize: 0.02
+  requireCenterInViewport: 1
+  enableOcclusionDetection: 1
+  occlusionVisibilityThreshold: 0.3
+  cam: {fileID: 0}
 --- !u!1 &7275064783432124439
 GameObject:
   m_ObjectHideFlags: 0
