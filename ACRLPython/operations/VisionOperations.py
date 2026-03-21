@@ -765,7 +765,7 @@ def create_detect_object_stereo_operation() -> BasicOperation:
                 description="Color to detect (None for all colors)",
                 required=False,
                 default=None,
-                valid_values=["red", "green", "blue", None],
+                valid_values=["red", "green", "blue", "yellow", "purple", "orange", "cyan", "magenta", None],
             ),
             OperationParameter(
                 name="camera_id",

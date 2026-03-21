@@ -810,7 +810,7 @@ class CommandParser:
             )
             if detect_color_match:
                 color = detect_color_match.group(1).lower()
-                if color in ["red", "green", "blue"]:
+                if color in ["red", "green", "blue", "yellow", "purple", "orange", "cyan", "magenta"]:
                     last_detection_var = "target"
                     commands.append(
                         {

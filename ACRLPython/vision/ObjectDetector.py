@@ -108,12 +108,14 @@ try:
     try:
         from .DepthEstimator import (
             calc_disparity,
+            estimate_depth_from_bbox,
             estimate_object_world_position_from_disparity,
             save_disparity_map_debug,
         )
     except ImportError:
         from vision.DepthEstimator import (
             calc_disparity,
+            estimate_depth_from_bbox,
             estimate_object_world_position_from_disparity,
             save_disparity_map_debug,
         )
@@ -130,6 +132,10 @@ except Exception as e:
     ReconstructionConfig = type("ReconstructionConfig", (), {})
 
     # Define dummy functions when stereo is not available
+    def estimate_depth_from_bbox(*args, **kwargs) -> None:
+        """Dummy function when stereo depth estimation is not available"""
+        return None
+
     def estimate_object_world_position_from_disparity(
         *args, **kwargs
     ) -> Optional[Tuple[float, float, float]]:
@@ -397,27 +403,22 @@ class CubeDetector:
         detections_with_depth = []
         h, w = imgL.shape[:2]
 
+        import math
+
+        focal_length = (w / 2.0) / math.tan(math.radians(camera_config.fov / 2.0))
+
         for det in detection_result.detections:
-            # Extract disparity value at detection center
-            disp_value = None
-            if (
-                0 <= det.center_y < disparity.shape[0]
-                and 0 <= det.center_x < disparity.shape[1]
-            ):
-                disp_value = float(disparity[det.center_y, det.center_x])
-
-            # Calculate depth from disparity
-            depth_m = None
-            focal_length = None
-            if disp_value is not None and disp_value > 1.0:  # Valid disparity
-                # Depth = (baseline * focal_length) / disparity
-                # focal_length = (image_width / 2) / tan(fov/2)
-                import math
-
-                focal_length = (w / 2.0) / math.tan(
-                    math.radians(camera_config.fov / 2.0)
-                )
-                depth_m = (camera_config.baseline * focal_length) / disp_value
+            # Sample depth using bbox ROI median (more robust than single-pixel center)
+            # estimate_depth_from_bbox uses the inner 50% of the bbox to avoid edge
+            # artifacts and returns (depth_m, median_disparity, num_valid_pixels).
+            depth_result = estimate_depth_from_bbox(
+                disparity,
+                (det.bbox_x, det.bbox_y, det.bbox_w, det.bbox_h),
+                focal_length,
+                camera_config.baseline,
+            )
+            depth_m = depth_result[0] if depth_result is not None else None
+            disp_value = depth_result[1] if depth_result is not None else None
 
             # Estimate world position using pre-computed disparity (OPTIMIZED)
             # Use lower min_disparity (1.0px) to handle distant objects better
@@ -631,7 +632,16 @@ class CubeDetector:
         debug_image = image.copy()
 
         # Color map for visualization
-        color_map = {"red": (0, 0, 255), "blue": (0, 255, 255)}
+        color_map = {
+            "red": (0, 0, 255),
+            "blue": (255, 0, 0),
+            "green": (0, 255, 0),
+            "yellow": (0, 255, 255),
+            "purple": (128, 0, 128),
+            "orange": (0, 165, 255),
+            "cyan": (255, 255, 0),
+            "magenta": (255, 0, 255),
+        }
 
         # Draw bounding boxes
         for det in detections:

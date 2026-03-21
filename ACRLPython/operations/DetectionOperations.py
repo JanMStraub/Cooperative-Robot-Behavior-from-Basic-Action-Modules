@@ -372,10 +372,11 @@ def estimate_distance_between_objects(
         # Calculate Euclidean distance
         import math
 
-        pos1 = obj1_state.get("position")
-        pos2 = obj2_state.get("position")
+        # ObjectState is a dataclass with position as Tuple[float, float, float]
+        pos1_tuple = obj1_state.position  # type: ignore[union-attr]
+        pos2_tuple = obj2_state.position  # type: ignore[union-attr]
 
-        if not pos1 or not pos2:
+        if not pos1_tuple or not pos2_tuple:
             return OperationResult.error_result(
                 "POSITION_DATA_MISSING",
                 "Object position data missing",
@@ -383,12 +384,15 @@ def estimate_distance_between_objects(
             )
 
         distance = math.sqrt(
-            (pos1["x"] - pos2["x"]) ** 2
-            + (pos1["y"] - pos2["y"]) ** 2
-            + (pos1["z"] - pos2["z"]) ** 2
+            (pos1_tuple[0] - pos2_tuple[0]) ** 2
+            + (pos1_tuple[1] - pos2_tuple[1]) ** 2
+            + (pos1_tuple[2] - pos2_tuple[2]) ** 2
         )
 
         logger.info(f"Distance between {object_id1} and {object_id2}: {distance:.3f}m")
+
+        pos1 = {"x": pos1_tuple[0], "y": pos1_tuple[1], "z": pos1_tuple[2]}
+        pos2 = {"x": pos2_tuple[0], "y": pos2_tuple[1], "z": pos2_tuple[2]}
 
         return OperationResult.success_result(
             {

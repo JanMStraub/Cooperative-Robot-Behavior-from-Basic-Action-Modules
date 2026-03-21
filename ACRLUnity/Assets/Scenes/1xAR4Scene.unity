@@ -417,7 +417,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   robotProfile: {fileID: 11400000, guid: 6f9a683789da5455a80584df8ee3cbbc, type: 2}
-  globalSpeedMultiplier: 1
+  globalSpeedMultiplier: 0.2
   _enableTargetChangeDetection: 1
   _targetChangeCheckInterval: 0.1
 --- !u!4 &1170887387
@@ -537,8 +537,6 @@ MonoBehaviour:
   _serverPort: 0
   _serverHost: 127.0.0.1
   _prompt: Calculate the distance between the blue and the red cube
-  _defaultRobotId: Robot1
-  _cameraId: TableStereoCamera
   _logCommands: 1
   _autoExecuteResult: 1
 --- !u!114 &1595579027
@@ -751,28 +749,6 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 5985811518645940055, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
   m_PrefabInstance: {fileID: 9060350412813614532}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &2048469486 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 2811135550562663997, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-  m_PrefabInstance: {fileID: 9060350412813614532}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 551221089}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5e40cb458152e449392e9d9edbd0dcfa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSControlModeManager
---- !u!114 &2107300034 stripped
-MonoBehaviour:
-  m_CorrespondingSourceObject: {fileID: 5699709490432778825, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-  m_PrefabInstance: {fileID: 9060350412813614532}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1482096344}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 5e40cb458152e449392e9d9edbd0dcfa, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.ROSControlModeManager
 --- !u!1001 &9060350412813614532
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -781,57 +757,17 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 384678295724699492, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_Enabled
+    - target: {fileID: 1074344561378000880, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Name
+      value: cyanCube
+      objectReference: {fileID: 0}
+    - target: {fileID: 2297682068063052943, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Name
+      value: magentaCube
+      objectReference: {fileID: 0}
+    - target: {fileID: 4381120814900928537, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_IsActive
       value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 1217348618543889257, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_Enabled
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 1440759134938604137, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: debugTarget
-      value: 
-      objectReference: {fileID: 0}
-    - target: {fileID: 1782900251721025928, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: debugTarget
-      value: 
-      objectReference: {fileID: 0}
-    - target: {fileID: 2521286999404157459, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_Enabled
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 2811135550562663997, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_Enabled
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 3861989622656847497, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_Enabled
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 3861989622656847497, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: _speedScaling
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 3861989622656847497, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: _controlModeManager
-      value: 
-      objectReference: {fileID: 2107300034}
-    - target: {fileID: 3861989622656847497, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: _settleTimeoutSeconds
-      value: 4
-      objectReference: {fileID: 0}
-    - target: {fileID: 3861989622656847497, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: _settleVelocityThresholdDegPerSec
-      value: 2
-      objectReference: {fileID: 0}
-    - target: {fileID: 4749562172011976917, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: 0.05
-      objectReference: {fileID: 0}
-    - target: {fileID: 5075431559166153548, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -0.05
       objectReference: {fileID: 0}
     - target: {fileID: 5271878870994714299, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.x
@@ -873,65 +809,9 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 5323394489080371934, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -0.05
-      objectReference: {fileID: 0}
-    - target: {fileID: 5567977826561441543, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: field of view
-      value: 60
-      objectReference: {fileID: 0}
-    - target: {fileID: 5699709490432778825, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_Enabled
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 5824589639710925805, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_Enabled
-      value: 1
-      objectReference: {fileID: 0}
     - target: {fileID: 6897178052544332906, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
       value: Environment
-      objectReference: {fileID: 0}
-    - target: {fileID: 7507869540839737869, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -0.7
-      objectReference: {fileID: 0}
-    - target: {fileID: 7507869540839737869, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 0.9848078
-      objectReference: {fileID: 0}
-    - target: {fileID: 7507869540839737869, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0.17364816
-      objectReference: {fileID: 0}
-    - target: {fileID: 7507869540839737869, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 20
-      objectReference: {fileID: 0}
-    - target: {fileID: 7753383895358973258, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_Enabled
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 7753383895358973258, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: _speedScaling
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 7753383895358973258, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: _controlModeManager
-      value: 
-      objectReference: {fileID: 2048469486}
-    - target: {fileID: 7753383895358973258, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: _settleTimeoutSeconds
-      value: 4
-      objectReference: {fileID: 0}
-    - target: {fileID: 7753383895358973258, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: _settleVelocityThresholdDegPerSec
-      value: 2
-      objectReference: {fileID: 0}
-    - target: {fileID: 9086981115628272307, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -0.7
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

@@ -513,10 +513,14 @@ class VisionProcessor:
 
             # Color map for different object types
             color_map = {
-                "red": (0, 0, 255),  # Red in BGR
-                "blue": (255, 0, 0),  # Blue in BGR
-                "green": (0, 255, 0),  # Green in BGR
+                "red": (0, 0, 255),       # Red in BGR
+                "blue": (255, 0, 0),      # Blue in BGR
+                "green": (0, 255, 0),     # Green in BGR
                 "yellow": (0, 255, 255),  # Yellow in BGR
+                "purple": (128, 0, 128),  # Purple in BGR
+                "orange": (0, 165, 255),  # Orange in BGR
+                "cyan": (255, 255, 0),    # Cyan in BGR
+                "magenta": (255, 0, 255), # Magenta in BGR
                 "default": (255, 255, 255),  # White
             }
 

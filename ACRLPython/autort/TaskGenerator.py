@@ -315,7 +315,7 @@ OUTPUT FORMAT (strict JSON array):
 
 CRITICAL PARAMETER RULES:
 1. detect_object_stereo parameters:
-   - color: Must be "red", "green", "blue", or null (for all colors)
+   - color: Must be "red", "green", "blue", "yellow", "purple", "orange", "cyan", "magenta", or null (for all colors)
    - selection: MUST be "left", "right", "closest", "first", or "all" (NOT object names!)
    - camera_id: Must be "StereoCamera"
    - Example: {{"color": "red", "selection": "closest"}} finds the closest red object
