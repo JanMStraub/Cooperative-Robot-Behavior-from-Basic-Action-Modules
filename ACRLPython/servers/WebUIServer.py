@@ -15,6 +15,17 @@ import threading
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, Any, List, Optional
 
+# Shared YOLO detector instance — set via set_shared_detector() to avoid loading
+# a duplicate model. Falls back to creating its own if not set.
+_shared_detector = None
+
+
+def set_shared_detector(detector):
+    """Set the shared YOLO detector so the WebUI reuses the existing model instance."""
+    global _shared_detector
+    _shared_detector = detector
+
+
 try:
     from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
     from fastapi.staticfiles import StaticFiles
@@ -257,18 +268,19 @@ def frame_generator(stream_type="left"):
     storage = UnifiedImageStorage()
     _placeholder = _make_placeholder_frame()
 
-    # Lazy load global detector for RGB stream annotations
+    # Reuse the shared detector if available, otherwise load one
     _detector = None
     if stream_type == "left":
-        try:
-            from vision.YOLODetector import YOLODetector
+        if _shared_detector is not None:
+            _detector = _shared_detector
+        else:
+            try:
+                from vision.YOLODetector import YOLODetector
+                from config.Vision import YOLO_MODEL_PATH
 
-            _model_path = str(
-                Path(__file__).parent.parent / "yolo" / "models" / "field_detector.onnx"
-            )
-            _detector = YOLODetector(model_path=_model_path)
-        except Exception as e:
-            logger.warning(f"Could not load YOLODetector for streaming: {e}")
+                _detector = YOLODetector(model_path=YOLO_MODEL_PATH)
+            except Exception as e:
+                logger.warning(f"Could not load YOLODetector for streaming: {e}")
 
     while True:
         frame_bytes = None

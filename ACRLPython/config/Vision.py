@@ -35,7 +35,7 @@ VISION_OPERATION_TIMEOUT = float(os.environ.get("VISION_OPERATION_TIMEOUT", "20.
 
 USE_YOLO = os.environ.get("USE_YOLO", "true").lower() in ("true", "1", "yes")
 YOLO_MODEL_PATH = os.environ.get(
-    "YOLO_MODEL_PATH", str(_CONFIG_DIR / "yolo" / "models" / "field_detector.onnx")
+    "YOLO_MODEL_PATH", str(_CONFIG_DIR / "yolo" / "models" / "more_cubes_detector.onnx")
 )
 YOLO_CONFIDENCE_THRESHOLD = float(os.environ.get("YOLO_CONFIDENCE_THRESHOLD", "0.5"))
 YOLO_IOU_THRESHOLD = float(os.environ.get("YOLO_IOU_THRESHOLD", "0.45"))
@@ -103,7 +103,7 @@ DEFAULT_CAMERA_ID = os.environ.get("DEFAULT_CAMERA_ID", "TableStereoCamera")
 # downscaled before inference (YOLO letterboxes to 640×640 internally anyway,
 # so sending e.g. a 1280×960 image just wastes preprocessing time).
 # Set to 0 or "" to disable resizing and pass full-resolution images.
-_yolo_size_raw = os.environ.get("YOLO_INPUT_SIZE", "640")
+_yolo_size_raw = os.environ.get("YOLO_INPUT_SIZE", "0")
 YOLO_INPUT_SIZE: Optional[int] = int(_yolo_size_raw) if _yolo_size_raw.strip().isdigit() and int(_yolo_size_raw) > 0 else None
 
 # Scene-change detection for VisionProcessor.
@@ -127,10 +127,10 @@ SCENE_DIFF_THRESHOLD = float(os.environ.get("SCENE_DIFF_THRESHOLD", "8.0"))
 # ============================================================================
 
 DEFAULT_STEREO_BASELINE = float(os.environ.get("STEREO_BASELINE", "0.05"))  # meters
-DEFAULT_STEREO_FOV = float(os.environ.get("STEREO_FOV", "60.0"))  # degrees
+DEFAULT_STEREO_FOV = float(os.environ.get("STEREO_FOV", "50.0"))  # degrees
 
 # Default stereo camera pose (must match Unity)
-DEFAULT_STEREO_CAMERA_POSITION = [-0.025, 0.4, -0.65]
+DEFAULT_STEREO_CAMERA_POSITION = [-0.025, 0.4, -0.70]
 DEFAULT_STEREO_CAMERA_ROTATION = [20.0, 0.0, 0.0]  # Pitch, yaw, roll
 
 # ============================================================================

@@ -499,6 +499,13 @@ class RobotController:
                     # Initialize YOLO detector
                     detector = YOLODetector(model_path=YOLO_MODEL_PATH)
 
+                    # Share with WebUI so it doesn't load a duplicate model
+                    try:
+                        from servers.WebUIServer import set_shared_detector
+                        set_shared_detector(detector)
+                    except ImportError:
+                        pass
+
                     # Determine if we should use main thread (macOS with visualization)
                     use_main_thread = (
                         platform.system() == "Darwin" and ENABLE_VISION_VISUALIZATION

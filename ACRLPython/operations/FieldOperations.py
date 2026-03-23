@@ -101,8 +101,8 @@ def detect_field(
                 ["Provide field label as 'A', 'B', 'C', etc."],
             )
 
-        # Construct YOLO class name: "field" + lowercase letter (matches trained model, e.g. "fielda")
-        yolo_class = f"field{field_label_lower}"
+        # Construct YOLO class name: "field_" + lowercase letter (matches trained model, e.g. "field_a")
+        yolo_class = f"field_{field_label_lower}"
 
         # Import YOLO detector
         try:
@@ -176,17 +176,17 @@ def detect_field(
         # Get first (best) detection
         detection = detections.detections[0]
 
-        # Extract field letter from YOLO class name ("fielda" → "A")
+        # Extract field letter from YOLO class name ("field_a" → "A")
         # DetectionObject stores class name in .color field for YOLO detections
         detected_class = detection.color.lower()
-        if not detected_class.startswith("field"):
+        if not detected_class.startswith("field_"):
             return OperationResult.error_result(
                 "INVALID_DETECTION_CLASS",
                 f"Unexpected class name: {detection.color}",
                 ["Verify YOLO model is correct field detector model"],
             )
 
-        detected_letter = detected_class[5:].upper()  # "fieldg"[5:] = "g" → "G"
+        detected_letter = detected_class[6:].upper()  # "field_g"[6:] = "g" → "G"
 
         # Get 3D world position from stereo detection
         world_position = detection.world_position
@@ -382,8 +382,8 @@ def detect_all_fields(
 
         stereo_params = camera_config_from_metadata(stereo_metadata)
 
-        # Run YOLO detection with all field classes (fielda-fieldi)
-        field_classes = [f"field{chr(ord('a') + i)}" for i in range(9)]  # fielda-fieldi
+        # Run YOLO detection with all field classes (field_a-field_i)
+        field_classes = [f"field_{chr(ord('a') + i)}" for i in range(9)]  # field_a-field_i
 
         try:
             from config.Vision import YOLO_MODEL_PATH
@@ -416,8 +416,8 @@ def detect_all_fields(
             # Extract field letter from class name
             # DetectionObject stores class name in .color field for YOLO detections
             detected_class = detection.color.lower()
-            if detected_class.startswith("field"):
-                field_letter = detected_class[5:].upper()  # "fielda" → "A"
+            if detected_class.startswith("field_"):
+                field_letter = detected_class[6:].upper()  # "field_a" → "A"
 
                 # Convert world_position tuple (x, y, z) to dict for consistent API
                 world_pos = detection.world_position

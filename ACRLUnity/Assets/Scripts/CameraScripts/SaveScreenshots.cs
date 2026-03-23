@@ -11,7 +11,7 @@ using UnityEngine;
 /// </summary>
 public class SaveScreenshots : MonoBehaviour
 {
-    public int numScreenshots = 3000;
+    public int numScreenshots = 1000;
     public string outputDir = "YOLODataset/images";
     public string labelsDir = "YOLODataset/labels";
     public GameObject[] objectsToLabel;
@@ -39,9 +39,28 @@ public class SaveScreenshots : MonoBehaviour
     public Vector3 objectSpawnMin = new Vector3(-0.35f, 0.0f, -0.35f);
     public Vector3 objectSpawnMax = new Vector3(0.35f, 0.4f, 0.35f);
 
+    [Header("Visibility Randomization")]
+    [Tooltip("All cube GameObjects — a random subset will be shown each capture")]
+    public GameObject[] allCubes;
+
+    [Tooltip("All field GameObjects — a random subset will be shown each capture")]
+    public GameObject[] allFields;
+
+    [Range(0f, 1f)]
+    [Tooltip("Probability that any individual cube is visible in a given capture")]
+    public float cubeVisibilityChance = 0.6f;
+
+    [Range(0f, 1f)]
+    [Tooltip("Probability that any individual field is visible in a given capture")]
+    public float fieldVisibilityChance = 0.7f;
+
+    [Range(0f, 1f)]
+    [Tooltip("Probability that any individual robot is visible in a given capture")]
+    public float robotVisibilityChance = 0.8f;
+
     [Header("Capture Settings")]
-    public int captureWidth = 640;
-    public int captureHeight = 640;
+    public int captureWidth = 1920;
+    public int captureHeight = 1080;
 
     [Range(0, 100)]
     public int jpegQuality = 85;
@@ -107,7 +126,8 @@ public class SaveScreenshots : MonoBehaviour
                 if (obj == null)
                     continue;
                 string cn = ExtractClassName(obj.name);
-                classNameToId.TryGetValue(cn, out int cid);
+                if (!classNameToId.TryGetValue(cn, out int cid))
+                    Debug.LogError($"[SaveScreenshots] No class ID for '{cn}' (GameObject: '{obj.name}') — fix the name or classNames array!");
                 _objectClassCache[obj.GetInstanceID()] = (cid, cn);
             }
         }
@@ -352,11 +372,51 @@ public class SaveScreenshots : MonoBehaviour
             }
         }
 
+        // Randomize which cubes and fields are visible this capture
+        RandomizeObjectVisibility();
+
         // Randomize robot joint targets
         RandomizeRobotJointTargets();
 
         // Apply small jitter around the real camera mount position
         ApplyCameraJitter();
+    }
+
+    /// <summary>
+    /// Randomly shows or hides individual cubes and fields each capture so the model
+    /// learns to detect each object independently, regardless of what else is in the scene.
+    /// </summary>
+    void RandomizeObjectVisibility()
+    {
+        if (allCubes != null)
+        {
+            foreach (var cube in allCubes)
+            {
+                if (cube != null)
+                    cube.SetActive(Random.value < cubeVisibilityChance);
+            }
+        }
+
+        if (allFields != null)
+        {
+            foreach (var field in allFields)
+            {
+                if (field != null)
+                    field.SetActive(Random.value < fieldVisibilityChance);
+            }
+        }
+
+        if (robots != null)
+        {
+            foreach (var robot in robots)
+            {
+                if (robot == null)
+                    continue;
+                bool visible = Random.value < robotVisibilityChance;
+                foreach (var renderer in robot.GetComponentsInChildren<Renderer>())
+                    renderer.enabled = visible;
+            }
+        }
     }
 
     /// <summary>
@@ -716,10 +776,10 @@ public class SaveScreenshots : MonoBehaviour
                 float lowerLimit = drive.lowerLimit;
                 float upperLimit = drive.upperLimit;
 
-                // Middle 50% of range for more natural poses
+                // Middle 30% of range for subtle poses
                 float center = (lowerLimit + upperLimit) / 2f;
                 float fullRange = upperLimit - lowerLimit;
-                float halfMiddleRange = fullRange * 0.25f;
+                float halfMiddleRange = fullRange * 0.20f;
 
                 float restrictedMin = center - halfMiddleRange;
                 float restrictedMax = center + halfMiddleRange;
