@@ -97,7 +97,7 @@ DEBUG_POINT_CLOUD_DIR = os.environ.get(
 
 # Default camera used for perception operations when Unity sends no camera_id.
 # Override with the DEFAULT_CAMERA_ID env var to match your scene's camera name.
-DEFAULT_CAMERA_ID = os.environ.get("DEFAULT_CAMERA_ID", "TableStereoCamera")
+DEFAULT_CAMERA_ID = os.environ.get("DEFAULT_CAMERA_ID", "TableStereoCamera")  # Must match the StereoCameraController GameObject name in Unity
 
 # Maximum long-edge resolution fed to YOLO. Images larger than this are
 # downscaled before inference (YOLO letterboxes to 640×640 internally anyway,

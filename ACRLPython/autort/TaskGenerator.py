@@ -8,6 +8,7 @@ LLM-based task generation with Pydantic validation and manual retry loop.
 import json
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional
 from pydantic import ValidationError
 from openai import OpenAI
@@ -16,6 +17,7 @@ from autort.DataModels import ProposedTask, SceneDescription
 from operations.Registry import get_global_registry
 from config.Servers import LLM_THINKING_BUDGET, LLM_THINKING_ENABLED, SYSTEM_PROMPT_BASE
 from config.Negotiation import USE_STRUCTURED_OUTPUT
+from config.Vision import DEFAULT_CAMERA_ID
 
 logger = logging.getLogger(__name__)
 
@@ -48,12 +50,12 @@ class TaskGenerator:
         include_collaborative: Optional[bool] = None,
     ) -> List[ProposedTask]:
         """
-        Generate task proposals with validation.
+        Generate task proposals in parallel — one LLM request per task.
 
-        Steps:
-        1. Build prompt with scene + operations from Registry
-        2. Query LLM with manual retry loop (error context preserved between retries)
-        3. Validate operation types against Registry
+        Sends ``num_tasks`` concurrent requests to the LLM, each asking for a
+        single task.  Results are merged and deduplicated by task_id.  Any
+        request that fails all retries is silently skipped so that partial
+        results are still returned.
 
         Args:
             scene: Scene description with detected objects
@@ -61,99 +63,98 @@ class TaskGenerator:
             num_tasks: Number of tasks to generate
             include_collaborative: Whether to generate collaborative tasks (None = use config default)
         """
-        # Use config default if not specified
         if include_collaborative is None:
             try:
                 from config.AutoRT import ENABLE_COLLABORATIVE_TASKS
             except ImportError:
                 from ..config.AutoRT import ENABLE_COLLABORATIVE_TASKS
             include_collaborative = ENABLE_COLLABORATIVE_TASKS
-        prompt = self._build_task_prompt(
-            scene, robot_ids, num_tasks, include_collaborative
-        )
 
-        # Manual retry loop — preserves error context between attempts
-        validated_tasks = []
-        last_error = None
-        last_response = None
+        prompt = self._build_task_prompt(scene, robot_ids, 1, include_collaborative)
+
+        logger.info(f"Generating {num_tasks} tasks in parallel...")
+
+        validated_tasks: List[ProposedTask] = []
+        seen_ids: set = set()
+
+        with ThreadPoolExecutor(max_workers=num_tasks) as executor:
+            futures = {
+                executor.submit(self._generate_single_task, prompt, idx): idx
+                for idx in range(num_tasks)
+            }
+            for future in as_completed(futures):
+                idx = futures[future]
+                try:
+                    task = future.result()
+                    if task is not None:
+                        # Deduplicate by task_id in case the LLM reuses IDs
+                        if task.task_id not in seen_ids:
+                            seen_ids.add(task.task_id)
+                            validated_tasks.append(task)
+                        else:
+                            # Rename duplicate so it is not silently dropped
+                            task.task_id = f"{task.task_id}_{idx}"
+                            seen_ids.add(task.task_id)
+                            validated_tasks.append(task)
+                except Exception as e:
+                    logger.warning(f"Task slot {idx} raised unexpected error: {e}")
+
+        logger.info(f"Parallel generation complete: {len(validated_tasks)}/{num_tasks} tasks succeeded")
+        return validated_tasks
+
+    def _generate_single_task(self, prompt: str, slot_index: int) -> Optional[ProposedTask]:
+        """
+        Generate and validate a single task with retries.
+
+        Called concurrently by ``generate_tasks`` — each invocation runs in its
+        own thread and retries independently on JSON/validation errors.
+
+        Args:
+            prompt: Base task-generation prompt (built for 1 task)
+            slot_index: Index used for logging to distinguish parallel workers
+
+        Returns:
+            A validated ProposedTask, or None if all retries failed
+        """
+        last_error: Optional[str] = None
+        current_prompt = prompt
 
         for attempt in range(self.max_retries):
             try:
-                # Build prompt with previous error feedback
-                current_prompt = prompt
                 if attempt > 0 and last_error:
-                    current_prompt += f"""
+                    current_prompt = prompt + f"""
 
 PREVIOUS ATTEMPT HAD ERRORS (attempt {attempt}):
 {last_error}
 
-Please fix these issues and generate valid tasks following the parameter schemas exactly.
+Please fix these issues and generate a valid task following the parameter schemas exactly.
 """
 
                 raw_response = self._query_llm(current_prompt)
-                last_response = raw_response[:500]  # Truncate for error messages
                 tasks = self._parse_llm_response(raw_response)
 
-                # Validate operations and parameters against Registry
-                validated_tasks = []
-                validation_errors = []
-
+                # _parse_llm_response may return a list; take the first valid task
                 for task in tasks:
                     is_valid, error_msg = self._validate_operations_with_feedback(task)
                     if is_valid:
-                        validated_tasks.append(task)
-                    else:
-                        logger.warning(
-                            f"Task '{task.task_id}' validation failed: {error_msg}"
-                        )
-                        validation_errors.append(f"Task '{task.task_id}': {error_msg}")
+                        logger.debug(f"Task slot {slot_index}: generated '{task.task_id}'")
+                        return task
+                    last_error = f"Parameter validation failed: {error_msg}"
+                    logger.warning(f"Task slot {slot_index} attempt {attempt + 1}: {last_error}")
 
-                # If we got at least some valid tasks, return them
-                if validated_tasks:
-                    if validation_errors:
-                        logger.info(
-                            f"Generated {len(validated_tasks)} valid tasks, "
-                            f"filtered out {len(validation_errors)} invalid tasks"
-                        )
-                    return validated_tasks
-
-                # All tasks failed validation - prepare error for retry
-                if validation_errors:
-                    last_error = "Parameter validation failed:\n" + "\n".join(
-                        validation_errors
-                    )
-                    logger.warning(
-                        f"Attempt {attempt + 1}/{self.max_retries}: All tasks failed validation"
-                    )
-                else:
-                    # No tasks generated
+                if not tasks:
                     last_error = "No tasks generated"
-                    logger.warning(
-                        f"Attempt {attempt + 1}/{self.max_retries}: {last_error}"
-                    )
-
-                # Last attempt?
-                if attempt == self.max_retries - 1:
-                    logger.error(
-                        f"Task generation failed after {self.max_retries} retries. Last error: {last_error}"
-                    )
-                    return []
-
-                time.sleep(1)  # Brief pause between retries
+                    logger.warning(f"Task slot {slot_index} attempt {attempt + 1}: {last_error}")
 
             except (json.JSONDecodeError, ValidationError, ValueError) as e:
-                last_error = f"JSON/Schema error: {str(e)}"
-                logger.warning(
-                    f"Attempt {attempt + 1}/{self.max_retries}: {last_error}"
-                )
-                if attempt == self.max_retries - 1:
-                    logger.error(
-                        f"Task generation failed after {self.max_retries} retries"
-                    )
-                    return []
+                last_error = f"JSON/Schema error: {e}"
+                logger.warning(f"Task slot {slot_index} attempt {attempt + 1}: {last_error}")
+
+            if attempt < self.max_retries - 1:
                 time.sleep(1)
 
-        return validated_tasks
+        logger.error(f"Task slot {slot_index} failed after {self.max_retries} retries. Last error: {last_error}")
+        return None
 
     def _query_llm(self, prompt: str) -> str:
         """Query LM Studio via OpenAI-compatible API"""
@@ -179,13 +180,17 @@ Please fix these issues and generate valid tasks following the parameter schemas
                 "model": self.model,
                 "messages": messages,
                 "temperature": self.temperature,
-                "max_tokens": 8192,  # Must cover thinking budget + actual JSON response
-                **({"thinking": {"type": "enabled", "budget_tokens": LLM_THINKING_BUDGET}} if LLM_THINKING_ENABLED else {}),
+                # Single task JSON — 2048 tokens covers verbose multi-step tasks.
+                "max_tokens": 2048,
             }
             # Structured output forces valid JSON at the inference layer.
             # Set USE_STRUCTURED_OUTPUT=false for models that don't support response_format.
             if USE_STRUCTURED_OUTPUT:
                 create_kwargs["response_format"] = {"type": "json_object"}
+            # `thinking` is a LM Studio extension; pass via extra_body so the openai SDK
+            # forwards it as-is without treating it as an unknown named parameter.
+            if LLM_THINKING_ENABLED:
+                create_kwargs["extra_body"] = {"thinking": {"type": "enabled", "budget_tokens": LLM_THINKING_BUDGET}}
             response = self.llm_client.chat.completions.create(**create_kwargs)  # type: ignore[arg-type]
             content = response.choices[0].message.content
             if content is None:
@@ -249,8 +254,21 @@ Use 'signal' and 'wait_for_signal' for coordination between robots.
         if not include_collaborative or len(robot_ids) == 1:
             spatial_hints = f"\n{robot_layout}\n" if robot_layout else ""
 
+        # Strip [THINK]...[/THINK] reasoning traces before injecting into the prompt.
+        # The VLM may produce thousands of tokens of reasoning that are useless here
+        # and quickly exhaust the 8192-token context window.
+        summary = scene.scene_summary or "No VLM analysis available."
+        if "[/THINK]" in summary:
+            summary = summary.split("[/THINK]", 1)[1].strip()
+        elif "[THINK]" in summary:
+            # Incomplete reasoning block — drop it entirely, use fallback
+            summary = f"Detected {len(scene.objects)} objects in workspace."
+        # Hard cap as final safety net (~200 tokens)
+        if len(summary) > 800:
+            summary = summary[:800] + "..."
+
         return f"""SCENE ANALYSIS:
-{scene.scene_summary if scene.scene_summary else "No VLM analysis available."}
+{summary}
 
 DETECTED OBJECTS:
 {objects_str if objects_str else "No objects detected."}
@@ -267,7 +285,7 @@ WORKSPACE LAYOUT:
 - Right workspace: X positive (Robot2's area)
 
 AVAILABLE CAMERAS:
-- StereoCamera: Stereo camera for depth perception and object detection
+- {DEFAULT_CAMERA_ID}: Stereo camera for depth perception and object detection
 - MainCamera: Main camera for scene analysis
 
 AVAILABLE OPERATIONS:
@@ -284,7 +302,7 @@ OUTPUT FORMAT (strict JSON array):
     "task_id": "task_001",
     "description": "Pick up red cube from workspace",
     "operations": [
-      {{"type": "detect_object_stereo", "robot_id": "Robot1", "parameters": {{"color": "red", "selection": "closest", "camera_id": "StereoCamera"}}}},
+      {{"type": "detect_object_stereo", "robot_id": "Robot1", "parameters": {{"color": "red", "selection": "closest", "camera_id": "{DEFAULT_CAMERA_ID}"}}}},
       {{"type": "grasp_object", "robot_id": "Robot1", "parameters": {{"object_id": "red_cube"}}}}
     ],
     "required_robots": ["Robot1"],
@@ -305,7 +323,7 @@ OUTPUT FORMAT (strict JSON array):
     "task_id": "task_003",
     "description": "Detect all objects and analyze scene",
     "operations": [
-      {{"type": "detect_object_stereo", "robot_id": "Robot1", "parameters": {{"color": null, "selection": "all", "camera_id": "StereoCamera"}}}}
+      {{"type": "detect_object_stereo", "robot_id": "Robot1", "parameters": {{"color": null, "selection": "all", "camera_id": "{DEFAULT_CAMERA_ID}"}}}}
     ],
     "required_robots": ["Robot1"],
     "estimated_complexity": 2,
@@ -317,7 +335,7 @@ CRITICAL PARAMETER RULES:
 1. detect_object_stereo parameters:
    - color: Must be "red", "green", "blue", "yellow", "purple", "orange", "cyan", "magenta", or null (for all colors)
    - selection: MUST be "left", "right", "closest", "first", or "all" (NOT object names!)
-   - camera_id: Must be "StereoCamera"
+   - camera_id: Must be "{DEFAULT_CAMERA_ID}"
    - Example: {{"color": "red", "selection": "closest"}} finds the closest red object
    - Example: {{"color": null, "selection": "all"}} finds all objects regardless of color
 
@@ -329,7 +347,7 @@ CRITICAL PARAMETER RULES:
    - x, y, z: Numeric coordinates in workspace bounds
    - NOT "target_position" - use separate x, y, z parameters
 
-4. Camera IDs: ONLY "StereoCamera" or "MainCamera" - no other camera IDs exist
+4. Camera IDs: ONLY "{DEFAULT_CAMERA_ID}" or "MainCamera" - no other camera IDs exist
 
 GENERAL RULES:
 5. ONLY use objects from DETECTED OBJECTS list above
@@ -368,6 +386,7 @@ COMMON TASK PATTERNS:
    - release_object()
 
 IMPORTANT: Output the JSON array immediately without any preamble, reasoning, or explanatory text.
+IMPORTANT: Output compact JSON with no extra whitespace or indentation to minimize token usage.
 
 Generate tasks now:
 """
@@ -553,7 +572,10 @@ Generate tasks now:
                 if not isinstance(param_value, (int, float)):
                     return f"Parameter '{param_name}' must be numeric (got {type(param_value).__name__})"
                 min_val, max_val = param_def.valid_range
-                if not (min_val <= param_value <= max_val):
+                # Allow 1mm tolerance for floating-point rounding near boundaries
+                # (e.g. -0.001 is physically equivalent to 0.0 at table surface)
+                tolerance = 0.001
+                if not (min_val - tolerance <= param_value <= max_val + tolerance):
                     return (
                         f"Parameter '{param_name}' value {param_value} outside valid range [{min_val}, {max_val}]. "
                         f"Fix: Use a value between {min_val} and {max_val}."

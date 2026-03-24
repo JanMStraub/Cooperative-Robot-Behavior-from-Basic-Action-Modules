@@ -37,12 +37,14 @@ try:
     from config.Vision import (
         ENABLE_VISION_STREAMING,
         VISION_OPERATION_TIMEOUT,
+        DEFAULT_CAMERA_ID,
     )
     from config.Servers import DEFAULT_LMSTUDIO_MODEL
 except ImportError:
     from ..config.Vision import (
         ENABLE_VISION_STREAMING,
         VISION_OPERATION_TIMEOUT,
+        DEFAULT_CAMERA_ID,
     )
     from ..config.Servers import DEFAULT_LMSTUDIO_MODEL
 
@@ -250,7 +252,7 @@ def create_analyze_scene_operation() -> BasicOperation:
 def detect_object_stereo(
     # Primary parameters
     color: Optional[str] = None,
-    camera_id: str = "StereoCamera",
+    camera_id: str = DEFAULT_CAMERA_ID,
     # Detection options
     request_fresh_capture: bool = True,
     min_confidence: float = 0.5,
@@ -772,7 +774,7 @@ def create_detect_object_stereo_operation() -> BasicOperation:
                 type="str",
                 description="Stereo camera pair ID",
                 required=False,
-                default="StereoCamera",
+                default=DEFAULT_CAMERA_ID,
             ),
             OperationParameter(
                 name="request_fresh_capture",

@@ -605,7 +605,12 @@ MonoBehaviour:
   - {fileID: 1482096344}
   - {fileID: 1420007114}
   - {fileID: 1931604902}
+  - {fileID: 9060350412813614537}
+  - {fileID: 9060350412813614536}
+  - {fileID: 9060350412813614535}
+  - {fileID: 9060350412813614534}
   - {fileID: 774768699}
+  - {fileID: 9060350412813614533}
   _updatesSent: 0
   _lastUpdateTime: 0
 --- !u!114 &1595579030
@@ -849,6 +854,14 @@ PrefabInstance:
       propertyPath: field of view
       value: 50
       objectReference: {fileID: 0}
+    - target: {fileID: 1997307404626030059, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -0.1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1997307404626030059, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -0.2
+      objectReference: {fileID: 0}
     - target: {fileID: 2297682068063052943, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
       value: purpleCube
@@ -872,6 +885,10 @@ PrefabInstance:
     - target: {fileID: 4699154504404944203, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_IsActive
       value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4749562172011976917, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: -0.05
       objectReference: {fileID: 0}
     - target: {fileID: 5075431559166153548, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.y

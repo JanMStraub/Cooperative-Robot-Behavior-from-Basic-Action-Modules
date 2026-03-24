@@ -18,6 +18,7 @@ from autort.TaskSelector import TaskSelector
 from operations.Registry import get_global_registry
 from operations.WorldState import get_world_state
 from config import AutoRT as config
+from config.Vision import DEFAULT_CAMERA_ID
 
 logger = logging.getLogger(__name__)
 
@@ -184,7 +185,7 @@ class AutoRTOrchestrator:
             detection_result = self.registry.execute_operation_by_name(
                 "detect_object_stereo",
                 selection="all",
-                camera_id="StereoCamera",
+                camera_id=DEFAULT_CAMERA_ID,
             )
 
             if detection_result.success and detection_result.result:

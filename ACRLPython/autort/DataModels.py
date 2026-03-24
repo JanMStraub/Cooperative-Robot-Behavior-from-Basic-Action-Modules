@@ -54,7 +54,7 @@ class ProposedTask(BaseModel):
     operations: List[Operation] = Field(min_length=1)
     required_robots: List[str] = Field(min_length=1)
     estimated_complexity: int = Field(ge=1, le=10)
-    reasoning: str = ""  # Optional - defaults to empty string if not provided
+    reasoning: Optional[str] = ""  # Optional - null from LLM is coerced to empty string
 
     @model_validator(mode="after")
     def validate_robot_ids_consistent(self):

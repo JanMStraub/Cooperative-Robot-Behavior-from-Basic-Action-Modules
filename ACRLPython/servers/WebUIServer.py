@@ -326,11 +326,13 @@ def frame_generator(stream_type="left"):
             else:
                 frame = imgL if stream_type == "left" else imgR
 
-            # Add YOLO annotations to RGB stream
+            # Add YOLO annotations to RGB stream (field bboxes excluded)
             if stream_type == "left" and _detector is not None:
                 try:
                     res = _detector.detect_objects(frame, camera_id="webui_stream")
                     for det in res.detections:
+                        if det.color.lower().startswith("field"):
+                            continue
                         color = _detector._get_class_color(det.color)
                         # Box
                         cv2.rectangle(
