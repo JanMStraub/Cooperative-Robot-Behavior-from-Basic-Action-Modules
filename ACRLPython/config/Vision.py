@@ -37,7 +37,7 @@ USE_YOLO = os.environ.get("USE_YOLO", "true").lower() in ("true", "1", "yes")
 YOLO_MODEL_PATH = os.environ.get(
     "YOLO_MODEL_PATH", str(_CONFIG_DIR / "yolo" / "models" / "more_cubes_detector.onnx")
 )
-YOLO_CONFIDENCE_THRESHOLD = float(os.environ.get("YOLO_CONFIDENCE_THRESHOLD", "0.5"))
+YOLO_CONFIDENCE_THRESHOLD = float(os.environ.get("YOLO_CONFIDENCE_THRESHOLD", "0.7"))
 YOLO_IOU_THRESHOLD = float(os.environ.get("YOLO_IOU_THRESHOLD", "0.45"))
 
 # ============================================================================
@@ -54,15 +54,39 @@ RED_HSV_UPPER_2 = (180, 255, 255)
 BLUE_HSV_LOWER = (110, 100, 100)
 BLUE_HSV_UPPER = (130, 255, 255)
 
+# Green color
+GREEN_HSV_LOWER = (40, 100, 100)
+GREEN_HSV_UPPER = (80, 255, 255)
+
+# Yellow color
+YELLOW_HSV_LOWER = (20, 100, 100)
+YELLOW_HSV_UPPER = (35, 255, 255)
+
+# Orange color
+ORANGE_HSV_LOWER = (10, 100, 100)
+ORANGE_HSV_UPPER = (20, 255, 255)
+
+# Purple/violet color
+PURPLE_HSV_LOWER = (130, 50, 50)
+PURPLE_HSV_UPPER = (160, 255, 255)
+
+# Cyan color
+CYAN_HSV_LOWER = (85, 100, 100)
+CYAN_HSV_UPPER = (100, 255, 255)
+
+# Magenta/pink color
+MAGENTA_HSV_LOWER = (145, 100, 100)
+MAGENTA_HSV_UPPER = (165, 255, 255)
+
 # ============================================================================
 # Detection Filters
 # ============================================================================
 
-MIN_CUBE_AREA_PX = int(os.environ.get("MIN_CUBE_AREA_PX", "400"))
-MAX_CUBE_AREA_PX = int(os.environ.get("MAX_CUBE_AREA_PX", "80000"))
-MIN_ASPECT_RATIO = float(os.environ.get("MIN_ASPECT_RATIO", "0.3"))
-MAX_ASPECT_RATIO = float(os.environ.get("MAX_ASPECT_RATIO", "3.5"))
-MIN_CONFIDENCE = float(os.environ.get("MIN_CONFIDENCE", "0.3"))
+MIN_CUBE_AREA_PX = int(os.environ.get("MIN_CUBE_AREA_PX", "50"))
+MAX_CUBE_AREA_PX = int(os.environ.get("MAX_CUBE_AREA_PX", "150000"))
+MIN_ASPECT_RATIO = float(os.environ.get("MIN_ASPECT_RATIO", "0.1"))
+MAX_ASPECT_RATIO = float(os.environ.get("MAX_ASPECT_RATIO", "10.0"))
+MIN_CONFIDENCE = float(os.environ.get("MIN_CONFIDENCE", "0.25"))
 
 # ============================================================================
 # Debug Settings
@@ -127,7 +151,7 @@ SCENE_DIFF_THRESHOLD = float(os.environ.get("SCENE_DIFF_THRESHOLD", "8.0"))
 # ============================================================================
 
 DEFAULT_STEREO_BASELINE = float(os.environ.get("STEREO_BASELINE", "0.05"))  # meters
-DEFAULT_STEREO_FOV = float(os.environ.get("STEREO_FOV", "50.0"))  # degrees
+DEFAULT_STEREO_FOV = float(os.environ.get("STEREO_FOV", "45.0"))  # degrees
 
 # Default stereo camera pose (must match Unity)
 DEFAULT_STEREO_CAMERA_POSITION = [-0.025, 0.4, -0.70]
@@ -224,6 +248,3 @@ ENABLE_DISPARITY_CACHE = os.environ.get("ENABLE_DISPARITY_CACHE", "true").lower(
 )
 # Used in vision/DepthEstimator.py: cache TTL for disparity maps
 DISPARITY_CACHE_TTL = float(os.environ.get("DISPARITY_CACHE_TTL", "0.5"))
-ENABLE_PARALLEL_JPEG_ENCODING = os.environ.get(
-    "ENABLE_PARALLEL_JPEG_ENCODING", "true"
-).lower() in ("true", "1", "yes")

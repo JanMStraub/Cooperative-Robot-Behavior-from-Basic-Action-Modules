@@ -429,6 +429,10 @@ class YOLODetector:
                 w, h = x2 - x1, y2 - y1
                 area = w * h
 
+                # Get class ID and confidence
+                class_id = int(boxes.cls[i].cpu().numpy())
+                confidence = float(boxes.conf[i].cpu().numpy())
+
                 # Filter by area
                 if area < self.min_area or area > self.max_area:
                     logging.debug(
@@ -436,10 +440,6 @@ class YOLODetector:
                         f"need {self.min_area}-{self.max_area})"
                     )
                     continue
-
-                # Get class ID and confidence
-                class_id = int(boxes.cls[i].cpu().numpy())
-                confidence = float(boxes.conf[i].cpu().numpy())
 
                 # Map class ID to class name
                 class_name = self.get_class_name(class_id)
@@ -665,8 +665,36 @@ class YOLODetector:
                     calc_disparity_with_preset,
                 )
 
-            # Use medium preset by default (no distance estimate yet)
-            preset = select_sgbm_preset(estimated_distance=None)
+            # Estimate prior distance from WorldState known object positions
+            estimated_distance = None
+            if camera_position is not None:
+                try:
+                    from core.Imports import get_world_state
+                    ws = get_world_state()
+                    known_objects = ws.get_all_objects()
+                    if known_objects:
+                        import math
+                        cx, cy, cz = camera_position[0], camera_position[1], camera_position[2]
+                        distances = [
+                            math.sqrt(
+                                (obj.position[0] - cx) ** 2
+                                + (obj.position[1] - cy) ** 2
+                                + (obj.position[2] - cz) ** 2
+                            )
+                            for obj in known_objects
+                            if obj.position is not None
+                        ]
+                        if distances:
+                            distances.sort()
+                            estimated_distance = distances[len(distances) // 2]  # median
+                            logging.debug(
+                                f"Adaptive SGBM: prior distance={estimated_distance:.2f}m "
+                                f"(from {len(distances)} WorldState objects)"
+                            )
+                except Exception as e:
+                    logging.debug(f"Could not query WorldState for SGBM prior: {e}")
+
+            preset = select_sgbm_preset(estimated_distance=estimated_distance)
             disparity = calc_disparity_with_preset(imgL_gray, imgR_gray, preset)
         else:
             disparity = calc_disparity(

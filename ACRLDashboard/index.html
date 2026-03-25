@@ -147,7 +147,7 @@
 						<div class="camera-grid">
 							<div class="camera-feed glass-box">
 								<img id="stream-rgb" alt="RGB Stream"
-									style="width:100%;height:100%;object-fit:cover;"
+									style="width:100%;height:100%;object-fit:contain;"
 									onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
 								<div class="feed-placeholder" style="display:none;">
 									<i class="fa-solid fa-video-slash"></i>
@@ -157,7 +157,7 @@
 							</div>
 							<div class="camera-feed glass-box">
 								<img id="stream-depth" alt="Depth Stream"
-									style="width:100%;height:100%;object-fit:cover;"
+									style="width:100%;height:100%;object-fit:contain;"
 									onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
 								<div class="feed-placeholder" style="display:none;">
 									<i class="fa-solid fa-video-slash"></i>
@@ -175,20 +175,23 @@
 						<span class="ws-timestamp" id="ws-timestamp" style="font-size:0.75rem;opacity:0.5;">–</span>
 					</div>
 
-					<!-- Robot Cards -->
-					<div class="ws-robot-list glass-box" id="ws-robot-list">
-						<div class="ws-empty">
-							<i class="fa-solid fa-circle-notch fa-spin"></i>
-							<span>Waiting for Unity…</span>
+					<!-- World State Row: Robot Cards + Object Cards side by side -->
+					<div class="ws-state-row">
+						<!-- Robot Cards -->
+						<div class="ws-robot-list glass-box" id="ws-robot-list">
+							<div class="ws-empty">
+								<i class="fa-solid fa-circle-notch fa-spin"></i>
+								<span>Waiting for Unity…</span>
+							</div>
 						</div>
-					</div>
 
-					<!-- Object Cards -->
-					<div class="ws-object-section" id="ws-object-section" style="display:none;">
-						<h3 class="ws-section-title">
-							<i class="fa-solid fa-cubes"></i> Detected Objects
-						</h3>
-						<div class="ws-object-list glass-box" id="ws-object-list"></div>
+						<!-- Object Cards -->
+						<div class="ws-object-section" id="ws-object-section" style="display:none;">
+							<h3 class="ws-section-title">
+								<i class="fa-solid fa-cubes"></i> Detected Objects
+							</h3>
+							<div class="ws-object-list glass-box" id="ws-object-list"></div>
+						</div>
 					</div>
 				</section>
 

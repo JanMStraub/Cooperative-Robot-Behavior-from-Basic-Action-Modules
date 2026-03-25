@@ -36,6 +36,18 @@ try:
         RED_HSV_UPPER_2,
         BLUE_HSV_LOWER,
         BLUE_HSV_UPPER,
+        GREEN_HSV_LOWER,
+        GREEN_HSV_UPPER,
+        YELLOW_HSV_LOWER,
+        YELLOW_HSV_UPPER,
+        ORANGE_HSV_LOWER,
+        ORANGE_HSV_UPPER,
+        PURPLE_HSV_LOWER,
+        PURPLE_HSV_UPPER,
+        CYAN_HSV_LOWER,
+        CYAN_HSV_UPPER,
+        MAGENTA_HSV_LOWER,
+        MAGENTA_HSV_UPPER,
         MIN_CUBE_AREA_PX,
         MAX_CUBE_AREA_PX,
         MIN_ASPECT_RATIO,
@@ -57,6 +69,18 @@ except ImportError:
         RED_HSV_UPPER_2,
         BLUE_HSV_LOWER,
         BLUE_HSV_UPPER,
+        GREEN_HSV_LOWER,
+        GREEN_HSV_UPPER,
+        YELLOW_HSV_LOWER,
+        YELLOW_HSV_UPPER,
+        ORANGE_HSV_LOWER,
+        ORANGE_HSV_UPPER,
+        PURPLE_HSV_LOWER,
+        PURPLE_HSV_UPPER,
+        CYAN_HSV_LOWER,
+        CYAN_HSV_UPPER,
+        MAGENTA_HSV_LOWER,
+        MAGENTA_HSV_UPPER,
         MIN_CUBE_AREA_PX,
         MAX_CUBE_AREA_PX,
         MIN_ASPECT_RATIO,
@@ -241,6 +265,30 @@ class CubeDetector:
         # Blue color range
         self.blue_lower = np.array(BLUE_HSV_LOWER, dtype=np.uint8)
         self.blue_upper = np.array(BLUE_HSV_UPPER, dtype=np.uint8)
+
+        # Green color range
+        self.green_lower = np.array(GREEN_HSV_LOWER, dtype=np.uint8)
+        self.green_upper = np.array(GREEN_HSV_UPPER, dtype=np.uint8)
+
+        # Yellow color range
+        self.yellow_lower = np.array(YELLOW_HSV_LOWER, dtype=np.uint8)
+        self.yellow_upper = np.array(YELLOW_HSV_UPPER, dtype=np.uint8)
+
+        # Orange color range
+        self.orange_lower = np.array(ORANGE_HSV_LOWER, dtype=np.uint8)
+        self.orange_upper = np.array(ORANGE_HSV_UPPER, dtype=np.uint8)
+
+        # Purple color range
+        self.purple_lower = np.array(PURPLE_HSV_LOWER, dtype=np.uint8)
+        self.purple_upper = np.array(PURPLE_HSV_UPPER, dtype=np.uint8)
+
+        # Cyan color range
+        self.cyan_lower = np.array(CYAN_HSV_LOWER, dtype=np.uint8)
+        self.cyan_upper = np.array(CYAN_HSV_UPPER, dtype=np.uint8)
+
+        # Magenta color range
+        self.magenta_lower = np.array(MAGENTA_HSV_LOWER, dtype=np.uint8)
+        self.magenta_upper = np.array(MAGENTA_HSV_UPPER, dtype=np.uint8)
 
         # Detection thresholds
         self.min_area = MIN_CUBE_AREA_PX
@@ -540,11 +588,38 @@ class CubeDetector:
         mask_red_2 = cv2.inRange(hsv, self.red_lower_2, self.red_upper_2)
         mask_red = cv2.bitwise_or(mask_red_1, mask_red_2)
 
-        # Detect blue/cyan cubes
+        # Detect blue cubes
         mask_blue = cv2.inRange(hsv, self.blue_lower, self.blue_upper)
 
+        # Detect green cubes
+        mask_green = cv2.inRange(hsv, self.green_lower, self.green_upper)
+
+        # Detect yellow cubes
+        mask_yellow = cv2.inRange(hsv, self.yellow_lower, self.yellow_upper)
+
+        # Detect orange cubes
+        mask_orange = cv2.inRange(hsv, self.orange_lower, self.orange_upper)
+
+        # Detect purple cubes
+        mask_purple = cv2.inRange(hsv, self.purple_lower, self.purple_upper)
+
+        # Detect cyan cubes
+        mask_cyan = cv2.inRange(hsv, self.cyan_lower, self.cyan_upper)
+
+        # Detect magenta cubes
+        mask_magenta = cv2.inRange(hsv, self.magenta_lower, self.magenta_upper)
+
         # Process each color mask
-        for color_name, mask in [("red", mask_red), ("blue", mask_blue)]:
+        for color_name, mask in [
+            ("red", mask_red),
+            ("blue", mask_blue),
+            ("green", mask_green),
+            ("yellow", mask_yellow),
+            ("orange", mask_orange),
+            ("purple", mask_purple),
+            ("cyan", mask_cyan),
+            ("magenta", mask_magenta),
+        ]:
             # Apply morphological operations to clean up mask
             kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
             mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)

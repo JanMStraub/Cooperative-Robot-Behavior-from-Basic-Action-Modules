@@ -89,31 +89,6 @@ LMSTUDIO_BASE_URL = (
     _lmstudio_raw if _lmstudio_raw.endswith("/v1") else _lmstudio_raw + "/v1"
 )
 
-# ============================================================================
-# VGN (Volumetric Grasp Network) — Local Mac Inference
-# ============================================================================
-
-# Path to the VGN checkpoint file (vgn_conv.pth).
-# Relative paths are resolved from the ACRLPython/ root directory.
-# Download from: https://github.com/ethz-asl/vgn (Google Drive link in README)
-VGN_MODEL_PATH = os.environ.get("VGN_MODEL_PATH", "checkpoints/vgn_conv.pth")
-
-# Number of top-ranked grasp poses to return per call.
-VGN_TOP_K = int(os.environ.get("VGN_TOP_K", "20"))
-
-# Master toggle: set to "false" to skip VGN entirely and use geometric fallback.
-VGN_ENABLED = os.environ.get("VGN_ENABLED", "false").lower() in ("true", "1", "yes")
-
-# When False (default), skip the LM Studio VLM bbox-refinement step inside
-# VGNClient.predict_grasps() and use the raw YOLO bbox directly.  Set to "true"
-# only when LM Studio is running; otherwise every grasp attempt will hang for
-# the HTTP client default timeout (~30 s) before falling back.
-VGN_USE_VLM_REFINEMENT = os.environ.get("VGN_USE_VLM_REFINEMENT", "false").lower() in (
-    "true",
-    "1",
-    "yes",
-)
-
 DEFAULT_LMSTUDIO_MODEL = os.environ.get(
     "DEFAULT_LMSTUDIO_MODEL", "mistralai/ministral-3-14b-reasoning"
 )
@@ -128,6 +103,31 @@ LLM_THINKING_BUDGET = int(os.environ.get("LLM_THINKING_BUDGET", "1024"))
 # Set to True to enable thinking for reasoning models (e.g. ministral-3-14b-reasoning).
 # Requires max_tokens to be large enough to cover both thinking + actual response.
 LLM_THINKING_ENABLED = os.environ.get("LLM_THINKING_ENABLED", "true").lower() == "true"
+
+# ============================================================================
+# VGN (Volumetric Grasp Network) — Local Mac Inference
+# ============================================================================
+
+# Path to the VGN checkpoint file (vgn_conv.pth).
+# Relative paths are resolved from the ACRLPython/ root directory.
+# Download from: https://github.com/ethz-asl/vgn (Google Drive link in README)
+VGN_MODEL_PATH = os.environ.get("VGN_MODEL_PATH", "vendor/models/vgn_conv.pth")
+
+# Number of top-ranked grasp poses to return per call.
+VGN_TOP_K = int(os.environ.get("VGN_TOP_K", "20"))
+
+# Master toggle: set to "false" to skip VGN entirely and use geometric fallback.
+VGN_ENABLED = os.environ.get("VGN_ENABLED", "true").lower() in ("true", "1", "yes")
+
+# When False (default), skip the LM Studio VLM bbox-refinement step inside
+# VGNClient.predict_grasps() and use the raw YOLO bbox directly.  Set to "true"
+# only when LM Studio is running; otherwise every grasp attempt will hang for
+# the HTTP client default timeout (~30 s) before falling back.
+VGN_USE_VLM_REFINEMENT = os.environ.get("VGN_USE_VLM_REFINEMENT", "false").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 
 # ============================================================================
 # Shared LLM System Prompt

@@ -314,6 +314,14 @@ namespace PythonCommunication
                 float distanceToTarget = controller.GetDistanceToTarget();
                 bool isMoving = distanceToTarget > RobotConstants.MOVEMENT_THRESHOLD;
 
+                // Also consider the robot moving if it is executing a ROS trajectory,
+                // which bypasses the Unity IK targets used by GetDistanceToTarget()
+                var rosSubscriber = robotInstance.robotGameObject.GetComponentInChildren<ROSTrajectorySubscriber>();
+                if (rosSubscriber != null && rosSubscriber.IsExecutingTrajectory)
+                {
+                    isMoving = true;
+                }
+
                 // Get gripper state
                 string gripperState = "unknown";
                 var gripperController =

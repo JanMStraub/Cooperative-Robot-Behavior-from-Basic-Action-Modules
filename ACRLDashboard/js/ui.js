@@ -66,7 +66,7 @@ export class UIManager {
     logToConsole(msg, level = 'info') {
         const div = document.createElement('div');
         div.className = `log-line ${level}`;
-        const time = new Date().toLocaleTimeString();
+        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
         div.textContent = `[${time}] ${msg}`;
 
         const { scrollHeight, clientHeight, scrollTop } = this.consoleOutput;

@@ -120,26 +120,25 @@ class VisionConflictResolver:
 
         my_dist = _dist(robot_position, object_position)
 
-        for competitor in competitors:
-            # We can only compare distance when the caller provides its own position;
-            # competitors' positions are not stored in claims. Use claim timestamp as
-            # proxy for competitor proximity when only our position is known.
-            # A full implementation would pass all robot positions from WorldState.
-            pass
-
-        # When only this robot's position is available, grant access if
-        # no competitor timestamp is significantly earlier (tie-break heuristic)
+        # Competitors' positions are not stored in claims, so use claim timestamp
+        # as a distance proxy: if we claimed first, we were likely closer at that moment.
+        # Grant access only if no competitor claimed meaningfully earlier.
         earliest_ts = min(claims[r] for r in claims)
         my_ts = claims[robot_id]
 
         if my_ts == earliest_ts:
             # We claimed first; grant access
+            logger.debug(
+                f"Conflict: {robot_id} wins (first claim, dist={my_dist:.3f}m) on {object_id}"
+            )
             return True
 
-        # We claimed later; check if we're meaningfully closer (requires position of all robots)
-        # Without competitor positions, defer to first_come for safety
+        # We claimed later — yield to the earlier claimant.
+        # Use resolve_conflict_with_positions() for accurate closest-robot resolution
+        # when all robot positions are available via WorldState.
         logger.debug(
-            f"Conflict: {robot_id} yielding to earlier claimant on {object_id}"
+            f"Conflict: {robot_id} yielding to earlier claimant on {object_id} "
+            f"(dist={my_dist:.3f}m; use resolve_conflict_with_positions for full closest-robot logic)"
         )
         return False
 

@@ -105,27 +105,37 @@ namespace Robotics.Grasp
         /// <summary>
         /// Calculate basic grasp position and rotation for a given approach.
         /// Simple calculation for fallback or single-candidate generation.
+        ///
+        /// Position offsets and the base rotation are both composed through
+        /// <paramref name="objectRotation"/> so that a rotated object receives a
+        /// correctly-oriented grasp pose. Pass <c>default</c> (or omit) for
+        /// axis-aligned objects — it degrades to <c>Quaternion.identity</c>.
         /// </summary>
         /// <param name="objectPosition">Object center position</param>
-        /// <param name="objectSize">Object dimensions</param>
+        /// <param name="objectSize">Object dimensions in local space</param>
         /// <param name="gripperPosition">Current gripper position</param>
         /// <param name="approach">Approach direction</param>
-        /// <returns>Grasp position and rotation</returns>
+        /// <param name="objectRotation">World-space rotation of the target object (default: identity)</param>
+        /// <returns>Grasp position and rotation in world space</returns>
         public static (Vector3 position, Quaternion rotation) CalculateBasicGraspPose(
             Vector3 objectPosition,
             Vector3 objectSize,
             Vector3 gripperPosition,
-            GraspApproach approach
+            GraspApproach approach,
+            Quaternion objectRotation = default
         )
         {
+            if (objectRotation == default)
+                objectRotation = Quaternion.identity;
+
             Vector3 graspPosition;
-            Quaternion graspRotation;
+            Quaternion baseRotation;
 
             switch (approach)
             {
                 case GraspApproach.Top:
-                    graspPosition = objectPosition + Vector3.up * (objectSize.y * 0.5f);
-                    graspRotation = Quaternion.Euler(90f, 0f, 0f);
+                    graspPosition = objectPosition + objectRotation * (Vector3.up * (objectSize.y * 0.5f));
+                    baseRotation = Quaternion.Euler(90f, 0f, 0f);
                     break;
 
                 case GraspApproach.Side:
@@ -133,8 +143,8 @@ namespace Robotics.Grasp
                     float sideSign = deltaX > 0 ? 1f : -1f;
                     graspPosition =
                         objectPosition
-                        + Vector3.right * sideSign * (objectSize.x * 0.5f + SIDE_APPROACH_OFFSET);
-                    graspRotation = Quaternion.Euler(0f, deltaX > 0 ? -90f : 90f, 0f);
+                        + objectRotation * (Vector3.right * sideSign * (objectSize.x * 0.5f + SIDE_APPROACH_OFFSET));
+                    baseRotation = Quaternion.Euler(0f, deltaX > 0 ? -90f : 90f, 0f);
                     break;
 
                 case GraspApproach.Front:
@@ -142,19 +152,17 @@ namespace Robotics.Grasp
                     float frontSign = deltaZ > 0 ? 1f : -1f;
                     graspPosition =
                         objectPosition
-                        + Vector3.forward
-                            * frontSign
-                            * (objectSize.z * 0.5f + SIDE_APPROACH_OFFSET);
-                    graspRotation = Quaternion.Euler(0f, deltaZ > 0 ? 180f : 0f, 0f);
+                        + objectRotation * (Vector3.forward * frontSign * (objectSize.z * 0.5f + SIDE_APPROACH_OFFSET));
+                    baseRotation = Quaternion.Euler(0f, deltaZ > 0 ? 180f : 0f, 0f);
                     break;
 
                 default:
                     graspPosition = objectPosition;
-                    graspRotation = Quaternion.identity;
+                    baseRotation = Quaternion.identity;
                     break;
             }
 
-            return (graspPosition, graspRotation);
+            return (graspPosition, objectRotation * baseRotation);
         }
     }
 }

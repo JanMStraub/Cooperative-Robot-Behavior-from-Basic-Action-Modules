@@ -320,6 +320,8 @@ def frame_generator(stream_type="left"):
                         dtype=cv2.CV_8U,
                     )
                     frame = cv2.applyColorMap(disp_normalized, cv2.COLORMAP_JET)
+                    # Mask out invalid/zero disparity areas as black instead of dark blue
+                    frame[disp_valid <= 0] = [0, 0, 0]
                 except Exception as e:
                     logger.debug(f"WebUI depth stream failed: {e}")
                     frame = imgR  # Fallback to right eye if disparity fails

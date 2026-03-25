@@ -87,7 +87,7 @@ export class Renderer {
         // Timestamp
         if (tsEl) {
             const now = new Date();
-            tsEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            tsEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
         }
 
         // Robot cards
@@ -103,7 +103,7 @@ export class Renderer {
                 const tx = f(Array.isArray(tgt) ? tgt[0] : tgt.x);
                 const ty = f(Array.isArray(tgt) ? tgt[1] : tgt.y);
                 const tz = f(Array.isArray(tgt) ? tgt[2] : tgt.z);
-                const moving  = robot.is_moving;
+                const moving  = robot.is_moving === true;
                 const gripper = (robot.gripper_state || 'unknown').toLowerCase();
                 const mode    = robot.control_mode;
                 const joints  = robot.joint_angles;
@@ -123,7 +123,7 @@ export class Renderer {
                             ${modeTag}
                         </span>
                         <div style="display:flex;align-items:center;gap:0.5rem;">
-                            <span style="font-size:0.72rem;color:var(--text-muted)">${moving ? 'Moving…' : 'Idle'}</span>
+                            <span style="font-size:0.72rem;color:${moving ? 'var(--warning)' : 'var(--text-muted)'}">${moving ? 'Moving…' : 'Idle'}</span>
                             <span class="ws-status-dot${moving ? ' moving' : ''}"></span>
                         </div>
                     </div>
@@ -153,7 +153,7 @@ export class Renderer {
         // Object cards
         if (objectSection && objectList && data.objects) {
             if (data.objects.length > 0) {
-                objectSection.style.display = '';
+                objectSection.style.display = 'flex';
                 objectList.innerHTML = '';
                 data.objects.forEach(obj => {
                     const p = obj.position || {};
