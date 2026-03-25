@@ -1,0 +1,3 @@
+[submodule "ACRLPython/vendor/vgn"]
+	path = ACRLPython/vendor/vgn
+	url = https://github.com/ethz-asl/vgn
