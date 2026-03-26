@@ -360,19 +360,13 @@ HANDOFF_PATTERN = WorkflowPattern(
             description="Detect object to handoff",
         ),
         WorkflowStep(
-            operation_id="motion_move_to_coord_001",
+            operation_id="coordination_grasp_object_for_handoff_001",
             parameter_bindings={
-                "robot_id": "source_robot",
-                "x": "object.x",
-                "y": "object.y",
-                "z": "object.z",
+                "robot_id": "{source_robot_id}",
+                "object_id": "{object_id}",
+                "receiving_robot_id": "{target_robot_id}",
             },
-            description="Source robot approaches object",
-        ),
-        WorkflowStep(
-            operation_id="manipulation_control_gripper_001",
-            parameter_bindings={"robot_id": "source_robot", "open_gripper": "False"},
-            description="Source robot grasps object",
+            description="Source robot grasps object at far end for handoff, leaving near end clear for receiving robot",
         ),
         WorkflowStep(
             operation_id="sync_signal_001",
@@ -393,6 +387,14 @@ HANDOFF_PATTERN = WorkflowPattern(
                 "z": "handoff_z",
             },
             description="Source robot moves to handoff position",
+        ),
+        WorkflowStep(
+            operation_id="motion_adjust_orientation_003",
+            parameter_bindings={
+                "robot_id": "{target_robot_id}",
+                "pitch": 90.0,
+            },
+            description="Target robot rotates wrist upward (pitch=90°) for bottom-approach grasp, preventing gripper collision with source robot",
         ),
         WorkflowStep(
             operation_id="motion_move_to_coord_001",
@@ -660,26 +662,36 @@ To perform an object handoff, the LLM should chain these ATOMIC operations:
 
 **Step-by-Step Atomic Operation Sequence:**
 
-1. Source robot moves to handoff region
-   → move_to_coordinate(robot_from, handoff_position)
+1. Detect the object to hand off (required precondition for grasp step)
+   → detect_object_stereo(source_robot, color=object_color)
 
-2. Source robot signals ready
-   → signal(robot_from, "ready_for_handoff")
+2. Source robot grasps object at the FAR END (away from receiving robot)
+   → grasp_object_for_handoff(source_robot, object_id, receiving_robot)
+   NOTE: Do NOT use move_to_coordinate + control_gripper here. The
+   grasp_object_for_handoff operation automatically selects the far end of
+   elongated objects and aligns the jaw axis — preventing gripper collision.
 
-3. Target robot waits for signal and moves
-   → wait_for_signal(robot_to, "ready_for_handoff")
-   → move_to_coordinate(robot_to, handoff_position)
+3. Source robot signals it has grasped
+   → signal(source_robot, "object_gripped")
 
-4. Target robot grips object with object_id attachment
-   → control_gripper(robot_to, open=False, object_id=object)
+4. Target robot waits for signal (runs in parallel with step 3)
+   → wait_for_signal(target_robot, "object_gripped", timeout_ms=10000)
 
-5. Source robot releases
-   → control_gripper(robot_from, open=True)
-   OR: release_object(robot_from)
+5. Target robot rotates wrist UPWARD before approaching handoff position
+   → adjust_end_effector_orientation(target_robot, pitch=90.0)
+   NOTE: pitch=90.0 faces the gripper upward (bottom-approach). This is the
+   opposite of pitch=-90.0 (top-down). Prevents collision with source gripper.
 
-6. Robots signal completion and move away
-   → signal(robot_to, "handoff_complete")
-   → move_to_coordinate(robot_from, safe_position)
+6. Both robots move to handoff position (can run in parallel)
+   → move_to_coordinate(source_robot, handoff_x, handoff_y, handoff_z)
+   → move_to_coordinate(target_robot, handoff_x, handoff_y, handoff_z)
+
+7. Both at handoff — signal and exchange
+   → signal(source_robot, "both_at_handoff")
+   → control_gripper(target_robot, open_gripper=False)  # target grips
+   → wait(duration_ms=500)                               # let gripper close
+   → control_gripper(source_robot, open_gripper=True)   # source releases
+   → signal(target_robot, "handoff_complete")
 
 **Why Removed:**
 The original operation hid coordination complexity from the LLM.
@@ -689,16 +701,25 @@ By exposing atomic operations, the LLM can:
 - Adapt the sequence to specific contexts
 - Learn from successful coordination patterns
 
+**Key Anti-Patterns to Avoid:**
+- Do NOT use move_to_coordinate + control_gripper for step 2 — use grasp_object_for_handoff
+- Do NOT skip the orientation step for the target robot — both robots approaching
+  with default top-down orientation causes gripper collision at the handoff point
+
 **Example LLM Usage:**
-"Robot1, hand the red cube to Robot2"
+"Robot1, hand the red bar to Robot2"
 
 LLM generates:
 ```
+detect_object_stereo("Robot1", color="red")
+grasp_object_for_handoff("Robot1", object_id="RedBar", receiving_robot_id="Robot2")
+signal("Robot1", "object_gripped")
+wait_for_signal("Robot2", "object_gripped", timeout_ms=10000)
+adjust_end_effector_orientation("Robot2", pitch=90.0)
 move_to_coordinate("Robot1", x=0.0, y=0.0, z=0.15)
-signal("Robot1", "ready_for_handoff")
-wait_for_signal("Robot2", "ready_for_handoff")
 move_to_coordinate("Robot2", x=0.0, y=0.0, z=0.15)
-control_gripper("Robot2", open_gripper=False, object_id="RedCube")
+signal("Robot1", "both_at_handoff")
+control_gripper("Robot2", open_gripper=False)
 release_object("Robot1")
 signal("Robot2", "handoff_complete")
 ```
