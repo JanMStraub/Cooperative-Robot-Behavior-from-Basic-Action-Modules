@@ -130,7 +130,7 @@ class SequenceQueryHandler(SingletonBase):
             robot_id: Default robot ID
             camera_id: Camera ID for perception operations (depth detection)
             auto_execute: Whether to automatically execute parsed operations
-            timeout: Timeout per command
+            timeout: Timeout per command in seconds (default 180s matches executor default)
 
         Returns:
             Execution result dictionary

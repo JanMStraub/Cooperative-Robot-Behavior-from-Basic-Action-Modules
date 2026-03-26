@@ -523,7 +523,10 @@ class WorldState(SingletonBase):
                 obj.object_type = object_type
                 obj.confidence = confidence
                 obj.dimensions = dimensions
-                obj.rotation = rotation
+                # Preserve existing rotation if the new update doesn't carry one
+                # (vision-detected objects don't have rotation; physics-scene objects do).
+                if rotation is not None:
+                    obj.rotation = rotation
                 obj.timestamp = time.time()
 
             logger.debug(f"Updated object {object_id} at {position}")

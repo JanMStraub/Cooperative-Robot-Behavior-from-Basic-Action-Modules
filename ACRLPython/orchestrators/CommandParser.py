@@ -128,18 +128,29 @@ class _PromptBuilder:
 
         Example for multi-robot handoff:
         {{
-        "reasoning": "Robot1 detects and grasps the red cube using grasp_object. It then signals Robot2, both move to handoff position. Robot2 grips, then Robot1 releases.",
+        "reasoning": "Robot1 detects and grasps the red cube using grasp_object_for_handoff. It moves to the shared zone and signals Robot2. Robot2 waits, then re-detects the cube's NEW position (it has moved with Robot1) and calls grasp_object on it. Then Robot1 releases.",
         "plan": [
             {{"parallel_group": 1, "robot": "Robot1", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "capture_var": "target"}},
-            {{"parallel_group": 2, "robot": "Robot1", "operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "red_cube"}}}},
-            {{"parallel_group": 3, "robot": "Robot1", "operation": "signal", "params": {{"event_name": "r1_gripped"}}}},
-            {{"parallel_group": 3, "robot": "Robot2", "operation": "wait_for_signal", "params": {{"event_name": "r1_gripped"}}}},
-            {{"parallel_group": 4, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": -0.15, "y": 0.3, "z": 0.15}}}},
-            {{"parallel_group": 4, "robot": "Robot2", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot2", "x": 0.15, "y": 0.3, "z": 0.15}}}},
-            {{"parallel_group": 5, "robot": "Robot2", "operation": "control_gripper", "params": {{"robot_id": "Robot2", "open_gripper": false}}}},
-            {{"parallel_group": 6, "robot": "Robot1", "operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": true}}}}
+            {{"parallel_group": 2, "robot": "Robot1", "operation": "grasp_object_for_handoff", "params": {{"robot_id": "Robot1", "object_id": "$target.color", "receiving_robot_id": "Robot2"}}}},
+            {{"parallel_group": 3, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": 0.0, "y": 0.3, "z": 0.07}}}},
+            {{"parallel_group": 4, "robot": "Robot1", "operation": "signal", "params": {{"event_name": "r1_at_handoff"}}}},
+            {{"parallel_group": 4, "robot": "Robot2", "operation": "wait_for_signal", "params": {{"event_name": "r1_at_handoff"}}}},
+            {{"parallel_group": 5, "robot": "Robot2", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot2", "color": "red"}}, "capture_var": "handoff_target"}},
+            {{"parallel_group": 6, "robot": "Robot2", "operation": "grasp_object", "params": {{"robot_id": "Robot2", "object_id": "$handoff_target.color"}}}},
+            {{"parallel_group": 7, "robot": "Robot1", "operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": true}}}}
         ]
         }}
+
+        === HANDOFF RULE ===
+
+        For robot-to-robot handoffs:
+        1. Robot1 grasps with grasp_object_for_handoff, moves to the shared zone (x=0.0, y=0.3, z=0.07), then signals.
+        2. Robot2 waits for the signal, then re-detects the object (it has MOVED with Robot1 to the shared zone).
+        3. Robot2 calls grasp_object on the newly detected position — do NOT use move_to_coordinate + control_gripper.
+        4. Robot1 releases only after Robot2's grasp_object completes.
+
+        NEVER hardcode Robot2's grasp position — the cube moves with Robot1 and its position changes.
+        NEVER use move_to_coordinate + control_gripper for Robot2's grip — always use grasp_object after re-detecting.
 
         === SYNCHRONIZATION PRIMITIVES ===
 
@@ -161,9 +172,10 @@ class _PromptBuilder:
         - After detect_object_stereo with capture_var "target": {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "$target.color"}}}}
         - The object_id field in grasp_object ALWAYS uses ".color" from the detection result — NEVER ".id", ".name", or any other field
         - Only use control_gripper directly for explicit open/close commands unrelated to picking
+        - ALWAYS use grasp_object_for_handoff (NOT grasp_object) when a multi-robot handoff is planned
+        - grasp_object_for_handoff grasps the far end of the object (away from the receiving robot), leaving the near end clear so both grippers never collide
+        - grasp_object_for_handoff REQUIRES both object_id AND receiving_robot_id — if either is omitted the operation will fail immediately
         - NEVER use grasp_object_for_handoff for single-robot pick-and-place tasks
-        - grasp_object_for_handoff is ONLY for multi-robot handoffs where one robot must leave the near end of an elongated object clear for a second robot to approach simultaneously
-        - grasp_object_for_handoff REQUIRES object_id — if omitted the operation will fail immediately
 
         === PLACE RULE (CRITICAL) ===
 

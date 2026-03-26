@@ -710,6 +710,7 @@ class SequenceExecutor:
             if op_result.result and op_result.result.get("status") in (
                 "ros_executed",
                 "ros_command_sent",
+                "vgn_ros_executed",
             ):
                 logger.debug(
                     f"Skipping completion wait for ROS-executed operation: {operation}"

@@ -39,10 +39,10 @@
           max_position: 0.908
         joint_4:
           has_velocity_limits: true
-          max_velocity: 2.0944
+          max_velocity: 1.5708  # ~90 deg/s — Unity ArticulationBody peaks at ~100 deg/s; leave 10% headroom
           has_acceleration_limits: true
-          max_acceleration: 1.0472
-          max_deceleration: -1.0472
+          max_acceleration: 0.7854  # ~45 deg/s² — slower ramp to keep phys tracking error < 5 deg
+          max_deceleration: -0.7854
           has_position_limits: true
           min_position: -3.1406  # inset 0.001 rad from ±π to avoid constraint-merge wrap-around
           max_position: 3.1406

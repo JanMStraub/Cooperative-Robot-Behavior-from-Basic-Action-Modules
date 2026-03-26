@@ -9,6 +9,7 @@ collision checking, and scoring.
 """
 
 import logging
+import math
 import time
 from typing import List, Optional
 
@@ -836,6 +837,7 @@ def _grasp_via_vgn_with_ros(
     request_id: int,
     world_state,
     custom_approach_vector: "Optional[List[float]]" = None,
+    grasp_yaw_override: "Optional[float]" = None,
 ) -> "Optional[OperationResult]":
     """Attempt grasp using VGN pose selection with MoveIt trajectory execution.
 
@@ -1094,12 +1096,102 @@ def _grasp_via_vgn_with_ros(
     else:
         # VGN approach is too shallow/horizontal for a safe table grasp.
         # Use pure upward pre-grasp offset so the arm hovers directly above the
-        # object, then descend straight down with the known-good top-down orientation.
-        # w=0.0087 avoids the IK equator ambiguity at exactly w=0 (180° rotation).
+        # object, then descend straight down.
         pre_approach = [0.0, 1.0, 0.0]  # straight up in Unity world frame
-        orientation = {"x": 0.9999, "y": 0.0, "z": 0.0, "w": 0.0087}
+
+        # Yaw source priority:
+        # 0. Explicit override (e.g. handoff — jaw must face the handoff axis)
+        # 1. WorldState object rotation (exact, from Unity physics engine)
+        # 2. VGN rotation quaternion (estimated from TSDF grasp prediction)
+        # 3. Zero yaw (axis-aligned fallback)
+        yaw_unity = 0.0
+        yaw_source = "fallback (zero)"
+
+        if grasp_yaw_override is not None:
+            yaw_unity = grasp_yaw_override
+            yaw_source = f"override ({math.degrees(grasp_yaw_override):.1f}°)"
+        elif world_state is not None:
+            # get_object_state() doesn't expose rotation; access _objects directly.
+            try:
+                with world_state._lock:
+                    _obj = world_state._objects.get(object_id)
+                    if _obj is None:
+                        # partial-match fallback (same logic as get_object_position)
+                        _norm = object_id.lower().replace(" ", "_").replace("-", "_")
+                        for k, v in world_state._objects.items():
+                            if _norm in k.lower() or k.lower() in _norm:
+                                _obj = v
+                                break
+                    if _obj is None:
+                        _keys = list(world_state._objects.keys())
+                        logger.info(
+                            f"[VGN+ROS] WorldState object '{object_id}' not found. "
+                            f"Available keys: {_keys[:10]}"
+                        )
+                    elif _obj.rotation is None:
+                        logger.info(
+                            f"[VGN+ROS] WorldState object '{object_id}' found but rotation=None"
+                        )
+                    else:
+                        # rotation is (roll, pitch, yaw) from ZXY decomposition where:
+                        #   roll  = index 0 = rotation around Unity X
+                        #   pitch = index 1 = rotation around Unity Y (up) = in-plane yaw
+                        #   yaw   = index 2 = rotation around Unity Z
+                        # For top-down grasping, we need rotation around Unity Y → index 1.
+                        yaw_deg = _obj.rotation[1]
+                        # Unity Y rotation is left-handed (positive = clockwise from above).
+                        # ROS Z rotation is right-handed (positive = counter-clockwise).
+                        # Negate to convert between the two conventions.
+                        yaw_unity = -math.radians(yaw_deg)
+                        yaw_source = f"WorldState (yaw={yaw_deg:.1f}°)"
+            except Exception as _e:
+                logger.warning(f"[VGN+ROS] WorldState rotation lookup failed: {_e}")
+
+        if yaw_source.startswith("fallback"):
+            # Fall back to VGN rotation: extract yaw from gripper X-axis projection.
+            qx, qy, qz, qw = rot
+            gx_x = 1 - 2 * (qy * qy + qz * qz)
+            gx_z = 2 * (qx * qz + qy * qw)
+            yaw_unity = math.atan2(gx_x, gx_z)
+            yaw_source = f"VGN quaternion (yaw={math.degrees(yaw_unity):.1f}°)"
+
+        # Exploit 180° gripper symmetry: normalise to (-π/2, π/2] to minimise
+        # wrist travel (grasping at θ and θ+π are physically identical).
+        if yaw_unity > math.pi / 2:
+            yaw_unity -= math.pi
+        elif yaw_unity < -math.pi / 2:
+            yaw_unity += math.pi
+        # Compose: q_final = q_yaw_ros * q_topdown
+        # q_topdown ≈ {x:0.9999, y:0, z:0, w:0.0087} (179° around ROS X = gripper down)
+        # q_yaw_ros = {x:0, y:0, z:sin(θ/2), w:cos(θ/2)} (yaw around ROS Z = up)
+        half = yaw_unity / 2.0
+        qy_z = math.sin(half)
+        qy_w = math.cos(half)
+        # Full quaternion multiply q_yaw * q_topdown.
+        # a = q_yaw = (ax=0, ay=0, az=qy_z, aw=qy_w)
+        # b = q_topdown = (bx=0.9999, by=0, bz=0, bw=0.0087)
+        # Formula: (aw*bx+ax*bw+ay*bz-az*by,
+        #           aw*by+ay*bw+az*bx-ax*bz,
+        #           aw*bz+az*bw+ax*by-ay*bx,
+        #           aw*bw-ax*bx-ay*by-az*bz)
+        bx, by, bz, bw = 0.9999, 0.0, 0.0, 0.0087
+        ox = qy_w * bx - qy_z * by   # qy_w*bx + 0*bw + 0*bz - qy_z*by
+        oy = qy_w * by + qy_z * bx   # qy_w*by + 0*bw + qy_z*bx - 0*bz
+        oz = qy_w * bz + qy_z * bw   # qy_w*bz + qy_z*bw + 0*by - 0*bx
+        ow = qy_w * bw - qy_z * bz   # qy_w*bw - 0*bx - 0*by - qy_z*bz
+        # Normalise
+        mag = math.sqrt(ox * ox + oy * oy + oz * oz + ow * ow)
+        orientation = {
+            "x": ox / mag,
+            "y": oy / mag,
+            "z": oz / mag,
+            "w": ow / mag,
+        }
         logger.info(
-            f"[VGN+ROS] Using top-down orientation (VGN approach Y={_vgn_approach_y:.2f} < {_TOP_DOWN_Y_THRESHOLD})"
+            f"[VGN+ROS] Top-down + yaw={math.degrees(yaw_unity):.1f}° "
+            f"from {yaw_source} "
+            f"(VGN approach Y={_vgn_approach_y:.2f} < {_TOP_DOWN_Y_THRESHOLD}), "
+            f"orientation={orientation}"
         )
 
     pre_grasp_pos = {
@@ -1239,6 +1331,7 @@ def grasp_object(
     enable_retreat: bool = True,
     retreat_distance: float = 0.0,  # 0 = use config default
     custom_approach_vector: Optional[List[float]] = None,  # [x, y, z] or None
+    grasp_yaw_override: Optional[float] = None,  # radians; bypasses WorldState/VGN yaw
     request_id: int = 0,
     use_ros: Optional[bool] = None,
 ) -> OperationResult:
@@ -1485,6 +1578,7 @@ def grasp_object(
                             request_id=request_id,
                             world_state=world_state,
                             custom_approach_vector=custom_approach_vector,
+                            grasp_yaw_override=grasp_yaw_override,
                         )
                         if result is not None:
                             return result
@@ -1652,7 +1746,6 @@ def grasp_object(
 # Implementation: Grasp Object For Handoff Operation
 # ============================================================================
 
-
 def _compute_handoff_approach_vector(
     object_position: tuple,
     object_dimensions: tuple,
@@ -1804,11 +1897,25 @@ def grasp_object_for_handoff(
                 use_ros=use_ros,
             )
 
-        if (
-            object_dimensions is None
-            or receiving_robot_state is None
-            or receiving_robot_state.position is None
-        ):
+        # Resolve receiving robot position: prefer live WorldState, fall back to
+        # configured base position (robot may not have moved yet when this runs).
+        receiving_robot_pos = None
+        if receiving_robot_state is not None and receiving_robot_state.position is not None:
+            receiving_robot_pos = receiving_robot_state.position
+        else:
+            try:
+                from config.Robot import ROBOT_BASE_POSITIONS
+                base = ROBOT_BASE_POSITIONS.get(receiving_robot_id)
+                if base is not None:
+                    receiving_robot_pos = base
+                    logger.info(
+                        f"grasp_object_for_handoff: '{receiving_robot_id}' not yet in "
+                        f"WorldState, using base position {base}"
+                    )
+            except ImportError:
+                pass
+
+        if object_dimensions is None or receiving_robot_pos is None:
             logger.warning(
                 f"grasp_object_for_handoff: missing dimensions or receiving robot "
                 f"position for '{object_id}' / '{receiving_robot_id}', "
@@ -1824,14 +1931,31 @@ def grasp_object_for_handoff(
         approach_vector = _compute_handoff_approach_vector(
             object_position=object_position,
             object_dimensions=object_dimensions,
-            receiving_robot_position=receiving_robot_state.position,
+            receiving_robot_position=receiving_robot_pos,
         )
+
+        # Compute the handoff yaw: the gripper jaw must open along the same axis
+        # that the receiving robot approaches from, so Robot2's fingers can wrap
+        # around the object as it advances toward it.
+        #
+        # The approach_vector points toward the far end of the object (away from
+        # Robot2). For a top-down handoff grasp the jaw must be PARALLEL to the
+        # approach vector — Robot2 drives along that axis into the open jaw.
+        #
+        # Gripper jaw orientation at yaw=0 opens along Unity X (ROS -Y direction).
+        # Unity X ↔ yaw=0,  Unity Z ↔ yaw=π/2.
+        # If approach is along X ([±1,0,0]) → jaw should open along X → yaw = 0.
+        # If approach is along Z ([0,0,±1]) → jaw should open along Z → yaw = π/2.
+        av_x = approach_vector[0]
+        av_z = approach_vector[2]
+        # atan2(av_z, av_x): 0 when approach=X, π/2 when approach=Z.
+        handoff_yaw = math.atan2(av_z, av_x)
 
         logger.info(
             f"grasp_object_for_handoff: {robot_id} grasping '{object_id}' "
-            f"with approach vector {approach_vector} "
+            f"with approach vector {approach_vector}, handoff_yaw={math.degrees(handoff_yaw):.1f}° "
             f"(receiving robot '{receiving_robot_id}' at "
-            f"{receiving_robot_state.position})"
+            f"{receiving_robot_pos})"
         )
 
         return grasp_object(
@@ -1839,6 +1963,7 @@ def grasp_object_for_handoff(
             object_id=object_id,
             preferred_approach="side",
             custom_approach_vector=approach_vector,
+            grasp_yaw_override=handoff_yaw,
             request_id=request_id,
             use_ros=use_ros,
         )

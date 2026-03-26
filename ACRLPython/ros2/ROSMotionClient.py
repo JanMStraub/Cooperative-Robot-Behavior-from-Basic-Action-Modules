@@ -1404,9 +1404,76 @@ class ROSMotionServer:
                 return trajectory
         except Exception as e:
             logger.warning(
-                f"{robot_id}: Manual TOTG unavailable ({e}) — publishing untimed Cartesian trajectory"
+                f"{robot_id}: Manual TOTG unavailable ({e}) — applying linear time parameterization"
             )
+            return self._apply_linear_time_parameterization(trajectory, vel_scaling, robot_id)
+
+    def _apply_linear_time_parameterization(self, trajectory, vel_scaling, robot_id):
+        """Assign uniform time stamps to an untimed JointTrajectory.
+
+        Used as a fallback when the moveit Python package (TOTG) is unavailable.
+        Computes the maximum joint displacement between consecutive waypoints,
+        divides by (max_velocity * vel_scaling) to get segment duration, and
+        assigns cumulative time_from_start to each waypoint.
+
+        This produces a trajectory where each segment takes exactly as long as
+        the fastest joint needs at the scaled velocity — a conservative but
+        correct approximation of trapezoidal profiling.
+
+        Args:
+            trajectory: JointTrajectory with time_from_start = 0 on all points.
+            vel_scaling: Velocity scaling factor (0.0–1.0).
+            robot_id: Robot namespace string (for log messages).
+
+        Returns:
+            JointTrajectory with time_from_start populated.
+        """
+        import math as _math
+        from builtin_interfaces.msg import Duration  # type: ignore[import-not-found]
+
+        points = trajectory.points
+        if not points:
             return trajectory
+
+        joint_names = trajectory.joint_names
+        # Look up velocity limits for each joint; fall back to 1.0 rad/s.
+        vel_limits = []
+        for name in joint_names:
+            limits = ARM_JOINT_LIMITS.get(name)
+            if limits:
+                # ARM_JOINT_LIMITS stores position bounds; use joint_limits.yaml value.
+                # Default to 2.0944 rad/s (120 deg/s) as defined in joint_limits.yaml.
+                vel_limits.append(2.0944 * max(vel_scaling, 0.05))
+            else:
+                vel_limits.append(1.0 * max(vel_scaling, 0.05))
+
+        elapsed = 0.0
+        for i, pt in enumerate(points):
+            if i == 0:
+                pt.time_from_start = Duration(sec=0, nanosec=0)
+                continue
+            prev = points[i - 1]
+            # Segment duration = max over joints of |delta_pos| / vel_limit
+            seg_dur = 0.0
+            for j, (cur_pos, prev_pos) in enumerate(
+                zip(pt.positions, prev.positions)
+            ):
+                delta = abs(cur_pos - prev_pos)
+                lim = vel_limits[j] if j < len(vel_limits) else 1.0
+                if lim > 0:
+                    seg_dur = max(seg_dur, delta / lim)
+            seg_dur = max(seg_dur, 0.02)  # at least one FixedUpdate step
+            elapsed += seg_dur
+            sec = int(elapsed)
+            nanosec = int((elapsed - sec) * 1e9)
+            pt.time_from_start = Duration(sec=sec, nanosec=nanosec)
+
+        last_ts = elapsed
+        logger.info(
+            f"{robot_id}: Linear time parameterization applied to Cartesian trajectory — "
+            f"{len(points)} waypoints, last at {last_ts:.3f}s"
+        )
+        return trajectory
 
     def _plan_cartesian_descent(self, request, robot_id):
         """Plan and publish a straight-line Cartesian descent to a target position.
@@ -1496,9 +1563,9 @@ class ROSMotionServer:
             orient_constraint.header.frame_id = "base_link"
             orient_constraint.link_name = "ee_link"
             orient_constraint.orientation = target_pose.pose.orientation
-            orient_constraint.absolute_x_axis_tolerance = 0.05  # ~3 deg
-            orient_constraint.absolute_y_axis_tolerance = 0.05
-            orient_constraint.absolute_z_axis_tolerance = 0.05
+            orient_constraint.absolute_x_axis_tolerance = 0.15  # ~9 deg
+            orient_constraint.absolute_y_axis_tolerance = 0.15
+            orient_constraint.absolute_z_axis_tolerance = 0.15
             orient_constraint.weight = 1.0
             path_constraints = Constraints()
             path_constraints.orientation_constraints.append(orient_constraint)
