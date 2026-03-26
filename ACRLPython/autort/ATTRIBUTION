@@ -1,0 +1,21 @@
+This module is an independent implementation of the AutoRT system described in:
+
+  M. Ahn, D. Dwibedi, C. Finn, M. G. Arenas, K. Gopalakrishnan, K. Hausman,
+  B. Ichter, A. Irpan, N. Joshi, R. Julian, S. Kirmani, I. Leal, E. Lee,
+  S. Levine, Y. Lu, I. Leal, S. Maddineni, K. Pertsch, Q. Vuong, A. Wahid,
+  S. Welker, P. Wohlhart, F. Xia, T. Xiao, P. Xu, S. Xu, Z. Xu, Y. Zhou,
+  and B. Zitkovich,
+  "AutoRT: Embodied Foundation Models for Large Scale Orchestration of
+  Robotic Agents", arXiv:2401.12963, 2024.
+  https://arxiv.org/abs/2401.12963
+
+No source code from the original AutoRT system was used. This is an
+independent reimplementation based on the methods described in the paper,
+adapted for dual AR4 robotic arms in a Unity simulation environment.
+
+Key design decisions derived from the paper:
+  - Continuous scene understanding → task generation → safety filtering → execution loop (AutoRTLoop.py)
+  - LLM-based task generation from scene descriptions (TaskGenerator.py)
+  - Robot Constitution two-layer safety: semantic LLM + kinematic code checks (RobotConstitution.py)
+  - Balanced task selection across explore/exploit/random strategies (TaskSelector.py)
+  - Human-in-the-loop approval (enabled by default)

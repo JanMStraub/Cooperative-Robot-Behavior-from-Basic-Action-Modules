@@ -75,16 +75,16 @@ def _build_segmentation_mask(
     Y = points_camera[:, 1]
     Z = points_camera[:, 2]
 
-    # Avoid division by zero for points behind camera
-    valid_z = Z > 1e-3
+    # Points in front of camera have negative Z (Unity camera looks in -Z direction).
+    # After the caller's X-negation (LH→RH flip), Z remains negative for forward points.
+    valid_z = Z < -1e-3
 
-    # Correct projection for points in right-handed camera frame:
-    #   u = cx + f * (-X) / Z   (negate X: Unity LH→RH flip was already applied by caller,
-    #                             but OpenCV u increases right while camera X does too,
-    #                             so sign matches; the extra negation corrects handedness)
-    #   v = cy - f * Y / Z      (negate Y: Unity Y-up vs OpenCV Y-down)
-    u = np.where(valid_z, cx + f_px * (-X) / np.where(valid_z, Z, 1.0), -1.0)
-    v = np.where(valid_z, cy - f_px * Y / np.where(valid_z, Z, 1.0), -1.0)
+    # Projection for Unity-derived points (camera looks in -Z, Y-up, X-right):
+    #   u = cx + f * X / (-Z)   (divide by positive depth = -Z)
+    #   v = cy - f * Y / (-Z)   (negate Y: Unity Y-up vs image Y-down)
+    depth = np.where(valid_z, -Z, 1.0)  # positive depth
+    u = np.where(valid_z, cx + f_px * X / depth, -1.0)
+    v = np.where(valid_z, cy - f_px * Y / depth, -1.0)
 
     # Basic YOLO bounding-box mask
     x0, y0 = float(bx), float(by)

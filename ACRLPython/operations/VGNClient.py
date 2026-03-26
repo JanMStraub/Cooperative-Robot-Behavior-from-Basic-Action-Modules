@@ -31,8 +31,8 @@ from core.LoggingSetup import setup_logging
 setup_logging(__name__)
 logger = logging.getLogger(__name__)
 
-# VGN vendor source is vendored under ACRLPython/vendor/vgn/src/
-_VGN_SRC = os.path.join(os.path.dirname(__file__), "..", "vendor", "vgn", "src")
+# VGN inference source (trimmed from ethz-asl/vgn) under ACRLPython/vgn/
+_VGN_SRC = os.path.join(os.path.dirname(__file__), "..")
 
 
 def _ensure_vgn_on_path() -> bool:
@@ -310,7 +310,7 @@ class VGNClient:
         )
 
         masked_points = pts_rh[mask]
-        _MIN_POINTS = 50
+        _MIN_POINTS = 20
         if masked_points.shape[0] < _MIN_POINTS:
             logger.warning(
                 f"[VGN] Only {masked_points.shape[0]} points after masking "
@@ -354,9 +354,20 @@ class VGNClient:
             if _ensure_vgn_on_path():
                 from vgn.detection import process, select  # type: ignore
 
-                # process() returns cleaned volumes on CPU numpy
-                qual_np, rot_np, width_np = process(None, qual_vol, rot_vol, width_vol)
+                # Move tensors to CPU numpy (process/select expect numpy arrays)
+                qual_np = qual_vol.cpu().squeeze().numpy()
+                rot_np = rot_vol.cpu().squeeze().numpy()
+                width_np = width_vol.cpu().squeeze().numpy()
+
+                # process() needs the TSDF grid to mask surface voxels
+                qual_np, rot_np, width_np = process(grid, qual_np, rot_np, width_np)
                 grasps, scores = select(qual_np, rot_np, width_np)
+
+                # select() returns grasps with translation in voxel indices (0–40).
+                # Convert to metres by multiplying by voxel_size.
+                voxel_size = _TSDF_SIZE / _TSDF_RES
+                from vgn.grasp import from_voxel_coordinates  # type: ignore
+                grasps = [from_voxel_coordinates(g, voxel_size) for g in grasps]
             else:
                 logger.warning(
                     "[VGN] VGN source not on path; cannot call process/select"
@@ -375,6 +386,7 @@ class VGNClient:
         # ----------------------------------------------------------------
         from scipy.spatial.transform import Rotation  # type: ignore
 
+        logger.info(f"[VGN] centroid (camera frame): {centroid.tolist()}")
         results = []
         for grasp, score in zip(grasps, scores):
             try:

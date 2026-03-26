@@ -195,23 +195,32 @@ def transform_grasp_poses_to_unity(
             logger.warning(f"Skipping malformed grasp #{i}: {exc}")
             continue
 
-        # Step 1: RH → LH handedness flip (negate X component)
-        pos_flipped = pos_cam * np.array([-1.0, 1.0, 1.0])
-        # Flip X of the quaternion axis to convert handedness
-        rot_flipped = rot_cam * np.array([-1.0, 1.0, 1.0, 1.0])
-        rot_flipped = _normalise_quat(rot_flipped)
+        # Step 1: Convert VGNClient camera-frame points to DepthEstimator convention.
+        # The stereo Q matrix (with X-negation row) combined with VGNClient's
+        # pts_rh[:,0] *= -1 (which un-negates X) gives:
+        #   X: right (correct), Y: up (positive — derived below), Z: negative-forward
+        #
+        # Why Y is up: Q row 1 = [0,1,0,-cy]; after dividing by W=-disp/baseline,
+        # Y_out = -(v-cy)*baseline/disp.  Pixels below image centre (v>cy) give Y<0
+        # (lower in scene → lower Y), so Y is up-positive — matching DepthEstimator.
+        #
+        # Therefore only Z needs to be negated (negative-forward → positive-forward).
+        pos_de = pos_cam * np.array([1.0, 1.0, -1.0])
+        rot_de = rot_cam * np.array([1.0, 1.0, -1.0, 1.0])
+        rot_de = _normalise_quat(rot_de)
 
-        # Step 2: Transform position into world frame
-        pos_world = _quat_rotate_vector(cam_rot, pos_flipped) + cam_pos
+        # Step 2: Apply camera rotation using the same standard quaternion sandwich
+        # product as DepthEstimator (lines 739-745) — no additional LH adjustment.
+        pos_world = _quat_rotate_vector(cam_rot, pos_de) + cam_pos
 
-        # Step 3: Compose rotations:  world_rot = cam_rot ⊗ grasp_rot_flipped
-        rot_world = _normalise_quat(_quat_multiply(cam_rot, rot_flipped))
+        # Step 3: Compose rotations
+        rot_world = _normalise_quat(_quat_multiply(cam_rot, rot_de))
 
         # Step 4: Transform approach direction (if present)
         approach_cam_raw = grasp.get("approach_direction")
         if approach_cam_raw is not None:
             approach_cam = np.array(approach_cam_raw, dtype=np.float64)
-            approach_flipped = approach_cam * np.array([-1.0, 1.0, 1.0])
+            approach_flipped = approach_cam * np.array([1.0, 1.0, -1.0])
             approach_world = _quat_rotate_vector(cam_rot, approach_flipped)
             approach_list = approach_world.tolist()
         else:

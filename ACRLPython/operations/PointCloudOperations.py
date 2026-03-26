@@ -250,10 +250,22 @@ def generate_point_cloud(
         camera_position = [float(v) for v in stereo_params.camera_position]
         camera_rotation = [float(v) for v in stereo_params.camera_rotation]
 
-        # --- Stereo reconstruction ---
+        # --- Compute max_disp to cover the robotic workspace ---
+        # SGBM's numDisparities must be >= f_px*baseline/min_depth.
+        # The default of 128 is too small: for fov=45°, w=1920, baseline=0.05m,
+        # an object at 0.8m needs ~145px disparity, exceeding the 128 cap.
+        # SGBM then finds the best wrong in-range match (~79px), reporting ~1.47m
+        # instead of 0.8m — a systematic ~1.8x overestimate of depth.
+        # Cap at 512 for performance; covers objects down to f_px*b/512 (~0.23m).
+        import math as _math
+        _f_norm = 1.0 / (2.0 * _math.tan(_math.radians(fov / 2.0)))
+        _f_px = _f_norm * img_left.shape[1]  # pixel focal length
+        _min_depth = 0.25  # metres — closest expected object in robot workspace
+        _max_disp_needed = int(_math.ceil(_f_px * baseline / _min_depth))
+        _max_disp_needed = min(((_max_disp_needed + 15) // 16) * 16, 512)
         logger.info(
             f"[{robot_id}] Reconstructing point cloud from stereo pair "
-            f"(fov={fov}°, baseline={baseline}m)"
+            f"(fov={fov}°, baseline={baseline}m, max_disp={_max_disp_needed})"
         )
         t0 = time.time()
         point_cloud = stereo_reconstruct_stream(
@@ -261,6 +273,7 @@ def generate_point_cloud(
             img_right,
             fov=fov,
             cam_dist=baseline,
+            max_disp=_max_disp_needed,
         )
         elapsed_ms = (time.time() - t0) * 1000
         logger.info(
@@ -333,6 +346,8 @@ def generate_point_cloud(
                 "fov": fov,
                 "baseline": baseline,
                 "timestamp": timestamp,
+                "image_width": img_left.shape[1],
+                "image_height": img_left.shape[0],
             }
         )
 

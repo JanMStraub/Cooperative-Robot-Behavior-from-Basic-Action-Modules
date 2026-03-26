@@ -111,7 +111,7 @@ LLM_THINKING_ENABLED = os.environ.get("LLM_THINKING_ENABLED", "true").lower() ==
 # Path to the VGN checkpoint file (vgn_conv.pth).
 # Relative paths are resolved from the ACRLPython/ root directory.
 # Download from: https://github.com/ethz-asl/vgn (Google Drive link in README)
-VGN_MODEL_PATH = os.environ.get("VGN_MODEL_PATH", "vendor/models/vgn_conv.pth")
+VGN_MODEL_PATH = os.environ.get("VGN_MODEL_PATH", "vgn/models/vgn_conv.pth")
 
 # Number of top-ranked grasp poses to return per call.
 VGN_TOP_K = int(os.environ.get("VGN_TOP_K", "20"))

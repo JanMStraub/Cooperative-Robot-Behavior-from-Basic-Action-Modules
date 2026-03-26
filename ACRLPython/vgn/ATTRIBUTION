@@ -1,0 +1,19 @@
+This directory contains a trimmed copy of source files from the VGN project:
+
+  Volumetric Grasping Network (VGN)
+  https://github.com/ethz-asl/vgn
+  Copyright (c) 2020, ETHZ ASL
+  Licensed under the BSD 3-Clause License (see LICENSE)
+
+Files included (inference only, unmodified except where noted):
+  __init__.py, detection.py, grasp.py, networks.py, utils/transform.py
+
+Modifications:
+  detection.py — moved `from vgn import vis` import inside the `if self.rviz:`
+  branch to avoid a transitive dependency on ROS sensor_msgs when running
+  outside a ROS environment.
+
+Reference:
+  M. Breyer, J. J. Chung, L. Ott, R. Siegwart, and J. Nieto,
+  "Volumetric Grasping Network: Real-time 6 DOF Grasp Detection in Clutter",
+  Conference on Robot Learning (CoRL), 2020.

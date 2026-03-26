@@ -44,6 +44,12 @@ except ImportError:
 # Must be high enough that the arm clears the object when it swings in.
 PRE_GRASP_HOVER_OFFSET: float = 0.15  # 15 cm above object centre
 
+# Safe clearance height (Unity world Y) used as an intermediate waypoint before
+# the pre-grasp descent.  The arm moves to this height first (joint-space, no
+# orientation constraint) so it cannot sweep through table-height objects on its
+# way to the pre-grasp position.  Should be above the tallest expected object.
+PRE_GRASP_CLEARANCE_Y: float = 0.35  # 35 cm above table surface
+
 # TCP offset at the final grasp position.
 # Placing ee_link this far above the object centre lets the fingers (which
 # extend ~5 cm beyond ee_link) wrap around the object rather than collide
@@ -645,7 +651,7 @@ def _grasp_via_vgn(
             for det in detections:
                 color_field = det.get("color", "").lower()
                 if obj_id_lower in color_field or color_field in obj_id_lower:
-                    bbox = det.get("bbox")  # dict {x,y,width,height} or list [x,y,w,h]
+                    bbox = det.get("bbox") or det.get("bbox_px")  # "bbox" when 3D present, "bbox_px" otherwise
                     if bbox:
                         if isinstance(bbox, dict):
                             yolo_bbox = (
@@ -888,26 +894,50 @@ def _grasp_via_vgn_with_ros(
     cam_pos = pc["camera_position"]
     cam_rot = pc["camera_rotation"]
     fov = pc["fov"]
+    # Use the stereo image dimensions that were actually used for reconstruction
+    img_w = pc.get("image_width", 640)
+    img_h = pc.get("image_height", 480)
 
-    # 3. Detect target object to get YOLO bbox and stereo image for VGN
+    # 3. Detect target object — get YOLO bbox for VGN masking AND world position.
+    #
+    # SGBM stereo is unreliable on flat synthetic Unity surfaces and systematically
+    # overestimates depth (~1.8x), so VGN's stereo-derived centroid position is wrong.
+    # WorldState (populated by a preceding detect_object_stereo / VisionProcessor run)
+    # stores DepthEstimator positions which are well-calibrated.  Use that as the
+    # grasp centre; rely on VGN only for orientation/approach direction.
     yolo_bbox: tuple = (0, 0, 0, 0)
     image_np: "Optional[np.ndarray]" = None
-    img_w = 640
-    img_h = 480
+    det_img_w = img_w
+    det_img_h = img_h
+
+    # Pull world position from WorldState (set by detect_object_stereo / VisionProcessor).
+    _detected_world_pos: "Optional[List[float]]" = None
+    try:
+        ws_pos = world_state.get_object_position(object_id)
+        if ws_pos is not None:
+            _detected_world_pos = list(ws_pos)
+            logger.info(
+                f"[VGN+ROS] Using WorldState position for '{object_id}': "
+                f"{[round(v, 3) for v in _detected_world_pos]}"
+            )
+    except Exception:
+        pass
+
+    # Always run detect_objects to get the YOLO bbox for VGN point-cloud masking.
     try:
         from operations.DetectionOperations import detect_objects
 
         det_result = detect_objects(robot_id=robot_id, camera_id="main")
         if det_result.success and det_result.result:
             detections = det_result.result.get("detections", [])
-            img_w = det_result.result.get("image_width", 640)
-            img_h = det_result.result.get("image_height", 480)
-            # DetectionObject.to_dict() stores class name in "color" not "label"
-            obj_id_lower = object_id.lower().replace("_", " ")
+            det_img_w = det_result.result.get("image_width", det_img_w)
+            det_img_h = det_result.result.get("image_height", det_img_h)
+            obj_id_norm = object_id.lower().replace(" ", "_")
             for det in detections:
-                color_field = det.get("color", "").lower()
-                if obj_id_lower in color_field or color_field in obj_id_lower:
-                    bbox = det.get("bbox")
+                color_field = det.get("color", "").lower().replace(" ", "_")
+                if obj_id_norm in color_field or color_field in obj_id_norm:
+                    # to_dict() uses "bbox" when world_position present, "bbox_px" without
+                    bbox = det.get("bbox") or det.get("bbox_px")
                     if bbox:
                         if isinstance(bbox, dict):
                             yolo_bbox = (
@@ -919,6 +949,18 @@ def _grasp_via_vgn_with_ros(
                         elif len(bbox) == 4:
                             yolo_bbox = tuple(int(v) for v in bbox)
                     break
+            # Scale bbox from detection resolution to stereo/point-cloud resolution
+            if yolo_bbox != (0, 0, 0, 0) and (det_img_w != img_w or det_img_h != img_h):
+                scale_x = img_w / det_img_w
+                scale_y = img_h / det_img_h
+                bx, by, bw, bh = yolo_bbox
+                yolo_bbox = (
+                    int(bx * scale_x), int(by * scale_y),
+                    int(bw * scale_x), int(bh * scale_y),
+                )
+                logger.info(f"[VGN] Scaled bbox {det_img_w}x{det_img_h}→{img_w}x{img_h}: {yolo_bbox}")
+            if yolo_bbox == (0, 0, 0, 0):
+                logger.warning(f"[VGN] No valid bbox found for '{object_id}' — masking will use all points")
     except Exception as exc:
         logger.debug(f"[VGN+ROS] YOLO bbox (non-fatal): {exc}")
 
@@ -930,6 +972,7 @@ def _grasp_via_vgn_with_ros(
         if stereo is not None:
             _, left_img, _, _ = stereo
             image_np = left_img
+            pass  # img_w/img_h already set from point cloud result
     except Exception as exc:
         logger.debug(f"[VGN+ROS] Stereo image retrieval (non-fatal): {exc}")
 
@@ -937,6 +980,9 @@ def _grasp_via_vgn_with_ros(
         image_np = np.zeros((img_h, img_w, 3), dtype=np.uint8)
 
     # 4. Query VGN (VLM bbox refinement + TSDF + inference internal to VGNClient)
+    logger.info(f"[VGN] Calling predict_grasps: image_width={img_w}, image_height={img_h}, fov={fov}, bbox={yolo_bbox}, points_shape={points_np.shape}")
+    import numpy as _np
+    logger.info(f"[VGN] Point cloud sample (first 3): {points_np[:3].tolist()}, X range=[{points_np[:,0].min():.3f},{points_np[:,0].max():.3f}], Y=[{points_np[:,1].min():.3f},{points_np[:,1].max():.3f}], Z=[{points_np[:,2].min():.3f},{points_np[:,2].max():.3f}]")
     grasps = client.predict_grasps(
         points=points_np,
         colors=colors_np,
@@ -984,38 +1030,138 @@ def _grasp_via_vgn_with_ros(
                 f"(from {len(grasps)} raw)"
             )
 
-    # 6. Pick top candidate by score
-    top = max(world_grasps, key=lambda g: g.get("score", 0.0))
+    # 6. Pick top candidate: prefer grasps with upward approach (Y > 0.3) to avoid
+    # table collisions.  Fall back to best overall score if none qualify.
+    _y_approaches = sorted([g["approach_direction"][1] for g in world_grasps], reverse=True)
+    logger.info(f"[VGN+ROS] Approach Y distribution (top 5): {[round(v,2) for v in _y_approaches[:5]]}")
+    _MIN_Y_APPROACH = 0.3  # approach must have at least 30% upward component
+    top_down_candidates = [
+        g for g in world_grasps
+        if g.get("approach_direction", [0, 0, 0])[1] >= _MIN_Y_APPROACH
+    ]
+    if top_down_candidates:
+        top = max(top_down_candidates, key=lambda g: g.get("score", 0.0))
+        logger.info(
+            f"[VGN+ROS] Selected top-down-feasible grasp "
+            f"(Y_approach={top['approach_direction'][1]:.2f}) from "
+            f"{len(top_down_candidates)}/{len(world_grasps)} candidates"
+        )
+    else:
+        top = max(world_grasps, key=lambda g: g.get("score", 0.0))
+        logger.warning(
+            f"[VGN+ROS] No grasp with Y_approach >= {_MIN_Y_APPROACH} — "
+            f"using best-score candidate (Y_approach={top['approach_direction'][1]:.2f})"
+        )
     pos = top["position"]
     rot = top["rotation"]
     approach = top["approach_direction"]
+    logger.info(f"[VGN+ROS] Top grasp world_pos={[round(v,3) for v in pos]}, approach={[round(v,3) for v in approach]}, cam_pos={cam_pos}, cam_rot={cam_rot}")
+
+    # Position anchor override: stereo reconstruction has a depth scale error for
+    # synthetic Unity scenes (~1.8x overestimate).  DepthEstimator (WorldState) is
+    # better calibrated, so substitute its world position as the grasp centre.
+    # VGN's orientation/approach are still used.
+    if _detected_world_pos:
+        dp = _detected_world_pos
+        logger.info(
+            f"[VGN+ROS] Overriding VGN pos {[round(v,3) for v in pos]} with "
+            f"DepthEstimator pos {[round(v,3) for v in dp]} for '{object_id}'"
+        )
+        pos = dp
 
     hover = pre_grasp_distance if pre_grasp_distance > 0 else PRE_GRASP_HOVER_OFFSET
-    pre_grasp_pos = {
-        "x": pos[0] + approach[0] * hover,
-        "y": pos[1] + approach[1] * hover,
-        "z": pos[2] + approach[2] * hover,
-    }
-    grasp_pos = {"x": pos[0], "y": pos[1], "z": pos[2]}
-    # VGN produces orientations in Unity world frame (Y-up, left-handed).
-    # Convert to ROS base_link frame (Z-up, right-handed) before sending to MoveIt.
-    # Conversion: (x,y,z,w)_unity → (z,-x,y,w)_ros — w preserved (negating inverts rotation)
-    _rx, _ry, _rz, _rw = rot[2], -rot[0], rot[1], rot[3]
-    if _rw < 0.0:
-        _rx, _ry, _rz, _rw = -_rx, -_ry, -_rz, -_rw
-    orientation = {"x": _rx, "y": _ry, "z": _rz, "w": _rw}
 
-    # 7. MoveIt pre-grasp move.
-    # TODO: remove orientation=orientation once VGN is implemented — VGN approach
-    #       vectors make this constraint redundant, and it shrinks the IK solution
-    #       space at borderline reach distances.
+    # Orientation selection:
+    # VGN rarely predicts near-vertical (top-down) grasps for table-top cubes —
+    # the best approach Y in this scene is typically ~0.45, producing a twisted
+    # wrist orientation that looks wrong.  For table grasps, use the proven
+    # top_down_orientation (~179° around ROS X: gripper straight down).
+    # For non-table scenarios (handoff, elevated object) where VGN predicts a
+    # genuinely top-down approach (Y >= 0.7), trust VGN's full 6-DOF orientation.
+    _TOP_DOWN_Y_THRESHOLD = 0.7
+    _vgn_approach_y = approach[1]  # Unity Y = up
+    if _vgn_approach_y >= _TOP_DOWN_Y_THRESHOLD:
+        # VGN orientation is sufficiently top-down — use VGN approach for pre-grasp
+        # offset and convert the full orientation for MoveIt.
+        pre_approach = approach
+        _rx, _ry, _rz, _rw = rot[2], -rot[0], rot[1], rot[3]
+        if _rw < 0.0:
+            _rx, _ry, _rz, _rw = -_rx, -_ry, -_rz, -_rw
+        orientation = {"x": _rx, "y": _ry, "z": _rz, "w": _rw}
+        logger.info(
+            f"[VGN+ROS] Using VGN orientation (approach Y={_vgn_approach_y:.2f} >= {_TOP_DOWN_Y_THRESHOLD})"
+        )
+    else:
+        # VGN approach is too shallow/horizontal for a safe table grasp.
+        # Use pure upward pre-grasp offset so the arm hovers directly above the
+        # object, then descend straight down with the known-good top-down orientation.
+        # w=0.0087 avoids the IK equator ambiguity at exactly w=0 (180° rotation).
+        pre_approach = [0.0, 1.0, 0.0]  # straight up in Unity world frame
+        orientation = {"x": 0.9999, "y": 0.0, "z": 0.0, "w": 0.0087}
+        logger.info(
+            f"[VGN+ROS] Using top-down orientation (VGN approach Y={_vgn_approach_y:.2f} < {_TOP_DOWN_Y_THRESHOLD})"
+        )
+
+    pre_grasp_pos = {
+        "x": pos[0] + pre_approach[0] * hover,
+        "y": pos[1] + pre_approach[1] * hover,
+        "z": pos[2] + pre_approach[2] * hover,
+    }
+    # Apply the same TCP offset as the geometric path: gripper contact point sits
+    # GRASP_TCP_OFFSET above the object centre so fingers wrap around the object
+    # rather than colliding with its top surface or the ground plane.
+    grasp_pos = {"x": pos[0], "y": pos[1] + GRASP_TCP_OFFSET, "z": pos[2]}
+
+    # 7a. Clearance waypoint: move to a safe height directly above the target XZ
+    #     before approaching.  This prevents the arm from sweeping through
+    #     table-height space (and knocking the object) on its joint-space path
+    #     to the pre-grasp position.  No orientation constraint here — we only
+    #     care that the gripper is well above the table.
+    clearance_pos = {"x": pos[0], "y": PRE_GRASP_CLEARANCE_Y, "z": pos[2]}
+    if pre_grasp_pos["y"] < PRE_GRASP_CLEARANCE_Y:
+        # Pre-grasp is below clearance height — insert the waypoint.
+        logger.info(f"[VGN+ROS] Clearance waypoint for {robot_id}: {clearance_pos}")
+        clearance_result = bridge.plan_and_execute(
+            position=clearance_pos,
+            orientation=None,
+            planning_time=10.0,
+            robot_id=robot_id,
+        )
+        if not clearance_result or not clearance_result.get("success"):
+            cl_err = (
+                clearance_result.get("error", "Unknown")
+                if clearance_result
+                else "No response"
+            )
+            logger.warning(
+                f"[VGN+ROS] Clearance waypoint failed ({cl_err}) — "
+                "proceeding directly to pre-grasp"
+            )
+        else:
+            time.sleep(0.2)
+
+    # 7b. MoveIt pre-grasp move.
     logger.info(f"[VGN+ROS] Moving to pre-grasp for {robot_id}: {pre_grasp_pos}")
+    # Attempt 1: with chosen orientation
     pre_result = bridge.plan_and_execute(
         position=pre_grasp_pos,
         orientation=orientation,
         planning_time=10.0,
         robot_id=robot_id,
     )
+    if not pre_result or not pre_result.get("success"):
+        pre_err = pre_result.get("error", "Unknown") if pre_result else "No response"
+        logger.info(
+            f"[VGN+ROS] Pre-grasp with orientation failed ({pre_err}) — "
+            "retrying without orientation constraint"
+        )
+        # Attempt 2: position-only (MoveIt picks any IK solution)
+        pre_result = bridge.plan_and_execute(
+            position=pre_grasp_pos,
+            orientation=None,
+            planning_time=10.0,
+            robot_id=robot_id,
+        )
     if not pre_result or not pre_result.get("success"):
         pre_err = pre_result.get("error", "Unknown") if pre_result else "No response"
         logger.warning(
