@@ -389,12 +389,13 @@ HANDOFF_PATTERN = WorkflowPattern(
             description="Source robot moves to handoff position",
         ),
         WorkflowStep(
-            operation_id="motion_adjust_orientation_003",
+            operation_id="coordination_orient_for_handoff_receive_001",
             parameter_bindings={
                 "robot_id": "{target_robot_id}",
-                "pitch": 90.0,
+                "object_id": "{object_id}",
+                "source_robot_id": "{source_robot_id}",
             },
-            description="Target robot rotates wrist upward (pitch=90°) for bottom-approach grasp, preventing gripper collision with source robot",
+            description="Target robot orients gripper upward (pitch=90°) and aligns jaw to handoff axis before approaching",
         ),
         WorkflowStep(
             operation_id="motion_move_to_coord_001",
@@ -677,10 +678,13 @@ To perform an object handoff, the LLM should chain these ATOMIC operations:
 4. Target robot waits for signal (runs in parallel with step 3)
    → wait_for_signal(target_robot, "object_gripped", timeout_ms=10000)
 
-5. Target robot rotates wrist UPWARD before approaching handoff position
-   → adjust_end_effector_orientation(target_robot, pitch=90.0)
-   NOTE: pitch=90.0 faces the gripper upward (bottom-approach). This is the
-   opposite of pitch=-90.0 (top-down). Prevents collision with source gripper.
+5. Target robot orients gripper before approaching handoff position
+   → orient_gripper_for_handoff_receive(target_robot, object_id, source_robot)
+   NOTE: This sets pitch=90° (upward-facing gripper) AND aligns the jaw yaw
+   to the object's handoff axis — matching the jaw orientation that
+   grasp_object_for_handoff used for the source robot. Using the plain
+   adjust_end_effector_orientation(pitch=90.0) without yaw alignment is
+   insufficient for elongated objects.
 
 6. Both robots move to handoff position (can run in parallel)
    → move_to_coordinate(source_robot, handoff_x, handoff_y, handoff_z)
@@ -715,7 +719,7 @@ detect_object_stereo("Robot1", color="red")
 grasp_object_for_handoff("Robot1", object_id="RedBar", receiving_robot_id="Robot2")
 signal("Robot1", "object_gripped")
 wait_for_signal("Robot2", "object_gripped", timeout_ms=10000)
-adjust_end_effector_orientation("Robot2", pitch=90.0)
+orient_gripper_for_handoff_receive("Robot2", object_id="RedBar", source_robot_id="Robot1")
 move_to_coordinate("Robot1", x=0.0, y=0.0, z=0.15)
 move_to_coordinate("Robot2", x=0.0, y=0.0, z=0.15)
 signal("Robot1", "both_at_handoff")
