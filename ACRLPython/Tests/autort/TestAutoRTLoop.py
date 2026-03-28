@@ -186,7 +186,7 @@ def test_capture_scene_stereo_detection(mock_config, mock_registry, mock_world_s
                             mock_registry.execute_operation_by_name.assert_called_with(
                                 "detect_object_stereo",
                                 selection="all",
-                                camera_id="StereoCamera",
+                                camera_id="TableStereoCamera",
                             )
 
                             # Verify scene has object

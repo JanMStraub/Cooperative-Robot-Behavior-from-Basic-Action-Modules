@@ -372,27 +372,32 @@ def estimate_distance_between_objects(
         # Calculate Euclidean distance
         import math
 
-        # ObjectState is a dataclass with position as Tuple[float, float, float]
-        pos1_tuple = obj1_state.position  # type: ignore[union-attr]
-        pos2_tuple = obj2_state.position  # type: ignore[union-attr]
+        # get_object_state returns a dict: {"position": {"x": ..., "y": ..., "z": ...}, ...}
+        pos1_dict = obj1_state.get("position") if isinstance(obj1_state, dict) else getattr(obj1_state, "position", None)  # type: ignore[union-attr]
+        pos2_dict = obj2_state.get("position") if isinstance(obj2_state, dict) else getattr(obj2_state, "position", None)  # type: ignore[union-attr]
 
-        if not pos1_tuple or not pos2_tuple:
+        if not pos1_dict or not pos2_dict:
             return OperationResult.error_result(
                 "POSITION_DATA_MISSING",
                 "Object position data missing",
                 ["Ensure objects have been detected with 3D coordinates"],
             )
 
-        distance = math.sqrt(
-            (pos1_tuple[0] - pos2_tuple[0]) ** 2
-            + (pos1_tuple[1] - pos2_tuple[1]) ** 2
-            + (pos1_tuple[2] - pos2_tuple[2]) ** 2
-        )
+        # Position may be a dict {"x":, "y":, "z":} or a tuple/list
+        def _extract_xyz(p):
+            if isinstance(p, dict):
+                return p["x"], p["y"], p["z"]
+            return p[0], p[1], p[2]
+
+        x1, y1, z1 = _extract_xyz(pos1_dict)
+        x2, y2, z2 = _extract_xyz(pos2_dict)
+
+        distance = math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2 + (z1 - z2) ** 2)
 
         logger.info(f"Distance between {object_id1} and {object_id2}: {distance:.3f}m")
 
-        pos1 = {"x": pos1_tuple[0], "y": pos1_tuple[1], "z": pos1_tuple[2]}
-        pos2 = {"x": pos2_tuple[0], "y": pos2_tuple[1], "z": pos2_tuple[2]}
+        pos1 = {"x": x1, "y": y1, "z": z1}
+        pos2 = {"x": x2, "y": y2, "z": z2}
 
         return OperationResult.success_result(
             {

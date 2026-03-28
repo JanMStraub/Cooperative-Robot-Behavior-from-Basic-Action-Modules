@@ -800,9 +800,12 @@ def stereo_images_available(max_age_seconds: float = 30.0, world_state=None) -> 
     if latest_ts == 0.0:
         return False, "No stereo images in storage"
 
+    # Guard against None, 0 or negative values (e.g. from LLM or missing params).
+    effective_max_age = max_age_seconds if (max_age_seconds is not None and max_age_seconds > 0) else 30.0
+
     age = time.time() - latest_ts
-    if age > max_age_seconds:
-        return False, f"Stereo images are stale ({age:.1f}s old, max {max_age_seconds}s)"
+    if age > effective_max_age:
+        return False, f"Stereo images are stale ({age:.1f}s old, max {effective_max_age}s)"
 
     return True, ""
 

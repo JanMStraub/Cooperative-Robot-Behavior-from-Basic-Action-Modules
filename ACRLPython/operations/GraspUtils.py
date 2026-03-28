@@ -33,11 +33,11 @@ def _build_segmentation_mask(
     model (inverse of DepthEstimator.pixel_to_world_coords).  Returns a
     bool mask that is True for points falling inside the bounding box.
 
-    The input ``points_camera`` must be in **right-handed camera frame** (i.e.
-    the Unity left-handed X-negation must have been undone by the caller before
-    passing points here).  Projection formulas follow OpenCV convention:
-    ``u = cx + f·(-X)/Z`` (negate X to undo Unity LH→RH flip) and
-    ``v = cy - f·Y/Z`` (negate Y for Unity Y-up vs OpenCV Y-down).
+    The input ``points_camera`` must be in **Unity camera frame** after
+    VGNClient's ``pts[:, 0] *= -1`` (undo the X-negation that was baked in by
+    ``generate_point_cloud``).  That gives X-right, Y-up, Z-forward (left-handed).
+    Projection formulas follow Unity camera convention:
+    ``u = cx + f·X/Z`` and ``v = cy - f·Y/Z`` (negate Y: Unity Y-up vs image Y-down).
 
     When ``preferred_approach`` is "side" the mask is additionally restricted
     to the lateral halves of the object (left/right).  When it is "top" only
@@ -75,14 +75,15 @@ def _build_segmentation_mask(
     Y = points_camera[:, 1]
     Z = points_camera[:, 2]
 
-    # Points in front of camera have negative Z (Unity camera looks in -Z direction).
-    # After the caller's X-negation (LH→RH flip), Z remains negative for forward points.
-    valid_z = Z < -1e-3
+    # Points in front of camera have positive Z (Unity camera: Z-forward).
+    # After VGNClient's pts[:, 0] *= -1, the points are in Unity camera frame:
+    # X-right, Y-up, Z-forward (left-handed).
+    valid_z = Z > 1e-3
 
-    # Projection for Unity-derived points (camera looks in -Z, Y-up, X-right):
-    #   u = cx + f * X / (-Z)   (divide by positive depth = -Z)
-    #   v = cy - f * Y / (-Z)   (negate Y: Unity Y-up vs image Y-down)
-    depth = np.where(valid_z, -Z, 1.0)  # positive depth
+    # Pinhole projection for Unity camera frame (X-right, Y-up, Z-forward):
+    #   u = cx + f * X / Z   (X-right matches image column direction)
+    #   v = cy - f * Y / Z   (negate Y: Unity Y-up vs image Y-down)
+    depth = np.where(valid_z, Z, 1.0)  # positive depth
     u = np.where(valid_z, cx + f_px * X / depth, -1.0)
     v = np.where(valid_z, cy - f_px * Y / depth, -1.0)
 

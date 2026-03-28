@@ -682,6 +682,19 @@ async def startup_event():
         logger.warning(f"Could not register AutoRT web callback: {e}")
 
 
+def broadcast_vgn_debug(data: Dict[str, Any]):
+    """
+    Broadcasts VGN point cloud and TSDF data to connected Web UI clients.
+    Safely schedules the broadcast on the captured uvicorn event loop.
+    """
+    if manager.active_connections and _main_loop:
+        try:
+            payload = json.dumps({"type": "vgn_debug", "data": data})
+            asyncio.run_coroutine_threadsafe(manager.broadcast(payload), _main_loop)
+        except Exception as e:
+            logger.error(f"Failed to broadcast VGN debug data: {e}")
+
+
 def run_webui_server(host: str = "0.0.0.0", port: int = 8000):
     """Run the FastAPI server blocking."""
     if not _FASTAPI_AVAILABLE:

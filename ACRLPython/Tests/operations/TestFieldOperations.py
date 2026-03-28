@@ -40,8 +40,8 @@ def mock_yolo_detector():
 def mock_detection_result():
     """Create a mock detection result from YOLO."""
     detection = Mock()
-    detection.class_name = "fielda"
-    detection.color = "fielda"
+    detection.class_name = "field_a"
+    detection.color = "field_a"
     detection.bbox = {"x": 100, "y": 100, "width": 50, "height": 50}
     detection.confidence = 0.85
     detection.world_position = (0.3, 0.0, 0.1)  # Tuple format
@@ -134,8 +134,8 @@ class TestDetectField:
         for letter in "ABCDEFGHI":
             # Create detection result for this letter
             detection = Mock()
-            detection.class_name = f"field{letter.lower()}"
-            detection.color = f"field{letter.lower()}"
+            detection.class_name = f"field_{letter.lower()}"
+            detection.color = f"field_{letter.lower()}"
             detection.bbox = {"x": 100, "y": 100, "width": 50, "height": 50}
             detection.confidence = 0.8
             detection.world_position = (0.2, 0.0, 0.1)
@@ -267,8 +267,8 @@ class TestDetectField:
 
         # Detection without world position
         detection = Mock()
-        detection.class_name = "fielda"
-        detection.color = "fielda"
+        detection.class_name = "field_a"
+        detection.color = "field_a"
         detection.bbox = {"x": 100, "y": 100, "width": 50, "height": 50}
         detection.confidence = 0.85
         detection.world_position = None  # No 3D position
@@ -298,8 +298,8 @@ class TestDetectField:
 
         # Detection with world position as dict
         detection = Mock()
-        detection.class_name = "fieldb"
-        detection.color = "fieldb"
+        detection.class_name = "field_b"
+        detection.color = "field_b"
         detection.bbox = {"x": 100, "y": 100, "width": 50, "height": 50}
         detection.confidence = 0.85
         detection.world_position = {"x": 0.4, "y": 0.1, "z": 0.0}  # Dict format
@@ -388,15 +388,15 @@ class TestDetectAllFields:
 
         # Create multiple field detections
         detection_a = Mock()
-        detection_a.class_name = "fielda"
-        detection_a.color = "fielda"
+        detection_a.class_name = "field_a"
+        detection_a.color = "field_a"
         detection_a.bbox = {"x": 100, "y": 100, "width": 50, "height": 50}
         detection_a.confidence = 0.85
         detection_a.world_position = (0.2, 0.0, 0.1)
 
         detection_d = Mock()
-        detection_d.class_name = "fieldd"
-        detection_d.color = "fieldd"
+        detection_d.class_name = "field_d"
+        detection_d.color = "field_d"
         detection_d.bbox = {"x": 200, "y": 100, "width": 50, "height": 50}
         detection_d.confidence = 0.90
         detection_d.world_position = (0.3, 0.1, 0.1)
@@ -474,8 +474,8 @@ class TestDetectAllFields:
             call_kwargs = mock_detector.detect_objects_stereo.call_args[1]
             filter_classes = call_kwargs["filter_classes"]
 
-            # Should filter for fielda through fieldi
-            expected_classes = [f"field{chr(ord('a') + i)}" for i in range(9)]
+            # Should filter for field_a through field_i
+            expected_classes = [f"field_{chr(ord('a') + i)}" for i in range(9)]
             assert filter_classes == expected_classes
 
     def test_detect_all_fields_with_confidence_threshold(
@@ -590,8 +590,8 @@ class TestFieldOperationsEdgeCases:
         detections = []
         for i, letter in enumerate("ABCDEFGHI"):
             detection = Mock()
-            detection.class_name = f"field{letter.lower()}"
-            detection.color = f"field{letter.lower()}"
+            detection.class_name = f"field_{letter.lower()}"
+            detection.color = f"field_{letter.lower()}"
             detection.bbox = {"x": i * 50, "y": 100, "width": 50, "height": 50}
             detection.confidence = 0.85
             detection.world_position = (0.1 + i * 0.05, 0.0, 0.1)

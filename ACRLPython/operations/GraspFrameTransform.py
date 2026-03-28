@@ -23,12 +23,12 @@ Unity coordinate convention
 
 Transform pipeline (per grasp)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-1. Negate X of grasp position  →  RH→LH handedness flip.
-2. Negate X of approach direction similarly.
+1. Negate X of grasp position and rotation  →  RH→LH handedness flip.
+2. Rotate the flipped position by the camera quaternion and add the camera
+   translation.
 3. Compose camera quaternion  ⊗  flipped grasp quaternion  →  world-frame
    grasp rotation.
-4. Rotate the flipped position by the camera quaternion and add the camera
-   translation.
+4. Negate X of approach direction (if present) and rotate by camera quaternion.
 
 The resulting ``position`` and ``rotation`` fields are ready to be sent to
 Unity's ``PlanGraspWithExternalCandidates()`` as a pre-computed candidate.
@@ -195,22 +195,16 @@ def transform_grasp_poses_to_unity(
             logger.warning(f"Skipping malformed grasp #{i}: {exc}")
             continue
 
-        # Step 1: Convert VGNClient camera-frame points to DepthEstimator convention.
-        # The stereo Q matrix (with X-negation row) combined with VGNClient's
-        # pts_rh[:,0] *= -1 (which un-negates X) gives:
-        #   X: right (correct), Y: up (positive — derived below), Z: negative-forward
-        #
-        # Why Y is up: Q row 1 = [0,1,0,-cy]; after dividing by W=-disp/baseline,
-        # Y_out = -(v-cy)*baseline/disp.  Pixels below image centre (v>cy) give Y<0
-        # (lower in scene → lower Y), so Y is up-positive — matching DepthEstimator.
-        #
-        # Therefore only Z needs to be negated (negative-forward → positive-forward).
-        pos_de = pos_cam * np.array([1.0, 1.0, -1.0])
-        rot_de = rot_cam * np.array([1.0, 1.0, -1.0, 1.0])
+        # Step 1: RH → LH handedness flip: negate X axis.
+        # Camera frame is right-handed (OpenCV: X-right, Y-down, Z-forward).
+        # Unity world frame is left-handed (X-right, Y-up, Z-forward).
+        # Negating X converts between the two conventions.
+        pos_de = pos_cam * np.array([-1.0, 1.0, 1.0])
+        rot_de = rot_cam * np.array([-1.0, 1.0, 1.0, 1.0])
         rot_de = _normalise_quat(rot_de)
 
-        # Step 2: Apply camera rotation using the same standard quaternion sandwich
-        # product as DepthEstimator (lines 739-745) — no additional LH adjustment.
+        # Step 2: Rotate the flipped position by the camera quaternion and add
+        # the camera world translation.
         pos_world = _quat_rotate_vector(cam_rot, pos_de) + cam_pos
 
         # Step 3: Compose rotations
@@ -220,7 +214,7 @@ def transform_grasp_poses_to_unity(
         approach_cam_raw = grasp.get("approach_direction")
         if approach_cam_raw is not None:
             approach_cam = np.array(approach_cam_raw, dtype=np.float64)
-            approach_flipped = approach_cam * np.array([1.0, 1.0, -1.0])
+            approach_flipped = approach_cam * np.array([-1.0, 1.0, 1.0])
             approach_world = _quat_rotate_vector(cam_rot, approach_flipped)
             approach_list = approach_world.tolist()
         else:

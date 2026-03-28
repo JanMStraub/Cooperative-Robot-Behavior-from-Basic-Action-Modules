@@ -245,10 +245,14 @@ class _VGNPatchedClient:
         vgn_det = types.ModuleType("vgn.detection")
         setattr(vgn_det, "process", MagicMock(return_value=(None, None, None)))
         setattr(vgn_det, "select", MagicMock(return_value=(mock_grasps, mock_scores)))
+        vgn_grasp = types.ModuleType("vgn.grasp")
+        setattr(vgn_grasp, "from_voxel_coordinates", MagicMock(side_effect=lambda g, vs: g))
         vgn_mod = types.ModuleType("vgn")
         setattr(vgn_mod, "detection", vgn_det)
+        setattr(vgn_mod, "grasp", vgn_grasp)
         sys.modules.setdefault("vgn", vgn_mod)
         sys.modules.setdefault("vgn.detection", vgn_det)
+        sys.modules.setdefault("vgn.grasp", vgn_grasp)
 
         # Patch torch to avoid GPU requirement
         torch_stub = types.ModuleType("torch")
@@ -303,7 +307,7 @@ class _VGNPatchedClient:
 
         _um.patch.stopall()
         # Clean up stubs from sys.modules
-        for key in ["vgn", "vgn.detection"]:
+        for key in ["vgn", "vgn.detection", "vgn.grasp"]:
             sys.modules.pop(key, None)
 
 

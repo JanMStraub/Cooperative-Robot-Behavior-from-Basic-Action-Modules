@@ -19,7 +19,6 @@ Example:
 """
 
 from typing import Dict, Any, List, Optional, Tuple
-import json
 import re
 import logging
 import requests
@@ -128,7 +127,7 @@ class _PromptBuilder:
 
         Example for multi-robot handoff:
         {{
-        "reasoning": "Robot1 detects and grasps the red cube using grasp_object_for_handoff. It moves to the shared zone and signals Robot2. Robot2 waits, then re-detects the cube's NEW position (it has moved with Robot1) and calls grasp_object on it. Then Robot1 releases.",
+        "reasoning": "Robot1 detects and grasps the red cube using grasp_object_for_handoff (far end). It moves to the shared zone and signals Robot2. Robot2 waits, re-detects the cube at its new position, then calls receive_handoff which orients the gripper upward and approaches from below. Robot1 releases after Robot2 has the object.",
         "plan": [
             {{"parallel_group": 1, "robot": "Robot1", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "capture_var": "target"}},
             {{"parallel_group": 2, "robot": "Robot1", "operation": "grasp_object_for_handoff", "params": {{"robot_id": "Robot1", "object_id": "$target.color", "receiving_robot_id": "Robot2"}}}},
@@ -136,8 +135,8 @@ class _PromptBuilder:
             {{"parallel_group": 4, "robot": "Robot1", "operation": "signal", "params": {{"event_name": "r1_at_handoff"}}}},
             {{"parallel_group": 4, "robot": "Robot2", "operation": "wait_for_signal", "params": {{"event_name": "r1_at_handoff"}}}},
             {{"parallel_group": 5, "robot": "Robot2", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot2", "color": "red"}}, "capture_var": "handoff_target"}},
-            {{"parallel_group": 6, "robot": "Robot2", "operation": "grasp_object", "params": {{"robot_id": "Robot2", "object_id": "$handoff_target.color"}}}},
-            {{"parallel_group": 7, "robot": "Robot1", "operation": "control_gripper", "params": {{"robot_id": "Robot1", "open_gripper": true}}}}
+            {{"parallel_group": 6, "robot": "Robot2", "operation": "receive_handoff", "params": {{"robot_id": "Robot2", "object_id": "$handoff_target.color", "source_robot_id": "Robot1"}}}},
+            {{"parallel_group": 7, "robot": "Robot1", "operation": "release_object", "params": {{"robot_id": "Robot1"}}}}
         ]
         }}
 
@@ -146,11 +145,12 @@ class _PromptBuilder:
         For robot-to-robot handoffs:
         1. Robot1 grasps with grasp_object_for_handoff, moves to the shared zone (x=0.0, y=0.3, z=0.07), then signals.
         2. Robot2 waits for the signal, then re-detects the object (it has MOVED with Robot1 to the shared zone).
-        3. Robot2 calls grasp_object on the newly detected position — do NOT use move_to_coordinate + control_gripper.
-        4. Robot1 releases only after Robot2's grasp_object completes.
+        3. Robot2 calls receive_handoff — this orients the gripper upward and approaches from below the object.
+        4. Robot1 releases only after Robot2's receive_handoff completes.
 
+        NEVER use grasp_object for the receiving robot during a handoff — it causes gripper collision.
         NEVER hardcode Robot2's grasp position — the cube moves with Robot1 and its position changes.
-        NEVER use move_to_coordinate + control_gripper for Robot2's grip — always use grasp_object after re-detecting.
+        receive_handoff automatically orients the gripper upward and approaches from below.
 
         === SYNCHRONIZATION PRIMITIVES ===
 
@@ -494,6 +494,13 @@ class CommandParser:
             commands = parsed.get("commands", [])
             validated_commands = self._validate_commands(commands, robot_id)
             logger.info(f"Validated {len(validated_commands)} commands")
+
+            if not validated_commands:
+                return {
+                    "success": False,
+                    "commands": [],
+                    "error": "LLM produced no valid commands — will try regex fallback",
+                }
 
             return {
                 "success": True,

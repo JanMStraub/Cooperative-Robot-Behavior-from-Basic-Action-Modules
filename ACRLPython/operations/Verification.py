@@ -190,10 +190,8 @@ class PredicateParser:
         for param_name in param_names:
             if param_name in operation_params:
                 resolved[param_name] = operation_params[param_name]
-            else:
-                # Special case: calculated parameters (e.g., calculated_x from spatial operations)
-                # These will be None if not provided
-                resolved[param_name] = None
+            # If the parameter is absent, omit it so the predicate function's
+            # own default value is used (rather than passing None which overrides defaults).
 
         return resolved
 

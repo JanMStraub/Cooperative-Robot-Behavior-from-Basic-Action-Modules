@@ -68,16 +68,16 @@ class TestFieldPickAndPlace(unittest.TestCase):
 
         # Mock field D detection
         mock_detection_d = MagicMock()
-        mock_detection_d.class_name = "fieldd"
-        mock_detection_d.color = "fieldd"
+        mock_detection_d.class_name = "field_d"
+        mock_detection_d.color = "field_d"
         mock_detection_d.world_position = {"x": 0.2, "y": -0.1, "z": 0.0}
         mock_detection_d.bbox = {"x": 100, "y": 100, "w": 80, "h": 80}
         mock_detection_d.confidence = 0.95
 
         # Mock field E detection
         mock_detection_e = MagicMock()
-        mock_detection_e.class_name = "fielde"
-        mock_detection_e.color = "fielde"
+        mock_detection_e.class_name = "field_e"
+        mock_detection_e.color = "field_e"
         mock_detection_e.world_position = {"x": 0.3, "y": 0.1, "z": 0.0}
         mock_detection_e.bbox = {"x": 200, "y": 100, "w": 80, "h": 80}
         mock_detection_e.confidence = 0.93

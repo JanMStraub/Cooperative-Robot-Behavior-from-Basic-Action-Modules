@@ -3,6 +3,8 @@ export class Renderer {
         this.meshCache = {};
         this.meshTimestamps = {};
         this.initThreeJS();
+        // Initialize empty VGN debug views immediately
+        this.updateVGNDebug({});
     }
 
     initThreeJS() {
@@ -325,6 +327,155 @@ export class Renderer {
         if (type === 'robot' && data.gripper_state !== undefined && mesh.userData.eeMat) {
             // Visualize gripper state via end-effector color: green=open, red=closed
             mesh.userData.eeMat.color.set(data.gripper_state === 'open' ? 0x2ec4b6 : 0xe71d36);
+        }
+    }
+
+    /* ── VGN Debug Visualization ── */
+    createMiniRenderer(containerId, scene, camera) {
+        const container = document.getElementById(containerId);
+        if (!container) return null;
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Position camera to look at the table
+        camera.position.set(0, 0.4, 0.6);
+        controls.target.set(0, 0, 0);
+
+        const resizeOb = new ResizeObserver(() => {
+            const w = container.clientWidth;
+            const h = container.clientHeight;
+            if (w === 0 || h === 0) return;
+            renderer.setSize(w, h);
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+        });
+        resizeOb.observe(container);
+
+        const animate = () => {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        };
+        animate();
+
+        return { renderer, controls };
+    }
+
+    updateVGNDebug(data) {
+        const pcContainer = document.getElementById('pointcloud-container');
+        const tsdfContainer = document.getElementById('tsdf-container');
+        
+        if (pcContainer) pcContainer.style.display = 'block';
+        if (tsdfContainer) tsdfContainer.style.display = 'block';
+
+        if (!this.vgnInited) {
+            this.vgnInited = true;
+            this.pcScene = new THREE.Scene();
+            this.tsdfScene = new THREE.Scene();
+
+            // Ground-plane grid (Y=0 = table surface)
+            this.pcScene.add(new THREE.GridHelper(1.0, 20, 0x444444, 0x222222));
+            this.tsdfScene.add(new THREE.GridHelper(1.0, 20, 0x444444, 0x222222));
+            this.pcScene.add(new THREE.AmbientLight(0xffffff, 1.0));
+            this.tsdfScene.add(new THREE.AmbientLight(0xffffff, 1.0));
+            
+            this.pcCamera = new THREE.PerspectiveCamera(45, 1, 0.01, 10);
+            this.tsdfCamera = new THREE.PerspectiveCamera(45, 1, 0.01, 10);
+            
+            this.createMiniRenderer('pointcloud-container', this.pcScene, this.pcCamera);
+            this.createMiniRenderer('tsdf-container', this.tsdfScene, this.tsdfCamera);
+        }
+
+        // All data arrives in Unity LH world frame.
+        // Three.js is RH Y-up → just negate Z.
+        const centroid = data.centroid || [0, 0, 0];
+
+        // ── Point cloud (Unity world frame → negate Z) ──
+        if (data.pointcloud_b64) {
+            const binaryStr = atob(data.pointcloud_b64);
+            const bytes = new Uint8Array(binaryStr.length);
+            for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+            const floatArray = new Float32Array(bytes.buffer);
+
+            for (let i = 0; i < floatArray.length; i += 3) {
+                floatArray[i + 2] = -floatArray[i + 2];
+            }
+
+            if (this.pcMesh) this.pcScene.remove(this.pcMesh);
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.BufferAttribute(floatArray, 3));
+            const mat = new THREE.PointsMaterial({ color: 0x2ec4b6, size: 0.003 });
+            this.pcMesh = new THREE.Points(geo, mat);
+            this.pcScene.add(this.pcMesh);
+        }
+
+        // ── TSDF surface voxels (centred frame → add centroid → negate Z) ──
+        if (data.tsdf_b64 && data.tsdf_size && data.tsdf_res) {
+            const res = data.tsdf_res;
+            const size = data.tsdf_size;
+            const voxSize = size / res;
+            
+            const binaryStr = atob(data.tsdf_b64);
+            const bytes = new Uint8Array(binaryStr.length);
+            for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+            const sdfArray = new Float32Array(bytes.buffer);
+
+            const surfacePoints = [];
+            for (let x = 0; x < res; x++) {
+                for (let y = 0; y < res; y++) {
+                    for (let z = 0; z < res; z++) {
+                        const idx = x * (res * res) + y * res + z;
+                        const val = sdfArray[idx];
+                        const dist = Math.abs(val * (size / 2.0));
+                        
+                        if (dist <= voxSize * 1.0) {
+                            // Voxel position in centred frame → add centroid → Unity LH world
+                            const wx = (x + 0.5) * voxSize - (size / 2.0) + centroid[0];
+                            const wy = (y + 0.5) * voxSize - (size / 2.0) + centroid[1];
+                            const wz = (z + 0.5) * voxSize - (size / 2.0) + centroid[2];
+                            // Unity → Three.js: negate Z
+                            surfacePoints.push(wx, wy, -wz);
+                        }
+                    }
+                }
+            }
+
+            if (this.tsdfMesh) this.tsdfScene.remove(this.tsdfMesh);
+            if (this.tsdfGrasps) {
+                this.tsdfScene.remove(this.tsdfGrasps);
+                this.tsdfGrasps = null;
+            }
+
+            if (surfacePoints.length > 0) {
+                const geo = new THREE.BufferGeometry();
+                geo.setAttribute('position', new THREE.Float32BufferAttribute(surfacePoints, 3));
+                const mat = new THREE.PointsMaterial({ color: 0xff9f1c, size: 0.005 });
+                this.tsdfMesh = new THREE.Points(geo, mat);
+                this.tsdfScene.add(this.tsdfMesh);
+            }
+
+            // ── Grasp arrows (absolute Unity world positions → negate Z) ──
+            if (data.grasps && data.grasps.length > 0) {
+                this.tsdfGrasps = new THREE.Group();
+                data.grasps.forEach(g => {
+                    const pos = new THREE.Vector3(
+                        g.position[0], g.position[1], -g.position[2]
+                    );
+                    const ad = g.approach_direction || [0, 1, 0];
+                    const dir = new THREE.Vector3(ad[0], ad[1], -ad[2]).normalize();
+
+                    const arrowHelper = new THREE.ArrowHelper(
+                        dir, pos, 0.05, 0xff3366, 0.015, 0.01
+                    );
+                    this.tsdfGrasps.add(arrowHelper);
+                });
+                this.tsdfScene.add(this.tsdfGrasps);
+            }
         }
     }
 }

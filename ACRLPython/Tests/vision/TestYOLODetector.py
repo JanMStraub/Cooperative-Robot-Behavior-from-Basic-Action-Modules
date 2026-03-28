@@ -15,6 +15,7 @@ try:
     from vision.DetectionDataModels import DetectionObject, DetectionResult
 except ImportError:
     pytest.skip("YOLODetector not available", allow_module_level=True)
+    raise  # unreachable — keeps Pylance from treating the names below as possibly-unbound
 
 
 class TestYOLODetectorInitialization:
@@ -33,7 +34,7 @@ class TestYOLODetectorInitialization:
         # Should load default YOLOv8n model
         mock_yolo_class.assert_called_once()
         assert detector.model is not None
-        assert detector.conf_threshold == 0.5
+        assert detector.conf_threshold == 0.7
         assert detector.iou_threshold == 0.45
 
     @pytest.mark.skipif(not YOLO_AVAILABLE, reason="YOLO not available")

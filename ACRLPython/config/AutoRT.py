@@ -28,8 +28,8 @@ ENABLE_SAFETY_VALIDATION = (
     os.environ.get("AUTORT_ENABLE_SAFETY", "true").lower() == "true"
 )
 WORKSPACE_BOUNDS = {
-    "min_corner": (-0.6, 0.0, -0.6),
-    "max_corner": (0.6, 0.6, 0.6),
+    "min_corner": (-0.4, 0.0, -0.4),
+    "max_corner": (0.4, 0.5, 0.4),
 }
 MAX_VELOCITY = 2.0  # m/s
 MIN_ROBOT_SEPARATION = 0.2  # meters

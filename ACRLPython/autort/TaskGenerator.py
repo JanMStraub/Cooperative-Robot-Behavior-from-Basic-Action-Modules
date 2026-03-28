@@ -87,13 +87,8 @@ class TaskGenerator:
                 try:
                     task = future.result()
                     if task is not None:
-                        # Deduplicate by task_id in case the LLM reuses IDs
+                        # Deduplicate by task_id — drop tasks with the same ID
                         if task.task_id not in seen_ids:
-                            seen_ids.add(task.task_id)
-                            validated_tasks.append(task)
-                        else:
-                            # Rename duplicate so it is not silently dropped
-                            task.task_id = f"{task.task_id}_{idx}"
                             seen_ids.add(task.task_id)
                             validated_tasks.append(task)
                 except Exception as e:

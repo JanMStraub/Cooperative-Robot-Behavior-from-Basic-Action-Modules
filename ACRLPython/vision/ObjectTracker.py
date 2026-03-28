@@ -198,11 +198,9 @@ class ObjectTracker:
         for det_idx in unmatched_detections:
             self._create_new_track(detections[det_idx])
 
-        # Age tracks and remove stale ones
-        self._age_tracks()
-
         # Assign track IDs to detections
         # Create a mapping from detection index to track index
+        # Note: must happen BEFORE _age_tracks(), which may remove tracks and invalidate indices
         det_to_track = {}
         for track_idx, det_idx in zip(matched_tracks, matched_detections):
             det_to_track[det_idx] = self.tracks[track_idx].track_id
@@ -217,6 +215,9 @@ class ObjectTracker:
                     if track.bbox == det_bbox and track.color == det.color:
                         det_to_track[det_idx] = track.track_id
                         break
+
+        # Age tracks and remove stale ones (must happen after all index-based access above)
+        self._age_tracks()
 
         # Create tracked detections with track IDs
         tracked_detections = []

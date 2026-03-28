@@ -108,6 +108,9 @@ export class NetworkManager {
             case 'autort_tasks':
                 this.autort.handleAutortTasks(msg);
                 break;
+            case 'vgn_debug':
+                if (this.renderer) this.renderer.updateVGNDebug(msg.data);
+                break;
             default:
                 console.log("Unknown msg:", msg);
         }

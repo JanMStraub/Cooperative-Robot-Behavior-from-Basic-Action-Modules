@@ -85,10 +85,10 @@
 	min-height: 0;
 }
 
-/* In the middle column, give cameras a fixed proportion so world state still shows */
+/* In the middle column, let cameras dictate height based on aspect ratio */
 .visualization-panel .perception-panel.expanded {
 	flex: none;
-	height: 420px;
+	height: auto;
 }
 
 /* Both world-state panels share remaining height equally, each scrollable */
@@ -130,10 +130,27 @@
 	display: flex;
 }
 
-/* Each camera feed takes equal width and fills height */
-.camera-feed {
+.perception-panel .camera-column {
+	display: flex;
+	flex-direction: column;
+	gap: 0.75rem;
 	flex: 1;
 	min-width: 0;
+}
+
+/* Each camera feed takes equal width and fills height */
+.camera-feed {
+	flex: none; /* remove flex 1 so it doesn't stretch indiscriminately */
+	width: 100%;
+	aspect-ratio: 16 / 9;
+	position: relative;
+	overflow: hidden;
+}
+
+/* 3D view containers */
+#pointcloud-container, #tsdf-container {
+	width: 100%;
+	aspect-ratio: 16 / 9;
 	position: relative;
 	overflow: hidden;
 }

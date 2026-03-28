@@ -32,6 +32,7 @@ from .GraspOperations import (
     GRASP_OBJECT_OPERATION,
     GRASP_OBJECT_FOR_HANDOFF_OPERATION,
     ORIENT_GRIPPER_FOR_HANDOFF_RECEIVE_OPERATION,
+    RECEIVE_HANDOFF_OPERATION,
 )
 from .DefaultPositionOperation import RETURN_TO_START_POSITION_OPERATION
 from .DetectionOperations import (
@@ -136,6 +137,7 @@ class OperationRegistry:
             MIRROR_MOVEMENT_OPERATION,
             GRASP_OBJECT_FOR_HANDOFF_OPERATION,
             ORIENT_GRIPPER_FOR_HANDOFF_RECEIVE_OPERATION,
+            RECEIVE_HANDOFF_OPERATION,
             # ============================================================================
             # LEVEL 5: COLLABORATIVE MANIPULATION (Advanced coordination)
             # ============================================================================
