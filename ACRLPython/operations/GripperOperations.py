@@ -112,6 +112,18 @@ def control_gripper(
                 ],
             )
 
+        def _update_gripper_world_state():
+            """Optimistic gripper state update — no Unity stream needed."""
+            try:
+                from core.Imports import get_world_state
+
+                get_world_state().update_robot_state(
+                    robot_id,
+                    {"gripper_state": "open" if open_gripper else "closed"},
+                )
+            except Exception as _exc:
+                logger.debug(f"Could not update gripper WorldState for {robot_id}: {_exc}")
+
         def _ros_path():
             from ros2.ROSBridge import ROSBridge
 
@@ -120,6 +132,7 @@ def control_gripper(
             result = bridge.control_gripper(gripper_position, robot_id=robot_id)
             if result and result.get("success"):
                 logger.info(f"ROS gripper command sent for {robot_id}")
+                _update_gripper_world_state()
                 return OperationResult.success_result(
                     {
                         "robot_id": robot_id,
@@ -157,6 +170,7 @@ def control_gripper(
                     ],
                 )
             logger.info(f"Successfully sent control_gripper command to {robot_id}")
+            _update_gripper_world_state()
             return OperationResult.success_result(
                 {
                     "robot_id": robot_id,

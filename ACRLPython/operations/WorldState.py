@@ -28,7 +28,9 @@ try:
         CONFIDENCE_DECAY_PER_FRAME,
         STALE_CONFIDENCE_THRESHOLD,
         OBJECT_TTL_SECONDS,
+        JOINT_MOVEMENT_THRESHOLD,
     )
+    from config.Robot import ROBOT_BASE_POSITIONS
 except ImportError:
     from ..config.Robot import (
         WORKSPACE_REGIONS,
@@ -37,7 +39,9 @@ except ImportError:
         CONFIDENCE_DECAY_PER_FRAME,
         STALE_CONFIDENCE_THRESHOLD,
         OBJECT_TTL_SECONDS,
+        JOINT_MOVEMENT_THRESHOLD,
     )
+    from ..config.Robot import ROBOT_BASE_POSITIONS
 from .StatusOperations import check_robot_status
 
 # Configure logging
@@ -269,6 +273,11 @@ class WorldState(SingletonBase):
         """
         Get robot end effector position (cached).
 
+        Priority:
+        1. Stored position in robot state (set by Unity stream or FK update).
+        2. On-the-fly FK computation from stored joint angles (no side effects).
+        3. Fall back to querying Unity status.
+
         Args:
             robot_id: Robot identifier
 
@@ -281,6 +290,21 @@ class WorldState(SingletonBase):
                 robot_state = self._robot_states[robot_id]
                 if robot_state.position is not None:
                     return robot_state.position
+
+                # FK fallback: compute position on-the-fly from joint angles
+                if robot_state.joint_angles and len(robot_state.joint_angles) == 6:
+                    try:
+                        import math as _math
+                        from operations.AR4Kinematics import compute_end_effector_position
+
+                        base_pos = ROBOT_BASE_POSITIONS.get(robot_id)
+                        if base_pos is not None:
+                            base_yaw = _math.pi if robot_id == "Robot2" else 0.0
+                            return compute_end_effector_position(
+                                robot_state.joint_angles, base_pos, base_yaw
+                            )
+                    except Exception as exc:
+                        logger.warning(f"FK fallback failed for {robot_id}: {exc}")
 
         # Fall back to querying status
         status = self.get_robot_status(robot_id)
@@ -399,17 +423,25 @@ class WorldState(SingletonBase):
 
     def update_robot_state(self, robot_id: str, state_data: Dict[str, Any]):
         """
-        Update robot state from Unity response.
+        Update robot state from Unity response or command-tracked updates.
+
+        When joint_angles are provided and no explicit position is in state_data,
+        the end-effector position is derived via AR4 forward kinematics so that
+        WorldState remains accurate without a Unity WorldStateServer connection.
 
         Args:
             robot_id: Robot identifier
-            state_data: State data dict from Unity
+            state_data: State data dict from Unity or internal command tracking
         """
         with self._lock:
             if robot_id not in self._robot_states:
                 self._robot_states[robot_id] = RobotState(robot_id=robot_id)
 
             state = self._robot_states[robot_id]
+
+            # Store previous joint angles before updating (used for is_moving detection)
+            prev_joint_angles = state.joint_angles
+
             state.position = self._to_position_tuple(
                 state_data.get("position", state.position)
             )
@@ -427,11 +459,81 @@ class WorldState(SingletonBase):
             state.is_initialized = state_data.get(
                 "is_initialized", state.is_initialized
             )
-            state.joint_angles = state_data.get("joint_angles", state.joint_angles)
+            new_joint_angles = state_data.get("joint_angles", None)
+            if new_joint_angles is not None:
+                state.joint_angles = new_joint_angles
             state.start_joint_angles = state_data.get("start_joint_angles", state.start_joint_angles)
             state.timestamp = time.time()
 
+            # Derive end-effector pose from FK when joint_angles were just updated
+            # and no explicit ground-truth position was provided in this update.
+            # This makes WorldState self-sufficient when Unity WorldStateServer is absent.
+            if new_joint_angles is not None and "position" not in state_data:
+                self._update_position_from_fk(robot_id, state, new_joint_angles, prev_joint_angles)
+
             logger.debug(f"Updated robot state for {robot_id}")
+
+    def _update_position_from_fk(
+        self,
+        robot_id: str,
+        state: "RobotState",
+        new_joint_angles: list,
+        prev_joint_angles,
+    ):
+        """Compute and store FK-derived end-effector position and is_moving flag.
+
+        Called from update_robot_state when joint_angles are present but no
+        explicit position was provided by Unity.  Assumes self._lock is held.
+
+        Args:
+            robot_id: Robot identifier (used for base position lookup).
+            state: RobotState to update in-place.
+            new_joint_angles: Newly received joint angles (6 values, radians).
+            prev_joint_angles: Previous joint angles, or None if first update.
+        """
+        try:
+            import math as _math
+            from operations.AR4Kinematics import compute_end_effector_pose
+
+            base_pos = ROBOT_BASE_POSITIONS.get(robot_id)
+            if base_pos is None:
+                logger.debug(
+                    f"FK skipped for {robot_id}: no base position in ROBOT_BASE_POSITIONS"
+                )
+                return
+
+            if len(new_joint_angles) != 6:
+                logger.debug(
+                    f"FK skipped for {robot_id}: expected 6 joint angles, got {len(new_joint_angles)}"
+                )
+                return
+
+            # Robot2 is mounted mirrored (180° yaw from Robot1)
+            base_yaw = _math.pi if robot_id == "Robot2" else 0.0
+
+            pos, quat = compute_end_effector_pose(new_joint_angles, base_pos, base_yaw)
+            state.position = pos
+            # Store quaternion as rotation tuple (treated as (x,y,z,w) 4-tuple)
+            # existing consumers of state.rotation expect (roll,pitch,yaw) degrees,
+            # so we convert here for compatibility.
+            qx, qy, qz, qw = quat
+            roll = _math.degrees(_math.atan2(2.0 * (qw * qx + qy * qz), 1.0 - 2.0 * (qx * qx + qy * qy)))
+            pitch = _math.degrees(_math.asin(max(-1.0, min(1.0, 2.0 * (qw * qy - qz * qx)))))
+            yaw = _math.degrees(_math.atan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz)))
+            state.rotation = (roll, pitch, yaw)
+
+            # Derive is_moving from joint angle delta
+            if prev_joint_angles and len(prev_joint_angles) == 6:
+                delta = sum(
+                    abs(a - b) for a, b in zip(new_joint_angles, prev_joint_angles)
+                )
+                state.is_moving = delta > JOINT_MOVEMENT_THRESHOLD
+
+            logger.debug(
+                f"FK pose for {robot_id}: pos=({pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f})"
+            )
+        except Exception as exc:
+            logger.warning(f"FK computation failed for {robot_id}: {exc}")
 
     def update_robot(
         self,

@@ -42,6 +42,7 @@ try:
         AUTORT_SERVER_PORT,
         DEFAULT_LMSTUDIO_MODEL,
         LMSTUDIO_BASE_URL,
+        PERCEPTION_ONLY_MODE,
     )
     from config.Vision import (
         ENABLE_VISION_STREAMING,
@@ -72,6 +73,7 @@ except ImportError:
         AUTORT_SERVER_PORT,
         DEFAULT_LMSTUDIO_MODEL,
         LMSTUDIO_BASE_URL,
+        PERCEPTION_ONLY_MODE,
     )
     from ..config.Vision import (
         ENABLE_VISION_STREAMING,
@@ -174,6 +176,7 @@ class RobotController:
         self._vision_processor = None
         self._graph_builder = None
         self._web_server_thread = None
+        self._perception_refresh = None
         self._running = False
         self._stop_event = threading.Event()
 
@@ -347,6 +350,25 @@ class RobotController:
                 "Non-critical — knowledge graph will not be updated automatically"
             )
 
+    def _start_perception_refresh(self):
+        """Start the background PerceptionRefreshLoop daemon.
+
+        Polls stale WorldState objects every 2 s and re-detects them using
+        stereo+YOLO.  Falls back to LLM analyze_scene when no stereo images
+        are available.  Non-critical — a failure here does not block startup.
+        """
+        try:
+            from operations.WorldState import get_world_state
+            from operations.PerceptionRefresh import PerceptionRefreshLoop
+
+            world_state = get_world_state()
+            self._perception_refresh = PerceptionRefreshLoop(world_state=world_state)
+            self._perception_refresh.start()
+            logger.info("✓ PerceptionRefreshLoop started (stale-object auto-refresh)")
+        except Exception as exc:
+            logger.warning(f"Failed to start PerceptionRefreshLoop: {exc}")
+            logger.debug("Non-critical — stale objects will not be auto-refreshed")
+
     def _auto_connect_ros(self):
         """
         Connect to ROS bridge on startup if AUTO_CONNECT_ROS is enabled.
@@ -405,17 +427,23 @@ class RobotController:
             check_completion=self._check_completion,
         )
 
-        # Start WorldStateServer (port 5014) only in sim mode.
-        # In real mode, world state is populated by perception operations only.
+        # Start WorldStateServer (port 5014) only in sim mode and when perception-only
+        # mode is not active.  In real mode or PERCEPTION_ONLY_MODE=true, world state
+        # is populated entirely by FK (joint angles) and stereo perception.
         from core.TCPServerBase import ServerConfig
 
-        if self._env == "sim":
+        if self._env == "sim" and not PERCEPTION_ONLY_MODE:
             logger.info(f"Starting WorldStateServer (port: {self._world_state_port})")
             world_state_config = ServerConfig(
                 host=self._host, port=self._world_state_port
             )
             self._world_state_server = WorldStateServer(config=world_state_config)
             self._world_state_server.start()
+        elif PERCEPTION_ONLY_MODE:
+            logger.info(
+                "PERCEPTION_ONLY_MODE=true: WorldStateServer disabled — "
+                "WorldState populated by FK + stereo perception"
+            )
         else:
             logger.info(
                 "Real env: WorldStateServer disabled — WorldState populated by perception only"
@@ -435,10 +463,13 @@ class RobotController:
         self._wire_world_state_to_rag()
 
         # Wire WorldStateServer callbacks and knowledge graph only when the
-        # server is running (sim mode); in real mode there is no server to wire.
-        if self._env == "sim":
+        # server is running (sim mode, not perception-only); otherwise no server to wire.
+        if self._env == "sim" and not PERCEPTION_ONLY_MODE:
             self._wire_world_state_callbacks()
             self._wire_knowledge_graph()
+
+        # Start perception refresh loop (keeps stale objects fresh via stereo+YOLO)
+        self._start_perception_refresh()
 
         # Initialize hardware and camera singletons for the selected environment.
         # This call seeds the module-level cache so all subsequent lazy accessors
@@ -552,10 +583,12 @@ class RobotController:
         logger.info(f"  Image Server (stereo):  {self._host}:{self._stereo_port}")
         logger.info(f"  Command Server:         {self._host}:{self._command_port}")
         logger.info(f"  Sequence Server:        {self._host}:{self._sequence_port}")
-        if self._env == "sim":
+        if self._env == "sim" and not PERCEPTION_ONLY_MODE:
             logger.info(
                 f"  World State Server:     {self._host}:{self._world_state_port}"
             )
+        elif PERCEPTION_ONLY_MODE:
+            logger.info(f"  World State Server:     Disabled (perception-only mode)")
         else:
             logger.info(f"  World State Server:     Disabled (real env)")
         logger.info(f"  AutoRT Server:          {self._host}:{self._autort_port}")
@@ -626,6 +659,12 @@ class RobotController:
                 logger.info("AutoRTServer stopped")
         except Exception as e:
             logger.error(f"Error stopping AutoRTServer: {e}")
+
+        try:
+            if self._perception_refresh:
+                self._perception_refresh.stop()
+        except Exception as e:
+            logger.error(f"Error stopping PerceptionRefreshLoop: {e}")
 
         logger.info("RobotController stopped")
 

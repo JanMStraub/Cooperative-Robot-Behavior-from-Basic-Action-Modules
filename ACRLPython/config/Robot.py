@@ -106,3 +106,13 @@ STALE_CONFIDENCE_THRESHOLD = float(
 OBJECT_TTL_SECONDS = float(
     os.environ.get("OBJECT_TTL_SECONDS", "30.0")
 )  # Delete object if not seen for 2s
+
+# ============================================================================
+# FK-based Movement Detection
+# ============================================================================
+
+# Minimum total joint angle delta (radians) to mark a robot as is_moving.
+# Sum of |Δθᵢ| across all 6 joints must exceed this threshold.
+JOINT_MOVEMENT_THRESHOLD = float(
+    os.environ.get("JOINT_MOVEMENT_THRESHOLD", "0.001")
+)
