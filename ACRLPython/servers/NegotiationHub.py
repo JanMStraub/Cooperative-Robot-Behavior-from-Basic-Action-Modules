@@ -245,17 +245,11 @@ class NegotiationHub(SingletonBase):
 
                 session.current_round = round_num
 
-                # BUG 3 FIX: Refresh world state and re-run analysis for rounds 2+
-                # so robots use current positions, not stale T=0 data.
+                # Refresh world state each round so proposals use current positions.
+                # Re-analysis is skipped: robots don't move during negotiation, so
+                # repeating the analysis phase just burns LLM tokens for the same result.
                 if round_num > 1:
                     world_state = self._get_world_state_snapshot()
-                    session.state = NegotiationState.ANALYZING
-                    analysis_ok = self._run_analysis_phase(session, world_state)
-                    if not analysis_ok:
-                        logger.warning(
-                            f"Round {round_num}: re-analysis failed, skipping round"
-                        )
-                        continue
 
                 # Phase 2: Proposal
                 session.state = NegotiationState.PROPOSING
@@ -368,11 +362,24 @@ class NegotiationHub(SingletonBase):
                         robot_id=robot_id, can_contribute=False
                     )
 
-        # Check if any robot can contribute
+        # Check if any robot can contribute.
+        # If all robots returned can_contribute=False, promote them all: for
+        # inherently joint tasks (handoff, stabilize) the model often interprets
+        # "can_contribute" as "can complete solo" and returns False even though
+        # both robots are needed.  Negotiation was triggered precisely because
+        # multiple robots are involved, so a unanimous False is a model artefact,
+        # not a genuine capability gap.
         contributors = [a for a in session.analyses.values() if a.can_contribute]
         if not contributors:
-            logger.warning("No robots can contribute to this task")
-            return False
+            all_analyses = list(session.analyses.values())
+            logger.warning(
+                f"All {len(all_analyses)} robots returned can_contribute=False — "
+                f"promoting all to contributors (likely a solo-vs-collaborative "
+                f"misinterpretation by the model)"
+            )
+            for a in all_analyses:
+                a.can_contribute = True
+            contributors = all_analyses
 
         return True
 
@@ -429,6 +436,23 @@ class NegotiationHub(SingletonBase):
             f"[{proposer_id}] Proposed plan: {len(proposal.commands)} commands, "
             f"reasoning='{proposal.reasoning[:100]}'"
         )
+
+        # Sanity-check: reject single-robot plans for multi-robot sessions
+        # before wasting an evaluation round-trip.
+        if len(session.robot_ids) > 1 and proposal.commands:
+            robots_in_plan = {
+                cmd.get("params", {}).get("robot_id") or cmd.get("robot")
+                for cmd in proposal.commands
+            }
+            robots_in_plan.discard(None)
+            missing = set(session.robot_ids) - robots_in_plan
+            if missing:
+                logger.warning(
+                    f"[{proposer_id}] Proposal missing commands for {missing} — "
+                    f"discarding (single-robot plan for multi-robot task)"
+                )
+                return None
+
         return proposal
 
     def _run_evaluation_phase(

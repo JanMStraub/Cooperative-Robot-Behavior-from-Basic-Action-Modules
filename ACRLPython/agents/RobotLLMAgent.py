@@ -184,12 +184,14 @@ Available operations: {ops_str}
 
 Task: "{task}"
 
+IMPORTANT: Set "can_contribute" to true if you can play ANY part in this task — even as one half of a collaborative pair. Only set it to false if this robot is completely irrelevant to the task (e.g. wrong workspace, wrong tool).
+
 Respond with JSON:
 {{
     "can_contribute": true/false,
     "capabilities": ["what you can do for this task"],
     "constraints": ["your limitations"],
-    "suggested_role": "brief role description",
+    "suggested_role": "brief role description (e.g. 'grasper', 'receiver', 'stabilizer')",
     "requires_collaboration": true/false,
     "confidence": 0.0-1.0
 }}
@@ -200,6 +202,8 @@ Output only valid JSON."""
         if response is None:
             logger.warning(f"[{self.robot_id}] LLM analysis failed, returning default")
             return TaskAnalysis(robot_id=self.robot_id)
+
+        logger.info(f"[{self.robot_id}] Raw analysis response: {response[:300]}")
 
         try:
             data = self._extract_json(response)
@@ -271,7 +275,7 @@ Output only valid JSON."""
             f"proximity. Every signal must have a matching wait_for_signal. "
             f"Respond only with a JSON object."
         )
-        user_prompt = f"""Propose a plan for this task. This is negotiation round {round_number}.
+        user_prompt = f"""Propose a coordinated plan for this task. This is negotiation round {round_number}.
 
 {context}
 {ops_section}
@@ -285,6 +289,7 @@ Create a plan using these rules:
 - Use signal/wait_for_signal for synchronization between robots
 - Every signal must have a matching wait_for_signal
 - IMPORTANT: Use ONLY operation names from the available operations list above
+- CRITICAL: This is a MULTI-ROBOT task. The plan MUST include operations assigned to EVERY participating robot. A plan that only assigns work to one robot will be rejected. Each robot must have at least one command.
 
 Respond with JSON:
 {{
@@ -357,6 +362,12 @@ Output only valid JSON."""
 
 {context}
 
+IMPORTANT operation semantics — do NOT raise concerns about missing coordinates for these:
+- orient_gripper_for_handoff_receive(robot_id, object_id, source_robot_id): computes gripper orientation from WorldState automatically. No coordinate params needed or expected.
+- receive_handoff(robot_id, object_id, source_robot_id): computes target position from WorldState automatically. No coordinate params needed or expected.
+- grasp_object_for_handoff(robot_id, object_id, receiving_robot_id): same — positions computed internally.
+Only flag missing coordinates for operations like move_to_coordinate that explicitly require them.
+
 Task: "{task}"
 Proposed by: {proposal.proposer_id}
 Reasoning: {proposal.reasoning}
@@ -373,7 +384,7 @@ Check:
 Respond with JSON:
 {{
     "accept": true/false,
-    "concerns": ["list of concerns"],
+    "concerns": ["list of concerns — omit concerns about missing coords on handoff ops"],
     "suggested_changes": ["list of suggested modifications"],
     "confidence": 0.0-1.0
 }}
@@ -439,11 +450,14 @@ Output only valid JSON."""
         """
         # Robot identity and workspace
         workspace_bounds = WORKSPACE_REGIONS.get(self.workspace, {})
+        shared_bounds = WORKSPACE_REGIONS.get("shared_zone", {})
         context = f"""Your identity: {self.robot_id}
 Base position: {self.base_position}
 Assigned workspace: {self.workspace}
 Workspace bounds: {workspace_bounds}
-Max reach: {self.max_reach}m"""
+Shared zone (reachable by ALL robots): {shared_bounds}
+Max reach: {self.max_reach}m
+NOTE: Objects in the shared zone are reachable by both robots. Set can_contribute=true if the target object is in your workspace OR the shared zone."""
 
         # Robot state from world state
         robot_states = world_state_snapshot.get("robots", {})
@@ -453,16 +467,38 @@ Max reach: {self.max_reach}m"""
             context += f"\nGripper state: {my_state.get('gripper_state', 'unknown')}"
             context += f"\nIs moving: {my_state.get('is_moving', False)}"
 
-        # Objects in scene
+        # Objects in scene — each annotated with its zone so the model can
+        # determine reachability without doing numeric comparisons itself.
         objects = world_state_snapshot.get("objects", {})
         if objects:
             context += "\nObjects in scene:"
             for obj_id, obj_data in objects.items():
                 pos = obj_data.get("position", "unknown")
                 color = obj_data.get("color", "unknown")
-                context += f"\n  - {obj_id}: color={color}, position={pos}"
+                zone = self._classify_position_zone(pos)
+                context += f"\n  - {obj_id}: color={color}, position={pos}, zone={zone}"
 
         return context
+
+    def _classify_position_zone(self, position) -> str:
+        """
+        Classify a world position into a named workspace zone.
+
+        Args:
+            position: Position as tuple/list (x, y, z) or "unknown"
+
+        Returns:
+            Zone label: "left_workspace", "right_workspace", "shared_zone", or "unknown"
+        """
+        if not isinstance(position, (list, tuple)) or len(position) < 1:
+            return "unknown"
+        x = position[0]
+        for zone_name, bounds in WORKSPACE_REGIONS.items():
+            x_min = bounds.get("x_min", float("-inf"))
+            x_max = bounds.get("x_max", float("inf"))
+            if x_min <= x <= x_max:
+                return zone_name
+        return "unknown"
 
     def _call_llm(self, system_prompt: str, user_prompt: str) -> Optional[str]:
         """

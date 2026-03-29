@@ -15,7 +15,7 @@ import os
 
 # Disabled by default to avoid impacting single-robot workflows.
 # Enable via: NEGOTIATION_ENABLED=true
-NEGOTIATION_ENABLED = os.environ.get("NEGOTIATION_ENABLED", "false").lower() in (
+NEGOTIATION_ENABLED = os.environ.get("NEGOTIATION_ENABLED", "true").lower() in (
     "true",
     "1",
     "yes",
@@ -33,8 +33,8 @@ NEGOTIATION_TIMEOUT = float(os.environ.get("NEGOTIATION_TIMEOUT", "120.0"))  # s
 # ============================================================================
 
 AGENT_LLM_TIMEOUT = float(
-    os.environ.get("AGENT_LLM_TIMEOUT", "30.0")
-)  # seconds per LLM call
+    os.environ.get("AGENT_LLM_TIMEOUT", "60.0")
+)  # seconds per LLM call (proposal phase is the heaviest; 60s gives headroom)
 NEGOTIATION_TEMPERATURE = float(os.environ.get("NEGOTIATION_TEMPERATURE", "0.3"))
 
 # ============================================================================

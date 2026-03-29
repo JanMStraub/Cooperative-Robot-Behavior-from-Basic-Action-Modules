@@ -266,6 +266,18 @@ class OperationVerifier:
             # Resolve parameter values
             predicate_params = PredicateParser.resolve_parameters(param_names, params)
 
+            # Skip predicate if required params are missing — params may use
+            # variable references (e.g. "$target") that are only resolved at
+            # execution time, so we cannot evaluate the predicate statically.
+            required_names = [p for p in param_names if p != "world_state"]
+            missing_params = [p for p in required_names if p not in predicate_params]
+            if missing_params:
+                logger.warning(
+                    f"Skipping precondition '{precondition}': params {missing_params} "
+                    f"not yet resolved (may be runtime variable references)"
+                )
+                continue
+
             # Add world_state to parameters
             predicate_params["world_state"] = world_state
 
@@ -290,10 +302,10 @@ class OperationVerifier:
                     logger.debug(f"Precondition passed: {precondition}")
 
             except Exception as e:
-                logger.error(f"Error evaluating precondition '{precondition}': {e}")
+                logger.error(f"Error evaluating predicate '{precondition}': {e}")
                 result.add_violation(
                     predicate=precondition,
-                    reason=f"Evaluation error: {str(e)}",
+                    reason=f"Predicate evaluation error: {str(e)}",
                     severity="error",
                     suggestions=[
                         "Check predicate parameters",
@@ -374,6 +386,17 @@ class OperationVerifier:
 
             # Resolve parameter values
             predicate_params = PredicateParser.resolve_parameters(param_names, params)
+
+            # Skip if required params are unresolved (e.g. runtime variable refs)
+            required_names = [p for p in param_names if p != "world_state"]
+            missing_params = [p for p in required_names if p not in predicate_params]
+            if missing_params:
+                logger.warning(
+                    f"Skipping postcondition '{postcondition}': params {missing_params} "
+                    f"not yet resolved (may be runtime variable references)"
+                )
+                continue
+
             predicate_params["world_state"] = world_state
 
             # Evaluate the predicate
