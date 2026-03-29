@@ -18,7 +18,7 @@ import time
 from typing import Dict, Any
 from operations.WorldState import WorldState
 from operations.SpatialPredicates import object_accessible_by_robot
-from config.Robot import WORKSPACE_REGIONS
+from config.Robot import WORKSPACE_REGIONS, ROBOT_BASE_POSITIONS
 from .Core import KnowledgeGraph
 from .Schema import RobotNode, ObjectNode, RegionNode
 
@@ -156,6 +156,11 @@ class GraphBuilder:
         for obj_data in objects:
             object_id = obj_data.get("object_id")
             if not object_id:
+                continue
+
+            # Skip robot IDs — robots appear in the Unity objects array but
+            # are tracked as robot nodes, not object nodes.
+            if object_id in ROBOT_BASE_POSITIONS:
                 continue
 
             seen_object_ids.add(object_id)

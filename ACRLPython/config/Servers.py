@@ -185,7 +185,7 @@ DEFAULT_OUTPUT_DIR = os.environ.get(
 LOG_DIR = os.environ.get("LOG_DIR", str(_CONFIG_DIR / "logs"))
 
 LOG_FORMAT = os.environ.get("LOG_FORMAT", "%(asctime)s [%(levelname)s] %(message)s")
-LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG")
 
 ENABLE_FILE_LOGGING = os.environ.get("ENABLE_FILE_LOGGING", "true").lower() in (
     "true",

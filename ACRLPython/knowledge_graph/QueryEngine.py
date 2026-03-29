@@ -231,6 +231,9 @@ class GraphQueryEngine:
         all_objects = set(self._graph.get_all_nodes(node_type="object"))
         candidates = near_objects | all_objects
 
+        # Exclude objects the robot is currently grasping — they travel with it.
+        grasped = set(self._graph.get_neighbors(robot_id, edge_type="GRASPING"))
+
         # Precompute segment vector for point-to-segment projection
         ax, ay, az = robot_pos
         bx, by, bz = target
@@ -242,11 +245,23 @@ class GraphQueryEngine:
         for obj_id in candidates:
             if obj_id == robot_id:
                 continue
+
+            # Skip objects being carried by this robot.
+            if obj_id in grasped:
+                continue
+
+            # Skip objects that are at (or very near) the target itself —
+            # the robot is moving *toward* them, not being blocked by them.
             obj_node = self._graph.get_node(obj_id)
             if not obj_node:
                 continue
             obj_pos = obj_node.get("position")
             if not obj_pos:
+                continue
+
+            # Skip objects at the target destination — the robot is moving toward
+            # them, not being blocked by them.
+            if math.dist(obj_pos, target) < blocking_threshold:
                 continue
 
             # Point-to-line-segment distance:

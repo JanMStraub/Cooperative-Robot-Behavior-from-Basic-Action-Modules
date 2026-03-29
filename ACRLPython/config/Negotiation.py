@@ -15,7 +15,7 @@ import os
 
 # Disabled by default to avoid impacting single-robot workflows.
 # Enable via: NEGOTIATION_ENABLED=true
-NEGOTIATION_ENABLED = os.environ.get("NEGOTIATION_ENABLED", "true").lower() in (
+NEGOTIATION_ENABLED = os.environ.get("NEGOTIATION_ENABLED", "false").lower() in (
     "true",
     "1",
     "yes",
