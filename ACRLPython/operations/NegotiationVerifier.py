@@ -187,11 +187,12 @@ class NegotiationVerifier:
         for event in unmatched:
             errors.append(f"wait_for_signal('{event}') has no matching signal")
 
-        # Warn about signals nobody waits for (not an error)
+        # Warn about signals nobody waits for — may indicate a broken coordination plan
         unused = defined_signals - waited_signals
         for event in unused:
-            logger.debug(
-                f"signal('{event}') has no matching wait_for_signal (harmless)"
+            logger.warning(
+                f"signal('{event}') has no matching wait_for_signal — "
+                f"potential coordination gap"
             )
 
         return errors

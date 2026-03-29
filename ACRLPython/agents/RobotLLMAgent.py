@@ -169,7 +169,7 @@ class RobotLLMAgent:
         context = self._build_agent_context(world_state_snapshot)
         ops_str = ", ".join(available_operations)
 
-        workspace_side = "left (X < 0)" if "1" in self.robot_id else "right (X > 0)"
+        workspace_side = self._get_workspace_label()
         system_prompt = (
             SYSTEM_PROMPT_BASE
             + f" You are {self.robot_id}, the {workspace_side} robot arm. "
@@ -225,6 +225,7 @@ Output only valid JSON."""
         other_analyses: List[TaskAnalysis],
         world_state: Dict[str, Any],
         round_number: int = 1,
+        available_operations: Optional[List[str]] = None,
     ) -> PlanProposal:
         """
         Phase 2: Propose a coordinated plan considering other robots' analyses.
@@ -234,6 +235,7 @@ Output only valid JSON."""
             other_analyses: Analyses from other robots
             world_state: Current world state snapshot
             round_number: Current negotiation round
+            available_operations: List of valid operation names from the registry
 
         Returns:
             PlanProposal with commands in SequenceExecutor format
@@ -250,7 +252,18 @@ Output only valid JSON."""
                 f"constraints={analysis.constraints}"
             )
 
-        workspace_side = "left (X < 0)" if "1" in self.robot_id else "right (X > 0)"
+        # Build operations section for the prompt
+        if available_operations:
+            ops_str = "\n".join(f"  - {op}" for op in available_operations)
+            ops_section = f"\nAvailable operations (use ONLY these exact names):\n{ops_str}\n"
+        else:
+            logger.warning(
+                f"[{self.robot_id}] propose_plan called without available_operations; "
+                f"LLM may hallucinate operation names"
+            )
+            ops_section = ""
+
+        workspace_side = self._get_workspace_label()
         system_prompt = (
             SYSTEM_PROMPT_BASE
             + f" You are {self.robot_id}, the {workspace_side} robot arm, proposing a "
@@ -261,7 +274,7 @@ Output only valid JSON."""
         user_prompt = f"""Propose a plan for this task. This is negotiation round {round_number}.
 
 {context}
-
+{ops_section}
 Other robots' analyses:{analyses_summary}
 
 Task: "{task}"
@@ -271,6 +284,7 @@ Create a plan using these rules:
 - Same parallel_group = concurrent execution
 - Use signal/wait_for_signal for synchronization between robots
 - Every signal must have a matching wait_for_signal
+- IMPORTANT: Use ONLY operation names from the available operations list above
 
 Respond with JSON:
 {{
@@ -331,7 +345,7 @@ Output only valid JSON."""
 
         commands_json = json.dumps(proposal.commands, indent=2)
 
-        workspace_side = "left (X < 0)" if "1" in self.robot_id else "right (X > 0)"
+        workspace_side = self._get_workspace_label()
         system_prompt = (
             SYSTEM_PROMPT_BASE
             + f" You are {self.robot_id}, the {workspace_side} robot arm, evaluating a plan "
@@ -369,22 +383,22 @@ Output only valid JSON."""
         response = self._call_llm(system_prompt, user_prompt)
         if response is None:
             logger.warning(
-                f"[{self.robot_id}] LLM evaluation failed, accepting by default"
+                f"[{self.robot_id}] LLM evaluation failed, rejecting proposal"
             )
             return ProposalEvaluation(
-                evaluator_id=self.robot_id, accept=True, confidence=0.3
+                evaluator_id=self.robot_id, accept=False, confidence=0.3
             )
 
         try:
             data = self._extract_json(response)
             if data is None:
                 return ProposalEvaluation(
-                    evaluator_id=self.robot_id, accept=True, confidence=0.3
+                    evaluator_id=self.robot_id, accept=False, confidence=0.3
                 )
 
             return ProposalEvaluation(
                 evaluator_id=self.robot_id,
-                accept=data.get("accept", True),
+                accept=data.get("accept", False),
                 concerns=data.get("concerns", []),
                 suggested_changes=data.get("suggested_changes", []),
                 confidence=data.get("confidence", 0.5),
@@ -392,8 +406,26 @@ Output only valid JSON."""
         except Exception as e:
             logger.error(f"[{self.robot_id}] Error parsing evaluation: {e}")
             return ProposalEvaluation(
-                evaluator_id=self.robot_id, accept=True, confidence=0.3
+                evaluator_id=self.robot_id, accept=False, confidence=0.3
             )
+
+    def _get_workspace_label(self) -> str:
+        """
+        Return a human-readable workspace side label for this robot.
+
+        Uses ROBOT_WORKSPACE_ASSIGNMENTS config to determine left/right/unknown,
+        avoiding fragile substring matches on robot_id strings.
+
+        Returns:
+            Descriptive label such as "left (X < 0)", "right (X > 0)", or
+            "workspace '<name>'" for unrecognized assignments.
+        """
+        workspace = ROBOT_WORKSPACE_ASSIGNMENTS.get(self.robot_id, "")
+        if "left" in workspace.lower():
+            return "left (X < 0)"
+        if "right" in workspace.lower():
+            return "right (X > 0)"
+        return f"workspace '{workspace}'" if workspace else "workspace (unknown)"
 
     def _build_agent_context(self, world_state_snapshot: Dict[str, Any]) -> str:
         """

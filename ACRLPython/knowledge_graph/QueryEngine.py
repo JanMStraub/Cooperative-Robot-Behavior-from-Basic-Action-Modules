@@ -360,6 +360,8 @@ class GraphQueryEngine:
 
         # Add edge type breakdown
         robots = self._graph.get_all_nodes(node_type="robot")
+        objects = self._graph.get_all_nodes(node_type="object")
+        regions = self._graph.get_all_nodes(node_type="region")
 
         edge_counts = {
             "CAN_REACH": 0,
@@ -370,15 +372,32 @@ class GraphQueryEngine:
             "ADJACENT_TO": 0,
         }
 
-        # Count CAN_REACH edges
         for robot_id in robots:
-            can_reach = self._graph.get_neighbors(robot_id, edge_type="CAN_REACH")
-            edge_counts["CAN_REACH"] += len(can_reach)
+            edge_counts["CAN_REACH"] += len(
+                self._graph.get_neighbors(robot_id, edge_type="CAN_REACH")
+            )
+            edge_counts["GRASPING"] += len(
+                self._graph.get_neighbors(robot_id, edge_type="GRASPING")
+            )
+            edge_counts["IN_REGION"] += len(
+                self._graph.get_neighbors(robot_id, edge_type="IN_REGION")
+            )
 
-        # Count GRASPING edges
-        for robot_id in robots:
-            grasping = self._graph.get_neighbors(robot_id, edge_type="GRASPING")
-            edge_counts["GRASPING"] += len(grasping)
+        for obj_id in objects:
+            edge_counts["NEAR"] += len(
+                self._graph.get_neighbors(obj_id, edge_type="NEAR")
+            )
+            edge_counts["IN_REGION"] += len(
+                self._graph.get_neighbors(obj_id, edge_type="IN_REGION")
+            )
+
+        for region_id in regions:
+            edge_counts["ALLOCATED"] += len(
+                self._graph.get_neighbors(region_id, edge_type="ALLOCATED")
+            )
+            edge_counts["ADJACENT_TO"] += len(
+                self._graph.get_neighbors(region_id, edge_type="ADJACENT_TO")
+            )
 
         stats["edge_types"] = edge_counts
 

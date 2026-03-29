@@ -11,6 +11,7 @@ Usage:
     from knowledge_graph._singleton import get_query_engine, get_knowledge_graph
 """
 
+import threading
 from typing import Optional
 
 from .Core import KnowledgeGraph
@@ -18,19 +19,25 @@ from .QueryEngine import GraphQueryEngine
 
 _kg: Optional[KnowledgeGraph] = None
 _query_engine: Optional[GraphQueryEngine] = None
+_init_lock = threading.Lock()
 
 
 def get_query_engine() -> GraphQueryEngine:
     """
     Get (or lazily create) the GraphQueryEngine singleton.
 
+    Uses double-checked locking so concurrent callers don't race to create
+    two separate KnowledgeGraph instances.
+
     Returns:
         GraphQueryEngine wrapping the shared KnowledgeGraph instance
     """
     global _kg, _query_engine
     if _query_engine is None:
-        _kg = KnowledgeGraph()
-        _query_engine = GraphQueryEngine(_kg)
+        with _init_lock:
+            if _query_engine is None:  # double-checked locking
+                _kg = KnowledgeGraph()
+                _query_engine = GraphQueryEngine(_kg)
     return _query_engine
 
 
@@ -44,5 +51,8 @@ def get_knowledge_graph() -> KnowledgeGraph:
         KnowledgeGraph instance used by the singleton query engine
     """
     get_query_engine()  # ensures _kg is initialised
-    assert _kg is not None
+    if _kg is None:
+        raise RuntimeError(
+            "KnowledgeGraph singleton was not initialized. Call get_query_engine() first."
+        )
     return _kg

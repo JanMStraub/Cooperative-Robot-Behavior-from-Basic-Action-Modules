@@ -70,11 +70,15 @@ class KnowledgeGraph:
             >>> kg.add_node("Robot1", node_type="robot", position=(-0.3, 0.2, 0.1))
         """
         with self._lock:
-            # If the node already exists with a different type, remove old index entry
+            existing_type = None
             if node_id in self._graph:
-                old_type = self._graph.nodes[node_id].get("node_type")
-                if old_type and old_type != attrs.get("node_type"):
-                    self._nodes_by_type[old_type].discard(node_id)
+                existing_type = self._graph.nodes[node_id].get("node_type")
+                new_type = attrs.get("node_type")
+                if existing_type and new_type and existing_type != new_type:
+                    self._nodes_by_type[existing_type].discard(node_id)
+            # If update doesn't supply node_type, preserve the existing one
+            if "node_type" not in attrs and existing_type:
+                attrs = {**attrs, "node_type": existing_type}
             self._graph.add_node(node_id, **attrs)
             node_type = attrs.get("node_type")
             if node_type:
@@ -346,7 +350,11 @@ class KnowledgeGraph:
                 if isinstance(value, tuple):
                     attrs[attr_key] = str(value)
 
-        nx.write_graphml(graph_copy, path)
+        try:
+            nx.write_graphml(graph_copy, path)
+        except OSError as e:
+            logger.error(f"Failed to save graph to {path}: {e}")
+            raise
         logger.info(f"Saved graph to {path} ({node_count} nodes, {edge_count} edges)")
 
     def load_graphml(self, path: str):
@@ -357,7 +365,11 @@ class KnowledgeGraph:
             path: File path to load
         """
         with self._lock:
-            self._graph = nx.read_graphml(path, node_type=str)
+            try:
+                self._graph = nx.read_graphml(path, node_type=str)
+            except OSError as e:
+                logger.error(f"Failed to load graph from {path}: {e}")
+                raise
             # Rebuild _nodes_by_type index from the newly loaded graph
             self._nodes_by_type.clear()
             for node_id, attrs in self._graph.nodes(data=True):

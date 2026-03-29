@@ -966,5 +966,264 @@ class TestCoreImportsNegotiation:
         importlib.reload(neg_config)
 
 
+# ============================================================================
+# Bug Fix Regression Tests
+# ============================================================================
+
+
+class TestBugFixes:
+    """Regression tests for the 7 negotiation system bug fixes."""
+
+    def setup_method(self):
+        """Reset singleton between tests."""
+        NegotiationHub._instance = None
+
+    # ------------------------------------------------------------------ BUG 1
+
+    @patch("agents.RobotLLMAgent.requests.post")
+    def test_evaluate_proposal_llm_failure_rejects(self, mock_post):
+        """BUG 1: LLM connection error must reject the proposal, not accept it."""
+        mock_post.side_effect = req.exceptions.ConnectionError()
+
+        agent = RobotLLMAgent("Robot2")
+        proposal = PlanProposal(
+            proposer_id="Robot1",
+            reasoning="test plan",
+            commands=[
+                {
+                    "operation": "move_to_coordinate",
+                    "params": {"robot_id": "Robot2", "x": 0, "y": 0.3, "z": 0},
+                }
+            ],
+        )
+
+        evaluation = agent.evaluate_proposal(
+            proposal, "test task", {"robots": {}, "objects": {}}
+        )
+        assert evaluation.accept is False, (
+            "A failed LLM call must produce accept=False, not auto-accept"
+        )
+
+    @patch("agents.RobotLLMAgent.requests.post")
+    def test_evaluate_proposal_json_failure_rejects(self, mock_post):
+        """BUG 1: Malformed JSON response must reject the proposal, not accept it."""
+        mock_post.return_value = _mock_llm_response("not valid json at all")
+
+        agent = RobotLLMAgent("Robot2")
+        proposal = PlanProposal(
+            proposer_id="Robot1",
+            reasoning="test plan",
+            commands=[],
+        )
+
+        evaluation = agent.evaluate_proposal(
+            proposal, "test task", {"robots": {}, "objects": {}}
+        )
+        assert evaluation.accept is False, (
+            "Unparseable LLM JSON must produce accept=False, not auto-accept"
+        )
+
+    # ------------------------------------------------------------------ BUG 2
+
+    def test_validate_before_normalize_catches_missing_operation(self):
+        """BUG 2: Validation must run on raw commands, catching missing 'operation' fields."""
+        hub = NegotiationHub()
+
+        # A plan where one command is missing the "operation" field entirely.
+        # _normalize_commands() would silently drop it; verifying raw catches it.
+        malformed_commands = [
+            {"params": {"robot_id": "Robot1", "x": 0, "y": 0.2, "z": 0}},  # no "operation"
+        ]
+
+        valid, errors = hub._validate_plan(malformed_commands)
+        # The verifier must find the missing field before normalization strips it
+        assert not valid, "Plan with missing 'operation' field must fail validation"
+        assert any("operation" in e.lower() or "empty" in e.lower() for e in errors), (
+            f"Expected error about missing 'operation', got: {errors}"
+        )
+
+    # ------------------------------------------------------------------ BUG 3
+
+    @patch("agents.RobotLLMAgent.requests.post")
+    def test_analysis_refreshed_on_round_2(self, mock_post):
+        """BUG 3: Analysis must be re-run at start of round 2 to get fresh world state."""
+        # Round 1 analysis: can_contribute=True for both robots
+        analysis_r = _mock_llm_response(
+            json.dumps(
+                {
+                    "can_contribute": True,
+                    "capabilities": ["move"],
+                    "constraints": [],
+                    "suggested_role": "helper",
+                    "requires_collaboration": True,
+                    "confidence": 0.7,
+                }
+            )
+        )
+        # Round 1 proposal: empty commands → no consensus, triggers round 2
+        proposal_empty = _mock_llm_response(
+            json.dumps({"reasoning": "plan", "commands": [], "estimated_duration_s": 5.0})
+        )
+        # Round 2 analysis responses (2 robots)
+        analysis_r2_1 = _mock_llm_response(
+            json.dumps(
+                {
+                    "can_contribute": True,
+                    "capabilities": ["move"],
+                    "constraints": [],
+                    "suggested_role": "helper",
+                    "requires_collaboration": True,
+                    "confidence": 0.8,
+                }
+            )
+        )
+        analysis_r2_2 = _mock_llm_response(
+            json.dumps(
+                {
+                    "can_contribute": True,
+                    "capabilities": ["grasp"],
+                    "constraints": [],
+                    "suggested_role": "support",
+                    "requires_collaboration": True,
+                    "confidence": 0.8,
+                }
+            )
+        )
+        # Round 2 proposal: also empty (so negotiation ends in FAILED)
+        proposal_empty2 = _mock_llm_response(
+            json.dumps({"reasoning": "plan", "commands": [], "estimated_duration_s": 5.0})
+        )
+
+        # Sequence: R1-analysis×2, R1-proposal, R2-analysis×2, R2-proposal, …
+        mock_post.side_effect = [
+            analysis_r, analysis_r,       # round 1 analysis
+            proposal_empty,               # round 1 proposal (empty → continue)
+            analysis_r2_1, analysis_r2_2, # round 2 analysis (re-run)
+            proposal_empty2,              # round 2 proposal
+            analysis_r, analysis_r,       # round 3 analysis (re-run)
+            proposal_empty,               # round 3 proposal
+        ]
+
+        hub = NegotiationHub()
+        hub.negotiate("Both robots cooperate", timeout=30.0)
+
+        # With 3 rounds, round 1 has 2 analysis calls, rounds 2 and 3 add 2 each → 6 total
+        # Plus 3 proposal calls → 9 total.  At minimum we need >4 calls (stale would be 2+3=5).
+        call_count = mock_post.call_count
+        assert call_count >= 6, (
+            f"Expected ≥6 LLM calls (analysis re-run each round), got {call_count}"
+        )
+
+    # ------------------------------------------------------------------ BUG 4
+
+    @patch("agents.RobotLLMAgent.requests.post")
+    def test_propose_plan_includes_operations_in_prompt(self, mock_post):
+        """BUG 4: propose_plan must include available operations in the LLM prompt."""
+        mock_post.return_value = _mock_llm_response(
+            json.dumps(
+                {
+                    "reasoning": "test plan",
+                    "commands": [
+                        {
+                            "parallel_group": 1,
+                            "operation": "move_to_coordinate",
+                            "params": {"robot_id": "Robot1", "x": 0, "y": 0.2, "z": 0},
+                        }
+                    ],
+                    "estimated_duration_s": 5.0,
+                }
+            )
+        )
+
+        agent = RobotLLMAgent("Robot1")
+        ops = ["move_to_coordinate", "control_gripper", "detect_objects"]
+        agent.propose_plan(
+            "Both robots approach the cube",
+            [],
+            {"robots": {}, "objects": {}},
+            round_number=1,
+            available_operations=ops,
+        )
+
+        mock_post.assert_called_once()
+        call_kwargs = mock_post.call_args
+        payload = call_kwargs[1]["json"] if "json" in call_kwargs[1] else call_kwargs[0][1]
+        user_msg = next(
+            m["content"] for m in payload["messages"] if m["role"] == "user"
+        )
+        for op in ops:
+            assert op in user_msg, (
+                f"Operation '{op}' must appear in LLM prompt, but was missing"
+            )
+
+    @patch("agents.RobotLLMAgent.requests.post")
+    def test_propose_plan_no_operations_logs_warning(self, mock_post, caplog):
+        """BUG 4: propose_plan without available_operations must log a WARNING."""
+        import logging
+
+        mock_post.return_value = _mock_llm_response(
+            json.dumps({"reasoning": "ok", "commands": [], "estimated_duration_s": 0})
+        )
+
+        agent = RobotLLMAgent("Robot1")
+        with caplog.at_level(logging.WARNING, logger="agents.RobotLLMAgent"):
+            agent.propose_plan(
+                "Both robots approach",
+                [],
+                {"robots": {}, "objects": {}},
+                round_number=1,
+                available_operations=None,
+            )
+
+        assert any("hallucinate" in rec.message.lower() or "available_operations" in rec.message
+                   for rec in caplog.records), (
+            "Missing available_operations must produce a WARNING log"
+        )
+
+    # ------------------------------------------------------------------ BUG 5
+
+    def test_workspace_label_robot1(self):
+        """BUG 5: Robot1 (left_workspace) must return left-side label via config, not substring."""
+        agent = RobotLLMAgent("Robot1")
+        label = agent._get_workspace_label()
+        assert "left" in label.lower(), f"Robot1 should be 'left', got: {label}"
+
+    def test_workspace_label_robot2(self):
+        """BUG 5: Robot2 (right_workspace) must return right-side label via config."""
+        agent = RobotLLMAgent("Robot2")
+        label = agent._get_workspace_label()
+        assert "right" in label.lower(), f"Robot2 should be 'right', got: {label}"
+
+    def test_workspace_label_unknown_robot(self):
+        """BUG 5: Robot with no assignment must return a safe fallback, not crash."""
+        agent = RobotLLMAgent("Robot99")
+        label = agent._get_workspace_label()
+        # Must not raise; content varies but must be a non-empty string
+        assert isinstance(label, str) and len(label) > 0
+
+    # ------------------------------------------------------------------ BUG 7
+
+    def test_signal_without_waiter_logs_warning(self, caplog):
+        """BUG 7: A signal with no matching wait_for_signal must log a WARNING."""
+        import logging
+
+        commands = [
+            {
+                "operation": "signal",
+                "params": {"robot_id": "Robot1", "event_name": "orphan_event"},
+                "parallel_group": 1,
+            },
+        ]
+
+        verifier = NegotiationVerifier()
+        with caplog.at_level(logging.WARNING, logger="operations.NegotiationVerifier"):
+            verifier.verify_plan(commands)
+
+        assert any(
+            "orphan_event" in rec.message and rec.levelno == logging.WARNING
+            for rec in caplog.records
+        ), "Unmatched signal must emit a WARNING log"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

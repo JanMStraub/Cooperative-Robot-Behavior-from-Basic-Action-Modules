@@ -245,6 +245,18 @@ class NegotiationHub(SingletonBase):
 
                 session.current_round = round_num
 
+                # BUG 3 FIX: Refresh world state and re-run analysis for rounds 2+
+                # so robots use current positions, not stale T=0 data.
+                if round_num > 1:
+                    world_state = self._get_world_state_snapshot()
+                    session.state = NegotiationState.ANALYZING
+                    analysis_ok = self._run_analysis_phase(session, world_state)
+                    if not analysis_ok:
+                        logger.warning(
+                            f"Round {round_num}: re-analysis failed, skipping round"
+                        )
+                        continue
+
                 # Phase 2: Proposal
                 session.state = NegotiationState.PROPOSING
                 proposal = self._run_proposal_phase(session, world_state)
@@ -259,17 +271,19 @@ class NegotiationHub(SingletonBase):
                 accepted = self._run_evaluation_phase(session, proposal, world_state)
 
                 if accepted:
-                    # Consensus reached
-                    commands = self._normalize_commands(proposal.commands, robot_ids)
-
-                    # Validate plan structure
+                    # BUG 2 FIX: Validate raw LLM output BEFORE normalization.
+                    # _normalize_commands() silently drops commands missing "operation",
+                    # so validating after normalization misses those malformed entries.
                     if VERIFY_NEGOTIATED_PLANS:
-                        valid, validation_errors = self._validate_plan(commands)
+                        valid, validation_errors = self._validate_plan(proposal.commands)
                         if not valid:
                             logger.warning(
                                 f"Round {round_num}: plan validation failed: {validation_errors}"
                             )
                             continue
+
+                    # Only normalize after validation passes
+                    commands = self._normalize_commands(proposal.commands, robot_ids)
 
                     session.state = NegotiationState.CONSENSUS
                     result.success = True
@@ -390,9 +404,25 @@ class NegotiationHub(SingletonBase):
             a for rid, a in session.analyses.items() if rid != proposer_id
         ]
 
+        # BUG 4 FIX: Fetch available operations from the registry so the LLM
+        # proposal prompt lists valid operation names. Without this, the LLM
+        # hallucinates names (e.g. "move_arm") that fail NegotiationVerifier checks.
+        try:
+            from core.Imports import get_global_registry
+
+            registry = get_global_registry()
+            available_ops = [op.name for op in registry.get_all_operations()]
+        except Exception:
+            available_ops = []
+            logger.warning("Cannot get operation names for proposal phase")
+
         agent = self._get_or_create_agent(proposer_id)
         proposal = agent.propose_plan(
-            session.task, other_analyses, world_state, session.current_round
+            session.task,
+            other_analyses,
+            world_state,
+            session.current_round,
+            available_operations=available_ops,
         )
 
         logger.info(

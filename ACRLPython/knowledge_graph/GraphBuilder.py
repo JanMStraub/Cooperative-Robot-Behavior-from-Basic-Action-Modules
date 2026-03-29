@@ -28,7 +28,7 @@ from core.LoggingSetup import get_logger
 logger = get_logger(__name__)
 
 # Configuration constants
-NEAR_THRESHOLD = 0.1  # meters - objects closer than this are considered "NEAR"
+from config.KnowledgeGraph import KG_NEAR_THRESHOLD as NEAR_THRESHOLD
 
 
 class GraphBuilder:
@@ -150,6 +150,9 @@ class GraphBuilder:
         # Track seen objects for cleanup
         seen_object_ids = set()
 
+        # Build lookup dict once outside the loop — O(N) total instead of O(N²)
+        world_objs_by_id = {o.object_id: o for o in self._world_state.get_all_objects()}
+
         for obj_data in objects:
             object_id = obj_data.get("object_id")
             if not object_id:
@@ -158,8 +161,7 @@ class GraphBuilder:
             seen_object_ids.add(object_id)
 
             # Get object from WorldState for full data
-            world_objs = self._world_state.get_all_objects()
-            obj_state = next((o for o in world_objs if o.object_id == object_id), None)
+            obj_state = world_objs_by_id.get(object_id)
 
             if not obj_state:
                 continue
