@@ -33,11 +33,11 @@ def _build_segmentation_mask(
     model (inverse of DepthEstimator.pixel_to_world_coords).  Returns a
     bool mask that is True for points falling inside the bounding box.
 
-    The input ``points_camera`` must be in **Unity camera frame** after
-    VGNClient's ``pts[:, 0] *= -1`` (undo the X-negation that was baked in by
-    ``generate_point_cloud``).  That gives X-right, Y-up, Z-forward (left-handed).
-    Projection formulas follow Unity camera convention:
-    ``u = cx + f·X/Z`` and ``v = cy - f·Y/Z`` (negate Y: Unity Y-up vs image Y-down).
+    The input ``points_camera`` must be in the Q-matrix output frame:
+    (X-right, Y-up, Z-negative).  This is the frame returned by
+    ``generate_point_cloud`` — no axis flip is applied in VGNClient before
+    calling this function.  Projection formulas:
+    ``u = cx + f·X/depth`` and ``v = cy - f·Y/depth`` where ``depth = -Z``.
 
     When ``preferred_approach`` is "side" the mask is additionally restricted
     to the lateral halves of the object (left/right).  When it is "top" only
@@ -75,15 +75,16 @@ def _build_segmentation_mask(
     Y = points_camera[:, 1]
     Z = points_camera[:, 2]
 
-    # Points in front of camera have positive Z (Unity camera: Z-forward).
-    # After VGNClient's pts[:, 0] *= -1, the points are in Unity camera frame:
-    # X-right, Y-up, Z-forward (left-handed).
-    valid_z = Z > 1e-3
+    # Q-matrix output is (X-right, Y-up, Z-negative).
+    # VGNClient no longer negates X, so pts_rh has the same frame.
+    # Points in front of the camera have Z < 0.
+    valid_z = Z < -1e-3
 
-    # Pinhole projection for Unity camera frame (X-right, Y-up, Z-forward):
-    #   u = cx + f * X / Z   (X-right matches image column direction)
-    #   v = cy - f * Y / Z   (negate Y: Unity Y-up vs image Y-down)
-    depth = np.where(valid_z, Z, 1.0)  # positive depth
+    # Pinhole projection with Y-up, Z-negative frame:
+    #   depth = -Z  (positive)
+    #   u = cx + f * X / depth       (X-right maps directly to pixel u)
+    #   v = cy - f * Y / depth       (Y-up: positive Y is above centre → smaller v)
+    depth = np.where(valid_z, -Z, 1.0)  # positive depth
     u = np.where(valid_z, cx + f_px * X / depth, -1.0)
     v = np.where(valid_z, cy - f_px * Y / depth, -1.0)
 

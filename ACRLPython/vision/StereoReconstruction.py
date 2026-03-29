@@ -68,6 +68,26 @@ def _f_from_fov(fov: float) -> float:
     return 1.0 / (2.0 * math.tan(math.radians(fov / 2.0)))
 
 
+def _vertical_to_horizontal_fov(vertical_fov: float, aspect: float) -> float:
+    """
+    Convert a vertical field-of-view to horizontal FOV for a given aspect ratio.
+
+    Unity's ``camera.fieldOfView`` is vertical FOV.  All downstream math
+    (Q-matrix construction) requires horizontal FOV, so this conversion must
+    be applied before calling ``_f_from_fov``.
+
+    Args:
+        vertical_fov: Vertical field of view in degrees (as sent by Unity).
+        aspect: Image aspect ratio (width / height).
+
+    Returns:
+        Horizontal field of view in degrees.
+    """
+    return math.degrees(
+        2.0 * math.atan(math.tan(math.radians(vertical_fov / 2.0)) * aspect)
+    )
+
+
 def _calc_disparity(
     imgL: np.ndarray, imgR: np.ndarray, max_disp: Optional[int] = None
 ) -> np.ndarray:
@@ -150,6 +170,16 @@ def _make_3d(
     depth_map = np.nan_to_num(depth_map, nan=-1.0).astype(np.float32)
 
     h, w = imgL_color.shape[:2]
+    # Q-matrix maps disparity → 3D.  X is negated for Unity LH convention;
+    # Y follows image convention (positive = downward); Z comes out negative
+    # (the -1/cam_dist denominator row makes Z = -f*b/d).
+    # VGNClient undoes the X-negate and works in this frame throughout.
+    # Q-matrix output coordinate frame (with denominator row [0,0,-1/b,0]):
+    #   X = (w/2 - u) * b / d  — negative denominator flips sign → X-right ✓
+    #   Y = (v - h/2) * b / (-d) = -(v-h/2)*b/d  — Y-up (negative for below-centre) ✓
+    #   Z = f * b / (-d) = -f*b/d  — Z-negative (depth into scene)
+    # So output is (X-right, Y-up, Z-negative).  To reach Unity camera frame
+    # (X-right, Y-up, Z-forward) only Z needs to be negated downstream.
     Q = np.array(
         [
             [-1, 0, 0, 0.5 * w],
@@ -180,7 +210,9 @@ def _reconstruct_from_disparity(
     Args:
         disparity: Float32 disparity map from _calc_disparity.
         imgL_color: BGR colour reference image.
-        fov: Horizontal FOV in degrees.  If given, overrides focal_length/sensor_width.
+        fov: Vertical FOV in degrees (as sent by Unity's ``camera.fieldOfView``).
+            Converted to horizontal FOV internally using the image aspect ratio.
+            If given, overrides focal_length/sensor_width.
         focal_length: Camera focal length (metres or pixels, combined with sensor_width).
         sensor_width: Camera sensor width (same units as focal_length).
         min_disp: Minimum disparity; lower values are discarded.
@@ -193,7 +225,11 @@ def _reconstruct_from_disparity(
         ValueError: If neither fov nor (focal_length + sensor_width) is provided.
     """
     if fov is not None:
-        f_norm = _f_from_fov(fov)
+        # Unity sends vertical FOV; convert to horizontal using image aspect ratio
+        # before computing the normalised focal length (which is f / sensor_width).
+        aspect = disparity.shape[1] / disparity.shape[0]  # width / height
+        horiz_fov = _vertical_to_horizontal_fov(fov, aspect)
+        f_norm = _f_from_fov(horiz_fov)
     elif focal_length is not None and sensor_width is not None:
         f_norm = focal_length / sensor_width
     else:

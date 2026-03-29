@@ -116,6 +116,45 @@ DEBUG_POINT_CLOUD_DIR = os.environ.get(
 )
 
 # ============================================================================
+# Point Cloud Cleaning
+# ============================================================================
+
+# Enable/disable the cleaning pipeline in generate_point_cloud.
+# When enabled: color-based background removal → depth clipping → statistical outlier removal.
+POINT_CLOUD_CLEANING_ENABLED = os.environ.get(
+    "POINT_CLOUD_CLEANING_ENABLED", "false"
+).lower() in ("true", "1", "yes")
+
+# Background colors to remove (Unity simulation background/floor).
+# Each entry is an RGB tuple with values in [0, 255].
+# Tolerance is applied per-channel (absolute difference ≤ tolerance).
+# Override at runtime by setting POINT_CLOUD_BG_COLORS_ENABLED=false to skip color removal.
+POINT_CLOUD_BG_COLORS_ENABLED = os.environ.get(
+    "POINT_CLOUD_BG_COLORS_ENABLED", "true"
+).lower() in ("true", "1", "yes")
+POINT_CLOUD_BG_COLORS = [
+    # Unity default sky/background (light grey-white)
+    ((220, 230, 240), 20),
+    # Unity default floor/table grid (dark grey lines on white)
+    ((200, 200, 200), 25),
+    ((240, 240, 240), 15),
+    # Pure white background (Unity clear color default)
+    ((255, 255, 255), 10),
+]
+
+# Workspace depth clip: discard points outside [min, max] metres from camera.
+# Keeps only the robot's immediate workspace and avoids far-field noise.
+POINT_CLOUD_MIN_DEPTH = float(os.environ.get("POINT_CLOUD_MIN_DEPTH", "0.1"))
+POINT_CLOUD_MAX_DEPTH = float(os.environ.get("POINT_CLOUD_MAX_DEPTH", "2.0"))
+
+# Statistical outlier removal (requires open3d; skipped if not installed).
+# nb_neighbors: how many neighbors to consider for the mean distance computation.
+# std_ratio: points further than mean + std_ratio * std_dev are removed.
+# Lower std_ratio = more aggressive removal (RoboScan uses 0.5 for final pass).
+POINT_CLOUD_OUTLIER_NB_NEIGHBORS = int(os.environ.get("POINT_CLOUD_OUTLIER_NB_NEIGHBORS", "20"))
+POINT_CLOUD_OUTLIER_STD_RATIO = float(os.environ.get("POINT_CLOUD_OUTLIER_STD_RATIO", "1.5"))
+
+# ============================================================================
 # Camera Identity
 # ============================================================================
 

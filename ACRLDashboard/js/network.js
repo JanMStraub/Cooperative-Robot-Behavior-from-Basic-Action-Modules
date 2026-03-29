@@ -111,7 +111,7 @@ export class NetworkManager {
             case 'vgn_debug':
                 if (this.renderer) this.renderer.updateVGNDebug(msg.data);
                 break;
-            default:
+default:
                 console.log("Unknown msg:", msg);
         }
     }

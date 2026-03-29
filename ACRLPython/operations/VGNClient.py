@@ -138,18 +138,14 @@ def _points_to_tsdf_grid(
     if idx.shape[0] > 0:
         occupancy[idx[:, 0], idx[:, 1], idx[:, 2]] = 1
 
-    # SDF: distance in voxel units, then convert to metres and truncate
-    dist_outside = (
-        np.asarray(distance_transform_edt(1 - occupancy), dtype=np.float32) * vox_size
-    )
-    dist_inside = (
-        np.asarray(distance_transform_edt(occupancy), dtype=np.float32) * vox_size
-    )
+    # Normalise to [-1, 1] matching Open3D ScalableTSDFVolume with sdf_trunc=4*vox_size.
+    # VGN's process() thresholds (> 0.5 = outside, < 0 = inside) assume this convention.
+    # Truncation at 4 voxels: distances > 4 vox → ±1; surface voxels → 0.
+    _TRUNC_VOXELS = 4.0
+    dist_outside = np.asarray(distance_transform_edt(1 - occupancy), dtype=np.float32)
+    dist_inside  = np.asarray(distance_transform_edt(occupancy),     dtype=np.float32)
     sdf = dist_outside - dist_inside
-
-    # Truncate to [-size/2, size/2] and normalise to [-1, 1]
-    trunc = size / 2.0
-    sdf = np.clip(sdf, -trunc, trunc) / trunc
+    sdf = np.clip(sdf, -_TRUNC_VOXELS, _TRUNC_VOXELS) / _TRUNC_VOXELS
 
     return sdf[np.newaxis, ...]  # (1, R, R, R)
 
@@ -231,16 +227,21 @@ class VGNClient:
                 from servers.WebUIServer import broadcast_vgn_debug
                 import base64
 
-                pts = debug_info.get("pts")
+                _pts_scene = debug_info.get("pts_full_scene")
+                pts = _pts_scene if _pts_scene is not None else debug_info.get("pts")
                 centroid = debug_info.get("centroid")
                 grid = debug_info.get("grid")
                 grasps = debug_info.get("grasps", [])
                 in_wf = debug_info.get("_in_world_frame", False)
 
                 if pts is not None:
-                    # Un-centre
-                    if centroid is not None:
-                        pts_full = pts + centroid
+                    # Full-scene cloud (pts_full_scene) is in camera frame — always use
+                    # the camera→world fallback path regardless of in_wf.
+                    if debug_info.get("pts_full_scene") is not None:
+                        pts_full = pts
+                        in_wf = False  # force camera-frame path for world transform
+                    elif centroid is not None:
+                        pts_full = pts + np.asarray(centroid)
                     else:
                         centroid = pts.mean(axis=0)
                         pts_full = pts
@@ -259,26 +260,27 @@ class VGNClient:
                         cam_rot_raw = debug_info.get("cam_rot")
                         has_cam = cam_pos_raw is not None and cam_rot_raw is not None
                         if has_cam:
-                            cam_p = np.array(cam_pos_raw, dtype=np.float64)
-                            cam_q = np.array(cam_rot_raw, dtype=np.float64)
-                            cam_q = cam_q / (np.linalg.norm(cam_q) + 1e-12)  # normalise
-                            # Step 1: negate X → back to Unity LH camera frame
+                            # For dashboard display only: convert Q-matrix output
+                            # (X-right, Y-up, Z-negative) to Unity LH world frame.
+                            # Only Z needs negating to reach Unity camera frame,
+                            # then rotate by camera quaternion and add position.
                             pts_de = pts_full.astype(np.float64).copy()
-                            pts_de[:, 0] *= -1.0
-                            # Step 2: vectorised quaternion rotation (same as _quat_rotate_vector)
-                            qvec = cam_q[:3]   # [qx, qy, qz]
-                            w = cam_q[3]        # qw
-                            t = 2.0 * np.cross(qvec, pts_de)         # (N, 3)
-                            pts_rotated = pts_de + w * t + np.cross(qvec, t)
-                            # Step 3: translate
-                            pts_unity = pts_rotated + cam_p
+                            pts_de[:, 2] *= -1.0  # Z-negative → Z-forward
+                            cam_pos_raw_arr = np.array(cam_pos_raw, dtype=np.float64)
+                            cam_rot_raw_arr = np.array(cam_rot_raw, dtype=np.float64)
+                            cam_rot_raw_arr /= np.linalg.norm(cam_rot_raw_arr) + 1e-12
+                            _qvec = cam_rot_raw_arr[:3]
+                            _w = cam_rot_raw_arr[3]
+                            _t = 2.0 * np.cross(_qvec, pts_de)
+                            pts_unity = pts_de + _w * _t + np.cross(_qvec, _t) + cam_pos_raw_arr
                         else:
                             pts_unity = pts_full
 
-                    # Workspace bounding box filter (Unity LH world)
-                    # Generous bounds to capture table + objects
-                    _WS_MIN = np.array([-1.0, -0.05, -1.0])
-                    _WS_MAX = np.array([1.0, 0.5, 1.0])
+                    # Workspace bounding box filter (Unity LH world).
+                    # Z is negative-forward in this scene (camera behind origin),
+                    # so allow a wide Z range to avoid culling valid points.
+                    _WS_MIN = np.array([-2.0, -0.2, -5.0])
+                    _WS_MAX = np.array([ 2.0,  2.0,  2.0])
                     ws_mask = np.all(
                         (pts_unity >= _WS_MIN) & (pts_unity <= _WS_MAX), axis=1
                     )
@@ -286,7 +288,10 @@ class VGNClient:
                     pts_filtered = pts_unity[ws_mask]
                     logger.info(
                         f"[VGN] Dashboard WS filter: {pts_filtered.shape[0]}/{n_before} pts "
-                        f"(world_frame={in_wf})"
+                        f"(world_frame={in_wf}) "
+                        f"pre-filter X=[{float(pts_unity[:,0].min()):.2f},{float(pts_unity[:,0].max()):.2f}] "
+                        f"Y=[{float(pts_unity[:,1].min()):.2f},{float(pts_unity[:,1].max()):.2f}] "
+                        f"Z=[{float(pts_unity[:,2].min()):.2f},{float(pts_unity[:,2].max()):.2f}]"
                     )
                     # If filter removes everything, send unfiltered
                     if pts_filtered.shape[0] > 0:
@@ -305,9 +310,12 @@ class VGNClient:
                             grid.astype(np.float32).tobytes()
                         ).decode('utf-8')
 
-                    # Centroid for TSDF un-centring in JS:
-                    # If world-frame, centroid is in RH world → convert to Unity LH (negate X)
-                    if in_wf and centroid is not None:
+                    # Centroid for TSDF un-centring in JS.
+                    # Grasps are always converted to Unity LH world when _in_world_frame is True
+                    # (X negated from RH world).  Send centroid in the same frame so JS can
+                    # un-centre TSDF voxels consistently with where grasps are placed.
+                    _internal_wf = debug_info.get("_in_world_frame", False)
+                    if _internal_wf and centroid is not None:
                         c_unity = [-centroid[0], centroid[1], centroid[2]]
                     elif centroid is not None:
                         c_unity = centroid.tolist()
@@ -325,7 +333,10 @@ class VGNClient:
                     }
                     broadcast_vgn_debug(payload)
                     logger.info(
-                        f"[VGN] Broadcasted VGN debug: {pts_unity.shape[0]} pts"
+                        f"[VGN] Broadcasted VGN debug: {pts_unity.shape[0]} pts "
+                        f"X=[{float(pts_unity[:,0].min()):.3f}, {float(pts_unity[:,0].max()):.3f}] "
+                        f"Y=[{float(pts_unity[:,1].min()):.3f}, {float(pts_unity[:,1].max()):.3f}] "
+                        f"Z=[{float(pts_unity[:,2].min()):.3f}, {float(pts_unity[:,2].max()):.3f}]"
                     )
             except Exception as exc:
                 logger.warning(f"[VGN] Could not broadcast VGN debug info: {exc}")
@@ -422,11 +433,12 @@ class VGNClient:
         debug_info["cam_pos"] = cam_pos
         debug_info["cam_rot"] = cam_rot
         
-        # Flip X back to right-handed frame (undo Unity LH bake)
+        # Q-matrix output is already (X-right, Y-up, Z-negative).
+        # No axis flip needed here; keep frame as-is for projection math.
         pts_rh = points.copy()
-        pts_rh[:, 0] *= -1.0
         
         debug_info["pts"] = pts_rh
+        debug_info["pts_full_scene"] = pts_rh  # full cloud for dashboard; pts is overwritten later
 
         # Build segmentation mask using refined bbox.
         # Import from GraspUtils (shared module) to avoid circular import with
@@ -459,22 +471,21 @@ class VGNClient:
         # Step 2b — Transform to world frame for VGN
         # ----------------------------------------------------------------
         # VGN was trained on axis-aligned table-top scenes (Y-up).
-        # Transform from RH camera frame to world frame so the table
-        # surface is flat along the XZ plane.
-        # Uses the same math as GraspFrameTransform:
-        #   1. Negate X (RH→LH)
-        #   2. Rotate by Unity camera quaternion (vectorised)
-        #   3. Add camera position  →  Unity LH world
-        #   4. Negate X  →  RH world (for scipy/VGN compatibility)
+        # Transform from Unity camera frame to world frame so the table
+        # surface is flat.
+        #   1. Negate Z to get Unity LH camera frame (X-right, Y-up, Z-forward)
+        #   2. Rotate by Unity camera quaternion → Unity LH world
+        #   3. Add camera position
+        #   4. Negate X → RH world (for scipy/VGN compatibility)
         _in_world_frame = False
         if cam_pos is not None and cam_rot is not None:
             cam_p = np.array(cam_pos, dtype=np.float64)
             cam_q = np.array(cam_rot, dtype=np.float64)  # Unity [x,y,z,w]
             cam_q = cam_q / (np.linalg.norm(cam_q) + 1e-12)
 
-            # Step 1: negate X → back to Unity LH camera frame
+            # Step 1: negate Z to reach Unity LH camera frame
             pts_de = masked_points.astype(np.float64).copy()
-            pts_de[:, 0] *= -1.0
+            pts_de[:, 2] *= -1.0
             # Step 2: vectorised quaternion rotation
             qvec = cam_q[:3]
             w = cam_q[3]
@@ -490,11 +501,11 @@ class VGNClient:
             )
 
             # Workspace bounding box filter (RH world = Unity LH world with X negated).
-            # Bounds are generous to handle varied camera placements; the camera may
-            # sit at z=-0.75 looking forward, placing objects at world Z ≈ -1.7 or
-            # further — well outside the old [-0.5, 0.5] range which discarded everything.
-            _WS_MIN = np.array([-0.8, -0.1, -4.0])
-            _WS_MAX = np.array([ 0.8,  1.0,  1.0])
+            # With corrected transform: camera at Z≈-0.75 looks toward +Z, so objects
+            # appear at world Z ≈ 0.0–1.5.  Y ≈ -0.1 (below table) to 1.0 (above).
+            # X bounds cover ±0.8m from robot centre line.
+            _WS_MIN = np.array([-0.8, -0.2, -1.0])
+            _WS_MAX = np.array([ 0.8,  1.2,  2.0])
             ws_mask = np.all(
                 (masked_points >= _WS_MIN) & (masked_points <= _WS_MAX), axis=1
             )
@@ -515,16 +526,62 @@ class VGNClient:
         # Step 3 — TSDF construction
         # ----------------------------------------------------------------
         centroid = masked_points.mean(axis=0)
-        centred = masked_points - centroid
-        
+
         debug_info["centroid"] = centroid
-        debug_info["pts"] = centred
+        debug_info["pts"] = masked_points - centroid
         debug_info["_in_world_frame"] = _in_world_frame
 
         _TSDF_SIZE = 0.3  # 30 cm workspace
         _TSDF_RES = 40
 
-        grid = _points_to_tsdf_grid(centred, size=_TSDF_SIZE, resolution=_TSDF_RES)
+        # VGN was trained with Z-up (table normal = +Z, gripper approaches from above = -Z).
+        # Our RH world frame has Y-up and Z-forward (camera depth).
+        # Remap: VGN_X = world_X,  VGN_Y = -world_Z,  VGN_Z = world_Y
+        # so the table surface faces +VGN_Z and the gripper descends in -VGN_Z.
+        #
+        # We use the raw (un-centred) masked_points so we can apply per-axis centring
+        # in the VGN frame, matching the training distribution:
+        #   - VGN_X, VGN_Y: centred on the object's centroid in that axis.
+        #   - VGN_Z (= world_Y, the height axis): shifted so the object bottom sits
+        #     one voxel above the grid floor, matching the "object on table" distribution.
+        pts_vgn = masked_points[:, [0, 2, 1]].copy()
+        pts_vgn[:, 1] *= -1.0  # world_Z → -world_Z for VGN_Y
+
+        # Centre X and Y in the VGN frame; record offsets for inverse mapping.
+        _vgn_centroid_x = pts_vgn[:, 0].mean()
+        _vgn_centroid_y = pts_vgn[:, 1].mean()
+        pts_vgn[:, 0] -= _vgn_centroid_x
+        pts_vgn[:, 1] -= _vgn_centroid_y
+
+        _vox_size = _TSDF_SIZE / _TSDF_RES
+        _half = _TSDF_SIZE / 2.0
+
+        # Scale the cloud so the object fills ~75% of the 30cm grid.
+        # VGN was trained on objects that occupy a significant fraction of the workspace;
+        # tiny objects (e.g. 5cm cube in a 30cm grid) cause VGN to hallucinate grasps
+        # at the grid ceiling rather than on the object surface.
+        # Scale is based on the max of X and Z (VGN_X = world_X, VGN_Z = world_Y = height),
+        # NOT VGN_Y (= -world_Z = camera depth) because depth varies with perspective.
+        _TARGET_FILL = 0.75
+        extents = pts_vgn.max(axis=0) - pts_vgn.min(axis=0)  # [ex, ey, ez]
+        xz_max_extent = max(extents[0], extents[2])           # ignore depth axis
+        if xz_max_extent > 1e-4:
+            _vgn_scale = (_TARGET_FILL * _TSDF_SIZE) / xz_max_extent
+        else:
+            _vgn_scale = 1.0
+        pts_vgn *= _vgn_scale
+
+        # Shift VGN_Z so the object bottom sits at grid floor + 1 voxel margin.
+        z_min_vgn = pts_vgn[:, 2].min()
+        _vgn_z_shift = -z_min_vgn - _half + _vox_size
+        pts_vgn[:, 2] += _vgn_z_shift
+
+        logger.debug(
+            f"[VGN] TSDF prep: scale={_vgn_scale:.3f} extents(X,Y_depth,Z_height)={[round(v,4) for v in extents.tolist()]} "
+            f"xz_max={xz_max_extent:.4f} z_shift={_vgn_z_shift:.4f}"
+        )
+
+        grid = _points_to_tsdf_grid(pts_vgn, size=_TSDF_SIZE, resolution=_TSDF_RES)
         # grid shape: (1, 40, 40, 40)
         debug_info["grid"] = grid
 
@@ -581,37 +638,78 @@ class VGNClient:
         from scipy.spatial.transform import Rotation  # type: ignore
 
         frame_label = "RH world" if _in_world_frame else "camera"
-        logger.info(f"[VGN] centroid ({frame_label} frame): {centroid.tolist()}")
+        logger.info(
+            f"[VGN] centroid ({frame_label} frame): {centroid.tolist()} | "
+            f"VGN offsets: x={_vgn_centroid_x:.4f} y={_vgn_centroid_y:.4f} "
+            f"z_shift={_vgn_z_shift:.4f} scale={_vgn_scale:.3f}"
+        )
+        logger.info(f"[VGN] TSDF size={_TSDF_SIZE}m res={_TSDF_RES} voxel_size={_TSDF_SIZE/_TSDF_RES:.4f}m")
+        if grasps:
+            logger.info(f"[VGN] first grasp raw translation (VGN frame, from corner): {grasps[0].pose.translation.tolist()}")
         results = []
         for grasp, score in zip(grasps, scores):
             try:
-                # Undo centring — position now in RH world (or camera) frame
-                pos = grasp.pose.translation + centroid
+                # grasp.pose.translation is voxel_index * voxel_size, range [0, TSDF_SIZE).
+                # The forward pipeline applied, in order:
+                #   1. Axis remap (world→VGN)
+                #   2. Subtract X/Y centroids
+                #   3. Uniform scale (* _vgn_scale)
+                #   4. Z floor shift (+ _vgn_z_shift) on VGN_Z
+                #   5. Grid: centred coords + _half → voxel index → * voxel_size
+                # Undo in reverse:
+                t = grasp.pose.translation.copy() - _half  # step 5 inv: back to centred+scaled
+                t[2] -= _vgn_z_shift                       # step 4 inv: undo Z shift
+                t /= _vgn_scale                            # step 3 inv: undo scale
+                t[0] += _vgn_centroid_x                    # step 2 inv: undo X/Y centering
+                t[1] += _vgn_centroid_y
+                # Undo axis remap: VGN_X=world_X, VGN_Y=-world_Z, VGN_Z=world_Y
+                # Inverse: world_X=VGN_X, world_Y=VGN_Z, world_Z=-VGN_Y
+                t_world = np.array([t[0], t[2], -t[1]])
+                pos = t_world  # already in RH world frame (not centred, using raw world coords)
+                logger.info(
+                    f"[VGN] grasp vgn={[round(v,4) for v in t.tolist()]} "
+                    f"→pos_rh={[round(v,4) for v in pos.tolist()]}"
+                )
+
+                # Remap the full rotation matrix: R_world = P^T @ R_vgn @ P
+                # where P maps world→VGN: col0=(1,0,0), col1=(0,0,-1), col2=(0,1,0)
+                # i.e. P[:,0]=world_X, P[:,1]=-world_Z, P[:,2]=world_Y
+                P = np.array([
+                    [1.0,  0.0,  0.0],
+                    [0.0,  0.0,  1.0],
+                    [0.0, -1.0,  0.0],
+                ], dtype=np.float64)
                 rot_matrix = grasp.pose.rotation.as_matrix()
-                quat = grasp.pose.rotation.as_quat()  # [qx, qy, qz, qw]
-                approach = rot_matrix[:, 2]  # Z-axis = approach
+                rot_world = P.T @ rot_matrix @ P
+
+                from scipy.spatial.transform import Rotation as _R  # type: ignore
+                quat = _R.from_matrix(rot_world).as_quat()  # [qx, qy, qz, qw]
+                approach = rot_world[:, 2]  # Z-axis = approach in world frame
 
                 if _in_world_frame:
-                    # Convert from RH world → Unity LH world: negate X.
+                    # Convert from RH world → Unity LH world: reflect across YZ plane (X → -X).
                     pos_out = (pos * np.array([-1.0, 1.0, 1.0])).tolist()
                     approach_out = (approach * np.array([-1.0, 1.0, 1.0])).tolist()
-                    # Quaternion RH→LH for X-axis reflection: negate qx only.
-                    # q = (ax·sin(θ/2), ay·sin(θ/2), az·sin(θ/2), cos(θ/2)).
-                    # Reflecting across YZ plane (X→-X) maps axis (ax,ay,az)→(-ax,ay,az),
-                    # so only qx changes sign: (-qx, qy, qz, qw).
-                    quat_out = [float(-quat[0]), float(quat[1]),
-                                float(quat[2]), float(quat[3])]
+                    logger.info(f"[VGN] pos_out(UnityLH)={[round(v,4) for v in pos_out]}")
+                    # Rotation RH→LH: R_lh = M @ R_world @ M, where M = diag(-1,1,1).
+                    # This correctly handles all rotation components (not just qx flip).
+                    M = np.diag([-1.0, 1.0, 1.0])
+                    rot_lh = M @ rot_world @ M
+                    quat_lh = _R.from_matrix(rot_lh).as_quat()
+                    quat_out = [float(quat_lh[0]), float(quat_lh[1]),
+                                float(quat_lh[2]), float(quat_lh[3])]
                 else:
                     pos_out = pos.tolist()
                     approach_out = approach.tolist()
-                    quat_out = quat.tolist()
+                    quat_out = [float(quat[0]), float(quat[1]),
+                                float(quat[2]), float(quat[3])]
 
                 results.append(
                     {
                         "position": pos_out,
                         "rotation": quat_out,
                         "score": float(score),
-                        "width": float(grasp.width),
+                        "width": float(grasp.width) / _vgn_scale,  # undo scale
                         "approach_direction": approach_out,
                         "_world_frame": _in_world_frame,
                     }

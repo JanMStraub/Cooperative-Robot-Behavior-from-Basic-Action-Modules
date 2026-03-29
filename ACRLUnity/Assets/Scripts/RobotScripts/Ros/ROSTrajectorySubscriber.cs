@@ -94,9 +94,6 @@ namespace Robotics
         // Pre-allocated fields to avoid per-trajectory GC pressure
         private double[] _startPositions;
         private double[] _synthCumDurations; // pre-allocated cumulative durations for zero-timestamp path
-#if UNITY_EDITOR
-        private System.Text.StringBuilder _debugStringBuilder = new System.Text.StringBuilder(512);
-#endif
 
         private const string _logPrefix = "[ROS_TRAJECTORY_SUBSCRIBER]";
 
@@ -334,9 +331,6 @@ namespace Robotics
 #if UNITY_EDITOR
             // DEBUG: log initial physical state vs first trajectory point
             {
-                _debugStringBuilder.Clear();
-                _debugStringBuilder.AppendLine($"[ROSTraj] {_robotController.robotId} — {msg.points.Length} waypoints, jointMap={_jointIndexMap.Length}");
-                _debugStringBuilder.AppendLine("  Joint-name → idx | phys(°) | drive(°) | first-waypoint(°)");
                 double[] firstWaypoint = msg.points.Length > 0 ? msg.points[0].positions : null;
                 for (int j = 0; j < _jointIndexMap.Length; j++)
                 {
@@ -352,9 +346,7 @@ namespace Robotics
                     int dof = _joints[idx].jointPosition.dofCount;
                     bool immovable = _joints[idx].immovable;
                     var jtype = _joints[idx].jointType;
-                    _debugStringBuilder.AppendLine($"  {jointName}→{idx} | phys={physDeg:F2} | drive={driveDeg:F2} | wp0={firstDeg:F2} | limits=[{lo:F2},{hi:F2}] | dof={dof} type={jtype} immovable={immovable}");
                 }
-                Debug.Log(_debugStringBuilder.ToString());
             }
 #endif
 
@@ -494,8 +486,6 @@ namespace Robotics
 
 #if UNITY_EDITOR
                     {
-                        _debugStringBuilder.Clear();
-                        _debugStringBuilder.AppendLine($"[ROSTraj] {_robotController.robotId} waypoint {p}/{msg.points.Length - 1} done  seg={rawSegmentDuration:F3}s raw → {segmentDuration:F3}s wall");
                         for (int j = 0; j < _jointIndexMap.Length; j++)
                         {
                             int idx = _jointIndexMap[j];
@@ -509,9 +499,7 @@ namespace Robotics
                             float physVelDeg = _joints[idx].jointVelocity.dofCount > 0
                                 ? _joints[idx].jointVelocity[0] * Mathf.Rad2Deg : float.NaN;
                             float err = physDeg - plannedDeg;
-                            _debugStringBuilder.AppendLine($"  J{idx}: phys={physDeg:F2}° physVel={physVelDeg:F2}°/s drive={driveDeg:F2}° planned={plannedDeg:F2}° planVel={plannedVelDeg:F2}°/s err={err:F2}°");
                         }
-                        Debug.Log(_debugStringBuilder.ToString());
                     }
 #endif
 
@@ -695,8 +683,6 @@ namespace Robotics
 #if UNITY_EDITOR
             // DEBUG: final physical state after settling
             {
-                _debugStringBuilder.Clear();
-                _debugStringBuilder.AppendLine($"[ROSTraj] {_robotController.robotId} FINAL (settle={settleStatus})");
                 JointTrajectoryPointMsg lastPoint = msg.points.Length > 0 ? msg.points[msg.points.Length - 1] : null;
                 for (int j = 0; j < _jointIndexMap.Length; j++)
                 {
@@ -708,9 +694,7 @@ namespace Robotics
                         ? _joints[idx].jointVelocity[0] * Mathf.Rad2Deg : float.NaN;
                     float plannedDeg = (lastPoint?.positions != null && j < lastPoint.positions.Length)
                         ? (float)(lastPoint.positions[j] * Mathf.Rad2Deg) : float.NaN;
-                    _debugStringBuilder.AppendLine($"  J{idx}: phys={physDeg:F2}° drive={driveDeg:F2}° planned={plannedDeg:F2}° vel={velDeg:F2}°/s");
                 }
-                Debug.Log(_debugStringBuilder.ToString());
             }
 #endif
 

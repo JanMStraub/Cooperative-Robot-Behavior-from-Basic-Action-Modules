@@ -5,8 +5,9 @@ Point Cloud Operations
 
 Generates dense 3D point clouds from the robot's stereo camera pair using
 semi-global block matching (SGBM) disparity estimation. The resulting cloud
-is expressed in the Unity camera frame with the X-axis already negated (LH
-convention) so it can be consumed directly by downstream grasp operations.
+is expressed in Unity camera frame with X negated (left-handed convention).
+Downstream consumers (VGNClient) apply their own camera→world transform using
+the camera_position and camera_rotation fields returned alongside the points.
 """
 
 import logging
@@ -40,9 +41,29 @@ except ImportError:
     from ..vision.StereoReconstruction import stereo_reconstruct_stream
 
 try:
-    from config.Vision import SAVE_DEBUG_POINT_CLOUDS, DEBUG_POINT_CLOUD_DIR
+    from config.Vision import (
+        SAVE_DEBUG_POINT_CLOUDS,
+        DEBUG_POINT_CLOUD_DIR,
+        POINT_CLOUD_CLEANING_ENABLED,
+        POINT_CLOUD_BG_COLORS_ENABLED,
+        POINT_CLOUD_BG_COLORS,
+        POINT_CLOUD_MIN_DEPTH,
+        POINT_CLOUD_MAX_DEPTH,
+        POINT_CLOUD_OUTLIER_NB_NEIGHBORS,
+        POINT_CLOUD_OUTLIER_STD_RATIO,
+    )
 except ImportError:
-    from ..config.Vision import SAVE_DEBUG_POINT_CLOUDS, DEBUG_POINT_CLOUD_DIR
+    from ..config.Vision import (
+        SAVE_DEBUG_POINT_CLOUDS,
+        DEBUG_POINT_CLOUD_DIR,
+        POINT_CLOUD_CLEANING_ENABLED,
+        POINT_CLOUD_BG_COLORS_ENABLED,
+        POINT_CLOUD_BG_COLORS,
+        POINT_CLOUD_MIN_DEPTH,
+        POINT_CLOUD_MAX_DEPTH,
+        POINT_CLOUD_OUTLIER_NB_NEIGHBORS,
+        POINT_CLOUD_OUTLIER_STD_RATIO,
+    )
 
 
 # ============================================================================
@@ -141,6 +162,131 @@ def _save_debug_point_cloud(
 
 
 # ============================================================================
+# Internal helpers
+# ============================================================================
+
+
+def _apply_camera_rotation(points: np.ndarray, quaternion: list) -> np.ndarray:
+    """Rotate points from Unity camera frame to Unity world frame.
+
+    Expects points already in Unity camera frame (X-right, Y-up, Z-forward).
+    The Q-matrix output is (X-right, Y-up, Z-negative); callers must negate Z
+    before calling this function.  Applies the camera's world-space rotation
+    quaternion to go from Unity camera space to Unity world space.
+
+    Args:
+        points: Float32 (N, 3) in Unity camera frame (Q-matrix output).
+        quaternion: Camera world rotation ``[x, y, z, w]`` from Unity metadata.
+
+    Returns:
+        Float32 (N, 3) in Unity world frame.
+    """
+    x, y, z, w = quaternion
+    R = np.array(
+        [
+            [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+            [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+            [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+        ],
+        dtype=np.float32,
+    )
+    return points @ R.T
+
+
+def _clean_point_cloud(
+    points: np.ndarray,
+    colors: np.ndarray,
+) -> tuple:
+    """Remove background points and statistical outliers from a point cloud.
+
+    Three-stage pipeline (each stage independently skippable via config):
+
+    1. **Depth clip** — discard points with Z (camera-forward) outside
+       [POINT_CLOUD_MIN_DEPTH, POINT_CLOUD_MAX_DEPTH].  Fast numpy operation;
+       removes far-field sky/floor noise before the more expensive steps.
+
+    2. **Color-based background removal** — removes points whose RGB color
+       closely matches known Unity background/floor colors (configured in
+       POINT_CLOUD_BG_COLORS).  Adapted from RoboScan's ``remove_colors()``.
+       Uses per-channel absolute tolerance so near-matches are also caught.
+
+    3. **Statistical outlier removal** — removes points whose mean distance
+       to their k nearest neighbors exceeds mean + std_ratio * σ.  Uses
+       Open3D if available; silently skipped otherwise.  Adapted from
+       RoboScan's ``filter_repeating_points()`` final pass.
+
+    Args:
+        points: Float32 (N, 3) point positions in world frame.
+        colors: Uint8 (N, 3) RGB colors.
+
+    Returns:
+        Tuple of (filtered_points, filtered_colors) as (float32, uint8) arrays.
+    """
+    if len(points) == 0:
+        return points, colors
+
+    # --- Stage 1: depth clip (Z axis = camera forward = scene depth) ---
+    z = points[:, 2]
+    depth_mask = (z >= POINT_CLOUD_MIN_DEPTH) & (z <= POINT_CLOUD_MAX_DEPTH)
+    points = points[depth_mask]
+    colors = colors[depth_mask]
+    logger.debug(
+        f"Depth clip [{POINT_CLOUD_MIN_DEPTH}m–{POINT_CLOUD_MAX_DEPTH}m]: "
+        f"{depth_mask.sum()} / {len(depth_mask)} points kept"
+    )
+
+    if len(points) == 0:
+        return points, colors
+
+    # --- Stage 2: color-based background removal ---
+    if POINT_CLOUD_BG_COLORS_ENABLED and len(POINT_CLOUD_BG_COLORS) > 0:
+        # Build a boolean mask: True = keep (not background)
+        keep = np.ones(len(points), dtype=bool)
+        colors_f = colors.astype(np.float32)
+        for rgb_tuple, tol in POINT_CLOUD_BG_COLORS:
+            ref = np.array(rgb_tuple, dtype=np.float32)
+            # Point matches background if ALL three channels are within tolerance
+            match = np.all(np.abs(colors_f - ref) <= tol, axis=1)
+            keep &= ~match
+        before = len(points)
+        points = points[keep]
+        colors = colors[keep]
+        logger.debug(
+            f"Color background removal: {keep.sum()} / {before} points kept"
+        )
+
+    if len(points) == 0:
+        return points, colors
+
+    # --- Stage 3: statistical outlier removal (Open3D) ---
+    try:
+        import open3d as o3d  # type: ignore[import]
+
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points.astype(np.float64))
+        pcd.colors = o3d.utility.Vector3dVector(colors.astype(np.float64) / 255.0)
+
+        before = len(points)
+        pcd_clean, ind = pcd.remove_statistical_outlier(
+            nb_neighbors=POINT_CLOUD_OUTLIER_NB_NEIGHBORS,
+            std_ratio=POINT_CLOUD_OUTLIER_STD_RATIO,
+        )
+        points = np.asarray(pcd_clean.points, dtype=np.float32)
+        colors = (np.asarray(pcd_clean.colors) * 255.0).astype(np.uint8)
+        logger.debug(
+            f"Statistical outlier removal (nb={POINT_CLOUD_OUTLIER_NB_NEIGHBORS}, "
+            f"std={POINT_CLOUD_OUTLIER_STD_RATIO}): {len(points)} / {before} points kept"
+        )
+    except ImportError:
+        logger.debug(
+            "open3d not installed — skipping statistical outlier removal. "
+            "Install with: pip install open3d"
+        )
+
+    return points, colors
+
+
+# ============================================================================
 # Implementation
 # ============================================================================
 
@@ -158,11 +304,10 @@ def generate_point_cloud(
     Unity's stereo camera rig) to reconstruct a 3D point cloud via
     semi-global block-matching disparity estimation.
 
-    The output points are expressed in the Unity camera frame with the
-    X-axis negated (left-handed convention), ready for VGN
-    inference.  Camera extrinsics (position + rotation in Unity world
-    frame) are included so downstream operations can transform poses back
-    into world space.
+    The output points are expressed in Unity world frame: OpenCV camera-space
+    points are Y-flipped (OpenCV→Unity camera convention), rotated by the
+    camera's world-space quaternion, and translated by the camera's world
+    position.  Camera extrinsics are also returned for reference.
 
     Args:
         robot_id: Robot whose camera pair is queried (e.g., "Robot1").
@@ -179,7 +324,7 @@ def generate_point_cloud(
         .. code-block:: python
 
             {
-                "points":          [[x, y, z], ...],   # camera frame, X-negated
+                "points":          [[x, y, z], ...],   # Unity camera frame, X-negated (LH)
                 "colors":          [[r, g, b], ...],   # 0-255 per channel
                 "point_count":     int,
                 "camera_position": [x, y, z],          # Unity world
@@ -258,7 +403,10 @@ def generate_point_cloud(
         # instead of 0.8m — a systematic ~1.8x overestimate of depth.
         # Cap at 512 for performance; covers objects down to f_px*b/512 (~0.23m).
         import math as _math
-        _f_norm = 1.0 / (2.0 * _math.tan(_math.radians(fov / 2.0)))
+        # fov from Unity is vertical; convert to horizontal for f_px calculation
+        _aspect = img_left.shape[1] / img_left.shape[0]  # width / height
+        _horiz_fov = 2.0 * _math.degrees(_math.atan(_math.tan(_math.radians(fov / 2.0)) * _aspect))
+        _f_norm = 1.0 / (2.0 * _math.tan(_math.radians(_horiz_fov / 2.0)))
         _f_px = _f_norm * img_left.shape[1]  # pixel focal length
         _min_depth = 0.25  # metres — closest expected object in robot workspace
         _max_disp_needed = int(_math.ceil(_f_px * baseline / _min_depth))
@@ -298,6 +446,24 @@ def generate_point_cloud(
                 ],
             )
 
+        # --- Background removal + statistical outlier cleaning ---
+        if POINT_CLOUD_CLEANING_ENABLED:
+            n_before = raw_points.shape[0]
+            raw_points, raw_colors = _clean_point_cloud(raw_points, raw_colors)
+            logger.info(
+                f"[{robot_id}] Point cloud cleaned: {raw_points.shape[0]} / {n_before} points retained"
+            )
+            if raw_points.shape[0] == 0:
+                return OperationResult.error_result(
+                    "EMPTY_POINT_CLOUD_AFTER_CLEANING",
+                    "All points were removed during background/outlier cleaning",
+                    [
+                        "Check POINT_CLOUD_BG_COLORS in config/Vision.py — tolerance may be too broad",
+                        "Disable cleaning with POINT_CLOUD_CLEANING_ENABLED=false to inspect raw cloud",
+                        "Check POINT_CLOUD_MIN_DEPTH / POINT_CLOUD_MAX_DEPTH range",
+                    ],
+                )
+
         # --- Uniform random downsample ---
         # Guard against callers (e.g. LLM) passing None or non-positive values.
         effective_max_points = (
@@ -326,10 +492,22 @@ def generate_point_cloud(
         )
 
         # --- Optional debug save ---
+        # For Blender inspection apply camera→world transform so the PLY is
+        # axis-aligned (table horizontal, robot upright).  The live pipeline
+        # (VGNClient) does its own transform from the raw camera-frame points.
         if SAVE_DEBUG_POINT_CLOUDS:
+            # Convert Q-matrix output to Unity camera frame before rotating.
+            # Q output is (X-right, Y-up, Z-negative) — only Z needs negating to
+            # reach Unity camera frame (X-right, Y-up, Z-forward).
+            debug_pts = raw_points.copy().astype(np.float32)
+            debug_pts[:, 2] *= -1.0  # Z-negative → Z-forward (positive)
+            if camera_rotation and len(camera_rotation) == 4:
+                debug_pts = _apply_camera_rotation(debug_pts, camera_rotation)
+            if camera_position and len(camera_position) == 3:
+                debug_pts = debug_pts + np.array(camera_position, dtype=np.float32)
             _save_debug_point_cloud(
                 robot_id,
-                raw_points,
+                debug_pts,
                 raw_colors,
                 camera_position,
                 camera_rotation,

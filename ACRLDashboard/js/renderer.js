@@ -391,38 +391,70 @@ export class Renderer {
             this.createMiniRenderer('tsdf-container', this.tsdfScene, this.tsdfCamera);
         }
 
-        // All data arrives in Unity LH world frame.
-        // Three.js is RH Y-up → just negate Z.
+        // Data arrives in Unity LH world frame: +X right, +Y up, +Z forward.
+        // Three.js is RH +Y up, +Z toward viewer.
+        // Unity LH → Three.js RH: negate X (reflection across YZ plane).
         const centroid = data.centroid || [0, 0, 0];
+        // Three.js centroid after Z-negate (Unity LH → Three.js RH)
+        const cx = centroid[0], cy = centroid[1], cz = -centroid[2];
 
-        // ── Point cloud (Unity world frame → negate Z) ──
+        // ── Point cloud (Unity LH → Three.js RH: negate X, centre XZ, floor Y at 0) ──
         if (data.pointcloud_b64) {
             const binaryStr = atob(data.pointcloud_b64);
             const bytes = new Uint8Array(binaryStr.length);
             for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
             const floatArray = new Float32Array(bytes.buffer);
+            const n = floatArray.length / 3;
 
+            // Pass 1: negate Z (camera +Z-forward → Three.js RH +Z-toward-viewer),
+            // accumulate bounds for centering
+            let minY = Infinity, minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
             for (let i = 0; i < floatArray.length; i += 3) {
-                floatArray[i + 2] = -floatArray[i + 2];
+                floatArray[i + 2] = -floatArray[i + 2];  // Z-forward → Z-toward-viewer
+                if (floatArray[i]     < minX) minX = floatArray[i];
+                if (floatArray[i]     > maxX) maxX = floatArray[i];
+                if (floatArray[i + 1] < minY) minY = floatArray[i + 1];
+                if (floatArray[i + 2] < minZ) minZ = floatArray[i + 2];
+                if (floatArray[i + 2] > maxZ) maxZ = floatArray[i + 2];
             }
+            const midX = (minX + maxX) / 2;
+            const midZ = (minZ + maxZ) / 2;
+
+            // Pass 2: shift so table surface = Y=0, cloud centred at X=0, Z=0
+            for (let i = 0; i < floatArray.length; i += 3) {
+                floatArray[i]     -= midX;
+                floatArray[i + 1] -= minY;
+                floatArray[i + 2] -= midZ;
+            }
+
+            // Place camera at isometric-style angle: above and in front of scene
+            const sceneSpan = Math.max(maxX - minX, maxZ - minZ);
+            const camDist = sceneSpan * 0.9 + 0.4;
+            this.pcCamera.position.set(0, camDist * 0.8, camDist);
+            this.pcCamera.lookAt(0, 0, 0);
 
             if (this.pcMesh) this.pcScene.remove(this.pcMesh);
             const geo = new THREE.BufferGeometry();
             geo.setAttribute('position', new THREE.BufferAttribute(floatArray, 3));
-            const mat = new THREE.PointsMaterial({ color: 0x2ec4b6, size: 0.003 });
+            const mat = new THREE.PointsMaterial({ color: 0x2ec4b6, size: sceneSpan * 0.003 });
             this.pcMesh = new THREE.Points(geo, mat);
             this.pcScene.add(this.pcMesh);
         }
 
-        // ── TSDF surface voxels (centred frame → add centroid → negate Z) ──
+        // ── TSDF surface voxels ──
+        // The TSDF grid is in VGN-local frame (centred at origin, scaled, axis-swapped).
+        // Display it centred at origin — it is a standalone debug view, not world-overlaid.
+        // VGN axes: X=world_X, Y=-world_Z(depth), Z=world_Y(height).
+        // Map to Three.js (+Y up, +Z toward viewer): X→X, Z→Y, Y→Z.
         if (data.tsdf_b64 && data.tsdf_size && data.tsdf_res) {
             const res = data.tsdf_res;
             const size = data.tsdf_size;
             const voxSize = size / res;
-            
+
             const binaryStr = atob(data.tsdf_b64);
             const bytes = new Uint8Array(binaryStr.length);
             for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+            // grid is (1, res, res, res) in C order — first res³ floats are the data
             const sdfArray = new Float32Array(bytes.buffer);
 
             const surfacePoints = [];
@@ -430,16 +462,16 @@ export class Renderer {
                 for (let y = 0; y < res; y++) {
                     for (let z = 0; z < res; z++) {
                         const idx = x * (res * res) + y * res + z;
+                        // val in [-1,1]: 0 = surface, ±1 = ±4 voxels away.
+                        // Show near-surface shell: |val| <= 1/4 (within 1 voxel of surface).
                         const val = sdfArray[idx];
-                        const dist = Math.abs(val * (size / 2.0));
-                        
-                        if (dist <= voxSize * 1.0) {
-                            // Voxel position in centred frame → add centroid → Unity LH world
-                            const wx = (x + 0.5) * voxSize - (size / 2.0) + centroid[0];
-                            const wy = (y + 0.5) * voxSize - (size / 2.0) + centroid[1];
-                            const wz = (z + 0.5) * voxSize - (size / 2.0) + centroid[2];
-                            // Unity → Three.js: negate Z
-                            surfacePoints.push(wx, wy, -wz);
+                        if (Math.abs(val) <= 0.25) {
+                            // VGN-frame coords centred at origin
+                            const vx = (x + 0.5) * voxSize - size / 2.0;  // VGN_X
+                            const vy = (y + 0.5) * voxSize - size / 2.0;  // VGN_Y = -world_Z
+                            const vz = (z + 0.5) * voxSize - size / 2.0;  // VGN_Z = world_Y (up)
+                            // Three.js: X=vx, Y=vz (height), Z=vy (depth toward viewer)
+                            surfacePoints.push(vx, vz, vy);
                         }
                     }
                 }
@@ -451,31 +483,51 @@ export class Renderer {
                 this.tsdfGrasps = null;
             }
 
+            console.log('[VGN] TSDF surface voxels:', surfacePoints.length / 3, '(|val|<=0.25)');
+
             if (surfacePoints.length > 0) {
                 const geo = new THREE.BufferGeometry();
                 geo.setAttribute('position', new THREE.Float32BufferAttribute(surfacePoints, 3));
-                const mat = new THREE.PointsMaterial({ color: 0xff9f1c, size: 0.005 });
+                const mat = new THREE.PointsMaterial({ color: 0xff9f1c, size: voxSize * 1.5 });
                 this.tsdfMesh = new THREE.Points(geo, mat);
                 this.tsdfScene.add(this.tsdfMesh);
+
+                // Camera: isometric view of the 0.3m cube centred at origin
+                this.tsdfCamera.position.set(0.3, 0.35, 0.5);
+                this.tsdfCamera.lookAt(0, 0, 0);
             }
 
-            // ── Grasp arrows (absolute Unity world positions → negate Z) ──
-            if (data.grasps && data.grasps.length > 0) {
-                this.tsdfGrasps = new THREE.Group();
-                data.grasps.forEach(g => {
-                    const pos = new THREE.Vector3(
-                        g.position[0], g.position[1], -g.position[2]
-                    );
-                    const ad = g.approach_direction || [0, 1, 0];
-                    const dir = new THREE.Vector3(ad[0], ad[1], -ad[2]).normalize();
+            // ── Grasp arrows in VGN frame ──
+            // Grasps from Python are in Unity LH world frame. We need them in VGN frame
+            // to overlay on the TSDF. Python sends vgn_grasps separately if available,
+            // otherwise fall back to showing grasps at VGN-frame positions via debug_info.
+            // For now: show world-frame grasps in the point cloud view only (see pcScene).
+        }
 
-                    const arrowHelper = new THREE.ArrowHelper(
-                        dir, pos, 0.05, 0xff3366, 0.015, 0.01
-                    );
-                    this.tsdfGrasps.add(arrowHelper);
-                });
-                this.tsdfScene.add(this.tsdfGrasps);
-            }
+        // ── Grasp arrows on point cloud view (Unity LH world → Three.js RH) ──
+        if (data.grasps && data.grasps.length > 0) {
+            if (this.pcGrasps) this.pcScene.remove(this.pcGrasps);
+            this.pcGrasps = new THREE.Group();
+
+            // Compute centroid of grasps for camera focus
+            let gcx = 0, gcy = 0, gcz = 0;
+            data.grasps.forEach(g => { gcx += g.position[0]; gcy += g.position[1]; gcz += g.position[2]; });
+            gcx /= data.grasps.length; gcy /= data.grasps.length; gcz /= data.grasps.length;
+
+            data.grasps.forEach(g => {
+                // Unity LH (X right, Y up, Z forward) → Three.js RH: negate X and Z
+                const pos = new THREE.Vector3(-g.position[0], g.position[1], -g.position[2]);
+                const ad = g.approach_direction || [0, 1, 0];
+                const dir = new THREE.Vector3(-ad[0], ad[1], -ad[2]).normalize();
+                const arrowHelper = new THREE.ArrowHelper(dir, pos, 0.05, 0xff3366, 0.015, 0.01);
+                this.pcGrasps.add(arrowHelper);
+            });
+            this.pcScene.add(this.pcGrasps);
+
+            // Point camera at grasp cluster
+            const span = 0.15;
+            this.pcCamera.position.set(-gcx, gcy + span, -gcz + span * 2);
+            this.pcCamera.lookAt(-gcx, gcy, -gcz);
         }
     }
 }
