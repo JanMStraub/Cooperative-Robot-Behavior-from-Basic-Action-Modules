@@ -106,7 +106,7 @@ def detect_objects(
         # Convert to dictionary format
         detections = [det.to_dict() for det in result.detections]
 
-        logger.info(f"Detected {len(detections)} objects from camera '{camera_id}'")
+        logger.debug(f"Detected {len(detections)} objects")
 
         return OperationResult.success_result(
             {

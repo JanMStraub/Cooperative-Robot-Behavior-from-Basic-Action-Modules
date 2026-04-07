@@ -566,7 +566,7 @@ MonoBehaviour:
   _autoReconnect: 1
   _serverPort: 0
   _serverHost: 127.0.0.1
-  _prompt: 'Robot 1: Grab the blue cube on the left'
+  _prompt: Robot1 and Robot2 perform a handoff of the red cube
   _logCommands: 1
   _autoExecuteResult: 1
 --- !u!114 &1595579027
@@ -877,6 +877,10 @@ PrefabInstance:
     - target: {fileID: 1390263129166398193, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
       value: field_e
+      objectReference: {fileID: 0}
+    - target: {fileID: 1447818337782935941, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 1523614578368514234, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_IsActive

@@ -33,7 +33,7 @@ kill_process_by_pattern() {
     local name="$2"
     # Send SIGTERM (15) for graceful shutdown. -f matches the full command line.
     if pkill -f "$pattern"; then
-        echo "  ✓ Sent stop signal to $name"
+        echo "  Sent stop signal to $name"
     fi
 }
 
@@ -160,7 +160,7 @@ cleanup() {
     if "$ROS_INTEGRATION" && "$STOP_DOCKER_ON_EXIT" && [ -d "$ROS_DIR" ] && command -v docker &>/dev/null; then
         echo "Stopping ROS Docker containers..."
         "$ROS_DIR/start_ros_endpoint.sh" down
-        echo "  ✓ ROS Docker containers stopped."
+        echo "  ROS Docker containers stopped."
     fi
 
     echo "Server stopped."

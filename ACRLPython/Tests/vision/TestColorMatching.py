@@ -44,7 +44,7 @@ def test_color_matches():
     assert not color_matches(None, "blue"), "Should not match: None != blue"
     assert not color_matches("blue", None), "Should not match: blue != None"
 
-    print("✓ All tests passed!")
+    print("All tests passed!")
 
 
 if __name__ == "__main__":

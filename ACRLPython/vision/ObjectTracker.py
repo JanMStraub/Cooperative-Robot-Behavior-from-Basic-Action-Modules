@@ -166,7 +166,7 @@ class ObjectTracker:
         self.tracks: List[Track] = []
         self.next_id = 1
 
-        logger.info(f"ObjectTracker initialized: max_age={max_age}, min_iou={min_iou}")
+        logger.debug(f"ObjectTracker initialized: max_age={max_age}, min_iou={min_iou}")
 
     def update(self, detections: List[DetectionObject]) -> List[DetectionObject]:
         """

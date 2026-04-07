@@ -211,7 +211,7 @@ class VisionProcessor:
                 self.enable_visualization = False
 
         resize_str = f"{self._yolo_input_size}px" if self._yolo_input_size else "disabled"
-        logger.info(
+        logger.debug(
             f"VisionProcessor initialized: fps={fps}, tracking={enable_tracking}, "
             f"shared_state={enable_shared_state}, visualization={enable_visualization}, "
             f"main_thread={use_main_thread}, input_resize={resize_str}"
@@ -237,7 +237,7 @@ class VisionProcessor:
         self.running = True
         self.thread = threading.Thread(target=self._processing_loop, daemon=True)
         self.thread.start()
-        logger.info("VisionProcessor started")
+        logger.debug("VisionProcessor started")
 
     def run(self):
         """
@@ -320,7 +320,7 @@ class VisionProcessor:
         needs_depth = self.enable_shared_state or (self.on_result_callback is not None)
 
         scene_diff_enabled = bool(SCENE_DIFF_THUMB_SIZE)
-        logger.info(
+        logger.debug(
             f"VisionProcessor loop started (target: {self.fps} FPS, "
             f"depth={'enabled' if needs_depth else 'disabled — no consumer'}, "
             f"scene_diff={'enabled (thresh={})'.format(SCENE_DIFF_THRESHOLD) if scene_diff_enabled else 'disabled'})"

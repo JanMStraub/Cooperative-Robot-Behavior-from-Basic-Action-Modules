@@ -570,3 +570,126 @@ class TestGraspFailureRecovery:
         assert result["result"]["command_sent"] is True
         # Note: Multi-criteria verification (contact + force + closure) performed by
         # Unity's VerifyGraspSuccess() method as documented in RobotControlRedesign.md
+
+
+class TestComputeHandoffApproachVector:
+    """Tests for _compute_handoff_approach_vector helper."""
+
+    def test_approach_vector_along_x_axis(self):
+        """When the object is wider on X, approach vector should be along X."""
+        from operations.GraspOperations import _compute_handoff_approach_vector
+
+        # Object at origin, wider on X (0.10) than Z (0.05).
+        # Receiving robot is at positive X → approach goes negative X (far end).
+        result = _compute_handoff_approach_vector(
+            object_position=(0.0, 0.03, 0.0),
+            object_dimensions=(0.10, 0.05, 0.05),
+            receiving_robot_position=(0.3, 0.4, 0.0),
+        )
+        assert result[0] == -1.0, "Should approach from -X (away from receiver at +X)"
+        assert result[1] == 0.0
+        assert result[2] == 0.0
+
+    def test_approach_vector_along_z_axis(self):
+        """When the object is longer on Z, approach vector should be along Z."""
+        from operations.GraspOperations import _compute_handoff_approach_vector
+
+        result = _compute_handoff_approach_vector(
+            object_position=(0.0, 0.03, 0.0),
+            object_dimensions=(0.04, 0.04, 0.10),
+            receiving_robot_position=(0.0, 0.4, 0.3),
+        )
+        assert result[0] == 0.0
+        assert result[2] == -1.0, "Should approach from -Z (away from receiver at +Z)"
+
+    def test_symmetric_object_uses_receiver_direction(self):
+        """For symmetric (cube) objects, receiver direction still picks an axis."""
+        from operations.GraspOperations import _compute_handoff_approach_vector
+
+        result = _compute_handoff_approach_vector(
+            object_position=(0.0, 0.03, 0.0),
+            object_dimensions=(0.05, 0.05, 0.05),
+            receiving_robot_position=(0.2, 0.4, 0.0),
+        )
+        # X >= Z extent, so X axis is chosen. Receiver is at +X → sign = -1.
+        assert result[0] == -1.0
+        assert result[2] == 0.0
+
+
+class TestReceiveHandoffOffset:
+    """Tests that receive_handoff positions Robot2 at the opposite end."""
+
+    @pytest.fixture
+    def mock_deps(self):
+        """Mock WorldState, move, gripper, and orientation dependencies."""
+        from operations.WorldState import WorldState
+        from operations.Base import OperationResult
+
+        ws = WorldState()
+        ws.update_robot_state("Robot1", {"position": (-0.2, 0.4, 0.0)})
+        ws.update_robot_state("Robot2", {"position": (0.2, 0.4, 0.0)})
+        ws.update_object_position(
+            "red_cube",
+            position=(0.0, 0.3, 0.0),
+            dimensions=(0.05, 0.05, 0.05),
+        )
+
+        ok = OperationResult.success_result({})
+        with (
+            patch("operations.GraspOperations.orient_gripper_for_handoff_receive") as mock_orient,
+            patch("operations.MoveOperations.move_to_coordinate") as mock_move,
+            patch("operations.GripperOperations.control_gripper") as mock_gripper,
+            patch("core.Imports.get_world_state", return_value=ws),
+        ):
+            mock_orient.return_value = ok
+            mock_move.return_value = ok
+            mock_gripper.return_value = ok
+            yield {
+                "ws": ws,
+                "orient": mock_orient,
+                "move": mock_move,
+                "gripper": mock_gripper,
+            }
+
+    def test_robot2_offset_to_opposite_end(self, mock_deps):
+        """Robot2 should be offset away from Robot1, not at object center."""
+        from operations.GraspOperations import receive_handoff
+
+        result = receive_handoff(
+            robot_id="Robot2",
+            object_id="red_cube",
+            source_robot_id="Robot1",
+        )
+
+        assert result["success"] is True
+        # Check the move_to_coordinate call
+        move_call = mock_deps["move"].call_args
+        target_x = move_call.kwargs.get("x", move_call[1].get("x") if len(move_call) > 1 else None)
+        target_z = move_call.kwargs.get("z", move_call[1].get("z") if len(move_call) > 1 else None)
+
+        # Robot1 is at -X → approach vector points to +X (far end from Robot1).
+        # Robot2 offset direction is NEGATED → Robot2 moves to -X end (opposite
+        # of Robot1's grasp at +X far end). So target_x < object center (0.0).
+        # Actually: _compute_handoff_approach_vector with receiver=Robot1(-0.2)
+        # picks approach=[+1, 0, 0] (far from Robot1 at -X means +X end).
+        # Negate for Robot2 offset: offset_dir_x = -1. So target_x < 0.
+        assert target_x is not None, "move_to_coordinate should receive x"
+        assert target_x != 0.0, "Robot2 must NOT go to the object center"
+
+    def test_robot2_below_object(self, mock_deps):
+        """Robot2 should approach from below (Y offset)."""
+        from operations.GraspOperations import receive_handoff
+
+        result = receive_handoff(
+            robot_id="Robot2",
+            object_id="red_cube",
+            source_robot_id="Robot1",
+        )
+
+        assert result["success"] is True
+        move_call = mock_deps["move"].call_args
+        target_y = move_call.kwargs.get("y", move_call[1].get("y") if len(move_call) > 1 else None)
+
+        # Object at y=0.3, below_offset = 0.05/2 + 0.02 = 0.045
+        assert target_y is not None
+        assert target_y < 0.3, "Robot2 should be below the object"

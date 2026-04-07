@@ -401,7 +401,7 @@ class CommandParser:
                 # Provide control over index rebuilding to speed up startups
                 self.rag.index_operations(rebuild=False)
                 logger.info(
-                    "RAG system initialized for command parsing (using existing index if present)"
+                    "RAG system initialized for command parsing"
                 )
             except Exception as e:
                 logger.warning(f"Failed to initialize RAG: {e}. Using registry only.")

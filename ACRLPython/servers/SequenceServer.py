@@ -5,7 +5,7 @@ SequenceServer.py - TCP server for multi-command sequence execution
 Receives compound commands from Unity, parses them into operation sequences,
 and executes them sequentially with completion tracking.
 
-Port: 5013 (SEQUENCE_SERVER_PORT)
+Port: 5011 (SEQUENCE_SERVER_PORT)
 
 Protocol V2:
     Query (Unity → Python):
@@ -214,7 +214,7 @@ class SequenceServer(TCPServerBase):
     """
     TCP server for receiving and executing command sequences from Unity.
 
-    Listens on port 5013 for sequence queries and returns execution results.
+    Listens on port 5011 for sequence queries and returns execution results.
     """
 
     def __init__(self, config: Optional[ServerConfig] = None):
@@ -337,7 +337,7 @@ class SequenceServer(TCPServerBase):
                 auto_execute = auto_execute_bytes[0] == 1
 
                 logger.info(
-                    f"Received sequence query (id={request_id}): {command_text[:100]}... (camera={camera_id}, auto_execute={auto_execute})"
+                    f"Received sequence query (id={request_id}): {command_text} (camera={camera_id}, auto_execute={auto_execute})"
                 )
 
                 # Execute the sequence

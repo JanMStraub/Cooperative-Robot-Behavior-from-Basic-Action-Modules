@@ -125,7 +125,7 @@ class TestFieldPickAndPlace(unittest.TestCase):
         self.assertEqual(
             result_field_d.result["center"], {"x": 0.2, "y": -0.1, "z": 0.0}
         )
-        print(f"✓ Step 1: Detected field D at {result_field_d.result['center']}")
+        print(f"Step 1: Detected field D at {result_field_d.result['center']}")
 
         # ========================================================================
         # STEP 2: Grasp cube at field D position
@@ -142,7 +142,7 @@ class TestFieldPickAndPlace(unittest.TestCase):
         self.assertTrue(result_grasp.success, "Grasp operation failed")
         assert result_grasp.result is not None
         self.assertEqual(result_grasp.result["robot_id"], "Robot1")
-        print(f"✓ Step 2: Grasped cube at field D")
+        print(f"Step 2: Grasped cube at field D")
 
         # ========================================================================
         # STEP 3: Detect field E
@@ -156,7 +156,7 @@ class TestFieldPickAndPlace(unittest.TestCase):
         self.assertEqual(
             result_field_e.result["center"], {"x": 0.3, "y": 0.1, "z": 0.0}
         )
-        print(f"✓ Step 3: Detected field E at {result_field_e.result['center']}")
+        print(f"Step 3: Detected field E at {result_field_e.result['center']}")
 
         # ========================================================================
         # STEP 4: Move to field E (positioning before release)
@@ -171,7 +171,7 @@ class TestFieldPickAndPlace(unittest.TestCase):
         )
 
         self.assertTrue(result_move.success, "Move to field E failed")
-        print(f"✓ Step 4: Moved to field E")
+        print(f"Step 4: Moved to field E")
 
         # ========================================================================
         # STEP 5: Release cube (ATOMIC - gripper only, no movement)
@@ -185,7 +185,7 @@ class TestFieldPickAndPlace(unittest.TestCase):
         assert result_release.result is not None
         # Atomic operation - no place_position in result
         self.assertNotIn("place_position", result_release.result)
-        print(f"✓ Step 5: Released cube (atomic gripper operation)")
+        print(f"Step 5: Released cube (atomic gripper operation)")
 
         # ========================================================================
         # Verification
@@ -196,7 +196,7 @@ class TestFieldPickAndPlace(unittest.TestCase):
             mock_yolo_instance.detect_objects_stereo.call_count, 2
         )  # Field D + E
 
-        print("\n✓ Integration test PASSED: Field pick-and-place workflow complete")
+        print("\nIntegration test PASSED: Field pick-and-place workflow complete")
         print(
             "  Workflow: detect_field(D) → grasp_object → detect_field(E) → move_to_coordinate(E) → release_object (atomic)"
         )
@@ -232,7 +232,7 @@ class TestFieldPickAndPlace(unittest.TestCase):
         self.assertFalse(result.success)
         assert result.error is not None
         self.assertEqual(result.error["code"], "FIELD_NOT_DETECTED")
-        print("✓ Error handling test PASSED: Correctly handles missing field")
+        print("Error handling test PASSED: Correctly handles missing field")
 
     def test_get_field_center_convenience_wrapper(self):
         """Test get_field_center convenience function"""
@@ -256,7 +256,7 @@ class TestFieldPickAndPlace(unittest.TestCase):
             assert result.result is not None
             self.assertEqual(result.result["center"], {"x": 0.1, "y": 0.1, "z": 0.0})
             mock_detect.assert_called_once_with("Robot1", "A", "stereo", request_id=0)
-            print("✓ Convenience wrapper test PASSED")
+            print("Convenience wrapper test PASSED")
 
 
 if __name__ == "__main__":

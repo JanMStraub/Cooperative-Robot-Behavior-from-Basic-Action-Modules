@@ -665,7 +665,7 @@ class TCPServerBase(ABC):
             )
             if snapshot != self._last_heartbeat_snapshot:
                 self._last_heartbeat_snapshot = snapshot
-                self._logger.info(
+                self._logger.debug(
                     f"[HEARTBEAT] {self.__class__.__name__} on :{self._config.port} | "
                     f"uptime={stats['uptime_seconds']:.0f}s | "
                     f"active_clients={stats['active_clients']} | "

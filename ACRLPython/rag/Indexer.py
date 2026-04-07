@@ -308,7 +308,7 @@ class OperationIndexer:
             logger.warning("No operations or workflows found in registries")
             return VectorStore()
 
-        logger.info(
+        logger.debug(
             f"Building index for {len(operations)} operations, {len(workflows)} workflows, and {len(context_docs)} context documents..."
         )
 
@@ -388,7 +388,7 @@ class OperationIndexer:
             )
 
         logger.info(
-            f"✓ Index built with {len(operations)} operations, {len(workflows)} workflows, {len(context_docs)} context docs"
+            f"Index built with {len(operations)} operations, {len(workflows)} workflows, {len(context_docs)} context docs"
         )
 
         # Save to disk
@@ -421,7 +421,7 @@ class OperationIndexer:
             >>> store = VectorStore.load()
             >>> store = indexer.refresh_index(store)
             Refreshing index: checking 5 operations, 2 workflows, 4 context docs...
-            ✓ Added 1 new document(s); 11 documents already indexed
+            Added 1 new document(s); 11 documents already indexed
         """
         operations = self.registry.get_all_operations()
         workflows = self.workflow_registry.get_all_patterns()
@@ -492,7 +492,7 @@ class OperationIndexer:
         )
 
         if not texts_to_embed:
-            logger.info("✓ Index already up-to-date; nothing new to add")
+            logger.info("Index already up-to-date; nothing new to add")
             return existing_store
 
         embeddings = self.embedding_generator.generate_embeddings(texts_to_embed)
@@ -505,7 +505,7 @@ class OperationIndexer:
             )
 
         logger.info(
-            f"✓ Added {len(texts_to_embed)} new document(s); "
+            f"Added {len(texts_to_embed)} new document(s); "
             f"{len(existing_ids)} documents already indexed"
         )
 
@@ -575,7 +575,7 @@ def build_index_from_registry(
         >>> from rag.indexer import build_index_from_registry
         >>> store = build_index_from_registry()
         Building index for 5 operations...
-        ✓ Index built with 5 operations
+        Index built with 5 operations
     """
     indexer = OperationIndexer(registry=registry)
     store = indexer.build_index(save=True)

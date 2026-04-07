@@ -175,8 +175,8 @@ def _make_3d(
     # (the -1/cam_dist denominator row makes Z = -f*b/d).
     # VGNClient undoes the X-negate and works in this frame throughout.
     # Q-matrix output coordinate frame (with denominator row [0,0,-1/b,0]):
-    #   X = (w/2 - u) * b / d  — negative denominator flips sign → X-right ✓
-    #   Y = (v - h/2) * b / (-d) = -(v-h/2)*b/d  — Y-up (negative for below-centre) ✓
+    #   X = (w/2 - u) * b / d  — negative denominator flips sign → X-right
+    #   Y = (v - h/2) * b / (-d) = -(v-h/2)*b/d  — Y-up (negative for below-centre)
     #   Z = f * b / (-d) = -f*b/d  — Z-negative (depth into scene)
     # So output is (X-right, Y-up, Z-negative).  To reach Unity camera frame
     # (X-right, Y-up, Z-forward) only Z needs to be negated downstream.

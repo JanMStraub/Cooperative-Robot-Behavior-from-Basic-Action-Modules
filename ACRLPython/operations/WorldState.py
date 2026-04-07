@@ -624,7 +624,12 @@ class WorldState(SingletonBase):
                 obj.color = color
                 obj.object_type = object_type
                 obj.confidence = confidence
-                obj.dimensions = dimensions
+                # Preserve existing dimensions when the new update has none.
+                # Unity streams accurate collider-based dimensions; Python detection
+                # (especially cached SharedVisionState) often sends None.
+                # Overwriting with None would erase good dimension data.
+                if dimensions is not None:
+                    obj.dimensions = dimensions
                 # Preserve existing rotation if the new update doesn't carry one
                 # (vision-detected objects don't have rotation; physics-scene objects do).
                 if rotation is not None:

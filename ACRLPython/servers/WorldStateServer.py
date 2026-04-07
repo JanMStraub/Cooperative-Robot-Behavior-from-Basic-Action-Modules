@@ -3,11 +3,11 @@
 WorldStateServer - Receives robot and object state updates from Unity.
 
 Dedicated streaming server that receives unsolicited world state broadcasts
-from Unity's WorldStatePublisher on port 5014. Keeps world state updates
+from Unity's WorldStatePublisher on port 5012. Keeps world state updates
 separate from command/response traffic to prevent message correlation conflicts.
 
 Architecture:
-- Port 5014: One-way stream (Unity → Python)
+- Port 5012: One-way stream (Unity → Python)
 - Message Type: STATUS_RESPONSE (0x04) with requestId=0
 - No responses sent back to Unity (pure receive-only)
 
@@ -29,6 +29,7 @@ try:
     from core.TCPServerBase import TCPServerBase, ServerConfig
     from core.UnityProtocol import UnityProtocol, MessageType
     from config.Servers import WORLD_STATE_PORT, DEFAULT_HOST, WORLDSTATE_CHECK_INTERVAL
+    from core.LoggingSetup import get_logger
 except ImportError:
     from ..core.TCPServerBase import TCPServerBase, ServerConfig
     from ..core.UnityProtocol import UnityProtocol, MessageType
@@ -37,7 +38,9 @@ except ImportError:
         DEFAULT_HOST,
         WORLDSTATE_CHECK_INTERVAL,
     )
+    from ..core.LoggingSetup import get_logger
 
+logger = get_logger(__name__)
 
 class WorldStateServer(TCPServerBase):
     """
@@ -52,7 +55,7 @@ class WorldStateServer(TCPServerBase):
         Initialize WorldStateServer.
 
         Args:
-            config: Server configuration (default: port 5014, host 0.0.0.0)
+            config: Server configuration (default: port 5012, host 0.0.0.0)
         """
         if config is None:
             config = ServerConfig(host=DEFAULT_HOST, port=WORLD_STATE_PORT)
@@ -89,13 +92,13 @@ class WorldStateServer(TCPServerBase):
 
                 # Expect STATUS_RESPONSE with requestId=0 (broadcast)
                 if msg_type != MessageType.STATUS_RESPONSE:
-                    self._logger.warning(
+                    logger.warning(
                         f"Expected STATUS_RESPONSE, got {msg_type.name}. Skipping."
                     )
                     continue
 
                 if request_id != 0:
-                    self._logger.warning(
+                    logger.warning(
                         f"Expected requestId=0 (broadcast), got {request_id}. Processing anyway."
                     )
 
@@ -109,7 +112,7 @@ class WorldStateServer(TCPServerBase):
 
                 # Validate length
                 if json_length <= 0 or json_length > UnityProtocol.MAX_IMAGE_SIZE:
-                    self._logger.error(f"Invalid JSON length: {json_length}")
+                    logger.error(f"Invalid JSON length: {json_length}")
                     break
 
                 # Read JSON body
@@ -126,19 +129,19 @@ class WorldStateServer(TCPServerBase):
 
                     robots_count = len(state_update.get("robots", []))
                     objects_count = len(state_update.get("objects", []))
-                    self._logger.debug(
+                    logger.debug(
                         f"Received world state update: {robots_count} robots, "
                         f"{objects_count} objects"
                     )
 
                 except json.JSONDecodeError as e:
-                    self._logger.error(f"Failed to parse world state JSON: {e}")
+                    logger.error(f"Failed to parse world state JSON: {e}")
                     continue
 
         except Exception as e:
-            self._logger.error(f"Error handling client {address}: {e}")
+            logger.error(f"Error handling client {address}: {e}")
         finally:
-            self._logger.info(f"Client {address} disconnected")
+            logger.info(f"Client {address} disconnected")
 
     def register_update_callback(self, callback) -> None:
         """
@@ -156,7 +159,7 @@ class WorldStateServer(TCPServerBase):
             >>> server.register_update_callback(on_update)
         """
         self._on_state_update_callbacks.append(callback)
-        self._logger.info(
+        logger.debug(
             f"Registered state update callback: {callback.__name__ if hasattr(callback, '__name__') else repr(callback)}"
         )
 
@@ -181,7 +184,7 @@ class WorldStateServer(TCPServerBase):
             try:
                 callback(state_update)
             except Exception as e:
-                self._logger.error(f"State update callback error: {e}", exc_info=True)
+                logger.error(f"State update callback error: {e}", exc_info=True)
 
     def get_latest_state(self) -> Optional[Dict]:
         """

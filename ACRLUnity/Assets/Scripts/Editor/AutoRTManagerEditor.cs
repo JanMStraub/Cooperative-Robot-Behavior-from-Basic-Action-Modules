@@ -313,7 +313,7 @@ namespace ACRLEditor
 
             // Approve & Execute button
             GUI.backgroundColor = Color.green;
-            if (GUILayout.Button("✓ Approve & Execute", _buttonStyle, GUILayout.Height(30)))
+            if (GUILayout.Button("Approve & Execute", _buttonStyle, GUILayout.Height(30)))
             {
                 // Execute immediately without confirmation dialog
                 _manager.ExecuteTask(task);

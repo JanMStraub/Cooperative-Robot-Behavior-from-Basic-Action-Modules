@@ -173,6 +173,6 @@ def validate_config(config_dict: Optional[Dict[str, Any]] = None) -> Dict[str, l
             logger.warning(f"  - {warning}")
 
     if not errors and not warnings_list:
-        logger.info("✓ Configuration validation passed")
+        logger.info("Configuration validation passed")
 
     return {"errors": errors, "warnings": warnings_list}

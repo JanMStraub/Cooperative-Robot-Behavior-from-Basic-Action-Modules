@@ -76,7 +76,7 @@ class PerceptionRefreshLoop:
             daemon=True,
         )
         self._thread.start()
-        logger.info(
+        logger.debug(
             f"PerceptionRefreshLoop started "
             f"(interval={self._refresh_interval}s, stale_threshold={self._stale_threshold})"
         )
@@ -155,7 +155,6 @@ class PerceptionRefreshLoop:
 
             result = detect_object_stereo(
                 color=color,
-                camera_id=None,
                 selection="closest",
                 request_id=0,
             )

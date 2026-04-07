@@ -445,7 +445,7 @@ namespace Robotics
             float posThreshold = _isGraspingTarget
                 ? RobotConstants.MOVEMENT_THRESHOLD
                 : (_ikConfig != null ? _ikConfig.convergenceThreshold : 0.02f);
-            float rotThreshold = 7.0f;
+            float rotThreshold = RobotConstants.ROTATION_CONVERGENCE_THRESHOLD_DEG;
 
             float angleError = Quaternion.Angle(_endEffectorLocalRotation, _targetLocalRotation);
             bool isPosReached = _distanceToTarget < posThreshold;

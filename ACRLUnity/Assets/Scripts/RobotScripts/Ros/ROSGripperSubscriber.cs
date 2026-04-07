@@ -176,9 +176,17 @@ namespace Robotics
         }
 
         /// <summary>
-        /// Find the nearest GameObject tagged "Target" within gripper reach.
-        /// Searches from the finger positions (below ee_link) with a generous radius
-        /// to account for the offset between the attachment point and the cube center.
+        /// Find the nearest graspable GameObject within gripper reach.
+        ///
+        /// Two search passes are performed:
+        ///   1. Free objects — Physics.OverlapSphere for "Target"-tagged colliders that
+        ///      are not currently held by any gripper.  This is the common grasp case.
+        ///   2. Held objects — scan all GripperControllers for objects they are holding
+        ///      that are within reach.  This covers the handoff case where the object's
+        ///      "Target" tag has been cleared by AttachObject (GripperController strips
+        ///      it so RobotManager stops tracking the moving object as an IK target),
+        ///      meaning pass 1 would find nothing even though the object is right there.
+        ///
         /// Falls back to the attachment point or transform if fingers are unavailable.
         /// </summary>
         private GameObject FindNearestGraspableObject()
@@ -210,6 +218,8 @@ namespace Robotics
             // exclude adjacent cubes in dense scenes while still reliably catching the
             // target object that the gripper has descended onto.
             const float searchRadius = 0.10f;
+
+            // --- Pass 1: free Target-tagged objects ---
             int hitCount = Physics.OverlapSphereNonAlloc(searchOrigin, searchRadius, _overlapBuffer);
 
             GameObject nearest = null;
@@ -231,11 +241,43 @@ namespace Robotics
                 }
             }
 
+            // --- Pass 2: objects held by another gripper (handoff scenario) ---
+            // AttachObject clears the "Target" tag from the held object to prevent
+            // IK drift, so pass 1 will miss it.  We scan all GripperControllers to
+            // find held objects within reach of this gripper.
+            if (nearest == null)
+            {
+                GripperController[] allGrippers = FindObjectsByType<GripperController>(
+                    FindObjectsSortMode.None
+                );
+                foreach (var other in allGrippers)
+                {
+                    // Skip ourselves — we're looking for objects held by a *different* robot.
+                    if (other == _gripperController)
+                        continue;
+
+                    if (!other.IsHoldingObject || other.GraspedObject == null)
+                        continue;
+
+                    float dist = Vector3.Distance(searchOrigin, other.GraspedObject.transform.position);
+                    if (dist <= searchRadius && dist < nearestDist)
+                    {
+                        nearestDist = dist;
+                        nearest = other.GraspedObject;
+                        candidateCount++;
+                        Debug.Log(
+                            $"{_logPrefix} Pass 2: found handoff object '{nearest.name}' "
+                                + $"held by another gripper at {dist * 100f:F1}cm from gripper centre"
+                        );
+                    }
+                }
+            }
+
             if (nearest != null)
             {
                 if (candidateCount > 1)
                     Debug.LogWarning(
-                        $"{_logPrefix} {candidateCount} Target-tagged objects within {searchRadius * 100f:F0}cm — "
+                        $"{_logPrefix} {candidateCount} graspable objects within {searchRadius * 100f:F0}cm — "
                             + $"attaching to nearest ('{nearest.name}' at {nearestDist * 100f:F1}cm). "
                             + "Wrong object may be grasped in dense scenes."
                     );
@@ -246,7 +288,7 @@ namespace Robotics
             }
             else
                 Debug.LogWarning(
-                    $"{_logPrefix} No Target-tagged object within {searchRadius * 100f:F0}cm of {searchOrigin}"
+                    $"{_logPrefix} No graspable object within {searchRadius * 100f:F0}cm of {searchOrigin}"
                 );
 
             return nearest;

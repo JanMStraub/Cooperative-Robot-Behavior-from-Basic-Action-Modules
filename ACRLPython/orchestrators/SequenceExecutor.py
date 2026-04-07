@@ -260,7 +260,7 @@ class SequenceExecutor:
 
         if has_parallel_groups:
             # Execute with parallel group support
-            logger.info("Parallel execution mode enabled (parallel_group detected)")
+            logger.info("Parallel execution mode enabled")
             group_results, group_completed = self._execute_parallel_groups(
                 commands, timeout
             )
@@ -448,7 +448,15 @@ class SequenceExecutor:
             # Using as_completed with an overall timeout so that unhandled
             # exceptions inside execute_command_thread propagate via
             # future.result() instead of silently disappearing.
-            with ThreadPoolExecutor(max_workers=len(group_commands)) as pool:
+            #
+            # NOTE: We manage the pool explicitly (not via context manager) so
+            # that shutdown(wait=False) is used on timeout/abort.  The context
+            # manager form always calls shutdown(wait=True) on __exit__, which
+            # would block here for the full operation timeout even after
+            # as_completed gives up — the root cause of the 30-second hang on
+            # graceful shutdown.
+            pool = ThreadPoolExecutor(max_workers=len(group_commands))
+            try:
                 future_to_idx = {
                     pool.submit(execute_command_thread, idx, cmd): idx
                     for idx, cmd in group_commands
@@ -479,13 +487,15 @@ class SequenceExecutor:
                                     cmd.get("capture_var"),
                                 )
                 except FuturesTimeoutError:
-                    # One or more futures did not finish within timeout+5s;
-                    # remaining futures are cancelled automatically by the
-                    # context-manager exit.  The results loop below will
-                    # produce a timeout error for any idx not in thread_results.
+                    # One or more futures did not finish within timeout+5s.
+                    # Return immediately — do not wait for stray threads.
                     logger.warning(
                         f"[Group {group_num}] as_completed timed out; some commands may not have finished"
                     )
+            finally:
+                # shutdown(wait=False) returns immediately; any still-running
+                # threads will complete in the background without blocking us.
+                pool.shutdown(wait=False)
 
             # Process results from this group
             group_success = True

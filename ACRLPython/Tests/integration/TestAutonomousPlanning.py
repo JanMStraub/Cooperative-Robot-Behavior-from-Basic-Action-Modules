@@ -57,7 +57,7 @@ class TestAutonomousPlanning(unittest.TestCase):
         # Check if operations are listed
         self.assertIn("move_to_coordinate", ops_summary.lower())
 
-        print(f"✓ Operations summary generated ({len(ops_summary)} chars)")
+        print(f"Operations summary generated ({len(ops_summary)} chars)")
         print(
             f"  Contains workflow patterns: {'WORKFLOW PATTERN' in ops_summary or 'workflow' in ops_summary.lower()}"
         )
@@ -77,7 +77,7 @@ class TestAutonomousPlanning(unittest.TestCase):
         self.assertEqual(handoff.name, "handoff")
         self.assertGreater(len(handoff.steps), 0)
 
-        print(f"✓ Workflow registry has {len(all_patterns)} patterns")
+        print(f"Workflow registry has {len(all_patterns)} patterns")
         print(f"  Handoff pattern has {len(handoff.steps)} steps")
 
     @pytest.mark.skipif(
@@ -97,7 +97,7 @@ class TestAutonomousPlanning(unittest.TestCase):
         self.assertIsInstance(commands, list)
         self.assertGreater(len(commands), 0, "Should generate at least one command")
 
-        print(f"✓ Generated {len(commands)} commands")
+        print(f"Generated {len(commands)} commands")
 
         # Check for parallel_group assignments (only if LLM is available)
         has_parallel_groups = any("parallel_group" in cmd for cmd in commands)
@@ -132,7 +132,7 @@ class TestAutonomousPlanning(unittest.TestCase):
         self.assertGreater(len(errors), 0, "Should return error messages")
         self.assertIn("undefined_signal", str(errors))
 
-        print(f"✓ Validation caught missing signal: {errors[0]}")
+        print(f"Validation caught missing signal: {errors[0]}")
 
     def test_plan_validation_variable_usage(self):
         """Test validation catches variables used before definition"""
@@ -154,7 +154,7 @@ class TestAutonomousPlanning(unittest.TestCase):
         self.assertGreater(len(errors), 0)
         self.assertIn("target", str(errors))
 
-        print(f"✓ Validation caught undefined variable: {errors[0]}")
+        print(f"Validation caught undefined variable: {errors[0]}")
 
     def test_plan_validation_valid_plan(self):
         """Test validation passes for valid plans"""
@@ -187,7 +187,7 @@ class TestAutonomousPlanning(unittest.TestCase):
         self.assertTrue(valid, f"Valid plan should pass validation: {errors}")
         self.assertEqual(len(errors), 0)
 
-        print(f"✓ Validation passed for valid plan with {len(valid_plan)} commands")
+        print(f"Validation passed for valid plan with {len(valid_plan)} commands")
 
     @pytest.mark.skipif(
         not LLM_AVAILABLE, reason="Requires LM Studio with embedding model"
@@ -212,7 +212,7 @@ class TestAutonomousPlanning(unittest.TestCase):
             len(move_commands), 2, "Should have moves for both robots"
         )
 
-        print(f"✓ Simultaneous movement: {len(move_commands)} move commands")
+        print(f"Simultaneous movement: {len(move_commands)} move commands")
 
     @pytest.mark.skipif(
         not LLM_AVAILABLE, reason="Requires LM Studio with embedding model"
@@ -228,7 +228,7 @@ class TestAutonomousPlanning(unittest.TestCase):
         assert commands is not None
         self.assertIsInstance(commands, list)
 
-        print(f"✓ Collaborative task generated {len(commands)} commands")
+        print(f"Collaborative task generated {len(commands)} commands")
 
         # Check for key operation types
         op_types = set(c.get("operation") for c in commands)
@@ -259,7 +259,7 @@ class TestWorkflowPatternFormatting(unittest.TestCase):
         self.assertIn("Steps:", formatted)
         self.assertIn("Examples:", formatted)
 
-        print(f"✓ Formatted pattern ({len(formatted)} chars):")
+        print(f"Formatted pattern ({len(formatted)} chars):")
         print(formatted[:300] + "...")
 
     def test_all_patterns_formattable(self):
@@ -271,7 +271,7 @@ class TestWorkflowPatternFormatting(unittest.TestCase):
             self.assertIsInstance(formatted, str)
             self.assertGreater(len(formatted), 0)
 
-        print(f"✓ All {len(all_patterns)} patterns can be formatted")
+        print(f"All {len(all_patterns)} patterns can be formatted")
 
 
 def run_tests():

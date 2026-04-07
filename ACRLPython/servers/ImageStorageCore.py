@@ -16,8 +16,8 @@ Architecture Decision:
         operations/DetectionOperations (CIRCULAR!)
 
     NEW (Clean):
-        operations/DetectionOperations → servers/ImageStorageCore (✓)
-        servers/ImageServer → servers/ImageStorageCore (✓)
+        operations/DetectionOperations → servers/ImageStorageCore)
+        servers/ImageServer → servers/ImageStorageCore
 
     Core Principle:
         - Core modules (servers/ImageStorageCore) have NO high-level dependencies

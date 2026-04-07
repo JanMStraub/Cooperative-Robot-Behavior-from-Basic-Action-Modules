@@ -123,7 +123,7 @@ def check_robot_status(
         }
 
         # Send to Unity via CommandBroadcaster
-        logger.info(f"Sending status check to {robot_id} (detailed={detailed})")
+        logger.debug(f"Sending status check to {robot_id} (detailed={detailed})")
 
         success = _get_command_broadcaster().send_command(command, request_id)
 

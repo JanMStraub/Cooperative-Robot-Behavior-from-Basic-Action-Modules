@@ -242,7 +242,7 @@ class LMStudioVisionProcessor:
             },
         }
 
-        logger.info(f"✓ Response received in {duration:.2f}s")
+        logger.info(f"Response received in {duration:.2f}s")
 
         return result
 
@@ -281,7 +281,7 @@ def get_images_from_server(
             prompt = storage.get_single_prompt(cam_id) or ""
             prompt_info = f", prompt: '{prompt}'" if prompt else ""
             logger.info(
-                f"  ✓ {cam_id}: {image.shape[1]}x{image.shape[0]}, {age:.1f}s ago{prompt_info}"
+                f"  {cam_id}: {image.shape[1]}x{image.shape[0]}, {age:.1f}s ago{prompt_info}"
             )
             images.append(image)
             valid_camera_ids.append(cam_id)
@@ -313,7 +313,7 @@ def save_response(result: Dict, output_path: Optional[str] = None):
     json_path = base_path.with_suffix(".json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(result, f, indent=2, ensure_ascii=False)
-    logger.info(f"\n✓ Saved full response to: {json_path}")
+    logger.info(f"\nSaved full response to: {json_path}")
 
 
 def main():
@@ -500,7 +500,7 @@ Note: StreamingServer.py must be running for this script to work.
                         continue  # Already processed
                     else:
                         # Process the image
-                        logger.info(f"\n{'='*80}")
+                        logger.info(f"\n{'='*60}")
                         logger.info(f"Processing image from: {cam_id}")
                         logger.info(f"Age: {age:.2f}s, Prompt: '{prompt}'")
 
@@ -512,11 +512,11 @@ Note: StreamingServer.py must be running for this script to work.
                         )
 
                     # Display response
-                    logger.info("\n" + "=" * 80)
+                    logger.info("\n" + "=" * 60)
                     logger.info(f"RESPONSE FOR {cam_id}:")
-                    logger.info("=" * 80)
+                    logger.info("=" * 60)
                     logger.info(result["response"])
-                    logger.info("=" * 80 + "\n")
+                    logger.info("=" * 60 + "\n")
 
                     # Save response
                     if not args.no_save:

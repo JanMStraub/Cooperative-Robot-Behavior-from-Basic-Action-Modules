@@ -86,7 +86,7 @@ class RAGSystem:
 
         Example:
             >>> rag = RAGSystem()
-            ✓ Connected to LM Studio at http://localhost:1234/v1
+            Connected to LM Studio at http://localhost:1234/v1
             Loaded vector store from .rag_index.pkl (5 operations)
         """
         self.registry = registry or _get_registry()
@@ -138,7 +138,7 @@ class RAGSystem:
             >>> rag = RAGSystem()
             >>> rag.index_operations()
             Building index for 5 operations...
-            ✓ Index built with 5 operations
+            Index built with 5 operations
             True
         """
         try:

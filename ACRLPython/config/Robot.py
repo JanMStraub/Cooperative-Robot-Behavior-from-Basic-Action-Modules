@@ -68,6 +68,19 @@ ROBOT_BASE_POSITIONS = {
 }
 
 # ============================================================================
+# Handoff Geometry Parameters
+# ============================================================================
+
+# Default object dimensions (m) used when actual dims are unavailable.
+# Matches the scene's standard 5 cm cube prefabs.
+HANDOFF_DEFAULT_OBJECT_DIMENSIONS = (0.05, 0.05, 0.05)
+
+# Extra clearance added to the half-extent offset so grippers don't overlap.
+HANDOFF_GRIPPER_CLEARANCE = float(
+    os.environ.get("HANDOFF_GRIPPER_CLEARANCE", "0.02")
+)  # meters
+
+# ============================================================================
 # Multi-Robot Coordination Safety Parameters
 # ============================================================================
 

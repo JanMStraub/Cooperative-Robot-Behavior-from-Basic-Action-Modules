@@ -4,10 +4,10 @@ RunRobotController.py - Unified orchestrator for robot control
 
 Starts all required servers in a single process:
 - ImageServer (ports 5005, 5006) - receives images
-- CommandServer (port 5010) - sends commands, receives completions
-- SequenceServer (port 5013) - processes command sequences
-- WorldStateServer (port 5014) - receives robot/object state updates
-- AutoRTServer (port 5015) - autonomous task generation
+- CommandServer (port 5007) - sends commands, receives completions
+- SequenceServer (port 5011) - processes command sequences
+- WorldStateServer (port 5012) - receives robot/object state updates
+- AutoRTServer (port 5013) - autonomous task generation
 
 Usage:
     python -m orchestrators.RunRobotController
@@ -215,9 +215,9 @@ class RobotController:
                             hasattr(command_parser.rag, "query_engine")
                             and command_parser.rag.query_engine is not None
                         ):
-                            command_parser.rag.query_engine.set_world_state(world_state)
+                            command_parser.rag.query_engine.set_world_state(world_state)  # type: ignore[union-attr]
                             logger.info(
-                                "✓ WorldState wired into RAG QueryEngine for context-aware search"
+                                "WorldState wired into RAG QueryEngine for context-aware search"
                             )
                         else:
                             logger.debug(
@@ -296,7 +296,7 @@ class RobotController:
             if self._world_state_server:
                 self._world_state_server.register_update_callback(on_state_update)
                 logger.info(
-                    "✓ WorldStateServer callback registered for confidence decay"
+                    "WorldStateServer callback registered for confidence decay"
                 )
             else:
                 logger.debug(
@@ -337,7 +337,7 @@ class RobotController:
                     self._graph_builder.on_state_update
                 )
                 logger.info(
-                    "✓ KnowledgeGraph wired — graph updates on every world state push"
+                    "KnowledgeGraph wired — graph updates on every world state push"
                 )
             else:
                 logger.debug(
@@ -364,7 +364,7 @@ class RobotController:
             world_state = get_world_state()
             self._perception_refresh = PerceptionRefreshLoop(world_state=world_state)
             self._perception_refresh.start()
-            logger.info("✓ PerceptionRefreshLoop started (stale-object auto-refresh)")
+            logger.info("PerceptionRefreshLoop started")
         except Exception as exc:
             logger.warning(f"Failed to start PerceptionRefreshLoop: {exc}")
             logger.debug("Non-critical — stale objects will not be auto-refreshed")
@@ -387,7 +387,7 @@ class RobotController:
             bridge = ROSBridge.get_instance()  # type: ignore
             success = bridge.connect()
             if success:
-                logger.info("✓ ROS bridge connected (AUTO_CONNECT_ROS)")
+                logger.info("ROS bridge connected")
             else:
                 logger.warning(
                     "ROS bridge auto-connect failed — Docker may not be running. "
@@ -413,13 +413,13 @@ class RobotController:
             host=self._host,
         )
 
-        # Start CommandServer (port 5010) - bidirectional for commands and completions
+        # Start CommandServer (port 5007) - bidirectional for commands and completions
         logger.info(f"Starting CommandServer (port: {self._command_port})")
         self._command_server = run_command_server_background(
             port=self._command_port, host=self._host
         )
 
-        # Initialize and start SequenceServer (port 5013)
+        # Initialize and start SequenceServer (port 5011)
         logger.info(f"Starting SequenceServer (port: {self._sequence_port})")
         self._sequence_server = run_sequence_server_background(
             lm_studio_url=LMSTUDIO_BASE_URL,
@@ -427,13 +427,12 @@ class RobotController:
             check_completion=self._check_completion,
         )
 
-        # Start WorldStateServer (port 5014) only in sim mode and when perception-only
+        # Start WorldStateServer (port 5012) only in sim mode and when perception-only
         # mode is not active.  In real mode or PERCEPTION_ONLY_MODE=true, world state
         # is populated entirely by FK (joint angles) and stereo perception.
         from core.TCPServerBase import ServerConfig
 
         if self._env == "sim" and not PERCEPTION_ONLY_MODE:
-            logger.info(f"Starting WorldStateServer (port: {self._world_state_port})")
             world_state_config = ServerConfig(
                 host=self._host, port=self._world_state_port
             )
@@ -449,8 +448,7 @@ class RobotController:
                 "Real env: WorldStateServer disabled — WorldState populated by perception only"
             )
 
-        # Start AutoRTServer (port 5015) - autonomous task generation
-        logger.info(f"Starting AutoRTServer (port: {self._autort_port})")
+        # Start AutoRTServer (port 5013) - autonomous task generation
         autort_config = ServerConfig(host=self._host, port=self._autort_port)
         self._autort_server = AutoRTServer(config=autort_config)
         self._autort_server.start()
@@ -478,22 +476,22 @@ class RobotController:
 
         hw = get_hardware_interface(env=self._env)
         cam = get_camera_provider(env=self._env)
-        logger.info(f"✓ HardwareInterface: {type(hw).__name__}")
-        logger.info(f"✓ CameraProvider:    {type(cam).__name__}")
+        logger.info(f"HardwareInterface: {type(hw).__name__}")
+        logger.info(f"CameraProvider:    {type(cam).__name__}")
 
         # Auto-connect to ROS bridge if enabled
         self._auto_connect_ros()
 
         # Start Web UI server if requested
         if self._web_port:
-            from servers.WebUIServer import run_webui_server_background
+            from servers.WebUIServer import run_webui_server_background, get_startup_event
 
             self._web_server_thread = run_webui_server_background(
                 host=self._host, port=self._web_port
             )
-            logger.info(
-                f"  Web UI:                 http://{self._host}:{self._web_port}"
-            )
+            # Wait for uvicorn's startup_event to fire (AutoRTHandler init,
+            # broadcast callback registration, etc.) before printing the banner.
+            get_startup_event().wait(timeout=10)
 
         self._running = True
 
@@ -588,7 +586,7 @@ class RobotController:
                 f"  World State Server:     {self._host}:{self._world_state_port}"
             )
         elif PERCEPTION_ONLY_MODE:
-            logger.info(f"  World State Server:     Disabled (perception-only mode)")
+            logger.info(f"  World State Server:     Disabled")
         else:
             logger.info(f"  World State Server:     Disabled (real env)")
         logger.info(f"  AutoRT Server:          {self._host}:{self._autort_port}")
@@ -605,8 +603,7 @@ class RobotController:
             logger.info(f"  Knowledge Graph:        Enabled")
         else:
             logger.info(
-                f"  Knowledge Graph:        Disabled (set KNOWLEDGE_GRAPH_ENABLED=true to enable)"
-            )
+                f"  Knowledge Graph:        Disabled")
         logger.info("=" * 60)
 
     def stop(self):

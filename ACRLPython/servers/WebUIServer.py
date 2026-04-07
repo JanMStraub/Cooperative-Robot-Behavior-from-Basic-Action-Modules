@@ -64,6 +64,15 @@ logger = logging.getLogger(__name__)
 # can schedule coroutines on it via run_coroutine_threadsafe().
 _main_loop: Optional[asyncio.AbstractEventLoop] = None
 
+# Fired once uvicorn's startup_event completes, so callers can wait for the
+# Web UI to be fully initialised before proceeding.
+_startup_complete = threading.Event()
+
+
+def get_startup_event() -> threading.Event:
+    """Return the event that is set when the Web UI server has fully started."""
+    return _startup_complete
+
 # SequenceQueryHandler singleton — initialized once to avoid repeated LLM model loading.
 _sequence_handler: Optional[Any] = None
 
@@ -641,6 +650,7 @@ async def startup_event():
     """Capture the running event loop and start background tasks."""
     global _main_loop
     _main_loop = asyncio.get_running_loop()
+    _startup_complete.set()
 
     asyncio.create_task(state_broadcaster())
 
@@ -702,7 +712,7 @@ def run_webui_server(host: str = "0.0.0.0", port: int = 8000):
             "WebUIServer requires fastapi and uvicorn. "
             "Install them with: pip install fastapi uvicorn"
         )
-    logger.info(f"Starting WebUIServer on http://{host}:{port}")
+    logger.debug(f"Starting WebUIServer on http://{host}:{port}")
     assert uvicorn is not None and isinstance(app, FastAPI)
     uvicorn.run(app, host=host, port=port, log_level="warning")
 

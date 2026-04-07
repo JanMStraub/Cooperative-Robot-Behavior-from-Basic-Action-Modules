@@ -49,6 +49,13 @@ namespace Core
         /// </summary>
         public const float MOVEMENT_THRESHOLD = 0.01f;
 
+        /// <summary>
+        /// Rotation convergence threshold in degrees.
+        /// IK declares "target reached" once orientation error is below this value.
+        /// Tighter values improve accuracy; looser values reduce convergence time.
+        /// </summary>
+        public const float ROTATION_CONVERGENCE_THRESHOLD_DEG = 3.0f;
+
         // GameObject Naming
         /// <summary>
         /// Suffix for temporary grasp target GameObjects

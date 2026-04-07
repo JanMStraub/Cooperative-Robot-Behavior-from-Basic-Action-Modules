@@ -988,7 +988,7 @@ if __name__ == "__main__":
     assert decoded_id == test_camera_id
     assert decoded_prompt == test_prompt
     assert decoded_image == test_image
-    print("✓ Image message encode/decode works")
+    print("Image message encode/decode works")
 
     # Test result message encoding/decoding
     test_result = {
@@ -1011,7 +1011,7 @@ if __name__ == "__main__":
     )
     assert result_request_id == test_result_request_id
     assert decoded_result == test_result
-    print("✓ Result message encode/decode works")
+    print("Result message encode/decode works")
 
     # Test RAG query
     rag_query_request_id = 99999
@@ -1021,7 +1021,7 @@ if __name__ == "__main__":
     rag_request_id, rag_query_dict = UnityProtocol.decode_rag_query(rag_encoded)
     assert rag_request_id == rag_query_request_id
     assert rag_query_dict["query"] == "move robot to position"
-    print("✓ RAG query encode/decode works")
+    print("RAG query encode/decode works")
 
     # Test status query
     status_query_request_id = 11111
@@ -1034,26 +1034,26 @@ if __name__ == "__main__":
     assert status_request_id == status_query_request_id
     assert status_query_dict["robot_id"] == "Robot1"
     assert status_query_dict["detailed"] == True
-    print("✓ Status query encode/decode works")
+    print("Status query encode/decode works")
 
     # Test error cases
     try:
         UnityProtocol.encode_image_message("", "prompt", b"data", 0)
         assert False, "Should have raised ValueError"
     except ValueError as e:
-        print(f"✓ Empty camera ID rejected: {e}")
+        print(f"Empty camera ID rejected: {e}")
 
     try:
         UnityProtocol.encode_image_message("A" * 300, "prompt", b"data", 0)
         assert False, "Should have raised ValueError"
     except ValueError as e:
-        print(f"✓ Camera ID too long rejected: {e}")
+        print(f"Camera ID too long rejected: {e}")
 
     # Test message type detection
     image_type, _, _ = UnityProtocol._decode_header(encoded)
     assert image_type == MessageType.IMAGE
     result_type, _, _ = UnityProtocol._decode_header(encoded_result)
     assert result_type == MessageType.RESULT
-    print("✓ Message type detection works")
+    print("Message type detection works")
 
     print("\nAll tests passed! Protocol V2 ready.")

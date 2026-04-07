@@ -246,21 +246,20 @@ class YOLODetector:
 
         self.model_path = Path(model_path)
         self.task = task
-        logging.info(f"Loading YOLO model from: {self.model_path} (task={task})")
+        logging.debug(f"Loading YOLO model from: {self.model_path} (task={task})")
 
         try:
             if YOLO is None:
                 raise ImportError("YOLO not available")
 
             # Load model with explicit task to avoid ONNX warning
-            # This fixes: "WARNING ⚠️ Unable to automatically guess model task"
             self.model = YOLO(str(self.model_path), task=task)
-            logging.info(f"YOLO model loaded successfully")
+            logging.debug(f"YOLO model loaded successfully")
 
             # Try to extract class names from model metadata
             if hasattr(self.model, "names") and self.model.names:
                 model_classes = self.model.names
-                logging.info(f"Loaded {len(model_classes)} classes from model metadata")
+                logging.debug(f"Loaded {len(model_classes)} classes from model metadata")
             else:
                 model_classes = None
 
@@ -274,17 +273,17 @@ class YOLODetector:
         # 3. DEFAULT_CLASS_MAPPING (fallback)
         if class_mapping is not None:
             self.class_mapping = class_mapping
-            logging.info(
+            logging.debug(
                 f"Using user-provided class mapping: {list(class_mapping.values())}"
             )
         elif model_classes is not None:
             self.class_mapping = model_classes
-            logging.info(
+            logging.debug(
                 f"Using class mapping from model: {list(model_classes.values())}"
             )
         else:
             self.class_mapping = self.DEFAULT_CLASS_MAPPING
-            logging.info(
+            logging.debug(
                 f"Using default class mapping: {list(self.DEFAULT_CLASS_MAPPING.values())}"
             )
 
@@ -307,7 +306,7 @@ class YOLODetector:
             if isinstance(self.class_mapping, dict)
             else list(self.class_mapping)
         )
-        logging.info(
+        logging.debug(
             f"YOLODetector initialized: "
             f"model={self.model_path.name}, task={self.task}, "
             f"conf={self.conf_threshold}, iou={self.iou_threshold}, "
@@ -1244,7 +1243,7 @@ Examples:
         print(f"  {', '.join(f'{c:20s}' for c in classes_row)}")
 
     if args.debug:
-        print(f"\n✓ Debug images saved to: {detector.debug_dir}")
+        print(f"\nDebug images saved to: {detector.debug_dir}")
         print(f"  Files: yolo_test_*.jpg")
 
 

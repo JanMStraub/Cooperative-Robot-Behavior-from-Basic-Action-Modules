@@ -94,7 +94,7 @@ class ROSBridge:
             self._socket.settimeout(timeout)
             self._socket.connect((self._host, self._port))
             self._connected = True
-            logger.info(f"Connected to ROS bridge at {self._host}:{self._port}")
+            logger.debug(f"Connected to ROS bridge at {self._host}:{self._port}")
 
             # Verify connection with ping
             result = self._send_command({"command": "ping"})

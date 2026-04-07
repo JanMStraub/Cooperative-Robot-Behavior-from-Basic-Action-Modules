@@ -327,9 +327,9 @@ class OperationRegistry:
             String with formatted summary
         """
         summary = []
-        summary.append("=" * 70)
+        summary.append("=" * 60)
         summary.append("ROBOT OPERATIONS REGISTRY")
-        summary.append("=" * 70)
+        summary.append("=" * 60)
         summary.append(f"\nTotal operations: {len(self.operations)}\n")
 
         # Group by category
