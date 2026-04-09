@@ -23,6 +23,7 @@ namespace Robotics.Grasp
         private readonly float[] _jointLowerLimits;
         private readonly float[] _jointUpperLimits;
         private Vector3 _endEffectorLocalOffset;
+        private Quaternion _endEffectorLocalRotationOffset;
         private readonly int _jointCount;
 
         private readonly float[] _bufferJointAngles;
@@ -148,6 +149,12 @@ namespace Robotics.Grasp
 
             _endEffectorLocalOffset = _joints[_jointCount - 1]
                 .transform.InverseTransformPoint(_endEffector.position);
+
+            // Cache rotation offset from last joint to end effector.
+            // Required so FK returns EE orientation, not just last-joint orientation.
+            _endEffectorLocalRotationOffset =
+                Quaternion.Inverse(_joints[_jointCount - 1].transform.rotation)
+                * _endEffector.rotation;
 
             for (int i = 0; i < _jointCount; i++)
             {
@@ -523,7 +530,9 @@ namespace Robotics.Grasp
 
             currentPos += currentRot * _endEffectorLocalOffset;
 
-            return new IKState(currentPos, currentRot);
+            // Apply the fixed rotation offset from the last joint to endEffectorBase
+            // so FK reports actual end-effector orientation, not just last-joint orientation.
+            return new IKState(currentPos, currentRot * _endEffectorLocalRotationOffset);
         }
 
         /// <summary>

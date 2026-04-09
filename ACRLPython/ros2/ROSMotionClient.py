@@ -713,9 +713,9 @@ class ROSMotionServer:
         goal.request = MotionPlanRequest()
         goal.request.group_name = "arm"
         # Explicitly select OMPL pipeline and RRTConnect planner.
-        # Without pipeline_id, MoveIt 2 Humble may pick CHOMP (also installed) as
-        # the default pipeline, which does not support pose goals and fails with
-        # "Start state violates joint limits" / INVALID_GOAL_CONSTRAINTS.
+        # pipeline_id="ompl" is required — without it, MoveIt 2 Humble may pick
+        # CHOMP (also installed) as the default, which does not support pose goals
+        # and fails with "Start state violates joint limits" / INVALID_GOAL_CONSTRAINTS.
         goal.request.pipeline_id = "ompl"
         goal.request.planner_id = "RRTConnect"
         goal.request.num_planning_attempts = MOVEIT_PLANNING_ATTEMPTS

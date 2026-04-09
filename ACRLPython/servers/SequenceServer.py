@@ -114,6 +114,11 @@ class SequenceQueryHandler(SingletonBase):
             logger.error(f"Failed to initialize SequenceQueryHandler: {e}")
             return False
 
+    # Prefix used by the test scripts (tools/send_command.py etc.) to send a
+    # pre-parsed operation list without going through the LLM.
+    # Format: "EXEC:" + JSON-encoded list of {"operation": str, "params": dict}
+    DIRECT_EXEC_PREFIX = "EXEC:"
+
     def execute_sequence(
         self,
         command_text: str,
@@ -125,8 +130,14 @@ class SequenceQueryHandler(SingletonBase):
         """
         Parse and execute a command sequence.
 
+        When command_text starts with ``EXEC:`` the remainder is treated as a
+        JSON-encoded list of already-parsed commands
+        (``[{"operation": str, "params": dict}, ...]``) and is passed directly
+        to the executor, bypassing the LLM entirely.  This is used by test
+        scripts (tools/send_command.py) to drive Unity without LLM latency.
+
         Args:
-            command_text: Natural language command
+            command_text: Natural language command, or "EXEC:<json>" for direct execution.
             robot_id: Default robot ID
             camera_id: Camera ID for perception operations (depth detection)
             auto_execute: Whether to automatically execute parsed operations
@@ -138,6 +149,41 @@ class SequenceQueryHandler(SingletonBase):
         if not self._parser or not self._executor:
             return {"success": False, "error": "SequenceQueryHandler not initialized"}
 
+        # ── Direct execution path (no LLM) ────────────────────────────────────
+        if command_text.startswith(self.DIRECT_EXEC_PREFIX):
+            raw = command_text[len(self.DIRECT_EXEC_PREFIX):]
+            try:
+                commands = json.loads(raw)
+                if not isinstance(commands, list):
+                    return {"success": False, "error": "EXEC: payload must be a JSON array"}
+            except json.JSONDecodeError as e:
+                return {"success": False, "error": f"EXEC: invalid JSON — {e}"}
+
+            logger.info(
+                f"Direct execution (no LLM): {len(commands)} command(s) for {robot_id}"
+            )
+
+            if not auto_execute:
+                return {
+                    "success": True,
+                    "parsed_commands": commands,
+                    "original_command": command_text,
+                    "auto_execute": False,
+                    "total_commands": len(commands),
+                    "completed_commands": 0,
+                    "results": [],
+                    "total_duration_ms": 0,
+                }
+
+            exec_result = self._executor.execute_sequence(
+                commands, timeout_per_command=timeout
+            )
+            exec_result["parsed_commands"] = commands
+            exec_result["original_command"] = command_text
+            exec_result["direct_exec"] = True
+            return exec_result
+
+        # ── Normal path: LLM parsing ───────────────────────────────────────────
         # Check if negotiation is needed (before parsing)
         if self._executor and auto_execute:
             negotiated = self._executor.negotiate_if_needed(command_text, robot_id)

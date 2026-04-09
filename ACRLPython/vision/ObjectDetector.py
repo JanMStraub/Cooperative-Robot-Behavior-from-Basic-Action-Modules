@@ -245,9 +245,6 @@ class CubeDetector:
                     else YOLO_MODEL_PATH
                 )
                 self.yolo_detector = YOLODetector(model_path=model_path)  # type: ignore[name-defined]
-                logging.info(
-                    f"CubeDetector initialized with YOLO task='{YOLO_TASK}' (model: {model_path})"
-                )
             except Exception as e:
                 logging.error(f"Failed to initialize YOLO detector: {e}")
                 logging.error(
@@ -355,7 +352,7 @@ class CubeDetector:
         if self.enable_debug:
             self._save_debug_image(image, all_detections, camera_id)
 
-        logging.info(f"Detected {len(all_detections)} objects")
+        logging.debug(f"Detected {len(all_detections)} objects")
 
         return DetectionResult(camera_id, width, height, all_detections)
 
@@ -483,12 +480,25 @@ class CubeDetector:
                 camera_position=camera_position,
             )
 
-            # Estimate 3D dimensions from bounding box and depth
+            # Estimate 3D dimensions from bounding box and depth.
+            # When estimate_depth_from_bbox failed (depth_m is None) but we have
+            # a world-space position and camera position, derive a fallback depth
+            # from the Euclidean distance so dimensions can still be computed.
+            fallback_depth_m = depth_m
+            if fallback_depth_m is None and world_pos is not None and camera_position is not None:
+                try:
+                    dx = world_pos[0] - camera_position[0]
+                    dy = world_pos[1] - camera_position[1]
+                    dz = world_pos[2] - camera_position[2]
+                    fallback_depth_m = math.sqrt(dx * dx + dy * dy + dz * dz)
+                except Exception:
+                    pass
+
             dimensions = None
-            if depth_m is not None and focal_length is not None:
+            if fallback_depth_m is not None and focal_length is not None:
                 dimensions = estimate_object_dimensions_from_bbox(
                     (det.bbox_x, det.bbox_y, det.bbox_w, det.bbox_h),
-                    depth_m,
+                    fallback_depth_m,
                     focal_length,
                     camera_config,
                 )
@@ -688,7 +698,7 @@ class CubeDetector:
             # Summary log for each color
             if accepted_count > 0:
                 logging.info(
-                    f"  {color_name.upper()}: ✓ {accepted_count} cube(s) detected"
+                    f"  {color_name.upper()}: {accepted_count} cube(s) detected"
                 )
 
         return detections

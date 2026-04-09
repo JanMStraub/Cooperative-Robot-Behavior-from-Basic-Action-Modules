@@ -187,6 +187,10 @@ class TCPServerBase(ABC):
         )
         self._running = False
 
+        # Close the server socket first so accept() unblocks immediately
+        # instead of waiting for the socket_timeout (up to 1s per server).
+        self._cleanup()
+
         # Wait for accept and heartbeat threads to finish
         if self._accept_thread and self._accept_thread.is_alive():
             self._accept_thread.join(timeout=2.0)

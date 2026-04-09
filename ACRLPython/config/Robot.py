@@ -72,13 +72,57 @@ ROBOT_BASE_POSITIONS = {
 # ============================================================================
 
 # Default object dimensions (m) used when actual dims are unavailable.
-# Matches the scene's standard 5 cm cube prefabs.
-HANDOFF_DEFAULT_OBJECT_DIMENSIONS = (0.05, 0.05, 0.05)
+# Matches the scene's standard 2 cm cube prefabs.
+HANDOFF_DEFAULT_OBJECT_DIMENSIONS = (0.02, 0.02, 0.02)
 
 # Extra clearance added to the half-extent offset so grippers don't overlap.
 HANDOFF_GRIPPER_CLEARANCE = float(
     os.environ.get("HANDOFF_GRIPPER_CLEARANCE", "0.02")
 )  # meters
+
+# ============================================================================
+# Follow-Target Configuration
+# ============================================================================
+
+# When True the arm re-plans to the live object position after each trajectory
+# if the cube has drifted (e.g. pushed by the other robot's open fingers).
+FOLLOW_TARGET_ENABLED = os.environ.get("FOLLOW_TARGET_ENABLED", "true").lower() == "true"
+
+# Maximum number of corrective moves before closing the gripper regardless.
+FOLLOW_TARGET_MAX_CORRECTIONS = int(os.environ.get("FOLLOW_TARGET_MAX_CORRECTIONS", "3"))
+
+# Minimum object drift (meters) that triggers a corrective plan_and_execute.
+FOLLOW_TARGET_DRIFT_THRESHOLD = float(os.environ.get("FOLLOW_TARGET_DRIFT_THRESHOLD", "0.015"))
+
+# ============================================================================
+# Grasp Geometry & Approach Parameters
+# ============================================================================
+
+# Physical offset from ee_link to gripper fingertip plane (meters).
+# AR4: ee_link → fingertip = 0.05m, finger length = 0.02m.
+# ee_link stops this far above the object centre so the fingertips land at
+# the object centre and wrap around it.
+GRASP_TCP_OFFSET = float(os.environ.get("GRASP_TCP_OFFSET", "0.05"))  # meters
+
+# Hover height above object centre for the pre-grasp approach waypoint.
+# Must be high enough that the arm clears the object when it swings in.
+PRE_GRASP_HOVER_OFFSET = float(os.environ.get("PRE_GRASP_HOVER_OFFSET", "0.15"))  # meters
+
+# Absolute world-Y safety height used as an intermediate waypoint before descent.
+# The arm moves here first (joint-space) so it cannot sweep through table-height
+# objects on its way to the pre-grasp position. Should be above the tallest object.
+PRE_GRASP_CLEARANCE_Y = float(os.environ.get("PRE_GRASP_CLEARANCE_Y", "0.35"))  # meters
+
+# Velocity/acceleration scaling for the joint-space pre-grasp approach move.
+# Full speed (1.0) causes residual vibration on arrival and risks overshoot into
+# the object; lower values give the arm time to decelerate cleanly.
+PREGRASP_VELOCITY_SCALING = float(os.environ.get("PREGRASP_VELOCITY_SCALING", "1.0"))
+PREGRASP_ACCELERATION_SCALING = float(os.environ.get("PREGRASP_ACCELERATION_SCALING", "1.0"))
+
+# Velocity/acceleration scaling for the final Cartesian descent to grasp position.
+# Must be slow enough that the gripper doesn't slam into the object on arrival.
+GRASP_DESCENT_VELOCITY_SCALING = float(os.environ.get("GRASP_DESCENT_VELOCITY_SCALING", "0.7"))
+GRASP_DESCENT_ACCELERATION_SCALING = float(os.environ.get("GRASP_DESCENT_ACCELERATION_SCALING", "0.5"))
 
 # ============================================================================
 # Multi-Robot Coordination Safety Parameters

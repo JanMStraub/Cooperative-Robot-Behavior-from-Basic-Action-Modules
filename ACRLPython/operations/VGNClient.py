@@ -666,7 +666,7 @@ class VGNClient:
                 # Inverse: world_X=VGN_X, world_Y=VGN_Z, world_Z=-VGN_Y
                 t_world = np.array([t[0], t[2], -t[1]])
                 pos = t_world  # already in RH world frame (not centred, using raw world coords)
-                logger.info(
+                logger.debug(
                     f"[VGN] grasp vgn={[round(v,4) for v in t.tolist()]} "
                     f"→pos_rh={[round(v,4) for v in pos.tolist()]}"
                 )
@@ -690,7 +690,7 @@ class VGNClient:
                     # Convert from RH world → Unity LH world: reflect across YZ plane (X → -X).
                     pos_out = (pos * np.array([-1.0, 1.0, 1.0])).tolist()
                     approach_out = (approach * np.array([-1.0, 1.0, 1.0])).tolist()
-                    logger.info(f"[VGN] pos_out(UnityLH)={[round(v,4) for v in pos_out]}")
+                    logger.debug(f"[VGN] pos_out(UnityLH)={[round(v,4) for v in pos_out]}")
                     # Rotation RH→LH: R_lh = M @ R_world @ M, where M = diag(-1,1,1).
                     # This correctly handles all rotation components (not just qx flip).
                     M = np.diag([-1.0, 1.0, 1.0])

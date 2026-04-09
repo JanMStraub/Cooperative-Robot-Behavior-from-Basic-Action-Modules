@@ -28,14 +28,6 @@ from .Base import (
 
 setup_logging(__name__)
 logger = logging.getLogger(__name__)
-# Conservative default for tabletop objects (4 cm cube).  When actual dimensions
-# are unavailable the axis selection degenerates to a direction-only offset based
-# on relative robot positions — still useful for preventing gripper collision.
-DEFAULT_HANDOFF_OBJECT_DIMENSIONS = (0.04, 0.04, 0.04)
-
-# Extra clearance added to the half-extent offset so grippers don't overlap.
-GRIPPER_CLEARANCE = 0.02
-
 
 # Import from centralized lazy import system (prevents circular dependencies)
 try:
@@ -43,44 +35,36 @@ try:
 except ImportError:
     from core.Imports import get_command_broadcaster as _get_command_broadcaster
 
-
-# ============================================================================
-# Module-Level Grasp Offset Constants
-# ============================================================================
-
-# Hover height above object centre used for the pre-grasp approach move.
-# Must be high enough that the arm clears the object when it swings in.
-PRE_GRASP_HOVER_OFFSET: float = 0.15  # 15 cm above object centre
-
-# Safe clearance height (Unity world Y) used as an intermediate waypoint before
-# the pre-grasp descent.  The arm moves to this height first (joint-space, no
-# orientation constraint) so it cannot sweep through table-height objects on its
-# way to the pre-grasp position.  Should be above the tallest expected object.
-PRE_GRASP_CLEARANCE_Y: float = 0.35  # 35 cm above table surface
-
-# TCP offset at the final grasp position.
-# Placing ee_link this far above the object centre lets the fingers (which
-# extend ~5 cm beyond ee_link) wrap around the object rather than collide
-# with its top surface or the ground plane.
-# Increased from 0.03 to 0.08 to prevent gripper from slamming into ground.
-GRASP_TCP_OFFSET: float = 0.055  # 5,5 cm above object centre
-
-
-# ============================================================================
-# Follow-Target Configuration
-# ============================================================================
-
-# Toggle: when True the arm will re-plan to the live object position after each
-# trajectory if the cube has drifted (e.g. pushed by the other robot's approach).
-# Set to False to disable correction moves and always close at the planned position.
-FOLLOW_TARGET_ENABLED: bool = True
-
-# Maximum number of corrective moves before giving up and closing anyway.
-FOLLOW_TARGET_MAX_CORRECTIONS: int = 3
-
-# Minimum object drift (metres) that triggers a corrective plan_and_execute.
-# Smaller values react to tiny vibrations; larger values only correct real pushes.
-FOLLOW_TARGET_DRIFT_THRESHOLD: float = 0.015  # 1.5 cm
+try:
+    from ..config.Robot import (
+        FOLLOW_TARGET_DRIFT_THRESHOLD,
+        FOLLOW_TARGET_ENABLED,
+        FOLLOW_TARGET_MAX_CORRECTIONS,
+        GRASP_DESCENT_ACCELERATION_SCALING,
+        GRASP_DESCENT_VELOCITY_SCALING,
+        GRASP_TCP_OFFSET,
+        HANDOFF_DEFAULT_OBJECT_DIMENSIONS as DEFAULT_HANDOFF_OBJECT_DIMENSIONS,
+        HANDOFF_GRIPPER_CLEARANCE as GRIPPER_CLEARANCE,
+        PRE_GRASP_CLEARANCE_Y,
+        PRE_GRASP_HOVER_OFFSET,
+        PREGRASP_ACCELERATION_SCALING,
+        PREGRASP_VELOCITY_SCALING,
+    )
+except ImportError:
+    from config.Robot import (
+        FOLLOW_TARGET_DRIFT_THRESHOLD,
+        FOLLOW_TARGET_ENABLED,
+        FOLLOW_TARGET_MAX_CORRECTIONS,
+        GRASP_DESCENT_ACCELERATION_SCALING,
+        GRASP_DESCENT_VELOCITY_SCALING,
+        GRASP_TCP_OFFSET,
+        HANDOFF_DEFAULT_OBJECT_DIMENSIONS as DEFAULT_HANDOFF_OBJECT_DIMENSIONS,
+        HANDOFF_GRIPPER_CLEARANCE as GRIPPER_CLEARANCE,
+        PRE_GRASP_CLEARANCE_Y,
+        PRE_GRASP_HOVER_OFFSET,
+        PREGRASP_ACCELERATION_SCALING,
+        PREGRASP_VELOCITY_SCALING,
+    )
 
 
 def _execute_grasp_with_follow_target(
@@ -398,6 +382,8 @@ def _grasp_via_ros_planned(
         orientation=grasp_orientation,
         planning_time=10.0,
         robot_id=robot_id,
+        max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
+        max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
     )
     if not pre_result or not pre_result.get("success"):
         pre_err = pre_result.get("error", "Unknown") if pre_result else "No response"
@@ -415,8 +401,8 @@ def _grasp_via_ros_planned(
         position=grasp_pos,
         orientation=grasp_orientation,
         robot_id=robot_id,
-        max_velocity_scaling=0.3,
-        max_acceleration_scaling=0.3,
+        max_velocity_scaling=GRASP_DESCENT_VELOCITY_SCALING,
+        max_acceleration_scaling=GRASP_DESCENT_ACCELERATION_SCALING,
     )
 
     if not result or not result.get("success"):
@@ -572,6 +558,8 @@ def _grasp_via_ros_position_only(
         orientation=top_down_orientation,
         planning_time=10.0,
         robot_id=robot_id,
+        max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
+        max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
     )
     if not pre_result or not pre_result.get("success"):
         error_msg = pre_result.get("error", "Unknown") if pre_result else "No response"
@@ -596,8 +584,8 @@ def _grasp_via_ros_position_only(
         position=grasp_position,
         orientation=top_down_orientation,
         robot_id=robot_id,
-        max_velocity_scaling=0.3,
-        max_acceleration_scaling=0.3,
+        max_velocity_scaling=GRASP_DESCENT_VELOCITY_SCALING,
+        max_acceleration_scaling=GRASP_DESCENT_ACCELERATION_SCALING,
     )
 
     if not result or not result.get("success"):
@@ -1247,11 +1235,12 @@ def _grasp_via_vgn_with_ros(
                 logger.warning(f"[VGN+ROS] WorldState rotation lookup failed: {_e}")
 
         if yaw_source.startswith("fallback"):
-            # Fall back to VGN rotation: extract yaw from gripper X-axis projection.
+            # Fall back to VGN rotation: extract yaw from gripper X-axis projection
+            # onto the XZ plane. atan2(z, x) gives the angle from world +X toward +Z.
             qx, qy, qz, qw = rot
             gx_x = 1 - 2 * (qy * qy + qz * qz)
             gx_z = 2 * (qx * qz + qy * qw)
-            yaw_unity = math.atan2(gx_x, gx_z)
+            yaw_unity = math.atan2(gx_z, gx_x)
             yaw_source = f"VGN quaternion (yaw={math.degrees(yaw_unity):.1f}°)"
 
         # Exploit 180° gripper symmetry: normalise to (-π/2, π/2] to minimise
@@ -1298,24 +1287,28 @@ def _grasp_via_vgn_with_ros(
         "y": pos[1] + pre_approach[1] * hover,
         "z": pos[2] + pre_approach[2] * hover,
     }
-    # VGN already outputs the TCP/finger-pad position directly — do not apply
-    # the geometric GRASP_TCP_OFFSET (which is only for object-center-based grasps).
-    grasp_pos = {"x": pos[0], "y": pos[1], "z": pos[2]}
+    # Apply GRASP_TCP_OFFSET: VGN predicts the grasp centre at the object surface.
+    # The ee_link must stop above that point by the finger-extension distance so
+    # the fingers wrap around the object rather than drive through it.
+    grasp_pos = {"x": pos[0], "y": pos[1] + GRASP_TCP_OFFSET, "z": pos[2]}
 
     # 7a. Clearance waypoint: move to a safe height directly above the target XZ
     #     before approaching.  This prevents the arm from sweeping through
     #     table-height space (and knocking the object) on its joint-space path
-    #     to the pre-grasp position.  No orientation constraint here — we only
-    #     care that the gripper is well above the table.
+    #     to the pre-grasp position.  Orientation is constrained here so the
+    #     wrist is already aligned for the descent — avoiding a flip between
+    #     clearance and pre-grasp.
     clearance_pos = {"x": pos[0], "y": PRE_GRASP_CLEARANCE_Y, "z": pos[2]}
     if pre_grasp_pos["y"] < PRE_GRASP_CLEARANCE_Y:
         # Pre-grasp is below clearance height — insert the waypoint.
         logger.info(f"[VGN+ROS] Clearance waypoint for {robot_id}: {clearance_pos}")
         clearance_result = bridge.plan_and_execute(
             position=clearance_pos,
-            orientation=None,
+            orientation=orientation,
             planning_time=10.0,
             robot_id=robot_id,
+            max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
+            max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
         )
         if not clearance_result or not clearance_result.get("success"):
             cl_err = (
@@ -1338,6 +1331,8 @@ def _grasp_via_vgn_with_ros(
         orientation=orientation,
         planning_time=10.0,
         robot_id=robot_id,
+        max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
+        max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
     )
     if not pre_result or not pre_result.get("success"):
         pre_err = pre_result.get("error", "Unknown") if pre_result else "No response"
@@ -1351,6 +1346,8 @@ def _grasp_via_vgn_with_ros(
             orientation=None,
             planning_time=10.0,
             robot_id=robot_id,
+            max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
+            max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
         )
     if not pre_result or not pre_result.get("success"):
         pre_err = pre_result.get("error", "Unknown") if pre_result else "No response"
@@ -1369,8 +1366,8 @@ def _grasp_via_vgn_with_ros(
         position=grasp_pos,
         orientation=orientation,
         robot_id=robot_id,
-        max_velocity_scaling=0.3,
-        max_acceleration_scaling=0.3,
+        max_velocity_scaling=GRASP_DESCENT_VELOCITY_SCALING,
+        max_acceleration_scaling=GRASP_DESCENT_ACCELERATION_SCALING,
     )
     if not descent_result or not descent_result.get("success"):
         descent_err = (

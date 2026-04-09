@@ -379,7 +379,7 @@ def detect_object_stereo(
 
         # Get metadata from storage (contains camera pose from Unity)
         metadata = storage.get_stereo_metadata(camera_id)
-        logger.info(f"Metadata for {camera_id}: {metadata}")
+        logger.debug(f"Metadata for {camera_id}: {metadata}")
 
         from operations.StereoUtils import camera_config_from_metadata
         stereo_params = camera_config_from_metadata(
@@ -427,17 +427,36 @@ def detect_object_stereo(
                         DetectionResult,
                     )
 
+                    # Resolve WorldState once for dimension lookup; dimensions
+                    # streamed from Unity (collider bounds) are more accurate than
+                    # anything we could estimate from a synthetic zero-area bbox.
+                    try:
+                        from core.Imports import get_world_state as _gws
+
+                        _ws_for_dims = _gws()
+                    except Exception:
+                        _ws_for_dims = None
+
                     cached_detections = []
                     for idx, obj in enumerate(cached_objects):
-                        # Create detection from cached object
+                        # Inherit dimensions from WorldState when available so that
+                        # Unity-streamed collider dimensions survive the cached path.
+                        inherited_dims = None
+                        if _ws_for_dims is not None:
+                            inherited_dims = _ws_for_dims.get_object_dimensions(obj.color)
+
+                        # Create detection from cached object.
+                        # bbox=(0,0,0,0) because pixel coordinates aren't available
+                        # for cached results; do NOT pass this to dimension estimation.
                         det = DetectionObject(
-                            object_id=idx,  # Required first parameter
+                            object_id=idx,
                             color=obj.color,
-                            bbox=(0, 0, 0, 0),  # Bbox not needed for cached results
+                            bbox=(0, 0, 0, 0),
                             confidence=obj.confidence,
                             world_position=obj.world_position,
                             depth_m=obj.depth_m,
                             track_id=obj.track_id,
+                            dimensions=inherited_dims,
                         )
                         cached_detections.append(det)
 
@@ -461,7 +480,10 @@ def detect_object_stereo(
             # Run detection using CubeDetector with stereo mode (on-demand)
             logger.info("Running on-demand stereo detection")
             detector = CubeDetector()
-            camera_config = CameraConfig(baseline=float(baseline), fov=float(fov))
+            camera_config = CameraConfig(
+                baseline=float(baseline),
+                fov=float(fov if fov is not None else 60.0),
+            )
 
             detection_result = detector.detect_objects_stereo(
                 imgL,
@@ -488,8 +510,8 @@ def detect_object_stereo(
             )
 
         # Debug: show all detections before color filtering
-        logger.info(
-            f"DEBUG: Total detections before filtering: {len(detection_result.detections)}"
+        logger.debug(
+            f"Total detections before filtering: {len(detection_result.detections)}"
         )
         for idx, d in enumerate(detection_result.detections):
             world_pos_str = (
@@ -497,7 +519,7 @@ def detect_object_stereo(
                 if d.world_position
                 else "None"
             )
-            logger.info(
+            logger.debug(
                 f"  Detection {idx+1}: color={d.color}, world_pos={world_pos_str}, conf={d.confidence:.2f}"
             )
 
@@ -505,8 +527,8 @@ def detect_object_stereo(
         detections = detection_result.detections
         if color is not None:
             detections = [d for d in detections if color_matches(d.color, color)]
-            logger.info(
-                f"DEBUG: After color filter ('{color}'): {len(detections)} detections"
+            logger.debug(
+                f"After color filter ('{color}'): {len(detections)} detections"
             )
             if not detections:
                 detected_colors = [d.color for d in detection_result.detections]
@@ -562,18 +584,15 @@ def detect_object_stereo(
                     ["Check stereo calibration", "Objects may be too close/far"],
                 )
             best = min(valid_detections, key=lambda d: cast(tuple, d.world_position)[0])
-            # Debug: show all candidates sorted by world_x
-            logger.info(
-                f"DEBUG: All {len(valid_detections)} candidates for 'left' selection:"
-            )
+
             for idx, d in enumerate(
                 sorted(valid_detections, key=lambda d: cast(tuple, d.world_position)[0])
             ):
                 wp = cast(tuple, d.world_position)
-                logger.info(
-                    f"  Candidate {idx+1}: world_pos=({wp[0]:.3f}, {wp[1]:.3f}, {wp[2]:.3f}), pixel_x={d.center_x}, color={d.color}, conf={d.confidence:.2f}"
+                logger.debug(
+                    f"Candidate {idx+1}: world_pos=({wp[0]:.3f}, {wp[1]:.3f}, {wp[2]:.3f}), pixel_x={d.center_x}, color={d.color}, conf={d.confidence:.2f}"
                 )
-            logger.info(
+            logger.debug(
                 f"Selected leftmost detection from {len(detections)} (world_x={cast(tuple, best.world_position)[0]:.3f}, pixel_x={best.center_x})"
             )
         elif selection == "right":
@@ -586,7 +605,7 @@ def detect_object_stereo(
                     ["Check stereo calibration", "Objects may be too close/far"],
                 )
             best = max(valid_detections, key=lambda d: cast(tuple, d.world_position)[0])
-            logger.info(
+            logger.debug(
                 f"Selected rightmost detection from {len(detections)} (world_x={cast(tuple, best.world_position)[0]:.3f}, pixel_x={best.center_x})"
             )
         elif selection == "closest":
@@ -601,10 +620,10 @@ def detect_object_stereo(
                 ) ** 0.5
 
             best = min(detections, key=get_distance)
-            logger.info(f"Selected closest detection from {len(detections)}")
+            logger.debug(f"Selected closest detection from {len(detections)}")
         elif selection == "first":
             best = detections[0]
-            logger.info(f"Selected first detection from {len(detections)}")
+            logger.debug(f"Selected first detection from {len(detections)}")
         elif selection == "all":
             # Return all detections
             result = {
@@ -621,7 +640,6 @@ def detect_object_stereo(
                 "count": len(detections),
                 "camera_id": camera_id,
             }
-            logger.info(f"Returning {len(detections)} detections")
             return OperationResult.success_result(result)
         else:
             return OperationResult.error_result(
