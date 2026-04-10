@@ -163,6 +163,12 @@ class ROSMotionServer:
     and publishers for each robot namespace.
     """
 
+    # Extra settle wait (seconds) injected after a "completed_with_timeout" trajectory.
+    # When Unity reports that the arm did not fully settle, the arm is still moving at the
+    # point where Python begins planning the next move.  This wait lets the physics
+    # catch up so /joint_states reflects the actual resting pose.
+    SETTLE_WAIT_AFTER_TIMEOUT = 3.0
+
     # Robot base positions and rotations in Unity world coordinates.
     # Positions sourced from ROBOT_BASE_POSITIONS in config/Robot.py.
     # Robot1: Unity rotation (0, 0, 0, -1) = 360° = 0° effective rotation - facing forward (+Z in Unity)
@@ -522,14 +528,14 @@ class ROSMotionServer:
             data = json.loads(msg.data)
             status = data.get("status", "")
             self._trajectory_feedback[robot_id] = status
-            if status in ("completed", "aborted", "rejected"):
+            if status in ("completed", "completed_with_timeout", "aborted", "rejected"):
                 self._trajectory_feedback_event[robot_id].set()
         except (json.JSONDecodeError, Exception):
             pass
 
     def _wait_for_trajectory_completion(
         self, robot_id: str, timeout: float = 30.0
-    ) -> bool:
+    ) -> str:
         """Wait until Unity reports the current trajectory as completed or aborted.
 
         Args:
@@ -537,15 +543,15 @@ class ROSMotionServer:
             timeout: Maximum seconds to wait
 
         Returns:
-            True if completed successfully, False if aborted/rejected/timed out.
+            Final feedback status string: "completed", "completed_with_timeout",
+            "aborted", "rejected", or "timeout" (Python-side wait expired).
         """
         event = self._trajectory_feedback_event[robot_id]
         signalled = event.wait(timeout=timeout)
         if not signalled:
             logger.warning(f"{robot_id}: Timed out waiting for trajectory completion")
-            return False
-        status = self._trajectory_feedback.get(robot_id, "")
-        return status == "completed"
+            return "timeout"
+        return self._trajectory_feedback.get(robot_id, "timeout")
 
     def start(self):
         """Start the TCP server and ROS spin thread."""
@@ -1081,6 +1087,26 @@ class ROSMotionServer:
         self._trajectory_feedback_event[robot_id].clear()
         self._trajectory_feedback[robot_id] = None
 
+        # Diagnostic: log joint_6 values to detect ±π boundary crossings.
+        if trajectory.joint_names and trajectory.points:
+            _j6i = None
+            for _ji, _jn in enumerate(trajectory.joint_names):
+                if _jn == "joint_6":
+                    _j6i = _ji
+                    break
+            if _j6i is not None:
+                import math as _mth
+                _j6v = [_mth.degrees(pt.positions[_j6i]) for pt in trajectory.points if pt.positions]
+                _step = max(1, len(_j6v) // 10)
+                _sampled = [f"{v:.1f}" for v in _j6v[::_step]] + [f"{_j6v[-1]:.1f}"]
+                logger.info(f"{robot_id}: joint_6 plan (deg, sampled): {' '.join(_sampled)}")
+                for _pi in range(1, len(_j6v)):
+                    if abs(_j6v[_pi] - _j6v[_pi - 1]) > 270.0:
+                        logger.warning(
+                            f"{robot_id}: joint_6 BOUNDARY CROSSING at waypoint {_pi}: "
+                            f"{_j6v[_pi-1]:.1f}° → {_j6v[_pi]:.1f}°"
+                        )
+
         trajectory_pub.publish(trajectory)
 
         logger.info(
@@ -1111,21 +1137,33 @@ class ROSMotionServer:
             traj_duration = 5.0
         execution_timeout = max(30.0, traj_duration * 2.5 + 15.0)
 
-        completed = self._wait_for_trajectory_completion(
+        feedback_status = self._wait_for_trajectory_completion(
             robot_id, timeout=execution_timeout
         )
-        if not completed:
+
+        # "completed_with_timeout" means Unity executed the trajectory but the arm
+        # did not fully settle at its drive target before the timeout expired.  The
+        # arm is still moving when Python receives this status, so plan the next move
+        # from stale /joint_states unless we wait for physics to catch up.
+        if feedback_status == "completed_with_timeout":
+            logger.warning(
+                f"{robot_id}: Arm did not fully settle — waiting {self.SETTLE_WAIT_AFTER_TIMEOUT}s "
+                "for physics to catch up before planning next move"
+            )
+            time.sleep(self.SETTLE_WAIT_AFTER_TIMEOUT)
+        elif feedback_status not in ("completed",):
             logger.warning(
                 f"{robot_id}: Trajectory completion not confirmed within {execution_timeout:.1f}s "
-                "(may have timed out or been aborted)"
+                f"(status={feedback_status})"
             )
 
+        success = feedback_status in ("completed", "completed_with_timeout")
         return {
-            "success": completed,
+            "success": success,
             "robot_id": robot_id,
             "trajectory_points": len(trajectory.points),
             "planning_time": plan_time,
-            "status": "completed" if completed else "timeout",
+            "status": feedback_status,
         }
 
     def _get_current_pose(self, robot_id):
@@ -1656,6 +1694,27 @@ class ROSMotionServer:
             f"{len(trajectory.points)} points"
         )
 
+        # Diagnostic: log joint_6 values to detect ±π boundary crossings in the planned trajectory.
+        if trajectory.joint_names and trajectory.points:
+            j6_idx = None
+            for _ji, _jn in enumerate(trajectory.joint_names):
+                if _jn == "joint_6":
+                    j6_idx = _ji
+                    break
+            if j6_idx is not None:
+                import math as _mth
+                j6_vals = [_mth.degrees(pt.positions[j6_idx]) for pt in trajectory.points if pt.positions]
+                step = max(1, len(j6_vals) // 10)
+                sampled = [f"{v:.1f}" for v in j6_vals[::step]] + [f"{j6_vals[-1]:.1f}"]
+                logger.info(f"{robot_id}: joint_6 trajectory (deg, sampled): {' '.join(sampled)}")
+                for _pi in range(1, len(j6_vals)):
+                    raw_delta = j6_vals[_pi] - j6_vals[_pi - 1]
+                    if abs(raw_delta) > 270.0:
+                        logger.warning(
+                            f"{robot_id}: joint_6 BOUNDARY CROSSING at waypoint {_pi}: "
+                            f"{j6_vals[_pi-1]:.1f}° → {j6_vals[_pi]:.1f}° (delta={raw_delta:.1f}°)"
+                        )
+
         # When moveit_msgs < 2.3, GetCartesianPath does not accept scaling factors
         # and returns an untimed trajectory (all time_from_start = 0). Apply TOTG
         # manually so Unity receives a properly timed trajectory.
@@ -1679,20 +1738,28 @@ class ROSMotionServer:
             traj_duration = 5.0
         execution_timeout = max(15.0, traj_duration * 2.5 + 10.0)
 
-        completed = self._wait_for_trajectory_completion(
+        feedback_status = self._wait_for_trajectory_completion(
             robot_id, timeout=execution_timeout
         )
-        if not completed:
+        if feedback_status == "completed_with_timeout":
             logger.warning(
-                f"{robot_id}: Cartesian trajectory completion not confirmed within {execution_timeout:.1f}s"
+                f"{robot_id}: Cartesian trajectory arm did not fully settle — "
+                f"waiting {self.SETTLE_WAIT_AFTER_TIMEOUT}s for physics to catch up"
+            )
+            time.sleep(self.SETTLE_WAIT_AFTER_TIMEOUT)
+        elif feedback_status not in ("completed",):
+            logger.warning(
+                f"{robot_id}: Cartesian trajectory completion not confirmed within {execution_timeout:.1f}s "
+                f"(status={feedback_status})"
             )
 
+        success = feedback_status in ("completed", "completed_with_timeout")
         return {
-            "success": completed,
+            "success": success,
             "robot_id": robot_id,
             "trajectory_points": len(trajectory.points),
             "cartesian_fraction": fraction,
-            "status": "completed" if completed else "timeout",
+            "status": feedback_status,
         }
 
     def _plan_return_to_start(self, request, robot_id):
@@ -1828,15 +1895,20 @@ class ROSMotionServer:
             traj_duration = 5.0
         execution_timeout = max(15.0, traj_duration * 2.5 + 10.0)
 
-        completed = self._wait_for_trajectory_completion(
+        feedback_status = self._wait_for_trajectory_completion(
             robot_id, timeout=execution_timeout
         )
+        if feedback_status not in ("completed", "completed_with_timeout"):
+            logger.warning(
+                f"{robot_id}: Return-to-start completion not confirmed within {execution_timeout:.1f}s "
+                f"(status={feedback_status})"
+            )
         return {
-            "success": completed,
+            "success": feedback_status in ("completed", "completed_with_timeout"),
             "robot_id": robot_id,
             "trajectory_points": len(trajectory.points),
             "planning_time": plan_time,
-            "status": "completed" if completed else "timeout",
+            "status": feedback_status,
         }
 
     def _validate_grasp_candidates(self, request, robot_id):

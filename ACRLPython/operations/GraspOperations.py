@@ -368,6 +368,26 @@ def _grasp_via_ros_planned(
     # w < 0 (especially for Top grasps where Euler(180,0,90) puts w near zero).
     if ros_w < 0.0:
         ros_x, ros_y, ros_z, ros_w = -ros_x, -ros_y, -ros_z, -ros_w
+    # Exploit 180° gripper symmetry: fold the yaw (rotation around ROS Z = vertical) into
+    # (-π/2, π/2].  For a parallel-jaw gripper, yaw θ and θ+π are identical grasps.
+    # Normalising here prevents MoveIt from picking the wrist solution requiring ~260° of
+    # joint-6 travel when the short path (via the equivalent yaw) needs only ~80°.
+    # yaw = atan2(2*(w*rz + rx*ry), 1 - 2*(ry² + rz²))
+    _yaw = math.atan2(
+        2.0 * (ros_w * ros_z + ros_x * ros_y),
+        1.0 - 2.0 * (ros_y * ros_y + ros_z * ros_z),
+    )
+    if _yaw > math.pi / 2 or _yaw < -math.pi / 2:
+        # Pre-multiply by 180° around ROS Z: (ax,ay,az,aw)=(0,0,1,0) × (rx,ry,rz,rw)
+        #   new_x = -ry, new_y = rx, new_z = rw, new_w = -rz
+        ros_x, ros_y, ros_z, ros_w = -ros_y, ros_x, ros_w, -ros_z
+        # Re-canonicalize after the flip (w may have changed sign).
+        if ros_w < 0.0:
+            ros_x, ros_y, ros_z, ros_w = -ros_x, -ros_y, -ros_z, -ros_w
+        logger.debug(
+            f"[_grasp_via_ros_planned] Yaw {math.degrees(_yaw):.1f}° outside (-90°,90°] — "
+            f"applied 180° wrist flip to minimise joint-6 travel."
+        )
     grasp_orientation = {"x": ros_x, "y": ros_y, "z": ros_z, "w": ros_w}
 
     grasp_pos = _vec_to_pos(best_grasp.grasp_position)
@@ -992,6 +1012,7 @@ def _grasp_via_vgn_with_ros(
     image_np: "Optional[np.ndarray]" = None
     det_img_w = img_w
     det_img_h = img_h
+    _detection_depth_m: "Optional[float]" = None  # stereo bbox depth for VGN hint
 
     # Pull world position from WorldState (set by detect_object_stereo / VisionProcessor).
     _detected_world_pos: "Optional[List[float]]" = None
@@ -1031,6 +1052,11 @@ def _grasp_via_vgn_with_ros(
                             )
                         elif len(bbox) == 4:
                             yolo_bbox = tuple(int(v) for v in bbox)
+                    # Use stereo bbox depth directly as depth hint — more accurate
+                    # than computing from WorldState world position via quaternions.
+                    _dm = det.get("depth_m")
+                    if _dm is not None:
+                        _detection_depth_m = float(_dm)
                     break
             # Scale bbox from detection resolution to stereo/point-cloud resolution
             if yolo_bbox != (0, 0, 0, 0) and (det_img_w != img_w or det_img_h != img_h):
@@ -1078,6 +1104,8 @@ def _grasp_via_vgn_with_ros(
         top_k=VGN_TOP_K,
         cam_pos=cam_pos,
         cam_rot=cam_rot,
+        object_world_pos=_detected_world_pos,
+        detection_depth_m=_detection_depth_m,
     )
     if not grasps:
         logger.info("[VGN+ROS] No candidates returned — falling back to geometric ROS")
@@ -1119,11 +1147,12 @@ def _grasp_via_vgn_with_ros(
                 f"(from {len(grasps)} raw)"
             )
 
-    # 6. Pick top candidate: prefer grasps with upward approach (Y > 0.3) to avoid
-    # table collisions.  Fall back to best overall score if none qualify.
+    # 6. Pick top candidate: prefer grasps with upward approach (Y > 0.2) to avoid
+    # table collisions.  If none qualify, fall back to the candidate with the highest
+    # Y_approach (most top-down) rather than best score, to minimise table collision risk.
     _y_approaches = sorted([g["approach_direction"][1] for g in world_grasps], reverse=True)
     logger.info(f"[VGN+ROS] Approach Y distribution (top 5): {[round(v,2) for v in _y_approaches[:5]]}")
-    _MIN_Y_APPROACH = 0.3  # approach must have at least 30% upward component
+    _MIN_Y_APPROACH = 0.2  # approach must have at least 20% upward component
     top_down_candidates = [
         g for g in world_grasps
         if g.get("approach_direction", [0, 0, 0])[1] >= _MIN_Y_APPROACH
@@ -1136,10 +1165,10 @@ def _grasp_via_vgn_with_ros(
             f"{len(top_down_candidates)}/{len(world_grasps)} candidates"
         )
     else:
-        top = max(world_grasps, key=lambda g: g.get("score", 0.0))
+        top = max(world_grasps, key=lambda g: g.get("approach_direction", [0, 0, 0])[1])
         logger.warning(
             f"[VGN+ROS] No grasp with Y_approach >= {_MIN_Y_APPROACH} — "
-            f"using best-score candidate (Y_approach={top['approach_direction'][1]:.2f})"
+            f"using most-top-down candidate (Y_approach={top['approach_direction'][1]:.2f})"
         )
     pos = top["position"]
     rot = top["rotation"]
@@ -1176,6 +1205,20 @@ def _grasp_via_vgn_with_ros(
         _rx, _ry, _rz, _rw = rot[2], -rot[0], rot[1], rot[3]
         if _rw < 0.0:
             _rx, _ry, _rz, _rw = -_rx, -_ry, -_rz, -_rw
+        # Exploit 180° gripper symmetry: fold yaw into (-π/2, π/2] to minimise
+        # joint-6 travel.  Same normalisation used on the top-down + yaw path.
+        _vgn_yaw = math.atan2(
+            2.0 * (_rw * _rz + _rx * _ry),
+            1.0 - 2.0 * (_ry * _ry + _rz * _rz),
+        )
+        if _vgn_yaw > math.pi / 2 or _vgn_yaw < -math.pi / 2:
+            _rx, _ry, _rz, _rw = -_ry, _rx, _rw, -_rz
+            if _rw < 0.0:
+                _rx, _ry, _rz, _rw = -_rx, -_ry, -_rz, -_rw
+            logger.debug(
+                f"[VGN+ROS] VGN yaw {math.degrees(_vgn_yaw):.1f}° outside (-90°,90°] — "
+                f"applied 180° wrist flip."
+            )
         orientation = {"x": _rx, "y": _ry, "z": _rz, "w": _rw}
         logger.info(
             f"[VGN+ROS] Using VGN orientation (|approach Y|={abs(_vgn_approach_y):.2f} >= {_TOP_DOWN_Y_THRESHOLD})"

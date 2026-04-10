@@ -214,13 +214,26 @@ class VGNClient:
         top_k: int = 0,
         cam_pos: "Optional[List[float]]" = None,
         cam_rot: "Optional[List[float]]" = None,
+        object_world_pos: "Optional[List[float]]" = None,
+        detection_depth_m: "Optional[float]" = None,
     ) -> "Optional[List[dict]]":
-        """Wrapper to evaluate VGN grasps and broadcast telemetry even if it ends early."""
+        """Wrapper to evaluate VGN grasps and broadcast telemetry even if it ends early.
+
+        Args:
+            object_world_pos:  Optional [x, y, z] object position in Unity LH world
+                               frame (from WorldState).  Used to derive a camera-frame
+                               depth hint when ``detection_depth_m`` is unavailable.
+            detection_depth_m: Optional stereo bbox depth in metres from the
+                               VisionProcessor.  Preferred over the quaternion-based
+                               depth derived from ``object_world_pos`` because it is
+                               measured directly from stereo disparity.
+        """
         debug_info = {}
         try:
             return self._predict_grasps_internal(
                 points, colors, image, yolo_bbox, object_label,
-                image_width, image_height, fov, top_k, cam_pos, cam_rot, debug_info
+                image_width, image_height, fov, top_k, cam_pos, cam_rot, debug_info,
+                object_world_pos, detection_depth_m,
             )
         finally:
             try:
@@ -355,6 +368,8 @@ class VGNClient:
         cam_pos: "Optional[List[float]]" = None,
         cam_rot: "Optional[List[float]]" = None,
         debug_info: dict = {},
+        object_world_pos: "Optional[List[float]]" = None,
+        detection_depth_m: "Optional[float]" = None,
     ) -> "Optional[List[dict]]":
         """Run the full VLM-guided VGN pipeline on a stereo point cloud.
 
@@ -440,6 +455,38 @@ class VGNClient:
         debug_info["pts"] = pts_rh
         debug_info["pts_full_scene"] = pts_rh  # full cloud for dashboard; pts is overwritten later
 
+        # Compute camera-frame depth hint for _build_segmentation_mask.
+        # Priority: stereo bbox depth (detection_depth_m) > quaternion from WorldState.
+        # detection_depth_m is measured directly from stereo disparity and is more
+        # accurate than the geometric estimate from object world position.
+        depth_hint: "Optional[float]" = None
+        if detection_depth_m is not None and detection_depth_m > 0.05:
+            depth_hint = detection_depth_m
+            logger.debug(f"[VGN] Depth hint from stereo detection: {depth_hint:.3f} m")
+        elif object_world_pos is not None and cam_pos is not None and cam_rot is not None:
+            try:
+                _obj_w = np.array(object_world_pos, dtype=np.float64)
+                _cam_p = np.array(cam_pos, dtype=np.float64)
+                _cam_q = np.array(cam_rot, dtype=np.float64)
+                _cam_q /= np.linalg.norm(_cam_q) + 1e-12
+                # Inverse quaternion (conjugate for unit quaternion): [-x, -y, -z, w]
+                _cam_q_inv = _cam_q * np.array([-1.0, -1.0, -1.0, 1.0])
+                _delta = _obj_w - _cam_p
+                _qvec = _cam_q_inv[:3]
+                _w = _cam_q_inv[3]
+                _t = 2.0 * np.cross(_qvec, _delta)
+                _delta_cam = _delta + _w * _t + np.cross(_qvec, _t)
+                # _delta_cam is in Unity LH camera frame (Z-forward = positive depth).
+                # Q-matrix frame uses depth = -Z, but the sign convention is the same
+                # for forward-facing objects: _delta_cam[2] > 0 means in front.
+                if _delta_cam[2] > 0.05:  # sanity check: object must be in front
+                    depth_hint = float(_delta_cam[2])
+                    logger.debug(
+                        f"[VGN] Depth hint from WorldState geometry: {depth_hint:.3f} m"
+                    )
+            except Exception as _exc:
+                logger.debug(f"[VGN] depth_hint computation failed (non-fatal): {_exc}")
+
         # Build segmentation mask using refined bbox.
         # Import from GraspUtils (shared module) to avoid circular import with
         # GraspOperations which imports VGNClient.
@@ -452,6 +499,8 @@ class VGNClient:
             image_height,
             fov,
             preferred_approach="auto",
+            depth_hint=depth_hint,
+            depth_margin=0.07,
         )
 
         masked_points = pts_rh[mask]
@@ -497,7 +546,9 @@ class VGNClient:
             _in_world_frame = True
             logger.info(
                 f"[VGN] Transformed {masked_points.shape[0]} points to RH world frame "
-                f"(Y range: [{masked_points[:, 1].min():.3f}, {masked_points[:, 1].max():.3f}])"
+                f"(X=[{masked_points[:,0].min():.3f},{masked_points[:,0].max():.3f}] "
+                f"Y=[{masked_points[:,1].min():.3f},{masked_points[:,1].max():.3f}] "
+                f"Z=[{masked_points[:,2].min():.3f},{masked_points[:,2].max():.3f}])"
             )
 
             # Workspace bounding box filter (RH world = Unity LH world with X negated).
@@ -521,6 +572,35 @@ class VGNClient:
                     f"[VGN] Workspace filter left {filtered.shape[0]} pts (< {_MIN_POINTS}); "
                     f"skipping filter and using all {n_before} bbox-masked points"
                 )
+
+        # ----------------------------------------------------------------
+        # Step 2c — Surface densification (jitter augmentation)
+        # ----------------------------------------------------------------
+        # With only 84–146 masked points in a 40³ TSDF, the distance
+        # transform cannot reconstruct the object's top surface cleanly,
+        # causing VGN to produce near-horizontal rather than top-down
+        # approach vectors.  Duplicate each point N times with small
+        # Gaussian noise (σ ≈ half a voxel) to densify the surface
+        # representation without introducing large geometric errors.
+        _DENSIFY_TARGET = 600  # aim for ~600 points total after augmentation
+        _n_orig = masked_points.shape[0]
+        _n_copies = max(1, _DENSIFY_TARGET // _n_orig)
+        if _n_copies > 1:
+            # σ = half a voxel in world-frame metres.
+            # voxel_size = _TSDF_SIZE / _TSDF_RES = 0.3 / 40 = 0.0075 m
+            # half-voxel = 0.00375 m; round up slightly for better fill.
+            _sigma = 0.005
+            rng = np.random.default_rng(seed=42)
+            noise = rng.normal(scale=_sigma, size=(_n_copies - 1, _n_orig, 3))
+            copies = masked_points[np.newaxis] + noise
+            masked_points = np.concatenate(
+                [masked_points] + [copies[i] for i in range(_n_copies - 1)],
+                axis=0,
+            ).astype(masked_points.dtype)
+            logger.info(
+                f"[VGN] Densified: {_n_orig} → {masked_points.shape[0]} points "
+                f"({_n_copies}x jitter, σ={_sigma} m)"
+            )
 
         # ----------------------------------------------------------------
         # Step 3 — TSDF construction
@@ -547,6 +627,32 @@ class VGNClient:
         pts_vgn = masked_points[:, [0, 2, 1]].copy()
         pts_vgn[:, 1] *= -1.0  # world_Z → -world_Z for VGN_Y
 
+        # Clip stereo depth noise in VGN_Y (= -world_Z = camera depth axis).
+        # At ~1 m working distance with a 5 cm baseline, stereo reconstruction
+        # spreads a 3 cm cube over ~14 cm of camera depth (0.83 cm/disparity-pixel
+        # × ~17 px noise).  This causes the VGN_Y extent to dominate the scale
+        # calculation and fills the grid with noisy depth samples.
+        #
+        # Fix: clip VGN_Y to [median - half_obj, median + half_obj].
+        # We estimate half_obj from the X and Z extents (known-good dimensions):
+        # half_obj = max(X_extent, Z_extent) / 2.  This preserves the 3D structure
+        # needed for VGN inference while removing outlier depth noise.
+        # Collapsing to a single plane (previous approach) destroyed the 3D shape
+        # and caused VGN to hallucinate grasps at the grid ceiling.
+        _vgn_y_median = float(np.median(pts_vgn[:, 1]))
+        _x_ext_pre = float(pts_vgn[:, 0].max() - pts_vgn[:, 0].min())
+        _z_ext_pre = float(pts_vgn[:, 2].max() - pts_vgn[:, 2].min())
+        _half_obj = max(_x_ext_pre, _z_ext_pre, 0.03) / 2.0  # at least 3 cm radius
+        pts_vgn[:, 1] = np.clip(
+            pts_vgn[:, 1],
+            _vgn_y_median - _half_obj,
+            _vgn_y_median + _half_obj,
+        )
+        logger.debug(
+            f"[VGN] VGN_Y clip: median={_vgn_y_median:.4f} half_obj={_half_obj:.4f} "
+            f"new_Y_range=[{pts_vgn[:,1].min():.4f},{pts_vgn[:,1].max():.4f}]"
+        )
+
         # Centre X and Y in the VGN frame; record offsets for inverse mapping.
         _vgn_centroid_x = pts_vgn[:, 0].mean()
         _vgn_centroid_y = pts_vgn[:, 1].mean()
@@ -560,12 +666,20 @@ class VGNClient:
         # VGN was trained on objects that occupy a significant fraction of the workspace;
         # tiny objects (e.g. 5cm cube in a 30cm grid) cause VGN to hallucinate grasps
         # at the grid ceiling rather than on the object surface.
-        # Scale is based on the max of X and Z (VGN_X = world_X, VGN_Z = world_Y = height),
-        # NOT VGN_Y (= -world_Z = camera depth) because depth varies with perspective.
+        #
+        # Scale driver: VGN_Z (world_Y = object height).
+        # This fills the height axis to 75% of the grid.  The footprint (X, Y after
+        # clip) overflows but _points_to_tsdf_grid clips silently — the top surface
+        # remains well-represented, which is what VGN needs for top-down grasps.
+        # Driving by max(X,Y,Z) under-scales Z (height) to ~39%, making the object
+        # appear as a flat disc and causing VGN to prefer horizontal side approaches.
         _TARGET_FILL = 0.75
         extents = pts_vgn.max(axis=0) - pts_vgn.min(axis=0)  # [ex, ey, ez]
-        xz_max_extent = max(extents[0], extents[2])           # ignore depth axis
-        if xz_max_extent > 1e-4:
+        xz_max_extent = max(extents[0], extents[2])           # for logging
+        _z_extent = float(extents[2])                         # VGN_Z = height axis
+        if _z_extent > 1e-4:
+            _vgn_scale = (_TARGET_FILL * _TSDF_SIZE) / _z_extent
+        elif xz_max_extent > 1e-4:
             _vgn_scale = (_TARGET_FILL * _TSDF_SIZE) / xz_max_extent
         else:
             _vgn_scale = 1.0
