@@ -199,6 +199,40 @@ def _vec_to_pos(seq, y_offset: float = 0.0) -> dict:
     return {"x": seq[0], "y": seq[1] + y_offset, "z": seq[2]}
 
 
+def _yaw_toward_object(robot_id: str, object_position) -> float:
+    """Return Unity-frame yaw (radians) that points the gripper jaw from the
+    robot base toward the object in the horizontal plane.
+
+    For a top-down grasp the gripper Z-axis (closing direction) should face the
+    object so the fingers straddle it along the robot-to-object axis.
+
+    Args:
+        robot_id: Robot identifier used to look up base position.
+        object_position: (x, y, z) object centre in Unity world space.
+
+    Returns:
+        Yaw angle in radians, normalised to (-π/2, π/2] for gripper symmetry.
+    """
+    try:
+        from config.Robot import ROBOT_BASE_POSITIONS
+
+        base = ROBOT_BASE_POSITIONS.get(robot_id, (0.0, 0.0, 0.0))
+    except Exception:
+        base = (0.0, 0.0, 0.0)
+
+    dx = object_position[0] - base[0]
+    dz = object_position[2] - base[2]
+    yaw = math.atan2(dz, dx)
+
+    # Normalise to (-π/2, π/2] to exploit 180° gripper symmetry.
+    if yaw > math.pi / 2:
+        yaw -= math.pi
+    elif yaw <= -math.pi / 2:
+        yaw += math.pi
+
+    return yaw
+
+
 def _get_control_mode() -> str:
     """Return DEFAULT_CONTROL_MODE from config, or 'ros' as fallback.
 
@@ -286,32 +320,22 @@ def _grasp_via_ros_planned(
         return None, True  # signal caller to try position-only path
 
     # Build object rotation quaternion for GraspPlanner.
-    # Priority: explicit yaw override > WorldState rotation > identity.
+    # Priority: explicit yaw override > robot-to-object axis > identity.
+    # Using the robot-to-object axis aligns the gripper jaw toward the object
+    # so the fingers straddle it along the natural approach direction.
     # GraspPlanner expects a Unity-frame quaternion (x, y, z, w).
     obj_rot_quat = (0.0, 0.0, 0.0, 1.0)
-    yaw_unity = None
     if grasp_yaw_override is not None:
         yaw_unity = grasp_yaw_override
-    elif world_state is not None:
-        try:
-            with world_state._lock:
-                _obj = world_state._objects.get(object_id)
-                if _obj is None:
-                    _norm = object_id.lower().replace(" ", "_").replace("-", "_")
-                    for k, v in world_state._objects.items():
-                        if _norm in k.lower() or k.lower() in _norm:
-                            _obj = v
-                            break
-                if _obj is not None and _obj.rotation is not None:
-                    # rotation[1] = Unity Y-axis rotation (degrees)
-                    yaw_unity = math.radians(_obj.rotation[1])
-        except Exception as _e:
-            logger.warning(f"[ROS planned] WorldState yaw lookup failed: {_e}")
+    else:
+        yaw_unity = _yaw_toward_object(robot_id, object_position)
+        logger.info(
+            f"[ROS planned] gripper yaw toward object: {math.degrees(yaw_unity):.1f}°"
+        )
 
-    if yaw_unity is not None:
-        # Build a Unity Y-axis rotation quaternion: (0, sin(θ/2), 0, cos(θ/2))
-        half_y = yaw_unity / 2.0
-        obj_rot_quat = (0.0, math.sin(half_y), 0.0, math.cos(half_y))
+    # Build a Unity Y-axis rotation quaternion: (0, sin(θ/2), 0, cos(θ/2))
+    half_y = yaw_unity / 2.0
+    obj_rot_quat = (0.0, math.sin(half_y), 0.0, math.cos(half_y))
 
     try:
         planner = GraspPlanner()
@@ -514,30 +538,21 @@ def _grasp_via_ros_position_only(
     # ROS X axis, which flips ee_link Z downward.  A small positive w bias keeps
     # the quaternion in the w>0 hemisphere so MoveIt's IK solver always picks the
     # same wrist configuration and avoids the ±360° flip that occurs at w=0.
-    yaw_unity = 0.0
+    # Priority: explicit yaw override > robot-to-object axis.
+    # Using the robot-to-object axis aligns the gripper jaw toward the object
+    # so the fingers straddle it along the natural approach direction.
+    # Already normalised to (-π/2, π/2] inside _yaw_toward_object.
     if grasp_yaw_override is not None:
         yaw_unity = grasp_yaw_override
-    elif world_state is not None:
-        try:
-            with world_state._lock:
-                _obj = world_state._objects.get(object_id)
-                if _obj is None:
-                    _norm = object_id.lower().replace(" ", "_").replace("-", "_")
-                    for k, v in world_state._objects.items():
-                        if _norm in k.lower() or k.lower() in _norm:
-                            _obj = v
-                            break
-                if _obj is not None and _obj.rotation is not None:
-                    # rotation[1] = Unity Y-axis rotation (in-plane yaw, degrees)
-                    yaw_unity = -math.radians(_obj.rotation[1])
-        except Exception as _e:
-            logger.warning(f"[ROS pos-only] WorldState yaw lookup failed: {_e}")
-
-    # Normalise to (-π/2, π/2] to exploit 180° gripper symmetry and minimise wrist travel.
-    if yaw_unity > math.pi / 2:
-        yaw_unity -= math.pi
-    elif yaw_unity < -math.pi / 2:
-        yaw_unity += math.pi
+        if yaw_unity > math.pi / 2:
+            yaw_unity -= math.pi
+        elif yaw_unity <= -math.pi / 2:
+            yaw_unity += math.pi
+    else:
+        yaw_unity = _yaw_toward_object(robot_id, object_position)
+        logger.info(
+            f"[ROS pos-only] gripper yaw toward object: {math.degrees(yaw_unity):.1f}°"
+        )
 
     # Compose q_yaw_ros * q_topdown (same formula as _grasp_via_vgn_with_ros).
     half = yaw_unity / 2.0
@@ -1465,7 +1480,7 @@ def grasp_object(
     robot_id: str,
     object_id: str,
     use_advanced_planning: bool = True,
-    preferred_approach: str = "auto",  # "top", "front", "side", "auto"
+    preferred_approach: str = "top",  # "top", "front", "side", "auto"
     pre_grasp_distance: float = 0.0,  # 0 = use config default
     enable_retreat: bool = True,
     retreat_distance: float = 0.0,  # 0 = use config default
@@ -1496,8 +1511,8 @@ def grasp_object(
         object_id: ID or name of the object to grasp (must be detected/tracked)
         use_advanced_planning: Use full pipeline (True) or simple planner (False)
         preferred_approach: Preferred grasp approach direction
-            - "auto": Let pipeline determine best approach (recommended)
-            - "top": Approach from above (gripper pointing down)
+            - "top": Approach from above, gripper pointing down (default)
+            - "auto": Let pipeline determine best approach
             - "front": Approach from front/back
             - "side": Approach from left/right
         pre_grasp_distance: Custom pre-grasp distance in meters (0 = use config)
@@ -1576,8 +1591,8 @@ def grasp_object(
                 "INVALID_APPROACH",
                 f"Preferred approach must be one of {valid_approaches}, got: {preferred_approach}",
                 [
-                    "Use 'auto' to let pipeline determine best approach",
-                    "Or specify 'top', 'front', or 'side' explicitly",
+                    "Use 'top' for standard top-down approach (default)",
+                    "Or specify 'front', 'side', or 'auto' explicitly",
                 ],
             )
 
@@ -2814,8 +2829,8 @@ GRASP_OBJECT_OPERATION = BasicOperation(
         - Including safe retreat motions after grasping
     """,
     usage_examples=[
-        "Grasp object with automatic approach selection: grasp_object(robot_id='Robot1', object_id='Cube_01')",
-        "Grasp from specific direction: grasp_object(robot_id='Robot1', object_id='Cube_01', preferred_approach='top')",
+        "Grasp object top-down (default): grasp_object(robot_id='Robot1', object_id='Cube_01')",
+        "Grasp from specific direction: grasp_object(robot_id='Robot1', object_id='Cube_01', preferred_approach='side')",
         "Grasp with custom distances: grasp_object(robot_id='Robot1', object_id='Cube_01', pre_grasp_distance=0.12, retreat_distance=0.15)",
         "Grasp without retreat: grasp_object(robot_id='Robot1', object_id='Cube_01', enable_retreat=False)",
         "Grasp with custom approach vector: grasp_object(robot_id='Robot1', object_id='Cube_01', custom_approach_vector=[0, 1, 0.5])",
@@ -2843,9 +2858,9 @@ GRASP_OBJECT_OPERATION = BasicOperation(
         OperationParameter(
             name="preferred_approach",
             type="str",
-            description="Preferred grasp approach: 'auto', 'top', 'front', 'side'",
+            description="Preferred grasp approach: 'top' (default, top-down), 'front', 'side', 'auto'",
             required=False,
-            default="auto",
+            default="top",
             valid_values=["auto", "top", "front", "side"],
         ),
         OperationParameter(

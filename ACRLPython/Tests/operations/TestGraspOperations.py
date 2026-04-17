@@ -312,7 +312,7 @@ class TestGraspObjectOperationDefinition:
         params = {p.name: p for p in GRASP_OBJECT_OPERATION.parameters}
 
         assert params["use_advanced_planning"].default is True
-        assert params["preferred_approach"].default == "auto"
+        assert params["preferred_approach"].default == "top"
         assert params["pre_grasp_distance"].default == 0.0
         assert params["enable_retreat"].default is True
         assert params["retreat_distance"].default == 0.0
