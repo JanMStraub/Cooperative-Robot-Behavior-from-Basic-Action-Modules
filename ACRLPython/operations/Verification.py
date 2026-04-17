@@ -190,8 +190,8 @@ class PredicateParser:
         for param_name in param_names:
             if param_name in operation_params:
                 resolved[param_name] = operation_params[param_name]
-            # If the parameter is absent, omit it so the predicate function's
-            # own default value is used (rather than passing None which overrides defaults).
+            else:
+                resolved[param_name] = None
 
         return resolved
 

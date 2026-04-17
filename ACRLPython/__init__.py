@@ -18,7 +18,7 @@ Configuration:
 
 Architecture (December 2025):
 - Unified backend via RunRobotController
-- 3 active servers: ImageServer (5005/5006), CommandServer (5007), SequenceServer (5011)
+- 3 active servers: ImageServer (5005/5006), CommandServer (5007), SequenceServer (5008)
 - Operations system with 17 registered operations
 - Protocol V2 with request ID correlation
 """

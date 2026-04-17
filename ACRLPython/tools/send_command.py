@@ -2,7 +2,7 @@
 """
 send_command.py — Send commands directly to Unity without going through the LLM.
 
-Connects to the SequenceServer (port 5011) and sends pre-parsed operations using
+Connects to the SequenceServer (port 5008) and sends pre-parsed operations using
 the "EXEC:<json>" prefix, which bypasses CommandParser/LLM entirely and feeds the
 command list straight into SequenceExecutor → Unity. Response and completion
 tracking work exactly as they do for normal Unity-initiated commands.
@@ -18,7 +18,7 @@ Usage:
 
 Options:
     --host HOST     SequenceServer host (default: 127.0.0.1)
-    --port PORT     SequenceServer port (default: 5011)
+    --port PORT     SequenceServer port (default: 5008)
     --timeout SEC   Per-operation timeout in seconds (default: 120)
     --dry-run       Parse without executing (returns plan, no Unity movement)
     --pretty        Pretty-print JSON response
@@ -36,7 +36,7 @@ SEQUENCE_QUERY = 0x08   # MessageType.SEQUENCE_QUERY
 RESULT_TYPE    = 0x02   # MessageType.RESULT
 
 DEFAULT_HOST    = "127.0.0.1"
-DEFAULT_PORT    = 5011
+DEFAULT_PORT    = 5008
 DEFAULT_ROBOT   = "Robot1"
 DEFAULT_CAMERA  = "TableStereoCamera"
 DEFAULT_TIMEOUT = 120   # grasp + trajectory can take 60–90 s

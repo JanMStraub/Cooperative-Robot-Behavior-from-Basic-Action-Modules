@@ -36,6 +36,11 @@ ROS_EXECUTION_TIMEOUT = 30.0
 ROS_TIMEOUT_BASE = 5.0
 ROS_TIMEOUT_PER_CANDIDATE = 0.5
 
+# When MoveIt returns UNKNOWN_ERROR_99999 (usually wrist singularity / unreachable goal),
+# allow falling back to the TCP/Unity path.  Set False to get a hard abort with diagnostics
+# instead of silent fallback (recommended for debugging singularity issues).
+ROS_ALLOW_TCP_FALLBACK_ON_99999 = False
+
 # URDF joint limits for the 6-DOF AR4 arm (radians).
 # Used by ROSMotionClient to clamp start states before submitting to MoveIt and to
 # build path constraints. Values match the URDF joint limit tags in ar4.urdf.

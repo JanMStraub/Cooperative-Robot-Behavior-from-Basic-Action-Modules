@@ -36,11 +36,7 @@ setup_logging(__name__)
 logger = logging.getLogger(__name__)
 
 
-# Import from centralized lazy import system (prevents circular dependencies)
-try:
-    from ..core.Imports import get_command_broadcaster as _get_command_broadcaster
-except ImportError:
-    from core.Imports import get_command_broadcaster as _get_command_broadcaster
+from ._imports import get_command_broadcaster as _get_command_broadcaster
 
 
 # ============================================================================
@@ -189,7 +185,7 @@ def move_to_coordinate(
                     "Failed to send command to Unity - no clients connected",
                     [
                         "Ensure Unity is running with UnifiedPythonReceiver active",
-                        "Verify CommandServer is running (port 5010)",
+                        "Verify CommandServer is running (port 5007)",
                         "Check Unity console for connection errors",
                         "Restart backend: python -m orchestrators.RunRobotController",
                     ],
@@ -462,7 +458,7 @@ def move_from_a_to_b(
                     "Failed to send command to Unity - no clients connected",
                     [
                         "Ensure Unity is running",
-                        "Verify CommandServer is running (port 5010)",
+                        "Verify CommandServer is running (port 5007)",
                     ],
                 )
             logger.info(f"Successfully sent move_from_a_to_b command to {robot_id}")

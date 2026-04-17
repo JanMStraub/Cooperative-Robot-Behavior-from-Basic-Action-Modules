@@ -696,6 +696,40 @@ class WorldState(SingletonBase):
                 "grasped_by": obj.grasped_by,
                 "confidence": obj.confidence,
             }
+            
+    def get_object_rotation(
+        self, object_id: str
+    ) -> Optional[Tuple[float, float, float]]:
+        """Get object rotation (roll, pitch, yaw) in degrees with partial-match fallback.
+
+        Uses the same normalised-key lookup as ``get_object_state`` and
+        ``get_object_position`` so compound names like "red_cube" resolve to an
+        object stored as "red".  Returns ``None`` when the object is not found or
+        has no rotation recorded.
+
+        Args:
+            object_id: Object identifier (exact key, color, or compound name).
+
+        Returns:
+            Rotation tuple ``(roll_deg, pitch_deg, yaw_deg)`` or ``None``.
+        """
+        with self._lock:
+            obj = self._objects.get(object_id)
+            if obj is None:
+                normalised = object_id.lower().replace(" ", "_").replace("-", "_")
+                norm_cache = self._get_normalized_keys()
+                original_key = norm_cache.get(normalised)
+                if original_key is None:
+                    for key_norm, orig in norm_cache.items():
+                        if key_norm in normalised or normalised in key_norm:
+                            original_key = orig
+                            break
+                if original_key is not None:
+                    obj = self._objects.get(original_key)
+            if obj is None:
+                return None
+            return obj.rotation
+
 
     def get_object_position(
         self, object_id: str

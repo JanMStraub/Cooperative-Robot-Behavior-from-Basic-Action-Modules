@@ -25,23 +25,14 @@ STEREO_DETECTION_PORT = int(
 COMMAND_SERVER_PORT = int(
     os.environ.get("COMMAND_SERVER_PORT", "5007")
 )  # Bidirectional command server (commands & results)
-DEPTH_RESULTS_PORT = int(
-    os.environ.get("DEPTH_RESULTS_PORT", "5008")
-)  # Sends depth detection results
-RAG_SERVER_PORT = int(
-    os.environ.get("RAG_SERVER_PORT", "5009")
-)  # RAG semantic search server
-STATUS_SERVER_PORT = int(
-    os.environ.get("STATUS_SERVER_PORT", "5010")
-)  # Status query server
 SEQUENCE_SERVER_PORT = int(
-    os.environ.get("SEQUENCE_SERVER_PORT", "5011")
+    os.environ.get("SEQUENCE_SERVER_PORT", "5008")
 )  # Sequence server
 WORLD_STATE_PORT = int(
-    os.environ.get("WORLD_STATE_PORT", "5012")
+    os.environ.get("WORLD_STATE_PORT", "5009")
 )  # World state streaming (Unity → Python)
 AUTORT_SERVER_PORT = int(
-    os.environ.get("AUTORT_SERVER_PORT", "5013")
+    os.environ.get("AUTORT_SERVER_PORT", "5010")
 )  # AutoRT task generation server
 
 
@@ -131,7 +122,7 @@ VGN_MODEL_PATH = os.environ.get("VGN_MODEL_PATH", "vgn/models/vgn_conv.pth")
 VGN_TOP_K = int(os.environ.get("VGN_TOP_K", "20"))
 
 # Master toggle: set to "false" to skip VGN entirely and use geometric fallback.
-VGN_ENABLED = os.environ.get("VGN_ENABLED", "true").lower() in ("true", "1", "yes")
+VGN_ENABLED = os.environ.get("VGN_ENABLED", "false").lower() in ("true", "1", "yes")
 
 # When False (default), skip the LM Studio VLM bbox-refinement step inside
 # VGNClient.predict_grasps() and use the raw YOLO bbox directly.  Set to "true"

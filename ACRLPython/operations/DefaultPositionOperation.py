@@ -168,7 +168,7 @@ def return_to_start_position(
                     "Failed to send command to Unity - no clients connected",
                     [
                         "Ensure Unity is running with UnifiedPythonReceiver active",
-                        "Verify CommandServer is running (port 5010)",
+                        "Verify CommandServer is running (port 5007)",
                         "Check Unity console for connection errors",
                     ],
                 )

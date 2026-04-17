@@ -138,7 +138,7 @@ namespace PythonCommunication
     /// Usage:
     /// 1. Attach this component to a GameObject in your scene
     /// 2. Ensure SequenceClient and RobotManager are active
-    /// 3. Python SequenceServer will send commands via port 5013
+    /// 3. Python SequenceServer will send commands via port 5008
     /// </summary>
     public class PythonCommandHandler : MonoBehaviour
     {

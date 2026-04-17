@@ -21,15 +21,11 @@ to Unity frame — same pattern as GraspFrameTransform.py:202-204.
 """
 
 import math
-import logging
 from typing import Tuple
 
 import numpy as np
 
 from operations.GraspFrameTransform import _quat_multiply, _normalise_quat
-from core.LoggingSetup import get_logger
-
-logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # URDF joint definitions (verified from ar4.urdf)

@@ -458,7 +458,7 @@ namespace Tests.PlayMode
             var ports = new int[]
             {
                 CommunicationConstants.COMMAND_SERVER_PORT,        // 5007
-                CommunicationConstants.SEQUENCE_SERVER_PORT     // 5011
+                CommunicationConstants.SEQUENCE_SERVER_PORT     // 5008
             };
 
             var uniquePorts = new System.Collections.Generic.HashSet<int>(ports);
@@ -469,8 +469,8 @@ namespace Tests.PlayMode
         [Test]
         public void CommunicationConstants_SequenceServerPort_IsCorrect()
         {
-            Assert.AreEqual(5011, CommunicationConstants.SEQUENCE_SERVER_PORT,
-                "Sequence server should be on port 5011");
+            Assert.AreEqual(5008, CommunicationConstants.SEQUENCE_SERVER_PORT,
+                "Sequence server should be on port 5008");
         }
 
         [Test]

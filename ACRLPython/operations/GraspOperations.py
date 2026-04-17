@@ -13,7 +13,6 @@ import math
 import time
 from typing import List, Optional
 
-# Configure logging
 from core.LoggingSetup import setup_logging
 
 from .Base import (
@@ -26,6 +25,8 @@ from .Base import (
     ParameterFlow,
 )
 
+from .ROSDispatcher import _get_control_mode
+
 setup_logging(__name__)
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,7 @@ logger = logging.getLogger(__name__)
 try:
     from ..core.Imports import get_command_broadcaster as _get_command_broadcaster
 except ImportError:
-    from core.Imports import get_command_broadcaster as _get_command_broadcaster
+    from core.Imports import get_command_broadcaster as _get_command_broadcaster # type: ignore[no-redef]
 
 try:
     from ..config.Robot import (
@@ -51,7 +52,7 @@ try:
         PREGRASP_VELOCITY_SCALING,
     )
 except ImportError:
-    from config.Robot import (
+    from config.Robot import ( # type: ignore[no-redef]
         FOLLOW_TARGET_DRIFT_THRESHOLD,
         FOLLOW_TARGET_ENABLED,
         FOLLOW_TARGET_MAX_CORRECTIONS,

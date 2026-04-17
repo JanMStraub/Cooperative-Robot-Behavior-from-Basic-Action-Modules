@@ -5,7 +5,7 @@ All Operations Integration Test
 
 Comprehensive integration test that exercises all 30 registered operations
 against a live Unity + Python backend via the BackendClient → SequenceServer
-(port 5011) path.
+(port 5008) path.
 
 Prerequisites
 -------------

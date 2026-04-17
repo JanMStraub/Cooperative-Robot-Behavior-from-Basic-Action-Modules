@@ -5,9 +5,9 @@ RunRobotController.py - Unified orchestrator for robot control
 Starts all required servers in a single process:
 - ImageServer (ports 5005, 5006) - receives images
 - CommandServer (port 5007) - sends commands, receives completions
-- SequenceServer (port 5011) - processes command sequences
-- WorldStateServer (port 5012) - receives robot/object state updates
-- AutoRTServer (port 5013) - autonomous task generation
+- SequenceServer (port 5008) - processes command sequences
+- WorldStateServer (port 5009) - receives robot/object state updates
+- AutoRTServer (port 5010) - autonomous task generation
 
 Usage:
     python -m orchestrators.RunRobotController
@@ -419,7 +419,7 @@ class RobotController:
             port=self._command_port, host=self._host
         )
 
-        # Initialize and start SequenceServer (port 5011)
+        # Initialize and start SequenceServer (port 5008)
         logger.info(f"Starting SequenceServer (port: {self._sequence_port})")
         self._sequence_server = run_sequence_server_background(
             lm_studio_url=LMSTUDIO_BASE_URL,
@@ -427,7 +427,7 @@ class RobotController:
             check_completion=self._check_completion,
         )
 
-        # Start WorldStateServer (port 5012) only in sim mode and when perception-only
+        # Start WorldStateServer (port 5009) only in sim mode and when perception-only
         # mode is not active.  In real mode or PERCEPTION_ONLY_MODE=true, world state
         # is populated entirely by FK (joint angles) and stereo perception.
         from core.TCPServerBase import ServerConfig
@@ -448,7 +448,7 @@ class RobotController:
                 "Real env: WorldStateServer disabled — WorldState populated by perception only"
             )
 
-        # Start AutoRTServer (port 5013) - autonomous task generation
+        # Start AutoRTServer (port 5010) - autonomous task generation
         autort_config = ServerConfig(host=self._host, port=self._autort_port)
         self._autort_server = AutoRTServer(config=autort_config)
         self._autort_server.start()

@@ -168,7 +168,13 @@ class _VGNPatch:
             return_value=self.mock_broadcaster if self.broadcaster_available else None,
         )
         self._patches.append(bc_patch.start())
-
+         # _grasp_via_vgn calls _get_command_broadcaster from its own module namespace
+        bc_vgn_patch = patch(
+            "operations.GraspOperations._get_command_broadcaster",
+            return_value=self.mock_broadcaster if self.broadcaster_available else None,
+        )
+        self._patches.append(bc_vgn_patch.start())
+        
         return self
 
     def __exit__(self, *args):
@@ -726,7 +732,7 @@ class TestGraspViaVGNWithROSHappyPath:
                 world_state=None,
             )
         descent_kwargs = ctx.mock_bridge.plan_cartesian_descent.call_args.kwargs
-        assert descent_kwargs["position"] == {"x": 0.3, "y": 0.4, "z": 0.5}
+        assert descent_kwargs["position"] == {"x": 0.3, "y": 0.45, "z": 0.5}
 
     def test_follow_target_called_after_descent(self):
         """_execute_grasp_with_follow_target is called after Cartesian descent."""

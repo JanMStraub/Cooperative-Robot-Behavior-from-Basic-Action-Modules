@@ -160,17 +160,17 @@ namespace Core
         /// <summary>
         /// Sequence server port (multi-command sequence execution) - primary communication port
         /// </summary>
-        public const int SEQUENCE_SERVER_PORT = 5011;
+        public const int SEQUENCE_SERVER_PORT = 5008;
 
         /// <summary>
         /// AutoRT server port (autonomous task generation)
         /// </summary>
-        public const int AUTORT_SERVER_PORT = 5013;
+        public const int AUTORT_SERVER_PORT = 5010;
 
         /// <summary>
         /// World state streaming port (one-way broadcast of robot/object states)
         /// </summary>
-        public const int WORLD_STATE_PORT = 5012;
+        public const int WORLD_STATE_PORT = 5009;
 
         /// <summary>
         /// Maximum JSON message size (10MB)

@@ -11,32 +11,15 @@ stored in ImageStorage and return detection results directly.
 import time
 import logging
 
-# Import from centralized lazy import system (prevents circular dependencies)
-try:
-    from ..core.Imports import get_unified_image_storage
-except ImportError:
-    from core.Imports import get_unified_image_storage
-
-
-# Handle both direct execution and package import
-try:
-    from .Base import (
-        BasicOperation,
-        OperationCategory,
-        OperationComplexity,
-        OperationParameter,
-        OperationRelationship,
-        OperationResult,
-    )
-except ImportError:
-    from operations.Base import (
-        BasicOperation,
-        OperationCategory,
-        OperationComplexity,
-        OperationParameter,
-        OperationRelationship,
-        OperationResult,
-    )
+from ._imports import get_unified_image_storage
+from .Base import (
+    BasicOperation,
+    OperationCategory,
+    OperationComplexity,
+    OperationParameter,
+    OperationRelationship,
+    OperationResult,
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)

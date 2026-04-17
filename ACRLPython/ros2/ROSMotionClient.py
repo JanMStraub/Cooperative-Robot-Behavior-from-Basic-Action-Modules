@@ -304,9 +304,8 @@ class ROSMotionServer:
         """Publish a ground/table collision object to a robot's MoveIt planning scene.
 
         The table surface in Unity is at Y=0 (same as robot base_link origin).
-        In ROS base_link frame (Z-up), Z=0 is the floor. We add a large flat box
-        at Z=-0.01 (just below the surface) so MoveIt treats the table surface as
-        a collision boundary and plans paths that stay above it.
+        In ROS base_link frame (Z-up), Z=0 is the table surface. We add a large
+        flat box with its top face at Z=0 so MoveIt treats the actual table surface as a collision boundary and plans paths that stay above it.
 
         Published to /{robot_id}/planning_scene once at startup. MoveIt's planning
         scene monitor picks it up and applies it to all subsequent planning requests.
@@ -327,13 +326,10 @@ class ROSMotionServer:
         scene.is_diff = True  # Incremental update, not a full scene replacement
 
         # Ground plane: 2m x 2m x 10cm slab in base_link frame.
-        # Top face at Z=-0.10 (10cm below table surface).
-        # Prevents trajectories from going far below the table while giving
-        # enough room for the arm links (link_2, link_3) to sweep low when
-        # reaching laterally at grasp height. At full extension (Y≈-0.27),
-        # the elbow can dip to Z≈-0.07 — a ground plane at Z=-0.05 caused
-        # "Unable to sample any valid states for goal tree" because the arm
-        # geometry collided with the collision box at every IK solution.
+        # Ground plane: 2m x 2m x 10cm slab in base_link frame.
+        # Unity table surface (BottomPanel) is at Y=0, which maps to Z=0 in ROS
+        # base_link (Z-up). Top face of the box is placed at Z=0 so MoveIt treats the actual table surface as the collision boundary.
+        # Box center at Z=-0.05 with 10cm thickness → top face at Z=0.
         ground = CollisionObject()
         ground.header.frame_id = "base_link"
         ground.id = "ground_plane"
@@ -346,7 +342,7 @@ class ROSMotionServer:
         box_pose = Pose()
         box_pose.position.x = 0.0
         box_pose.position.y = 0.0
-        box_pose.position.z = -0.15  # Top face at Z=-0.10, 10cm below table surface
+        box_pose.position.z = -0.05  # Top face at Z=0, matching Unity Y=0 table surface
         box_pose.orientation.w = 1.0
 
         ground.primitives = [box]
@@ -369,11 +365,12 @@ class ROSMotionServer:
         Unity coordinate system: X=right, Y=up, Z=forward (left-handed)
         ROS coordinate system: X=forward, Y=left, Z=up (right-handed)
 
-        Example for Robot2 at Unity world (0.475, 0, 0):
-        - User sends Unity world: (0.2, 0.15, 0)
-        - Translate: (0.2-0.475, 0.15, 0) = (-0.275, 0.15, 0) in Unity local
-        - Rotate 180°: (0.275, 0.15, 0) in Unity local
-        - Convert to ROS: (Z, -X, Y) = (0, -0.275, 0.15) in ROS base_link
+        Example for Robot1 at Unity world (-0.475, 0, 0), base_link facing +Z (y_rotation=0°):
+        - Target Unity world: (0, 0.089, 0.05)
+        - Translate: (0-(-0.475), 0.089, 0.05) = (0.475, 0.089, 0.05) in Unity local
+        - Rotate 0°: unchanged (0.475, 0.089, 0.05)
+        - Convert to ROS: x=local_z=0.05 (forward), y=-local_x=-0.475 (left), z=0.089 (up)
+
 
         Args:
             world_position: Dict with x, y, z in Unity world coordinates (Y-up)

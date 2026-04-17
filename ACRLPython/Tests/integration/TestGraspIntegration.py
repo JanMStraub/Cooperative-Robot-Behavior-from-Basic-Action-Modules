@@ -236,15 +236,15 @@ class TestGraspEndToEnd:
 
 
 def _is_sequence_server_available() -> bool:
-    """Check if the SequenceServer (port 5011) is reachable."""
+    """Check if the SequenceServer (port 5008) is reachable."""
     from backend_client import port_open  # type: ignore[import]
 
-    return port_open(5011, timeout=1.0)
+    return port_open(5008, timeout=1.0)
 
 
 _SEQUENCE_AVAILABLE = _is_sequence_server_available()
 _SKIP_REASON_SEQ = (
-    "SequenceServer not running on port 5011. Start backend servers to run these tests."
+    "SequenceServer not running on port 5008. Start backend servers to run these tests."
 )
 
 # Import the shared BackendClient from the helpers package.

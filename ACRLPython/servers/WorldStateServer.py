@@ -3,11 +3,11 @@
 WorldStateServer - Receives robot and object state updates from Unity.
 
 Dedicated streaming server that receives unsolicited world state broadcasts
-from Unity's WorldStatePublisher on port 5012. Keeps world state updates
+from Unity's WorldStatePublisher on port 5009. Keeps world state updates
 separate from command/response traffic to prevent message correlation conflicts.
 
 Architecture:
-- Port 5012: One-way stream (Unity → Python)
+- Port 5009: One-way stream (Unity → Python)
 - Message Type: STATUS_RESPONSE (0x04) with requestId=0
 - No responses sent back to Unity (pure receive-only)
 
@@ -55,7 +55,7 @@ class WorldStateServer(TCPServerBase):
         Initialize WorldStateServer.
 
         Args:
-            config: Server configuration (default: port 5012, host 0.0.0.0)
+            config: Server configuration (default: port 5009, host 0.0.0.0)
         """
         if config is None:
             config = ServerConfig(host=DEFAULT_HOST, port=WORLD_STATE_PORT)
@@ -95,6 +95,13 @@ class WorldStateServer(TCPServerBase):
                     logger.warning(
                         f"Expected STATUS_RESPONSE, got {msg_type.name}. Skipping."
                     )
+                    # Must still consume the length+body to keep the stream aligned.
+                    len_bytes = self._recv_exactly(client, 4)
+                    if len_bytes:
+                        import struct as _struct
+                        skip_len = _struct.unpack("<I", len_bytes)[0]
+                        if 0 < skip_len <= UnityProtocol.MAX_IMAGE_SIZE:
+                            self._recv_exactly(client, skip_len)
                     continue
 
                 if request_id != 0:

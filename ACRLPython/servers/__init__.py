@@ -8,8 +8,8 @@ network communication between Unity and Python.
 Active Servers:
 - ImageServer: Unified image receiver for single/stereo cameras (ports 5005, 5006)
 - CommandServer: Bidirectional commands and results (port 5007)
-- SequenceServer: Multi-command sequence execution (port 5011)
-- WorldStateServer: One-way robot/object state stream from Unity (port 5012)
+- SequenceServer: Multi-command sequence execution (port 5008)
+- WorldStateServer: One-way robot/object state stream from Unity (port 5009)
 
 Legacy servers (DetectionServer, StreamingServer, StereoDetectionServer,
 ResultsServer, RAGServer) have been consolidated into the above servers.

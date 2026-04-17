@@ -21,32 +21,13 @@ from .Base import (
     OperationRelationship,
 )
 
-# Import from centralized lazy import system (prevents circular dependencies)
-try:
-    from ..core.Imports import get_unified_image_storage, get_command_broadcaster
-except ImportError:
-    from core.Imports import get_unified_image_storage, get_command_broadcaster
-
-# Lazy imports for vision modules (imported inside functions where needed)
-# from vision.ObjectDetector import CubeDetector
-# from vision.AnalyzeImage import LMStudioVisionProcessor
-# from vision.StereoConfig import CameraConfig
-
-# Import config
-try:
-    from config.Vision import (
-        ENABLE_VISION_STREAMING,
-        VISION_OPERATION_TIMEOUT,
-        DEFAULT_CAMERA_ID,
-    )
-    from config.Servers import DEFAULT_LMSTUDIO_MODEL
-except ImportError:
-    from ..config.Vision import (
-        ENABLE_VISION_STREAMING,
-        VISION_OPERATION_TIMEOUT,
-        DEFAULT_CAMERA_ID,
-    )
-    from ..config.Servers import DEFAULT_LMSTUDIO_MODEL
+from ._imports import get_unified_image_storage, get_command_broadcaster
+from ._imports import (
+    ENABLE_VISION_STREAMING,
+    VISION_OPERATION_TIMEOUT,
+    DEFAULT_CAMERA_ID,
+    DEFAULT_LMSTUDIO_MODEL,
+)
 
 logger = logging.getLogger(__name__)
 

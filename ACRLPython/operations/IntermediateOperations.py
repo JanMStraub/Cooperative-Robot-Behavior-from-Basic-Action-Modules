@@ -16,33 +16,16 @@ import time
 import logging
 from typing import List, Dict, Any, Optional
 
-# Import from centralized lazy import system
-try:
-    from ..core.Imports import get_command_broadcaster as _get_command_broadcaster
-except ImportError:
-    from core.Imports import get_command_broadcaster as _get_command_broadcaster
-
-# Handle both direct execution and package import
-try:
-    from .Base import (
-        BasicOperation,
-        OperationCategory,
-        OperationComplexity,
-        OperationParameter,
-        OperationResult,
-        OperationRelationship,
-    )
-    from .ROSDispatcher import execute_with_ros_fallback
-except ImportError:
-    from operations.Base import (
-        BasicOperation,
-        OperationCategory,
-        OperationComplexity,
-        OperationParameter,
-        OperationResult,
-        OperationRelationship,
-    )
-    from operations.ROSDispatcher import execute_with_ros_fallback
+from ._imports import get_command_broadcaster as _get_command_broadcaster
+from .Base import (
+    BasicOperation,
+    OperationCategory,
+    OperationComplexity,
+    OperationParameter,
+    OperationResult,
+    OperationRelationship,
+)
+from .ROSDispatcher import execute_with_ros_fallback
 
 # Configure logging
 logger = logging.getLogger(__name__)
