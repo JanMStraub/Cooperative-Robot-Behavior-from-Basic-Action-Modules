@@ -32,19 +32,20 @@ import sys
 import time
 
 # ── Protocol V2 constants (mirrors core/UnityProtocol.py) ─────────────────────
-SEQUENCE_QUERY = 0x08   # MessageType.SEQUENCE_QUERY
-RESULT_TYPE    = 0x02   # MessageType.RESULT
+SEQUENCE_QUERY = 0x08  # MessageType.SEQUENCE_QUERY
+RESULT_TYPE = 0x02  # MessageType.RESULT
 
-DEFAULT_HOST    = "127.0.0.1"
-DEFAULT_PORT    = 5008
-DEFAULT_ROBOT   = "Robot1"
-DEFAULT_CAMERA  = "TableStereoCamera"
-DEFAULT_TIMEOUT = 120   # grasp + trajectory can take 60–90 s
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = 5008
+DEFAULT_ROBOT = "Robot1"
+DEFAULT_CAMERA = "TableStereoCamera"
+DEFAULT_TIMEOUT = 120  # grasp + trajectory can take 60–90 s
 
 DIRECT_EXEC_PREFIX = "EXEC:"
 
 
 # ── Wire format ────────────────────────────────────────────────────────────────
+
 
 def build_sequence_message(
     command_text: str,
@@ -62,7 +63,7 @@ def build_sequence_message(
     rob_b = robot_id.encode("utf-8")
     cam_b = camera_id.encode("utf-8")
 
-    msg  = struct.pack("<BI", SEQUENCE_QUERY, request_id)
+    msg = struct.pack("<BI", SEQUENCE_QUERY, request_id)
     msg += struct.pack("<I", len(cmd_b)) + cmd_b
     msg += struct.pack("<I", len(rob_b)) + rob_b
     msg += struct.pack("<I", len(cam_b)) + cam_b
@@ -122,7 +123,9 @@ def send(
     """
     command_text = DIRECT_EXEC_PREFIX + json.dumps(ops)
     auto_execute = not dry_run
-    msg = build_sequence_message(command_text, robot_id, camera_id, auto_execute, request_id)
+    msg = build_sequence_message(
+        command_text, robot_id, camera_id, auto_execute, request_id
+    )
 
     # Generous socket timeout: the response only arrives after Unity finishes all ops
     with socket.create_connection((host, port), timeout=10) as sock:
@@ -132,46 +135,53 @@ def send(
 
 # ── Operation builders ─────────────────────────────────────────────────────────
 
+
 def ops_move(args) -> list:
     """Build a move_to_coordinate operation."""
-    return [{
-        "operation": "move_to_coordinate",
-        "params": {
-            "robot_id": args.robot,
-            "x": args.x,
-            "y": args.y,
-            "z": args.z,
-            "speed": getattr(args, "speed", 1.0),
-            "use_advanced_planning": not getattr(args, "no_advanced", False),
-        },
-    }]
+    return [
+        {
+            "operation": "move_to_coordinate",
+            "params": {
+                "robot_id": args.robot,
+                "x": args.x,
+                "y": args.y,
+                "z": args.z,
+                "speed": getattr(args, "speed", 1.0),
+                "use_advanced_planning": not getattr(args, "no_advanced", False),
+            },
+        }
+    ]
 
 
 def ops_grasp(args) -> list:
     """Build a grasp_object operation."""
-    return [{
-        "operation": "grasp_object",
-        "params": {
-            "robot_id":              args.robot,
-            "object_id":             args.object,
-            "preferred_approach":    args.approach,
-            "pre_grasp_distance":    args.pre_grasp_distance,
-            "enable_retreat":        not args.no_retreat,
-            "retreat_distance":      args.retreat_distance,
-            "use_advanced_planning": not args.no_advanced,
-        },
-    }]
+    return [
+        {
+            "operation": "grasp_object",
+            "params": {
+                "robot_id": args.robot,
+                "object_id": args.object,
+                "preferred_approach": args.approach,
+                "pre_grasp_distance": args.pre_grasp_distance,
+                "enable_retreat": not args.no_retreat,
+                "retreat_distance": args.retreat_distance,
+                "use_advanced_planning": not args.no_advanced,
+            },
+        }
+    ]
 
 
 def ops_gripper(args) -> list:
     """Build a control_gripper operation."""
-    return [{
-        "operation": "control_gripper",
-        "params": {
-            "robot_id":     args.robot,
-            "open_gripper": args.open,
-        },
-    }]
+    return [
+        {
+            "operation": "control_gripper",
+            "params": {
+                "robot_id": args.robot,
+                "open_gripper": args.open,
+            },
+        }
+    ]
 
 
 def ops_release(args) -> list:
@@ -181,13 +191,15 @@ def ops_release(args) -> list:
 
 def ops_home(args) -> list:
     """Build a return_to_start operation."""
-    return [{
-        "operation": "return_to_start",
-        "params": {
-            "robot_id": args.robot,
-            "speed":    getattr(args, "speed", 1.0),
-        },
-    }]
+    return [
+        {
+            "operation": "return_to_start",
+            "params": {
+                "robot_id": args.robot,
+                "speed": getattr(args, "speed", 1.0),
+            },
+        }
+    ]
 
 
 def ops_raw(args) -> list:
@@ -200,16 +212,35 @@ def ops_raw(args) -> list:
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
 
+
 def add_common(p: argparse.ArgumentParser):
     """Attach shared arguments to a sub-command parser."""
-    p.add_argument("--robot",   default=DEFAULT_ROBOT,  help=f"Robot ID (default: {DEFAULT_ROBOT})")
-    p.add_argument("--host",    default=DEFAULT_HOST,   help=f"Server host (default: {DEFAULT_HOST})")
-    p.add_argument("--port",    default=DEFAULT_PORT, type=int, help=f"Port (default: {DEFAULT_PORT})")
-    p.add_argument("--timeout", default=DEFAULT_TIMEOUT, type=float,
-                   help=f"Per-operation timeout in seconds (default: {DEFAULT_TIMEOUT})")
-    p.add_argument("--camera",  default=DEFAULT_CAMERA, help=f"Camera ID (default: {DEFAULT_CAMERA})")
-    p.add_argument("--dry-run", action="store_true",    help="Parse without executing (no Unity movement)")
-    p.add_argument("--pretty",  action="store_true",    help="Pretty-print JSON response")
+    p.add_argument(
+        "--robot", default=DEFAULT_ROBOT, help=f"Robot ID (default: {DEFAULT_ROBOT})"
+    )
+    p.add_argument(
+        "--host", default=DEFAULT_HOST, help=f"Server host (default: {DEFAULT_HOST})"
+    )
+    p.add_argument(
+        "--port", default=DEFAULT_PORT, type=int, help=f"Port (default: {DEFAULT_PORT})"
+    )
+    p.add_argument(
+        "--timeout",
+        default=DEFAULT_TIMEOUT,
+        type=float,
+        help=f"Per-operation timeout in seconds (default: {DEFAULT_TIMEOUT})",
+    )
+    p.add_argument(
+        "--camera",
+        default=DEFAULT_CAMERA,
+        help=f"Camera ID (default: {DEFAULT_CAMERA})",
+    )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Parse without executing (no Unity movement)",
+    )
+    p.add_argument("--pretty", action="store_true", help="Pretty-print JSON response")
 
 
 def main():
@@ -237,9 +268,13 @@ def main():
     add_common(p)
     p.add_argument("--object", required=True, help="Object ID (e.g. red_cube)")
     p.add_argument("--approach", default="top", choices=["top", "front", "side"])
-    p.add_argument("--pre-grasp-distance", type=float, default=0.15, dest="pre_grasp_distance")
-    p.add_argument("--no-retreat",  action="store_true")
-    p.add_argument("--retreat-distance", type=float, default=0.1, dest="retreat_distance")
+    p.add_argument(
+        "--pre-grasp-distance", type=float, default=0.15, dest="pre_grasp_distance"
+    )
+    p.add_argument("--no-retreat", action="store_true")
+    p.add_argument(
+        "--retreat-distance", type=float, default=0.1, dest="retreat_distance"
+    )
     p.add_argument("--no-advanced", action="store_true")
     p.set_defaults(builder=ops_grasp)
 
@@ -247,7 +282,7 @@ def main():
     p = sub.add_parser("gripper", help="Open or close the gripper")
     add_common(p)
     grp = p.add_mutually_exclusive_group(required=True)
-    grp.add_argument("--open",  dest="open", action="store_true",  help="Open gripper")
+    grp.add_argument("--open", dest="open", action="store_true", help="Open gripper")
     grp.add_argument("--close", dest="open", action="store_false", help="Close gripper")
     p.set_defaults(builder=ops_gripper)
 
@@ -265,8 +300,11 @@ def main():
     # raw
     p = sub.add_parser("raw", help="Send a raw JSON operation list")
     add_common(p)
-    p.add_argument("--ops", required=True,
-                   help='JSON array, e.g. \'[{"operation":"grasp_object","params":{"robot_id":"Robot1","object_id":"red_cube"}}]\'')
+    p.add_argument(
+        "--ops",
+        required=True,
+        help='JSON array, e.g. \'[{"operation":"grasp_object","params":{"robot_id":"Robot1","object_id":"red_cube"}}]\'',
+    )
     p.set_defaults(builder=ops_raw)
 
     args = parser.parse_args()
@@ -278,7 +316,9 @@ def main():
         sys.exit(1)
 
     mode = "DRY-RUN" if args.dry_run else "EXECUTE"
-    print(f"→ [{mode}] {args.cmd.upper()}  robot={args.robot}  server={args.host}:{args.port}")
+    print(
+        f"→ [{mode}] {args.cmd.upper()}  robot={args.robot}  server={args.host}:{args.port}"
+    )
     print(f"  ops: {json.dumps(ops)}")
     print()
 

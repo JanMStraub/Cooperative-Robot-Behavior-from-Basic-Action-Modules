@@ -19,7 +19,6 @@ from unittest.mock import Mock, patch
 
 from operations.DetectionOperations import detect_objects, DETECT_OBJECTS_OPERATION
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================

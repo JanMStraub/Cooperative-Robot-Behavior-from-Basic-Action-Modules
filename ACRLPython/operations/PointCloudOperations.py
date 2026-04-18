@@ -251,9 +251,7 @@ def _clean_point_cloud(
         before = len(points)
         points = points[keep]
         colors = colors[keep]
-        logger.debug(
-            f"Color background removal: {keep.sum()} / {before} points kept"
-        )
+        logger.debug(f"Color background removal: {keep.sum()} / {before} points kept")
 
     if len(points) == 0:
         return points, colors
@@ -390,10 +388,18 @@ def generate_point_cloud(
             from operations.StereoUtils import camera_config_from_metadata
 
         stereo_params = camera_config_from_metadata(metadata)
-        fov = stereo_params.camera_config.fov
+        fov = stereo_params.camera_config.fov or 60.0
         baseline = stereo_params.camera_config.baseline
-        camera_position = [float(v) for v in stereo_params.camera_position]
-        camera_rotation = [float(v) for v in stereo_params.camera_rotation]
+        camera_position = (
+            [float(v) for v in stereo_params.camera_position]
+            if stereo_params.camera_position is not None
+            else []
+        )
+        camera_rotation = (
+            [float(v) for v in stereo_params.camera_rotation]
+            if stereo_params.camera_rotation is not None
+            else []
+        )
 
         # --- Compute max_disp to cover the robotic workspace ---
         # SGBM's numDisparities must be >= f_px*baseline/min_depth.
@@ -403,9 +409,12 @@ def generate_point_cloud(
         # instead of 0.8m — a systematic ~1.8x overestimate of depth.
         # Cap at 512 for performance; covers objects down to f_px*b/512 (~0.23m).
         import math as _math
+
         # fov from Unity is vertical; convert to horizontal for f_px calculation
         _aspect = img_left.shape[1] / img_left.shape[0]  # width / height
-        _horiz_fov = 2.0 * _math.degrees(_math.atan(_math.tan(_math.radians(fov / 2.0)) * _aspect))
+        _horiz_fov = 2.0 * _math.degrees(
+            _math.atan(_math.tan(_math.radians(fov / 2.0)) * _aspect)
+        )
         _f_norm = 1.0 / (2.0 * _math.tan(_math.radians(_horiz_fov / 2.0)))
         _f_px = _f_norm * img_left.shape[1]  # pixel focal length
         _min_depth = 0.25  # metres — closest expected object in robot workspace

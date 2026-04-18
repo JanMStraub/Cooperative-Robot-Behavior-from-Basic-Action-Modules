@@ -141,7 +141,9 @@ class UnifiedImageStorage:
         Computed once at store time so the comparison in VisionProcessor is free.
         Uses nearest-neighbour resize (fastest) — quality doesn't matter here.
         """
-        gray = img[:, :, 0] if len(img.shape) == 3 else img  # take one channel, no cvtColor alloc
+        gray = (
+            img[:, :, 0] if len(img.shape) == 3 else img
+        )  # take one channel, no cvtColor alloc
         h, w = gray.shape
         # Nearest-neighbour via stride-based subsampling (zero extra allocation)
         row_step = max(1, h // size)

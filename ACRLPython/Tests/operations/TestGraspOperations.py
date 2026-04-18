@@ -56,9 +56,10 @@ class TestGraspObjectOperation:
     @pytest.fixture
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
-        with patch(
-            "operations.GraspOperations._get_command_broadcaster"
-        ) as mock, patch("config.ROS.ROS_ENABLED", False):
+        with (
+            patch("operations.GraspOperations._get_command_broadcaster") as mock,
+            patch("config.ROS.ROS_ENABLED", False),
+        ):
             broadcaster = MagicMock()
             mock.return_value = broadcaster
             yield broadcaster
@@ -348,9 +349,9 @@ class TestGraspObjectOperationDefinition:
         """Test operation has examples."""
         assert len(GRASP_OBJECT_OPERATION.usage_examples) >= 3
 
-        # Check for basic example
+        # Check for basic example (top-down default)
         assert any(
-            "automatic approach" in ex.lower()
+            "top-down" in ex.lower() or "default" in ex.lower()
             for ex in GRASP_OBJECT_OPERATION.usage_examples
         )
 
@@ -386,9 +387,10 @@ class TestGraspObjectIntegration:
 
     def test_grasp_object_with_all_parameters(self, mock_world_state):
         """Test grasp operation with all parameters specified."""
-        with patch(
-            "operations.GraspOperations._get_command_broadcaster"
-        ) as mock_bc, patch("config.ROS.ROS_ENABLED", False):
+        with (
+            patch("operations.GraspOperations._get_command_broadcaster") as mock_bc,
+            patch("config.ROS.ROS_ENABLED", False),
+        ):
             broadcaster = MagicMock()
             broadcaster.send_command.return_value = True
             mock_bc.return_value = broadcaster
@@ -429,9 +431,10 @@ class TestGraspTrajectoryValidation:
     @pytest.fixture
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
-        with patch(
-            "operations.GraspOperations._get_command_broadcaster"
-        ) as mock, patch("config.ROS.ROS_ENABLED", False):
+        with (
+            patch("operations.GraspOperations._get_command_broadcaster") as mock,
+            patch("config.ROS.ROS_ENABLED", False),
+        ):
             broadcaster = MagicMock()
             mock.return_value = broadcaster
             yield broadcaster
@@ -519,9 +522,10 @@ class TestGraspForceEstimation:
     @pytest.fixture
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
-        with patch(
-            "operations.GraspOperations._get_command_broadcaster"
-        ) as mock, patch("config.ROS.ROS_ENABLED", False):
+        with (
+            patch("operations.GraspOperations._get_command_broadcaster") as mock,
+            patch("config.ROS.ROS_ENABLED", False),
+        ):
             broadcaster = MagicMock()
             mock.return_value = broadcaster
             yield broadcaster
@@ -553,9 +557,10 @@ class TestGraspFailureRecovery:
     @pytest.fixture
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
-        with patch(
-            "operations.GraspOperations._get_command_broadcaster"
-        ) as mock, patch("config.ROS.ROS_ENABLED", False):
+        with (
+            patch("operations.GraspOperations._get_command_broadcaster") as mock,
+            patch("config.ROS.ROS_ENABLED", False),
+        ):
             broadcaster = MagicMock()
             mock.return_value = broadcaster
             yield broadcaster
@@ -636,7 +641,9 @@ class TestReceiveHandoffOffset:
 
         ok = OperationResult.success_result({})
         with (
-            patch("operations.GraspOperations.orient_gripper_for_handoff_receive") as mock_orient,
+            patch(
+                "operations.GraspOperations.orient_gripper_for_handoff_receive"
+            ) as mock_orient,
             patch("operations.MoveOperations.move_to_coordinate") as mock_move,
             patch("operations.GripperOperations.control_gripper") as mock_gripper,
             patch("core.Imports.get_world_state", return_value=ws),
@@ -664,17 +671,21 @@ class TestReceiveHandoffOffset:
         assert result["success"] is True
         # Check the move_to_coordinate call
         move_call = mock_deps["move"].call_args
-        target_x = move_call.kwargs.get("x", move_call[1].get("x") if len(move_call) > 1 else None)
-        target_z = move_call.kwargs.get("z", move_call[1].get("z") if len(move_call) > 1 else None)
+        target_x = move_call.kwargs.get(
+            "x", move_call[1].get("x") if len(move_call) > 1 else None
+        )
+        target_z = move_call.kwargs.get(
+            "z", move_call[1].get("z") if len(move_call) > 1 else None
+        )
 
-        # Robot1 is at -X → approach vector points to +X (far end from Robot1).
-        # Robot2 offset direction is NEGATED → Robot2 moves to -X end (opposite
-        # of Robot1's grasp at +X far end). So target_x < object center (0.0).
-        # Actually: _compute_handoff_approach_vector with receiver=Robot1(-0.2)
-        # picks approach=[+1, 0, 0] (far from Robot1 at -X means +X end).
-        # Negate for Robot2 offset: offset_dir_x = -1. So target_x < 0.
+        # receive_handoff positions Robot2 directly below the object (XZ = object
+        # center, Y = object_y - below_offset). The lateral offset strategy was
+        # replaced by the "approach from below with upward-pitched gripper" design,
+        # so target_x should equal the object's X position (0.0 in this fixture).
         assert target_x is not None, "move_to_coordinate should receive x"
-        assert target_x != 0.0, "Robot2 must NOT go to the object center"
+        assert (
+            target_x == 0.0
+        ), "Robot2 should move to object center X (approach from below)"
 
     def test_robot2_below_object(self, mock_deps):
         """Robot2 should approach from below (Y offset)."""
@@ -688,7 +699,9 @@ class TestReceiveHandoffOffset:
 
         assert result["success"] is True
         move_call = mock_deps["move"].call_args
-        target_y = move_call.kwargs.get("y", move_call[1].get("y") if len(move_call) > 1 else None)
+        target_y = move_call.kwargs.get(
+            "y", move_call[1].get("y") if len(move_call) > 1 else None
+        )
 
         # Object at y=0.3, below_offset = 0.05/2 + 0.02 = 0.045
         assert target_y is not None

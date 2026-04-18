@@ -259,7 +259,9 @@ class YOLODetector:
             # Try to extract class names from model metadata
             if hasattr(self.model, "names") and self.model.names:
                 model_classes = self.model.names
-                logging.debug(f"Loaded {len(model_classes)} classes from model metadata")
+                logging.debug(
+                    f"Loaded {len(model_classes)} classes from model metadata"
+                )
             else:
                 model_classes = None
 
@@ -669,11 +671,15 @@ class YOLODetector:
             if camera_position is not None:
                 try:
                     from core.Imports import get_world_state
+
                     ws = get_world_state()
                     known_objects = ws.get_all_objects()
                     if known_objects:
-                        import math
-                        cx, cy, cz = camera_position[0], camera_position[1], camera_position[2]
+                        cx, cy, cz = (
+                            camera_position[0],
+                            camera_position[1],
+                            camera_position[2],
+                        )
                         distances = [
                             math.sqrt(
                                 (obj.position[0] - cx) ** 2
@@ -685,7 +691,9 @@ class YOLODetector:
                         ]
                         if distances:
                             distances.sort()
-                            estimated_distance = distances[len(distances) // 2]  # median
+                            estimated_distance = distances[
+                                len(distances) // 2
+                            ]  # median
                             logging.debug(
                                 f"Adaptive SGBM: prior distance={estimated_distance:.2f}m "
                                 f"(from {len(distances)} WorldState objects)"

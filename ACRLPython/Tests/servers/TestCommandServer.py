@@ -25,7 +25,6 @@ from servers.CommandServer import (
 )
 from core.UnityProtocol import UnityProtocol, MessageType
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================

@@ -363,6 +363,7 @@ def detect_object_stereo(
         logger.debug(f"Metadata for {camera_id}: {metadata}")
 
         from operations.StereoUtils import camera_config_from_metadata
+
         stereo_params = camera_config_from_metadata(
             metadata,
             baseline=baseline,
@@ -424,7 +425,9 @@ def detect_object_stereo(
                         # Unity-streamed collider dimensions survive the cached path.
                         inherited_dims = None
                         if _ws_for_dims is not None:
-                            inherited_dims = _ws_for_dims.get_object_dimensions(obj.color)
+                            inherited_dims = _ws_for_dims.get_object_dimensions(
+                                obj.color
+                            )
 
                         # Create detection from cached object.
                         # bbox=(0,0,0,0) because pixel coordinates aren't available
@@ -766,7 +769,17 @@ def create_detect_object_stereo_operation() -> BasicOperation:
                 description="Color to detect (None for all colors)",
                 required=False,
                 default=None,
-                valid_values=["red", "green", "blue", "yellow", "purple", "orange", "cyan", "magenta", None],
+                valid_values=[
+                    "red",
+                    "green",
+                    "blue",
+                    "yellow",
+                    "purple",
+                    "orange",
+                    "cyan",
+                    "magenta",
+                    None,
+                ],
             ),
             OperationParameter(
                 name="camera_id",

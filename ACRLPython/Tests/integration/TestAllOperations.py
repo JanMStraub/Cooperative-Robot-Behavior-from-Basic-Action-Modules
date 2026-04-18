@@ -78,7 +78,6 @@ from backend_client import (  # type: ignore[import]
     port_open,
 )
 
-
 # ---------------------------------------------------------------------------
 # Availability guard
 # ---------------------------------------------------------------------------
@@ -478,6 +477,7 @@ class TestPerceptionOps:
         )
         if lm_unavailable:
             import pytest
+
             pytest.skip(f"LM Studio vision model unavailable: {error}")
         assert result.get("success") is True, f"analyze_scene failed: {error}"
 

@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 try:
     from ..core.Imports import get_command_broadcaster as _get_command_broadcaster
 except ImportError:
-    from core.Imports import get_command_broadcaster as _get_command_broadcaster # type: ignore[no-redef]
+    from core.Imports import get_command_broadcaster as _get_command_broadcaster  # type: ignore[no-redef]
 
 try:
     from ..config.Robot import (
@@ -52,7 +52,7 @@ try:
         PREGRASP_VELOCITY_SCALING,
     )
 except ImportError:
-    from config.Robot import ( # type: ignore[no-redef]
+    from config.Robot import (  # type: ignore[no-redef]
         FOLLOW_TARGET_DRIFT_THRESHOLD,
         FOLLOW_TARGET_ENABLED,
         FOLLOW_TARGET_MAX_CORRECTIONS,
@@ -383,10 +383,10 @@ def _grasp_via_ros_planned(
     # w is preserved — negating it would invert the rotation (conjugate), not
     # just change the handedness representation.
     unity_q = best_grasp.grasp_rotation  # (x, y, z, w) in Unity frame
-    ros_x = unity_q[2]    # unity z → ros x
-    ros_y = -unity_q[0]   # unity x → ros -y
-    ros_z = unity_q[1]    # unity y → ros z
-    ros_w = unity_q[3]    # w preserved
+    ros_x = unity_q[2]  # unity z → ros x
+    ros_y = -unity_q[0]  # unity x → ros -y
+    ros_z = unity_q[1]  # unity y → ros z
+    ros_w = unity_q[3]  # w preserved
     # Canonicalize to w >= 0 hemisphere. The two quaternion representations
     # (x,y,z,w) and (-x,-y,-z,-w) encode identical orientations, but MoveIt's
     # IK solver may pick a wrist solution requiring an extra ±360° rotation when
@@ -764,7 +764,9 @@ def _grasp_via_vgn(
             for det in detections:
                 color_field = det.get("color", "").lower()
                 if obj_id_lower in color_field or color_field in obj_id_lower:
-                    bbox = det.get("bbox") or det.get("bbox_px")  # "bbox" when 3D present, "bbox_px" otherwise
+                    bbox = det.get("bbox") or det.get(
+                        "bbox_px"
+                    )  # "bbox" when 3D present, "bbox_px" otherwise
                     if bbox:
                         if isinstance(bbox, dict):
                             yolo_bbox = (
@@ -1080,12 +1082,18 @@ def _grasp_via_vgn_with_ros(
                 scale_y = img_h / det_img_h
                 bx, by, bw, bh = yolo_bbox
                 yolo_bbox = (
-                    int(bx * scale_x), int(by * scale_y),
-                    int(bw * scale_x), int(bh * scale_y),
+                    int(bx * scale_x),
+                    int(by * scale_y),
+                    int(bw * scale_x),
+                    int(bh * scale_y),
                 )
-                logger.info(f"[VGN] Scaled bbox {det_img_w}x{det_img_h}→{img_w}x{img_h}: {yolo_bbox}")
+                logger.info(
+                    f"[VGN] Scaled bbox {det_img_w}x{det_img_h}→{img_w}x{img_h}: {yolo_bbox}"
+                )
             if yolo_bbox == (0, 0, 0, 0):
-                logger.warning(f"[VGN] No valid bbox found for '{object_id}' — masking will use all points")
+                logger.warning(
+                    f"[VGN] No valid bbox found for '{object_id}' — masking will use all points"
+                )
     except Exception as exc:
         logger.debug(f"[VGN+ROS] YOLO bbox (non-fatal): {exc}")
 
@@ -1105,9 +1113,14 @@ def _grasp_via_vgn_with_ros(
         image_np = np.zeros((img_h, img_w, 3), dtype=np.uint8)
 
     # 4. Query VGN (VLM bbox refinement + TSDF + inference internal to VGNClient)
-    logger.info(f"[VGN] Calling predict_grasps: image_width={img_w}, image_height={img_h}, fov={fov}, bbox={yolo_bbox}, points_shape={points_np.shape}")
+    logger.info(
+        f"[VGN] Calling predict_grasps: image_width={img_w}, image_height={img_h}, fov={fov}, bbox={yolo_bbox}, points_shape={points_np.shape}"
+    )
     import numpy as _np
-    logger.info(f"[VGN] Point cloud sample (first 3): {points_np[:3].tolist()}, X range=[{points_np[:,0].min():.3f},{points_np[:,0].max():.3f}], Y=[{points_np[:,1].min():.3f},{points_np[:,1].max():.3f}], Z=[{points_np[:,2].min():.3f},{points_np[:,2].max():.3f}]")
+
+    logger.info(
+        f"[VGN] Point cloud sample (first 3): {points_np[:3].tolist()}, X range=[{points_np[:,0].min():.3f},{points_np[:,0].max():.3f}], Y=[{points_np[:,1].min():.3f},{points_np[:,1].max():.3f}], Z=[{points_np[:,2].min():.3f},{points_np[:,2].max():.3f}]"
+    )
     grasps = client.predict_grasps(
         points=points_np,
         colors=colors_np,
@@ -1130,7 +1143,9 @@ def _grasp_via_vgn_with_ros(
     # 5. Transform to Unity world frame (skip if VGN already output world-frame grasps)
     if grasps and grasps[0].get("_world_frame"):
         world_grasps = grasps
-        logger.info("[VGN+ROS] Grasps already in Unity world frame - skipping transform")
+        logger.info(
+            "[VGN+ROS] Grasps already in Unity world frame - skipping transform"
+        )
     else:
         world_grasps = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
     if not world_grasps:
@@ -1166,11 +1181,16 @@ def _grasp_via_vgn_with_ros(
     # 6. Pick top candidate: prefer grasps with upward approach (Y > 0.2) to avoid
     # table collisions.  If none qualify, fall back to the candidate with the highest
     # Y_approach (most top-down) rather than best score, to minimise table collision risk.
-    _y_approaches = sorted([g["approach_direction"][1] for g in world_grasps], reverse=True)
-    logger.info(f"[VGN+ROS] Approach Y distribution (top 5): {[round(v,2) for v in _y_approaches[:5]]}")
+    _y_approaches = sorted(
+        [g["approach_direction"][1] for g in world_grasps], reverse=True
+    )
+    logger.info(
+        f"[VGN+ROS] Approach Y distribution (top 5): {[round(v,2) for v in _y_approaches[:5]]}"
+    )
     _MIN_Y_APPROACH = 0.2  # approach must have at least 20% upward component
     top_down_candidates = [
-        g for g in world_grasps
+        g
+        for g in world_grasps
         if g.get("approach_direction", [0, 0, 0])[1] >= _MIN_Y_APPROACH
     ]
     if top_down_candidates:
@@ -1189,7 +1209,9 @@ def _grasp_via_vgn_with_ros(
     pos = top["position"]
     rot = top["rotation"]
     approach = top["approach_direction"]
-    logger.info(f"[VGN+ROS] Top grasp world_pos={[round(v,3) for v in pos]}, approach={[round(v,3) for v in approach]}, cam_pos={cam_pos}, cam_rot={cam_rot}")
+    logger.info(
+        f"[VGN+ROS] Top grasp world_pos={[round(v,3) for v in pos]}, approach={[round(v,3) for v in approach]}, cam_pos={cam_pos}, cam_rot={cam_rot}"
+    )
 
     # Position anchor override: stereo reconstruction has a depth scale error for
     # synthetic Unity scenes (~1.8x overestimate).  DepthEstimator (WorldState) is
@@ -1322,10 +1344,10 @@ def _grasp_via_vgn_with_ros(
         #           aw*bz+az*bw+ax*by-ay*bx,
         #           aw*bw-ax*bx-ay*by-az*bz)
         bx, by, bz, bw = 0.9999, 0.0, 0.0, 0.0087
-        ox = qy_w * bx - qy_z * by   # qy_w*bx + 0*bw + 0*bz - qy_z*by
-        oy = qy_w * by + qy_z * bx   # qy_w*by + 0*bw + qy_z*bx - 0*bz
-        oz = qy_w * bz + qy_z * bw   # qy_w*bz + qy_z*bw + 0*by - 0*bx
-        ow = qy_w * bw - qy_z * bz   # qy_w*bw - 0*bx - 0*by - qy_z*bz
+        ox = qy_w * bx - qy_z * by  # qy_w*bx + 0*bw + 0*bz - qy_z*by
+        oy = qy_w * by + qy_z * bx  # qy_w*by + 0*bw + qy_z*bx - 0*bz
+        oz = qy_w * bz + qy_z * bw  # qy_w*bz + qy_z*bw + 0*by - 0*bx
+        ow = qy_w * bw - qy_z * bz  # qy_w*bw - 0*bx - 0*by - qy_z*bz
         # Normalise
         mag = math.sqrt(ox * ox + oy * oy + oz * oz + ow * ow)
         orientation = {
@@ -1902,6 +1924,7 @@ def grasp_object(
 # Implementation: Grasp Object For Handoff Operation
 # ============================================================================
 
+
 def _compute_handoff_approach_vector(
     object_position: tuple,
     object_dimensions: tuple,
@@ -2056,11 +2079,15 @@ def grasp_object_for_handoff(
         # Resolve receiving robot position: prefer live WorldState, fall back to
         # configured base position (robot may not have moved yet when this runs).
         receiving_robot_pos = None
-        if receiving_robot_state is not None and receiving_robot_state.position is not None:
+        if (
+            receiving_robot_state is not None
+            and receiving_robot_state.position is not None
+        ):
             receiving_robot_pos = receiving_robot_state.position
         else:
             try:
                 from config.Robot import ROBOT_BASE_POSITIONS
+
                 base = ROBOT_BASE_POSITIONS.get(receiving_robot_id)
                 if base is not None:
                     receiving_robot_pos = base
@@ -2351,11 +2378,15 @@ def orient_gripper_for_handoff_receive(
             source_robot_state = world_state.get_robot_state(source_robot_id)
 
             source_robot_pos = None
-            if source_robot_state is not None and source_robot_state.position is not None:
+            if (
+                source_robot_state is not None
+                and source_robot_state.position is not None
+            ):
                 source_robot_pos = source_robot_state.position
             else:
                 try:
                     from config.Robot import ROBOT_BASE_POSITIONS
+
                     base = ROBOT_BASE_POSITIONS.get(source_robot_id)
                     if base is not None:
                         source_robot_pos = base
@@ -2369,7 +2400,11 @@ def orient_gripper_for_handoff_receive(
                     f"'{object_id}', using default {DEFAULT_HANDOFF_OBJECT_DIMENSIONS}"
                 )
 
-            if object_position is not None and object_dimensions is not None and source_robot_pos is not None:
+            if (
+                object_position is not None
+                and object_dimensions is not None
+                and source_robot_pos is not None
+            ):
                 # _compute_handoff_approach_vector returns the vector pointing toward
                 # the end the source robot grasps from (away from source robot's
                 # perspective).  The receiving robot approaches from the opposite
@@ -2451,7 +2486,10 @@ ORIENT_GRIPPER_FOR_HANDOFF_RECEIVE_OPERATION = BasicOperation(
     ],
     parameters=[
         OperationParameter(
-            name="robot_id", type="str", description="ID of the receiving robot", required=True
+            name="robot_id",
+            type="str",
+            description="ID of the receiving robot",
+            required=True,
         ),
         OperationParameter(
             name="object_id",
@@ -2493,7 +2531,10 @@ ORIENT_GRIPPER_FOR_HANDOFF_RECEIVE_OPERATION = BasicOperation(
             "sync_wait_for_signal_001": "Wait for source robot's object_gripped signal before orienting",
             "motion_move_to_coord_001": "Move to handoff position after orientation is set",
         },
-        typical_after=["sync_wait_for_signal_001", "coordination_grasp_object_for_handoff_001"],
+        typical_after=[
+            "sync_wait_for_signal_001",
+            "coordination_grasp_object_for_handoff_001",
+        ],
         typical_before=["motion_move_to_coord_001", "manipulation_control_gripper_001"],
         coordination_requirements={
             "requires_peer_robot": True,
@@ -2614,6 +2655,7 @@ def receive_handoff(
         else:
             try:
                 from config.Robot import ROBOT_BASE_POSITIONS
+
                 base = ROBOT_BASE_POSITIONS.get(source_robot_id)
                 if base is not None:
                     source_robot_pos = base

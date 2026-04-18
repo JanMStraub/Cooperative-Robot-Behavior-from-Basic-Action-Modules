@@ -25,7 +25,7 @@ Usage:
     'Found 3 relevant operations for: pick up object'
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, cast
 import os
 
 
@@ -44,9 +44,9 @@ except ImportError:
     from ..config.Rag import RAG_VECTOR_STORE_PATH
 
 from .Embeddings import EmbeddingGenerator
-from .VectorStore import VectorStore
+from .vector_store import VectorStore as _VectorStore
 from .Indexer import OperationIndexer
-from .QueryEngine import QueryEngine
+from .query_engine import QueryEngine as _QueryEngine
 from .ConfidenceScorer import (
     compute_confidence_score,
     get_confidence_level,
@@ -94,8 +94,8 @@ class RAGSystem:
             base_url=lm_studio_url, model=embedding_model
         )
 
-        self.vector_store: Optional[VectorStore] = None
-        self.query_engine: Optional[QueryEngine] = None
+        self.vector_store: Optional[_VectorStore] = None
+        self.query_engine: Optional[_QueryEngine] = None
         self.indexer = OperationIndexer(
             registry=self.registry, embedding_generator=self.embedding_generator
         )
@@ -145,6 +145,7 @@ class RAGSystem:
             if rebuild or self.vector_store is None:
                 self.vector_store = self.indexer.build_index(save=True)
             else:
+                assert self.vector_store is not None
                 self.vector_store = self.indexer.update_index(self.vector_store)
 
             # Create query engine with new vector store
@@ -190,7 +191,8 @@ class RAGSystem:
             logger.error("Query engine not initialized. Call index_operations() first.")
             return []
 
-        return self.query_engine.search(
+        qe = cast(_QueryEngine, self.query_engine)
+        return qe.search(
             query=query,
             top_k=top_k,
             min_score=min_score,
@@ -228,7 +230,8 @@ class RAGSystem:
                 "operations": [],
             }
 
-        return self.query_engine.get_operation_context(query, top_k=top_k)
+        qe = cast(_QueryEngine, self.query_engine)
+        return qe.get_operation_context(query, top_k=top_k)
 
     def get_operations_by_category(
         self, category: str, top_k: Optional[int] = None
@@ -247,7 +250,8 @@ class RAGSystem:
             logger.error("Query engine not initialized. Call index_operations() first.")
             return []
 
-        return self.query_engine.search_by_category(category, top_k=top_k)
+        qe = cast(_QueryEngine, self.query_engine)
+        return qe.search_by_category(category, top_k=top_k)
 
     def find_similar_operations(
         self, operation_id: str, top_k: int = 5
@@ -266,7 +270,8 @@ class RAGSystem:
             logger.error("Query engine not initialized. Call index_operations() first.")
             return []
 
-        return self.query_engine.find_similar_operations(operation_id, top_k=top_k)
+        qe = cast(_QueryEngine, self.query_engine)
+        return qe.find_similar_operations(operation_id, top_k=top_k)
 
     def search_by_type(
         self, query: str, result_type: str, top_k: int = 5
@@ -343,9 +348,10 @@ class RAGSystem:
 
         # Add vector store stats if available
         if self.vector_store:
+            _vs = cast(_VectorStore, self.vector_store)
             stats["vector_store_stats"] = {
-                "num_operations": len(self.vector_store),
-                "has_embeddings": len(self.vector_store) > 0,
+                "num_operations": len(_vs),
+                "has_embeddings": len(_vs) > 0,
             }
         else:
             stats["vector_store_stats"] = {
@@ -357,9 +363,18 @@ class RAGSystem:
 
     def __repr__(self) -> str:
         ready = "ready" if self.is_ready() else "not indexed"
-        num_ops = len(self.vector_store) if self.vector_store else 0
+        num_ops = (
+            len(cast(_VectorStore, self.vector_store))
+            if self.vector_store is not None
+            else 0
+        )
         return f"RAGSystem({ready}, operations={num_ops})"
 
+
+# Public aliases — kept after class definitions so the module-level names
+# don't shadow the submodule names during Pylance's import resolution above.
+VectorStore = _VectorStore
+QueryEngine = _QueryEngine
 
 # Export main classes and functions
 __all__ = [

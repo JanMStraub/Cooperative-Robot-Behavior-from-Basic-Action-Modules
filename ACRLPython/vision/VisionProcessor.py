@@ -168,7 +168,9 @@ class VisionProcessor:
         self.on_result_callback: Optional[Callable[[DetectionResult], None]] = None
         self.viz_window_name = "VisionProcessor - Live Detection"
         # Only enable input resize if OpenCV is available
-        self._yolo_input_size: Optional[int] = YOLO_INPUT_SIZE if CV2_AVAILABLE else None
+        self._yolo_input_size: Optional[int] = (
+            YOLO_INPUT_SIZE if CV2_AVAILABLE else None
+        )
 
         # Initialize tracker if enabled
         if self.enable_tracking:
@@ -210,7 +212,9 @@ class VisionProcessor:
                 logger.warning("OpenCV not available - visualization disabled")
                 self.enable_visualization = False
 
-        resize_str = f"{self._yolo_input_size}px" if self._yolo_input_size else "disabled"
+        resize_str = (
+            f"{self._yolo_input_size}px" if self._yolo_input_size else "disabled"
+        )
         logger.debug(
             f"VisionProcessor initialized: fps={fps}, tracking={enable_tracking}, "
             f"shared_state={enable_shared_state}, visualization={enable_visualization}, "
@@ -312,7 +316,9 @@ class VisionProcessor:
 
         frame_interval = 1.0 / self.fps
         last_processed_timestamp = 0.0
-        last_thumb: Optional[Any] = None  # previous frame thumbnail for scene-change comparison
+        last_thumb: Optional[Any] = (
+            None  # previous frame thumbnail for scene-change comparison
+        )
 
         # Depth/world-position is only useful when something consumes it.
         # If neither shared state nor a callback is registered we run 2D-only,
@@ -344,7 +350,9 @@ class VisionProcessor:
                         logger.debug(
                             f"VisionProcessor: Scene unchanged (MAD={diff:.2f} < {SCENE_DIFF_THRESHOLD}), skipping"
                         )
-                        last_processed_timestamp = latest_ts  # advance so we don't re-check same frame
+                        last_processed_timestamp = (
+                            latest_ts  # advance so we don't re-check same frame
+                        )
                         time.sleep(frame_interval * 0.5)
                         continue
 
@@ -377,8 +385,12 @@ class VisionProcessor:
                         scale = self._yolo_input_size / max(h, w)
                         new_w = int(w * scale)
                         new_h = int(h * scale)
-                        imgL = cv2.resize(imgL, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-                        imgR = cv2.resize(imgR, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+                        imgL = cv2.resize(
+                            imgL, (new_w, new_h), interpolation=cv2.INTER_LINEAR
+                        )
+                        imgR = cv2.resize(
+                            imgR, (new_w, new_h), interpolation=cv2.INTER_LINEAR
+                        )
 
                 # --- Extract camera config from metadata ---
                 camera_config = None
@@ -396,7 +408,9 @@ class VisionProcessor:
                     )
 
                 # --- Re-evaluate depth need each iteration (callback may be added later) ---
-                needs_depth = self.enable_shared_state or (self.on_result_callback is not None)
+                needs_depth = self.enable_shared_state or (
+                    self.on_result_callback is not None
+                )
 
                 if needs_depth:
                     result = self.detector.detect_objects_stereo(
@@ -513,14 +527,14 @@ class VisionProcessor:
 
             # Color map for different object types
             color_map = {
-                "red": (0, 0, 255),       # Red in BGR
-                "blue": (255, 0, 0),      # Blue in BGR
-                "green": (0, 255, 0),     # Green in BGR
+                "red": (0, 0, 255),  # Red in BGR
+                "blue": (255, 0, 0),  # Blue in BGR
+                "green": (0, 255, 0),  # Green in BGR
                 "yellow": (0, 255, 255),  # Yellow in BGR
                 "purple": (128, 0, 128),  # Purple in BGR
                 "orange": (0, 165, 255),  # Orange in BGR
-                "cyan": (255, 255, 0),    # Cyan in BGR
-                "magenta": (255, 0, 255), # Magenta in BGR
+                "cyan": (255, 255, 0),  # Cyan in BGR
+                "magenta": (255, 0, 255),  # Magenta in BGR
                 "default": (255, 255, 255),  # White
             }
 

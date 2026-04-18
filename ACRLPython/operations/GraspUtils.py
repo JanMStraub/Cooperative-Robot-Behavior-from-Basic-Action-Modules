@@ -116,6 +116,7 @@ def _build_segmentation_mask(
     # depth median, so stereo reconstruction errors don't hard-abort the pipeline.
     if depth_hint is not None:
         import logging as _logging
+
         _log = _logging.getLogger(__name__)
         _n_2d = int(np.count_nonzero(mask))
         if _n_2d > 0:
@@ -138,7 +139,11 @@ def _build_segmentation_mask(
                     f"(> margin {depth_margin:.3f} m) — using bbox median as filter centre"
                 )
                 _effective_hint = _depth_median
-            depth_mask = mask & (depth >= _effective_hint - depth_margin) & (depth <= _effective_hint + depth_margin)
+            depth_mask = (
+                mask
+                & (depth >= _effective_hint - depth_margin)
+                & (depth <= _effective_hint + depth_margin)
+            )
             _n_depth = int(np.count_nonzero(depth_mask))
             if _n_depth >= max(10, _n_2d // 4):
                 # Depth filter kept at least 25% of 2D points — apply it.

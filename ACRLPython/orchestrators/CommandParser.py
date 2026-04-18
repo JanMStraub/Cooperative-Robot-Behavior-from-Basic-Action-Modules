@@ -35,6 +35,7 @@ try:
         LLM_THINKING_BUDGET,
         LLM_THINKING_ENABLED,
         SYSTEM_PROMPT_BASE,
+        USE_MOTION_LAYER,
     )
     from ..config.Negotiation import USE_STRUCTURED_OUTPUT
     from ..operations.WorkflowPatterns import WorkflowPatternRegistry, WorkflowPattern
@@ -48,6 +49,7 @@ except ImportError:
         LLM_THINKING_BUDGET,
         LLM_THINKING_ENABLED,
         SYSTEM_PROMPT_BASE,
+        USE_MOTION_LAYER,
     )
     from config.Negotiation import USE_STRUCTURED_OUTPUT
     from operations.WorkflowPatterns import WorkflowPatternRegistry, WorkflowPattern
@@ -85,6 +87,7 @@ class _PromptBuilder:
         robot_id: str,
         anti_pattern_section: str = "",
         spatial_section: str = "",
+        hint: str = "",
     ) -> str:
         """
         Build the full LLM parsing prompt.
@@ -94,6 +97,7 @@ class _PromptBuilder:
             robot_id: Default robot ID for the command.
             anti_pattern_section: Formatted anti-pattern warning block (may be empty).
             spatial_section: Formatted knowledge-graph spatial context (may be empty).
+            hint: Reflexion hint injected when retrying after a failure (may be empty).
 
         Returns:
             Complete prompt string ready to send to the LLM.
@@ -103,6 +107,9 @@ class _PromptBuilder:
             f"\n        {anti_pattern_section}\n" if anti_pattern_section else ""
         )
         spatial_block = f"\n        {spatial_section}\n" if spatial_section else ""
+        reflection_block = (
+            f"\n        === REFLECTION ===\n        {hint}\n" if hint else ""
+        )
 
         return f"""You are a robot coordinator planning tasks for multiple robots.
 
@@ -214,7 +221,7 @@ class _PromptBuilder:
         {{"operation": "detect_field", "params": {{"robot_id": "Robot1", "field_label": "G"}}, "capture_var": "field"}}
         {{"operation": "place_object", "params": {{"robot_id": "Robot1", "x": "$field.x", "y": "$field.y", "z": "$field.z"}}}}
         Note: detect_field stores center coordinates directly under the capture variable — use "$field.x" NOT "$field.center.x"
-{spatial_block}{anti_pattern_block}Output only valid JSON, no explanation, no comments."""
+{spatial_block}{anti_pattern_block}{reflection_block}Output only valid JSON, no explanation, no comments."""
 
     def get_available_operations_summary(self, command_text: str = "") -> str:
         """
@@ -400,9 +407,7 @@ class CommandParser:
                 self.rag = RAGSystem()
                 # Provide control over index rebuilding to speed up startups
                 self.rag.index_operations(rebuild=False)
-                logger.info(
-                    "RAG system initialized for command parsing"
-                )
+                logger.info("RAG system initialized for command parsing")
             except Exception as e:
                 logger.warning(f"Failed to initialize RAG: {e}. Using registry only.")
 
@@ -412,7 +417,11 @@ class CommandParser:
         )
 
     def parse(
-        self, command_text: str, robot_id: str = "Robot1", use_llm: bool = True
+        self,
+        command_text: str,
+        robot_id: str = "Robot1",
+        use_llm: bool = True,
+        use_motion_layer: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
         Parse a compound command into a sequence of operations.
@@ -421,6 +430,8 @@ class CommandParser:
             command_text: Natural language command (e.g., "move to (0.3, 0.2, 0.1) and close gripper")
             robot_id: Default robot ID to use for operations
             use_llm: Whether to use LLM parsing (falls back to regex if False or LLM unavailable)
+            use_motion_layer: Enable RT-H style two-stage parsing (Stage 1: motion decomposition,
+                Stage 2: op mapping). Defaults to the USE_MOTION_LAYER config value.
 
         Returns:
             Dict with structure:
@@ -436,9 +447,16 @@ class CommandParser:
         if not command_text or not command_text.strip():
             return {"success": False, "commands": [], "error": "Empty command text"}
 
+        motion_layer = (
+            USE_MOTION_LAYER if use_motion_layer is None else use_motion_layer
+        )
+
         # Try LLM parsing first
         if use_llm:
-            result = self._parse_with_llm(command_text, robot_id)
+            if motion_layer:
+                result = self._parse_with_motion_layer(command_text, robot_id)
+            else:
+                result = self._parse_with_llm(command_text, robot_id)
             if result["success"]:
                 return result
             logger.warning(
@@ -451,6 +469,146 @@ class CommandParser:
             return regex_result
 
         return regex_result
+
+    def parse_with_hint(
+        self, command_text: str, robot_id: str = "Robot1", hint: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Re-parse a command with a Reflexion hint injected into the prompt.
+
+        Called by SequenceExecutor when retrying a failed command. The hint
+        typically contains the previous error message and recovery suggestions
+        so the LLM can correct its parameter choices.
+
+        Args:
+            command_text: Original natural language command.
+            robot_id: Default robot for the command.
+            hint: Reflexion context string (error + suggestions).
+
+        Returns:
+            Same structure as parse().
+        """
+        spatial_section = self._get_spatial_context(robot_id)
+        prompt = self._prompt_builder.build(
+            command_text,
+            robot_id,
+            spatial_section=spatial_section,
+            hint=hint,
+        )
+        try:
+            result = self._do_llm_request(prompt, command_text)
+            if not result.get("success"):
+                return {"success": False, "commands": [], "error": result.get("error")}
+            parsed = result["parsed"]
+            if "plan" in parsed and "commands" not in parsed:
+                parsed["commands"] = parsed["plan"]
+            commands = parsed.get("commands", [])
+            validated = self._validate_commands(commands, robot_id)
+            if not validated:
+                return {
+                    "success": False,
+                    "commands": [],
+                    "error": "Reflexion retry produced no valid commands",
+                }
+            return {"success": True, "commands": validated, "error": None}
+        except Exception as e:
+            return {
+                "success": False,
+                "commands": [],
+                "error": f"Reflexion LLM error: {e}",
+            }
+
+    def _decompose_to_motions(self, command_text: str, robot_id: str) -> List[str]:
+        """
+        Stage 1 of the RT-H motion layer: decompose a high-level command into
+        an ordered list of natural-language motion strings.
+
+        Each motion string is a brief, concrete physical action (e.g.
+        "approach red cube from above at 0.05 m/s"). These act as chain-of-thought
+        anchors that constrain Stage 2 operation selection.
+
+        Args:
+            command_text: High-level natural language command.
+            robot_id: Default robot for the task.
+
+        Returns:
+            List of motion strings, or empty list on failure.
+        """
+        prompt = (
+            f"You are a motion planner for a robot arm.\n\n"
+            f'High-level command: "{command_text}"\n'
+            f"Default robot: {robot_id}\n\n"
+            "Decompose this command into an ordered list of short, concrete physical "
+            "motion descriptions. Each entry should describe one distinct robot motion "
+            "(e.g. 'approach red cube from above', 'close gripper slowly', 'lift to 0.3m'). "
+            "Output only a JSON array of strings, no explanation.\n"
+            'Example: ["move end-effector above target", "descend to grasp height", "close gripper"]'
+        )
+        try:
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT_BASE},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": DEFAULT_TEMPERATURE,
+                "max_tokens": 512,
+            }
+            response = self._session.post(
+                f"{self.lm_studio_url}/chat/completions",
+                json=payload,
+                timeout=LLM_REQUEST_TIMEOUT,
+            )
+            if response.status_code != 200:
+                logger.warning(
+                    f"Motion decomposition LLM returned {response.status_code}"
+                )
+                return []
+            content = response.json()["choices"][0]["message"]["content"]
+            motions = _extract_json_util(content)
+            if isinstance(motions, list) and all(isinstance(m, str) for m in motions):
+                logger.debug(f"Motion decomposition: {motions}")
+                return motions
+            logger.warning(
+                f"Motion decomposition returned unexpected format: {content[:200]}"
+            )
+            return []
+        except Exception as e:
+            logger.warning(f"Motion decomposition failed: {e}")
+            return []
+
+    def _parse_with_motion_layer(
+        self, command_text: str, robot_id: str
+    ) -> Dict[str, Any]:
+        """
+        Two-stage RT-H style parsing.
+
+        Stage 1: decompose command to motion strings via _decompose_to_motions().
+        Stage 2: use motion strings as chain-of-thought context in _parse_with_llm().
+
+        Falls back to single-stage LLM parsing if Stage 1 produces no motions.
+
+        Args:
+            command_text: High-level natural language command.
+            robot_id: Default robot ID.
+
+        Returns:
+            Same structure as parse().
+        """
+        motions = self._decompose_to_motions(command_text, robot_id)
+        if not motions:
+            logger.info(
+                "Motion decomposition empty, falling back to standard LLM parse"
+            )
+            return self._parse_with_llm(command_text, robot_id)
+
+        motion_context = "\n".join(f"  {i + 1}. {m}" for i, m in enumerate(motions))
+        augmented_command = (
+            f"{command_text}\n\n"
+            f"Motion plan (use as chain-of-thought guidance):\n{motion_context}"
+        )
+        logger.info(f"Motion layer Stage 2 with {len(motions)} motion steps")
+        return self._parse_with_llm(augmented_command, robot_id)
 
     def _parse_with_llm(self, command_text: str, robot_id: str) -> Dict[str, Any]:
         """
@@ -545,7 +703,16 @@ class CommandParser:
                 ],
                 "temperature": DEFAULT_TEMPERATURE,  # Low temperature for deterministic parsing
                 "max_tokens": 8192,  # Must cover thinking budget + actual JSON response
-                **({"thinking": {"type": "enabled", "budget_tokens": LLM_THINKING_BUDGET}} if LLM_THINKING_ENABLED else {}),
+                **(
+                    {
+                        "thinking": {
+                            "type": "enabled",
+                            "budget_tokens": LLM_THINKING_BUDGET,
+                        }
+                    }
+                    if LLM_THINKING_ENABLED
+                    else {}
+                ),
             }
             # Structured output forces the model to emit valid JSON at the inference layer.
             # Set USE_STRUCTURED_OUTPUT=false for models that don't support response_format.
@@ -829,7 +996,16 @@ class CommandParser:
             )
             if detect_color_match:
                 color = detect_color_match.group(1).lower()
-                if color in ["red", "green", "blue", "yellow", "purple", "orange", "cyan", "magenta"]:
+                if color in [
+                    "red",
+                    "green",
+                    "blue",
+                    "yellow",
+                    "purple",
+                    "orange",
+                    "cyan",
+                    "magenta",
+                ]:
                     last_detection_var = "target"
                     commands.append(
                         {

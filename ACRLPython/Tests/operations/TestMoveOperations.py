@@ -18,7 +18,6 @@ from unittest.mock import Mock
 
 from operations.MoveOperations import move_to_coordinate, MOVE_TO_COORDINATE_OPERATION
 
-
 # ============================================================================
 # Test Class: Basic Movement Operations
 # ============================================================================

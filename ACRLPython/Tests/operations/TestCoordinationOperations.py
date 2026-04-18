@@ -19,7 +19,6 @@ from operations.CoordinationOperations import (
     MIRROR_MOVEMENT_OPERATION,
 )
 
-
 # ============================================================================
 # Test Class: detect_other_robot - Robot Detection
 # ============================================================================

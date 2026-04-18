@@ -151,8 +151,12 @@ POINT_CLOUD_MAX_DEPTH = float(os.environ.get("POINT_CLOUD_MAX_DEPTH", "2.0"))
 # nb_neighbors: how many neighbors to consider for the mean distance computation.
 # std_ratio: points further than mean + std_ratio * std_dev are removed.
 # Lower std_ratio = more aggressive removal (RoboScan uses 0.5 for final pass).
-POINT_CLOUD_OUTLIER_NB_NEIGHBORS = int(os.environ.get("POINT_CLOUD_OUTLIER_NB_NEIGHBORS", "20"))
-POINT_CLOUD_OUTLIER_STD_RATIO = float(os.environ.get("POINT_CLOUD_OUTLIER_STD_RATIO", "1.5"))
+POINT_CLOUD_OUTLIER_NB_NEIGHBORS = int(
+    os.environ.get("POINT_CLOUD_OUTLIER_NB_NEIGHBORS", "20")
+)
+POINT_CLOUD_OUTLIER_STD_RATIO = float(
+    os.environ.get("POINT_CLOUD_OUTLIER_STD_RATIO", "1.5")
+)
 
 # ============================================================================
 # Camera Identity
@@ -160,14 +164,20 @@ POINT_CLOUD_OUTLIER_STD_RATIO = float(os.environ.get("POINT_CLOUD_OUTLIER_STD_RA
 
 # Default camera used for perception operations when Unity sends no camera_id.
 # Override with the DEFAULT_CAMERA_ID env var to match your scene's camera name.
-DEFAULT_CAMERA_ID = os.environ.get("DEFAULT_CAMERA_ID", "TableStereoCamera")  # Must match the StereoCameraController GameObject name in Unity
+DEFAULT_CAMERA_ID = os.environ.get(
+    "DEFAULT_CAMERA_ID", "TableStereoCamera"
+)  # Must match the StereoCameraController GameObject name in Unity
 
 # Maximum long-edge resolution fed to YOLO. Images larger than this are
 # downscaled before inference (YOLO letterboxes to 640×640 internally anyway,
 # so sending e.g. a 1280×960 image just wastes preprocessing time).
 # Set to 0 or "" to disable resizing and pass full-resolution images.
 _yolo_size_raw = os.environ.get("YOLO_INPUT_SIZE", "0")
-YOLO_INPUT_SIZE: Optional[int] = int(_yolo_size_raw) if _yolo_size_raw.strip().isdigit() and int(_yolo_size_raw) > 0 else None
+YOLO_INPUT_SIZE: Optional[int] = (
+    int(_yolo_size_raw)
+    if _yolo_size_raw.strip().isdigit() and int(_yolo_size_raw) > 0
+    else None
+)
 
 # Scene-change detection for VisionProcessor.
 # A downsampled thumbnail (SCENE_DIFF_THUMB_SIZE × SCENE_DIFF_THUMB_SIZE pixels)
@@ -182,7 +192,9 @@ YOLO_INPUT_SIZE: Optional[int] = int(_yolo_size_raw) if _yolo_size_raw.strip().i
 # Default of 8.0 gives a 13× safety margin over the measured noise floor.
 # Set SCENE_DIFF_THUMB_SIZE=0 to disable scene-change detection entirely.
 _thumb_raw = os.environ.get("SCENE_DIFF_THUMB_SIZE", "64")
-SCENE_DIFF_THUMB_SIZE: Optional[int] = int(_thumb_raw) if _thumb_raw.strip().isdigit() and int(_thumb_raw) > 0 else None
+SCENE_DIFF_THUMB_SIZE: Optional[int] = (
+    int(_thumb_raw) if _thumb_raw.strip().isdigit() and int(_thumb_raw) > 0 else None
+)
 SCENE_DIFF_THRESHOLD = float(os.environ.get("SCENE_DIFF_THRESHOLD", "8.0"))
 
 # ============================================================================

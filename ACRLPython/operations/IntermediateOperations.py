@@ -425,9 +425,7 @@ def draw_with_pen(
                 "timestamp": time.time(),
                 "request_id": request_id,
             }
-            logger.info(
-                f"Sending draw_with_pen command to {robot_id}: shape={shape}"
-            )
+            logger.info(f"Sending draw_with_pen command to {robot_id}: shape={shape}")
             success = _get_command_broadcaster().send_command(command, request_id)
             if not success:
                 return OperationResult.error_result(

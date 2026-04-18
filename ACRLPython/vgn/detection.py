@@ -33,7 +33,8 @@ class VGN(object):
             scores = scores[p]
 
         if self.rviz:
-            from vgn import vis  # noqa: PLC0415 — lazy import to avoid ROS sensor_msgs dep
+            from vgn import vis  # type: ignore[attr-defined]  # noqa: PLC0415
+
             vis.draw_quality(qual_vol, state.tsdf.voxel_size, threshold=0.01)
 
         return grasps, scores, toc
@@ -75,7 +76,7 @@ def process(
     # mask out voxels too far away from the surface
     outside_voxels = tsdf_vol > 0.5
     inside_voxels = np.logical_and(1e-3 < tsdf_vol, tsdf_vol < 0.5)
-    valid_voxels = ndimage.morphology.binary_dilation(
+    valid_voxels = ndimage.binary_dilation(
         outside_voxels, iterations=2, mask=np.logical_not(inside_voxels)
     )
     qual_vol[valid_voxels == False] = 0.0

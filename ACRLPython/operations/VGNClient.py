@@ -143,7 +143,7 @@ def _points_to_tsdf_grid(
     # Truncation at 4 voxels: distances > 4 vox → ±1; surface voxels → 0.
     _TRUNC_VOXELS = 4.0
     dist_outside = np.asarray(distance_transform_edt(1 - occupancy), dtype=np.float32)
-    dist_inside  = np.asarray(distance_transform_edt(occupancy),     dtype=np.float32)
+    dist_inside = np.asarray(distance_transform_edt(occupancy), dtype=np.float32)
     sdf = dist_outside - dist_inside
     sdf = np.clip(sdf, -_TRUNC_VOXELS, _TRUNC_VOXELS) / _TRUNC_VOXELS
 
@@ -231,9 +231,20 @@ class VGNClient:
         debug_info = {}
         try:
             return self._predict_grasps_internal(
-                points, colors, image, yolo_bbox, object_label,
-                image_width, image_height, fov, top_k, cam_pos, cam_rot, debug_info,
-                object_world_pos, detection_depth_m,
+                points,
+                colors,
+                image,
+                yolo_bbox,
+                object_label,
+                image_width,
+                image_height,
+                fov,
+                top_k,
+                cam_pos,
+                cam_rot,
+                debug_info,
+                object_world_pos,
+                detection_depth_m,
             )
         finally:
             try:
@@ -285,7 +296,9 @@ class VGNClient:
                             _qvec = cam_rot_raw_arr[:3]
                             _w = cam_rot_raw_arr[3]
                             _t = 2.0 * np.cross(_qvec, pts_de)
-                            pts_unity = pts_de + _w * _t + np.cross(_qvec, _t) + cam_pos_raw_arr
+                            pts_unity = (
+                                pts_de + _w * _t + np.cross(_qvec, _t) + cam_pos_raw_arr
+                            )
                         else:
                             pts_unity = pts_full
 
@@ -293,7 +306,7 @@ class VGNClient:
                     # Z is negative-forward in this scene (camera behind origin),
                     # so allow a wide Z range to avoid culling valid points.
                     _WS_MIN = np.array([-2.0, -0.2, -5.0])
-                    _WS_MAX = np.array([ 2.0,  2.0,  2.0])
+                    _WS_MAX = np.array([2.0, 2.0, 2.0])
                     ws_mask = np.all(
                         (pts_unity >= _WS_MIN) & (pts_unity <= _WS_MAX), axis=1
                     )
@@ -312,16 +325,16 @@ class VGNClient:
 
                     # Subsample
                     if pts_unity.shape[0] > 20000:
-                        pts_unity = pts_unity[::(pts_unity.shape[0] // 20000 + 1)]
+                        pts_unity = pts_unity[:: (pts_unity.shape[0] // 20000 + 1)]
 
                     pts_b64 = base64.b64encode(
                         pts_unity.astype(np.float32).tobytes()
-                    ).decode('utf-8')
+                    ).decode("utf-8")
                     tsdf_b64 = None
                     if grid is not None:
                         tsdf_b64 = base64.b64encode(
                             grid.astype(np.float32).tobytes()
-                        ).decode('utf-8')
+                        ).decode("utf-8")
 
                     # Centroid for TSDF un-centring in JS.
                     # Grasps are always converted to Unity LH world when _in_world_frame is True
@@ -447,13 +460,15 @@ class VGNClient:
         # ----------------------------------------------------------------
         debug_info["cam_pos"] = cam_pos
         debug_info["cam_rot"] = cam_rot
-        
+
         # Q-matrix output is already (X-right, Y-up, Z-negative).
         # No axis flip needed here; keep frame as-is for projection math.
         pts_rh = points.copy()
-        
+
         debug_info["pts"] = pts_rh
-        debug_info["pts_full_scene"] = pts_rh  # full cloud for dashboard; pts is overwritten later
+        debug_info["pts_full_scene"] = (
+            pts_rh  # full cloud for dashboard; pts is overwritten later
+        )
 
         # Compute camera-frame depth hint for _build_segmentation_mask.
         # Priority: stereo bbox depth (detection_depth_m) > quaternion from WorldState.
@@ -463,7 +478,9 @@ class VGNClient:
         if detection_depth_m is not None and detection_depth_m > 0.05:
             depth_hint = detection_depth_m
             logger.debug(f"[VGN] Depth hint from stereo detection: {depth_hint:.3f} m")
-        elif object_world_pos is not None and cam_pos is not None and cam_rot is not None:
+        elif (
+            object_world_pos is not None and cam_pos is not None and cam_rot is not None
+        ):
             try:
                 _obj_w = np.array(object_world_pos, dtype=np.float64)
                 _cam_p = np.array(cam_pos, dtype=np.float64)
@@ -556,7 +573,7 @@ class VGNClient:
             # appear at world Z ≈ 0.0–1.5.  Y ≈ -0.1 (below table) to 1.0 (above).
             # X bounds cover ±0.8m from robot centre line.
             _WS_MIN = np.array([-0.8, -0.2, -1.0])
-            _WS_MAX = np.array([ 0.8,  1.2,  2.0])
+            _WS_MAX = np.array([0.8, 1.2, 2.0])
             ws_mask = np.all(
                 (masked_points >= _WS_MIN) & (masked_points <= _WS_MAX), axis=1
             )
@@ -675,8 +692,8 @@ class VGNClient:
         # appear as a flat disc and causing VGN to prefer horizontal side approaches.
         _TARGET_FILL = 0.75
         extents = pts_vgn.max(axis=0) - pts_vgn.min(axis=0)  # [ex, ey, ez]
-        xz_max_extent = max(extents[0], extents[2])           # for logging
-        _z_extent = float(extents[2])                         # VGN_Z = height axis
+        xz_max_extent = max(extents[0], extents[2])  # for logging
+        _z_extent = float(extents[2])  # VGN_Z = height axis
         if _z_extent > 1e-4:
             _vgn_scale = (_TARGET_FILL * _TSDF_SIZE) / _z_extent
         elif xz_max_extent > 1e-4:
@@ -732,6 +749,7 @@ class VGNClient:
                 # Convert to metres by multiplying by voxel_size.
                 voxel_size = _TSDF_SIZE / _TSDF_RES
                 from vgn.grasp import from_voxel_coordinates  # type: ignore
+
                 grasps = [from_voxel_coordinates(g, voxel_size) for g in grasps]
             else:
                 logger.warning(
@@ -757,9 +775,13 @@ class VGNClient:
             f"VGN offsets: x={_vgn_centroid_x:.4f} y={_vgn_centroid_y:.4f} "
             f"z_shift={_vgn_z_shift:.4f} scale={_vgn_scale:.3f}"
         )
-        logger.info(f"[VGN] TSDF size={_TSDF_SIZE}m res={_TSDF_RES} voxel_size={_TSDF_SIZE/_TSDF_RES:.4f}m")
+        logger.info(
+            f"[VGN] TSDF size={_TSDF_SIZE}m res={_TSDF_RES} voxel_size={_TSDF_SIZE/_TSDF_RES:.4f}m"
+        )
         if grasps:
-            logger.info(f"[VGN] first grasp raw translation (VGN frame, from corner): {grasps[0].pose.translation.tolist()}")
+            logger.info(
+                f"[VGN] first grasp raw translation (VGN frame, from corner): {grasps[0].pose.translation.tolist()}"
+            )
         results = []
         for grasp, score in zip(grasps, scores):
             try:
@@ -771,10 +793,12 @@ class VGNClient:
                 #   4. Z floor shift (+ _vgn_z_shift) on VGN_Z
                 #   5. Grid: centred coords + _half → voxel index → * voxel_size
                 # Undo in reverse:
-                t = grasp.pose.translation.copy() - _half  # step 5 inv: back to centred+scaled
-                t[2] -= _vgn_z_shift                       # step 4 inv: undo Z shift
-                t /= _vgn_scale                            # step 3 inv: undo scale
-                t[0] += _vgn_centroid_x                    # step 2 inv: undo X/Y centering
+                t = (
+                    grasp.pose.translation.copy() - _half
+                )  # step 5 inv: back to centred+scaled
+                t[2] -= _vgn_z_shift  # step 4 inv: undo Z shift
+                t /= _vgn_scale  # step 3 inv: undo scale
+                t[0] += _vgn_centroid_x  # step 2 inv: undo X/Y centering
                 t[1] += _vgn_centroid_y
                 # Undo axis remap: VGN_X=world_X, VGN_Y=-world_Z, VGN_Z=world_Y
                 # Inverse: world_X=VGN_X, world_Y=VGN_Z, world_Z=-VGN_Y
@@ -788,15 +812,19 @@ class VGNClient:
                 # Remap the full rotation matrix: R_world = P^T @ R_vgn @ P
                 # where P maps world→VGN: col0=(1,0,0), col1=(0,0,-1), col2=(0,1,0)
                 # i.e. P[:,0]=world_X, P[:,1]=-world_Z, P[:,2]=world_Y
-                P = np.array([
-                    [1.0,  0.0,  0.0],
-                    [0.0,  0.0,  1.0],
-                    [0.0, -1.0,  0.0],
-                ], dtype=np.float64)
+                P = np.array(
+                    [
+                        [1.0, 0.0, 0.0],
+                        [0.0, 0.0, 1.0],
+                        [0.0, -1.0, 0.0],
+                    ],
+                    dtype=np.float64,
+                )
                 rot_matrix = grasp.pose.rotation.as_matrix()
                 rot_world = P.T @ rot_matrix @ P
 
                 from scipy.spatial.transform import Rotation as _R  # type: ignore
+
                 quat = _R.from_matrix(rot_world).as_quat()  # [qx, qy, qz, qw]
                 approach = rot_world[:, 2]  # Z-axis = approach in world frame
 
@@ -804,19 +832,29 @@ class VGNClient:
                     # Convert from RH world → Unity LH world: reflect across YZ plane (X → -X).
                     pos_out = (pos * np.array([-1.0, 1.0, 1.0])).tolist()
                     approach_out = (approach * np.array([-1.0, 1.0, 1.0])).tolist()
-                    logger.debug(f"[VGN] pos_out(UnityLH)={[round(v,4) for v in pos_out]}")
+                    logger.debug(
+                        f"[VGN] pos_out(UnityLH)={[round(v,4) for v in pos_out]}"
+                    )
                     # Rotation RH→LH: R_lh = M @ R_world @ M, where M = diag(-1,1,1).
                     # This correctly handles all rotation components (not just qx flip).
                     M = np.diag([-1.0, 1.0, 1.0])
                     rot_lh = M @ rot_world @ M
                     quat_lh = _R.from_matrix(rot_lh).as_quat()
-                    quat_out = [float(quat_lh[0]), float(quat_lh[1]),
-                                float(quat_lh[2]), float(quat_lh[3])]
+                    quat_out = [
+                        float(quat_lh[0]),
+                        float(quat_lh[1]),
+                        float(quat_lh[2]),
+                        float(quat_lh[3]),
+                    ]
                 else:
                     pos_out = pos.tolist()
                     approach_out = approach.tolist()
-                    quat_out = [float(quat[0]), float(quat[1]),
-                                float(quat[2]), float(quat[3])]
+                    quat_out = [
+                        float(quat[0]),
+                        float(quat[1]),
+                        float(quat[2]),
+                        float(quat[3]),
+                    ]
 
                 results.append(
                     {

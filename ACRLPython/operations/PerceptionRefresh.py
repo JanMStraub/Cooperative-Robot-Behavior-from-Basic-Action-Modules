@@ -162,7 +162,9 @@ class PerceptionRefreshLoop:
                 logger.debug(f"PerceptionRefreshLoop: stereo refresh OK for '{color}'")
                 return True
         except Exception as exc:
-            logger.debug(f"PerceptionRefreshLoop stereo refresh failed for '{color}': {exc}")
+            logger.debug(
+                f"PerceptionRefreshLoop stereo refresh failed for '{color}': {exc}"
+            )
         return False
 
     def _refresh_llm_fallback(self, color: str) -> None:
@@ -195,15 +197,23 @@ class PerceptionRefreshLoop:
                 try:
                     with self._world_state._lock:
                         # _objects keys are color labels (set by detect_object_stereo)
-                        obj = self._world_state._objects.get(color) or self._world_state._objects.get(color.lower())
+                        obj = self._world_state._objects.get(
+                            color
+                        ) or self._world_state._objects.get(color.lower())
                         if obj is not None:
-                            obj.confidence = max(obj.confidence, self._stale_threshold + 0.1)
+                            obj.confidence = max(
+                                obj.confidence, self._stale_threshold + 0.1
+                            )
                             obj.last_seen = time.time()
                             obj.stale = False
                             logger.debug(
                                 f"PerceptionRefreshLoop: LLM fallback refreshed confidence for '{color}'"
                             )
                 except Exception as exc:
-                    logger.debug(f"LLM fallback confidence update failed for '{color}': {exc}")
+                    logger.debug(
+                        f"LLM fallback confidence update failed for '{color}': {exc}"
+                    )
         except Exception as exc:
-            logger.debug(f"PerceptionRefreshLoop LLM fallback error for '{color}': {exc}")
+            logger.debug(
+                f"PerceptionRefreshLoop LLM fallback error for '{color}': {exc}"
+            )

@@ -27,6 +27,7 @@ def set_shared_detector(detector):
 
 
 try:
+    from contextlib import asynccontextmanager
     from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
     from fastapi.staticfiles import StaticFiles
     from fastapi.responses import HTMLResponse, StreamingResponse
@@ -38,11 +39,13 @@ except ImportError:
     # Provide stubs so the module can be imported without fastapi installed.
     # A clear RuntimeError is raised only when run_webui_server() is actually called.
     if TYPE_CHECKING:
+        from contextlib import asynccontextmanager
         from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
         from fastapi.staticfiles import StaticFiles
         from fastapi.responses import HTMLResponse, StreamingResponse
         import uvicorn
     else:
+        asynccontextmanager = None  # type: ignore
         FastAPI = WebSocket = WebSocketDisconnect = BackgroundTasks = None  # type: ignore
         StaticFiles = None  # type: ignore
         HTMLResponse = StreamingResponse = None  # type: ignore
@@ -72,6 +75,7 @@ _startup_complete = threading.Event()
 def get_startup_event() -> threading.Event:
     """Return the event that is set when the Web UI server has fully started."""
     return _startup_complete
+
 
 # SequenceQueryHandler singleton — initialized once to avoid repeated LLM model loading.
 _sequence_handler: Optional[Any] = None
@@ -123,7 +127,54 @@ class _NoOpApp:
         pass
 
 
-app = FastAPI(title="ACRL Mission Control") if _FASTAPI_AVAILABLE else _NoOpApp()
+async def _startup_logic():
+    """Startup logic extracted so it can be called from the lifespan handler."""
+    global _main_loop
+    _main_loop = asyncio.get_running_loop()
+    _startup_complete.set()
+
+    asyncio.create_task(state_broadcaster())
+
+    try:
+        from core.LoggingSetup import add_websocket_handler
+    except ImportError:
+        from ..core.LoggingSetup import add_websocket_handler
+
+    def log_callback(msg: str, level: str):
+        """Forward a log record to all active WebSocket clients."""
+        if manager.active_connections and _main_loop:
+            log_data = json.dumps({"type": "log", "message": msg, "level": level})
+            asyncio.run_coroutine_threadsafe(manager.broadcast(log_data), _main_loop)
+
+    add_websocket_handler(log_callback)
+
+    try:
+        from servers.AutoRTIntegration import AutoRTHandler
+
+        _autort = AutoRTHandler.get_instance()
+
+        def _autort_web_push(payload: dict):
+            if manager.active_connections and _main_loop:
+                asyncio.run_coroutine_threadsafe(
+                    manager.broadcast(json.dumps(payload)), _main_loop
+                )
+
+        _autort.set_web_broadcast_callback(_autort_web_push)
+        logger.info("AutoRT web broadcast callback registered")
+    except Exception as e:
+        logger.warning(f"Could not register AutoRT web callback: {e}")
+
+
+if _FASTAPI_AVAILABLE:
+
+    @asynccontextmanager
+    async def _lifespan(app_instance):
+        await _startup_logic()
+        yield
+
+    app = FastAPI(title="ACRL Mission Control", lifespan=_lifespan)
+else:
+    app = _NoOpApp()
 
 
 # Track active websocket connections
@@ -153,7 +204,9 @@ manager = ConnectionManager()
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
 WEBUI_DIR = os.path.join(PROJECT_ROOT, "ACRLDashboard")
-UNITY_URDF_DIR = os.path.join(PROJECT_ROOT, "ACRLUnity", "Assets", "Prefabs", "ar4_urdf")
+UNITY_URDF_DIR = os.path.join(
+    PROJECT_ROOT, "ACRLUnity", "Assets", "Prefabs", "ar4_urdf"
+)
 
 # Ensure webui dir exists
 os.makedirs(WEBUI_DIR, exist_ok=True)
@@ -258,6 +311,7 @@ def _make_placeholder_frame(text="Waiting for Unity..."):
     """Return a minimal JPEG bytes placeholder frame for MJPEG streams."""
     import cv2
     import numpy as np
+
     img = np.zeros((240, 320, 3), dtype=np.uint8)
     cv2.putText(img, text, (20, 125), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (80, 80, 80), 1)
     _, encoded = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 50])
@@ -267,6 +321,7 @@ def _make_placeholder_frame(text="Waiting for Unity..."):
 def frame_generator(stream_type="left"):
     """Generator for MJPEG streaming from UnifiedImageStorage"""
     import time
+
     try:
         from servers.ImageStorageCore import UnifiedImageStorage
         import cv2
@@ -381,7 +436,9 @@ def frame_generator(stream_type="left"):
 
         yield (
             b"--frame\r\n"
-            b"Content-Type: image/jpeg\r\n\r\n" + (frame_bytes or _placeholder) + b"\r\n"
+            b"Content-Type: image/jpeg\r\n\r\n"
+            + (frame_bytes or _placeholder)
+            + b"\r\n"
         )
 
         time.sleep(0.06)  # ~15 fps
@@ -642,54 +699,6 @@ async def state_broadcaster():
             except Exception:
                 pass
         await asyncio.sleep(0.5)  # 2 Hz updates
-
-
-# Fast background hook
-@app.on_event("startup")
-async def startup_event():
-    """Capture the running event loop and start background tasks."""
-    global _main_loop
-    _main_loop = asyncio.get_running_loop()
-    _startup_complete.set()
-
-    asyncio.create_task(state_broadcaster())
-
-    # Attach to root logger — route all backend log records to connected UIs.
-    try:
-        from core.LoggingSetup import add_websocket_handler
-    except ImportError:
-        from ..core.LoggingSetup import add_websocket_handler
-
-    def log_callback(msg: str, level: str):
-        """
-        Forward a log record to all active WebSocket clients.
-
-        Called from arbitrary threads by the logging system. Uses
-        run_coroutine_threadsafe to safely schedule the broadcast on the
-        captured uvicorn event loop without dropping records.
-        """
-        if manager.active_connections and _main_loop:
-            log_data = json.dumps({"type": "log", "message": msg, "level": level})
-            asyncio.run_coroutine_threadsafe(manager.broadcast(log_data), _main_loop)
-
-    add_websocket_handler(log_callback)
-
-    # Wire AutoRTHandler → WebSocket broadcast for loop-generated tasks
-    try:
-        from servers.AutoRTIntegration import AutoRTHandler
-
-        _autort = AutoRTHandler.get_instance()
-
-        def _autort_web_push(payload: dict):
-            if manager.active_connections and _main_loop:
-                asyncio.run_coroutine_threadsafe(
-                    manager.broadcast(json.dumps(payload)), _main_loop
-                )
-
-        _autort.set_web_broadcast_callback(_autort_web_push)
-        logger.info("AutoRT web broadcast callback registered")
-    except Exception as e:
-        logger.warning(f"Could not register AutoRT web callback: {e}")
 
 
 def broadcast_vgn_debug(data: Dict[str, Any]):

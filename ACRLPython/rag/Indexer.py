@@ -13,7 +13,7 @@ from typing import Optional, List, Dict, Any
 # from operations.WorkflowPatterns import WorkflowPatternRegistry, get_global_workflow_registry
 
 from .Embeddings import EmbeddingGenerator
-from .VectorStore import VectorStore
+from .vector_store import VectorStore
 
 # Import config
 try:

@@ -30,7 +30,6 @@ import numpy as np
 from operations.GraspOperations import _grasp_via_vgn, grasp_object
 from operations.Base import OperationResult
 
-
 # ---------------------------------------------------------------------------
 # Shared fixtures and helpers
 # ---------------------------------------------------------------------------
@@ -168,13 +167,13 @@ class _VGNPatch:
             return_value=self.mock_broadcaster if self.broadcaster_available else None,
         )
         self._patches.append(bc_patch.start())
-         # _grasp_via_vgn calls _get_command_broadcaster from its own module namespace
+        # _grasp_via_vgn calls _get_command_broadcaster from its own module namespace
         bc_vgn_patch = patch(
             "operations.GraspOperations._get_command_broadcaster",
             return_value=self.mock_broadcaster if self.broadcaster_available else None,
         )
         self._patches.append(bc_vgn_patch.start())
-        
+
         return self
 
     def __exit__(self, *args):

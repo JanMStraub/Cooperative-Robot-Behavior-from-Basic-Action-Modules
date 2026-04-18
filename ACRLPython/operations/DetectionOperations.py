@@ -261,11 +261,19 @@ def estimate_distance_to_object(
                 "Robot position data missing",
                 ["Ensure WorldStatePublisher is sending position data"],
             )
-        robot_pos = {"x": robot_pos_tuple[0], "y": robot_pos_tuple[1], "z": robot_pos_tuple[2]}
+        robot_pos = {
+            "x": robot_pos_tuple[0],
+            "y": robot_pos_tuple[1],
+            "z": robot_pos_tuple[2],
+        }
 
         # ObjectState is a dataclass with position as Tuple[float, float, float]
         object_pos_tuple = obj_state.position  # type: ignore[union-attr]
-        object_pos = {"x": object_pos_tuple[0], "y": object_pos_tuple[1], "z": object_pos_tuple[2]}
+        object_pos = {
+            "x": object_pos_tuple[0],
+            "y": object_pos_tuple[1],
+            "z": object_pos_tuple[2],
+        }
 
         distance = math.sqrt(
             (robot_pos["x"] - object_pos["x"]) ** 2
@@ -322,9 +330,17 @@ def estimate_distance_between_objects(
     try:
         # Coerce dict arguments (e.g. variable-resolved detection results) to their string id
         if isinstance(object_id1, dict):
-            object_id1 = object_id1.get("color") or object_id1.get("object_id") or str(object_id1)
+            object_id1 = (
+                object_id1.get("color")
+                or object_id1.get("object_id")
+                or str(object_id1)
+            )
         if isinstance(object_id2, dict):
-            object_id2 = object_id2.get("color") or object_id2.get("object_id") or str(object_id2)
+            object_id2 = (
+                object_id2.get("color")
+                or object_id2.get("object_id")
+                or str(object_id2)
+            )
 
         # Import WorldState
         try:

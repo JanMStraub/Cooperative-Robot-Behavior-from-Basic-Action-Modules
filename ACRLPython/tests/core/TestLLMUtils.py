@@ -27,6 +27,7 @@ class TestExtractJsonDirect:
     def test_nested_json(self):
         payload = '{"commands": [{"op": "move", "robot_id": "Robot1"}]}'
         result = extract_json(payload)
+        assert result is not None
         assert result["commands"][0]["op"] == "move"
 
     def test_json_with_whitespace(self):
@@ -62,7 +63,7 @@ class TestExtractJsonMarkdown:
         assert result["concerns"] == []
 
     def test_markdown_preamble_then_block(self):
-        content = "Here is the result:\n```json\n{\"ok\": true}\n```\nDone."
+        content = 'Here is the result:\n```json\n{"ok": true}\n```\nDone.'
         result = extract_json(content)
         assert result == {"ok": True}
 
@@ -76,9 +77,7 @@ class TestExtractJsonBareRegex:
         assert result == {"status": "ready"}
 
     def test_bare_json_with_js_comments(self):
-        content = (
-            'Output: {"violates": false // no rule violated\n} done.'
-        )
+        content = 'Output: {"violates": false // no rule violated\n} done.'
         result = extract_json(content)
         assert result is not None
         assert result["violates"] is False

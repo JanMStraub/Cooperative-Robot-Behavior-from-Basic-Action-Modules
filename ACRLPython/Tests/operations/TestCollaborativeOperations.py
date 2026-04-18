@@ -15,7 +15,6 @@ from operations.CollaborativeOperations import (
     STABILIZE_OBJECT_OPERATION,
 )
 
-
 # ============================================================================
 # Test Class: stabilize_object - Object Stabilization
 # ============================================================================

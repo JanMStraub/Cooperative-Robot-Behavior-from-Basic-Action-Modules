@@ -8,7 +8,7 @@ class Label(enum.IntEnum):
 
 class Grasp(object):
     """Grasp parameterized as pose of a 2-finger robot hand.
-    
+
     TODO(mbreyer): clarify definition of grasp frame
     """
 

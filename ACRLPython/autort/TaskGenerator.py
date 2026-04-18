@@ -94,10 +94,14 @@ class TaskGenerator:
                 except Exception as e:
                     logger.warning(f"Task slot {idx} raised unexpected error: {e}")
 
-        logger.info(f"Parallel generation complete: {len(validated_tasks)}/{num_tasks} tasks succeeded")
+        logger.info(
+            f"Parallel generation complete: {len(validated_tasks)}/{num_tasks} tasks succeeded"
+        )
         return validated_tasks
 
-    def _generate_single_task(self, prompt: str, slot_index: int) -> Optional[ProposedTask]:
+    def _generate_single_task(
+        self, prompt: str, slot_index: int
+    ) -> Optional[ProposedTask]:
         """
         Generate and validate a single task with retries.
 
@@ -132,23 +136,33 @@ Please fix these issues and generate a valid task following the parameter schema
                 for task in tasks:
                     is_valid, error_msg = self._validate_operations_with_feedback(task)
                     if is_valid:
-                        logger.debug(f"Task slot {slot_index}: generated '{task.task_id}'")
+                        logger.debug(
+                            f"Task slot {slot_index}: generated '{task.task_id}'"
+                        )
                         return task
                     last_error = f"Parameter validation failed: {error_msg}"
-                    logger.warning(f"Task slot {slot_index} attempt {attempt + 1}: {last_error}")
+                    logger.warning(
+                        f"Task slot {slot_index} attempt {attempt + 1}: {last_error}"
+                    )
 
                 if not tasks:
                     last_error = "No tasks generated"
-                    logger.warning(f"Task slot {slot_index} attempt {attempt + 1}: {last_error}")
+                    logger.warning(
+                        f"Task slot {slot_index} attempt {attempt + 1}: {last_error}"
+                    )
 
             except (json.JSONDecodeError, ValidationError, ValueError) as e:
                 last_error = f"JSON/Schema error: {e}"
-                logger.warning(f"Task slot {slot_index} attempt {attempt + 1}: {last_error}")
+                logger.warning(
+                    f"Task slot {slot_index} attempt {attempt + 1}: {last_error}"
+                )
 
             if attempt < self.max_retries - 1:
                 time.sleep(1)
 
-        logger.error(f"Task slot {slot_index} failed after {self.max_retries} retries. Last error: {last_error}")
+        logger.error(
+            f"Task slot {slot_index} failed after {self.max_retries} retries. Last error: {last_error}"
+        )
         return None
 
     def _query_llm(self, prompt: str) -> str:
@@ -185,7 +199,12 @@ Please fix these issues and generate a valid task following the parameter schema
             # `thinking` is a LM Studio extension; pass via extra_body so the openai SDK
             # forwards it as-is without treating it as an unknown named parameter.
             if LLM_THINKING_ENABLED:
-                create_kwargs["extra_body"] = {"thinking": {"type": "enabled", "budget_tokens": LLM_THINKING_BUDGET}}
+                create_kwargs["extra_body"] = {
+                    "thinking": {
+                        "type": "enabled",
+                        "budget_tokens": LLM_THINKING_BUDGET,
+                    }
+                }
             response = self.llm_client.chat.completions.create(**create_kwargs)  # type: ignore[arg-type]
             content = response.choices[0].message.content
             if content is None:

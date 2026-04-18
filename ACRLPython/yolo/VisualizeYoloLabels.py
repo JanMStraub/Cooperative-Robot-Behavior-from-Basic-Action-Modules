@@ -11,7 +11,6 @@ import cv2
 from tkinter import Tk, filedialog
 import os
 
-
 # Color palette for different classes (BGR format for OpenCV)
 COLORS = [
     (0, 255, 0),  # Green - class 0

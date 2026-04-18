@@ -9,7 +9,7 @@ Semantic search and retrieval over operations.
 from typing import List, Dict, Any, Optional
 
 from .Embeddings import EmbeddingGenerator
-from .VectorStore import VectorStore
+from .vector_store import VectorStore
 
 # Import config
 try:

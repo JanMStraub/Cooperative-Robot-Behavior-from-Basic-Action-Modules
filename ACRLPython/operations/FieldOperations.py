@@ -383,7 +383,9 @@ def detect_all_fields(
         stereo_params = camera_config_from_metadata(stereo_metadata)
 
         # Run YOLO detection with all field classes (field_a-field_i)
-        field_classes = [f"field_{chr(ord('a') + i)}" for i in range(9)]  # field_a-field_i
+        field_classes = [
+            f"field_{chr(ord('a') + i)}" for i in range(9)
+        ]  # field_a-field_i
 
         try:
             from config.Vision import YOLO_MODEL_PATH

@@ -15,9 +15,7 @@ import logging
 import os
 
 # Master switch: enable/disable knowledge graph (off by default)
-KNOWLEDGE_GRAPH_ENABLED = os.environ.get(
-    "KNOWLEDGE_GRAPH_ENABLED", "true"
-).lower() in (
+KNOWLEDGE_GRAPH_ENABLED = os.environ.get("KNOWLEDGE_GRAPH_ENABLED", "true").lower() in (
     "true",
     "1",
     "yes",

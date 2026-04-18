@@ -29,10 +29,10 @@ import socket
 import struct
 from typing import Any, Dict
 
-
 # ---------------------------------------------------------------------------
 # Port availability helpers
 # ---------------------------------------------------------------------------
+
 
 def port_open(port: int, timeout: float = 2.0) -> bool:
     """
@@ -73,6 +73,7 @@ def backend_available() -> bool:
 # ---------------------------------------------------------------------------
 # Protocol V2 client
 # ---------------------------------------------------------------------------
+
 
 class BackendClient:
     """
@@ -203,8 +204,8 @@ class BackendClient:
             auto_execute: Execution flag.
             request_id: Protocol V2 correlation ID.
         """
-        header = struct.pack("B", self.SEQUENCE_QUERY)   # type byte
-        header += struct.pack("<I", request_id)           # request_id (4 bytes LE)
+        header = struct.pack("B", self.SEQUENCE_QUERY)  # type byte
+        header += struct.pack("<I", request_id)  # request_id (4 bytes LE)
         body = (
             self._encode_str(command)
             + self._encode_str(robot_id)

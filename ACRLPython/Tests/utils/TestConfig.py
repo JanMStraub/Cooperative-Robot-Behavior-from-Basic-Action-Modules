@@ -115,9 +115,9 @@ class TestConfigConstants:
             importlib.reload(servers_mod)
             url = servers_mod.LMSTUDIO_BASE_URL
 
-        assert url.startswith("http"), (
-            f"Default LMSTUDIO_BASE_URL must be an http URL, got: {url!r}"
-        )
+        assert url.startswith(
+            "http"
+        ), f"Default LMSTUDIO_BASE_URL must be an http URL, got: {url!r}"
 
     def test_queue_config(self):
         """Test queue configuration"""

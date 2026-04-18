@@ -158,9 +158,7 @@ def return_to_start_position(
                 "timestamp": time.time(),
                 "request_id": request_id,
             }
-            logger.info(
-                f"Sending return_to_start_position command to {robot_id}"
-            )
+            logger.info(f"Sending return_to_start_position command to {robot_id}")
             success = _get_command_broadcaster().send_command(command, request_id)
             if not success:
                 return OperationResult.error_result(

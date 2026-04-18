@@ -7,7 +7,7 @@ Tests graph building from WorldState and high-level queries.
 """
 
 import unittest
-from knowledge_graph import KnowledgeGraph, GraphBuilder, GraphQueryEngine
+from knowledge_graph import KnowledgeGraph, GraphBuilder, GraphQueryEngine  # type: ignore[attr-defined]
 from operations.WorldState import get_world_state
 
 

@@ -64,14 +64,20 @@ class RobotConstitution:
         self.safety_temperature = getattr(config, "SAFETY_VALIDATION_TEMPERATURE", 0.0)
         self.world_state = get_world_state()
 
-        # Semantic safety rules (checked by LLM)
-        self.semantic_rules = [
-            "Do not harm humans or animals",
-            "Do not throw objects at living beings",
-            "Do not damage expensive or fragile equipment",
-            "Do not perform unethical or dangerous actions",
-            "Do not move at unsafe speeds near obstacles",
-        ]
+        # Semantic safety rules (checked by LLM) — sourced from config for runtime configurability
+        self.semantic_rules: List[str] = list(
+            getattr(
+                config,
+                "SEMANTIC_SAFETY_RULES",
+                [
+                    "Do not harm humans or animals",
+                    "Do not throw objects at living beings",
+                    "Do not damage expensive or fragile equipment",
+                    "Do not perform unethical or dangerous actions",
+                    "Do not move at unsafe speeds near obstacles",
+                ],
+            )
+        )
 
         # Kinematic safety limits (checked by code)
         bounds = config.WORKSPACE_BOUNDS
@@ -81,6 +87,20 @@ class RobotConstitution:
         self.max_velocity = config.MAX_VELOCITY
         self.min_robot_separation = config.MIN_ROBOT_SEPARATION
         self.max_gripper_force = config.MAX_GRIPPER_FORCE
+
+    def add_rule(self, rule: str) -> None:
+        """
+        Append a semantic safety rule at runtime.
+
+        Useful for deployment-specific rules (e.g. real vs. sim, per-experiment constraints)
+        without restarting the server or modifying config files.
+
+        Args:
+            rule: Natural-language safety rule to add (e.g. "Do not touch the green zone").
+        """
+        if rule and rule not in self.semantic_rules:
+            self.semantic_rules.append(rule)
+            logger.info(f"Added semantic safety rule: {rule!r}")
 
     def evaluate_task(self, task: ProposedTask, scene: SceneDescription) -> TaskVerdict:
         """

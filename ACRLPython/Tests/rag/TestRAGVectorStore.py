@@ -11,7 +11,7 @@ import numpy as np
 import os
 import tempfile
 import threading
-from rag.VectorStore import VectorStore
+from rag.vector_store import VectorStore
 
 
 class TestVectorStore:

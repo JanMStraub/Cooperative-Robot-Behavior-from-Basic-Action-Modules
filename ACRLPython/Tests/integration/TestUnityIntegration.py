@@ -21,7 +21,6 @@ import time
 
 from backend_client import BackendClient, backend_available, port_open  # type: ignore[import]
 
-
 # ---------------------------------------------------------------------------
 # Availability check
 # ---------------------------------------------------------------------------

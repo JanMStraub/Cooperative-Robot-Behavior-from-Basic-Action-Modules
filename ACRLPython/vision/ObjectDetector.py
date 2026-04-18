@@ -485,7 +485,11 @@ class CubeDetector:
             # a world-space position and camera position, derive a fallback depth
             # from the Euclidean distance so dimensions can still be computed.
             fallback_depth_m = depth_m
-            if fallback_depth_m is None and world_pos is not None and camera_position is not None:
+            if (
+                fallback_depth_m is None
+                and world_pos is not None
+                and camera_position is not None
+            ):
                 try:
                     dx = world_pos[0] - camera_position[0]
                     dy = world_pos[1] - camera_position[1]
@@ -718,14 +722,14 @@ class CubeDetector:
 
         # Color map for visualization
         color_map = {
-            "red": (0, 0, 255),       # BGR
-            "blue": (255, 0, 0),      # BGR
-            "green": (0, 255, 0),     # BGR
+            "red": (0, 0, 255),  # BGR
+            "blue": (255, 0, 0),  # BGR
+            "green": (0, 255, 0),  # BGR
             "yellow": (0, 255, 255),  # BGR
             "purple": (128, 0, 128),  # BGR
             "orange": (0, 165, 255),  # BGR
-            "cyan": (255, 255, 0),    # BGR
-            "magenta": (255, 0, 255), # BGR
+            "cyan": (255, 255, 0),  # BGR
+            "magenta": (255, 0, 255),  # BGR
         }
 
         # Draw bounding boxes

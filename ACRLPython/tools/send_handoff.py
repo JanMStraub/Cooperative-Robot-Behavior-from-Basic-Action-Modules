@@ -33,28 +33,31 @@ import threading
 import time
 
 # ── Protocol V2 constants ──────────────────────────────────────────────────────
-SEQUENCE_QUERY     = 0x08
-RESULT_TYPE        = 0x02
+SEQUENCE_QUERY = 0x08
+RESULT_TYPE = 0x02
 DIRECT_EXEC_PREFIX = "EXEC:"
 
-DEFAULT_HOST     = "127.0.0.1"
-DEFAULT_PORT     = 5008
-DEFAULT_CAMERA   = "TableStereoCamera"
-DEFAULT_OBJECT   = "red_bar"
-DEFAULT_GRASPER  = "Robot1"
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = 5008
+DEFAULT_CAMERA = "TableStereoCamera"
+DEFAULT_OBJECT = "red_bar"
+DEFAULT_GRASPER = "Robot1"
 DEFAULT_RECEIVER = "Robot2"
-DEFAULT_TIMEOUT  = 120
+DEFAULT_TIMEOUT = 120
 
 
 # ── Wire format ────────────────────────────────────────────────────────────────
 
-def build_message(ops: list, robot_id: str, camera_id: str, auto_execute: bool, request_id: int) -> bytes:
+
+def build_message(
+    ops: list, robot_id: str, camera_id: str, auto_execute: bool, request_id: int
+) -> bytes:
     """Encode an EXEC: SEQUENCE_QUERY message."""
     cmd_b = (DIRECT_EXEC_PREFIX + json.dumps(ops)).encode("utf-8")
     rob_b = robot_id.encode("utf-8")
     cam_b = camera_id.encode("utf-8")
 
-    msg  = struct.pack("<BI", SEQUENCE_QUERY, request_id)
+    msg = struct.pack("<BI", SEQUENCE_QUERY, request_id)
     msg += struct.pack("<I", len(cmd_b)) + cmd_b
     msg += struct.pack("<I", len(rob_b)) + rob_b
     msg += struct.pack("<I", len(cam_b)) + cam_b
@@ -116,10 +119,13 @@ def send_ops(
         out[label] = {"success": False, "error": str(e)}
 
     success = out[label].get("success", False)
-    print(f"    ← [{label}] [{'OK' if success else 'FAILED'}]  {json.dumps(out[label])}")
+    print(
+        f"    ← [{label}] [{'OK' if success else 'FAILED'}]  {json.dumps(out[label])}"
+    )
 
 
 # ── Handoff sequence ───────────────────────────────────────────────────────────
+
 
 def run_handoff(
     object_id: str,
@@ -147,35 +153,59 @@ def run_handoff(
 
     # ── Steps 1 & 2 (concurrent) ───────────────────────────────────────────────
     if not receive_only:
-        grasp_ops = [{
-            "operation": "grasp_object_for_handoff",
-            "params": {
-                "robot_id":           grasper_id,
-                "object_id":          object_id,
-                "receiving_robot_id": receiver_id,
-            },
-        }]
+        grasp_ops = [
+            {
+                "operation": "grasp_object_for_handoff",
+                "params": {
+                    "robot_id": grasper_id,
+                    "object_id": object_id,
+                    "receiving_robot_id": receiver_id,
+                },
+            }
+        ]
         t = threading.Thread(
             target=send_ops,
-            args=(grasp_ops, grasper_id, "grasper", host, port,
-                  camera_id, timeout, auto_execute, 1, results),
+            args=(
+                grasp_ops,
+                grasper_id,
+                "grasper",
+                host,
+                port,
+                camera_id,
+                timeout,
+                auto_execute,
+                1,
+                results,
+            ),
             daemon=True,
         )
         threads.append(t)
 
     if not grasp_only:
-        receive_ops = [{
-            "operation": "receive_handoff",
-            "params": {
-                "robot_id":        receiver_id,
-                "object_id":       object_id,
-                "source_robot_id": grasper_id,
-            },
-        }]
+        receive_ops = [
+            {
+                "operation": "receive_handoff",
+                "params": {
+                    "robot_id": receiver_id,
+                    "object_id": object_id,
+                    "source_robot_id": grasper_id,
+                },
+            }
+        ]
         t = threading.Thread(
             target=send_ops,
-            args=(receive_ops, receiver_id, "receiver", host, port,
-                  camera_id, timeout, auto_execute, 2, results),
+            args=(
+                receive_ops,
+                receiver_id,
+                "receiver",
+                host,
+                port,
+                camera_id,
+                timeout,
+                auto_execute,
+                2,
+                results,
+            ),
             daemon=True,
         )
         threads.append(t)
@@ -191,11 +221,31 @@ def run_handoff(
     if not grasp_only and not receive_only and overall and auto_execute:
         print()
 
-        release_ops = [{"operation": "release_object", "params": {"robot_id": grasper_id}}]
-        send_ops(release_ops, grasper_id, "release", host, port, camera_id, 20, True, 3, results)
+        release_ops = [
+            {"operation": "release_object", "params": {"robot_id": grasper_id}}
+        ]
+        send_ops(
+            release_ops,
+            grasper_id,
+            "release",
+            host,
+            port,
+            camera_id,
+            20,
+            True,
+            3,
+            results,
+        )
 
-        home_ops = [{"operation": "return_to_start", "params": {"robot_id": grasper_id, "speed": 1.0}}]
-        send_ops(home_ops, grasper_id, "home", host, port, camera_id, 60, True, 4, results)
+        home_ops = [
+            {
+                "operation": "return_to_start",
+                "params": {"robot_id": grasper_id, "speed": 1.0},
+            }
+        ]
+        send_ops(
+            home_ops, grasper_id, "home", host, port, camera_id, 60, True, 4, results
+        )
 
         overall = all(r.get("success", False) for r in results.values())
 
@@ -204,6 +254,7 @@ def run_handoff(
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
 
+
 def main():
     """Parse arguments and run the handoff."""
     parser = argparse.ArgumentParser(
@@ -211,18 +262,48 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("--object",   default=DEFAULT_OBJECT,   help=f"Object ID (default: {DEFAULT_OBJECT})")
-    parser.add_argument("--grasper",  default=DEFAULT_GRASPER,  help=f"Grasping robot (default: {DEFAULT_GRASPER})")
-    parser.add_argument("--receiver", default=DEFAULT_RECEIVER,  help=f"Receiving robot (default: {DEFAULT_RECEIVER})")
-    parser.add_argument("--host",     default=DEFAULT_HOST,      help=f"Host (default: {DEFAULT_HOST})")
-    parser.add_argument("--port",     default=DEFAULT_PORT, type=int, help=f"Port (default: {DEFAULT_PORT})")
-    parser.add_argument("--camera",   default=DEFAULT_CAMERA,   help=f"Camera ID (default: {DEFAULT_CAMERA})")
-    parser.add_argument("--timeout",  default=DEFAULT_TIMEOUT, type=float,
-                        help=f"Per-step timeout in seconds (default: {DEFAULT_TIMEOUT})")
-    parser.add_argument("--grasp-only",   action="store_true", help="Only run step 1 (grasp)")
-    parser.add_argument("--receive-only", action="store_true", help="Only run step 2 (receive)")
-    parser.add_argument("--dry-run",  action="store_true", help="Parse without executing")
-    parser.add_argument("--pretty",   action="store_true", help="Pretty-print responses")
+    parser.add_argument(
+        "--object",
+        default=DEFAULT_OBJECT,
+        help=f"Object ID (default: {DEFAULT_OBJECT})",
+    )
+    parser.add_argument(
+        "--grasper",
+        default=DEFAULT_GRASPER,
+        help=f"Grasping robot (default: {DEFAULT_GRASPER})",
+    )
+    parser.add_argument(
+        "--receiver",
+        default=DEFAULT_RECEIVER,
+        help=f"Receiving robot (default: {DEFAULT_RECEIVER})",
+    )
+    parser.add_argument(
+        "--host", default=DEFAULT_HOST, help=f"Host (default: {DEFAULT_HOST})"
+    )
+    parser.add_argument(
+        "--port", default=DEFAULT_PORT, type=int, help=f"Port (default: {DEFAULT_PORT})"
+    )
+    parser.add_argument(
+        "--camera",
+        default=DEFAULT_CAMERA,
+        help=f"Camera ID (default: {DEFAULT_CAMERA})",
+    )
+    parser.add_argument(
+        "--timeout",
+        default=DEFAULT_TIMEOUT,
+        type=float,
+        help=f"Per-step timeout in seconds (default: {DEFAULT_TIMEOUT})",
+    )
+    parser.add_argument(
+        "--grasp-only", action="store_true", help="Only run step 1 (grasp)"
+    )
+    parser.add_argument(
+        "--receive-only", action="store_true", help="Only run step 2 (receive)"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Parse without executing"
+    )
+    parser.add_argument("--pretty", action="store_true", help="Pretty-print responses")
     args = parser.parse_args()
 
     if args.grasp_only and args.receive_only:
@@ -230,7 +311,9 @@ def main():
         sys.exit(1)
 
     mode = "DRY-RUN" if args.dry_run else "EXECUTE"
-    print(f"[{mode}] Handoff: {args.grasper} grasps '{args.object}' → {args.receiver} receives")
+    print(
+        f"[{mode}] Handoff: {args.grasper} grasps '{args.object}' → {args.receiver} receives"
+    )
     print(f"  server={args.host}:{args.port}  camera={args.camera}")
     print()
 

@@ -38,7 +38,6 @@ logger = logging.getLogger(__name__)
 
 from ._imports import get_command_broadcaster as _get_command_broadcaster
 
-
 # ============================================================================
 # Implementation: Move to Coordinates
 # ============================================================================
@@ -862,7 +861,9 @@ def pick_object_at_coordinate(
         )
 
     except Exception as e:
-        logger.error(f"Unexpected error in pick_object_at_coordinate: {e}", exc_info=True)
+        logger.error(
+            f"Unexpected error in pick_object_at_coordinate: {e}", exc_info=True
+        )
         return OperationResult.error_result(
             "UNEXPECTED_ERROR",
             f"Unexpected error occurred: {str(e)}",

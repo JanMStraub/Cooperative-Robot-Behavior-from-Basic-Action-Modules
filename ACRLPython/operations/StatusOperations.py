@@ -27,7 +27,6 @@ logger = get_logger(__name__)
 
 from ._imports import get_command_broadcaster as _get_command_broadcaster
 
-
 # ============================================================================
 # Implementation: Check Robot Status
 # ============================================================================

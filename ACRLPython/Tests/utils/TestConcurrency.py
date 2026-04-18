@@ -29,7 +29,6 @@ from operations.Base import (
 from operations.MoveOperations import move_to_coordinate
 from operations.WorldState import WorldState
 
-
 # ============================================================================
 # Test Concurrent Image Operations
 # ============================================================================

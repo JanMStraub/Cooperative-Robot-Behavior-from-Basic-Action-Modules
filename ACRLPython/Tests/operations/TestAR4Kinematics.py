@@ -22,7 +22,6 @@ from operations.AR4Kinematics import (
     compute_end_effector_position,
 )
 
-
 # Robot base positions matching config/Robot.py
 ROBOT1_BASE = (-0.475, 0.0, 0.0)
 ROBOT2_BASE = (0.475, 0.0, 0.0)
@@ -84,11 +83,13 @@ def test_zero_pose_position_is_near_base():
     bx = ROBOT1_BASE[0]
     # End-effector should be within max reach of the base
     dist = math.sqrt(
-        (pos[0] - bx) ** 2 + (pos[1] - ROBOT1_BASE[1]) ** 2 + (pos[2] - ROBOT1_BASE[2]) ** 2
+        (pos[0] - bx) ** 2
+        + (pos[1] - ROBOT1_BASE[1]) ** 2
+        + (pos[2] - ROBOT1_BASE[2]) ** 2
     )
-    assert dist <= MAX_REACH + 0.05, (
-        f"Zero-pose EE distance from base {dist:.3f} m exceeds reach {MAX_REACH} m"
-    )
+    assert (
+        dist <= MAX_REACH + 0.05
+    ), f"Zero-pose EE distance from base {dist:.3f} m exceeds reach {MAX_REACH} m"
 
 
 def test_zero_pose_height_above_table():
@@ -115,9 +116,9 @@ def test_fk_within_max_reach_several_configs():
         pos, _ = compute_end_effector_pose(angles, ROBOT1_BASE)
         bx, by, bz = ROBOT1_BASE
         dist = math.sqrt((pos[0] - bx) ** 2 + (pos[1] - by) ** 2 + (pos[2] - bz) ** 2)
-        assert dist <= MAX_REACH + 0.1, (
-            f"Config {angles}: EE dist {dist:.3f} m exceeds max reach {MAX_REACH} m"
-        )
+        assert (
+            dist <= MAX_REACH + 0.1
+        ), f"Config {angles}: EE dist {dist:.3f} m exceeds max reach {MAX_REACH} m"
 
 
 # ============================================================================
@@ -140,9 +141,9 @@ def test_robot2_mirrored_x():
     dx2 = pos2[0] - ROBOT2_BASE[0]
 
     # The X offsets should be equal and opposite (within floating-point tolerance)
-    assert abs(dx1 + dx2) < 0.02, (
-        f"Robot1 dx={dx1:.4f} and Robot2 dx={dx2:.4f} are not symmetric"
-    )
+    assert (
+        abs(dx1 + dx2) < 0.02
+    ), f"Robot1 dx={dx1:.4f} and Robot2 dx={dx2:.4f} are not symmetric"
 
 
 def test_robot2_z_negated_relative_to_robot1():
@@ -155,9 +156,9 @@ def test_robot2_z_negated_relative_to_robot1():
     dz2 = pos2[2] - ROBOT2_BASE[2]
 
     # After a 180° yaw, Z flips sign: dz2 ≈ -dz1
-    assert abs(dz1 + dz2) < 0.02, (
-        f"Robot1 dz={dz1:.4f} and Robot2 dz={dz2:.4f} are not negatives of each other"
-    )
+    assert (
+        abs(dz1 + dz2) < 0.02
+    ), f"Robot1 dz={dz1:.4f} and Robot2 dz={dz2:.4f} are not negatives of each other"
 
 
 # ============================================================================

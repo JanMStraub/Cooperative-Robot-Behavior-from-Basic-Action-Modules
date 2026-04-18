@@ -295,9 +295,7 @@ class RobotController:
             # Register callback with WorldStateServer
             if self._world_state_server:
                 self._world_state_server.register_update_callback(on_state_update)
-                logger.info(
-                    "WorldStateServer callback registered for confidence decay"
-                )
+                logger.info("WorldStateServer callback registered for confidence decay")
             else:
                 logger.debug(
                     "WorldStateServer not available, skipping callback registration"
@@ -484,7 +482,10 @@ class RobotController:
 
         # Start Web UI server if requested
         if self._web_port:
-            from servers.WebUIServer import run_webui_server_background, get_startup_event
+            from servers.WebUIServer import (
+                run_webui_server_background,
+                get_startup_event,
+            )
 
             self._web_server_thread = run_webui_server_background(
                 host=self._host, port=self._web_port
@@ -531,6 +532,7 @@ class RobotController:
                     # Share with WebUI so it doesn't load a duplicate model
                     try:
                         from servers.WebUIServer import set_shared_detector
+
                         set_shared_detector(detector)
                     except ImportError:
                         pass
@@ -602,8 +604,7 @@ class RobotController:
         if KNOWLEDGE_GRAPH_ENABLED:
             logger.info(f"  Knowledge Graph:        Enabled")
         else:
-            logger.info(
-                f"  Knowledge Graph:        Disabled")
+            logger.info(f"  Knowledge Graph:        Disabled")
         logger.info("=" * 60)
 
     def stop(self):

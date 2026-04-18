@@ -192,13 +192,19 @@ class ROSMotionServer:
         self._move_group_clients = {}  # robot_id -> ActionClient
         self._ik_service_clients = {}  # robot_id -> Service Client for IK
         self._fk_service_clients = {}  # robot_id -> Service Client for FK
-        self._cartesian_path_clients = {}  # robot_id -> Service Client for Cartesian paths
+        self._cartesian_path_clients = (
+            {}
+        )  # robot_id -> Service Client for Cartesian paths
         self._trajectory_pubs = {}  # robot_id -> Publisher
         self._gripper_pubs = {}  # robot_id -> Publisher
         self._joint_state_subs = {}  # robot_id -> Subscription
         self._current_joint_states = {}  # robot_id -> JointState msg
-        self._move_group_server_ready = {}  # robot_id -> bool, cached server availability
-        self._joint_states_lock = threading.Lock()  # guards _current_joint_states (writer: ROS spin thread, readers: TCP handler threads)
+        self._move_group_server_ready = (
+            {}
+        )  # robot_id -> bool, cached server availability
+        self._joint_states_lock = (
+            threading.Lock()
+        )  # guards _current_joint_states (writer: ROS spin thread, readers: TCP handler threads)
         self._last_planned_trajectories = {}  # robot_id -> JointTrajectory
         self._trajectory_feedback = {}  # robot_id -> last feedback status string
         self._trajectory_feedback_event = {}  # robot_id -> threading.Event
@@ -967,8 +973,10 @@ class ROSMotionServer:
 
             # Diagnostic: warn if TOTG did not produce timestamps (silent failure).
             if trajectory.points:
-                last_ts = (trajectory.points[-1].time_from_start.sec
-                           + trajectory.points[-1].time_from_start.nanosec * 1e-9)
+                last_ts = (
+                    trajectory.points[-1].time_from_start.sec
+                    + trajectory.points[-1].time_from_start.nanosec * 1e-9
+                )
                 if last_ts < 1e-9:
                     logger.warning(
                         f"{robot_id}: MoveIt returned zero timestamps on all "
@@ -1093,10 +1101,17 @@ class ROSMotionServer:
                     break
             if _j6i is not None:
                 import math as _mth
-                _j6v = [_mth.degrees(pt.positions[_j6i]) for pt in trajectory.points if pt.positions]
+
+                _j6v = [
+                    _mth.degrees(pt.positions[_j6i])
+                    for pt in trajectory.points
+                    if pt.positions
+                ]
                 _step = max(1, len(_j6v) // 10)
                 _sampled = [f"{v:.1f}" for v in _j6v[::_step]] + [f"{_j6v[-1]:.1f}"]
-                logger.info(f"{robot_id}: joint_6 plan (deg, sampled): {' '.join(_sampled)}")
+                logger.info(
+                    f"{robot_id}: joint_6 plan (deg, sampled): {' '.join(_sampled)}"
+                )
                 for _pi in range(1, len(_j6v)):
                     if abs(_j6v[_pi] - _j6v[_pi - 1]) > 270.0:
                         logger.warning(
@@ -1388,7 +1403,9 @@ class ROSMotionServer:
         }
         return self._plan_and_publish(orient_request, robot_id)
 
-    def _apply_time_parameterization(self, trajectory, vel_scaling, acc_scaling, robot_id):
+    def _apply_time_parameterization(
+        self, trajectory, vel_scaling, acc_scaling, robot_id
+    ):
         """Apply time parameterization to an untimed JointTrajectory using TOTG.
 
         Used when GetCartesianPath returns a trajectory with all time_from_start = 0
@@ -1425,7 +1442,8 @@ class ROSMotionServer:
             if success:
                 last_ts = (
                     robot_traj.joint_trajectory.points[-1].time_from_start.sec
-                    + robot_traj.joint_trajectory.points[-1].time_from_start.nanosec * 1e-9
+                    + robot_traj.joint_trajectory.points[-1].time_from_start.nanosec
+                    * 1e-9
                 )
                 logger.info(
                     f"{robot_id}: Manual TOTG applied to Cartesian trajectory — "
@@ -1441,7 +1459,9 @@ class ROSMotionServer:
             logger.warning(
                 f"{robot_id}: Manual TOTG unavailable ({e}) — applying linear time parameterization"
             )
-            return self._apply_linear_time_parameterization(trajectory, vel_scaling, robot_id)
+            return self._apply_linear_time_parameterization(
+                trajectory, vel_scaling, robot_id
+            )
 
     def _apply_linear_time_parameterization(self, trajectory, vel_scaling, robot_id):
         """Assign uniform time stamps to an untimed JointTrajectory.
@@ -1490,9 +1510,7 @@ class ROSMotionServer:
             prev = points[i - 1]
             # Segment duration = max over joints of |delta_pos| / vel_limit
             seg_dur = 0.0
-            for j, (cur_pos, prev_pos) in enumerate(
-                zip(pt.positions, prev.positions)
-            ):
+            for j, (cur_pos, prev_pos) in enumerate(zip(pt.positions, prev.positions)):
                 delta = abs(cur_pos - prev_pos)
                 lim = vel_limits[j] if j < len(vel_limits) else 1.0
                 if lim > 0:
@@ -1700,10 +1718,17 @@ class ROSMotionServer:
                     break
             if j6_idx is not None:
                 import math as _mth
-                j6_vals = [_mth.degrees(pt.positions[j6_idx]) for pt in trajectory.points if pt.positions]
+
+                j6_vals = [
+                    _mth.degrees(pt.positions[j6_idx])
+                    for pt in trajectory.points
+                    if pt.positions
+                ]
                 step = max(1, len(j6_vals) // 10)
                 sampled = [f"{v:.1f}" for v in j6_vals[::step]] + [f"{j6_vals[-1]:.1f}"]
-                logger.info(f"{robot_id}: joint_6 trajectory (deg, sampled): {' '.join(sampled)}")
+                logger.info(
+                    f"{robot_id}: joint_6 trajectory (deg, sampled): {' '.join(sampled)}"
+                )
                 for _pi in range(1, len(j6_vals)):
                     raw_delta = j6_vals[_pi] - j6_vals[_pi - 1]
                     if abs(raw_delta) > 270.0:

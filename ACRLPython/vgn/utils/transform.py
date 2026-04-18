@@ -3,9 +3,9 @@ import scipy.spatial.transform
 
 
 class Rotation(scipy.spatial.transform.Rotation):
-    @classmethod
-    def identity(cls):
-        return cls.from_quat([0.0, 0.0, 0.0, 1.0])
+    @staticmethod  # type: ignore[override]
+    def identity():  # type: ignore[override]
+        return Rotation.from_quat([0.0, 0.0, 0.0, 1.0])
 
 
 class Transform(object):

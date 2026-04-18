@@ -42,6 +42,7 @@ except ImportError:
 
 logger = get_logger(__name__)
 
+
 class WorldStateServer(TCPServerBase):
     """
     TCP server that receives world state updates from Unity's WorldStatePublisher.
@@ -99,6 +100,7 @@ class WorldStateServer(TCPServerBase):
                     len_bytes = self._recv_exactly(client, 4)
                     if len_bytes:
                         import struct as _struct
+
                         skip_len = _struct.unpack("<I", len_bytes)[0]
                         if 0 < skip_len <= UnityProtocol.MAX_IMAGE_SIZE:
                             self._recv_exactly(client, skip_len)

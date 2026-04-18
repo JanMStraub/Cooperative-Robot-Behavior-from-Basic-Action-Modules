@@ -94,22 +94,20 @@ def camera_config_from_metadata(
 
     # Priority: Unity metadata > caller-supplied value > config default
     baseline = (
-        float(meta["baseline"]) if meta.get("baseline") is not None
+        float(meta["baseline"])
+        if meta.get("baseline") is not None
         else (baseline if baseline is not None else DEFAULT_STEREO_BASELINE)
     )
     fov = (
-        float(meta["fov"]) if meta.get("fov") is not None
+        float(meta["fov"])
+        if meta.get("fov") is not None
         else (fov if fov is not None else DEFAULT_STEREO_FOV)
     )
     camera_position = (
-        meta.get("camera_position")
-        or camera_position
-        or DEFAULT_STEREO_CAMERA_POSITION
+        meta.get("camera_position") or camera_position or DEFAULT_STEREO_CAMERA_POSITION
     )
     camera_rotation = (
-        meta.get("camera_rotation")
-        or camera_rotation
-        or DEFAULT_STEREO_CAMERA_ROTATION
+        meta.get("camera_rotation") or camera_rotation or DEFAULT_STEREO_CAMERA_ROTATION
     )
 
     return StereoParams(

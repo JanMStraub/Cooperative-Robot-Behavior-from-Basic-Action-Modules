@@ -19,7 +19,6 @@ import requests
 
 from orchestrators.CommandParser import CommandParser, get_command_parser
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================

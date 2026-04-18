@@ -424,7 +424,9 @@ class ROSBridge:
         }
         return self._send_command(cmd, timeout=planning_time + 10)
 
-    def plan_return_to_start(self, robot_id="Robot1", planning_time=5.0, target_joint_angles=None):
+    def plan_return_to_start(
+        self, robot_id="Robot1", planning_time=5.0, target_joint_angles=None
+    ):
         """
         Plan and execute a return to the robot's start/home configuration.
 

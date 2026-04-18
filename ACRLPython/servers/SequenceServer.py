@@ -151,11 +151,14 @@ class SequenceQueryHandler(SingletonBase):
 
         # ── Direct execution path (no LLM) ────────────────────────────────────
         if command_text.startswith(self.DIRECT_EXEC_PREFIX):
-            raw = command_text[len(self.DIRECT_EXEC_PREFIX):]
+            raw = command_text[len(self.DIRECT_EXEC_PREFIX) :]
             try:
                 commands = json.loads(raw)
                 if not isinstance(commands, list):
-                    return {"success": False, "error": "EXEC: payload must be a JSON array"}
+                    return {
+                        "success": False,
+                        "error": "EXEC: payload must be a JSON array",
+                    }
             except json.JSONDecodeError as e:
                 return {"success": False, "error": f"EXEC: invalid JSON — {e}"}
 
@@ -213,12 +216,17 @@ class SequenceQueryHandler(SingletonBase):
                 "commands": [],
             }
 
+        # Tag each command with the original text so SequenceExecutor can
+        # re-parse it with Reflexion context on failure.
+        for cmd in commands:
+            cmd["_original_text"] = command_text
+
         # Add camera_id to commands that need it (perception operations).
         # detect_objects is intentionally excluded: it reads from single-camera
         # storage (port 5005) using its own "main" default, not the stereo camera.
         perception_ops = [
             "detect_object_stereo",  # Stereo detection with depth (port 5006)
-            "analyze_scene",         # LLM vision analysis (single camera)
+            "analyze_scene",  # LLM vision analysis (single camera)
         ]
         for cmd in commands:
             if cmd.get("operation") in perception_ops:

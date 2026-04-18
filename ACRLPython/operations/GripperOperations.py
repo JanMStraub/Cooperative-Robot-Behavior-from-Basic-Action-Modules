@@ -32,7 +32,6 @@ logger = logging.getLogger(__name__)
 
 from ._imports import get_command_broadcaster as _get_command_broadcaster
 
-
 # ============================================================================
 # Implementation: Control Gripper Operation
 # ============================================================================
@@ -118,7 +117,9 @@ def control_gripper(
                     {"gripper_state": "open" if open_gripper else "closed"},
                 )
             except Exception as _exc:
-                logger.debug(f"Could not update gripper WorldState for {robot_id}: {_exc}")
+                logger.debug(
+                    f"Could not update gripper WorldState for {robot_id}: {_exc}"
+                )
 
         def _ros_path():
             from ros2.ROSBridge import ROSBridge
@@ -537,8 +538,14 @@ def place_object(
                 robot_id=robot_id,
             )
             if not hover_result or not hover_result.get("success"):
-                err = hover_result.get("error", "Unknown") if hover_result else "No response"
-                logger.warning(f"place_object: hover move failed ({err}), attempting direct descent")
+                err = (
+                    hover_result.get("error", "Unknown")
+                    if hover_result
+                    else "No response"
+                )
+                logger.warning(
+                    f"place_object: hover move failed ({err}), attempting direct descent"
+                )
 
             # Brief settle pause so /joint_states reflects the hover pose before
             # MoveIt samples the start state for the descent plan.
@@ -555,8 +562,14 @@ def place_object(
                 robot_id=robot_id,
             )
             if not descent_result or not descent_result.get("success"):
-                err = descent_result.get("error", "Unknown") if descent_result else "No response"
-                logger.warning(f"place_object: descent failed ({err}), releasing at current height")
+                err = (
+                    descent_result.get("error", "Unknown")
+                    if descent_result
+                    else "No response"
+                )
+                logger.warning(
+                    f"place_object: descent failed ({err}), releasing at current height"
+                )
 
             # Step 3: Open gripper and wait long enough for Unity to fully process
             # the detach before the ascent trajectory is published.  The gripper
@@ -594,7 +607,9 @@ def place_object(
                 "timestamp": time.time(),
                 "request_id": request_id,
             }
-            logger.info(f"Sending place_object command to {robot_id} at ({x}, {y}, {z})")
+            logger.info(
+                f"Sending place_object command to {robot_id} at ({x}, {y}, {z})"
+            )
             success = _get_command_broadcaster().send_command(command, request_id)
             if not success:
                 return OperationResult.error_result(

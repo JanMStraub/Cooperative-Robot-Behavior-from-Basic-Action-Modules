@@ -46,17 +46,23 @@ class TestHandoffPatternSteps:
 
     def test_receive_handoff_has_source_robot_id_binding(self):
         """receive_handoff step must pass source_robot_id for offset computation."""
-        receive_step = next(s for s in HANDOFF_PATTERN.steps if s.operation_id == RECEIVE_OP_ID)
+        receive_step = next(
+            s for s in HANDOFF_PATTERN.steps if s.operation_id == RECEIVE_OP_ID
+        )
         assert "source_robot_id" in receive_step.parameter_bindings
 
     def test_receive_handoff_has_object_id_binding(self):
         """receive_handoff step must pass object_id for WorldState geometry lookup."""
-        receive_step = next(s for s in HANDOFF_PATTERN.steps if s.operation_id == RECEIVE_OP_ID)
+        receive_step = next(
+            s for s in HANDOFF_PATTERN.steps if s.operation_id == RECEIVE_OP_ID
+        )
         assert "object_id" in receive_step.parameter_bindings
 
     def test_receive_handoff_has_robot_id_binding(self):
         """receive_handoff step must bind the target robot."""
-        receive_step = next(s for s in HANDOFF_PATTERN.steps if s.operation_id == RECEIVE_OP_ID)
+        receive_step = next(
+            s for s in HANDOFF_PATTERN.steps if s.operation_id == RECEIVE_OP_ID
+        )
         assert "robot_id" in receive_step.parameter_bindings
 
     def test_no_bare_adjust_orientation_in_pattern(self):
@@ -84,18 +90,27 @@ class TestHandoffPatternSteps:
     def test_step_order_grasp_before_receive(self):
         """grasp_for_handoff must come before receive_handoff."""
         ids = self._step_ids()
-        assert ids.index("coordination_grasp_object_for_handoff_001") < ids.index(RECEIVE_OP_ID)
+        assert ids.index("coordination_grasp_object_for_handoff_001") < ids.index(
+            RECEIVE_OP_ID
+        )
 
     def test_step_order_receive_before_release(self):
         """receive_handoff must come before the source robot releases."""
         ids = self._step_ids()
         receive_idx = ids.index(RECEIVE_OP_ID)
         # The release is the final control_gripper or release step after receive
-        post_receive_ids = ids[receive_idx + 1:]
-        assert any(
-            op_id in ("manipulation_control_gripper_001", "manipulation_release_object_001")
-            for op_id in post_receive_ids
-        ) or "sync_signal_001" in post_receive_ids  # handoff_complete signal is also valid
+        post_receive_ids = ids[receive_idx + 1 :]
+        assert (
+            any(
+                op_id
+                in (
+                    "manipulation_control_gripper_001",
+                    "manipulation_release_object_001",
+                )
+                for op_id in post_receive_ids
+            )
+            or "sync_signal_001" in post_receive_ids
+        )  # handoff_complete signal is also valid
 
     def test_handoff_complete_signal_present(self):
         """The pattern must end with a handoff_complete signal."""

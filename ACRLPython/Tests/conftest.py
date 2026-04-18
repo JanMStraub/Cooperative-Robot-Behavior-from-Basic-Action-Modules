@@ -17,7 +17,6 @@ import numpy as np
 import socket
 from unittest.mock import Mock, MagicMock
 
-
 # ---------------------------------------------------------------------------
 # Singleton reset utility
 # ---------------------------------------------------------------------------
