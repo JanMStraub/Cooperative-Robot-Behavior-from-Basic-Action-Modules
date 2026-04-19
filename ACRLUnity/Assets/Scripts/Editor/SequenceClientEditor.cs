@@ -31,7 +31,6 @@ namespace EditorScripts
         private readonly Color _errorColor = new Color(0.9f, 0.3f, 0.3f);
         private readonly Color _infoColor = new Color(0.4f, 0.7f, 1.0f);
 
-        // Original GUI colors captured at the start of each OnInspectorGUI call
         private Color _originalColor;
         private Color _originalBgColor;
 
@@ -105,12 +104,10 @@ namespace EditorScripts
 
             SequenceClient client = (SequenceClient)target;
 
-            // Connection Status
             DrawConnectionStatus(client);
 
             EditorGUILayout.Space(5);
 
-            // Default Inspector (settings)
             DrawSection(() =>
             {
                 DrawDefaultInspector();
@@ -118,7 +115,6 @@ namespace EditorScripts
 
             EditorGUILayout.Space(5);
 
-            // Action Buttons Section
             DrawSection(() =>
             {
                 EditorGUILayout.LabelField("Actions", _subHeaderStyle);
@@ -146,7 +142,6 @@ namespace EditorScripts
 
             EditorGUILayout.Space(5);
 
-            // Quick Action Templates
             _showQuickActions = EditorGUILayout.BeginFoldoutHeaderGroup(
                 _showQuickActions,
                 "Quick Action Templates"
@@ -159,7 +154,6 @@ namespace EditorScripts
 
             EditorGUILayout.Space(5);
 
-            // Last Result Section
             _showLastResult = EditorGUILayout.BeginFoldoutHeaderGroup(
                 _showLastResult,
                 "Last Sequence Result"
@@ -172,7 +166,6 @@ namespace EditorScripts
 
             EditorGUILayout.Space(5);
 
-            // Recent Commands Section
             _showRecentCommands = EditorGUILayout.BeginFoldoutHeaderGroup(
                 _showRecentCommands,
                 "Recent Commands"
@@ -237,7 +230,6 @@ namespace EditorScripts
         {
             EditorGUILayout.BeginVertical(_boxStyle);
 
-            // Basic Actions
             EditorGUILayout.LabelField("Basic Actions", EditorStyles.miniBoldLabel);
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("Move to Position", _buttonStyle))
@@ -316,7 +308,6 @@ namespace EditorScripts
 
             EditorGUILayout.Space(5);
 
-            // Pick & Place
             EditorGUILayout.LabelField("Pick & Place Sequences", EditorStyles.miniBoldLabel);
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("Pick Sequence", _buttonStyle))
@@ -335,7 +326,6 @@ namespace EditorScripts
 
             EditorGUILayout.Space(5);
 
-            // Cooperation
             EditorGUILayout.LabelField("Cooperation Commands", EditorStyles.miniBoldLabel);
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("Transfer cube", _buttonStyle))
@@ -396,7 +386,6 @@ PARALLEL GROUP 4:
             {
                 var result = client.LastResult;
 
-                // Status with colored background
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.LabelField("Status:", GUILayout.Width(60));
 
@@ -413,7 +402,6 @@ PARALLEL GROUP 4:
                 GUI.color = _originalColor;
                 EditorGUILayout.EndHorizontal();
 
-                // Stats row
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.LabelField(
                     $"Commands: {result.completed_commands}/{result.total_commands}",
@@ -422,7 +410,6 @@ PARALLEL GROUP 4:
                 EditorGUILayout.LabelField($"Duration: {result.total_duration_ms:F0}ms");
                 EditorGUILayout.EndHorizontal();
 
-                // Error if any
                 if (!string.IsNullOrEmpty(result.error))
                 {
                     EditorGUILayout.Space(5);
@@ -434,7 +421,6 @@ PARALLEL GROUP 4:
                     GUI.color = _originalColor;
                 }
 
-                // Individual command results
                 if (result.results != null && result.results.Count > 0)
                 {
                     EditorGUILayout.Space(8);
@@ -444,7 +430,6 @@ PARALLEL GROUP 4:
                     {
                         EditorGUILayout.BeginHorizontal();
 
-                        // Status indicator
                         if (cmdResult.success)
                         {
                             GUI.color = _successColor;
@@ -457,7 +442,6 @@ PARALLEL GROUP 4:
                         }
                         GUI.color = _originalColor;
 
-                        // Operation name and duration
                         EditorGUILayout.LabelField(
                             cmdResult.operation,
                             EditorStyles.miniLabel,
@@ -471,7 +455,6 @@ PARALLEL GROUP 4:
 
                         EditorGUILayout.EndHorizontal();
 
-                        // Show error if failed
                         if (!string.IsNullOrEmpty(cmdResult.error))
                         {
                             GUI.color = _errorColor;
@@ -508,12 +491,10 @@ PARALLEL GROUP 4:
                 {
                     EditorGUILayout.BeginHorizontal();
 
-                    // Command number
                     GUI.color = _infoColor;
                     EditorGUILayout.LabelField($"{i + 1}.", GUILayout.Width(20));
                     GUI.color = _originalColor;
 
-                    // Command text (truncated if too long)
                     string cmdText = client.RecentCommands[i];
                     if (cmdText.Length > 50)
                     {
@@ -521,7 +502,6 @@ PARALLEL GROUP 4:
                     }
                     EditorGUILayout.LabelField(cmdText, EditorStyles.miniLabel);
 
-                    // Use button
                     if (GUILayout.Button("Use", GUILayout.Width(40)))
                     {
                         Undo.RecordObject(client, "Change Prompt");

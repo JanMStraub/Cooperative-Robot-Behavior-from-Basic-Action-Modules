@@ -69,7 +69,6 @@ namespace Robotics
         {
             // CRITICAL: Cache trajectory state in FixedUpdate
             // If called in Update(), trajectory will jitter relative to FixedUpdate()
-            // Only recompute if time has changed (i.e., new FixedUpdate frame)
             if (Mathf.Abs(currentTime - _lastUpdateTime) > 0.001f)
             {
                 if (path == null || velocityProfile == null)
@@ -159,8 +158,8 @@ namespace Robotics
         }
 
         /// <summary>
-        /// Compute Cartesian correction using PD control law.
-        /// This is the "secret sauce" that eliminates oscillation.
+        /// Computes a damped Cartesian correction using PD control: position error scaled by
+        /// positionGains plus velocity error scaled by velocityGains.
         /// </summary>
         /// <param name="currentPos">Current end effector position</param>
         /// <param name="targetPos">Target position from trajectory</param>
@@ -191,7 +190,6 @@ namespace Robotics
             if (path.waypoints.Count < 2)
                 return Vector3.forward;
 
-            // Find segment containing this distance
             for (int i = 0; i < path.waypoints.Count - 1; i++)
             {
                 float d1 = path.waypoints[i].distanceFromStart;
@@ -205,7 +203,6 @@ namespace Robotics
                 }
             }
 
-            // Default to direction of last segment
             int lastIdx = path.waypoints.Count - 1;
             return (
                 path.waypoints[lastIdx].position - path.waypoints[lastIdx - 1].position
@@ -227,7 +224,6 @@ namespace Robotics
 
             float accelScalar = 0f;
 
-            // Determine phase based on distance
             if (distance < profile.accelerationPhaseDistance)
             {
                 accelScalar = profile.acceleration;

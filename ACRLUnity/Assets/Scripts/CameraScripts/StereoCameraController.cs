@@ -86,7 +86,6 @@ namespace Vision
         {
             if (_leftCamera != null && _rightCamera != null)
             {
-                // Calculate distance between cameras (typically horizontal X distance)
                 float distance = Vector3.Distance(
                     _leftCamera.transform.position,
                     _rightCamera.transform.position
@@ -362,16 +361,13 @@ namespace Vision
 
             try
             {
-                // Render into the shared RenderTexture
                 camera.targetTexture = _sharedRT;
                 camera.Render();
 
-                // Read pixels into the shared Texture2D
                 RenderTexture.active = _sharedRT;
                 _sharedTex.ReadPixels(new Rect(0, 0, _imageWidth, _imageHeight), 0, 0);
                 _sharedTex.Apply();
 
-                // Restore camera and active RT before encoding
                 camera.targetTexture = null;
                 RenderTexture.active = null;
 

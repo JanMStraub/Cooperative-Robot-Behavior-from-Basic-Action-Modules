@@ -115,6 +115,9 @@ public class SaveScreenshots : MonoBehaviour
     private Vector3 baseCameraPosition;
     private Quaternion baseCameraRotation;
 
+    /// <summary>
+    /// Initializes output directories, class mappings, render textures, and begins the capture coroutine.
+    /// </summary>
     void Start()
     {
         Directory.CreateDirectory(Path.Combine(outputDir, "train"));
@@ -160,7 +163,6 @@ public class SaveScreenshots : MonoBehaviour
             return;
         }
 
-        // Store the camera's real mounting position/rotation from the scene
         baseCameraPosition = cam.transform.position;
         baseCameraRotation = cam.transform.rotation;
 
@@ -348,6 +350,9 @@ public class SaveScreenshots : MonoBehaviour
         return 0;
     }
 
+    /// <summary>
+    /// Releases render texture and screenshot texture resources.
+    /// </summary>
     void OnDestroy()
     {
         if (renderTexture != null)
@@ -382,7 +387,6 @@ public class SaveScreenshots : MonoBehaviour
     /// </summary>
     void SetupRandomScene()
     {
-        // Randomize only Target-tagged object positions within table bounds
         if (randomizeObjectPositions)
         {
             foreach (var obj in objectsToLabel)
@@ -401,13 +405,8 @@ public class SaveScreenshots : MonoBehaviour
             }
         }
 
-        // Randomize which cubes and fields are visible this capture
         RandomizeObjectVisibility();
-
-        // Randomize robot joint targets
         RandomizeRobotJointTargets();
-
-        // Apply small jitter around the real camera mount position
         ApplyCameraJitter();
     }
 

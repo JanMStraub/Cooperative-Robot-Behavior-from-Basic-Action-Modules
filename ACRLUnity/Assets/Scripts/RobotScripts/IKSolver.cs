@@ -24,7 +24,6 @@ namespace Robotics
         private Matrix<double> _jacobianJacobianTranspose;
         private Matrix<double> _regularizedMatrix;
 
-        // Iteration tracking
         private int _iterationCount;
         public int IterationCount => _iterationCount;
 
@@ -112,9 +111,9 @@ namespace Robotics
         }
 
         /// <summary>
-        /// Compute joint angle deltas with velocity-level IK (PD control).
-        /// This is the KEY IMPROVEMENT that eliminates oscillation.
-        /// Combines position error with velocity error for natural damping.
+        /// Computes joint deltas using velocity-level (PD) IK: combines position error scaled by
+        /// <paramref name="Kp"/> with velocity error scaled by <paramref name="Kd"/> to damp oscillation.
+        /// Convergence is not signalled here — RobotController owns the stop condition.
         /// </summary>
         /// <param name="currentState">Current end effector state</param>
         /// <param name="targetState">Target end effector state</param>

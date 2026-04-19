@@ -132,7 +132,6 @@ namespace Robotics
             SetupDrive(leftGripper);
             SetupDrive(rightGripper);
 
-            // Initialize from the saved initial target
             _currentPhysicalTarget = initialTarget;
             targetPosition = MapPhysicalToNormalized(initialTarget);
 
@@ -432,7 +431,6 @@ namespace Robotics
                 return;
             }
 
-            // Check if object is currently held by another gripper (handoff scenario)
             GripperController otherGripper = FindGripperHoldingObject(obj);
             if (otherGripper != null && otherGripper != this)
             {
@@ -449,7 +447,6 @@ namespace Robotics
                 _graspedObjectOriginalParent = obj.transform.parent;
             }
 
-            // Disable physics on the object so it moves with the gripper
             Rigidbody rb = obj.GetComponent<Rigidbody>();
             if (rb != null)
             {
@@ -460,7 +457,6 @@ namespace Robotics
                 rb.useGravity = false; // Disable gravity while held
             }
 
-            // Parent to attachment point
             obj.transform.SetParent(attachmentPoint, worldPositionStays: true);
             _graspedObject = obj;
             _isHoldingObject = true;
@@ -526,7 +522,6 @@ namespace Robotics
                 return;
             }
 
-            // Store current world position and rotation before changing anything
             Vector3 worldPosition = _graspedObject.transform.position;
             Quaternion worldRotation = _graspedObject.transform.rotation;
 
@@ -534,7 +529,6 @@ namespace Robotics
                 $"{_logPrefix} Detaching object '{_graspedObject.name}' at world position {worldPosition}"
             );
 
-            // Get Rigidbody before making changes
             Rigidbody rb = _graspedObject.GetComponent<Rigidbody>();
 
             // CRITICAL: Unparent while still kinematic to avoid physics snap-back
@@ -544,11 +538,8 @@ namespace Robotics
             _graspedObject.transform.position = worldPosition;
             _graspedObject.transform.rotation = worldRotation;
 
-            // If there's a Rigidbody, handle physics carefully
             if (rb != null)
             {
-                // While still kinematic, explicitly set the Rigidbody's position
-                // This ensures the physics engine knows where the object is
                 rb.position = worldPosition;
                 rb.rotation = worldRotation;
 

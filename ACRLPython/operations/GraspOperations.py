@@ -13,6 +13,8 @@ import math
 import time
 from typing import List, Optional
 
+import numpy as np
+
 from core.LoggingSetup import setup_logging
 
 from .Base import (
@@ -287,6 +289,7 @@ def _grasp_via_ros_planned(
     request_id: int,
     world_state,
     grasp_yaw_override: "Optional[float]" = None,
+    pre_grasp_distance: float = 0.0,
 ):
     """Execute grasp using the full GraspPlanner pipeline (ROS path).
 
@@ -372,50 +375,70 @@ def _grasp_via_ros_planned(
         f"score={best_grasp.total_score:.3f}"
     )
 
-    # The Python grasp planner produces quaternions in Unity world space (Y-up,
-    # left-handed, matching Unity's Quaternion.Euler ZYX convention). MoveIt expects
-    # orientations in ROS base_link space (Z-up, right-handed). Without this conversion,
-    # MoveIt plans a trajectory to a misinterpreted orientation and joint 4 spins
-    # extensively near the pre-grasp waypoint before settling.
+    # Build the MoveIt (ROS) orientation for the chosen grasp approach.
     #
-    # Conversion: (x,y,z,w)_unity → (z,-x,y,w)_ros
-    # Axis relabeling Unity(X,Y,Z)→ROS(Z,-X,Y) applied to vector components.
-    # w is preserved — negating it would invert the rotation (conjugate), not
-    # just change the handedness representation.
-    unity_q = best_grasp.grasp_rotation  # (x, y, z, w) in Unity frame
-    ros_x = unity_q[2]  # unity z → ros x
-    ros_y = -unity_q[0]  # unity x → ros -y
-    ros_z = unity_q[1]  # unity y → ros z
-    ros_w = unity_q[3]  # w preserved
-    # Canonicalize to w >= 0 hemisphere. The two quaternion representations
-    # (x,y,z,w) and (-x,-y,-z,-w) encode identical orientations, but MoveIt's
-    # IK solver may pick a wrist solution requiring an extra ±360° rotation when
-    # w < 0 (especially for Top grasps where Euler(180,0,90) puts w near zero).
-    if ros_w < 0.0:
-        ros_x, ros_y, ros_z, ros_w = -ros_x, -ros_y, -ros_z, -ros_w
-    # Exploit 180° gripper symmetry: fold the yaw (rotation around ROS Z = vertical) into
-    # (-π/2, π/2].  For a parallel-jaw gripper, yaw θ and θ+π are identical grasps.
-    # Normalising here prevents MoveIt from picking the wrist solution requiring ~260° of
-    # joint-6 travel when the short path (via the equivalent yaw) needs only ~80°.
-    # yaw = atan2(2*(w*rz + rx*ry), 1 - 2*(ry² + rz²))
-    _yaw = math.atan2(
-        2.0 * (ros_w * ros_z + ros_x * ros_y),
-        1.0 - 2.0 * (ros_y * ros_y + ros_z * ros_z),
-    )
-    if _yaw > math.pi / 2 or _yaw < -math.pi / 2:
-        # Pre-multiply by 180° around ROS Z: (ax,ay,az,aw)=(0,0,1,0) × (rx,ry,rz,rw)
-        #   new_x = -ry, new_y = rx, new_z = rw, new_w = -rz
-        ros_x, ros_y, ros_z, ros_w = -ros_y, ros_x, ros_w, -ros_z
-        # Re-canonicalize after the flip (w may have changed sign).
+    # The general Unity→ROS swap (x,y,z,w)→(z,-x,y,w) breaks for top-down grasps:
+    # GraspCandidateGenerator produces Euler(180°,0°,90°) in Unity ZYX, which gives
+    # w=0 exactly.  After the axis swap the result is a pure rotation around ROS -Y
+    # (horizontal), so link5/6 end up horizontal instead of pointing down.
+    #
+    # For top: build the ROS quaternion directly from the already-computed yaw.
+    # In ROS (Z-up), top-down = tool-Z along -Z_ros = 180° around ROS X composed
+    # with yaw θ around ROS Z.  q_x180=(1,0,0,0); q_yaw=(0,0,sin(θ/2),cos(θ/2)).
+    # Product (q_yaw * q_x180): x=cos(θ/2), y=-sin(θ/2), z=0, w=0.
+    # w=0 is unavoidable for any 180° rotation; MoveIt normalises internally so the
+    # axis direction is what matters — and now it is correct (pointing down).
+    if best_grasp.approach_type == "top":
+        # Fold yaw into (-π/2, π/2] (jaw 180° symmetry).
+        yaw_ros = yaw_unity  # Unity Y-axis == ROS Z-axis
+        while yaw_ros > math.pi / 2:
+            yaw_ros -= math.pi
+        while yaw_ros < -math.pi / 2:
+            yaw_ros += math.pi
+        s = math.sin(yaw_ros / 2.0)
+        c = math.cos(yaw_ros / 2.0)
+        ros_x, ros_y, ros_z, ros_w = c, -s, 0.0, 0.0
+        logger.debug(
+            f"[_grasp_via_ros_planned] Top-down ROS orientation: "
+            f"yaw_ros={math.degrees(yaw_ros):.1f}° → q=({ros_x:.3f},{ros_y:.3f},{ros_z:.3f},{ros_w:.3f})"
+        )
+    else:
+        # Front/side: standard Unity→ROS axis swap (x,y,z,w)→(z,-x,y,w).
+        unity_q = best_grasp.grasp_rotation
+        ros_x = unity_q[2]
+        ros_y = -unity_q[0]
+        ros_z = unity_q[1]
+        ros_w = unity_q[3]
         if ros_w < 0.0:
             ros_x, ros_y, ros_z, ros_w = -ros_x, -ros_y, -ros_z, -ros_w
-        logger.debug(
-            f"[_grasp_via_ros_planned] Yaw {math.degrees(_yaw):.1f}° outside (-90°,90°] — "
-            f"applied 180° wrist flip to minimise joint-6 travel."
+        # Fold yaw into (-π/2, π/2] for jaw symmetry.
+        _yaw = math.atan2(
+            2.0 * (ros_w * ros_z + ros_x * ros_y),
+            1.0 - 2.0 * (ros_y * ros_y + ros_z * ros_z),
         )
+        if _yaw > math.pi / 2 or _yaw < -math.pi / 2:
+            ros_x, ros_y, ros_z, ros_w = -ros_y, ros_x, ros_w, -ros_z
+            if ros_w < 0.0:
+                ros_x, ros_y, ros_z, ros_w = -ros_x, -ros_y, -ros_z, -ros_w
+            logger.debug(
+                f"[_grasp_via_ros_planned] Yaw {math.degrees(_yaw):.1f}° outside (-90°,90°] — "
+                f"applied 180° wrist flip to minimise joint-6 travel."
+            )
     grasp_orientation = {"x": ros_x, "y": ros_y, "z": ros_z, "w": ros_w}
 
     grasp_pos = _vec_to_pos(best_grasp.grasp_position)
+
+    # Override pre-grasp position if caller specified an explicit distance.
+    # GraspCandidateGenerator derives it from object size (min 5cm), which is too
+    # small for 2cm cubes — the caller's pre_grasp_distance (e.g. 0.15m) is used instead.
+    if pre_grasp_distance > 0.0 and best_grasp.approach_direction is not None:
+        pre_grasp_pt = (
+            np.array(best_grasp.grasp_position)
+            + np.array(best_grasp.approach_direction) * pre_grasp_distance
+        )
+        pre_grasp_pos = _vec_to_pos(tuple(pre_grasp_pt))
+    else:
+        pre_grasp_pos = _vec_to_pos(best_grasp.pre_grasp_position)
 
     # Step 1: Pre-grasp hover.
     # TODO: remove orientation=grasp_orientation once VGN is implemented — VGN poses
@@ -423,7 +446,7 @@ def _grasp_via_ros_planned(
     #       and only shrinks the IK solution space at borderline reach distances.
     logger.info(f"Moving to pre-grasp position for {robot_id}")
     pre_result = bridge.plan_and_execute(
-        position=_vec_to_pos(best_grasp.pre_grasp_position),
+        position=pre_grasp_pos,
         orientation=grasp_orientation,
         planning_time=10.0,
         robot_id=robot_id,
@@ -1758,10 +1781,6 @@ def grasp_object(
                         )
                         if result is not None:
                             return result
-                        logger.info(
-                            "[VGN+ROS] path unavailable or failed — "
-                            "falling back to geometric ROS planning"
-                        )
 
                     # PATH 2: Geometric ROS planning (existing code, unchanged)
                     # Try full GraspPlanner pipeline when dimensions + robot pose are available
@@ -1783,6 +1802,7 @@ def grasp_object(
                             request_id=request_id,
                             world_state=world_state,
                             grasp_yaw_override=grasp_yaw_override,
+                            pre_grasp_distance=pre_grasp_distance,
                         )
                         if not fallback:
                             assert ros_result is not None

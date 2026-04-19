@@ -50,21 +50,21 @@ namespace Robotics
         private IKConfig _ikConfig;
 
         [SerializeField]
-        private float _maxJointStepRad = 0.02f; // Reduced from 0.05 to prevent overshoot
+        private float _maxJointStepRad = 0.02f;
 
         [Header("Speed Settings")]
         [SerializeField]
-        private float _minStepSpeedNearTarget = 0.1f; // Reduced for gentler approach
+        private float _minStepSpeedNearTarget = 0.1f;
 
         [SerializeField]
-        private float _maxStepSpeed = 0.4f; // Reduced from 0.8 to prevent oscillation
+        private float _maxStepSpeed = 0.4f;
 
         [Header("Velocity Damping (Anti-Oscillation)")]
         [SerializeField]
-        private float _positionGain = 2f; // Kp - position error gain (low for stability)
+        private float _positionGain = 2f; // Kp - position error gain
 
         [SerializeField]
-        private float _velocityGain = 4f; // Kd - velocity damping gain (high for stability)
+        private float _velocityGain = 4f; // Kd - velocity damping gain
 
         [SerializeField]
         private float _leashDistance = 0.10f; // Max distance to "carrot" target (10cm)
@@ -74,13 +74,13 @@ namespace Robotics
         private GripperController _gripperController;
 
         [SerializeField]
-        private bool _closeGripperOnReach = true; // Close gripper when target reached
+        private bool _closeGripperOnReach = true;
 
         [SerializeField]
-        private float _gripperCloseDelay = 0.2f; // Delay before closing gripper (seconds)
+        private float _gripperCloseDelay = 0.2f;
 
         [SerializeField]
-        private bool _attachObjectOnGrasp = true; // Attach object to gripper when grasped
+        private bool _attachObjectOnGrasp = true;
 
         [Header("Gripper Orientation")]
         [
@@ -144,6 +144,9 @@ namespace Robotics
             }
         }
 
+        /// <summary>
+        /// Defers gripper initialization by one frame to ensure GripperController has completed its Start() setup.
+        /// </summary>
         private IEnumerator DelayedStartup()
         {
             yield return null;

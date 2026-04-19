@@ -20,6 +20,7 @@ namespace ACRLEditor
         private GUIStyle _buttonStyle;
         private bool _stylesInitialized = false;
 
+        /// <summary>Caches the AutoRTManager target reference on inspector enable.</summary>
         private void OnEnable()
         {
             _manager = target as AutoRTManager;
@@ -27,31 +28,27 @@ namespace ACRLEditor
 
         public override void OnInspectorGUI()
         {
-            // Initialize styles
             if (!_stylesInitialized)
             {
                 InitializeStyles();
                 _stylesInitialized = true;
             }
 
-            // Draw default inspector
             DrawDefaultInspector();
 
             EditorGUILayout.Space(10);
             EditorGUILayout.LabelField("AutoRT Controls", _headerStyle);
             EditorGUILayout.Space(5);
 
-            // Connection status
             DrawConnectionStatus();
 
             EditorGUILayout.Space(10);
 
-            // Control buttons (only enabled when connected and in play mode)
+            // Only enabled when connected and in play mode
             bool canControl = _manager != null && _manager.IsConnected && Application.isPlaying;
 
             EditorGUI.BeginDisabledGroup(!canControl);
 
-            // Manual generation button
             if (GUILayout.Button("Generate Tasks Now", GUILayout.Height(30)))
             {
                 _manager.GenerateTasks();
@@ -59,7 +56,6 @@ namespace ACRLEditor
 
             EditorGUILayout.Space(5);
 
-            // Loop control buttons
             EditorGUILayout.BeginHorizontal();
 
             if (_manager.LoopRunning)
@@ -83,12 +79,10 @@ namespace ACRLEditor
 
             EditorGUILayout.Space(10);
 
-            // Loop status display
             DrawLoopStatus();
 
             EditorGUILayout.Space(10);
 
-            // Pending tasks section
             DrawPendingTasks();
 
             // Auto-repaint in play mode
@@ -98,6 +92,7 @@ namespace ACRLEditor
             }
         }
 
+        /// <summary>Creates GUIStyle objects for the custom inspector. Called once on first OnInspectorGUI invocation.</summary>
         private void InitializeStyles()
         {
             _headerStyle = new GUIStyle(EditorStyles.boldLabel)
@@ -115,6 +110,7 @@ namespace ACRLEditor
             _buttonStyle = new GUIStyle(GUI.skin.button) { fontStyle = FontStyle.Bold };
         }
 
+        /// <summary>Draws a colored connection status badge and current status message.</summary>
         private void DrawConnectionStatus()
         {
             EditorGUILayout.BeginHorizontal();
@@ -136,7 +132,6 @@ namespace ACRLEditor
 
             EditorGUILayout.EndHorizontal();
 
-            // Status message
             if (!string.IsNullOrEmpty(_manager.StatusMessage))
             {
                 EditorGUILayout.LabelField(
@@ -147,6 +142,7 @@ namespace ACRLEditor
             }
         }
 
+        /// <summary>Draws the current loop state (running/stopped), delay, strategy, and robot configuration.</summary>
         private void DrawLoopStatus()
         {
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
@@ -170,7 +166,6 @@ namespace ACRLEditor
             GUI.color = Color.white;
             EditorGUILayout.EndHorizontal();
 
-            // Loop configuration (if available)
             if (_manager.Config != null)
             {
                 EditorGUILayout.LabelField($"Delay: {_manager.Config.loopDelaySeconds}s");
@@ -181,6 +176,7 @@ namespace ACRLEditor
             EditorGUILayout.EndVertical();
         }
 
+        /// <summary>Draws the scrollable list of pending ProposedTasks with approve/reject buttons.</summary>
         private void DrawPendingTasks()
         {
             EditorGUILayout.LabelField("Pending Tasks", _headerStyle);
@@ -202,7 +198,6 @@ namespace ACRLEditor
             );
             EditorGUILayout.Space(5);
 
-            // Clear all button
             if (GUILayout.Button("Clear All Tasks"))
             {
                 if (
@@ -220,13 +215,11 @@ namespace ACRLEditor
 
             EditorGUILayout.Space(5);
 
-            // Scrollable task list
             _taskScrollPosition = EditorGUILayout.BeginScrollView(
                 _taskScrollPosition,
                 GUILayout.MaxHeight(400)
             );
 
-            // Iterate through tasks and draw cards
             for (int i = 0; i < tasks.Count; i++)
             {
                 DrawTaskCard(tasks[i], i);
@@ -235,6 +228,7 @@ namespace ACRLEditor
             EditorGUILayout.EndScrollView();
         }
 
+        /// <summary>Draws a single task card showing description, operations, reasoning, and approve/reject controls.</summary>
         private void DrawTaskCard(ProposedTask task, int index)
         {
             if (task == null)
@@ -242,7 +236,6 @@ namespace ACRLEditor
 
             EditorGUILayout.BeginVertical(_taskCardStyle);
 
-            // Task header
             EditorGUILayout.BeginHorizontal();
 
             EditorGUILayout.LabelField(
@@ -251,7 +244,6 @@ namespace ACRLEditor
                 GUILayout.Width(80)
             );
 
-            // Complexity badge
             GUI.color = GetComplexityColor(task.estimated_complexity);
             EditorGUILayout.LabelField(
                 $"Complexity: {task.estimated_complexity}",
@@ -260,7 +252,6 @@ namespace ACRLEditor
             );
             GUI.color = Color.white;
 
-            // Robots required
             EditorGUILayout.LabelField(
                 $"Robots: {task.RobotCount}",
                 EditorStyles.miniLabel,
@@ -271,13 +262,11 @@ namespace ACRLEditor
 
             EditorGUILayout.Space(3);
 
-            // Task description
             EditorGUILayout.LabelField("Description:", EditorStyles.boldLabel);
             EditorGUILayout.LabelField(task.description, EditorStyles.wordWrappedLabel);
 
             EditorGUILayout.Space(3);
 
-            // Operations list
             if (task.operations != null && task.operations.Count > 0)
             {
                 EditorGUILayout.LabelField(
@@ -299,7 +288,6 @@ namespace ACRLEditor
 
             EditorGUILayout.Space(3);
 
-            // Reasoning
             if (!string.IsNullOrEmpty(task.reasoning))
             {
                 EditorGUILayout.LabelField("Reasoning:", EditorStyles.boldLabel);
@@ -308,10 +296,8 @@ namespace ACRLEditor
 
             EditorGUILayout.Space(5);
 
-            // Action buttons
             EditorGUILayout.BeginHorizontal();
 
-            // Approve & Execute button
             GUI.backgroundColor = Color.green;
             if (GUILayout.Button("Approve & Execute", _buttonStyle, GUILayout.Height(30)))
             {
@@ -322,7 +308,6 @@ namespace ACRLEditor
 
             GUI.backgroundColor = Color.white;
 
-            // Reject button
             GUI.backgroundColor = new Color(1f, 0.5f, 0.5f);
             if (GUILayout.Button("✗ Reject", _buttonStyle, GUILayout.Height(30)))
             {
@@ -336,6 +321,7 @@ namespace ACRLEditor
             EditorGUILayout.EndVertical();
         }
 
+        /// <summary>Maps a task complexity integer to a display color: green (1-2), yellow (3-4), orange (5+).</summary>
         private Color GetComplexityColor(int complexity)
         {
             if (complexity <= 2)
