@@ -35,7 +35,12 @@ namespace Robotics
         /// </summary>
         /// <param name="positionGains">Position gain (K_p) per axis</param>
         /// <param name="velocityGains">Velocity gain (K_d) per axis for damping</param>
-        public TrajectoryController(Vector3? positionGains = null, Vector3? velocityGains = null, float? maxVelocity = null, float? maxAcceleration = null)
+        public TrajectoryController(
+            Vector3? positionGains = null,
+            Vector3? velocityGains = null,
+            float? maxVelocity = null,
+            float? maxAcceleration = null
+        )
         {
             _positionGains = positionGains ?? new Vector3(10f, 10f, 10f);
             _velocityGains = velocityGains ?? new Vector3(2f, 2f, 2f);

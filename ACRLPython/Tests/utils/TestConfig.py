@@ -27,10 +27,8 @@ from config.Servers import (
     MAX_RESULT_QUEUE_SIZE,
     MAX_STRING_LENGTH,
     SEQUENCE_SERVER_PORT,
-    SERVER_INIT_WAIT_TIME,
     SOCKET_ACCEPT_TIMEOUT,
     STEREO_DETECTION_PORT,
-    STREAMING_SERVER_PORT,
     VISION_MODELS,
     WORLDSTATE_CHECK_INTERVAL,
 )
@@ -39,7 +37,6 @@ from config.Vision import (
     BLUE_HSV_UPPER,
     DEFAULT_STEREO_BASELINE,
     DEFAULT_STEREO_FOV,
-    DUPLICATE_TIME_THRESHOLD,
     IMAGE_CHECK_INTERVAL,
     MAX_ASPECT_RATIO,
     MAX_CUBE_AREA_PX,
@@ -60,7 +57,6 @@ class TestConfigConstants:
     def test_network_config(self):
         """Test network configuration constants"""
         assert DEFAULT_HOST == "127.0.0.1"
-        assert STREAMING_SERVER_PORT == 5005
         assert STEREO_DETECTION_PORT == 5006
         assert COMMAND_SERVER_PORT == 5007
         assert SEQUENCE_SERVER_PORT == 5008
@@ -80,8 +76,6 @@ class TestConfigConstants:
         assert MIN_IMAGE_AGE >= 0
         assert MAX_IMAGE_AGE > MIN_IMAGE_AGE
         assert IMAGE_CHECK_INTERVAL > 0
-        assert SERVER_INIT_WAIT_TIME > 0
-        assert DUPLICATE_TIME_THRESHOLD >= 0
         assert LLM_REQUEST_TIMEOUT > 0
         assert WORLDSTATE_CHECK_INTERVAL > 0
         assert VISION_OPERATION_TIMEOUT > 0
@@ -159,7 +153,7 @@ class TestConfigModuleStructure:
 
         # Network constants
         assert hasattr(Servers, "DEFAULT_HOST")
-        assert hasattr(Servers, "STREAMING_SERVER_PORT")
+        assert hasattr(Servers, "STEREO_DETECTION_PORT")
         assert hasattr(Servers, "SEQUENCE_SERVER_PORT")
 
         # LLM constants

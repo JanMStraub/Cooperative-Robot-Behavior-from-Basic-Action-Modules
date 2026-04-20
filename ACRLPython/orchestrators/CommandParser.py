@@ -38,6 +38,7 @@ try:
         USE_MOTION_LAYER,
     )
     from ..config.Negotiation import USE_STRUCTURED_OUTPUT
+    from ..config.Robot import HANDOFF_PRESENTATION_POSITION
     from ..operations.WorkflowPatterns import WorkflowPatternRegistry, WorkflowPattern
 except ImportError:
     from rag import RAGSystem
@@ -52,6 +53,7 @@ except ImportError:
         USE_MOTION_LAYER,
     )
     from config.Negotiation import USE_STRUCTURED_OUTPUT
+    from config.Robot import HANDOFF_PRESENTATION_POSITION
     from operations.WorkflowPatterns import WorkflowPatternRegistry, WorkflowPattern
 
 # Configure logging
@@ -60,6 +62,9 @@ from core.LLMUtils import extract_json as _extract_json_util
 
 setup_logging(__name__)
 logger = logging.getLogger(__name__)
+
+_HPP = HANDOFF_PRESENTATION_POSITION
+_HANDOFF_X, _HANDOFF_Y, _HANDOFF_Z = _HPP[0], _HPP[1], _HPP[2]
 
 
 class _PromptBuilder:
@@ -134,11 +139,11 @@ class _PromptBuilder:
 
         Example for multi-robot handoff:
         {{
-        "reasoning": "Robot1 detects and grasps the red cube using grasp_object_for_handoff (far end). It moves to the shared zone and signals Robot2. Robot2 waits, re-detects the cube at its new position, then calls receive_handoff which orients the gripper upward and approaches from below. Robot1 releases after Robot2 has the object.",
+        "reasoning": "Robot1 detects and grasps the red cube, then moves to the fixed handoff presentation position ({_HANDOFF_X:.2f}, {_HANDOFF_Y:.2f}, {_HANDOFF_Z:.2f}) and signals. Robot2 waits, re-detects the object at the presentation position, then calls receive_handoff which orients the gripper upward and approaches from the side. Robot1 releases after Robot2 has the object.",
         "plan": [
             {{"parallel_group": 1, "robot": "Robot1", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "capture_var": "target"}},
-            {{"parallel_group": 2, "robot": "Robot1", "operation": "grasp_object_for_handoff", "params": {{"robot_id": "Robot1", "object_id": "$target.color", "receiving_robot_id": "Robot2"}}}},
-            {{"parallel_group": 3, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": 0.0, "y": 0.3, "z": 0.07}}}},
+            {{"parallel_group": 2, "robot": "Robot1", "operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "$target.color"}}}},
+            {{"parallel_group": 3, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": {_HANDOFF_X:.2f}, "y": {_HANDOFF_Y:.2f}, "z": {_HANDOFF_Z:.2f}}}}},
             {{"parallel_group": 4, "robot": "Robot1", "operation": "signal", "params": {{"event_name": "r1_at_handoff"}}}},
             {{"parallel_group": 4, "robot": "Robot2", "operation": "wait_for_signal", "params": {{"event_name": "r1_at_handoff"}}}},
             {{"parallel_group": 5, "robot": "Robot2", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot2", "color": "red"}}, "capture_var": "handoff_target"}},
@@ -150,14 +155,17 @@ class _PromptBuilder:
         === HANDOFF RULE ===
 
         For robot-to-robot handoffs:
-        1. Robot1 grasps with grasp_object_for_handoff, moves to the shared zone (x=0.0, y=0.3, z=0.07), then signals.
-        2. Robot2 waits for the signal, then re-detects the object (it has MOVED with Robot1 to the shared zone).
-        3. Robot2 calls receive_handoff — this orients the gripper upward and approaches from below the object.
-        4. Robot1 releases only after Robot2's receive_handoff completes.
+        1. Robot1 grasps with grasp_object.
+        2. Robot1 moves to the fixed HANDOFF PRESENTATION POSITION (x={_HANDOFF_X:.2f}, y={_HANDOFF_Y:.2f}, z={_HANDOFF_Z:.2f}) — always use these exact coordinates.
+        3. Robot1 signals. Robot2 waits for that signal.
+        4. Robot2 re-detects the object (it has MOVED with Robot1 to the presentation position).
+        5. Robot2 calls receive_handoff — orients gripper upward and approaches from the side.
+        6. Robot1 releases only after Robot2's receive_handoff completes.
 
         NEVER use grasp_object for the receiving robot during a handoff — it causes gripper collision.
-        NEVER hardcode Robot2's grasp position — the cube moves with Robot1 and its position changes.
-        receive_handoff automatically orients the gripper upward and approaches from below.
+        NEVER hardcode Robot2's grasp position — the object moves with Robot1 and its position changes.
+        NEVER move Robot1 to any position other than ({_HANDOFF_X:.2f}, {_HANDOFF_Y:.2f}, {_HANDOFF_Z:.2f}) for the handoff.
+        receive_handoff automatically orients the gripper and approaches from the side.
 
         === SYNCHRONIZATION PRIMITIVES ===
 
@@ -178,11 +186,11 @@ class _PromptBuilder:
         - With a known object name: {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "blue_cube"}}}}
         - After detect_object_stereo with capture_var "target": {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "$target.color"}}}}
         - The object_id field in grasp_object ALWAYS uses ".color" from the detection result — NEVER ".id", ".name", or any other field
+        - NEVER use grasp_object with a $field variable — detect_field returns coordinates (center.x/y/z), NOT an object; $field has NO ".color" property
+        - NEVER emit grasp_object when the task says "place", "deposit", or "move to … and place" — the robot already holds the object; use place_object directly
         - Only use control_gripper directly for explicit open/close commands unrelated to picking
-        - ALWAYS use grasp_object_for_handoff (NOT grasp_object) when a multi-robot handoff is planned
-        - grasp_object_for_handoff grasps the far end of the object (away from the receiving robot), leaving the near end clear so both grippers never collide
-        - grasp_object_for_handoff REQUIRES both object_id AND receiving_robot_id — if either is omitted the operation will fail immediately
-        - NEVER use grasp_object_for_handoff for single-robot pick-and-place tasks
+        - Use grasp_object for both single-robot and multi-robot handoff source grasps
+        - NEVER use grasp_object for the receiving robot during a handoff — use receive_handoff
 
         === PLACE RULE (CRITICAL) ===
 
@@ -451,6 +459,11 @@ class CommandParser:
             USE_MOTION_LAYER if use_motion_layer is None else use_motion_layer
         )
 
+        # Perception-only commands have no physical motions — motion layer Stage 1
+        # would hallucinate a move plan and corrupt Stage 2 intent. Bypass it.
+        if motion_layer and self._is_perception_only_command(command_text):
+            motion_layer = False
+
         # Try LLM parsing first
         if use_llm:
             if motion_layer:
@@ -471,7 +484,11 @@ class CommandParser:
         return regex_result
 
     def parse_with_hint(
-        self, command_text: str, robot_id: str = "Robot1", hint: str = ""
+        self,
+        command_text: str,
+        robot_id: str = "Robot1",
+        hint: str = "",
+        use_motion_layer: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
         Re-parse a command with a Reflexion hint injected into the prompt.
@@ -480,17 +497,42 @@ class CommandParser:
         typically contains the previous error message and recovery suggestions
         so the LLM can correct its parameter choices.
 
+        When use_motion_layer is True (or USE_MOTION_LAYER config is True), Stage 1
+        motion decomposition runs first and the resulting motion strings are prepended
+        to the command before the hinted Stage 2 parse — keeping Reflexion retries
+        consistent with the main parse() path.
+
         Args:
             command_text: Original natural language command.
             robot_id: Default robot for the command.
             hint: Reflexion context string (error + suggestions).
+            use_motion_layer: Enable RT-H two-stage decomposition on retry.
+                Defaults to the USE_MOTION_LAYER config value.
 
         Returns:
             Same structure as parse().
         """
+        motion_layer = USE_MOTION_LAYER if use_motion_layer is None else use_motion_layer
+
+        # Stage 1: decompose to motions if enabled (same as main parse() path)
+        effective_command = command_text
+        if motion_layer:
+            motions = self._decompose_to_motions(command_text, robot_id)
+            if motions:
+                motion_context = "\n".join(
+                    f"  {i + 1}. {m}" for i, m in enumerate(motions)
+                )
+                effective_command = (
+                    f"{command_text}\n\n"
+                    f"Motion plan (use as chain-of-thought guidance):\n{motion_context}"
+                )
+                logger.info(
+                    f"Reflexion retry: motion layer Stage 1 produced {len(motions)} steps"
+                )
+
         spatial_section = self._get_spatial_context(robot_id)
         prompt = self._prompt_builder.build(
-            command_text,
+            effective_command,
             robot_id,
             spatial_section=spatial_section,
             hint=hint,
@@ -517,6 +559,18 @@ class CommandParser:
                 "commands": [],
                 "error": f"Reflexion LLM error: {e}",
             }
+
+    _PERCEPTION_ONLY_PATTERNS = re.compile(
+        r"\b(analyze\s+(the\s+)?scene|describe\s+(the\s+)?(scene|workspace|environment)|"
+        r"what\s+(do\s+you\s+see|objects?\s+are|can\s+you\s+see|'?s\s+on\s+the\s+table)|"
+        r"(scan|inspect|observe|survey|look\s+at)\s+(the\s+)?(scene|workspace)|"
+        r"what\s+is\s+in\s+(the\s+)?scene)\b",
+        re.IGNORECASE,
+    )
+
+    def _is_perception_only_command(self, command_text: str) -> bool:
+        """Return True if the command is purely perceptual with no physical motion intent."""
+        return bool(self._PERCEPTION_ONLY_PATTERNS.search(command_text))
 
     def _decompose_to_motions(self, command_text: str, robot_id: str) -> List[str]:
         """
@@ -767,14 +821,18 @@ class CommandParser:
         except Exception as e:
             raise
 
-    def _get_spatial_context(self, robot_id: str) -> str:
+    def _get_spatial_context(self, robot_id: str, target: Optional[tuple] = None) -> str:
         """
         Retrieve formatted spatial context from the Knowledge Graph for the given robot.
 
-        Queries reachable objects and nearby robots to enrich the LLM prompt with live spatial awareness. Returns an empty string if the KG is disabled, unavailable, or raises any exception (graceful degrade).
+        Queries reachable objects, nearby robots, handoff candidates, and path
+        blocking to enrich the LLM prompt with live spatial awareness. Returns an
+        empty string if the KG is disabled, unavailable, or raises any exception
+        (graceful degrade).
 
         Args:
             robot_id: The robot whose spatial context to retrieve.
+            target: Optional (x, y, z) target position for path-blocking check.
 
         Returns:
             A formatted spatial context block string, or empty string if unavailable.
@@ -818,6 +876,31 @@ class CommandParser:
                 lines.append("Nearby robots:")
                 for r in nearby:
                     lines.append(f"  - {r['robot_id']} ({r['distance']:.2f}m)")
+
+            # Handoff candidates for each reachable object × every other robot
+            if reachable:
+                all_robots = qe._graph.get_all_nodes(node_type="robot")
+                other_robots = [r for r in all_robots if r != robot_id]
+                for other in other_robots:
+                    for obj in reachable:
+                        candidates = qe.get_handoff_candidates(
+                            robot_id, other, obj["object_id"]
+                        )
+                        if candidates:
+                            c = candidates[0]
+                            pos = c["position"]
+                            lines.append(
+                                f"Handoff {obj['object_id']} with {other}: "
+                                f"pos=({pos[0]:.2f},{pos[1]:.2f},{pos[2]:.2f}) "
+                                f"r1={c['r1_distance']:.2f}m r2={c['r2_distance']:.2f}m"
+                            )
+
+            # Path blocking check when a target coordinate is known
+            if target is not None:
+                blocked = qe.is_path_blocked(robot_id, target)
+                lines.append(
+                    f"Path to target: {'BLOCKED' if blocked else 'clear'}"
+                )
 
             if len(lines) == 1:
                 return ""  # Only header, no data
@@ -1110,14 +1193,14 @@ class CommandParser:
                 )
                 continue
 
-            # Parse simple object detection (2D pixel coordinates)
+            # Parse simple object detection — route to stereo detection (3D)
             if re.search(
                 r"detect\s+(?:objects?|cubes?)|find\s+(?:objects?|cubes?)|look\s+for|scan\s+for|locate\s+(?:objects?|cubes?)",
                 part,
             ):
                 commands.append(
                     {
-                        "operation": "detect_objects",
+                        "operation": "detect_object_stereo",
                         "params": {"robot_id": robot_id},
                     }
                 )
@@ -1193,32 +1276,6 @@ class CommandParser:
                 )
                 continue
 
-            # Parse move_from_a_to_b (e.g. "move Robot1 from X Y Z to X Y Z")
-            move_ab_match = re.search(
-                r"move\s+(?:\w+\s+)?from\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+to\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)",
-                part,
-            )
-            if move_ab_match:
-                g = move_ab_match.groups()
-                commands.append(
-                    {
-                        "operation": "move_from_a_to_b",
-                        "params": {
-                            "robot_id": robot_id,
-                            "point_a": {
-                                "x": float(g[0]),
-                                "y": float(g[1]),
-                                "z": float(g[2]),
-                            },
-                            "point_b": {
-                                "x": float(g[3]),
-                                "y": float(g[4]),
-                                "z": float(g[5]),
-                            },
-                        },
-                    }
-                )
-                continue
 
         if commands:
             return {"success": True, "commands": commands, "error": None}
@@ -1238,7 +1295,6 @@ class CommandParser:
             "open gripper / release / drop - Open the gripper",
             "check status / get status - Get robot status",
             "return to start / go home / home position - Return to start position",
-            "detect objects / find cubes / scan for - Detect objects (2D)",
             "detect with depth / find 3d positions / detect stereo - Detect objects with 3D positions",
             "Commands can be chained with 'and', 'then', 'after that', or commas",
         ]

@@ -79,6 +79,12 @@ class CommandBroadcaster:
         self._queue_lock = threading.Lock()
         self._max_queue_size = MAX_RESULT_QUEUE_SIZE
 
+        # Tracks request IDs that Python originated; kept for _LATE_ARRIVAL_TTL seconds
+        # after queue removal so put_completion can distinguish late arrivals from
+        # Unity-initiated messages that never had a queue.
+        self._recently_removed: Dict[int, float] = {}
+        self._LATE_ARRIVAL_TTL = 30.0  # seconds
+
         # Thread-safe command tracking
         self._active_commands: Dict[int, Dict[str, Any]] = {}
         self._active_commands_lock = threading.RLock()
@@ -148,11 +154,18 @@ class CommandBroadcaster:
         """Create a queue to receive completion for a request."""
         with self._queue_lock:
             self._completion_queues[request_id] = Queue()
+            self._recently_removed.pop(request_id, None)
 
     def remove_completion_queue(self, request_id: int):
-        """Remove a completion queue."""
+        """Remove a completion queue, recording it as a known Python-originated request."""
         with self._queue_lock:
-            self._completion_queues.pop(request_id, None)
+            if self._completion_queues.pop(request_id, None) is not None:
+                self._recently_removed[request_id] = time.time()
+            # Prune stale entries to bound memory usage.
+            cutoff = time.time() - self._LATE_ARRIVAL_TTL
+            stale = [rid for rid, ts in self._recently_removed.items() if ts < cutoff]
+            for rid in stale:
+                del self._recently_removed[rid]
 
     def put_completion(self, request_id: int, completion: Dict[str, Any]):
         """Put a completion result into the appropriate queue."""
@@ -160,9 +173,13 @@ class CommandBroadcaster:
             if request_id in self._completion_queues:
                 self._completion_queues[request_id].put(completion)
                 logger.debug(f"Completion queued for request {request_id}")
-            else:
+            elif request_id in self._recently_removed:
                 logger.warning(
-                    f"No queue for request {request_id} (late arrival or Unity-initiated)"
+                    f"Late completion for request {request_id} (queue already removed — operation timed out or returned early)"
+                )
+            else:
+                logger.debug(
+                    f"Ignoring Unity-initiated message for request {request_id} (no queue expected)"
                 )
 
     def get_completion(

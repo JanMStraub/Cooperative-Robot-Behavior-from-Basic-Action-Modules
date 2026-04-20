@@ -3,14 +3,15 @@
 Unit tests for WorkflowPatterns.py — HANDOFF_PATTERN step sequence.
 
 Verifies:
-- workflow_handoff_001 uses grasp_object_for_handoff (not move+gripper) for source robot
+- workflow_handoff_001 uses grasp_object (not move+gripper) for source robot
 - workflow_handoff_001 uses receive_handoff for target robot (orient + offset-move + close in one op)
-- Step ordering is correct: detect → grasp_for_handoff → signal → receive_handoff → release
+- Step ordering is correct: detect → grasp_object → signal → receive_handoff → release
 """
 
 from operations.WorkflowPatterns import HANDOFF_PATTERN
 
 RECEIVE_OP_ID = "coordination_receive_handoff_001"
+GRASP_OP_ID = "manipulation_grasp_object_001"
 
 
 class TestHandoffPatternSteps:
@@ -25,14 +26,14 @@ class TestHandoffPatternSteps:
         assert HANDOFF_PATTERN.pattern_id == "workflow_handoff_001"
 
     def test_detection_step_present(self):
-        """Stereo detection must precede grasp (required precondition for grasp_object_for_handoff)."""
+        """Stereo detection must precede grasp."""
         ids = self._step_ids()
         assert "perception_stereo_detect_001" in ids
 
-    def test_grasp_for_handoff_step_present(self):
-        """grasp_object_for_handoff must be used instead of plain move+gripper for source robot."""
+    def test_grasp_step_present(self):
+        """grasp_object must be used instead of plain move+gripper for source robot."""
         ids = self._step_ids()
-        assert "coordination_grasp_object_for_handoff_001" in ids
+        assert GRASP_OP_ID in ids
 
     def test_receive_handoff_step_present(self):
         """receive_handoff must be used for the target robot instead of separate orient+move+close."""
@@ -70,29 +71,25 @@ class TestHandoffPatternSteps:
         assert "motion_adjust_orientation_003" not in self._step_ids()
 
     def test_step_order_detect_before_grasp(self):
-        """Detection must precede grasp_for_handoff."""
+        """Detection must precede grasp_object."""
         ids = self._step_ids()
-        assert ids.index("perception_stereo_detect_001") < ids.index(
-            "coordination_grasp_object_for_handoff_001"
-        )
+        assert ids.index("perception_stereo_detect_001") < ids.index(GRASP_OP_ID)
 
     def test_step_order_grasp_before_signal(self):
-        """grasp_for_handoff must precede the 'object_gripped' signal."""
+        """grasp_object must precede the 'object_gripped' signal."""
         gripped_signal_idx = next(
             i
             for i, s in enumerate(HANDOFF_PATTERN.steps)
             if s.operation_id == "sync_signal_001"
             and s.parameter_bindings.get("event_name") == "object_gripped"
         )
-        grasp_idx = self._step_ids().index("coordination_grasp_object_for_handoff_001")
+        grasp_idx = self._step_ids().index(GRASP_OP_ID)
         assert grasp_idx < gripped_signal_idx
 
     def test_step_order_grasp_before_receive(self):
-        """grasp_for_handoff must come before receive_handoff."""
+        """grasp_object must come before receive_handoff."""
         ids = self._step_ids()
-        assert ids.index("coordination_grasp_object_for_handoff_001") < ids.index(
-            RECEIVE_OP_ID
-        )
+        assert ids.index(GRASP_OP_ID) < ids.index(RECEIVE_OP_ID)
 
     def test_step_order_receive_before_release(self):
         """receive_handoff must come before the source robot releases."""

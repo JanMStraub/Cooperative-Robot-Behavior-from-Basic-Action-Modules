@@ -16,9 +16,6 @@ import os
 DEFAULT_HOST = os.environ.get("ACRL_HOST", "127.0.0.1")
 
 # Port assignments (can be overridden via environment variables)
-STREAMING_SERVER_PORT = int(
-    os.environ.get("STREAMING_SERVER_PORT", "5005")
-)  # Receives images from Unity
 STEREO_DETECTION_PORT = int(
     os.environ.get("STEREO_DETECTION_PORT", "5006")
 )  # Receives stereo image pairs
@@ -81,18 +78,17 @@ MAX_RESULT_QUEUE_SIZE = int(os.environ.get("MAX_RESULT_QUEUE_SIZE", "100"))
 # Monitoring Intervals (seconds)
 # ============================================================================
 
-SERVER_INIT_WAIT_TIME = float(os.environ.get("SERVER_INIT_WAIT_TIME", "2.0"))
 LLM_REQUEST_TIMEOUT = float(os.environ.get("LLM_REQUEST_TIMEOUT", "90.0"))
 WORLDSTATE_CHECK_INTERVAL = float(os.environ.get("WORLDSTATE_CHECK_INTERVAL", "5.0"))
 
-# Reflexion retry: how many times SequenceExecutor re-parses a failed command
-# with error context injected into the LLM prompt before giving up.
+# Reflexion retry: re-parse failed commands with error context injected into the LLM prompt.
+REFLEXION_ENABLED = os.environ.get("REFLEXION_ENABLED", "true").lower() in ("true", "1", "yes")
 REFLEXION_MAX_RETRIES = int(os.environ.get("REFLEXION_MAX_RETRIES", "2"))
 
 # Intermediate motion layer (RT-H style): when True, CommandParser sends the
 # command to the LLM twice — Stage 1 decomposes to motion strings, Stage 2
 # maps those to operations. Disabled by default to preserve existing behaviour.
-USE_MOTION_LAYER = os.environ.get("PARSER_USE_MOTION_LAYER", "false").lower() in (
+USE_MOTION_LAYER = os.environ.get("PARSER_USE_MOTION_LAYER", "true").lower() in (
     "true",
     "1",
     "yes",

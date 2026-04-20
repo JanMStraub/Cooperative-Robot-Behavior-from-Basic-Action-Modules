@@ -45,7 +45,7 @@ kill_existing_servers() {
 
     # Wait until the key server ports are actually free (avoids EADDRINUSE on fast restarts)
     echo "Waiting for processes to shut down..."
-    local ports=(5005 5006 5007 5008 5009 5010)
+    local ports=(5006 5007 5008 5009 5010)
     local timeout=15
     for port in "${ports[@]}"; do
         for (( i=0; i<timeout; i++ )); do
@@ -121,7 +121,7 @@ start_controller() {
     export PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}"
 
     # Run RobotController - it starts all required servers internally:
-    # - ImageServer (ports 5005/5006) - receives single and stereo images
+    # - ImageServer (port 5006) - receives stereo images
     # - CommandServer (port 5007) - bidirectional commands and completions
     # - SequenceServer (port 5008) - sequence orchestration with RAG
     cd "$SCRIPT_DIR"

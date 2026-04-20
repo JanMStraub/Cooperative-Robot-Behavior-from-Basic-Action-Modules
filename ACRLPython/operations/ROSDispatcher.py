@@ -125,6 +125,23 @@ def execute_with_ros_fallback(
                 if result
                 else "No response from ROS bridge"
             )
+
+            # Wrist-singularity / unreachable-goal: MoveIt returns error code 99999.
+            # ROS_ALLOW_TCP_FALLBACK_ON_99999 lets operators allow TCP fallback for
+            # this specific error even in strict (non-hybrid) mode.
+            if "99999" in error_msg or "UNKNOWN_ERROR_99999" in error_msg:
+                try:
+                    from config.ROS import ROS_ALLOW_TCP_FALLBACK_ON_99999
+                    allow_99999_fallback = ROS_ALLOW_TCP_FALLBACK_ON_99999
+                except ImportError:
+                    allow_99999_fallback = False
+                if allow_99999_fallback:
+                    logger.warning(
+                        "MoveIt UNKNOWN_ERROR_99999 (singularity/unreachable), "
+                        "falling back to TCP (ROS_ALLOW_TCP_FALLBACK_ON_99999=True)"
+                    )
+                    return tcp_func()
+
             if _get_control_mode() == "hybrid":
                 logger.warning("ROS path failed (%s), falling back to TCP", error_msg)
                 return tcp_func()

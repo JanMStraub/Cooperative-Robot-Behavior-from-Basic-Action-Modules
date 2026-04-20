@@ -34,7 +34,6 @@ if "--web" in sys.argv:
 try:
     from config.Servers import (
         DEFAULT_HOST,
-        STREAMING_SERVER_PORT,
         STEREO_DETECTION_PORT,
         COMMAND_SERVER_PORT,
         SEQUENCE_SERVER_PORT,
@@ -43,6 +42,7 @@ try:
         DEFAULT_LMSTUDIO_MODEL,
         LMSTUDIO_BASE_URL,
         PERCEPTION_ONLY_MODE,
+        REFLEXION_ENABLED
     )
     from config.Vision import (
         ENABLE_VISION_STREAMING,
@@ -65,7 +65,6 @@ try:
 except ImportError:
     from ..config.Servers import (
         DEFAULT_HOST,
-        STREAMING_SERVER_PORT,
         STEREO_DETECTION_PORT,
         COMMAND_SERVER_PORT,
         SEQUENCE_SERVER_PORT,
@@ -74,6 +73,7 @@ except ImportError:
         DEFAULT_LMSTUDIO_MODEL,
         LMSTUDIO_BASE_URL,
         PERCEPTION_ONLY_MODE,
+        REFLEXION_ENABLED
     )
     from ..config.Vision import (
         ENABLE_VISION_STREAMING,
@@ -129,7 +129,6 @@ class RobotController:
     def __init__(
         self,
         host: str = DEFAULT_HOST,
-        single_port: int = STREAMING_SERVER_PORT,
         stereo_port: int = STEREO_DETECTION_PORT,
         command_port: int = COMMAND_SERVER_PORT,
         sequence_port: int = SEQUENCE_SERVER_PORT,
@@ -145,7 +144,6 @@ class RobotController:
 
         Args:
             host: Host to bind servers to
-            single_port: Port for single camera images
             stereo_port: Port for stereo image pairs
             command_port: Port for commands/results (bidirectional)
             sequence_port: Port for sequence execution
@@ -157,7 +155,6 @@ class RobotController:
             web_port: If set, start the Web UI server on this port
         """
         self._host = host
-        self._single_port = single_port
         self._stereo_port = stereo_port
         self._command_port = command_port
         self._sequence_port = sequence_port
@@ -265,6 +262,7 @@ class RobotController:
                             world_state.update_robot_state(robot_id, robot)
 
                     # Forward object states (position, dimensions, rotation) into WorldState
+                    from config.Vision import USE_UNITY_OBJECT_POSITIONS
                     objects = state_data.get("objects", [])
                     seen_object_ids = set()
                     for obj in objects:
@@ -272,19 +270,20 @@ class RobotController:
                         if not obj_id:
                             continue
                         seen_object_ids.add(obj_id)
-                        pos = world_state._to_position_tuple(obj.get("position"))
-                        if pos:
-                            dims = world_state._to_position_tuple(obj.get("dimensions"))
-                            rot = world_state._to_rotation_tuple(obj.get("rotation"))
-                            world_state.update_object_position(
-                                obj_id,
-                                pos,
-                                color=obj.get("color", "unknown"),
-                                object_type=obj.get("object_type", "unknown"),
-                                confidence=obj.get("confidence", 1.0),
-                                dimensions=dims,
-                                rotation=rot,
-                            )
+                        if USE_UNITY_OBJECT_POSITIONS:
+                            pos = world_state._to_position_tuple(obj.get("position"))
+                            if pos:
+                                dims = world_state._to_position_tuple(obj.get("dimensions"))
+                                rot = world_state._to_rotation_tuple(obj.get("rotation"))
+                                world_state.update_object_position(
+                                    obj_id,
+                                    pos,
+                                    color=obj.get("color", "unknown"),
+                                    object_type=obj.get("object_type", "unknown"),
+                                    confidence=obj.get("confidence", 1.0),
+                                    dimensions=dims,
+                                    rotation=rot,
+                                )
 
                     # Trigger confidence decay based on currently visible objects
                     world_state.decay_object_confidence(seen_object_ids)
@@ -401,12 +400,9 @@ class RobotController:
             logger.warning("RobotController already running")
             return
 
-        # Start ImageServer (ports 5005, 5006)
-        logger.info(
-            f"Starting ImageServer (single: {self._single_port}, stereo: {self._stereo_port})"
-        )
+        # Start ImageServer (port 5006)
+        logger.info(f"Starting ImageServer (stereo: {self._stereo_port})")
         self._image_server = run_image_server_background(
-            single_port=self._single_port,
             stereo_port=self._stereo_port,
             host=self._host,
         )
@@ -579,7 +575,6 @@ class RobotController:
         logger.info("RobotController started successfully!")
         logger.info("=" * 60)
         logger.info(f"  Environment:            {self._env}")
-        logger.info(f"  Image Server (single):  {self._host}:{self._single_port}")
         logger.info(f"  Image Server (stereo):  {self._host}:{self._stereo_port}")
         logger.info(f"  Command Server:         {self._host}:{self._command_port}")
         logger.info(f"  Sequence Server:        {self._host}:{self._sequence_port}")
@@ -605,6 +600,10 @@ class RobotController:
             logger.info(f"  Knowledge Graph:        Enabled")
         else:
             logger.info(f"  Knowledge Graph:        Disabled")
+        if REFLEXION_ENABLED:
+            logger.info(f"  Reflexion:              Enabled")
+        else:
+            logger.info(f"  Reflexion:              Disabled")
         logger.info("=" * 60)
 
     def stop(self):

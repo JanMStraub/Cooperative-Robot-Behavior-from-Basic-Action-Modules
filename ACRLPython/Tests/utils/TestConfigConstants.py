@@ -50,7 +50,6 @@ PERFORMANCE_TEST_ITERATIONS = 10000  # Iterations for performance benchmarks
 # ============================================================================
 
 # Server ports (should match production config)
-IMAGE_SERVER_PORT = 5005
 STEREO_SERVER_PORT = 5006
 COMMAND_SERVER_PORT = 5007
 SEQUENCE_SERVER_PORT = 5008

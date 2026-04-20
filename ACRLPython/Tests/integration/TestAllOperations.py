@@ -3,7 +3,7 @@
 All Operations Integration Test
 ================================
 
-Comprehensive integration test that exercises all 30 registered operations
+Comprehensive integration test that exercises all 23 registered operations
 against a live Unity + Python backend via the BackendClient → SequenceServer
 (port 5008) path.
 
@@ -29,25 +29,23 @@ Prerequisites
 
 Coverage
 --------
-All 31 operations registered in operations/Registry.py (plus variable chaining):
+All 23 operations registered in operations/Registry.py (plus variable chaining):
 
-    Level 1-2 Basic (18):
-        Navigation:   move_to_coordinate, move_from_a_to_b,
-                      adjust_end_effector_orientation, return_to_start
+    Level 1-2 Basic (16):
+        Navigation:   move_to_coordinate, adjust_end_effector_orientation,
+                      return_to_start, pick_object_at_coordinate
         Gripper:      control_gripper, release_object, place_object
-        Perception:   detect_objects, detect_object_stereo, analyze_scene,
-                      estimate_distance_to_object, estimate_distance_between_objects
-        Field:        detect_field, get_field_center, detect_all_fields
+        Perception:   detect_object_stereo, analyze_scene, generate_point_cloud
+        Field:        detect_field, detect_all_fields
         Status:       check_robot_status
         Sync:         wait (duration), signal + wait_for_signal (paired, threaded)
 
-    Level 3 Intermediate (5):
-        grasp_object, align_object,
-        move_relative_to_object, move_between_objects, follow_path
-        [move_to_region also tested under SpatialOps]
+    Level 3 Intermediate (2):
+        grasp_object, move_relative_to_object
 
-    Level 4 Multi-Robot (3):
-        detect_other_robot, mirror_movement, grasp_object_for_handoff
+    Level 4 Multi-Robot (4):
+        detect_other_robot, mirror_movement, orient_gripper_for_handoff_receive,
+        receive_handoff
 
     Level 5 Collaborative (1):
         stabilize_object
@@ -366,18 +364,6 @@ class TestNavigationOps:
             result.get("success") is True
         ), f"move_to_coordinate Robot2 failed: {result.get('error')}"
 
-    def test_move_from_a_to_b(self):
-        """move_from_a_to_b moves Robot1 between two left-workspace waypoints."""
-        result = _cmd(
-            "move Robot1 from -0.25 0.30 0.10 to -0.28 0.25 0.12",
-            robot_id="Robot1",
-            timeout=240.0,
-            request_id=402,
-        )
-        assert (
-            result.get("success") is True
-        ), f"move_from_a_to_b failed: {result.get('error')}"
-
     def test_adjust_end_effector_orientation(self):
         """adjust_end_effector_orientation changes Robot1 end-effector roll/pitch/yaw.
 
@@ -416,26 +402,7 @@ class TestNavigationOps:
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not BACKEND_AVAILABLE, reason=SKIP_REASON)
 class TestPerceptionOps:
-    """Tests for detect_objects, detect_object_stereo, analyze_scene,
-    estimate_distance_to_object, estimate_distance_between_objects (Level 1-2)."""
-
-    def test_detect_objects(self):
-        """detect_objects returns a list of detected objects or a structured error.
-
-        Uses camera_id="main" (the ImageServer key for the single-camera feed on
-        port 5005). Accepts a structured NO_IMAGE error if Unity has not yet sent
-        a frame — the operation path itself is what's under test.
-        """
-        result = _cmd(
-            "detect objects for Robot1",
-            robot_id="Robot1",
-            camera_id="main",
-            timeout=240.0,
-            request_id=500,
-        )
-        assert (
-            result.get("success") is True or result.get("error") is not None
-        ), "detect_objects returned an unexpected response"
+    """Tests for detect_object_stereo, analyze_scene (Level 1-2)."""
 
     def test_detect_object_stereo(self):
         """detect_object_stereo returns 3D world-space coordinates via stereo camera."""
@@ -481,31 +448,6 @@ class TestPerceptionOps:
             pytest.skip(f"LM Studio vision model unavailable: {error}")
         assert result.get("success") is True, f"analyze_scene failed: {error}"
 
-    def test_estimate_distance_to_object(self):
-        """estimate_distance_to_object returns distance from Robot1 to a named object."""
-        result = _cmd(
-            "estimate distance from Robot1 to redCube",
-            robot_id="Robot1",
-            timeout=240.0,
-            request_id=503,
-        )
-        # Distance estimation may fail gracefully if object is not in scene.
-        assert (
-            result.get("success") is True or result.get("error") is not None
-        ), "estimate_distance_to_object returned an unexpected response"
-
-    def test_estimate_distance_between_objects(self):
-        """estimate_distance_between_objects returns distance between two objects."""
-        result = _cmd(
-            "estimate distance between redCube and blueCube for Robot1",
-            robot_id="Robot1",
-            timeout=240.0,
-            request_id=504,
-        )
-        assert (
-            result.get("success") is True or result.get("error") is not None
-        ), "estimate_distance_between_objects returned an unexpected response"
-
 
 # ---------------------------------------------------------------------------
 # Field Operations (timeout: 30 s, camera_id="TableStereoCamera")
@@ -516,7 +458,7 @@ class TestPerceptionOps:
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not BACKEND_AVAILABLE, reason=SKIP_REASON)
 class TestFieldOps:
-    """Tests for detect_field, get_field_center, detect_all_fields (Level 1-2).
+    """Tests for detect_field, detect_all_fields (Level 1-2).
 
     Field operations use YOLO-based label detection on stereo images.  They
     always require camera_id="TableStereoCamera" (not the default main camera).
@@ -534,19 +476,6 @@ class TestFieldOps:
         assert (
             result.get("success") is True or result.get("error") is not None
         ), "detect_field returned an unexpected response"
-
-    def test_get_field_center(self):
-        """get_field_center returns 3D centre coordinates of a detected field."""
-        result = _cmd(
-            "get field center for Robot1",
-            robot_id="Robot1",
-            camera_id="TableStereoCamera",
-            timeout=240.0,
-            request_id=601,
-        )
-        assert (
-            result.get("success") is True or result.get("error") is not None
-        ), "get_field_center returned an unexpected response"
 
     def test_detect_all_fields(self):
         """detect_all_fields returns all labelled workspace fields in the stereo view."""
@@ -571,8 +500,7 @@ class TestFieldOps:
 @pytest.mark.requires_unity
 @pytest.mark.skipif(not BACKEND_AVAILABLE, reason=SKIP_REASON)
 class TestSpatialOps:
-    """Tests for move_relative_to_object, move_between_objects, move_to_region,
-    and follow_path (Level 2-3)."""
+    """Tests for move_relative_to_object (Level 3)."""
 
     @pytest.fixture(autouse=True)
     def reset_before_each(self):
@@ -590,42 +518,6 @@ class TestSpatialOps:
         assert (
             result.get("success") is True or result.get("error") is not None
         ), "move_relative_to_object returned an unexpected response"
-
-    def test_move_between_objects(self):
-        """move_between_objects moves Robot1 to the midpoint between two objects."""
-        result = _cmd(
-            "move Robot1 between redCube and blueCube",
-            robot_id="Robot1",
-            timeout=240.0,
-            request_id=701,
-        )
-        assert (
-            result.get("success") is True or result.get("error") is not None
-        ), "move_between_objects returned an unexpected response"
-
-    def test_move_to_region(self):
-        """move_to_region moves Robot1 to its allocated workspace region centre."""
-        result = _cmd(
-            "move Robot1 to region left_workspace",
-            robot_id="Robot1",
-            timeout=240.0,
-            request_id=702,
-        )
-        assert (
-            result.get("success") is True or result.get("error") is not None
-        ), "move_to_region returned an unexpected response"
-
-    def test_follow_path(self):
-        """follow_path moves Robot1 through a sequence of waypoints."""
-        result = _cmd(
-            "follow path for Robot1: -0.25 0.30 0.10, -0.28 0.25 0.12, -0.22 0.28 0.08",
-            robot_id="Robot1",
-            timeout=240.0,
-            request_id=703,
-        )
-        assert (
-            result.get("success") is True or result.get("error") is not None
-        ), "follow_path returned an unexpected response"
 
 
 # ---------------------------------------------------------------------------
@@ -708,18 +600,6 @@ class TestGraspOps:
             result.get("success") is True or result.get("error") is not None
         ), "place_object returned an unexpected response"
 
-    def test_align_object(self):
-        """align_object aligns Robot2's end effector to match redCube's orientation."""
-        result = _cmd(
-            "align Robot2 to object redCube",
-            robot_id="Robot2",
-            timeout=240.0,
-            request_id=801,
-        )
-        assert (
-            result.get("success") is True or result.get("error") is not None
-        ), "align_object returned an unexpected response"
-
 
 # ---------------------------------------------------------------------------
 # Multi-Robot Operations (timeout: 120 s, negotiation-aware)
@@ -731,7 +611,7 @@ class TestGraspOps:
 @pytest.mark.multi_robot
 @pytest.mark.skipif(not BACKEND_AVAILABLE, reason=SKIP_REASON)
 class TestMultiRobotOps:
-    """Tests for detect_other_robot, mirror_movement, grasp_object_for_handoff (Level 4).
+    """Tests for detect_other_robot, mirror_movement, grasp_object (Level 4).
 
     These tests use 120 s timeouts because the LLM-based negotiation protocol
     (NegotiationHub → RobotLLMAgent) may run up to 3 rounds of Analysis →
@@ -774,8 +654,8 @@ class TestMultiRobotOps:
             result.get("success") is True or result.get("error") is not None
         ), "mirror_movement returned an unexpected response"
 
-    def test_grasp_object_for_handoff(self):
-        """grasp_object_for_handoff grasps redCube with Robot2 for handoff to Robot1.
+    def test_grasp_object_handoff(self):
+        """grasp_object grasps redCube with Robot2 for handoff to Robot1.
 
         redCube is in Robot2's workspace, so Robot2 initiates the grasp and
         hands off to Robot1.
@@ -788,7 +668,7 @@ class TestMultiRobotOps:
         )
         assert (
             result.get("success") is True or result.get("error") is not None
-        ), "grasp_object_for_handoff returned an unexpected response"
+        ), "grasp_object returned an unexpected response"
 
 
 # ---------------------------------------------------------------------------

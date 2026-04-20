@@ -2,81 +2,6 @@ export class Renderer {
     constructor() {
         this.meshCache = {};
         this.meshTimestamps = {};
-        this.initThreeJS();
-        // Initialize empty VGN debug views immediately
-        this.updateVGNDebug({});
-    }
-
-    initThreeJS() {
-        const container = document.getElementById('threejs-container');
-        if (!container) return;
-        
-        const width = container.clientWidth;
-        const height = container.clientHeight;
-
-        const isLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
-        this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(isLight ? 0xf0f2f5 : 0x0a0a0a);
-
-        this.camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
-        this.camera.position.set(0, 2, 3);
-
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        this.renderer.setSize(width, height);
-        this.renderer.setPixelRatio(window.devicePixelRatio);
-        this.renderer.shadowMap.enabled = true;
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        container.appendChild(this.renderer.domElement);
-
-        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
-        this.controls.enableDamping = true;
-        this.controls.dampingFactor = 0.05;
-
-        const gridHelper = new THREE.GridHelper(5, 20, 0x4361ee, isLight ? 0xcccccc : 0x222222);
-        gridHelper.position.y = 0.01;
-        this.scene.add(gridHelper);
-
-        const groundGeo = new THREE.PlaneGeometry(10, 10);
-        const groundMat = new THREE.MeshStandardMaterial({ 
-            color: isLight ? 0xf0f2f5 : 0x111216, 
-            roughness: 0.8,
-            metalness: 0.2
-        });
-        const ground = new THREE.Mesh(groundGeo, groundMat);
-        ground.rotation.x = -Math.PI / 2;
-        ground.receiveShadow = true;
-        this.scene.add(ground);
-
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-        this.scene.add(ambientLight);
-
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        dirLight.position.set(5, 8, 5);
-        dirLight.castShadow = true;
-        dirLight.shadow.mapSize.width = 1024;
-        dirLight.shadow.mapSize.height = 1024;
-        dirLight.shadow.camera.near = 0.5;
-        dirLight.shadow.camera.far = 15;
-        this.scene.add(dirLight);
-
-        const fillLight = new THREE.DirectionalLight(0x90b0d0, 0.3);
-        fillLight.position.set(-5, 3, -5);
-        this.scene.add(fillLight);
-
-        window.addEventListener('resize', () => {
-            const newWidth = container.clientWidth;
-            const newHeight = container.clientHeight;
-            this.renderer.setSize(newWidth, newHeight);
-            this.camera.aspect = newWidth / newHeight;
-            this.camera.updateProjectionMatrix();
-        });
-
-        const animate = () => {
-            requestAnimationFrame(animate);
-            this.controls.update();
-            this.renderer.render(this.scene, this.camera);
-        };
-        animate();
     }
 
     updateWorldState(data) {
@@ -201,135 +126,6 @@ export class Renderer {
         }
     }
 
-    updateOrCreateMesh(id, data, type) {
-        let mesh = this.meshCache[id];
-
-        if (!mesh) {
-            if (type === 'robot') {
-                mesh = new THREE.Group();
-
-                // ---- Base disc ----
-                const baseGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.04, 32);
-                const baseMat = new THREE.MeshStandardMaterial({ color: 0x222244, roughness: 0.5, metalness: 0.6 });
-                const base = new THREE.Mesh(baseGeo, baseMat);
-                base.position.y = 0.02;
-                base.castShadow = true;
-                mesh.add(base);
-
-                // ---- Arm column ----
-                const armGeo = new THREE.CylinderGeometry(0.04, 0.07, 0.28, 16);
-                const armMat = new THREE.MeshStandardMaterial({ color: 0xff6a00, roughness: 0.4, metalness: 0.5 });
-                const arm = new THREE.Mesh(armGeo, armMat);
-                arm.position.y = 0.18;
-                arm.castShadow = true;
-                mesh.add(arm);
-
-                // ---- Shoulder joint ----
-                const shoulderGeo = new THREE.SphereGeometry(0.055, 16, 16);
-                const jointMat = new THREE.MeshStandardMaterial({ color: 0x333355, roughness: 0.5, metalness: 0.7 });
-                const shoulder = new THREE.Mesh(shoulderGeo, jointMat);
-                shoulder.position.y = 0.33;
-                shoulder.castShadow = true;
-                mesh.add(shoulder);
-
-                // ---- Forearm ----
-                const forearmGeo = new THREE.CylinderGeometry(0.03, 0.04, 0.22, 16);
-                const forearm = new THREE.Mesh(forearmGeo, armMat.clone());
-                forearm.position.y = 0.46;
-                forearm.castShadow = true;
-                mesh.add(forearm);
-
-                // ---- End-effector ----
-                const eeGeo = new THREE.SphereGeometry(0.04, 16, 16);
-                const eeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.8 });
-                const ee = new THREE.Mesh(eeGeo, eeMat);
-                ee.position.y = 0.59;
-                ee.castShadow = true;
-                mesh.add(ee);
-                // Store reference for gripper state color change
-                mesh.userData.endEffector = ee;
-                mesh.userData.eeMat = eeMat;
-            } else {
-                let colorHex = 0xaaaaaa; // Default gray for unknown objects
-                let isTransparent = false;
-                let opacity = 1.0;
-
-                if (data.color) {
-                    const col = data.color.toLowerCase();
-                    if (col.includes('blue')) colorHex = 0x4361ee;
-                    else if (col.includes('green')) colorHex = 0x2ec4b6;
-                    else if (col.includes('yellow')) colorHex = 0xff9f1c;
-                    else if (col.includes('orange')) colorHex = 0xf58231;
-                    else if (col.includes('red')) colorHex = 0xe71d36;
-                    else if (col.includes('purple')) colorHex = 0x9b5de5;
-                    else if (col.includes('white')) colorHex = 0xffffff;
-                    else if (col.includes('black')) colorHex = 0x222222;
-                    else if (col.includes('field') || col.includes('table')) {
-                        colorHex = 0xcccccc;
-                        isTransparent = true;
-                        opacity = 0.3;
-                    }
-                }
-
-                if (data.object_id) {
-                    const id = data.object_id.toLowerCase();
-                    if (id.includes('table') || id.includes('workspace') || id.includes('floor') || id.includes('plane') || id.includes('base')) {
-                        isTransparent = true;
-                        opacity = 0.3;
-                    }
-                }
-
-                const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
-                const mat = new THREE.MeshStandardMaterial({ 
-                    color: colorHex,
-                    roughness: 0.7,
-                    metalness: 0.1,
-                    transparent: isTransparent,
-                    opacity: opacity
-                });
-                mesh = new THREE.Mesh(geo, mat);
-                mesh.castShadow = !isTransparent;
-                mesh.receiveShadow = true;
-            }
-
-            this.scene.add(mesh);
-            this.meshCache[id] = mesh;
-        }
-
-        if (data.position) {
-            if (Array.isArray(data.position) && data.position.length >= 3) {
-                mesh.position.set(data.position[0], data.position[1], data.position[2]);
-            } else if (data.position.x !== undefined && data.position.y !== undefined && data.position.z !== undefined) {
-                mesh.position.set(data.position.x, data.position.y, data.position.z);
-            }
-        }
-
-        if (data.rotation) {
-            if (Array.isArray(data.rotation) && data.rotation.length >= 3) {
-                mesh.rotation.set(
-                    THREE.MathUtils.degToRad(data.rotation[0]),
-                    THREE.MathUtils.degToRad(data.rotation[1]),
-                    THREE.MathUtils.degToRad(data.rotation[2])
-                );
-            } else if (data.rotation.x !== undefined && data.rotation.w !== undefined) {
-                mesh.quaternion.set(data.rotation.x, data.rotation.y, data.rotation.z, data.rotation.w);
-            }
-        }
-
-        if (type === 'object' && data.dimensions) {
-            if (Array.isArray(data.dimensions) && data.dimensions.length >= 3) {
-                mesh.scale.set(data.dimensions[0] / 0.1, data.dimensions[1] / 0.1, data.dimensions[2] / 0.1);
-            } else if (data.dimensions.x !== undefined) {
-                mesh.scale.set(data.dimensions.x / 0.1, data.dimensions.y / 0.1, data.dimensions.z / 0.1);
-            }
-        }
-
-        if (type === 'robot' && data.gripper_state !== undefined && mesh.userData.eeMat) {
-            // Visualize gripper state via end-effector color: green=open, red=closed
-            mesh.userData.eeMat.color.set(data.gripper_state === 'open' ? 0x2ec4b6 : 0xe71d36);
-        }
-    }
-
     /* ── VGN Debug Visualization ── */
     createMiniRenderer(containerId, scene, camera) {
         const container = document.getElementById(containerId);
@@ -346,15 +142,18 @@ export class Renderer {
         camera.position.set(0, 0.4, 0.6);
         controls.target.set(0, 0, 0);
 
-        const resizeOb = new ResizeObserver(() => {
+        const applySize = () => {
             const w = container.clientWidth;
             const h = container.clientHeight;
             if (w === 0 || h === 0) return;
             renderer.setSize(w, h);
             camera.aspect = w / h;
             camera.updateProjectionMatrix();
-        });
+        };
+        const resizeOb = new ResizeObserver(applySize);
         resizeOb.observe(container);
+        // Flush layout before reading clientWidth/clientHeight (container just became visible)
+        requestAnimationFrame(applySize);
 
         const animate = () => {
             requestAnimationFrame(animate);
@@ -366,168 +165,63 @@ export class Renderer {
         return { renderer, controls };
     }
 
-    updateVGNDebug(data) {
-        const pcContainer = document.getElementById('pointcloud-container');
-        const tsdfContainer = document.getElementById('tsdf-container');
-        
-        if (pcContainer) pcContainer.style.display = 'block';
-        if (tsdfContainer) tsdfContainer.style.display = 'block';
+    updateStereoPointCloud(data) {
+        const container = document.getElementById('stereo-pc-container');
+        if (!container) return;
+        container.style.display = 'block';
 
-        if (!this.vgnInited) {
-            this.vgnInited = true;
-            this.pcScene = new THREE.Scene();
-            this.tsdfScene = new THREE.Scene();
-
-            // Ground-plane grid (Y=0 = table surface)
-            this.pcScene.add(new THREE.GridHelper(1.0, 20, 0x444444, 0x222222));
-            this.tsdfScene.add(new THREE.GridHelper(1.0, 20, 0x444444, 0x222222));
-            this.pcScene.add(new THREE.AmbientLight(0xffffff, 1.0));
-            this.tsdfScene.add(new THREE.AmbientLight(0xffffff, 1.0));
-            
-            this.pcCamera = new THREE.PerspectiveCamera(45, 1, 0.01, 10);
-            this.tsdfCamera = new THREE.PerspectiveCamera(45, 1, 0.01, 10);
-            
-            this.createMiniRenderer('pointcloud-container', this.pcScene, this.pcCamera);
-            this.createMiniRenderer('tsdf-container', this.tsdfScene, this.tsdfCamera);
+        if (!this.stereoPCInited) {
+            this.stereoPCInited = true;
+            const placeholder = document.getElementById('stereo-pc-placeholder');
+            if (placeholder) placeholder.style.display = 'none';
+            this.stereoPCScene = new THREE.Scene();
+            this.stereoPCScene.add(new THREE.GridHelper(2.0, 40, 0x444444, 0x222222));
+            this.stereoPCScene.add(new THREE.AmbientLight(0xffffff, 1.0));
+            this.stereoPCCamera = new THREE.PerspectiveCamera(45, 1, 0.01, 20);
+            this.createMiniRenderer('stereo-pc-container', this.stereoPCScene, this.stereoPCCamera);
         }
 
-        // Data arrives in Unity LH world frame: +X right, +Y up, +Z forward.
-        // Three.js is RH +Y up, +Z toward viewer.
-        // Unity LH → Three.js RH: negate X (reflection across YZ plane).
-        const centroid = data.centroid || [0, 0, 0];
-        // Three.js centroid after Z-negate (Unity LH → Three.js RH)
-        const cx = centroid[0], cy = centroid[1], cz = -centroid[2];
+        if (!data.points_b64) return;
 
-        // ── Point cloud (Unity LH → Three.js RH: negate X, centre XZ, floor Y at 0) ──
-        if (data.pointcloud_b64) {
-            const binaryStr = atob(data.pointcloud_b64);
-            const bytes = new Uint8Array(binaryStr.length);
-            for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-            const floatArray = new Float32Array(bytes.buffer);
-            const n = floatArray.length / 3;
+        // Decode XYZ (float32) and RGB (uint8) binary blobs
+        const ptsBin = atob(data.points_b64);
+        const ptsBytes = new Uint8Array(ptsBin.length);
+        for (let i = 0; i < ptsBin.length; i++) ptsBytes[i] = ptsBin.charCodeAt(i);
+        const positions = new Float32Array(ptsBytes.buffer);
+        const n = positions.length / 3;
 
-            // Pass 1: negate Z (camera +Z-forward → Three.js RH +Z-toward-viewer),
-            // accumulate bounds for centering
-            let minY = Infinity, minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-            for (let i = 0; i < floatArray.length; i += 3) {
-                floatArray[i + 2] = -floatArray[i + 2];  // Z-forward → Z-toward-viewer
-                if (floatArray[i]     < minX) minX = floatArray[i];
-                if (floatArray[i]     > maxX) maxX = floatArray[i];
-                if (floatArray[i + 1] < minY) minY = floatArray[i + 1];
-                if (floatArray[i + 2] < minZ) minZ = floatArray[i + 2];
-                if (floatArray[i + 2] > maxZ) maxZ = floatArray[i + 2];
-            }
-            const midX = (minX + maxX) / 2;
-            const midZ = (minZ + maxZ) / 2;
-
-            // Pass 2: shift so table surface = Y=0, cloud centred at X=0, Z=0
-            for (let i = 0; i < floatArray.length; i += 3) {
-                floatArray[i]     -= midX;
-                floatArray[i + 1] -= minY;
-                floatArray[i + 2] -= midZ;
-            }
-
-            // Place camera at isometric-style angle: above and in front of scene
-            const sceneSpan = Math.max(maxX - minX, maxZ - minZ);
-            const camDist = sceneSpan * 0.9 + 0.4;
-            this.pcCamera.position.set(0, camDist * 0.8, camDist);
-            this.pcCamera.lookAt(0, 0, 0);
-
-            if (this.pcMesh) this.pcScene.remove(this.pcMesh);
-            const geo = new THREE.BufferGeometry();
-            geo.setAttribute('position', new THREE.BufferAttribute(floatArray, 3));
-            const mat = new THREE.PointsMaterial({ color: 0x2ec4b6, size: sceneSpan * 0.003 });
-            this.pcMesh = new THREE.Points(geo, mat);
-            this.pcScene.add(this.pcMesh);
+        let colors = null;
+        if (data.colors_b64) {
+            const clrBin = atob(data.colors_b64);
+            const clrBytes = new Uint8Array(clrBin.length);
+            for (let i = 0; i < clrBin.length; i++) clrBytes[i] = clrBin.charCodeAt(i);
+            // Normalise uint8 [0,255] → float [0,1] for Three.js vertex colors
+            colors = new Float32Array(clrBytes.length);
+            for (let i = 0; i < clrBytes.length; i++) colors[i] = clrBytes[i] / 255.0;
         }
 
-        // ── TSDF surface voxels ──
-        // The TSDF grid is in VGN-local frame (centred at origin, scaled, axis-swapped).
-        // Display it centred at origin — it is a standalone debug view, not world-overlaid.
-        // VGN axes: X=world_X, Y=-world_Z(depth), Z=world_Y(height).
-        // Map to Three.js (+Y up, +Z toward viewer): X→X, Z→Y, Y→Z.
-        if (data.tsdf_b64 && data.tsdf_size && data.tsdf_res) {
-            const res = data.tsdf_res;
-            const size = data.tsdf_size;
-            const voxSize = size / res;
+        // Points arrive in Unity LH world frame (+X right, +Y up, +Z forward).
+        // Three.js is RH +Y up: negate Z to convert.
+        for (let i = 2; i < positions.length; i += 3) positions[i] = -positions[i];
 
-            const binaryStr = atob(data.tsdf_b64);
-            const bytes = new Uint8Array(binaryStr.length);
-            for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-            // grid is (1, res, res, res) in C order — first res³ floats are the data
-            const sdfArray = new Float32Array(bytes.buffer);
+        // Compute centroid for camera framing
+        let cx = 0, cy = 0, cz = 0;
+        for (let i = 0; i < positions.length; i += 3) { cx += positions[i]; cy += positions[i+1]; cz += positions[i+2]; }
+        cx /= n; cy /= n; cz /= n;
+        const span = data.scene_span || 1.5;
+        this.stereoPCCamera.position.set(cx, cy + span * 0.6, cz + span * 1.2);
+        this.stereoPCCamera.lookAt(cx, cy, cz);
 
-            const surfacePoints = [];
-            for (let x = 0; x < res; x++) {
-                for (let y = 0; y < res; y++) {
-                    for (let z = 0; z < res; z++) {
-                        const idx = x * (res * res) + y * res + z;
-                        // val in [-1,1]: 0 = surface, ±1 = ±4 voxels away.
-                        // Show near-surface shell: |val| <= 1/4 (within 1 voxel of surface).
-                        const val = sdfArray[idx];
-                        if (Math.abs(val) <= 0.25) {
-                            // VGN-frame coords centred at origin
-                            const vx = (x + 0.5) * voxSize - size / 2.0;  // VGN_X
-                            const vy = (y + 0.5) * voxSize - size / 2.0;  // VGN_Y = -world_Z
-                            const vz = (z + 0.5) * voxSize - size / 2.0;  // VGN_Z = world_Y (up)
-                            // Three.js: X=vx, Y=vz (height), Z=vy (depth toward viewer)
-                            surfacePoints.push(vx, vz, vy);
-                        }
-                    }
-                }
-            }
-
-            if (this.tsdfMesh) this.tsdfScene.remove(this.tsdfMesh);
-            if (this.tsdfGrasps) {
-                this.tsdfScene.remove(this.tsdfGrasps);
-                this.tsdfGrasps = null;
-            }
-
-            console.log('[VGN] TSDF surface voxels:', surfacePoints.length / 3, '(|val|<=0.25)');
-
-            if (surfacePoints.length > 0) {
-                const geo = new THREE.BufferGeometry();
-                geo.setAttribute('position', new THREE.Float32BufferAttribute(surfacePoints, 3));
-                const mat = new THREE.PointsMaterial({ color: 0xff9f1c, size: voxSize * 1.5 });
-                this.tsdfMesh = new THREE.Points(geo, mat);
-                this.tsdfScene.add(this.tsdfMesh);
-
-                // Camera: isometric view of the 0.3m cube centred at origin
-                this.tsdfCamera.position.set(0.3, 0.35, 0.5);
-                this.tsdfCamera.lookAt(0, 0, 0);
-            }
-
-            // ── Grasp arrows in VGN frame ──
-            // Grasps from Python are in Unity LH world frame. We need them in VGN frame
-            // to overlay on the TSDF. Python sends vgn_grasps separately if available,
-            // otherwise fall back to showing grasps at VGN-frame positions via debug_info.
-            // For now: show world-frame grasps in the point cloud view only (see pcScene).
-        }
-
-        // ── Grasp arrows on point cloud view (Unity LH world → Three.js RH) ──
-        if (data.grasps && data.grasps.length > 0) {
-            if (this.pcGrasps) this.pcScene.remove(this.pcGrasps);
-            this.pcGrasps = new THREE.Group();
-
-            // Compute centroid of grasps for camera focus
-            let gcx = 0, gcy = 0, gcz = 0;
-            data.grasps.forEach(g => { gcx += g.position[0]; gcy += g.position[1]; gcz += g.position[2]; });
-            gcx /= data.grasps.length; gcy /= data.grasps.length; gcz /= data.grasps.length;
-
-            data.grasps.forEach(g => {
-                // Unity LH (X right, Y up, Z forward) → Three.js RH: negate X and Z
-                const pos = new THREE.Vector3(-g.position[0], g.position[1], -g.position[2]);
-                const ad = g.approach_direction || [0, 1, 0];
-                const dir = new THREE.Vector3(-ad[0], ad[1], -ad[2]).normalize();
-                const arrowHelper = new THREE.ArrowHelper(dir, pos, 0.05, 0xff3366, 0.015, 0.01);
-                this.pcGrasps.add(arrowHelper);
-            });
-            this.pcScene.add(this.pcGrasps);
-
-            // Point camera at grasp cluster
-            const span = 0.15;
-            this.pcCamera.position.set(-gcx, gcy + span, -gcz + span * 2);
-            this.pcCamera.lookAt(-gcx, gcy, -gcz);
-        }
+        if (this.stereoPCMesh) this.stereoPCScene.remove(this.stereoPCMesh);
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        if (colors) geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        const mat = new THREE.PointsMaterial({
+            size: Math.max(span * 0.002, 0.003),
+            vertexColors: !!colors,
+            color: colors ? 0xffffff : 0x2ec4b6,
+        });
+        this.stereoPCMesh = new THREE.Points(geo, mat);
+        this.stereoPCScene.add(this.stereoPCMesh);
     }
 }

@@ -134,11 +134,11 @@ class _VGNPatch:
         )
         self._patches.append(pc_patch.start())
 
-        # Mock detect_objects (optional detection, non-fatal if not provided)
+        # Mock YOLODetector used inline in GraspOperations (optional, non-fatal if not provided)
         if self.detect_result is not None:
             det_patch = patch(
-                "operations.DetectionOperations.detect_objects",
-                return_value=self.detect_result,
+                "operations.GraspOperations.YOLODetector",
+                return_value=MagicMock(detect_objects=MagicMock(return_value=self.detect_result)),
             )
             self._patches.append(det_patch.start())
 

@@ -99,34 +99,19 @@ def analyze_scene(
         # Get image storage using centralized imports
         storage = get_unified_image_storage()
 
-        # Try to get single camera image
-        image = storage.get_single_image(camera_id)
-
-        if image is None:
-            # Fallback to stereo left image
-            stereo_data = storage.get_latest_stereo()
-            if stereo_data:
-                _, imgL, _, _ = stereo_data
-                image = imgL
-            else:
-                return OperationResult.error_result(
-                    "NO_IMAGES",
-                    "No images available for analysis",
-                    ["Ensure camera is connected", "Check camera_id parameter"],
-                )
+        stereo_data = storage.get_latest_stereo()
+        if stereo_data is None:
+            return OperationResult.error_result(
+                "NO_IMAGES",
+                "No stereo images available for analysis",
+                ["Ensure StereoCameraController is sending images", "Check camera_id parameter"],
+            )
+        _, image, _, _ = stereo_data
 
         # Lazy import to avoid circular dependency
         from vision.AnalyzeImage import LMStudioVisionProcessor
 
-        # Use LMStudioVisionProcessor
         processor = LMStudioVisionProcessor(model=model)
-
-        if image is None:
-            return OperationResult.error_result(
-                "NO_IMAGES",
-                "No images available for analysis after fallback",
-                ["Ensure camera is connected", "Check camera_id parameter"],
-            )
 
         # Send image for analysis
         llm_result = processor.send_images(
@@ -171,9 +156,20 @@ def create_analyze_scene_operation() -> BasicOperation:
             count items, read text, and answer questions about the scene.
 
             Useful for high-level task planning and verification.
+
+            USE THIS OPERATION WHEN the user says any of:
+            "analyze the scene", "analyze scene", "what do you see",
+            "what objects are in the scene", "describe the scene",
+            "describe the workspace", "what's on the table",
+            "look at the scene", "scan the scene", "inspect the scene",
+            "what can you see", "observe the scene", "survey the workspace".
+            Do NOT substitute detect_object_stereo or move_to_coordinate for this operation.
         """,
         usage_examples=[
-            "Describe scene: analyze_scene(prompt='Describe what you see')",
+            "Analyze scene: analyze_scene(prompt='Describe what you see')",
+            "What objects are in the scene: analyze_scene(prompt='What objects are on the table?')",
+            "Describe the scene: analyze_scene(prompt='Describe the workspace')",
+            "What do you see: analyze_scene(prompt='What can you see in front of you?')",
             "Count objects: analyze_scene(prompt='How many cubes are on the table?')",
             "Identify colors: analyze_scene(prompt='What colors are the objects?')",
         ],

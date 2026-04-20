@@ -34,7 +34,9 @@ namespace Vision
         private int _imageHeight = 1080;
 
         [SerializeField]
-        [Tooltip("JPEG compression quality (1-100). Mirrors STEREO_JPEG_QUALITY in ACRLPython/config/Vision.py (default: 75).")]
+        [Tooltip(
+            "JPEG compression quality (1-100). Mirrors STEREO_JPEG_QUALITY in ACRLPython/config/Vision.py (default: 75)."
+        )]
         [Range(1, 100)]
         private int _JPEGQuality = 75;
 
@@ -196,7 +198,10 @@ namespace Vision
                 // Re-establish connection if it doesn't exist or is broken
                 if (_tcpClient == null || !_tcpClient.Connected)
                 {
-                    if (_tcpClient != null) { _tcpClient.Close(); }
+                    if (_tcpClient != null)
+                    {
+                        _tcpClient.Close();
+                    }
                     _tcpClient = new TcpClient();
                     _tcpClient.Connect(
                         CommunicationConstants.SERVER_HOST,

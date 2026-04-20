@@ -166,5 +166,139 @@ class TestCommandParserKG(unittest.TestCase):
         self.assertEqual(result, "")
 
 
+    def test_spatial_context_includes_handoff_candidates(self):
+        """Handoff candidates are formatted when both robots can reach the object."""
+        parser = self._make_parser()
+        mock_qe = MagicMock()
+        mock_qe.get_objects_in_reach.return_value = [
+            {
+                "object_id": "red_cube",
+                "distance": 0.4,
+                "color": "red",
+                "grasped_by": None,
+            }
+        ]
+        mock_qe.find_robots_near.return_value = []
+        mock_qe._graph.get_all_nodes.return_value = ["Robot1", "Robot2"]
+        mock_qe.get_handoff_candidates.return_value = [
+            {
+                "position": (0.0, 0.3, 0.0),
+                "region": "shared_zone",
+                "r1_distance": 0.4,
+                "r2_distance": 0.4,
+            }
+        ]
+
+        with (
+            patch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True),
+            patch("core.Imports.get_graph_query_engine", return_value=mock_qe),
+        ):
+            result = parser._get_spatial_context("Robot1")
+
+        self.assertIn("Handoff red_cube with Robot2", result)
+        self.assertIn("r1=0.40m", result)
+        self.assertIn("r2=0.40m", result)
+
+    def test_spatial_context_no_handoff_when_empty_candidates(self):
+        """No handoff line added when get_handoff_candidates returns empty list."""
+        parser = self._make_parser()
+        mock_qe = MagicMock()
+        mock_qe.get_objects_in_reach.return_value = [
+            {
+                "object_id": "red_cube",
+                "distance": 0.4,
+                "color": "red",
+                "grasped_by": None,
+            }
+        ]
+        mock_qe.find_robots_near.return_value = []
+        mock_qe._graph.get_all_nodes.return_value = ["Robot1", "Robot2"]
+        mock_qe.get_handoff_candidates.return_value = []
+
+        with (
+            patch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True),
+            patch("core.Imports.get_graph_query_engine", return_value=mock_qe),
+        ):
+            result = parser._get_spatial_context("Robot1")
+
+        self.assertNotIn("Handoff", result)
+
+    def test_spatial_context_path_clear(self):
+        """Path line shows 'clear' when is_path_blocked returns False."""
+        parser = self._make_parser()
+        mock_qe = MagicMock()
+        mock_qe.get_objects_in_reach.return_value = [
+            {
+                "object_id": "red_cube",
+                "distance": 0.4,
+                "color": "red",
+                "grasped_by": None,
+            }
+        ]
+        mock_qe.find_robots_near.return_value = []
+        mock_qe._graph.get_all_nodes.return_value = ["Robot1"]
+        mock_qe.get_handoff_candidates.return_value = []
+        mock_qe.is_path_blocked.return_value = False
+
+        with (
+            patch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True),
+            patch("core.Imports.get_graph_query_engine", return_value=mock_qe),
+        ):
+            result = parser._get_spatial_context("Robot1", target=(0.3, 0.2, 0.1))
+
+        self.assertIn("Path to target: clear", result)
+        mock_qe.is_path_blocked.assert_called_once_with("Robot1", (0.3, 0.2, 0.1))
+
+    def test_spatial_context_path_blocked(self):
+        """Path line shows 'BLOCKED' when is_path_blocked returns True."""
+        parser = self._make_parser()
+        mock_qe = MagicMock()
+        mock_qe.get_objects_in_reach.return_value = [
+            {
+                "object_id": "red_cube",
+                "distance": 0.4,
+                "color": "red",
+                "grasped_by": None,
+            }
+        ]
+        mock_qe.find_robots_near.return_value = []
+        mock_qe._graph.get_all_nodes.return_value = ["Robot1"]
+        mock_qe.get_handoff_candidates.return_value = []
+        mock_qe.is_path_blocked.return_value = True
+
+        with (
+            patch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True),
+            patch("core.Imports.get_graph_query_engine", return_value=mock_qe),
+        ):
+            result = parser._get_spatial_context("Robot1", target=(0.3, 0.2, 0.1))
+
+        self.assertIn("Path to target: BLOCKED", result)
+
+    def test_spatial_context_no_path_check_when_no_target(self):
+        """No path line when target is not provided."""
+        parser = self._make_parser()
+        mock_qe = MagicMock()
+        mock_qe.get_objects_in_reach.return_value = [
+            {
+                "object_id": "red_cube",
+                "distance": 0.4,
+                "color": "red",
+                "grasped_by": None,
+            }
+        ]
+        mock_qe.find_robots_near.return_value = []
+        mock_qe._graph.get_all_nodes.return_value = ["Robot1"]
+        mock_qe.get_handoff_candidates.return_value = []
+
+        with (
+            patch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True),
+            patch("core.Imports.get_graph_query_engine", return_value=mock_qe),
+        ):
+            result = parser._get_spatial_context("Robot1")
+
+        self.assertNotIn("Path to target", result)
+        mock_qe.is_path_blocked.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

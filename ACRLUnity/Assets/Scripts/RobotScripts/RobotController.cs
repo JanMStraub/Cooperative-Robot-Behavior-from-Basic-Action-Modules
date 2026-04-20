@@ -38,6 +38,7 @@ namespace Robotics
         private Transform _targetTransform;
 
         private bool _isManuallyDriven = false;
+
         /// <summary>
         /// Gets or sets whether the robot is driven externally, disabling the FixedUpdate IK loop.
         /// </summary>
@@ -154,7 +155,9 @@ namespace Robotics
                 _gripperController = GetComponentInChildren<GripperController>();
                 if (_gripperController == null)
                 {
-                    Debug.LogWarning($"[ROBOT_CONTROLLER] No GripperController found in children of {robotId}");
+                    Debug.LogWarning(
+                        $"[ROBOT_CONTROLLER] No GripperController found in children of {robotId}"
+                    );
                 }
             }
 
@@ -173,7 +176,9 @@ namespace Robotics
         {
             if (robotJoints == null || robotJoints.Length == 0)
             {
-                Debug.LogWarning($"[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+                Debug.LogWarning(
+                    $"[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies."
+                );
                 return;
             }
 
@@ -249,13 +254,14 @@ namespace Robotics
                 logPrefix: _logPrefix,
                 setTargetInternal: SetTargetInternal,
                 getEndEffectorVelocityMagnitude: () => GetEndEffectorVelocity().magnitude,
-                getCachedTempObject: suffix => suffix switch
-                {
-                    "_pre" => GetCachedTempObject(ref _cachedTempTargetPre, suffix),
-                    "_retreat" => GetCachedTempObject(ref _cachedTempTargetRetreat, suffix),
-                    "_handoff" => GetCachedTempObject(ref _cachedTempTargetGrasp, suffix),
-                    _ => GetCachedTempObject(ref _cachedTempTargetGrasp, suffix),
-                },
+                getCachedTempObject: suffix =>
+                    suffix switch
+                    {
+                        "_pre" => GetCachedTempObject(ref _cachedTempTargetPre, suffix),
+                        "_retreat" => GetCachedTempObject(ref _cachedTempTargetRetreat, suffix),
+                        "_handoff" => GetCachedTempObject(ref _cachedTempTargetGrasp, suffix),
+                        _ => GetCachedTempObject(ref _cachedTempTargetGrasp, suffix),
+                    },
                 setIsGraspingTarget: value => _isGraspingTarget = value,
                 fireOnTargetReached: () => OnTargetReached?.Invoke(),
                 setActiveCoroutine: c => _activeGraspCoroutine = c
@@ -293,11 +299,13 @@ namespace Robotics
                 {
                     if (_closeGripperAfterReach && _gripperController != null)
                     {
-                        StartCoroutine(_graspExecutor.CloseGripperAfterDelay(
-                            _targetObject,
-                            _gripperCloseDelay,
-                            _attachObjectOnGrasp
-                        ));
+                        StartCoroutine(
+                            _graspExecutor.CloseGripperAfterDelay(
+                                _targetObject,
+                                _gripperCloseDelay,
+                                _attachObjectOnGrasp
+                            )
+                        );
                     }
                     else
                     {
@@ -446,7 +454,12 @@ namespace Robotics
         /// </summary>
         public void PerformInverseKinematicsStep()
         {
-            if (robotJoints == null || robotJoints.Length == 0 || endEffectorBase == null || _targetTransform == null)
+            if (
+                robotJoints == null
+                || robotJoints.Length == 0
+                || endEffectorBase == null
+                || _targetTransform == null
+            )
                 return;
 
             RefreshIKFrameCache();
@@ -462,7 +475,8 @@ namespace Robotics
             bool isRotReached = angleError < rotThreshold;
 
             Vector3 currentVelocity = GetEndEffectorVelocity();
-            bool isSettled = currentVelocity.sqrMagnitude < RobotConstants.VELOCITY_SETTLE_THRESHOLD_SQR;
+            bool isSettled =
+                currentVelocity.sqrMagnitude < RobotConstants.VELOCITY_SETTLE_THRESHOLD_SQR;
 
             bool isStalled = isSettled && (!isPosReached || !isRotReached);
             if (_enableDebugVisualization && isStalled && Time.frameCount % 60 == 0)
@@ -646,13 +660,23 @@ namespace Robotics
                         if (candidate.useSimplifiedExecution)
                         {
                             _activeGraspCoroutine = StartCoroutine(
-                                _graspExecutor.ExecuteSimplifiedGrasp(candidate, target, options, () => _hasReachedTarget)
+                                _graspExecutor.ExecuteSimplifiedGrasp(
+                                    candidate,
+                                    target,
+                                    options,
+                                    () => _hasReachedTarget
+                                )
                             );
                         }
                         else
                         {
                             _activeGraspCoroutine = StartCoroutine(
-                                _graspExecutor.ExecuteThreeWaypointGrasp(candidate, target, options, () => _hasReachedTarget)
+                                _graspExecutor.ExecuteThreeWaypointGrasp(
+                                    candidate,
+                                    target,
+                                    options,
+                                    () => _hasReachedTarget
+                                )
                             );
                         }
                         return;
@@ -676,13 +700,23 @@ namespace Robotics
                         if (candidate.useSimplifiedExecution)
                         {
                             _activeGraspCoroutine = StartCoroutine(
-                                _graspExecutor.ExecuteSimplifiedGrasp(candidate, target, options, () => _hasReachedTarget)
+                                _graspExecutor.ExecuteSimplifiedGrasp(
+                                    candidate,
+                                    target,
+                                    options,
+                                    () => _hasReachedTarget
+                                )
                             );
                         }
                         else
                         {
                             _activeGraspCoroutine = StartCoroutine(
-                                _graspExecutor.ExecuteTwoWaypointGrasp(candidate, target, options, () => _hasReachedTarget)
+                                _graspExecutor.ExecuteTwoWaypointGrasp(
+                                    candidate,
+                                    target,
+                                    options,
+                                    () => _hasReachedTarget
+                                )
                             );
                         }
                         return;
@@ -790,7 +824,8 @@ namespace Robotics
                 );
                 if (realObject != null)
                 {
-                    float distThreshold = _ikConfig != null ? _ikConfig.objectDistanceThreshold : 0.1f;
+                    float distThreshold =
+                        _ikConfig != null ? _ikConfig.objectDistanceThreshold : 0.1f;
                     if (
                         Vector3.SqrMagnitude(position - realObject.transform.position)
                         < distThreshold * distThreshold
@@ -925,14 +960,14 @@ namespace Robotics
 
             _targetTransform = temp.transform;
             _targetObject = null;
-            _hasReachedTarget = true;       // IK will not fire until a new target is given
+            _hasReachedTarget = true; // IK will not fire until a new target is given
             _isGraspingTarget = false;
             _closeGripperAfterReach = false;
             _isTrackingMovingTarget = false; // Held objects must not feed back as moving targets
 
             Debug.Log(
                 $"{_logPrefix} [{robotId}] IK target synced to current EE pose "
-                + $"({endEffectorBase.position}) — IK quiesced"
+                    + $"({endEffectorBase.position}) — IK quiesced"
             );
         }
 

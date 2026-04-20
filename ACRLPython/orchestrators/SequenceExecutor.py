@@ -32,13 +32,13 @@ try:
     from ..operations.Verification import OperationVerifier
     from ..operations.CoordinationVerifier import CoordinationVerifier
     from ..core.Imports import get_world_state
-    from ..config.Servers import REFLEXION_MAX_RETRIES
+    from ..config.Servers import REFLEXION_ENABLED, REFLEXION_MAX_RETRIES
 except ImportError:
     from operations.Base import OperationCategory
     from operations.Verification import OperationVerifier
     from operations.CoordinationVerifier import CoordinationVerifier
     from core.Imports import get_world_state
-    from config.Servers import REFLEXION_MAX_RETRIES
+    from config.Servers import REFLEXION_ENABLED, REFLEXION_MAX_RETRIES
 
 # Configure logging with safe handler for background threads
 logger = logging.getLogger(__name__)
@@ -352,6 +352,7 @@ class SequenceExecutor:
                     _reflexion_allowed = _op_category in _reflexion_eligible_categories
                     if (
                         original_text
+                        and REFLEXION_ENABLED
                         and REFLEXION_MAX_RETRIES > 0
                         and _reflexion_allowed
                     ):
@@ -375,7 +376,8 @@ class SequenceExecutor:
                                 f"for command {i + 1}: {operation}"
                             )
                             retry_parse = parser.parse_with_hint(
-                                original_text, robot_id=robot_id, hint=hint
+                                original_text, robot_id=robot_id, hint=hint,
+                                use_motion_layer=False,
                             )
                             if (
                                 not retry_parse["success"]
@@ -740,6 +742,12 @@ class SequenceExecutor:
             "error": "internal",
         }
         try:
+            # Resolve common LLM name abbreviations to registered names.
+            _OP_ALIASES = {
+                "return_to_start": "return_to_start_position",
+            }
+            operation = _OP_ALIASES.get(operation, operation)
+
             # Get operation definition for verification
             op_def = self.registry.get_operation_by_name(operation)
             if op_def is None:

@@ -1,36 +1,36 @@
 #!/usr/bin/env python3
 """
-send_handoff.py — Test grasp_object_for_handoff directly in Unity without the LLM.
+send_handoff.py — Test grasp_object + receive_handoff directly in Unity without the LLM.
 
 Uses the SequenceServer "EXEC:" prefix to bypass LLM parsing and feed operations
 directly into SequenceExecutor. Each step blocks until Unity confirms completion
 before the next step begins.
 
 Sequence:
-  1. Robot1: grasp_object_for_handoff  (grasps at far end, stays there)
-  2. Robot2: receive_handoff            (orients gripper, moves to near end, closes)
-  3. Robot1: release_object             (opens gripper — Robot2 now holds it)
-  4. Robot1: return_to_start            (return home)
+  1. Robot1: grasp_object                      (grasps object in place)
+  2. Robot1: move_to_coordinate                (moves to HANDOFF_PRESENTATION_POSITION)
+  3. Robot2: orient_gripper_for_handoff_receive (pitches gripper up, aligns jaw yaw)
+  4. Robot2: receive_handoff                   (approaches from side, closes gripper)
+  5. Robot1: release_object                    (opens gripper — Robot2 now holds it)
+  6. Robot1: return_to_start_position          (return home)
 
-Steps 1 and 2 are dispatched concurrently (matching how Unity sends them)
-because grasp_object_for_handoff and receive_handoff synchronize internally
-via signal/wait_for_signal.
+Steps run sequentially. Robot1 presents the object at a fixed world position
+so Robot2 can approach from the side without colliding with Robot1's top-down grip.
 
 Usage:
     python tools/send_handoff.py
     python tools/send_handoff.py --object red_bar --grasper Robot1 --receiver Robot2
     python tools/send_handoff.py --grasp-only    # only step 1
-    python tools/send_handoff.py --receive-only  # only step 2
+    python tools/send_handoff.py --receive-only  # only steps 3-4
     python tools/send_handoff.py --dry-run       # parse without executing
 """
 
 import argparse
 import json
+import os
 import socket
 import struct
 import sys
-import threading
-import time
 
 # ── Protocol V2 constants ──────────────────────────────────────────────────────
 SEQUENCE_QUERY = 0x08
@@ -44,6 +44,11 @@ DEFAULT_OBJECT = "red_bar"
 DEFAULT_GRASPER = "Robot1"
 DEFAULT_RECEIVER = "Robot2"
 DEFAULT_TIMEOUT = 120
+
+# Mirrors config/Robot.py HANDOFF_PRESENTATION_POSITION defaults.
+HANDOFF_PRESENTATION_X = float(os.environ.get("HANDOFF_PRESENTATION_X", "0.0"))
+HANDOFF_PRESENTATION_Y = float(os.environ.get("HANDOFF_PRESENTATION_Y", "0.35"))
+HANDOFF_PRESENTATION_Z = float(os.environ.get("HANDOFF_PRESENTATION_Z", "0.0"))
 
 
 # ── Wire format ────────────────────────────────────────────────────────────────
@@ -140,48 +145,79 @@ def run_handoff(
     auto_execute: bool,
 ) -> bool:
     """
-    Dispatch the full handoff sequence.
+    Dispatch the full handoff sequence (sequential).
 
-    Steps 1 & 2 (grasp + receive) run concurrently in threads because
-    grasp_object_for_handoff signals when done and receive_handoff waits for
-    that signal — they must be in-flight at the same time.
-
-    Steps 3 & 4 (release + home) run sequentially after both complete.
+    Step 1 — Robot A grasps the object.
+    Step 2 — Robot A moves to HANDOFF_PRESENTATION_POSITION (fixed world point).
+    Step 3 — Robot B orients its gripper for receiving (pitch up, align jaw yaw).
+    Step 4 — Robot B approaches from the side and closes gripper (receive_handoff).
+    Step 5 — Robot A releases.
+    Step 6 — Robot A returns home.
     """
     results: dict = {}
-    threads = []
 
-    # ── Steps 1 & 2 (concurrent) ───────────────────────────────────────────────
+    # ── Step 1: Grasp ─────────────────────────────────────────────────────────
     if not receive_only:
         grasp_ops = [
             {
-                "operation": "grasp_object_for_handoff",
+                "operation": "grasp_object",
                 "params": {
                     "robot_id": grasper_id,
                     "object_id": object_id,
-                    "receiving_robot_id": receiver_id,
                 },
             }
         ]
-        t = threading.Thread(
-            target=send_ops,
-            args=(
-                grasp_ops,
-                grasper_id,
-                "grasper",
-                host,
-                port,
-                camera_id,
-                timeout,
-                auto_execute,
-                1,
-                results,
-            ),
-            daemon=True,
+        send_ops(
+            grasp_ops, grasper_id, "grasp", host, port, camera_id,
+            timeout, auto_execute, 1, results,
         )
-        threads.append(t)
+        if not results.get("grasp", {}).get("success", False):
+            return False
 
+    # ── Step 2: Move to presentation position ─────────────────────────────────
+    if not receive_only:
+        print()
+        move_ops = [
+            {
+                "operation": "move_to_coordinate",
+                "params": {
+                    "robot_id": grasper_id,
+                    "x": HANDOFF_PRESENTATION_X,
+                    "y": HANDOFF_PRESENTATION_Y,
+                    "z": HANDOFF_PRESENTATION_Z,
+                },
+            }
+        ]
+        send_ops(
+            move_ops, grasper_id, "present", host, port, camera_id,
+            timeout, auto_execute, 2, results,
+        )
+        if not results.get("present", {}).get("success", False):
+            return False
+
+    # ── Step 3: Orient receiver gripper ──────────────────────────────────────
     if not grasp_only:
+        print()
+        orient_ops = [
+            {
+                "operation": "orient_gripper_for_handoff_receive",
+                "params": {
+                    "robot_id": receiver_id,
+                    "object_id": object_id,
+                    "source_robot_id": grasper_id,
+                },
+            }
+        ]
+        send_ops(
+            orient_ops, receiver_id, "orient", host, port, camera_id,
+            timeout, auto_execute, 3, results,
+        )
+        if not results.get("orient", {}).get("success", False):
+            return False
+
+    # ── Step 4: Receive ───────────────────────────────────────────────────────
+    if not grasp_only:
+        print()
         receive_ops = [
             {
                 "operation": "receive_handoff",
@@ -192,64 +228,36 @@ def run_handoff(
                 },
             }
         ]
-        t = threading.Thread(
-            target=send_ops,
-            args=(
-                receive_ops,
-                receiver_id,
-                "receiver",
-                host,
-                port,
-                camera_id,
-                timeout,
-                auto_execute,
-                2,
-                results,
-            ),
-            daemon=True,
+        send_ops(
+            receive_ops, receiver_id, "receive", host, port, camera_id,
+            timeout, auto_execute, 4, results,
         )
-        threads.append(t)
+        if not results.get("receive", {}).get("success", False):
+            return False
 
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join(timeout=timeout + 60)
-
-    overall = all(r.get("success", False) for r in results.values())
-
-    # ── Steps 3 & 4: release + home (only if both sides ran and succeeded) ──────
-    if not grasp_only and not receive_only and overall and auto_execute:
+    # ── Steps 4 & 5: release + home ───────────────────────────────────────────
+    if not grasp_only and not receive_only and auto_execute:
         print()
 
         release_ops = [
             {"operation": "release_object", "params": {"robot_id": grasper_id}}
         ]
         send_ops(
-            release_ops,
-            grasper_id,
-            "release",
-            host,
-            port,
-            camera_id,
-            20,
-            True,
-            3,
-            results,
+            release_ops, grasper_id, "release", host, port, camera_id,
+            20, True, 5, results,
         )
 
         home_ops = [
             {
-                "operation": "return_to_start",
+                "operation": "return_to_start_position",
                 "params": {"robot_id": grasper_id, "speed": 1.0},
             }
         ]
         send_ops(
-            home_ops, grasper_id, "home", host, port, camera_id, 60, True, 4, results
+            home_ops, grasper_id, "home", host, port, camera_id, 60, True, 6, results,
         )
 
-        overall = all(r.get("success", False) for r in results.values())
-
-    return overall
+    return all(r.get("success", False) for r in results.values())
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
@@ -258,7 +266,7 @@ def run_handoff(
 def main():
     """Parse arguments and run the handoff."""
     parser = argparse.ArgumentParser(
-        description="Test grasp_object_for_handoff in Unity without LLM latency.",
+        description="Test grasp_object + receive_handoff in Unity without LLM latency.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )

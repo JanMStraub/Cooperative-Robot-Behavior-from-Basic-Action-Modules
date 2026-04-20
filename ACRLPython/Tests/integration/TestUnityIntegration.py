@@ -133,8 +133,8 @@ class TestUnityImageCapture:
     """Test real image capture from Unity cameras."""
 
     def test_connection_to_image_server(self):
-        """Verify direct TCP connection to the ImageServer (port 5005)."""
-        assert _port_open(5005), "Could not connect to ImageServer on port 5005"
+        """Verify direct TCP connection to the ImageServer (port 5006)."""
+        assert _port_open(5006), "Could not connect to ImageServer on port 5006"
 
     def test_real_single_image_capture(self):
         """

@@ -57,21 +57,21 @@ namespace Robotics
 
         [Header("Motion Parameters")]
         [Tooltip("Speed of gripper opening/closing in meters per second.")]
-        public float gripSpeed = 0.10f;  // Doubled from 0.05 → halves close time (~280ms → ~140ms)
+        public float gripSpeed = 0.10f; // Doubled from 0.05 → halves close time (~280ms → ~140ms)
 
         [Tooltip(
             "Maximum distance the target can be ahead of the physical finger. Prevents tunneling."
         )]
-        public float maxTargetLead = 0.008f;  // Increased from 0.005 to reduce anti-tunneling clamping
+        public float maxTargetLead = 0.008f; // Increased from 0.005 to reduce anti-tunneling clamping
 
         [Tooltip("Stiffness (P-Gain).")]
-        public float stiffness = 8000f;  // Increased from 5000 for stronger, more positive grip
+        public float stiffness = 8000f; // Increased from 5000 for stronger, more positive grip
 
         [Tooltip("Damping (D-Gain).")]
         public float damping = 500f;
 
         [Tooltip("Force Limit.")]
-        public float maxForce = 300f;  // Increased from 200 to maintain grip under object weight/inertia
+        public float maxForce = 300f; // Increased from 200 to maintain grip under object weight/inertia
 
         [Range(0f, 1f)]
         public float targetPosition = 1f;
@@ -89,9 +89,11 @@ namespace Robotics
         private bool _isHoldingObject = false;
         private GameObject _targetObjectToGrasp;
         private bool _shouldAttachOnClose = false;
+
         // Deferred attachment flag: set in Update() when closing completes, consumed in
         // FixedUpdate() so the AttachObject call runs in sync with the physics engine.
         private bool _attachmentPending = false;
+
         // Deferred detachment flag: set in OpenGrippers(), consumed in FixedUpdate()
         // once the gripper has opened enough to avoid trapping the object between fingers.
         private bool _detachmentPending = false;
@@ -173,7 +175,11 @@ namespace Robotics
             // While the gripper is opening, check if it has opened enough to safely detach
             // the held object. Threshold 0.5 means the gripper is at least half open,
             // ensuring the fingers have cleared the object before re-enabling physics.
-            if (_detachmentPending && targetPosition > 0.5f && MapPhysicalToNormalized(currentRealPosition) > 0.4f)
+            if (
+                _detachmentPending
+                && targetPosition > 0.5f
+                && MapPhysicalToNormalized(currentRealPosition) > 0.4f
+            )
             {
                 _detachmentPending = false;
                 _detachInFixedUpdate = true;

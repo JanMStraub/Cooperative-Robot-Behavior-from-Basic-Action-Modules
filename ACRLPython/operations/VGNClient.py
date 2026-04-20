@@ -216,6 +216,7 @@ class VGNClient:
         cam_rot: "Optional[List[float]]" = None,
         object_world_pos: "Optional[List[float]]" = None,
         detection_depth_m: "Optional[float]" = None,
+        object_dimensions: "Optional[Tuple[float, float, float]]" = None,
     ) -> "Optional[List[dict]]":
         """Wrapper to evaluate VGN grasps and broadcast telemetry even if it ends early.
 
@@ -227,6 +228,10 @@ class VGNClient:
                                VisionProcessor.  Preferred over the quaternion-based
                                depth derived from ``object_world_pos`` because it is
                                measured directly from stereo disparity.
+            object_dimensions: Optional (w, h, d) in metres from WorldState collider
+                               data.  When provided, a synthetic box surface point
+                               cloud is merged with the real masked points so VGN
+                               sees all six faces, not just the camera-visible top.
         """
         debug_info = {}
         try:
@@ -245,6 +250,7 @@ class VGNClient:
                 debug_info,
                 object_world_pos,
                 detection_depth_m,
+                object_dimensions,
             )
         finally:
             try:
@@ -351,8 +357,8 @@ class VGNClient:
                     payload = {
                         "pointcloud_b64": pts_b64,
                         "tsdf_b64": tsdf_b64,
-                        "tsdf_size": 0.3,
-                        "tsdf_res": 40,
+                        "tsdf_size": debug_info.get("tsdf_size", 0.12),
+                        "tsdf_res": debug_info.get("tsdf_res", 40),
                         "grasps": grasps,
                         "centroid": c_unity,
                         "world_frame": True,
@@ -383,6 +389,7 @@ class VGNClient:
         debug_info: dict = {},
         object_world_pos: "Optional[List[float]]" = None,
         detection_depth_m: "Optional[float]" = None,
+        object_dimensions: "Optional[Tuple[float, float, float]]" = None,
     ) -> "Optional[List[dict]]":
         """Run the full VLM-guided VGN pipeline on a stereo point cloud.
 
@@ -591,33 +598,68 @@ class VGNClient:
                 )
 
         # ----------------------------------------------------------------
-        # Step 2c — Surface densification (jitter augmentation)
+        # Step 2c — Surface completion / densification
         # ----------------------------------------------------------------
-        # With only 84–146 masked points in a 40³ TSDF, the distance
-        # transform cannot reconstruct the object's top surface cleanly,
-        # causing VGN to produce near-horizontal rather than top-down
-        # approach vectors.  Duplicate each point N times with small
-        # Gaussian noise (σ ≈ half a voxel) to densify the surface
-        # representation without introducing large geometric errors.
-        _DENSIFY_TARGET = 600  # aim for ~600 points total after augmentation
+        # The depth camera only sees the top face of a table-top cube.
+        # A partial top-face cloud → flat-disc TSDF → VGN prefers horizontal
+        # side grasps.  When WorldState dimensions are available, synthesise a
+        # full box surface (all 6 faces, ~200 pts/face) centred on the real
+        # point cloud centroid and merge it with the real points.  Real points
+        # take precedence: they anchor the centroid correctly; the synthetic
+        # faces supply the geometry VGN needs to prefer top grasps.
+        # Fall back to jitter densification when dimensions are unavailable.
+        _real_centroid = masked_points.mean(axis=0)
+        rng = np.random.default_rng(seed=42)
         _n_orig = masked_points.shape[0]
-        _n_copies = max(1, _DENSIFY_TARGET // _n_orig)
-        if _n_copies > 1:
-            # σ = half a voxel in world-frame metres.
-            # voxel_size = _TSDF_SIZE / _TSDF_RES = 0.3 / 40 = 0.0075 m
-            # half-voxel = 0.00375 m; round up slightly for better fill.
-            _sigma = 0.005
-            rng = np.random.default_rng(seed=42)
-            noise = rng.normal(scale=_sigma, size=(_n_copies - 1, _n_orig, 3))
-            copies = masked_points[np.newaxis] + noise
-            masked_points = np.concatenate(
-                [masked_points] + [copies[i] for i in range(_n_copies - 1)],
-                axis=0,
-            ).astype(masked_points.dtype)
+
+        if object_dimensions is not None:
+            # object_dimensions = (w, h, d) in Unity LH world frame metres.
+            # Half-extents are unsigned, so the same in RH world frame.
+            _hw = float(object_dimensions[0]) / 2.0  # X half-extent (width)
+            _hh = float(object_dimensions[1]) / 2.0  # Y half-extent (height)
+            _hd = float(object_dimensions[2]) / 2.0  # Z half-extent (depth)
+            _PTS_PER_FACE = 200
+            _faces = []
+            for u_range, v_range, fixed_val, axis in [
+                # (u_range, v_range, fixed_coord_val, fixed_axis_idx)
+                ((-_hw, _hw), (-_hd, _hd), _hh, 1),   # top face    Y=+hh
+                ((-_hw, _hw), (-_hd, _hd), -_hh, 1),  # bottom face Y=-hh
+                ((-_hh, _hh), (-_hd, _hd), _hw, 0),   # right face  X=+hw
+                ((-_hh, _hh), (-_hd, _hd), -_hw, 0),  # left face   X=-hw
+                ((-_hw, _hw), (-_hh, _hh), _hd, 2),   # front face  Z=+hd
+                ((-_hw, _hw), (-_hh, _hh), -_hd, 2),  # back face   Z=-hd
+            ]:
+                us = rng.uniform(u_range[0], u_range[1], _PTS_PER_FACE)
+                vs = rng.uniform(v_range[0], v_range[1], _PTS_PER_FACE)
+                face = np.zeros((_PTS_PER_FACE, 3), dtype=np.float32)
+                axes = [i for i in range(3) if i != axis]
+                face[:, axes[0]] = us
+                face[:, axes[1]] = vs
+                face[:, axis] = fixed_val
+                _faces.append(face)
+            _box_pts = np.concatenate(_faces, axis=0) + _real_centroid.astype(np.float32)
+            masked_points = np.concatenate([masked_points, _box_pts], axis=0)
             logger.info(
-                f"[VGN] Densified: {_n_orig} → {masked_points.shape[0]} points "
-                f"({_n_copies}x jitter, σ={_sigma} m)"
+                f"[VGN] Box synthesis: {_n_orig} real + {_box_pts.shape[0]} synthetic pts "
+                f"(dims={[round(float(d), 4) for d in object_dimensions]}) "
+                f"→ {masked_points.shape[0]} total"
             )
+        else:
+            # No dimension data — fall back to jitter densification.
+            _DENSIFY_TARGET = 800
+            _n_copies = max(1, _DENSIFY_TARGET // max(1, _n_orig))
+            if _n_copies > 1:
+                _sigma = 0.005
+                noise = rng.normal(scale=_sigma, size=(_n_copies - 1, _n_orig, 3))
+                copies = masked_points[np.newaxis] + noise
+                masked_points = np.concatenate(
+                    [masked_points] + [copies[i] for i in range(_n_copies - 1)],
+                    axis=0,
+                ).astype(masked_points.dtype)
+                logger.info(
+                    f"[VGN] Jitter densification (no dims): {_n_orig} → {masked_points.shape[0]} pts "
+                    f"({_n_copies}x, σ={_sigma} m)"
+                )
 
         # ----------------------------------------------------------------
         # Step 3 — TSDF construction
@@ -628,7 +670,7 @@ class VGNClient:
         debug_info["pts"] = masked_points - centroid
         debug_info["_in_world_frame"] = _in_world_frame
 
-        _TSDF_SIZE = 0.3  # 30 cm workspace
+        _TSDF_SIZE = 0.12  # 12 cm — tightly fits a 5 cm cube at ~1.5× fill (close to VGN training distribution)
         _TSDF_RES = 40
 
         # VGN was trained with Z-up (table normal = +Z, gripper approaches from above = -Z).
@@ -691,13 +733,14 @@ class VGNClient:
         # Driving by max(X,Y,Z) under-scales Z (height) to ~39%, making the object
         # appear as a flat disc and causing VGN to prefer horizontal side approaches.
         _TARGET_FILL = 0.75
+        _MAX_SCALE = 5.0  # 5cm cube at 5× = 25cm in 30cm grid ≈ 83% fill, close to VGN training dist
         extents = pts_vgn.max(axis=0) - pts_vgn.min(axis=0)  # [ex, ey, ez]
         xz_max_extent = max(extents[0], extents[2])  # for logging
         _z_extent = float(extents[2])  # VGN_Z = height axis
         if _z_extent > 1e-4:
-            _vgn_scale = (_TARGET_FILL * _TSDF_SIZE) / _z_extent
+            _vgn_scale = min((_TARGET_FILL * _TSDF_SIZE) / _z_extent, _MAX_SCALE)
         elif xz_max_extent > 1e-4:
-            _vgn_scale = (_TARGET_FILL * _TSDF_SIZE) / xz_max_extent
+            _vgn_scale = min((_TARGET_FILL * _TSDF_SIZE) / xz_max_extent, _MAX_SCALE)
         else:
             _vgn_scale = 1.0
         pts_vgn *= _vgn_scale
@@ -715,6 +758,18 @@ class VGNClient:
         grid = _points_to_tsdf_grid(pts_vgn, size=_TSDF_SIZE, resolution=_TSDF_RES)
         # grid shape: (1, 40, 40, 40)
         debug_info["grid"] = grid
+        debug_info["tsdf_size"] = _TSDF_SIZE
+        debug_info["tsdf_res"] = _TSDF_RES
+
+        from config.Vision import VGN_EXPORT_TSDF, VGN_EXPORT_TSDF_PATH
+        if VGN_EXPORT_TSDF:
+            np.savez(
+                VGN_EXPORT_TSDF_PATH,
+                grid=grid,
+                size=np.float32(_TSDF_SIZE),
+                res=np.int32(_TSDF_RES),
+            )
+            logger.info(f"[VGN] TSDF grid exported to {VGN_EXPORT_TSDF_PATH}")
 
         # ----------------------------------------------------------------
         # Step 4 — VGN inference
@@ -826,7 +881,10 @@ class VGNClient:
                 from scipy.spatial.transform import Rotation as _R  # type: ignore
 
                 quat = _R.from_matrix(rot_world).as_quat()  # [qx, qy, qz, qw]
-                approach = rot_world[:, 2]  # Z-axis = approach in world frame
+                # Negate: VGN's grasp Z-axis points into the surface (gripper→object).
+                # Flip to get approach vector pointing from object toward gripper
+                # (arm descends from above), matching pre-grasp subtraction convention.
+                approach = -rot_world[:, 2]
 
                 if _in_world_frame:
                     # Convert from RH world → Unity LH world: reflect across YZ plane (X → -X).

@@ -148,9 +148,10 @@
 }
 
 /* 3D view containers */
-#pointcloud-container, #tsdf-container {
+#stereo-pc-container {
 	width: 100%;
-	aspect-ratio: 16 / 9;
+	flex: 1;
+	min-height: 0;
 	position: relative;
 	overflow: hidden;
 }

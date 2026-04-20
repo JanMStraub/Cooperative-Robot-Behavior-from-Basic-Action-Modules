@@ -250,13 +250,16 @@ class GraphQueryEngine:
             if obj_id in grasped:
                 continue
 
-            # Skip objects that are at (or very near) the target itself —
-            # the robot is moving *toward* them, not being blocked by them.
             obj_node = self._graph.get_node(obj_id)
             if not obj_node:
                 continue
             obj_pos = obj_node.get("position")
             if not obj_pos:
+                continue
+
+            # Skip objects co-located with the robot — either held (GRASPING edge
+            # not yet synced) or resting in the gripper zone.
+            if math.dist(obj_pos, robot_pos) < blocking_threshold:
                 continue
 
             # Skip objects at the target destination — the robot is moving toward
@@ -278,7 +281,10 @@ class GraphQueryEngine:
                 dist = math.dist(obj_pos, closest)
 
             if dist < blocking_threshold:
-                logger.debug(f"Path blocked by {obj_id} (dist={dist:.4f}m)")
+                logger.warning(
+                    f"Path blocked: obj={obj_id} pos={obj_pos} dist_to_path={dist:.4f}m "
+                    f"robot_pos={robot_pos} target={target}"
+                )
                 return True
 
         return False

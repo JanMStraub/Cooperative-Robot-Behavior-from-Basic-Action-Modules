@@ -136,9 +136,9 @@
 .camera-feed {
     flex: 1; min-height: 80px; position: relative;
     display: flex; justify-content: center; align-items: center;
-    background: #050505; overflow: hidden;
+    overflow: hidden;
 }
-.feed-placeholder { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; color: var(--text-muted); }
+.feed-placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.5rem; color: var(--text-muted); background: var(--bg-panel); border-radius: var(--radius-md); }
 .feed-placeholder i { font-size: 2rem; }
 .feed-overlay {
     position: absolute; bottom: 0; left: 0; right: 0;

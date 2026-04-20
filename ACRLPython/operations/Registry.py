@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 from .MoveOperations import (
     MOVE_TO_COORDINATE_OPERATION,
-    MOVE_FROM_A_TO_B_OPERATION,
     ADJUST_END_EFFECTOR_ORIENTATION_OPERATION,
     PICK_OBJECT_AT_COORDINATE_OPERATION,
 )
@@ -30,22 +29,15 @@ from .GripperOperations import (
 )
 from .GraspOperations import (
     GRASP_OBJECT_OPERATION,
-    GRASP_OBJECT_FOR_HANDOFF_OPERATION,
     ORIENT_GRIPPER_FOR_HANDOFF_RECEIVE_OPERATION,
+    PRESENT_FOR_HANDOFF_OPERATION,
     RECEIVE_HANDOFF_OPERATION,
 )
 from .DefaultPositionOperation import RETURN_TO_START_POSITION_OPERATION
-from .DetectionOperations import (
-    DETECT_OBJECTS_OPERATION,
-    ESTIMATE_DISTANCE_TO_OBJECT_OPERATION,
-    ESTIMATE_DISTANCE_BETWEEN_OBJECTS_OPERATION,
-)
 from .VisionOperations import ANALYZE_SCENE_OPERATION, DETECT_OBJECT_STEREO_OPERATION
 from .PointCloudOperations import GENERATE_POINT_CLOUD_OPERATION
 from .SpatialOperations import (
     MOVE_RELATIVE_TO_OBJECT_OPERATION,
-    MOVE_BETWEEN_OBJECTS_OPERATION,
-    MOVE_TO_REGION_OPERATION,
 )
 from .SyncOperations import (
     SIGNAL_OPERATION,
@@ -54,12 +46,7 @@ from .SyncOperations import (
 )
 from .FieldOperations import (
     DETECT_FIELD_OPERATION,
-    GET_FIELD_CENTER_OPERATION,
     DETECT_ALL_FIELDS_OPERATION,
-)
-from .IntermediateOperations import (
-    ALIGN_OBJECT_OPERATION,
-    FOLLOW_PATH_OPERATION,
 )
 from .CoordinationOperations import (
     DETECT_OTHER_ROBOT_OPERATION,
@@ -94,7 +81,6 @@ class OperationRegistry:
             # ============================================================================
             # Navigation & Motion
             MOVE_TO_COORDINATE_OPERATION,
-            MOVE_FROM_A_TO_B_OPERATION,
             ADJUST_END_EFFECTOR_ORIENTATION_OPERATION,
             RETURN_TO_START_POSITION_OPERATION,
             PICK_OBJECT_AT_COORDINATE_OPERATION,
@@ -103,15 +89,11 @@ class OperationRegistry:
             RELEASE_OBJECT_OPERATION,
             PLACE_OBJECT_OPERATION,
             # Perception & Detection
-            DETECT_OBJECTS_OPERATION,
             DETECT_OBJECT_STEREO_OPERATION,
             GENERATE_POINT_CLOUD_OPERATION,
             ANALYZE_SCENE_OPERATION,
-            ESTIMATE_DISTANCE_TO_OBJECT_OPERATION,
-            ESTIMATE_DISTANCE_BETWEEN_OBJECTS_OPERATION,
             # Field Detection (YOLO-based)
             DETECT_FIELD_OPERATION,
-            GET_FIELD_CENTER_OPERATION,
             DETECT_ALL_FIELDS_OPERATION,
             # Status
             CHECK_ROBOT_STATUS_OPERATION,
@@ -122,21 +104,15 @@ class OperationRegistry:
             # ============================================================================
             # LEVEL 3: INTERMEDIATE OPERATIONS (Complex single-robot tasks)
             # ============================================================================
-            # Advanced Manipulation
             GRASP_OBJECT_OPERATION,
-            ALIGN_OBJECT_OPERATION,
-            # Spatial Reasoning & Navigation
             MOVE_RELATIVE_TO_OBJECT_OPERATION,
-            MOVE_BETWEEN_OBJECTS_OPERATION,
-            MOVE_TO_REGION_OPERATION,
-            FOLLOW_PATH_OPERATION,
             # ============================================================================
             # LEVEL 4: MULTI-ROBOT COORDINATION (Inter-robot operations)
             # ============================================================================
             DETECT_OTHER_ROBOT_OPERATION,
             MIRROR_MOVEMENT_OPERATION,
-            GRASP_OBJECT_FOR_HANDOFF_OPERATION,
             ORIENT_GRIPPER_FOR_HANDOFF_RECEIVE_OPERATION,
+            PRESENT_FOR_HANDOFF_OPERATION,
             RECEIVE_HANDOFF_OPERATION,
             # ============================================================================
             # LEVEL 5: COLLABORATIVE MANIPULATION (Advanced coordination)

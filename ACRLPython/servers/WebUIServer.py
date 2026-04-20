@@ -423,7 +423,8 @@ def frame_generator(stream_type="left"):
                 except Exception as detect_err:
                     logger.debug(f"WebUI Stream detection skipping frame: {detect_err}")
 
-            _, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            from config.Vision import STEREO_JPEG_QUALITY
+            _, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, STEREO_JPEG_QUALITY])
             frame_bytes = encoded.tobytes()
 
         # Fallback to single camera if no stereo
@@ -431,7 +432,8 @@ def frame_generator(stream_type="left"):
             single = storage.get_latest_single()
             if single:
                 _, img, _ = single
-                _, encoded = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                from config.Vision import STEREO_JPEG_QUALITY
+                _, encoded = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, STEREO_JPEG_QUALITY])
                 frame_bytes = encoded.tobytes()
 
         yield (
@@ -696,9 +698,38 @@ async def state_broadcaster():
                     },
                 }
                 await manager.broadcast(json.dumps(world_state_data))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"state_broadcaster error: {e}")
         await asyncio.sleep(0.5)  # 2 Hz updates
+
+
+def broadcast_stereo_pointcloud(points: Any, colors: Any, scene_span: float = 1.5):
+    """
+    Broadcasts a stereo point cloud to connected Web UI clients.
+
+    Args:
+        points: (N, 3) float32 array in Unity LH world frame.
+        colors: (N, 3) uint8 array of RGB colours.
+        scene_span: approximate scene diameter in metres, used for point sizing.
+    """
+    if not manager.active_connections or not _main_loop:
+        return
+    try:
+        import base64
+        import numpy as np
+        pts_b64 = base64.b64encode(points.astype(np.float32).tobytes()).decode("utf-8")
+        clr_b64 = base64.b64encode(colors.astype(np.uint8).tobytes()).decode("utf-8")
+        payload = json.dumps({
+            "type": "stereo_pointcloud",
+            "data": {
+                "points_b64": pts_b64,
+                "colors_b64": clr_b64,
+                "scene_span": float(scene_span),
+            },
+        })
+        asyncio.run_coroutine_threadsafe(manager.broadcast(payload), _main_loop)
+    except Exception as e:
+        logger.error(f"Failed to broadcast stereo point cloud: {e}")
 
 
 def broadcast_vgn_debug(data: Dict[str, Any]):

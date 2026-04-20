@@ -212,3 +212,62 @@ class TestMotionLayerConfig:
 
         importlib.reload(srv)
         assert srv.USE_MOTION_LAYER is True
+
+
+# ============================================================================
+# parse_with_hint() motion layer integration
+# ============================================================================
+
+
+class TestParseWithHintMotionLayer:
+    def _stub_parser(self, parser, motions):
+        """Wire up common mocks for parse_with_hint tests."""
+        parser._decompose_to_motions = Mock(return_value=motions)
+        parser._do_llm_request = Mock(
+            return_value={
+                "success": True,
+                "parsed": {"commands": [{"operation": "control_gripper", "params": {}}]},
+            }
+        )
+        parser._validate_commands = Mock(
+            return_value=[{"operation": "control_gripper", "params": {}}]
+        )
+        parser._get_spatial_context = Mock(return_value="")
+        parser._prompt_builder = Mock()
+        parser._prompt_builder.build.return_value = "mocked prompt"
+
+    def test_parse_with_hint_uses_motion_layer_when_flag_true(self, parser):
+        """parse_with_hint(use_motion_layer=True) runs Stage 1 before the hint parse."""
+        motions = ["approach from above", "close gripper"]
+        self._stub_parser(parser, motions)
+
+        result = parser.parse_with_hint(
+            "grasp the red cube", robot_id="Robot1", hint="prev error", use_motion_layer=True
+        )
+
+        parser._decompose_to_motions.assert_called_once_with("grasp the red cube", "Robot1")
+        prompt_call_arg = parser._prompt_builder.build.call_args[0][0]
+        assert "approach from above" in prompt_call_arg
+        assert result["success"] is True
+
+    def test_parse_with_hint_skips_motion_layer_when_flag_false(self, parser):
+        """parse_with_hint(use_motion_layer=False) does not call _decompose_to_motions."""
+        self._stub_parser(parser, ["some motion"])
+
+        parser.parse_with_hint(
+            "grasp the red cube", robot_id="Robot1", hint="err", use_motion_layer=False
+        )
+
+        parser._decompose_to_motions.assert_not_called()
+
+    def test_parse_with_hint_falls_back_when_decompose_empty(self, parser):
+        """parse_with_hint with motion layer falls back to original command when Stage 1 empty."""
+        self._stub_parser(parser, [])
+
+        parser.parse_with_hint(
+            "grasp the red cube", robot_id="Robot1", hint="err", use_motion_layer=True
+        )
+
+        prompt_call_arg = parser._prompt_builder.build.call_args[0][0]
+        assert "Motion plan" not in prompt_call_arg
+        assert "grasp the red cube" in prompt_call_arg

@@ -15,9 +15,9 @@
 			href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
 		/>
 
-		<link rel="stylesheet" href="/static/css/variables.css?v=20260328_0001" />
-		<link rel="stylesheet" href="/static/css/layout.css?v=20260328_0002" />
-		<link rel="stylesheet" href="/static/css/components.css?v=20260328_0001" />
+		<link rel="stylesheet" href="/static/css/variables.css?v=20260420_0001" />
+		<link rel="stylesheet" href="/static/css/layout.css?v=20260420_0001" />
+		<link rel="stylesheet" href="/static/css/components.css?v=20260420_0002" />
 		<!-- Three.js Library -->
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 		<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -151,33 +151,22 @@
 							<div class="camera-column">
 								<div class="camera-feed glass-box">
 									<img id="stream-rgb" alt="RGB Stream"
-										style="width:100%;height:100%;object-fit:cover;"
-										onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
-									<div class="feed-placeholder" style="display:none;">
-										<i class="fa-solid fa-video-slash"></i>
-										<span>Camera 1 (Offline)</span>
+										style="width:100%;height:100%;object-fit:cover;display:none;" />
+									<div id="rgb-placeholder" class="feed-placeholder">
+										<i class="fa-solid fa-circle-notch fa-spin"></i>
+										<span>Waiting for Unity…</span>
 									</div>
 									<div class="feed-overlay">RGB + YOLO</div>
 								</div>
-								<!-- Pointcloud visualization overlay -->
-								<div id="pointcloud-container" class="glass-box">
-									<div class="feed-overlay">Masked Point Cloud</div>
-								</div>
 							</div>
 							<div class="camera-column">
-								<div class="camera-feed glass-box">
-									<img id="stream-depth" alt="Depth Stream"
-										style="width:100%;height:100%;object-fit:cover;"
-										onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
-									<div class="feed-placeholder" style="display:none;">
-										<i class="fa-solid fa-video-slash"></i>
-										<span>Camera 2 (Offline)</span>
+								<!-- Stereo point cloud -->
+								<div id="stereo-pc-container" class="glass-box">
+									<div id="stereo-pc-placeholder" class="feed-placeholder">
+										<i class="fa-solid fa-circle-notch fa-spin"></i>
+										<span>Waiting for Unity…</span>
 									</div>
-									<div class="feed-overlay">Stereo Right (Depth proxy)</div>
-								</div>
-								<!-- TSDF & Grasps visualization overlay -->
-								<div id="tsdf-container" class="glass-box">
-									<div class="feed-overlay">TSDF + Grasps</div>
+									<div class="feed-overlay">Stereo Point Cloud</div>
 								</div>
 							</div>
 						</div>

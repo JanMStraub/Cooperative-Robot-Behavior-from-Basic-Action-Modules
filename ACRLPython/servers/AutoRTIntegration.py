@@ -46,6 +46,7 @@ try:
         ENABLE_SAFETY_VALIDATION,
         TASK_CACHE_SIZE,
         TASK_EXPIRATION_SECONDS,
+        UNITY_INTEGRATION_ENABLED,
     )
 except ImportError:
     from ..config.AutoRT import (
@@ -56,6 +57,7 @@ except ImportError:
         ENABLE_SAFETY_VALIDATION,
         TASK_CACHE_SIZE,
         TASK_EXPIRATION_SECONDS,
+        UNITY_INTEGRATION_ENABLED,
     )
 
 
@@ -134,6 +136,11 @@ class AutoRTHandler:
 
             self._orchestrator = AutoRTOrchestrator()
             logger.info("AutoRTOrchestrator initialized successfully")
+            if not UNITY_INTEGRATION_ENABLED:
+                logger.warning(
+                    "AUTORT_UNITY_INTEGRATION=false — tasks will be generated "
+                    "but not pushed to Unity"
+                )
         except Exception as e:
             logger.error(f"Failed to initialize AutoRTOrchestrator: {e}")
             raise RuntimeError(f"AutoRT initialization failed: {e}")
@@ -559,8 +566,8 @@ class AutoRTHandler:
                     strategy=self._loop_strategy,
                 )
 
-                # Send to Unity via callback (if registered)
-                if self._task_callback and response.get("tasks"):
+                # Send to Unity via callback (if registered and Unity integration enabled)
+                if UNITY_INTEGRATION_ENABLED and self._task_callback and response.get("tasks"):
                     self._task_callback(response, request_id=0)
                     logger.debug(
                         f"Sent {len(response['tasks'])} tasks to Unity via callback"

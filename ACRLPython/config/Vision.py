@@ -24,9 +24,6 @@ MAX_IMAGE_AGE = float(os.environ.get("MAX_IMAGE_AGE", "30.0"))
 # Monitoring intervals (seconds)
 IMAGE_CHECK_INTERVAL = float(os.environ.get("IMAGE_CHECK_INTERVAL", "1.0"))
 
-# Duplicate detection
-DUPLICATE_TIME_THRESHOLD = float(os.environ.get("DUPLICATE_TIME_THRESHOLD", "0.1"))
-
 VISION_OPERATION_TIMEOUT = float(os.environ.get("VISION_OPERATION_TIMEOUT", "20.0"))
 
 # ============================================================================
@@ -249,6 +246,17 @@ STEREO_MAX_SIZE_RATIO = float(os.environ.get("STEREO_MAX_SIZE_RATIO", "0.3"))
 STEREO_MIN_IOU = float(os.environ.get("STEREO_MIN_IOU", "0.0"))
 
 # ============================================================================
+# World State Position Source
+# ============================================================================
+
+# When True, object positions streamed from Unity (WorldStatePublisher) are
+# written into WorldState, potentially overwriting vision-detected positions.
+# Set to False to keep only stereo/vision-detected positions in WorldState.
+USE_UNITY_OBJECT_POSITIONS = os.environ.get(
+    "USE_UNITY_OBJECT_POSITIONS", "true"
+).lower() in ("true", "1", "yes")
+
+# ============================================================================
 # Object Tracking
 # ============================================================================
 
@@ -268,7 +276,7 @@ TRACKING_MIN_IOU = float(os.environ.get("TRACKING_MIN_IOU", "0.3"))
 YOLO_TASK = os.environ.get("YOLO_TASK", "detect")  # detect or segment
 YOLO_SEGMENTATION_MODEL = os.environ.get(
     "YOLO_SEGMENTATION_MODEL",
-    str(_CONFIG_DIR / "yolo" / "models" / "field_detector_seg.onnx"),
+    str(_CONFIG_DIR / "yolo" / "models" / "more_cubes_detector.onnx"),
 )
 
 # ============================================================================
@@ -284,6 +292,13 @@ CONFLICT_RESOLUTION_STRATEGY = os.environ.get(
     "CONFLICT_RESOLUTION_STRATEGY", "closest_robot"
 )
 CONFLICT_MIN_DISTANCE_DIFF = float(os.environ.get("CONFLICT_MIN_DISTANCE_DIFF", "0.05"))
+
+# ============================================================================
+# VGN Debug Export
+# ============================================================================
+
+VGN_EXPORT_TSDF = os.environ.get("VGN_EXPORT_TSDF", "false").lower() in ("true", "1", "yes")
+VGN_EXPORT_TSDF_PATH = os.environ.get("VGN_EXPORT_TSDF_PATH", "/tmp/vgn_tsdf_last.npz")
 
 # ============================================================================
 # Visualization and Performance

@@ -35,18 +35,26 @@ public class SaveScreenshots : MonoBehaviour
     public float rotationJitter = 2f;
 
     [Header("Object Randomization")]
-    [Tooltip("Enable random repositioning of Target-tagged objects each capture. Disable to keep objects at their scene positions.")]
+    [Tooltip(
+        "Enable random repositioning of Target-tagged objects each capture. Disable to keep objects at their scene positions."
+    )]
     public bool randomizeObjectPositions = true;
 
-    [Tooltip("Min/max bounds for randomizing Target-tagged object positions (matches robot workspace)")]
+    [Tooltip(
+        "Min/max bounds for randomizing Target-tagged object positions (matches robot workspace)"
+    )]
     public Vector3 objectSpawnMin = new Vector3(-0.35f, 0.0f, -0.35f);
     public Vector3 objectSpawnMax = new Vector3(0.35f, 0.4f, 0.35f);
 
-    [Tooltip("Bias cube spawning toward the far half of the table to generate more small/distant training examples")]
+    [Tooltip(
+        "Bias cube spawning toward the far half of the table to generate more small/distant training examples"
+    )]
     public bool biasSpawnToFar = false;
 
     [Range(0f, 1f)]
-    [Tooltip("When biasSpawnToFar is enabled, probability that a cube spawns in the far half (z > midpoint). 0.5 = uniform.")]
+    [Tooltip(
+        "When biasSpawnToFar is enabled, probability that a cube spawns in the far half (z > midpoint). 0.5 = uniform."
+    )]
     public float farSpawnBias = 0.75f;
 
     [Header("Visibility Randomization")]
@@ -140,7 +148,9 @@ public class SaveScreenshots : MonoBehaviour
                     continue;
                 string cn = ExtractClassName(obj.name);
                 if (!classNameToId.TryGetValue(cn, out int cid))
-                    Debug.LogError($"[SaveScreenshots] No class ID for '{cn}' (GameObject: '{obj.name}') — fix the name or classNames array!");
+                    Debug.LogError(
+                        $"[SaveScreenshots] No class ID for '{cn}' (GameObject: '{obj.name}') — fix the name or classNames array!"
+                    );
                 _objectClassCache[obj.GetInstanceID()] = (cid, cn);
             }
         }
@@ -171,7 +181,7 @@ public class SaveScreenshots : MonoBehaviour
 
         Debug.Log(
             $"SaveScreenshots: Starting capture of {numScreenshots} images. "
-            + $"Camera base position: {baseCameraPosition}, rotation: {baseCameraRotation.eulerAngles}"
+                + $"Camera base position: {baseCameraPosition}, rotation: {baseCameraRotation.eulerAngles}"
         );
 
         StartCoroutine(CaptureLoop());
@@ -635,7 +645,10 @@ public class SaveScreenshots : MonoBehaviour
             float width_yolo = width_unity;
             float height_yolo = height_unity;
 
-            var (classId, className) = _objectClassCache.TryGetValue(obj.GetInstanceID(), out var info)
+            var (classId, className) = _objectClassCache.TryGetValue(
+                obj.GetInstanceID(),
+                out var info
+            )
                 ? info
                 : (0, ExtractClassName(obj.name));
 
@@ -693,13 +706,13 @@ public class SaveScreenshots : MonoBehaviour
         return new Vector3[]
         {
             t.TransformPoint(c + new Vector3(-e.x, -e.y, -e.z)),
-            t.TransformPoint(c + new Vector3(-e.x, -e.y,  e.z)),
-            t.TransformPoint(c + new Vector3(-e.x,  e.y, -e.z)),
-            t.TransformPoint(c + new Vector3(-e.x,  e.y,  e.z)),
-            t.TransformPoint(c + new Vector3( e.x, -e.y, -e.z)),
-            t.TransformPoint(c + new Vector3( e.x, -e.y,  e.z)),
-            t.TransformPoint(c + new Vector3( e.x,  e.y, -e.z)),
-            t.TransformPoint(c + new Vector3( e.x,  e.y,  e.z)),
+            t.TransformPoint(c + new Vector3(-e.x, -e.y, e.z)),
+            t.TransformPoint(c + new Vector3(-e.x, e.y, -e.z)),
+            t.TransformPoint(c + new Vector3(-e.x, e.y, e.z)),
+            t.TransformPoint(c + new Vector3(e.x, -e.y, -e.z)),
+            t.TransformPoint(c + new Vector3(e.x, -e.y, e.z)),
+            t.TransformPoint(c + new Vector3(e.x, e.y, -e.z)),
+            t.TransformPoint(c + new Vector3(e.x, e.y, e.z)),
         };
     }
 

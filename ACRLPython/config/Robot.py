@@ -73,7 +73,7 @@ ROBOT_BASE_POSITIONS = {
 
 # Default object dimensions (m) used when actual dims are unavailable.
 # Matches the scene's standard 2 cm cube prefabs.
-HANDOFF_DEFAULT_OBJECT_DIMENSIONS = (0.02, 0.02, 0.02)
+DEFAULT_HANDOFF_OBJECT_DIMENSIONS = (0.02, 0.02, 0.02)
 
 # Extra clearance added to the half-extent offset so grippers don't overlap.
 HANDOFF_GRIPPER_CLEARANCE = float(

@@ -111,7 +111,8 @@ namespace Robotics
                 // Ensure default profile is properly initialized.
                 // Note: RobotConfig field initializer creates a 6-element array of nulls,
                 // so we must also check for null entries, not just an empty/null array.
-                bool hasNullJoints = robotProfile.joints == null
+                bool hasNullJoints =
+                    robotProfile.joints == null
                     || robotProfile.joints.Length == 0
                     || System.Array.Exists(robotProfile.joints, j => j == null);
                 if (hasNullJoints)
@@ -210,12 +211,15 @@ namespace Robotics
                 // Do not re-issue SetTarget when the robot is holding the target itself.
                 // The gripper moves the object kinematically, so any arm motion would appear
                 // as target drift and spin up a new grasp coroutine against a held object.
-                GripperController gripper = robot.controller != null
-                    ? robot.controller.GetComponentInChildren<GripperController>()
-                    : null;
-                if (gripper != null
+                GripperController gripper =
+                    robot.controller != null
+                        ? robot.controller.GetComponentInChildren<GripperController>()
+                        : null;
+                if (
+                    gripper != null
                     && gripper.IsHoldingObject
-                    && gripper.GraspedObject == robot.targetGameObject)
+                    && gripper.GraspedObject == robot.targetGameObject
+                )
                     continue;
 
                 Vector3 currentPos = robot.targetGameObject.transform.position;

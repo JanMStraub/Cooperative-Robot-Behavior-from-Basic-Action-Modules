@@ -272,16 +272,19 @@ class CoordinationVerifier:
         if other_robot_state is None:
             return None  # Other robot not tracked
 
-        # If other robot is not moving, check static position
+        # If other robot is not moving, only flag actual physical overlap (gripper
+        # collision radius ~5cm), not the full motion-safety separation (0.2m).
+        # The 0.2m separation applies when both robots are in motion; using it
+        # against a static idle robot incorrectly blocks valid workspace targets.
+        STATIC_COLLISION_RADIUS = 0.05  # meters
         if not other_robot_state.is_moving:
-            # Check distance to other robot's current position
             if other_robot_state.position is not None:
                 dx = target_pos[0] - other_robot_state.position[0]
                 dy = target_pos[1] - other_robot_state.position[1]
                 dz = target_pos[2] - other_robot_state.position[2]
                 distance = (dx * dx + dy * dy + dz * dz) ** 0.5
 
-                min_sep = MIN_ROBOT_SEPARATION
+                min_sep = STATIC_COLLISION_RADIUS
                 if distance < min_sep:
                     return CoordinationIssue(
                         issue_type="collision",
