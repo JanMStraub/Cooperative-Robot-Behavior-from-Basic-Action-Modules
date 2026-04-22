@@ -371,8 +371,7 @@ Output only valid JSON."""
 {context}
 
 IMPORTANT operation semantics — do NOT raise concerns about missing coordinates for these:
-- orient_gripper_for_handoff_receive(robot_id, object_id, source_robot_id): computes gripper orientation from WorldState automatically. No coordinate params needed or expected.
-- receive_handoff(robot_id, object_id, source_robot_id): computes target position from WorldState automatically. No coordinate params needed or expected.
+- orient_gripper_for_handoff_receive(robot_id, object_id, source_robot_id): computes gripper orientation from WorldState automatically. Also returns approach_position {{x,y,z}} in result for use by subsequent move_to_coordinate. No coordinate params needed or expected.
 - grasp_object(robot_id, object_id): positions computed internally — no coordinate params needed.
 Only flag missing coordinates for operations like move_to_coordinate that explicitly require them.
 

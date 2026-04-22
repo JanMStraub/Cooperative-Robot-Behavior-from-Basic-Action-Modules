@@ -139,33 +139,41 @@ class _PromptBuilder:
 
         Example for multi-robot handoff:
         {{
-        "reasoning": "Robot1 detects and grasps the red cube, then moves to the fixed handoff presentation position ({_HANDOFF_X:.2f}, {_HANDOFF_Y:.2f}, {_HANDOFF_Z:.2f}) and signals. Robot2 waits, re-detects the object at the presentation position, then calls receive_handoff which orients the gripper upward and approaches from the side. Robot1 releases after Robot2 has the object.",
+        "reasoning": "Robot1 detects and grasps, returns to start for a deterministic joint config, then moves to the fixed handoff position and signals. Robot2 waits, re-detects, orients its gripper (orient_gripper_for_handoff_receive returns approach_position), moves to that position, and closes the gripper. Robot1 releases after.",
         "plan": [
             {{"parallel_group": 1, "robot": "Robot1", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "capture_var": "target"}},
             {{"parallel_group": 2, "robot": "Robot1", "operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "$target.color"}}}},
-            {{"parallel_group": 3, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": {_HANDOFF_X:.2f}, "y": {_HANDOFF_Y:.2f}, "z": {_HANDOFF_Z:.2f}}}}},
-            {{"parallel_group": 4, "robot": "Robot1", "operation": "signal", "params": {{"event_name": "r1_at_handoff"}}}},
-            {{"parallel_group": 4, "robot": "Robot2", "operation": "wait_for_signal", "params": {{"event_name": "r1_at_handoff"}}}},
-            {{"parallel_group": 5, "robot": "Robot2", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot2", "color": "red"}}, "capture_var": "handoff_target"}},
-            {{"parallel_group": 6, "robot": "Robot2", "operation": "receive_handoff", "params": {{"robot_id": "Robot2", "object_id": "$handoff_target.color", "source_robot_id": "Robot1"}}}},
-            {{"parallel_group": 7, "robot": "Robot1", "operation": "release_object", "params": {{"robot_id": "Robot1"}}}}
+            {{"parallel_group": 3, "robot": "Robot1", "operation": "return_to_start_position", "params": {{"robot_id": "Robot1"}}}},
+            {{"parallel_group": 4, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": {_HANDOFF_X:.2f}, "y": {_HANDOFF_Y:.2f}, "z": {_HANDOFF_Z:.2f}}}}},
+            {{"parallel_group": 5, "robot": "Robot1", "operation": "adjust_end_effector_orientation", "params": {{"robot_id": "Robot1", "pitch": 0.0, "yaw": 0.0, "roll": 0.0}}}},
+            {{"parallel_group": 6, "robot": "Robot1", "operation": "signal", "params": {{"event_name": "r1_at_handoff"}}}},
+            {{"parallel_group": 6, "robot": "Robot2", "operation": "wait_for_signal", "params": {{"event_name": "r1_at_handoff"}}}},
+            {{"parallel_group": 7, "robot": "Robot2", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot2", "color": "red"}}, "capture_var": "handoff_target"}},
+            {{"parallel_group": 8, "robot": "Robot2", "operation": "orient_gripper_for_handoff_receive", "params": {{"robot_id": "Robot2", "object_id": "$handoff_target.color", "source_robot_id": "Robot1"}}, "capture_var": "orient_result"}},
+            {{"parallel_group": 9, "robot": "Robot2", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot2", "x": "$orient_result.approach_position.x", "y": "$orient_result.approach_position.y", "z": "$orient_result.approach_position.z"}}}},
+            {{"parallel_group": 10, "robot": "Robot2", "operation": "control_gripper", "params": {{"robot_id": "Robot2", "open_gripper": false}}}},
+            {{"parallel_group": 11, "robot": "Robot1", "operation": "release_object", "params": {{"robot_id": "Robot1"}}}}
         ]
         }}
 
         === HANDOFF RULE ===
 
-        For robot-to-robot handoffs:
-        1. Robot1 grasps with grasp_object.
-        2. Robot1 moves to the fixed HANDOFF PRESENTATION POSITION (x={_HANDOFF_X:.2f}, y={_HANDOFF_Y:.2f}, z={_HANDOFF_Z:.2f}) — always use these exact coordinates.
-        3. Robot1 signals. Robot2 waits for that signal.
-        4. Robot2 re-detects the object (it has MOVED with Robot1 to the presentation position).
-        5. Robot2 calls receive_handoff — orients gripper upward and approaches from the side.
-        6. Robot1 releases only after Robot2's receive_handoff completes.
+        For robot-to-robot handoffs use these exact explicit steps — no composite operations:
+        1. Robot1: grasp_object
+        2. Robot1: return_to_start_position (gives deterministic IK starting config)
+        3. Robot1: move_to_coordinate to ({_HANDOFF_X:.2f}, {_HANDOFF_Y:.2f}, {_HANDOFF_Z:.2f}) — always these exact coordinates
+        4. Robot1: adjust_end_effector_orientation(pitch=0, yaw=0, roll=0) — locks wrist, prevents joint 5/6 variance across runs
+        5. Robot1: signal. Robot2: wait_for_signal (same event name, same parallel_group).
+        6. Robot2: detect_object_stereo (object has MOVED with Robot1 — must re-detect)
+        7. Robot2: orient_gripper_for_handoff_receive — captures result as variable (contains approach_position)
+        8. Robot2: move_to_coordinate using $orient_result.approach_position.x/y/z
+        9. Robot2: control_gripper(open_gripper=false)
+        10. Robot1: release_object
 
-        NEVER use grasp_object for the receiving robot during a handoff — it causes gripper collision.
-        NEVER hardcode Robot2's grasp position — the object moves with Robot1 and its position changes.
-        NEVER move Robot1 to any position other than ({_HANDOFF_X:.2f}, {_HANDOFF_Y:.2f}, {_HANDOFF_Z:.2f}) for the handoff.
-        receive_handoff automatically orients the gripper and approaches from the side.
+        NEVER use grasp_object for the receiving robot — causes gripper collision.
+        NEVER hardcode Robot2's approach position — use $orient_result.approach_position from step 7.
+        NEVER move Robot1 to any position other than ({_HANDOFF_X:.2f}, {_HANDOFF_Y:.2f}, {_HANDOFF_Z:.2f}).
+        NEVER skip step 4 — wrist orientation is non-deterministic without it.
 
         === SYNCHRONIZATION PRIMITIVES ===
 
@@ -190,7 +198,7 @@ class _PromptBuilder:
         - NEVER emit grasp_object when the task says "place", "deposit", or "move to … and place" — the robot already holds the object; use place_object directly
         - Only use control_gripper directly for explicit open/close commands unrelated to picking
         - Use grasp_object for both single-robot and multi-robot handoff source grasps
-        - NEVER use grasp_object for the receiving robot during a handoff — use receive_handoff
+        - NEVER use grasp_object for the receiving robot during a handoff — use orient_gripper_for_handoff_receive + move_to_coordinate + control_gripper(close)
 
         === PLACE RULE (CRITICAL) ===
 
@@ -564,12 +572,19 @@ class CommandParser:
         r"\b(analyze\s+(the\s+)?scene|describe\s+(the\s+)?(scene|workspace|environment)|"
         r"what\s+(do\s+you\s+see|objects?\s+are|can\s+you\s+see|'?s\s+on\s+the\s+table)|"
         r"(scan|inspect|observe|survey|look\s+at)\s+(the\s+)?(scene|workspace)|"
-        r"what\s+is\s+in\s+(the\s+)?scene)\b",
+        r"what\s+is\s+in\s+(the\s+)?scene|"
+        r"detect\s+(object|field|all\s+fields?)|"
+        r"generate\s+point\s+cloud|"
+        r"check\s+(robot\s+)?status|"
+        r"wait\s+\d|"
+        r"wait\s+for\s+(signal|event))\b",
         re.IGNORECASE,
     )
 
     def _is_perception_only_command(self, command_text: str) -> bool:
         """Return True if the command is purely perceptual with no physical motion intent."""
+        if re.match(r"\s*signal\s+\S", command_text, re.IGNORECASE):
+            return True
         return bool(self._PERCEPTION_ONLY_PATTERNS.search(command_text))
 
     def _decompose_to_motions(self, command_text: str, robot_id: str) -> List[str]:

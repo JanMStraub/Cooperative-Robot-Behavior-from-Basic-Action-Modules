@@ -195,14 +195,14 @@ class TestMotionLayerConfig:
 
         assert isinstance(USE_MOTION_LAYER, bool)
 
-    def test_use_motion_layer_default_false(self, monkeypatch):
-        """Default value is False (disabled)."""
+    def test_use_motion_layer_default_true(self, monkeypatch):
+        """Default value is True (enabled)."""
         monkeypatch.delenv("PARSER_USE_MOTION_LAYER", raising=False)
         import config.Servers as srv
         import importlib
 
         importlib.reload(srv)
-        assert srv.USE_MOTION_LAYER is False
+        assert srv.USE_MOTION_LAYER is True
 
     def test_use_motion_layer_env_true(self, monkeypatch):
         """PARSER_USE_MOTION_LAYER=true enables the flag."""

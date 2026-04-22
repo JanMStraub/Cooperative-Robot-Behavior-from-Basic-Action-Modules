@@ -1,36 +1,39 @@
 #!/usr/bin/env python3
 """
-send_handoff.py — Test grasp_object + receive_handoff directly in Unity without the LLM.
+send_handoff.py — Test the explicit handoff pipeline in Unity without the LLM.
 
 Uses the SequenceServer "EXEC:" prefix to bypass LLM parsing and feed operations
 directly into SequenceExecutor. Each step blocks until Unity confirms completion
 before the next step begins.
 
-Sequence:
-  1. Robot1: grasp_object                      (grasps object in place)
-  2. Robot1: move_to_coordinate                (moves to HANDOFF_PRESENTATION_POSITION)
-  3. Robot2: orient_gripper_for_handoff_receive (pitches gripper up, aligns jaw yaw)
-  4. Robot2: receive_handoff                   (approaches from side, closes gripper)
-  5. Robot1: release_object                    (opens gripper — Robot2 now holds it)
-  6. Robot1: return_to_start_position          (return home)
-
-Steps run sequentially. Robot1 presents the object at a fixed world position
-so Robot2 can approach from the side without colliding with Robot1's top-down grip.
+Flat step sequence (each is an independent SE operation):
+  1. Robot1: grasp_object
+  2. Robot1: return_to_start_position  (deterministic joint config)
+  3. Robot1: move_to_coordinate        (→ HANDOFF_PRESENTATION_POSITION)
+  4. Robot1: adjust_end_effector_orientation(pitch=0,yaw=0,roll=0)  (lock wrist)
+  5a. Robot1: signal(r1_at_handoff)
+  5b. Robot2: wait_for_signal(r1_at_handoff)   [parallel with 5a]
+  6. Robot2: detect_object_stereo      (re-detect at presentation pos)
+  7. Robot2: orient_gripper_for_handoff_receive  (returns approach_position in result)
+  8. Robot2: move_to_coordinate        (→ approach_position from step 7)
+  9. Robot2: control_gripper(close)
+ 10. Robot1: release_object
+ 11. Robot1: return_to_start_position
 
 Usage:
     python tools/send_handoff.py
     python tools/send_handoff.py --object red_bar --grasper Robot1 --receiver Robot2
     python tools/send_handoff.py --grasp-only    # only step 1
-    python tools/send_handoff.py --receive-only  # only steps 3-4
+    python tools/send_handoff.py --receive-only  # steps 5-8
     python tools/send_handoff.py --dry-run       # parse without executing
 """
 
 import argparse
 import json
-import os
 import socket
 import struct
 import sys
+import threading
 
 # ── Protocol V2 constants ──────────────────────────────────────────────────────
 SEQUENCE_QUERY = 0x08
@@ -45,10 +48,10 @@ DEFAULT_GRASPER = "Robot1"
 DEFAULT_RECEIVER = "Robot2"
 DEFAULT_TIMEOUT = 120
 
-# Mirrors config/Robot.py HANDOFF_PRESENTATION_POSITION defaults.
-HANDOFF_PRESENTATION_X = float(os.environ.get("HANDOFF_PRESENTATION_X", "0.0"))
-HANDOFF_PRESENTATION_Y = float(os.environ.get("HANDOFF_PRESENTATION_Y", "0.35"))
-HANDOFF_PRESENTATION_Z = float(os.environ.get("HANDOFF_PRESENTATION_Z", "0.0"))
+# Handoff presentation position (must match config/Robot.py HANDOFF_PRESENTATION_POSITION)
+HANDOFF_X = -0.05
+HANDOFF_Y = 0.35
+HANDOFF_Z = 0.0
 
 
 # ── Wire format ────────────────────────────────────────────────────────────────
@@ -129,6 +132,19 @@ def send_ops(
     )
 
 
+def _extract_approach_position(orient_result: dict) -> tuple[float, float, float] | None:
+    """
+    Extract approach_position from orient_gripper_for_handoff_receive result.
+
+    Returns (x, y, z) tuple or None if not present.
+    """
+    data = orient_result.get("data") or orient_result.get("result") or orient_result
+    approach = data.get("approach_position") if isinstance(data, dict) else None
+    if approach and all(k in approach for k in ("x", "y", "z")):
+        return approach["x"], approach["y"], approach["z"]
+    return None
+
+
 # ── Handoff sequence ───────────────────────────────────────────────────────────
 
 
@@ -145,117 +161,173 @@ def run_handoff(
     auto_execute: bool,
 ) -> bool:
     """
-    Dispatch the full handoff sequence (sequential).
+    Dispatch the full handoff sequence using explicit flat operations.
 
-    Step 1 — Robot A grasps the object.
-    Step 2 — Robot A moves to HANDOFF_PRESENTATION_POSITION (fixed world point).
-    Step 3 — Robot B orients its gripper for receiving (pitch up, align jaw yaw).
-    Step 4 — Robot B approaches from the side and closes gripper (receive_handoff).
-    Step 5 — Robot A releases.
-    Step 6 — Robot A returns home.
+    Each step is an independent SE operation with its own Unity ACK.
+    Steps 4a/4b (signal/wait) run in parallel threads.
     """
     results: dict = {}
+    req = 1  # monotonically increasing request_id
 
     # ── Step 1: Grasp ─────────────────────────────────────────────────────────
     if not receive_only:
-        grasp_ops = [
-            {
-                "operation": "grasp_object",
-                "params": {
-                    "robot_id": grasper_id,
-                    "object_id": object_id,
-                },
-            }
-        ]
         send_ops(
-            grasp_ops, grasper_id, "grasp", host, port, camera_id,
-            timeout, auto_execute, 1, results,
+            [{"operation": "grasp_object", "params": {"robot_id": grasper_id, "object_id": object_id}}],
+            grasper_id, "grasp", host, port, camera_id, timeout, auto_execute, req, results,
         )
+        req += 1
         if not results.get("grasp", {}).get("success", False):
             return False
 
-    # ── Step 2: Move to presentation position ─────────────────────────────────
+    # ── Step 2: Return to start (deterministic joint config) ──────────────────
     if not receive_only:
         print()
-        move_ops = [
-            {
-                "operation": "move_to_coordinate",
-                "params": {
-                    "robot_id": grasper_id,
-                    "x": HANDOFF_PRESENTATION_X,
-                    "y": HANDOFF_PRESENTATION_Y,
-                    "z": HANDOFF_PRESENTATION_Z,
-                },
-            }
-        ]
         send_ops(
-            move_ops, grasper_id, "present", host, port, camera_id,
-            timeout, auto_execute, 2, results,
+            [{"operation": "return_to_start_position", "params": {"robot_id": grasper_id, "speed": 0.5}}],
+            grasper_id, "return_start", host, port, camera_id, 60, auto_execute, req, results,
         )
-        if not results.get("present", {}).get("success", False):
+        req += 1
+        if not results.get("return_start", {}).get("success", False):
             return False
 
-    # ── Step 3: Orient receiver gripper ──────────────────────────────────────
+    # ── Step 3: Move to handoff presentation position ─────────────────────────
+    if not receive_only:
+        print()
+        send_ops(
+            [{"operation": "move_to_coordinate", "params": {
+                "robot_id": grasper_id, "x": HANDOFF_X, "y": HANDOFF_Y, "z": HANDOFF_Z,
+            }}],
+            grasper_id, "move_present", host, port, camera_id, timeout, auto_execute, req, results,
+        )
+        req += 1
+        if not results.get("move_present", {}).get("success", False):
+            return False
+
+    # ── Step 4: Lock wrist orientation (deterministic joint 5/6 at presentation pos) ──
+    if not receive_only:
+        print()
+        send_ops(
+            [{"operation": "adjust_end_effector_orientation", "params": {
+                "robot_id": grasper_id, "pitch": 0.0, "yaw": 0.0, "roll": 0.0,
+            }}],
+            grasper_id, "orient_wrist", host, port, camera_id, 30, auto_execute, req, results,
+        )
+        req += 1
+        if not results.get("orient_wrist", {}).get("success", False):
+            print("  [WARN] orient_wrist failed — continuing anyway")
+
+    # ── Steps 5a/5b: Signal (R1) + Wait (R2) in parallel ─────────────────────
+    if not grasp_only and not receive_only:
+        print()
+        signal_req = req
+        wait_req = req + 1
+        req += 2
+
+        signal_out: dict = {}
+        wait_out: dict = {}
+
+        t_signal = threading.Thread(target=send_ops, args=(
+            [{"operation": "signal", "params": {"robot_id": grasper_id, "event_name": "r1_at_handoff"}}],
+            grasper_id, "signal", host, port, camera_id, 30, auto_execute, signal_req, signal_out,
+        ))
+        t_wait = threading.Thread(target=send_ops, args=(
+            [{"operation": "wait_for_signal", "params": {"robot_id": receiver_id, "event_name": "r1_at_handoff"}}],
+            receiver_id, "wait_signal", host, port, camera_id, 60, auto_execute, wait_req, wait_out,
+        ))
+
+        t_signal.start()
+        t_wait.start()
+        t_signal.join()
+        t_wait.join()
+
+        results.update(signal_out)
+        results.update(wait_out)
+
+        if not signal_out.get("signal", {}).get("success", False):
+            return False
+        if not wait_out.get("wait_signal", {}).get("success", False):
+            return False
+
+    # ── Step 5: Receiver detects object at presentation position ──────────────
     if not grasp_only:
         print()
-        orient_ops = [
-            {
-                "operation": "orient_gripper_for_handoff_receive",
-                "params": {
-                    "robot_id": receiver_id,
-                    "object_id": object_id,
-                    "source_robot_id": grasper_id,
-                },
-            }
-        ]
         send_ops(
-            orient_ops, receiver_id, "orient", host, port, camera_id,
-            timeout, auto_execute, 3, results,
+            [{"operation": "detect_object_stereo", "params": {
+                "robot_id": receiver_id, "camera_id": camera_id, "object_color": object_id,
+            }}],
+            receiver_id, "detect", host, port, camera_id, 60, auto_execute, req, results,
         )
+        req += 1
+        if not results.get("detect", {}).get("success", False):
+            print("  [WARN] detect_object_stereo failed — continuing with orient step anyway")
+
+    # ── Step 6: Orient receiver gripper (returns approach_position in result) ──
+    if not grasp_only:
+        print()
+        send_ops(
+            [{"operation": "orient_gripper_for_handoff_receive", "params": {
+                "robot_id": receiver_id,
+                "object_id": object_id,
+                "source_robot_id": grasper_id,
+            }}],
+            receiver_id, "orient", host, port, camera_id, timeout, auto_execute, req, results,
+        )
+        req += 1
         if not results.get("orient", {}).get("success", False):
             return False
 
-    # ── Step 4: Receive ───────────────────────────────────────────────────────
+    # ── Step 7: Move receiver to approach position ────────────────────────────
     if not grasp_only:
         print()
-        receive_ops = [
-            {
-                "operation": "receive_handoff",
-                "params": {
-                    "robot_id": receiver_id,
-                    "object_id": object_id,
-                    "source_robot_id": grasper_id,
-                },
-            }
-        ]
+        approach = _extract_approach_position(results.get("orient", {}))
+        if approach:
+            ap_x, ap_y, ap_z = approach
+            print(f"  [INFO] approach_position from orient: x={ap_x:.4f} y={ap_y:.4f} z={ap_z:.4f}")
+        else:
+            # Fallback: use handoff position with lateral offset toward receiver
+            ap_x = HANDOFF_X + 0.08
+            ap_y = HANDOFF_Y - 0.04
+            ap_z = HANDOFF_Z
+            print(f"  [WARN] approach_position not in orient result — using fallback ({ap_x:.4f}, {ap_y:.4f}, {ap_z:.4f})")
+
         send_ops(
-            receive_ops, receiver_id, "receive", host, port, camera_id,
-            timeout, auto_execute, 4, results,
+            [{"operation": "move_to_coordinate", "params": {
+                "robot_id": receiver_id, "x": ap_x, "y": ap_y, "z": ap_z,
+            }}],
+            receiver_id, "move_approach", host, port, camera_id, timeout, auto_execute, req, results,
         )
-        if not results.get("receive", {}).get("success", False):
+        req += 1
+        if not results.get("move_approach", {}).get("success", False):
             return False
 
-    # ── Steps 4 & 5: release + home ───────────────────────────────────────────
-    if not grasp_only and not receive_only and auto_execute:
+    # ── Step 8: Close receiver gripper ────────────────────────────────────────
+    if not grasp_only:
         print()
-
-        release_ops = [
-            {"operation": "release_object", "params": {"robot_id": grasper_id}}
-        ]
         send_ops(
-            release_ops, grasper_id, "release", host, port, camera_id,
-            20, True, 5, results,
+            [{"operation": "control_gripper", "params": {"robot_id": receiver_id, "open_gripper": False}}],
+            receiver_id, "close_gripper", host, port, camera_id, 20, auto_execute, req, results,
         )
+        req += 1
+        if not results.get("close_gripper", {}).get("success", False):
+            return False
 
-        home_ops = [
-            {
-                "operation": "return_to_start_position",
-                "params": {"robot_id": grasper_id, "speed": 1.0},
-            }
-        ]
+    # ── Step 9: Grasper releases ──────────────────────────────────────────────
+    if not grasp_only and not receive_only:
+        print()
         send_ops(
-            home_ops, grasper_id, "home", host, port, camera_id, 60, True, 6, results,
+            [{"operation": "release_object", "params": {"robot_id": grasper_id}}],
+            grasper_id, "release", host, port, camera_id, 20, auto_execute, req, results,
         )
+        req += 1
+
+    # ── Step 10: Grasper returns home ─────────────────────────────────────────
+    if not grasp_only and not receive_only:
+        print()
+        send_ops(
+            [{"operation": "return_to_start_position", "params": {"robot_id": grasper_id, "speed": 1.0}}],
+            grasper_id, "home", host, port, camera_id, 60, True, req, results,
+        )
+        req += 1
 
     return all(r.get("success", False) for r in results.values())
 
@@ -266,7 +338,7 @@ def run_handoff(
 def main():
     """Parse arguments and run the handoff."""
     parser = argparse.ArgumentParser(
-        description="Test grasp_object + receive_handoff in Unity without LLM latency.",
+        description="Test explicit flat handoff pipeline in Unity without LLM latency.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -303,15 +375,14 @@ def main():
         help=f"Per-step timeout in seconds (default: {DEFAULT_TIMEOUT})",
     )
     parser.add_argument(
-        "--grasp-only", action="store_true", help="Only run step 1 (grasp)"
+        "--grasp-only", action="store_true", help="Only run steps 1-3 (grasp + present)"
     )
     parser.add_argument(
-        "--receive-only", action="store_true", help="Only run step 2 (receive)"
+        "--receive-only", action="store_true", help="Only run steps 5-8 (detect + orient + approach + close)"
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Parse without executing"
     )
-    parser.add_argument("--pretty", action="store_true", help="Pretty-print responses")
     args = parser.parse_args()
 
     if args.grasp_only and args.receive_only:

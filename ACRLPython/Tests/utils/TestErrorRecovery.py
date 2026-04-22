@@ -30,13 +30,14 @@ class TestNetworkFailureRecovery:
     def test_command_send_with_no_server_connection(self):
         """Test command execution when server is not connected"""
         broadcaster = CommandBroadcaster()
-        # No server attached
-
-        command = {"command_type": "move", "robot_id": "Robot1"}
-        result = broadcaster.send_command(command, request_id=1)
-
-        # Should return False but not crash
-        assert result is False
+        original_server = broadcaster._server
+        try:
+            broadcaster._server = None
+            command = {"command_type": "move", "robot_id": "Robot1"}
+            result = broadcaster.send_command(command, request_id=1)
+            assert result is False
+        finally:
+            broadcaster._server = original_server
 
     def test_intermittent_network_failure(self):
         """Test that send_command returns False (not raises) on intermittent failures"""

@@ -264,26 +264,31 @@ namespace Tests.PlayMode
         [UnityTest]
         public IEnumerator IKSolver_MemoryAllocation_PreallocatedMatrices()
         {
-            // Test that IK solver uses pre-allocated matrices (GC-free operation)
+            // Test that IK solver uses pre-allocated matrices (GC-free operation).
+            // Tests IKSolver directly — yielding to Unity's update loop would include
+            // ArticulationBody physics allocations unrelated to the IK solver.
 
-            TestHelpers.SetupMinimalArticulationChain(_robotController);
-            LogAssert.Expect(LogType.Error, "Tag: EndEffector is not defined.");
+            int jointCount = 6;
+            var solver = new IKSolver(jointCount, dampingFactor: 0.2f);
 
-            Vector3 targetPosition = new Vector3(0.15f, 0.15f, 0.15f);
-            GameObject target = TestHelpers.CreateTestTarget(targetPosition);
+            var joints = new JointInfo[jointCount];
+            for (int i = 0; i < jointCount; i++)
+                joints[i] = new JointInfo(new Vector3(0, i * 0.1f, 0), Vector3.right);
 
-            // Force garbage collection before test
+            var currentState = new IKState(new Vector3(0.1f, 0.3f, 0.1f), Quaternion.identity);
+            var targetState = new IKState(new Vector3(0.15f, 0.15f, 0.15f), Quaternion.Euler(10, 20, 5));
+
+            // Warm up: allow any one-time JIT / static init allocations to settle
+            for (int i = 0; i < 10; i++)
+                solver.ComputeJointDeltasWithVelocity(currentState, targetState, Vector3.zero, Vector3.zero, joints, 0.02f);
+
             System.GC.Collect();
             yield return null;
 
             long memoryBefore = System.GC.GetTotalMemory(true);
 
-            // Perform IK iterations
-            _robotController.SetTarget(target);
             for (int i = 0; i < 100; i++)
-            {
-                yield return null; // Allow IK to run
-            }
+                solver.ComputeJointDeltasWithVelocity(currentState, targetState, Vector3.zero, Vector3.zero, joints, 0.02f);
 
             long memoryAfter = System.GC.GetTotalMemory(false);
             long memoryDelta = memoryAfter - memoryBefore;
@@ -291,8 +296,6 @@ namespace Tests.PlayMode
             // Should have minimal memory allocation (< 1MB for 100 iterations)
             Assert.Less(memoryDelta, 1024 * 1024,
                 $"IK solver should use pre-allocated matrices. Allocated {memoryDelta / 1024}KB in 100 iterations.");
-
-            TestHelpers.DestroyAll(target);
         }
 
         #endregion

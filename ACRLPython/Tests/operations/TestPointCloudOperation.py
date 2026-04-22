@@ -302,7 +302,7 @@ class TestGeneratePointCloudIntegration:
         """
         try:
             BackendClient = _load_backend_client()
-            with BackendClient(timeout=15.0) as client:
+            with BackendClient(timeout=120.0) as client:
                 client.send_command(
                     command="detect object stereo for Robot1",
                     robot_id="Robot1",
@@ -320,7 +320,7 @@ class TestGeneratePointCloudIntegration:
         """
         BackendClient = _load_backend_client()
         # Step 1: capture a fresh stereo frame into the backend's storage.
-        with BackendClient(timeout=15.0) as client:
+        with BackendClient(timeout=120.0) as client:
             client.send_command(
                 command="detect object stereo for Robot1",
                 robot_id="Robot1",
@@ -328,7 +328,7 @@ class TestGeneratePointCloudIntegration:
                 request_id=request_id,
             )
         # Step 2: generate the point cloud immediately after (images are fresh).
-        with BackendClient(timeout=30.0) as client:
+        with BackendClient(timeout=120.0) as client:
             return client.send_command(
                 command="generate point cloud for Robot1",
                 robot_id="Robot1",

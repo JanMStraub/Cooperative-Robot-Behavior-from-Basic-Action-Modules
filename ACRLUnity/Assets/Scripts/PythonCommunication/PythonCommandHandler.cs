@@ -1813,10 +1813,11 @@ namespace PythonCommunication
                         ? controller.GetCurrentEndEffectorPosition()
                         : robotInstance.simpleController.GetCurrentEndEffectorPosition();
 
+                // Quaternion.Euler(x, y, z) = tilt(pitch), spin(yaw), roll(roll)                                        
                 Quaternion targetRotation = Quaternion.Euler(
-                    command.parameters.roll,
                     command.parameters.pitch,
-                    command.parameters.yaw
+                    command.parameters.yaw,
+                    command.parameters.roll
                 );
 
                 string commandKey = $"adjust_orientation_{command.robot_id}_{command.request_id}";

@@ -23,6 +23,8 @@ namespace Robotics
         private Matrix<double> _jacobianTranspose;
         private Matrix<double> _jacobianJacobianTranspose;
         private Matrix<double> _regularizedMatrix;
+        private Matrix<double> _addResultMatrix;
+        private Vector<double> _luSolveResult;
 
         private int _iterationCount;
         public int IterationCount => _iterationCount;
@@ -60,6 +62,8 @@ namespace Robotics
             _jacobianTranspose = DenseMatrix.Build.Dense(jointCount, 6);
             _jacobianJacobianTranspose = DenseMatrix.Build.Dense(6, 6);
             _regularizedMatrix = DenseMatrix.Build.Dense(6, 6);
+            _addResultMatrix = DenseMatrix.Build.Dense(6, 6);
+            _luSolveResult = Vector<double>.Build.Dense(6);
         }
 
         /// <summary>
@@ -229,6 +233,8 @@ namespace Robotics
                 _jacobianTranspose = DenseMatrix.Build.Dense(joints.Length, 6);
                 _jacobianJacobianTranspose = DenseMatrix.Build.Dense(6, 6);
                 _regularizedMatrix = DenseMatrix.Build.Dense(6, 6);
+                _addResultMatrix = DenseMatrix.Build.Dense(6, 6);
+                _luSolveResult = Vector<double>.Build.Dense(6);
             }
 
             for (int i = 0; i < joints.Length; i++)
@@ -262,15 +268,16 @@ namespace Robotics
 
             float damping = overrideDamping ?? _dampingFactor;
 
-            // regularizedMatrix = JJ^T + λ²I  (in-place: write into _regularizedMatrix)
+            // regularizedMatrix = JJ^T + λ²I
+            // Use separate _addResultMatrix to avoid aliased Add (aliasing causes internal alloc in MathNet)
             _cachedIdentity.Multiply(damping * damping, _regularizedMatrix);
-            _jacobianJacobianTranspose.Add(_regularizedMatrix, _regularizedMatrix);
+            _jacobianJacobianTranspose.Add(_regularizedMatrix, _addResultMatrix);
 
-            // LU decomp still allocates internally (unavoidable with MathNet)
-            var y = _regularizedMatrix.LU().Solve(_errorVector);
+            // LU decomp allocates the factorization obj (unavoidable); Solve result copied into pre-alloc buffer
+            _addResultMatrix.LU().Solve(_errorVector, _luSolveResult);
 
             // Write result directly into pre-allocated _jointDelta
-            _jacobianTranspose.Multiply(y, _jointDelta);
+            _jacobianTranspose.Multiply(_luSolveResult, _jointDelta);
         }
     }
 

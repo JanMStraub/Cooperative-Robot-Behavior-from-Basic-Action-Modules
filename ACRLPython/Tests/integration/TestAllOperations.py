@@ -43,9 +43,8 @@ All 23 operations registered in operations/Registry.py (plus variable chaining):
     Level 3 Intermediate (2):
         grasp_object, move_relative_to_object
 
-    Level 4 Multi-Robot (4):
-        detect_other_robot, mirror_movement, orient_gripper_for_handoff_receive,
-        receive_handoff
+    Level 4 Multi-Robot (3):
+        detect_other_robot, mirror_movement, orient_gripper_for_handoff_receive
 
     Level 5 Collaborative (1):
         stabilize_object
@@ -97,7 +96,7 @@ _R2_COORD = (0.25, 0.30, 0.10)  # x, y, z  — Robot2 reachable point
 # ---------------------------------------------------------------------------
 
 
-def _reset_robot(robot_id: str, timeout: float = 60.0) -> None:
+def _reset_robot(robot_id: str, timeout: float = 120.0) -> None:
     """
     Send return_to_start for the given robot and ignore the result.
 

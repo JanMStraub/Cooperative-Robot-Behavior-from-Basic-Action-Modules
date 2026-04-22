@@ -845,7 +845,7 @@ class SequenceExecutor:
                 return _result
 
             # Skip completion waiting for operations that executed via ROS
-            # (Unity never received the command, so it won't send completion)
+            # (no Unity command with outer request_id was sent).
             if op_result.result and op_result.result.get("status") in (
                 "ros_executed",
                 "ros_command_sent",

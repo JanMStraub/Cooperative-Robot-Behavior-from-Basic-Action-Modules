@@ -30,8 +30,6 @@ from .GripperOperations import (
 from .GraspOperations import (
     GRASP_OBJECT_OPERATION,
     ORIENT_GRIPPER_FOR_HANDOFF_RECEIVE_OPERATION,
-    PRESENT_FOR_HANDOFF_OPERATION,
-    RECEIVE_HANDOFF_OPERATION,
 )
 from .DefaultPositionOperation import RETURN_TO_START_POSITION_OPERATION
 from .VisionOperations import ANALYZE_SCENE_OPERATION, DETECT_OBJECT_STEREO_OPERATION
@@ -112,8 +110,6 @@ class OperationRegistry:
             DETECT_OTHER_ROBOT_OPERATION,
             MIRROR_MOVEMENT_OPERATION,
             ORIENT_GRIPPER_FOR_HANDOFF_RECEIVE_OPERATION,
-            PRESENT_FOR_HANDOFF_OPERATION,
-            RECEIVE_HANDOFF_OPERATION,
             # ============================================================================
             # LEVEL 5: COLLABORATIVE MANIPULATION (Advanced coordination)
             # ============================================================================

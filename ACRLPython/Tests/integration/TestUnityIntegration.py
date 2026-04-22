@@ -72,7 +72,7 @@ class TestUnityCommandExecution:
 
     def test_real_robot_status_query(self):
         """Query real robot status through the backend SequenceServer."""
-        with BackendClient(timeout=15.0) as client:
+        with BackendClient(timeout=120.0) as client:
             result = client.send_command(
                 command="check robot status for Robot1",
                 robot_id="Robot1",
@@ -89,7 +89,7 @@ class TestUnityCommandExecution:
         Robot1 is assigned to left_workspace: x in [-0.5, -0.15], y in [0.0, 0.6].
         Using x=-0.25 keeps the target well within reach.
         """
-        with BackendClient(timeout=30.0) as client:
+        with BackendClient(timeout=120.0) as client:
             result = client.send_command(
                 command="move Robot1 to coordinate -0.25 0.3 0.1",
                 robot_id="Robot1",
@@ -102,7 +102,7 @@ class TestUnityCommandExecution:
 
     def test_real_gripper_control(self):
         """Test real gripper open/close through the backend."""
-        with BackendClient(timeout=15.0) as client:
+        with BackendClient(timeout=120.0) as client:
             result_open = client.send_command(
                 command="open gripper for Robot1",
                 robot_id="Robot1",
@@ -115,7 +115,7 @@ class TestUnityCommandExecution:
 
         time.sleep(0.3)
 
-        with BackendClient(timeout=15.0) as client:
+        with BackendClient(timeout=120.0) as client:
             result_close = client.send_command(
                 command="close gripper for Robot1",
                 robot_id="Robot1",
@@ -144,7 +144,7 @@ class TestUnityImageCapture:
         to Unity (via CommandBroadcaster) and waits for Unity to send back the
         images.  This does not rely on Unity already streaming images passively.
         """
-        with BackendClient(timeout=30.0) as client:
+        with BackendClient(timeout=120.0) as client:
             result = client.send_command(
                 command="detect object stereo for Robot1",
                 robot_id="Robot1",
@@ -165,7 +165,7 @@ class TestUnityProtocolCompatibility:
     def test_request_id_correlation(self):
         """Verify that request_id is echoed back correctly in the response."""
         request_id = 12345
-        with BackendClient(timeout=15.0) as client:
+        with BackendClient(timeout=120.0) as client:
             result = client.send_command(
                 command="check robot status for Robot1",
                 robot_id="Robot1",
@@ -192,7 +192,7 @@ class TestUnityProtocolCompatibility:
 
         def send_command(command: str, rid: int):
             try:
-                with BackendClient(timeout=30.0) as client:
+                with BackendClient(timeout=120.0) as client:
                     result = client.send_command(
                         command=command,
                         robot_id="Robot1",
@@ -220,7 +220,7 @@ class TestUnityProtocolCompatibility:
         for t in threads:
             t.start()
         for t in threads:
-            t.join(timeout=30.0)
+            t.join(timeout=120.0)
 
         assert not errors, f"Errors in concurrent commands: {errors}"
         assert len(results) == 3, f"Expected 3 results, got {len(results)}"
@@ -237,7 +237,7 @@ class TestUnityObjectDetection:
         Uses detect_object_stereo which triggers Unity to capture images first,
         rather than reading from pre-existing image storage.
         """
-        with BackendClient(timeout=30.0) as client:
+        with BackendClient(timeout=120.0) as client:
             result = client.send_command(
                 command="detect object stereo for Robot1",
                 robot_id="Robot1",

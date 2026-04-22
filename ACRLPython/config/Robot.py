@@ -134,9 +134,9 @@ PRE_GRASP_CLEARANCE_Y = float(os.environ.get("PRE_GRASP_CLEARANCE_Y", "0.35"))  
 # Velocity/acceleration scaling for the joint-space pre-grasp approach move.
 # Full speed (1.0) causes residual vibration on arrival and risks overshoot into
 # the object; lower values give the arm time to decelerate cleanly.
-PREGRASP_VELOCITY_SCALING = float(os.environ.get("PREGRASP_VELOCITY_SCALING", "0.7"))
+PREGRASP_VELOCITY_SCALING = float(os.environ.get("PREGRASP_VELOCITY_SCALING", "1.0"))
 PREGRASP_ACCELERATION_SCALING = float(
-    os.environ.get("PREGRASP_ACCELERATION_SCALING", "0.7")
+    os.environ.get("PREGRASP_ACCELERATION_SCALING", "1.0")
 )
 
 # Velocity/acceleration scaling for the final Cartesian descent to grasp position.
