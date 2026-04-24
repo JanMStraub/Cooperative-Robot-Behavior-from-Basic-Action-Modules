@@ -11,7 +11,7 @@ import time
 import numpy as np
 from typing import List, Optional, Dict, Any
 
-from autort.DataModels import SceneDescription, GroundedObject, ProposedTask
+from autort.DataModels import SceneDescription, GroundedObject, ProposedTask, ExecutedTaskContext
 from autort.TaskGenerator import TaskGenerator
 from autort.RobotConstitution import RobotConstitution
 from autort.TaskSelector import TaskSelector
@@ -73,6 +73,7 @@ class AutoRTOrchestrator:
         self._executor = SequenceExecutor()
 
         self._running = False
+        self._last_task_context: Optional[ExecutedTaskContext] = None
 
     def start(self):
         """Run continuous task generation loop"""
@@ -106,7 +107,7 @@ class AutoRTOrchestrator:
     def _run_one_iteration(self):
         """Execute one full iteration of the AutoRT loop"""
         # 1. Capture scene using existing operations
-        scene = self._capture_scene()
+        scene = self._capture_scene(last_task_context=self._last_task_context)
         if not scene.objects:
             logger.info("No objects detected, skipping iteration")
             return
@@ -169,7 +170,18 @@ class AutoRTOrchestrator:
         self.task_selector.update_history(selected, result)
         logger.info(f"Task completed: success={result.get('success', False)}")
 
-    def _capture_scene(self) -> SceneDescription:
+        self._last_task_context = ExecutedTaskContext(
+            task_id=selected.task_id,
+            description=selected.description,
+            operation_types=[op.type for op in selected.operations],
+            success=result.get("success", False),
+            result_summary=(
+                str(result.get("result", "")) if result.get("success")
+                else str(result.get("error", "unknown error"))
+            ),
+        )
+
+    def _capture_scene(self, last_task_context: Optional[ExecutedTaskContext] = None) -> SceneDescription:
         """
         Capture scene state by composing existing operations.
 
@@ -259,6 +271,7 @@ class AutoRTOrchestrator:
             objects=grounded_objects,
             scene_summary=scene_summary,
             robot_states=robot_states,
+            last_task_context=last_task_context,
         )
 
     def _execute_task(self, task: ProposedTask) -> Dict[str, Any]:

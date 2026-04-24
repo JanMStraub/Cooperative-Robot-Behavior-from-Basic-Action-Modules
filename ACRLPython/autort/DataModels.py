@@ -21,6 +21,16 @@ class GroundedObject(BaseModel):
     graspable: bool = True
 
 
+class ExecutedTaskContext(BaseModel):
+    """Lightweight record of the most recently completed task for context-aware prompt generation."""
+
+    task_id: str
+    description: str
+    operation_types: List[str]
+    success: bool
+    result_summary: str = ""
+
+
 class SceneDescription(BaseModel):
     """Scene state assembled from existing operations + WorldState"""
 
@@ -28,6 +38,7 @@ class SceneDescription(BaseModel):
     objects: List[GroundedObject]
     scene_summary: str = ""  # Optional VLM reasoning
     robot_states: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    last_task_context: Optional["ExecutedTaskContext"] = None
 
 
 class Operation(BaseModel):
