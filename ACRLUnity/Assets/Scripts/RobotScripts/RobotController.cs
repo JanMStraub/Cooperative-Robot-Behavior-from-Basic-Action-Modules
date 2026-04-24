@@ -1,5 +1,3 @@
-using System;
-using System.Collections;
 using Configuration;
 using Core;
 using Robotics.Grasp;
@@ -479,6 +477,25 @@ namespace Robotics
                 currentVelocity.sqrMagnitude < RobotConstants.VELOCITY_SETTLE_THRESHOLD_SQR;
 
             bool isStalled = isSettled && (!isPosReached || !isRotReached);
+
+            // If settled + position reached + angle within stall acceptance, declare done
+            // rather than spinning forever against ArticulationBody friction.
+            if (
+                isStalled
+                && isPosReached
+                && angleError < RobotConstants.ROTATION_STALL_ACCEPTANCE_DEG
+            )
+            {
+                if (!_hasReachedTarget)
+                {
+                    Debug.Log(
+                        $"{_logPrefix} [{robotId}] TARGET REACHED (stall accept): dist={_distanceToTarget:F4}m, ang={angleError:F1}°"
+                    );
+                    SetTargetReached(true);
+                }
+                return;
+            }
+
             if (_enableDebugVisualization && isStalled && Time.frameCount % 60 == 0)
             {
                 Debug.Log(

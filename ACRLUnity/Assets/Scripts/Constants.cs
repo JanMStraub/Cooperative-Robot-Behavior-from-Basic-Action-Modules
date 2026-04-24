@@ -56,6 +56,15 @@ namespace Core
         /// </summary>
         public const float ROTATION_CONVERGENCE_THRESHOLD_DEG = 3.0f;
 
+        /// <summary>
+        /// Rotation acceptance threshold when stalled (degrees).
+        /// If the robot is settled, position is reached, and orientation error is below
+        /// this value, target is declared reached rather than stalling indefinitely.
+        /// Looser than ROTATION_CONVERGENCE_THRESHOLD_DEG to handle ArticulationBody
+        /// friction preventing full convergence.
+        /// </summary>
+        public const float ROTATION_STALL_ACCEPTANCE_DEG = 8.0f;
+
         // GameObject Naming
         /// <summary>
         /// Suffix for temporary grasp target GameObjects

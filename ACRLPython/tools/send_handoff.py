@@ -14,11 +14,9 @@ Flat step sequence (each is an independent SE operation):
   5a. Robot1: signal(r1_at_handoff)
   5b. Robot2: wait_for_signal(r1_at_handoff)   [parallel with 5a]
   6. Robot2: detect_object_stereo      (re-detect at presentation pos)
-  7. Robot2: orient_gripper_for_handoff_receive  (returns approach_position in result)
-  8. Robot2: move_to_coordinate        (→ approach_position from step 7)
-  9. Robot2: control_gripper(close)
- 10. Robot1: release_object
- 11. Robot1: return_to_start_position
+  7. Robot2: receive_handoff           (orient + move to approach + close gripper)
+  8. Robot1: release_object
+  9. Robot1: return_to_start_position
 
 Usage:
     python tools/send_handoff.py
@@ -132,18 +130,6 @@ def send_ops(
     )
 
 
-def _extract_approach_position(orient_result: dict) -> tuple[float, float, float] | None:
-    """
-    Extract approach_position from orient_gripper_for_handoff_receive result.
-
-    Returns (x, y, z) tuple or None if not present.
-    """
-    data = orient_result.get("data") or orient_result.get("result") or orient_result
-    approach = data.get("approach_position") if isinstance(data, dict) else None
-    if approach and all(k in approach for k in ("x", "y", "z")):
-        return approach["x"], approach["y"], approach["z"]
-    return None
-
 
 # ── Handoff sequence ───────────────────────────────────────────────────────────
 
@@ -164,7 +150,7 @@ def run_handoff(
     Dispatch the full handoff sequence using explicit flat operations.
 
     Each step is an independent SE operation with its own Unity ACK.
-    Steps 4a/4b (signal/wait) run in parallel threads.
+    Steps 5a/5b (signal/wait) run in parallel threads.
     """
     results: dict = {}
     req = 1  # monotonically increasing request_id
@@ -248,7 +234,7 @@ def run_handoff(
         if not wait_out.get("wait_signal", {}).get("success", False):
             return False
 
-    # ── Step 5: Receiver detects object at presentation position ──────────────
+    # ── Step 6: Receiver detects object at presentation position ──────────────
     if not grasp_only:
         print()
         send_ops(
@@ -259,59 +245,24 @@ def run_handoff(
         )
         req += 1
         if not results.get("detect", {}).get("success", False):
-            print("  [WARN] detect_object_stereo failed — continuing with orient step anyway")
+            print("  [WARN] detect_object_stereo failed — continuing anyway")
 
-    # ── Step 6: Orient receiver gripper (returns approach_position in result) ──
+    # ── Step 7: receive_handoff (orient + move to approach + close gripper) ───
     if not grasp_only:
         print()
         send_ops(
-            [{"operation": "orient_gripper_for_handoff_receive", "params": {
+            [{"operation": "receive_handoff", "params": {
                 "robot_id": receiver_id,
                 "object_id": object_id,
                 "source_robot_id": grasper_id,
             }}],
-            receiver_id, "orient", host, port, camera_id, timeout, auto_execute, req, results,
+            receiver_id, "receive", host, port, camera_id, timeout, auto_execute, req, results,
         )
         req += 1
-        if not results.get("orient", {}).get("success", False):
+        if not results.get("receive", {}).get("success", False):
             return False
 
-    # ── Step 7: Move receiver to approach position ────────────────────────────
-    if not grasp_only:
-        print()
-        approach = _extract_approach_position(results.get("orient", {}))
-        if approach:
-            ap_x, ap_y, ap_z = approach
-            print(f"  [INFO] approach_position from orient: x={ap_x:.4f} y={ap_y:.4f} z={ap_z:.4f}")
-        else:
-            # Fallback: use handoff position with lateral offset toward receiver
-            ap_x = HANDOFF_X + 0.08
-            ap_y = HANDOFF_Y - 0.04
-            ap_z = HANDOFF_Z
-            print(f"  [WARN] approach_position not in orient result — using fallback ({ap_x:.4f}, {ap_y:.4f}, {ap_z:.4f})")
-
-        send_ops(
-            [{"operation": "move_to_coordinate", "params": {
-                "robot_id": receiver_id, "x": ap_x, "y": ap_y, "z": ap_z,
-            }}],
-            receiver_id, "move_approach", host, port, camera_id, timeout, auto_execute, req, results,
-        )
-        req += 1
-        if not results.get("move_approach", {}).get("success", False):
-            return False
-
-    # ── Step 8: Close receiver gripper ────────────────────────────────────────
-    if not grasp_only:
-        print()
-        send_ops(
-            [{"operation": "control_gripper", "params": {"robot_id": receiver_id, "open_gripper": False}}],
-            receiver_id, "close_gripper", host, port, camera_id, 20, auto_execute, req, results,
-        )
-        req += 1
-        if not results.get("close_gripper", {}).get("success", False):
-            return False
-
-    # ── Step 9: Grasper releases ──────────────────────────────────────────────
+    # ── Step 8: Grasper releases ──────────────────────────────────────────────
     if not grasp_only and not receive_only:
         print()
         send_ops(
@@ -320,7 +271,7 @@ def run_handoff(
         )
         req += 1
 
-    # ── Step 10: Grasper returns home ─────────────────────────────────────────
+    # ── Step 9: Grasper returns home ─────────────────────────────────────────
     if not grasp_only and not receive_only:
         print()
         send_ops(
@@ -375,10 +326,10 @@ def main():
         help=f"Per-step timeout in seconds (default: {DEFAULT_TIMEOUT})",
     )
     parser.add_argument(
-        "--grasp-only", action="store_true", help="Only run steps 1-3 (grasp + present)"
+        "--grasp-only", action="store_true", help="Only run steps 1-4 (grasp + return + present + orient wrist)"
     )
     parser.add_argument(
-        "--receive-only", action="store_true", help="Only run steps 5-8 (detect + orient + approach + close)"
+        "--receive-only", action="store_true", help="Only run steps 5-8 (detect + approach + close)"
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Parse without executing"
