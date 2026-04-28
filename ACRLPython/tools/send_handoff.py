@@ -14,9 +14,10 @@ Flat step sequence (each is an independent SE operation):
   5a. Robot1: signal(r1_at_handoff)
   5b. Robot2: wait_for_signal(r1_at_handoff)   [parallel with 5a]
   6. Robot2: detect_object_stereo      (re-detect at presentation pos)
-  7. Robot2: receive_handoff           (orient + move to approach + close gripper)
-  8. Robot1: release_object
-  9. Robot1: return_to_start_position
+  7a. Robot2: receive_handoff          (pre-approach + orient + slide in + close gripper)
+                                        emits r2_gripped after close
+  7b. Robot1: wait_for_signal(r2_gripped) + release_object  [parallel with 7a]
+  8. Robot1: return_to_start_position
 
 Usage:
     python tools/send_handoff.py
@@ -247,31 +248,51 @@ def run_handoff(
         if not results.get("detect", {}).get("success", False):
             print("  [WARN] detect_object_stereo failed — continuing anyway")
 
-    # ── Step 7: receive_handoff (orient + move to approach + close gripper) ───
+    # ── Steps 7a/7b: receive_handoff (Robot2) + wait_and_release (Robot1) parallel ─
+    # receive_handoff emits r2_gripped immediately after closing the gripper.
+    # Robot1 waits on that signal and releases — minimises dual-gripper hold time.
     if not grasp_only:
         print()
-        send_ops(
+        receive_req = req
+        release_req = req + 1
+        req += 2
+
+        receive_out: dict = {}
+        release_out: dict = {}
+
+        t_receive = threading.Thread(target=send_ops, args=(
             [{"operation": "receive_handoff", "params": {
                 "robot_id": receiver_id,
                 "object_id": object_id,
                 "source_robot_id": grasper_id,
+                "release_signal": "r2_gripped",
             }}],
-            receiver_id, "receive", host, port, camera_id, timeout, auto_execute, req, results,
-        )
-        req += 1
+            receiver_id, "receive", host, port, camera_id, timeout, auto_execute, receive_req, receive_out,
+        ))
+
+        if not receive_only:
+            t_release = threading.Thread(target=send_ops, args=(
+                [
+                    {"operation": "wait_for_signal", "params": {"robot_id": grasper_id, "event_name": "r2_gripped", "timeout_ms": int(timeout * 1000)}},
+                    {"operation": "release_object", "params": {"robot_id": grasper_id}},
+                ],
+                grasper_id, "release", host, port, camera_id, timeout + 10, auto_execute, release_req, release_out,
+            ))
+            t_release.start()
+
+        t_receive.start()
+        t_receive.join()
+
+        if not receive_only:
+            t_release.join()  # type: ignore[possibly-unbound]
+            results.update(release_out)
+
+        results.update(receive_out)
+
         if not results.get("receive", {}).get("success", False):
             return False
 
-    # ── Step 8: Grasper releases ──────────────────────────────────────────────
-    if not grasp_only and not receive_only:
-        print()
-        send_ops(
-            [{"operation": "release_object", "params": {"robot_id": grasper_id}}],
-            grasper_id, "release", host, port, camera_id, 20, auto_execute, req, results,
-        )
-        req += 1
-
-    # ── Step 9: Grasper returns home ─────────────────────────────────────────
+    # ── Step 8: Grasper returns home ─────────────────────────────────────────
     if not grasp_only and not receive_only:
         print()
         send_ops(

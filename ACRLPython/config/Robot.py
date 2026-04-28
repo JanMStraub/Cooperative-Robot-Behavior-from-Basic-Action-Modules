@@ -77,7 +77,7 @@ DEFAULT_HANDOFF_OBJECT_DIMENSIONS = (0.02, 0.02, 0.02)
 
 # Extra clearance added to the half-extent offset so grippers don't overlap.
 HANDOFF_GRIPPER_CLEARANCE = float(
-    os.environ.get("HANDOFF_GRIPPER_CLEARANCE", "0.02")
+    os.environ.get("HANDOFF_GRIPPER_CLEARANCE", "0.03")
 )  # meters
 
 # Fixed world-space position where Robot A presents the object for handoff.
@@ -123,7 +123,7 @@ GRASP_TCP_OFFSET = float(os.environ.get("GRASP_TCP_OFFSET", "0.05"))  # meters
 # Hover height above object centre for the pre-grasp approach waypoint.
 # Must be high enough that the arm clears the object when it swings in.
 PRE_GRASP_HOVER_OFFSET = float(
-    os.environ.get("PRE_GRASP_HOVER_OFFSET", "0.15")
+    os.environ.get("PRE_GRASP_HOVER_OFFSET", "0.17")
 )  # meters
 
 # Absolute world-Y safety height used as an intermediate waypoint before descent.

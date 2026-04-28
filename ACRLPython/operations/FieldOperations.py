@@ -217,6 +217,25 @@ def detect_field(
         else:
             center_dict = {"x": 0.0, "y": 0.0, "z": 0.0}
 
+        # Persist field position to WorldState as object_type="field" so
+        # confidence decay (keyed on Unity object list) never evicts it.
+        try:
+            from core.Imports import get_world_state
+
+            world_state = get_world_state()
+            ws_key = f"field_{detected_letter.lower()}"
+            pos_tuple = (center_dict["x"], center_dict["y"], center_dict["z"])
+            world_state.update_object_position(
+                object_id=ws_key,
+                position=pos_tuple,
+                color=ws_key,
+                object_type="field",
+                confidence=detection.confidence,
+            )
+            logger.info(f"WorldState updated: key='{ws_key}' at {pos_tuple}")
+        except Exception as e:
+            logger.error(f"Failed to update WorldState after field detection: {e}", exc_info=True)
+
         return OperationResult.success_result(
             {
                 "field_label": detected_letter,

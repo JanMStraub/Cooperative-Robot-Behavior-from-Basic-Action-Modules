@@ -657,27 +657,32 @@ def detect_object_stereo(
 
             world_state = get_world_state()
             ws_object_id = best.color if best.color else "unknown_object"
-            world_state.update_object_position(
-                object_id=ws_object_id,
-                position=(
-                    best.world_position[0],
-                    best.world_position[1],
-                    best.world_position[2],
-                ),
-                color=best.color,
-                object_type="cube",
-                confidence=best.confidence,
-                dimensions=best.dimensions,
-            )
-            dim_str = (
-                f" dims=({best.dimensions[0]:.3f}, {best.dimensions[1]:.3f}, {best.dimensions[2]:.3f})m"
-                if best.dimensions
-                else ""
-            )
-            logger.info(
-                f"WorldState updated: key='{ws_object_id}' at "
-                f"({best.world_position[0]:.3f}, {best.world_position[1]:.3f}, {best.world_position[2]:.3f}){dim_str}"
-            )
+            # Fields are managed by detect_field with object_type="field".
+            # detect_object_stereo must not create or overwrite field entries.
+            is_field = ws_object_id.lower().startswith("field_")
+            existing = world_state.get_object_state(ws_object_id) if not is_field else None
+            if not is_field and not (existing and existing.get("object_type") == "field"):
+                world_state.update_object_position(
+                    object_id=ws_object_id,
+                    position=(
+                        best.world_position[0],
+                        best.world_position[1],
+                        best.world_position[2],
+                    ),
+                    color=best.color,
+                    object_type="cube",
+                    confidence=best.confidence,
+                    dimensions=best.dimensions,
+                )
+                dim_str = (
+                    f" dims=({best.dimensions[0]:.3f}, {best.dimensions[1]:.3f}, {best.dimensions[2]:.3f})m"
+                    if best.dimensions
+                    else ""
+                )
+                logger.info(
+                    f"WorldState updated: key='{ws_object_id}' at "
+                    f"({best.world_position[0]:.3f}, {best.world_position[1]:.3f}, {best.world_position[2]:.3f}){dim_str}"
+                )
         except Exception as e:
             # Log at ERROR level so this is never silently missed — a WorldState write
             # failure means grasp_object will fail to find the object on the next call.

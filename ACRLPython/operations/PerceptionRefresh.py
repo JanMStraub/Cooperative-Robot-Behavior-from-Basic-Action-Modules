@@ -130,6 +130,9 @@ class PerceptionRefreshLoop:
         try:
             all_objects = self._world_state.get_all_objects()
             for obj in all_objects:
+                # Fields are static landmarks — never refresh via cube detector.
+                if getattr(obj, "object_type", None) == "field":
+                    continue
                 color = getattr(obj, "color", None)
                 if color and color != "unknown" and color not in seen:
                     is_stale = getattr(obj, "stale", False)

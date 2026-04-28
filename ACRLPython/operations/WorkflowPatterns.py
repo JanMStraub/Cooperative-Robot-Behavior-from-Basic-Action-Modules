@@ -418,28 +418,13 @@ HANDOFF_PATTERN = WorkflowPattern(
             description="Target robot re-detects object at presentation position",
         ),
         WorkflowStep(
-            operation_id="coordination_orient_for_handoff_receive_001",
+            operation_id="coordination_receive_handoff_001",
             parameter_bindings={
                 "robot_id": "{target_robot_id}",
                 "object_id": "{object_id}",
                 "source_robot_id": "{source_robot_id}",
             },
-            description="Target robot orients gripper (returns approach_position in result)",
-        ),
-        WorkflowStep(
-            operation_id="motion_move_to_coord_001",
-            parameter_bindings={
-                "robot_id": "{target_robot_id}",
-                "x": "{orient_result.approach_position.x}",
-                "y": "{orient_result.approach_position.y}",
-                "z": "{orient_result.approach_position.z}",
-            },
-            description="Target robot moves to approach position from orient result",
-        ),
-        WorkflowStep(
-            operation_id="manipulation_control_gripper_001",
-            parameter_bindings={"robot_id": "{target_robot_id}", "open_gripper": "False"},
-            description="Target robot closes gripper on object",
+            description="Target robot receives handoff: orient gripper, move to approach, close gripper",
         ),
         WorkflowStep(
             operation_id="manipulation_release_object_001",
@@ -706,24 +691,16 @@ or receive_handoff ops exist. Each step gets its own Unity ACK via SequenceExecu
 7. Target robot re-detects the object at its new position
    → detect_object_stereo(target_robot, color=object_color)
 
-8. Target robot orients gripper — result contains approach_position {x,y,z}
-   → orient_gripper_for_handoff_receive(target_robot, object_id, source_robot_id=source_robot)
-   Capture result as orient_result.
+8. Target robot receives handoff (orient + move to approach + close gripper — fully atomic)
+   → receive_handoff(target_robot, object_id, source_robot_id=source_robot)
 
-9. Target robot moves to approach position (from step 8 result)
-   → move_to_coordinate(target_robot, x=$orient_result.approach_position.x,
-                                      y=$orient_result.approach_position.y,
-                                      z=$orient_result.approach_position.z)
-
-10. Target robot closes gripper
-    → control_gripper(target_robot, open_gripper=False)
-
-11. Source robot releases
+9. Source robot releases
     → release_object(source_robot)
 
 **Key Anti-Patterns to Avoid:**
 - Do NOT use move_to_coordinate + control_gripper for step 2 — use grasp_object
-- Do NOT use grasp_object for the receiving robot — use orient + move + control_gripper
+- Do NOT use grasp_object for the receiving robot — use receive_handoff instead
+- Do NOT use orient_gripper_for_handoff_receive — it was removed; receive_handoff is the replacement
 - Do NOT skip step 3 — return_to_start is required for deterministic IK convergence
 - Do NOT skip step 4 — source MUST move to the presentation position before receiver approaches
 - Do NOT skip step 5 — adjust_end_effector_orientation locks wrist (joint 5/6 variance otherwise)
@@ -741,9 +718,7 @@ adjust_end_effector_orientation("Robot1", pitch=0, yaw=0, roll=0)
 signal("Robot1", "r1_at_handoff")          # parallel
 wait_for_signal("Robot2", "r1_at_handoff") # parallel
 detect_object_stereo("Robot2", color="red")
-orient_gripper_for_handoff_receive("Robot2", object_id="RedBar", source_robot_id="Robot1")
-move_to_coordinate("Robot2", x=$orient_result.approach_position.x, ...)
-control_gripper("Robot2", open_gripper=False)
+receive_handoff("Robot2", object_id="RedBar", source_robot_id="Robot1")
 release_object("Robot1")
 ```
 """

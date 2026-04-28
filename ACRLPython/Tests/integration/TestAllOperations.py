@@ -44,7 +44,7 @@ All 23 operations registered in operations/Registry.py (plus variable chaining):
         grasp_object, move_relative_to_object
 
     Level 4 Multi-Robot (3):
-        detect_other_robot, mirror_movement, orient_gripper_for_handoff_receive
+        detect_other_robot, mirror_movement, receive_handoff
 
     Level 5 Collaborative (1):
         stabilize_object

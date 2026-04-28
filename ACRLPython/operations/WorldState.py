@@ -911,6 +911,9 @@ class WorldState(SingletonBase):
             to_delete = []
 
             for obj_id, obj in self._objects.items():
+                # Fields are static landmarks not tracked by Unity — skip decay.
+                if getattr(obj, "object_type", None) == "field":
+                    continue
                 if obj_id in seen_object_ids:
                     # Object was seen - refresh confidence
                     obj.confidence = 1.0

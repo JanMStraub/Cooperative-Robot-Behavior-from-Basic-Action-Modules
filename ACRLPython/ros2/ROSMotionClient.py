@@ -705,6 +705,10 @@ class ROSMotionServer:
         # coords (LLM-generated, move_to_coordinate). "unity_world" means Unity world
         # coords that must be transformed (grasp planner, detection-derived positions).
         coordinate_space = request.get("coordinate_space", "unity_world")
+        # constrain_joint6: when True, add a ±30° path constraint on joint_6 around its
+        # current position to prevent link-6 free-spin during pre-grasp hover moves.
+        # Must NOT be set for descent/grasp moves where joint_6 must reach target orientation.
+        constrain_joint6 = request.get("constrain_joint6", False)
 
         logger.info(
             f"[GRASP_DEBUG] {robot_id} incoming position ({coordinate_space}): "
@@ -853,6 +857,31 @@ class ROSMotionServer:
             constraints.orientation_constraints.append(orient_constraint)
 
         goal.request.goal_constraints.append(constraints)
+
+        if constrain_joint6 and joint_state is not None and "joint_6" in joint_state.name:
+            # Prevent link-6 free-spin during pre-grasp hover: pin joint_6 within ±30°
+            # of its current value so RRTConnect cannot spin the wrist 180-360° to an
+            # equivalent ee_link pose. Only applied when caller sets constrain_joint6=True
+            # (pre-grasp hover). Never set for descent/grasp moves where joint_6 must
+            # reach the target orientation.
+            _j6_idx = list(joint_state.name).index("joint_6")
+            _j6_current = joint_state.position[_j6_idx]
+            _j6_lower, _j6_upper = ARM_JOINT_LIMITS.get(
+                "joint_6", (-3.1405926535897932, 3.1405926535897932)
+            )
+            _window = 0.5236  # ±30° in radians
+            _j6_path_lower = max(_j6_lower, _j6_current - _window)
+            _j6_path_upper = min(_j6_upper, _j6_current + _window)
+            _j6_center = (_j6_path_lower + _j6_path_upper) / 2.0
+            _j6c = JointConstraint()
+            _j6c.joint_name = "joint_6"
+            _j6c.position = _j6_center
+            _j6c.tolerance_below = _j6_center - _j6_path_lower
+            _j6c.tolerance_above = _j6_path_upper - _j6_center
+            _j6c.weight = 1.0
+            _j6_path_constraints = Constraints()
+            _j6_path_constraints.joint_constraints.append(_j6c)
+            goal.request.path_constraints = _j6_path_constraints
 
         return goal
 
@@ -1570,6 +1599,7 @@ class ROSMotionServer:
         orientation = request.get("orientation")
         vel_scaling = request.get("max_velocity_scaling", 0.6)
         acc_scaling = request.get("max_acceleration_scaling", 0.4)
+        lock_orientation = request.get("lock_orientation", True)
 
         # Transform Unity world coords → ROS base_link frame
         local_position = self._transform_world_to_local(position, robot_id)
@@ -1611,7 +1641,7 @@ class ROSMotionServer:
         # the gripper to visibly rotate around its own axis during descent).
         # Without this constraint, GetCartesianPath solves each waypoint
         # independently and may choose a different J4/J6 configuration each time.
-        if OrientationConstraint is not None:
+        if lock_orientation and OrientationConstraint is not None:
             orient_constraint = OrientationConstraint()
             orient_constraint.header.frame_id = "base_link"
             orient_constraint.link_name = "ee_link"

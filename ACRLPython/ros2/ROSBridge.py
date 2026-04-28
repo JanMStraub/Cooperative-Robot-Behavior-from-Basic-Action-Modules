@@ -210,6 +210,7 @@ class ROSBridge:
         max_velocity_scaling=0.0,
         max_acceleration_scaling=0.0,
         coordinate_space="unity_world",
+        constrain_joint6=False,
     ):
         """
         Plan and execute a motion to target pose for a specific robot.
@@ -227,6 +228,10 @@ class ROSBridge:
                 (LLM-generated, move_to_coordinate). "unity_world" if position is in Unity
                 world space and needs the world→base_link transform applied (grasp planner,
                 detection-derived positions). Default: "unity_world".
+            constrain_joint6: When True, adds a ±30° path constraint on joint_6 around its
+                current position to prevent link-6 free-spin. Only set for pre-grasp hover
+                moves. Never set for descent/grasp moves where joint_6 must reach target
+                orientation.
 
         Returns:
             Dict with success status and details.
@@ -244,6 +249,8 @@ class ROSBridge:
             cmd["max_velocity_scaling"] = max_velocity_scaling
         if max_acceleration_scaling > 0.0:
             cmd["max_acceleration_scaling"] = max_acceleration_scaling
+        if constrain_joint6:
+            cmd["constrain_joint6"] = True
 
         return self._send_command(cmd, timeout=self._execution_timeout)
 
@@ -254,6 +261,7 @@ class ROSBridge:
         robot_id="Robot1",
         max_velocity_scaling=0.3,
         max_acceleration_scaling=0.3,
+        lock_orientation=True,
     ):
         """
         Plan and execute a straight-line Cartesian descent to a target position.
@@ -282,6 +290,7 @@ class ROSBridge:
             "position": position,
             "max_velocity_scaling": max_velocity_scaling,
             "max_acceleration_scaling": max_acceleration_scaling,
+            "lock_orientation": lock_orientation,
         }
         if orientation is not None:
             cmd["orientation"] = orientation
