@@ -297,6 +297,50 @@ class ROSBridge:
 
         return self._send_command(cmd, timeout=self._execution_timeout)
 
+    def plan_cartesian_move(
+        self,
+        position,
+        orientation=None,
+        robot_id="Robot1",
+        max_velocity_scaling=0.3,
+        max_acceleration_scaling=0.3,
+        lock_orientation=True,
+        avoid_collisions=True,
+    ):
+        """Plan and execute a straight-line Cartesian move to a target position.
+
+        Direction-agnostic alias for plan_cartesian_descent. Use whenever the
+        end-effector must translate in a straight line without wrist rotation
+        (e.g. handoff slide-in along X, grasp descent along Z).
+
+        Args:
+            position: Dict with x, y, z in Unity world coordinates.
+            orientation: Dict with x, y, z, w quaternion (optional).
+            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
+            max_velocity_scaling: Velocity scaling factor (default 0.3).
+            max_acceleration_scaling: Acceleration scaling factor (default 0.3).
+            lock_orientation: Keep orientation fixed during move (default True).
+            avoid_collisions: Enable MoveIt collision checking (default True).
+                Set False when the path intentionally passes near a cooperative
+                robot (e.g. handoff slide-in toward Robot1).
+
+        Returns:
+            Dict with success status and details.
+        """
+        cmd = {
+            "command": "plan_cartesian_move",
+            "robot_id": robot_id,
+            "position": position,
+            "max_velocity_scaling": max_velocity_scaling,
+            "max_acceleration_scaling": max_acceleration_scaling,
+            "lock_orientation": lock_orientation,
+            "avoid_collisions": avoid_collisions,
+        }
+        if orientation is not None:
+            cmd["orientation"] = orientation
+
+        return self._send_command(cmd, timeout=self._execution_timeout)
+
     def plan_to_pose(
         self, position, orientation=None, planning_time=5.0, robot_id="Robot1"
     ):
@@ -323,6 +367,19 @@ class ROSBridge:
             cmd["orientation"] = orientation
 
         return self._send_command(cmd, timeout=self._execution_timeout)
+
+    def get_ee_pose(self, robot_id="Robot1"):
+        """Get current end-effector Cartesian pose (position + orientation) via FK.
+
+        Returns position and orientation in ROS base_link frame.
+
+        Args:
+            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
+
+        Returns:
+            Dict with success, position {x,y,z}, orientation {x,y,z,w} in base_link.
+        """
+        return self._send_command({"command": "get_ee_pose", "robot_id": robot_id})
 
     def get_current_pose(self, robot_id="Robot1"):
         """

@@ -662,6 +662,8 @@ class ROSMotionServer:
                 return self._plan_and_publish(request, robot_id)
             elif command == "get_current_pose":
                 return self._get_current_pose(robot_id)
+            elif command == "get_ee_pose":
+                return self._compute_fk(robot_id)
             elif command == "control_gripper":
                 return self._control_gripper(request, robot_id)
             elif command == "plan_multi_waypoint":
@@ -672,8 +674,8 @@ class ROSMotionServer:
                 return self._plan_return_to_start(request, robot_id)
             elif command == "validate_grasp_candidates":
                 return self._validate_grasp_candidates(request, robot_id)
-            elif command == "plan_cartesian_descent":
-                return self._plan_cartesian_descent(request, robot_id)
+            elif command in ("plan_cartesian_descent", "plan_cartesian_move"):
+                return self._plan_cartesian_move(request, robot_id)
             elif command == "ping":
                 return {"success": True, "message": "pong", "timestamp": time.time()}
             else:
@@ -1368,9 +1370,11 @@ class ROSMotionServer:
             return {"success": False, "error": "FK returned no poses"}
 
         pos = response.pose_stamped[0].pose.position
+        ori = response.pose_stamped[0].pose.orientation
         return {
             "success": True,
             "position": {"x": pos.x, "y": pos.y, "z": pos.z},
+            "orientation": {"x": ori.x, "y": ori.y, "z": ori.z, "w": ori.w},
         }
 
     def _plan_orientation_change(self, request, robot_id):
@@ -1557,17 +1561,16 @@ class ROSMotionServer:
         )
         return trajectory
 
-    def _plan_cartesian_descent(self, request, robot_id):
-        """Plan and publish a straight-line Cartesian descent to a target position.
+    def _plan_cartesian_move(self, request, robot_id):
+        """Plan and publish a straight-line Cartesian move to a target position.
 
         Uses MoveIt's GetCartesianPath service to constrain the end-effector to
         follow a straight line from the current pose to the target. This prevents
-        IK redundancy from causing joint 4 (or any wrist joint) to rotate to a
-        different solution mid-descent, which would offset the gripper laterally.
+        IK redundancy from causing joints to rotate to a different solution
+        mid-move, which would cause unwanted rotation instead of pure translation.
 
-        Intended for the final grasp descent: after arriving at the pre-grasp
-        hover, call this instead of plan_and_execute so the arm descends straight
-        down to the object without any lateral drift.
+        Use instead of plan_and_execute whenever the end-effector must travel in
+        a straight line (grasp descent, handoff slide-in, etc.).
 
         Args:
             request: Dict with keys:
@@ -1600,6 +1603,7 @@ class ROSMotionServer:
         vel_scaling = request.get("max_velocity_scaling", 0.6)
         acc_scaling = request.get("max_acceleration_scaling", 0.4)
         lock_orientation = request.get("lock_orientation", True)
+        avoid_collisions = request.get("avoid_collisions", True)
 
         # Transform Unity world coords → ROS base_link frame
         local_position = self._transform_world_to_local(position, robot_id)
@@ -1634,7 +1638,7 @@ class ROSMotionServer:
         req.waypoints = [target_pose.pose]
         req.max_step = 0.10  # 10cm maximum interpolation step — reduces waypoints for short descents (5cm → 150 pts, 10cm → ~75 pts)
         req.jump_threshold = 0.0  # Disable jump detection; non-zero values prematurely terminate descent at workspace edges
-        req.avoid_collisions = True
+        req.avoid_collisions = avoid_collisions
 
         # Lock wrist orientation throughout the descent so MoveIt's IK solver
         # cannot flip to a redundant wrist solution mid-path (which would cause

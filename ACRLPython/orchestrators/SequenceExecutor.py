@@ -850,6 +850,7 @@ class SequenceExecutor:
                 "ros_executed",
                 "ros_command_sent",
                 "vgn_ros_executed",
+                "handoff_received",
             ):
                 logger.debug(
                     f"Skipping completion wait for ROS-executed operation: {operation}"

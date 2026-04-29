@@ -2081,9 +2081,9 @@ def receive_handoff(
          half object width + ``HANDOFF_GRIPPER_CLEARANCE``.
       3. Compute yaw toward object using ``_yaw_toward_object``.  pitch=0 so
          gripper stays horizontal (Robot1 presents at pitch=0).
-      4. Move to pre-approach waypoint (further out on X, correct Y/Z).
-      5. ``move_to_coordinate(ap_x, ap_y, ap_z)`` — slide in.
-      7. ``control_gripper(open_gripper=False)``.
+      4. ``plan_and_execute`` (ROS) or ``move_to_coordinate`` (Unity) — move directly to
+         approach position with orientation set, so OMPL finds the correct wrist config.
+      5. ``control_gripper(open_gripper=False)``.
       8. Emit ``release_signal`` event (if provided) so source robot releases
          immediately — prevents Unity physics conflict from dual-gripper hold.
 
@@ -2120,16 +2120,12 @@ def receive_handoff(
         try:
             from config.Robot import (
                 DEFAULT_HANDOFF_OBJECT_DIMENSIONS,
-                GRASP_TCP_OFFSET,
                 HANDOFF_GRIPPER_CLEARANCE,
-                HANDOFF_PRESENTATION_POSITION,
                 ROBOT_BASE_POSITIONS,
             )
         except ImportError:
             DEFAULT_HANDOFF_OBJECT_DIMENSIONS = (0.02, 0.02, 0.02)
-            GRASP_TCP_OFFSET = 0.05
             HANDOFF_GRIPPER_CLEARANCE = 0.02
-            HANDOFF_PRESENTATION_POSITION = (0.0, 0.35, 0.0)
             ROBOT_BASE_POSITIONS = {}
 
         object_position = None
@@ -2190,89 +2186,67 @@ def receive_handoff(
         static_yaw_deg = 0.0
         logger.info("receive_handoff: using robot-local yaw=0° (base rotation handles world facing)")
 
-        from .MoveOperations import move_to_coordinate, adjust_end_effector_orientation
+        from .MoveOperations import move_to_coordinate
 
-        # ── 4. Move to pre-approach waypoint ─────────────────────────────────
-        # Start from HANDOFF_PRESENTATION_POSITION + extra X offset, not from ap_x.
-        # Ensures Robot2 approaches along a straight line toward the known handoff point.
-        pre_ap_x = HANDOFF_PRESENTATION_POSITION[0] + approach_sign * (
-            obj_x * 0.5 + HANDOFF_GRIPPER_CLEARANCE + GRASP_TCP_OFFSET
-        )
-        pre_ap_y = HANDOFF_PRESENTATION_POSITION[1]
-        pre_ap_z = HANDOFF_PRESENTATION_POSITION[2]
-        logger.info(
-            f"receive_handoff: pre_approach=({pre_ap_x:.3f}, {pre_ap_y:.3f}, {pre_ap_z:.3f})"
-        )
-        hover_result = move_to_coordinate(
-            robot_id=robot_id,
-            x=pre_ap_x,
-            y=pre_ap_y,
-            z=pre_ap_z,
-            request_id=request_id,
-            use_ros=use_ros,
-        )
-        if not hover_result.success:
-            logger.warning(
-                f"receive_handoff: pre-approach move failed — {hover_result.error}; continuing"
+        # ── 4–6. Move to final approach position with orientation ─────────────
+        # Mirrors the top-down grasp pattern: single plan_and_execute with both
+        # position AND orientation so OMPL finds a solution in the correct wrist
+        # configuration from the start — no separate orient step, no Cartesian
+        # complexity. pitch=0,yaw=0,roll=0 in Robot2's base_link = identity {w:1},
+        # which points the gripper toward -X (handoff side) because Robot2's
+        # base is already rotated 180° in Unity world space.
+        _use_ros_approach = use_ros
+        if _use_ros_approach is None:
+            try:
+                from config.ROS import DEFAULT_CONTROL_MODE, ROS_ENABLED
+
+                _use_ros_approach = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
+            except ImportError:
+                _use_ros_approach = False
+
+        # Side-approach orientation: roll=90° around ROS X-axis so fingers are
+        # horizontal. q = (sin45, 0, 0, cos45). Single plan_and_execute with
+        # position+orientation so OMPL finds one consistent IK solution — same
+        # pattern as top-down grasp, no separate orient step needed.
+        import math as _math
+        _half = _math.radians(90.0) / 2.0
+        handoff_orientation = {
+            "x": _math.sin(_half),
+            "y": 0.0,
+            "z": 0.0,
+            "w": _math.cos(_half),
+        }
+
+        if _use_ros_approach:
+            from ros2.ROSBridge import ROSBridge
+
+            bridge = ROSBridge.get_instance()
+            approach_result = bridge.plan_and_execute(
+                position={"x": ap_x, "y": ap_y, "z": ap_z},
+                orientation=handoff_orientation,
+                robot_id=robot_id,
+                max_velocity_scaling=0.4,
+                max_acceleration_scaling=0.3,
+                constrain_joint6=True,
             )
-
-        # ── 5. Orient gripper at pre-approach ────────────────────────────────
-
-        orient_result = adjust_end_effector_orientation(
-            robot_id=robot_id,
-            pitch=0.0,
-            yaw=0.0,
-            roll=0.0,
-            request_id=request_id,
-            use_ros=use_ros,
-        )
-        if not orient_result.success:
-            logger.warning(
-                f"receive_handoff: orient step failed — {orient_result.error}; continuing"
-            )
-
-        # Allow arm to fully settle before detecting and sliding in
-        import time as _time
-        _time.sleep(1.0)
-
-        # ── 5b. Re-detect object from pre-approach position ───────────────────
-        # Robot2 is now close with clear line-of-sight. Use fresh detected pos
-        # for slide-in so gripper aligns with Robot1's actual settled position.
-        from .VisionOperations import detect_object_stereo
-
-        detect_result = detect_object_stereo(
-            robot_id=robot_id,
-            color=object_id.split("_")[0],
-            request_id=request_id,
-        )
-        if detect_result.success and detect_result.result:
-            detected = detect_result.result
-            ap_x = detected.get("x", ap_x) + approach_sign * (
-                obj_x * 0.5 + HANDOFF_GRIPPER_CLEARANCE
-            )
-            ap_y = detected.get("y", ap_y)
-            ap_z = detected.get("z", ap_z)
-            logger.info(
-                f"receive_handoff: refined approach from detection=({ap_x:.3f}, {ap_y:.3f}, {ap_z:.3f})"
-            )
+            approach_success = approach_result and approach_result.get("success")
+            approach_error = (approach_result or {}).get("error", "No response from ROS bridge")
         else:
-            logger.warning(
-                f"receive_handoff: re-detect failed ({detect_result.error}), using config-derived approach"
+            _move = move_to_coordinate(
+                robot_id=robot_id,
+                x=ap_x,
+                y=ap_y,
+                z=ap_z,
+                request_id=request_id,
+                use_ros=False,
             )
+            approach_success = _move.success
+            approach_error = _move.error
 
-        # ── 6. Slide in to final approach position ────────────────────────────
-        slide_result = move_to_coordinate(
-            robot_id=robot_id,
-            x=ap_x,
-            y=ap_y,
-            z=ap_z,
-            request_id=request_id,
-            use_ros=use_ros,
-        )
-        if not slide_result.success:
+        if not approach_success:
             return OperationResult.error_result(
                 "MOVE_FAILED",
-                f"receive_handoff: slide-in failed — {slide_result.error}",
+                f"receive_handoff: approach failed — {approach_error}",
                 ["Check for workspace collision", "Verify approach_position is reachable"],
             )
 
