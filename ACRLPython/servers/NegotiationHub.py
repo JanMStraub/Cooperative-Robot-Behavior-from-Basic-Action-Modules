@@ -245,11 +245,15 @@ class NegotiationHub(SingletonBase):
 
                 session.current_round = round_num
 
-                # Refresh world state each round so proposals use current positions.
-                # Re-analysis is skipped: robots don't move during negotiation, so
-                # repeating the analysis phase just burns LLM tokens for the same result.
+                # Refresh world state and re-run analysis each round so agents
+                # incorporate any state changes and previous round outcomes.
                 if round_num > 1:
                     world_state = self._get_world_state_snapshot()
+                    analysis_ok = self._run_analysis_phase(session, world_state)
+                    if not analysis_ok:
+                        result.state = NegotiationState.FAILED
+                        result.reasoning = "Analysis phase failed"
+                        return result
 
                 # Phase 2: Proposal
                 session.state = NegotiationState.PROPOSING

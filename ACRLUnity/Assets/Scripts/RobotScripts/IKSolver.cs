@@ -13,16 +13,18 @@ namespace Robotics
     {
         private readonly float _dampingFactor;
 
-        // Pre-allocated matrices for GC-free operation
+        // Pre-allocated MathNet matrices (still used for Jacobian building and J*J^T multiply)
         private Matrix<double> _jacobianMatrix;
-        private Matrix<double> _cachedIdentity;
         private Vector<double> _errorVector;
         private Vector<double> _jointDelta;
-
-        // Pre-allocated intermediates for ComputePseudoInverse (avoids 3 heap allocs/frame)
         private Matrix<double> _jacobianTranspose;
         private Matrix<double> _jacobianJacobianTranspose;
-        private Matrix<double> _regularizedMatrix;
+
+        // Raw double arrays for zero-alloc 6x6 LU solve (replaces MathNet LU().Solve())
+        private readonly double[,] _luA = new double[6, 6];
+        private readonly double[] _luB = new double[6];
+        private readonly double[] _luY = new double[6];
+        private readonly int[] _luPiv = new int[6];
 
         // Iteration tracking
         private int _iterationCount;
@@ -56,11 +58,9 @@ namespace Robotics
             _jacobianMatrix = DenseMatrix.Build.Dense(6, jointCount);
             _errorVector = Vector<double>.Build.Dense(6);
             _jointDelta = Vector<double>.Build.Dense(jointCount);
-            _cachedIdentity = DenseMatrix.Build.DenseIdentity(6);
 
             _jacobianTranspose = DenseMatrix.Build.Dense(jointCount, 6);
             _jacobianJacobianTranspose = DenseMatrix.Build.Dense(6, 6);
-            _regularizedMatrix = DenseMatrix.Build.Dense(6, 6);
         }
 
         /// <summary>
@@ -229,7 +229,6 @@ namespace Robotics
                 _jointDelta = Vector<double>.Build.Dense(joints.Length);
                 _jacobianTranspose = DenseMatrix.Build.Dense(joints.Length, 6);
                 _jacobianJacobianTranspose = DenseMatrix.Build.Dense(6, 6);
-                _regularizedMatrix = DenseMatrix.Build.Dense(6, 6);
             }
 
             for (int i = 0; i < joints.Length; i++)
@@ -252,26 +251,88 @@ namespace Robotics
 
         /// <summary>
         /// Compute the damped least squares pseudo-inverse of the Jacobian
-        /// and update joint deltas
+        /// and update joint deltas. Uses zero-alloc manual LU solve for the 6x6 system.
         /// </summary>
         /// <param name="overrideDamping">Optional damping override (null uses default)</param>
         private void ComputePseudoInverse(float? overrideDamping = null)
         {
-            // Use pre-allocated fields to avoid per-frame heap allocations
             _jacobianMatrix.Transpose(_jacobianTranspose);
             _jacobianMatrix.Multiply(_jacobianTranspose, _jacobianJacobianTranspose);
 
-            float damping = overrideDamping ?? _dampingFactor;
+            double damping = overrideDamping ?? _dampingFactor;
+            double lambda2 = damping * damping;
 
-            // regularizedMatrix = JJ^T + λ²I  (in-place: write into _regularizedMatrix)
-            _cachedIdentity.Multiply(damping * damping, _regularizedMatrix);
-            _jacobianJacobianTranspose.Add(_regularizedMatrix, _regularizedMatrix);
+            // Copy JJ^T + λ²I into raw double array (avoids MathNet LU object allocation)
+            for (int r = 0; r < 6; r++)
+            {
+                for (int c = 0; c < 6; c++)
+                    _luA[r, c] = _jacobianJacobianTranspose[r, c];
+                _luA[r, r] += lambda2;
+                _luB[r] = _errorVector[r];
+            }
 
-            // LU decomp still allocates internally (unavoidable with MathNet)
-            var y = _regularizedMatrix.LU().Solve(_errorVector);
+            SolveLU6x6(_luA, _luB, _luY, _luPiv);
 
-            // Write result directly into pre-allocated _jointDelta
-            _jacobianTranspose.Multiply(y, _jointDelta);
+            // J^T * y -> _jointDelta
+            int n = _jointDelta.Count;
+            for (int i = 0; i < n; i++)
+            {
+                double sum = 0.0;
+                for (int j = 0; j < 6; j++)
+                    sum += _jacobianTranspose[i, j] * _luY[j];
+                _jointDelta[i] = sum;
+            }
+        }
+
+        /// <summary>
+        /// In-place partial-pivot LU solve for a 6x6 system Ax=b.
+        /// Writes solution into y. Uses pre-allocated pivot buffer.
+        /// </summary>
+        private static void SolveLU6x6(double[,] a, double[] b, double[] y, int[] piv)
+        {
+            const int n = 6;
+            for (int i = 0; i < n; i++) piv[i] = i;
+
+            // LU factorization with partial pivoting (in-place on a)
+            for (int k = 0; k < n; k++)
+            {
+                // Find pivot
+                int maxRow = k;
+                double maxVal = System.Math.Abs(a[k, k]);
+                for (int i = k + 1; i < n; i++)
+                {
+                    double v = System.Math.Abs(a[i, k]);
+                    if (v > maxVal) { maxVal = v; maxRow = i; }
+                }
+                if (maxRow != k)
+                {
+                    // Swap rows in a
+                    for (int j = 0; j < n; j++) { double t = a[k, j]; a[k, j] = a[maxRow, j]; a[maxRow, j] = t; }
+                    int tmp = piv[k]; piv[k] = piv[maxRow]; piv[maxRow] = tmp;
+                }
+                if (a[k, k] == 0.0) continue; // singular column — skip
+                double inv = 1.0 / a[k, k];
+                for (int i = k + 1; i < n; i++)
+                {
+                    a[i, k] *= inv;
+                    for (int j = k + 1; j < n; j++)
+                        a[i, j] -= a[i, k] * a[k, j];
+                }
+            }
+
+            // Apply row permutation to b -> y, then forward/back substitution
+            for (int i = 0; i < n; i++) y[i] = b[piv[i]];
+            // Forward substitution (L is unit lower triangular)
+            for (int i = 1; i < n; i++)
+                for (int j = 0; j < i; j++)
+                    y[i] -= a[i, j] * y[j];
+            // Back substitution
+            for (int i = n - 1; i >= 0; i--)
+            {
+                for (int j = i + 1; j < n; j++)
+                    y[i] -= a[i, j] * y[j];
+                y[i] /= a[i, i];
+            }
         }
     }
 
