@@ -619,5 +619,3 @@ class TestComputeHandoffApproachVector:
         # X >= Z extent, so X axis is chosen. Receiver is at +X → sign = -1.
         assert result[0] == -1.0
         assert result[2] == 0.0
-
-

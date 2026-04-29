@@ -104,7 +104,10 @@ def analyze_scene(
             return OperationResult.error_result(
                 "NO_IMAGES",
                 "No stereo images available for analysis",
-                ["Ensure StereoCameraController is sending images", "Check camera_id parameter"],
+                [
+                    "Ensure StereoCameraController is sending images",
+                    "Check camera_id parameter",
+                ],
             )
         _, image, _, _ = stereo_data
 
@@ -660,8 +663,12 @@ def detect_object_stereo(
             # Fields are managed by detect_field with object_type="field".
             # detect_object_stereo must not create or overwrite field entries.
             is_field = ws_object_id.lower().startswith("field_")
-            existing = world_state.get_object_state(ws_object_id) if not is_field else None
-            if not is_field and not (existing and existing.get("object_type") == "field"):
+            existing = (
+                world_state.get_object_state(ws_object_id) if not is_field else None
+            )
+            if not is_field and not (
+                existing and existing.get("object_type") == "field"
+            ):
                 world_state.update_object_position(
                     object_id=ws_object_id,
                     position=(

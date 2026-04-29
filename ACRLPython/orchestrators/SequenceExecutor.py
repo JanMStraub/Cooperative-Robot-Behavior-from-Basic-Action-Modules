@@ -376,7 +376,9 @@ class SequenceExecutor:
                                 f"for command {i + 1}: {operation}"
                             )
                             retry_parse = parser.parse_with_hint(
-                                original_text, robot_id=robot_id, hint=hint,
+                                original_text,
+                                robot_id=robot_id,
+                                hint=hint,
                                 use_motion_layer=False,
                             )
                             if (

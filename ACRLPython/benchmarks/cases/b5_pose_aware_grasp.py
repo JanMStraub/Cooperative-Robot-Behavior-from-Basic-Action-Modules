@@ -40,7 +40,12 @@ def build_sequence(cfg: BenchmarkConfig) -> List[Dict[str, Any]]:
         },
         {
             "operation": "adjust_end_effector_orientation",
-            "params": {"robot_id": cfg.robot_id, "roll": 0.0, "pitch": -90.0, "yaw": 0.0},
+            "params": {
+                "robot_id": cfg.robot_id,
+                "roll": 0.0,
+                "pitch": -90.0,
+                "yaw": 0.0,
+            },
         },
         {
             "operation": "grasp_object",

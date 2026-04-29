@@ -350,8 +350,6 @@ def create_move_to_coordinate_operation() -> BasicOperation:
 MOVE_TO_COORDINATE_OPERATION = create_move_to_coordinate_operation()
 
 
-
-
 def adjust_end_effector_orientation(
     robot_id: str,
     roll: float = 0.0,

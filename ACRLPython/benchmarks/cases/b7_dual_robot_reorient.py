@@ -67,7 +67,11 @@ def build_sequence(cfg: DualRobotConfig) -> List[Dict[str, Any]]:
         },
         {
             "operation": "wait_for_signal",
-            "params": {"event_name": ev1, "robot_id": B, "timeout_ms": cfg.sync_timeout_ms},
+            "params": {
+                "event_name": ev1,
+                "robot_id": B,
+                "timeout_ms": cfg.sync_timeout_ms,
+            },
             "parallel_group": 3,
         },
         {
@@ -88,7 +92,11 @@ def build_sequence(cfg: DualRobotConfig) -> List[Dict[str, Any]]:
         },
         {
             "operation": "wait_for_signal",
-            "params": {"event_name": ev2, "robot_id": B, "timeout_ms": cfg.sync_timeout_ms},
+            "params": {
+                "event_name": ev2,
+                "robot_id": B,
+                "timeout_ms": cfg.sync_timeout_ms,
+            },
             "parallel_group": 5,
         },
         # Group 6: parallel incremental arm swings

@@ -283,7 +283,9 @@ Use 'signal' and 'wait_for_signal' for coordination between robots.
 
         previous_task_section = ""
         if scene.last_task_context is not None:
-            previous_task_section = self._build_previous_task_section(scene.last_task_context)
+            previous_task_section = self._build_previous_task_section(
+                scene.last_task_context
+            )
 
         return f"""SCENE ANALYSIS:
 {summary}
@@ -694,45 +696,74 @@ Generate tasks now:
         return ""
 
     _SEQUENCING_HINTS: dict = {
-        "grasp_object":              ("holding an object in its gripper",
-                                      "place_object, move_to_coordinate, handoff, release_object, receive_handoff"),
-        "pick_object_at_coordinate": ("holding an object picked from a coordinate",
-                                      "place_object, move_to_coordinate, handoff, release_object"),
-        "detect_object_stereo":      ("has just completed a detection scan",
-                                      "grasp_object, move_to_coordinate, pick_object_at_coordinate"),
-        "analyze_scene":             ("has just performed a scene analysis",
-                                      "detect_object_stereo, grasp_object, move_to_coordinate"),
-        "release_object":            ("gripper is open and not holding anything",
-                                      "move_to_coordinate, detect_object_stereo, grasp_object"),
-        "place_object":              ("has just placed an object, gripper is open",
-                                      "move_to_coordinate, detect_object_stereo, grasp_object"),
-        "move_to_coordinate":        ("has just finished a move",
-                                      "detect_object_stereo, grasp_object, control_gripper, move_to_coordinate"),
-        "control_gripper":           ("gripper state was just changed",
-                                      "move_to_coordinate, grasp_object, release_object"),
-        "handoff":                   ("just completed a handoff transfer",
-                                      "move_to_coordinate, detect_object_stereo, grasp_object"),
-        "receive_handoff":           ("just received an object from a handoff",
-                                      "place_object, move_to_coordinate, release_object"),
+        "grasp_object": (
+            "holding an object in its gripper",
+            "place_object, move_to_coordinate, handoff, release_object, receive_handoff",
+        ),
+        "pick_object_at_coordinate": (
+            "holding an object picked from a coordinate",
+            "place_object, move_to_coordinate, handoff, release_object",
+        ),
+        "detect_object_stereo": (
+            "has just completed a detection scan",
+            "grasp_object, move_to_coordinate, pick_object_at_coordinate",
+        ),
+        "analyze_scene": (
+            "has just performed a scene analysis",
+            "detect_object_stereo, grasp_object, move_to_coordinate",
+        ),
+        "release_object": (
+            "gripper is open and not holding anything",
+            "move_to_coordinate, detect_object_stereo, grasp_object",
+        ),
+        "place_object": (
+            "has just placed an object, gripper is open",
+            "move_to_coordinate, detect_object_stereo, grasp_object",
+        ),
+        "move_to_coordinate": (
+            "has just finished a move",
+            "detect_object_stereo, grasp_object, control_gripper, move_to_coordinate",
+        ),
+        "control_gripper": (
+            "gripper state was just changed",
+            "move_to_coordinate, grasp_object, release_object",
+        ),
+        "handoff": (
+            "just completed a handoff transfer",
+            "move_to_coordinate, detect_object_stereo, grasp_object",
+        ),
+        "receive_handoff": (
+            "just received an object from a handoff",
+            "place_object, move_to_coordinate, release_object",
+        ),
     }
 
     _FAILURE_HINTS: dict = {
-        "grasp_object":         "Re-detect the object before retrying grasp — position may have drifted.",
+        "grasp_object": "Re-detect the object before retrying grasp — position may have drifted.",
         "detect_object_stereo": "Move to a different viewpoint before re-scanning.",
     }
 
-    def _build_previous_task_section(self, last_task_context: ExecutedTaskContext) -> str:
+    def _build_previous_task_section(
+        self, last_task_context: ExecutedTaskContext
+    ) -> str:
         """Build the PREVIOUS TASK CONTEXT prompt section from the last executed task."""
-        last_op = last_task_context.operation_types[-1] if last_task_context.operation_types else ""
+        last_op = (
+            last_task_context.operation_types[-1]
+            if last_task_context.operation_types
+            else ""
+        )
 
         if last_task_context.success:
             state_desc, follow_ups = self._SEQUENCING_HINTS.get(
                 last_op,
-                ("has just completed an operation", "move_to_coordinate, detect_object_stereo"),
+                (
+                    "has just completed an operation",
+                    "move_to_coordinate, detect_object_stereo",
+                ),
             )
             return (
                 f"PREVIOUS TASK CONTEXT:\n"
-                f"Last task: \"{last_task_context.description}\" (succeeded)\n"
+                f'Last task: "{last_task_context.description}" (succeeded)\n'
                 f"Result: {last_task_context.result_summary}\n"
                 f"Robot state: {state_desc}\n"
                 f"Suggested follow-up operations: {follow_ups}\n"
@@ -745,7 +776,7 @@ Generate tasks now:
             )
             return (
                 f"PREVIOUS TASK CONTEXT:\n"
-                f"Last task: \"{last_task_context.description}\" (FAILED)\n"
+                f'Last task: "{last_task_context.description}" (FAILED)\n'
                 f"Error: {last_task_context.result_summary}\n"
                 f"Recovery suggestion: {corrective}\n"
                 f"Generate a task that recovers from or works around this failure.\n"

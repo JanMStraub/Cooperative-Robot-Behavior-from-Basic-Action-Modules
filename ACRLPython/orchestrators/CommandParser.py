@@ -516,7 +516,9 @@ class CommandParser:
         Returns:
             Same structure as parse().
         """
-        motion_layer = USE_MOTION_LAYER if use_motion_layer is None else use_motion_layer
+        motion_layer = (
+            USE_MOTION_LAYER if use_motion_layer is None else use_motion_layer
+        )
 
         # Stage 1: decompose to motions if enabled (same as main parse() path)
         effective_command = command_text
@@ -832,7 +834,9 @@ class CommandParser:
         except Exception as e:
             raise
 
-    def _get_spatial_context(self, robot_id: str, target: Optional[tuple] = None) -> str:
+    def _get_spatial_context(
+        self, robot_id: str, target: Optional[tuple] = None
+    ) -> str:
         """
         Retrieve formatted spatial context from the Knowledge Graph for the given robot.
 
@@ -909,9 +913,7 @@ class CommandParser:
             # Path blocking check when a target coordinate is known
             if target is not None:
                 blocked = qe.is_path_blocked(robot_id, target)
-                lines.append(
-                    f"Path to target: {'BLOCKED' if blocked else 'clear'}"
-                )
+                lines.append(f"Path to target: {'BLOCKED' if blocked else 'clear'}")
 
             if len(lines) == 1:
                 return ""  # Only header, no data
@@ -1286,7 +1288,6 @@ class CommandParser:
                     }
                 )
                 continue
-
 
         if commands:
             return {"success": True, "commands": commands, "error": None}

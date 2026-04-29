@@ -138,7 +138,9 @@ class _VGNPatch:
         if self.detect_result is not None:
             det_patch = patch(
                 "operations.GraspOperations.YOLODetector",
-                return_value=MagicMock(detect_objects=MagicMock(return_value=self.detect_result)),
+                return_value=MagicMock(
+                    detect_objects=MagicMock(return_value=self.detect_result)
+                ),
             )
             self._patches.append(det_patch.start())
 

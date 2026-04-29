@@ -7,8 +7,8 @@ from typing import Any, Dict, List
 
 from ..config import BenchmarkConfig
 
-_HOVER_OFFSET = 0.05   # approach height above object
-_LIFT_OFFSET = 0.15    # lift height after grasp
+_HOVER_OFFSET = 0.05  # approach height above object
+_LIFT_OFFSET = 0.15  # lift height after grasp
 _PLACE_COORDS = {"x": 0.2, "y": 0.15, "z": 0.1}
 
 

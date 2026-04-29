@@ -11,7 +11,12 @@ import time
 import numpy as np
 from typing import List, Optional, Dict, Any
 
-from autort.DataModels import SceneDescription, GroundedObject, ProposedTask, ExecutedTaskContext
+from autort.DataModels import (
+    SceneDescription,
+    GroundedObject,
+    ProposedTask,
+    ExecutedTaskContext,
+)
 from autort.TaskGenerator import TaskGenerator
 from autort.RobotConstitution import RobotConstitution
 from autort.TaskSelector import TaskSelector
@@ -176,12 +181,15 @@ class AutoRTOrchestrator:
             operation_types=[op.type for op in selected.operations],
             success=result.get("success", False),
             result_summary=(
-                str(result.get("result", "")) if result.get("success")
+                str(result.get("result", ""))
+                if result.get("success")
                 else str(result.get("error", "unknown error"))
             ),
         )
 
-    def _capture_scene(self, last_task_context: Optional[ExecutedTaskContext] = None) -> SceneDescription:
+    def _capture_scene(
+        self, last_task_context: Optional[ExecutedTaskContext] = None
+    ) -> SceneDescription:
         """
         Capture scene state by composing existing operations.
 

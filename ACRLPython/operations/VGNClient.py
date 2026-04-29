@@ -622,11 +622,11 @@ class VGNClient:
             _faces = []
             for u_range, v_range, fixed_val, axis in [
                 # (u_range, v_range, fixed_coord_val, fixed_axis_idx)
-                ((-_hw, _hw), (-_hd, _hd), _hh, 1),   # top face    Y=+hh
+                ((-_hw, _hw), (-_hd, _hd), _hh, 1),  # top face    Y=+hh
                 ((-_hw, _hw), (-_hd, _hd), -_hh, 1),  # bottom face Y=-hh
-                ((-_hh, _hh), (-_hd, _hd), _hw, 0),   # right face  X=+hw
+                ((-_hh, _hh), (-_hd, _hd), _hw, 0),  # right face  X=+hw
                 ((-_hh, _hh), (-_hd, _hd), -_hw, 0),  # left face   X=-hw
-                ((-_hw, _hw), (-_hh, _hh), _hd, 2),   # front face  Z=+hd
+                ((-_hw, _hw), (-_hh, _hh), _hd, 2),  # front face  Z=+hd
                 ((-_hw, _hw), (-_hh, _hh), -_hd, 2),  # back face   Z=-hd
             ]:
                 us = rng.uniform(u_range[0], u_range[1], _PTS_PER_FACE)
@@ -637,7 +637,9 @@ class VGNClient:
                 face[:, axes[1]] = vs
                 face[:, axis] = fixed_val
                 _faces.append(face)
-            _box_pts = np.concatenate(_faces, axis=0) + _real_centroid.astype(np.float32)
+            _box_pts = np.concatenate(_faces, axis=0) + _real_centroid.astype(
+                np.float32
+            )
             masked_points = np.concatenate([masked_points, _box_pts], axis=0)
             logger.info(
                 f"[VGN] Box synthesis: {_n_orig} real + {_box_pts.shape[0]} synthetic pts "
@@ -762,6 +764,7 @@ class VGNClient:
         debug_info["tsdf_res"] = _TSDF_RES
 
         from config.Vision import VGN_EXPORT_TSDF, VGN_EXPORT_TSDF_PATH
+
         if VGN_EXPORT_TSDF:
             np.savez(
                 VGN_EXPORT_TSDF_PATH,

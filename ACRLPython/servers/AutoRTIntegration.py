@@ -567,7 +567,11 @@ class AutoRTHandler:
                 )
 
                 # Send to Unity via callback (if registered and Unity integration enabled)
-                if UNITY_INTEGRATION_ENABLED and self._task_callback and response.get("tasks"):
+                if (
+                    UNITY_INTEGRATION_ENABLED
+                    and self._task_callback
+                    and response.get("tasks")
+                ):
                     self._task_callback(response, request_id=0)
                     logger.debug(
                         f"Sent {len(response['tasks'])} tasks to Unity via callback"

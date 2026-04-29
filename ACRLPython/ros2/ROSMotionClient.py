@@ -860,7 +860,11 @@ class ROSMotionServer:
 
         goal.request.goal_constraints.append(constraints)
 
-        if constrain_joint6 and joint_state is not None and "joint_6" in joint_state.name:
+        if (
+            constrain_joint6
+            and joint_state is not None
+            and "joint_6" in joint_state.name
+        ):
             # Prevent link-6 free-spin during pre-grasp hover: pin joint_6 within ±30°
             # of its current value so RRTConnect cannot spin the wrist 180-360° to an
             # equivalent ee_link pose. Only applied when caller sets constrain_joint6=True

@@ -42,7 +42,7 @@ try:
         DEFAULT_LMSTUDIO_MODEL,
         LMSTUDIO_BASE_URL,
         PERCEPTION_ONLY_MODE,
-        REFLEXION_ENABLED
+        REFLEXION_ENABLED,
     )
     from config.Vision import (
         ENABLE_VISION_STREAMING,
@@ -73,7 +73,7 @@ except ImportError:
         DEFAULT_LMSTUDIO_MODEL,
         LMSTUDIO_BASE_URL,
         PERCEPTION_ONLY_MODE,
-        REFLEXION_ENABLED
+        REFLEXION_ENABLED,
     )
     from ..config.Vision import (
         ENABLE_VISION_STREAMING,
@@ -263,6 +263,7 @@ class RobotController:
 
                     # Forward object states (position, dimensions, rotation) into WorldState
                     from config.Vision import USE_UNITY_OBJECT_POSITIONS
+
                     objects = state_data.get("objects", [])
                     seen_object_ids = set()
                     for obj in objects:
@@ -273,8 +274,12 @@ class RobotController:
                         if USE_UNITY_OBJECT_POSITIONS:
                             pos = world_state._to_position_tuple(obj.get("position"))
                             if pos:
-                                dims = world_state._to_position_tuple(obj.get("dimensions"))
-                                rot = world_state._to_rotation_tuple(obj.get("rotation"))
+                                dims = world_state._to_position_tuple(
+                                    obj.get("dimensions")
+                                )
+                                rot = world_state._to_rotation_tuple(
+                                    obj.get("rotation")
+                                )
                                 world_state.update_object_position(
                                     obj_id,
                                     pos,

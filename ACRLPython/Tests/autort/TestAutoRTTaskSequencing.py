@@ -11,13 +11,14 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from pydantic import ValidationError
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 def make_scene(last_task_context=None):
     from autort.DataModels import SceneDescription, GroundedObject
+
     return SceneDescription(
         timestamp=1.0,
         objects=[
@@ -34,6 +35,7 @@ def make_scene(last_task_context=None):
 
 def make_context(op_types, success=True, result_summary="ok", description="Test task"):
     from autort.DataModels import ExecutedTaskContext
+
     return ExecutedTaskContext(
         task_id="t001",
         description=description,
@@ -45,8 +47,9 @@ def make_context(op_types, success=True, result_summary="ok", description="Test 
 
 def make_generator():
     """Build a TaskGenerator with all external deps mocked."""
-    with patch("autort.TaskGenerator.get_global_registry") as mreg, \
-         patch("autort.TaskGenerator.OpenAI"):
+    with patch("autort.TaskGenerator.get_global_registry") as mreg, patch(
+        "autort.TaskGenerator.OpenAI"
+    ):
         mreg.return_value.get_all_operations.return_value = []
         gen = _build_generator()
     return gen
@@ -54,6 +57,7 @@ def make_generator():
 
 def _build_generator():
     from autort.TaskGenerator import TaskGenerator
+
     cfg = Mock()
     cfg.LM_STUDIO_URL = "http://localhost:1234/v1"
     cfg.TASK_GENERATION_MODEL = "test-model"
@@ -66,9 +70,11 @@ def _build_generator():
 # Section 1: ExecutedTaskContext model
 # ---------------------------------------------------------------------------
 
+
 class TestExecutedTaskContext:
     def test_valid_success(self):
         from autort.DataModels import ExecutedTaskContext
+
         ctx = ExecutedTaskContext(
             task_id="t1",
             description="Grasp cube",
@@ -82,6 +88,7 @@ class TestExecutedTaskContext:
 
     def test_result_summary_defaults_empty(self):
         from autort.DataModels import ExecutedTaskContext
+
         ctx = ExecutedTaskContext(
             task_id="t2",
             description="Move",
@@ -92,6 +99,7 @@ class TestExecutedTaskContext:
 
     def test_failure(self):
         from autort.DataModels import ExecutedTaskContext
+
         ctx = ExecutedTaskContext(
             task_id="t3",
             description="Grasp blue",
@@ -104,6 +112,7 @@ class TestExecutedTaskContext:
 
     def test_missing_required_field_raises(self):
         from autort.DataModels import ExecutedTaskContext
+
         with pytest.raises(ValidationError):
             ExecutedTaskContext(
                 description="No task_id",
@@ -115,6 +124,7 @@ class TestExecutedTaskContext:
 # ---------------------------------------------------------------------------
 # Section 2: SceneDescription backward compat
 # ---------------------------------------------------------------------------
+
 
 class TestSceneDescriptionBackwardCompat:
     def test_no_context_still_valid(self):
@@ -133,6 +143,7 @@ class TestSceneDescriptionBackwardCompat:
         scene = make_scene(last_task_context=ctx)
         data = scene.model_dump()
         from autort.DataModels import SceneDescription
+
         restored = SceneDescription(**data)
         assert restored.last_task_context.success is False
 
@@ -141,19 +152,28 @@ class TestSceneDescriptionBackwardCompat:
 # Section 3: _build_previous_task_section — success paths
 # ---------------------------------------------------------------------------
 
+
 class TestBuildPreviousTaskSectionSuccess:
     @pytest.fixture(autouse=True)
     def gen(self):
-        with patch("autort.TaskGenerator.get_global_registry") as mreg, \
-             patch("autort.TaskGenerator.OpenAI"):
+        with patch("autort.TaskGenerator.get_global_registry") as mreg, patch(
+            "autort.TaskGenerator.OpenAI"
+        ):
             mreg.return_value.get_all_operations.return_value = []
             from autort.TaskGenerator import TaskGenerator
-            cfg = Mock(LM_STUDIO_URL="x", TASK_GENERATION_MODEL="m",
-                       MAX_JSON_RETRIES=1, TASK_GENERATION_TEMPERATURE=0.7)
+
+            cfg = Mock(
+                LM_STUDIO_URL="x",
+                TASK_GENERATION_MODEL="m",
+                MAX_JSON_RETRIES=1,
+                TASK_GENERATION_TEMPERATURE=0.7,
+            )
             self.gen = TaskGenerator(cfg)
 
     def test_grasp_success(self):
-        ctx = make_context(["grasp_object"], success=True, result_summary="grasped cube")
+        ctx = make_context(
+            ["grasp_object"], success=True, result_summary="grasped cube"
+        )
         section = self.gen._build_previous_task_section(ctx)
         assert "PREVIOUS TASK CONTEXT" in section
         assert "holding an object" in section
@@ -182,15 +202,22 @@ class TestBuildPreviousTaskSectionSuccess:
 # Section 4: _build_previous_task_section — failure paths
 # ---------------------------------------------------------------------------
 
+
 class TestBuildPreviousTaskSectionFailure:
     @pytest.fixture(autouse=True)
     def gen(self):
-        with patch("autort.TaskGenerator.get_global_registry") as mreg, \
-             patch("autort.TaskGenerator.OpenAI"):
+        with patch("autort.TaskGenerator.get_global_registry") as mreg, patch(
+            "autort.TaskGenerator.OpenAI"
+        ):
             mreg.return_value.get_all_operations.return_value = []
             from autort.TaskGenerator import TaskGenerator
-            cfg = Mock(LM_STUDIO_URL="x", TASK_GENERATION_MODEL="m",
-                       MAX_JSON_RETRIES=1, TASK_GENERATION_TEMPERATURE=0.7)
+
+            cfg = Mock(
+                LM_STUDIO_URL="x",
+                TASK_GENERATION_MODEL="m",
+                MAX_JSON_RETRIES=1,
+                TASK_GENERATION_TEMPERATURE=0.7,
+            )
             self.gen = TaskGenerator(cfg)
 
     def test_grasp_failure_suggests_redetect(self):
@@ -201,19 +228,25 @@ class TestBuildPreviousTaskSectionFailure:
         assert "IK failed" in section
 
     def test_detect_failure_suggests_viewpoint(self):
-        ctx = make_context(["detect_object_stereo"], success=False, result_summary="timeout")
+        ctx = make_context(
+            ["detect_object_stereo"], success=False, result_summary="timeout"
+        )
         section = self.gen._build_previous_task_section(ctx)
         assert "viewpoint" in section
         assert "timeout" in section
 
     def test_other_failure_generic_retry(self):
-        ctx = make_context(["move_to_coordinate"], success=False, result_summary="collision")
+        ctx = make_context(
+            ["move_to_coordinate"], success=False, result_summary="collision"
+        )
         section = self.gen._build_previous_task_section(ctx)
         assert "FAILED" in section
         assert "collision" in section
 
     def test_error_summary_in_output(self):
-        ctx = make_context(["grasp_object"], success=False, result_summary="motor overheated")
+        ctx = make_context(
+            ["grasp_object"], success=False, result_summary="motor overheated"
+        )
         section = self.gen._build_previous_task_section(ctx)
         assert "motor overheated" in section
 
@@ -222,15 +255,22 @@ class TestBuildPreviousTaskSectionFailure:
 # Section 5: _build_task_prompt integration
 # ---------------------------------------------------------------------------
 
+
 class TestBuildTaskPromptIntegration:
     @pytest.fixture(autouse=True)
     def gen(self):
-        with patch("autort.TaskGenerator.get_global_registry") as mreg, \
-             patch("autort.TaskGenerator.OpenAI"):
+        with patch("autort.TaskGenerator.get_global_registry") as mreg, patch(
+            "autort.TaskGenerator.OpenAI"
+        ):
             mreg.return_value.get_all_operations.return_value = []
             from autort.TaskGenerator import TaskGenerator
-            cfg = Mock(LM_STUDIO_URL="x", TASK_GENERATION_MODEL="m",
-                       MAX_JSON_RETRIES=1, TASK_GENERATION_TEMPERATURE=0.7)
+
+            cfg = Mock(
+                LM_STUDIO_URL="x",
+                TASK_GENERATION_MODEL="m",
+                MAX_JSON_RETRIES=1,
+                TASK_GENERATION_TEMPERATURE=0.7,
+            )
             self.gen = TaskGenerator(cfg)
 
     def test_no_context_section_absent(self):
@@ -260,18 +300,25 @@ class TestBuildTaskPromptIntegration:
 # Section 6: AutoRTOrchestrator state tracking
 # ---------------------------------------------------------------------------
 
+
 class TestAutoRTOrchestratorState:
     def _make_orchestrator(self):
-        with patch("autort.AutoRTLoop.get_global_registry"), \
-             patch("autort.AutoRTLoop.get_world_state"), \
-             patch("autort.TaskGenerator.get_global_registry") as mreg, \
-             patch("autort.TaskGenerator.OpenAI"), \
-             patch("autort.AutoRTLoop.TaskGenerator"), \
-             patch("autort.AutoRTLoop.RobotConstitution"), \
-             patch("autort.AutoRTLoop.TaskSelector"), \
-             patch("orchestrators.SequenceExecutor.SequenceExecutor"):
+        with patch("autort.AutoRTLoop.get_global_registry"), patch(
+            "autort.AutoRTLoop.get_world_state"
+        ), patch("autort.TaskGenerator.get_global_registry") as mreg, patch(
+            "autort.TaskGenerator.OpenAI"
+        ), patch(
+            "autort.AutoRTLoop.TaskGenerator"
+        ), patch(
+            "autort.AutoRTLoop.RobotConstitution"
+        ), patch(
+            "autort.AutoRTLoop.TaskSelector"
+        ), patch(
+            "orchestrators.SequenceExecutor.SequenceExecutor"
+        ):
             mreg.return_value.get_all_operations.return_value = []
             from autort.AutoRTLoop import AutoRTOrchestrator
+
             with patch("orchestrators.SequenceExecutor.SequenceExecutor"):
                 orch = AutoRTOrchestrator.__new__(AutoRTOrchestrator)
                 orch._last_task_context = None
@@ -280,12 +327,16 @@ class TestAutoRTOrchestratorState:
 
     def test_starts_none(self):
         from autort.AutoRTLoop import AutoRTOrchestrator
-        with patch("autort.AutoRTLoop.get_global_registry"), \
-             patch("autort.AutoRTLoop.get_world_state"), \
-             patch("autort.AutoRTLoop.TaskGenerator"), \
-             patch("autort.AutoRTLoop.RobotConstitution"), \
-             patch("autort.AutoRTLoop.TaskSelector"), \
-             patch("orchestrators.SequenceExecutor.SequenceExecutor"):
+
+        with patch("autort.AutoRTLoop.get_global_registry"), patch(
+            "autort.AutoRTLoop.get_world_state"
+        ), patch("autort.AutoRTLoop.TaskGenerator"), patch(
+            "autort.AutoRTLoop.RobotConstitution"
+        ), patch(
+            "autort.AutoRTLoop.TaskSelector"
+        ), patch(
+            "orchestrators.SequenceExecutor.SequenceExecutor"
+        ):
             orch = AutoRTOrchestrator()
             assert orch._last_task_context is None
 
@@ -303,12 +354,16 @@ class TestAutoRTOrchestratorState:
         result = {"success": True, "result": "grasped red_cube"}
 
         from autort.AutoRTLoop import AutoRTOrchestrator
-        with patch("autort.AutoRTLoop.get_global_registry"), \
-             patch("autort.AutoRTLoop.get_world_state"), \
-             patch("autort.AutoRTLoop.TaskGenerator"), \
-             patch("autort.AutoRTLoop.RobotConstitution"), \
-             patch("autort.AutoRTLoop.TaskSelector"), \
-             patch("orchestrators.SequenceExecutor.SequenceExecutor"):
+
+        with patch("autort.AutoRTLoop.get_global_registry"), patch(
+            "autort.AutoRTLoop.get_world_state"
+        ), patch("autort.AutoRTLoop.TaskGenerator"), patch(
+            "autort.AutoRTLoop.RobotConstitution"
+        ), patch(
+            "autort.AutoRTLoop.TaskSelector"
+        ), patch(
+            "orchestrators.SequenceExecutor.SequenceExecutor"
+        ):
             orch = AutoRTOrchestrator()
 
         # Simulate what _run_one_iteration does after execution
@@ -329,6 +384,7 @@ class TestAutoRTOrchestratorState:
         """_capture_scene signature must accept last_task_context without error."""
         import inspect
         from autort.AutoRTLoop import AutoRTOrchestrator
+
         sig = inspect.signature(AutoRTOrchestrator._capture_scene)
         assert "last_task_context" in sig.parameters
         param = sig.parameters["last_task_context"]

@@ -414,7 +414,10 @@ HANDOFF_PATTERN = WorkflowPattern(
         ),
         WorkflowStep(
             operation_id="perception_stereo_detect_001",
-            parameter_bindings={"color": "object_color", "robot_id": "{target_robot_id}"},
+            parameter_bindings={
+                "color": "object_color",
+                "robot_id": "{target_robot_id}",
+            },
             description="Target robot re-detects object at presentation position",
         ),
         WorkflowStep(

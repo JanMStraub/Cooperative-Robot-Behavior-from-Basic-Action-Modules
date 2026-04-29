@@ -78,7 +78,8 @@ class TestHandoffPatternSteps:
         ids = self._step_ids()
         orient_lock_idx = ids.index("motion_adjust_orientation_003")
         signal_idx = next(
-            i for i, s in enumerate(HANDOFF_PATTERN.steps)
+            i
+            for i, s in enumerate(HANDOFF_PATTERN.steps)
             if s.operation_id == SIGNAL_OP_ID
             and s.parameter_bindings.get("event_name") == "r1_at_handoff"
         )

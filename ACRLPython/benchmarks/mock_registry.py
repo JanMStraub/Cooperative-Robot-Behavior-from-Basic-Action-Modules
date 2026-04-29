@@ -52,7 +52,13 @@ class _MockOperation:
         if self._profile == "always_succeed":
             if "detect" in name:
                 return OperationResult.success_result(
-                    {"x": 0.3, "y": 0.15, "z": 0.1, "color": "red_cube", "confidence": 0.95}
+                    {
+                        "x": 0.3,
+                        "y": 0.15,
+                        "z": 0.1,
+                        "color": "red_cube",
+                        "confidence": 0.95,
+                    }
                 )
             return OperationResult.success_result({"mock": True})
 
@@ -66,7 +72,9 @@ class _MockOperation:
         if self._profile == "detect_fails":
             if "detect" in name:
                 return OperationResult.error_result(
-                    "DETECTION_FAILED", "Mock: detection always fails in this profile", []
+                    "DETECTION_FAILED",
+                    "Mock: detection always fails in this profile",
+                    [],
                 )
             return OperationResult.success_result({"mock": True})
 

@@ -526,14 +526,21 @@ def generate_point_cloud(
         # --- WebUI broadcast ---
         try:
             from servers.WebUIServer import broadcast_stereo_pointcloud
+
             world_pts = raw_points.copy().astype(np.float32)
-            world_pts[:, 2] *= -1.0  # Q-matrix Z-negative → Unity cam Z-forward (required before rotation)
+            world_pts[
+                :, 2
+            ] *= (
+                -1.0
+            )  # Q-matrix Z-negative → Unity cam Z-forward (required before rotation)
             if camera_rotation and len(camera_rotation) == 4:
                 world_pts = _apply_camera_rotation(world_pts, camera_rotation)
             if camera_position and len(camera_position) == 3:
                 world_pts = world_pts + np.array(camera_position, dtype=np.float32)
             span = float(np.max(world_pts.max(axis=0) - world_pts.min(axis=0)))
-            broadcast_stereo_pointcloud(world_pts, raw_colors, scene_span=max(span, 0.1))
+            broadcast_stereo_pointcloud(
+                world_pts, raw_colors, scene_span=max(span, 0.1)
+            )
         except Exception as e:
             logger.warning(f"WebUI point cloud broadcast failed: {e}")
 

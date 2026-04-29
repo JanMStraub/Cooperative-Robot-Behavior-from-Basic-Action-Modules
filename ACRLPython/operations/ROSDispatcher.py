@@ -132,6 +132,7 @@ def execute_with_ros_fallback(
             if "99999" in error_msg or "UNKNOWN_ERROR_99999" in error_msg:
                 try:
                     from config.ROS import ROS_ALLOW_TCP_FALLBACK_ON_99999
+
                     allow_99999_fallback = ROS_ALLOW_TCP_FALLBACK_ON_99999
                 except ImportError:
                     allow_99999_fallback = False

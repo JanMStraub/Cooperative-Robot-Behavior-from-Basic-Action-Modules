@@ -234,7 +234,9 @@ def detect_field(
             )
             logger.info(f"WorldState updated: key='{ws_key}' at {pos_tuple}")
         except Exception as e:
-            logger.error(f"Failed to update WorldState after field detection: {e}", exc_info=True)
+            logger.error(
+                f"Failed to update WorldState after field detection: {e}", exc_info=True
+            )
 
         return OperationResult.success_result(
             {

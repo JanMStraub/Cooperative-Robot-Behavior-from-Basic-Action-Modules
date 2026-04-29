@@ -52,7 +52,9 @@ def main() -> None:
         help="Run a single benchmark (1–8)",
     )
     group.add_argument("--all", action="store_true", help="Run all 8 benchmarks")
-    parser.add_argument("--dry-run", action="store_true", help="Use mock operations (no hardware)")
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Use mock operations (no hardware)"
+    )
     parser.add_argument(
         "--output-dir",
         default="./benchmark_results",

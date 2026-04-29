@@ -297,7 +297,11 @@ CONFLICT_MIN_DISTANCE_DIFF = float(os.environ.get("CONFLICT_MIN_DISTANCE_DIFF", 
 # VGN Debug Export
 # ============================================================================
 
-VGN_EXPORT_TSDF = os.environ.get("VGN_EXPORT_TSDF", "false").lower() in ("true", "1", "yes")
+VGN_EXPORT_TSDF = os.environ.get("VGN_EXPORT_TSDF", "false").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 VGN_EXPORT_TSDF_PATH = os.environ.get("VGN_EXPORT_TSDF_PATH", "/tmp/vgn_tsdf_last.npz")
 
 # ============================================================================

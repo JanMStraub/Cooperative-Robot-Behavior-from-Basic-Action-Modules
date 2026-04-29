@@ -424,7 +424,10 @@ def frame_generator(stream_type="left"):
                     logger.debug(f"WebUI Stream detection skipping frame: {detect_err}")
 
             from config.Vision import STEREO_JPEG_QUALITY
-            _, encoded = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, STEREO_JPEG_QUALITY])
+
+            _, encoded = cv2.imencode(
+                ".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, STEREO_JPEG_QUALITY]
+            )
             frame_bytes = encoded.tobytes()
 
         # Fallback to single camera if no stereo
@@ -433,7 +436,10 @@ def frame_generator(stream_type="left"):
             if single:
                 _, img, _ = single
                 from config.Vision import STEREO_JPEG_QUALITY
-                _, encoded = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, STEREO_JPEG_QUALITY])
+
+                _, encoded = cv2.imencode(
+                    ".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, STEREO_JPEG_QUALITY]
+                )
                 frame_bytes = encoded.tobytes()
 
         yield (
@@ -717,16 +723,19 @@ def broadcast_stereo_pointcloud(points: Any, colors: Any, scene_span: float = 1.
     try:
         import base64
         import numpy as np
+
         pts_b64 = base64.b64encode(points.astype(np.float32).tobytes()).decode("utf-8")
         clr_b64 = base64.b64encode(colors.astype(np.uint8).tobytes()).decode("utf-8")
-        payload = json.dumps({
-            "type": "stereo_pointcloud",
-            "data": {
-                "points_b64": pts_b64,
-                "colors_b64": clr_b64,
-                "scene_span": float(scene_span),
-            },
-        })
+        payload = json.dumps(
+            {
+                "type": "stereo_pointcloud",
+                "data": {
+                    "points_b64": pts_b64,
+                    "colors_b64": clr_b64,
+                    "scene_span": float(scene_span),
+                },
+            }
+        )
         asyncio.run_coroutine_threadsafe(manager.broadcast(payload), _main_loop)
     except Exception as e:
         logger.error(f"Failed to broadcast stereo point cloud: {e}")

@@ -246,10 +246,14 @@ class TestCommandParserLLM:
             }
         )
 
-        with patch("orchestrators.CommandParser.requests.post", return_value=llm_response):
+        with patch(
+            "orchestrators.CommandParser.requests.post", return_value=llm_response
+        ):
             with patch("orchestrators.CommandParser.USE_MOTION_LAYER", False):
                 with patch.object(command_parser, "registry", mock_registry):
-                    result = command_parser.parse("detect the blue cube", robot_id="Robot1")
+                    result = command_parser.parse(
+                        "detect the blue cube", robot_id="Robot1"
+                    )
 
                     assert result["success"] is True
                     assert result["commands"][0]["operation"] == "detect_object_stereo"

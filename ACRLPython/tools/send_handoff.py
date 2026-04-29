@@ -131,7 +131,6 @@ def send_ops(
     )
 
 
-
 # ── Handoff sequence ───────────────────────────────────────────────────────────
 
 
@@ -159,8 +158,21 @@ def run_handoff(
     # ── Step 1: Grasp ─────────────────────────────────────────────────────────
     if not receive_only:
         send_ops(
-            [{"operation": "grasp_object", "params": {"robot_id": grasper_id, "object_id": object_id}}],
-            grasper_id, "grasp", host, port, camera_id, timeout, auto_execute, req, results,
+            [
+                {
+                    "operation": "grasp_object",
+                    "params": {"robot_id": grasper_id, "object_id": object_id},
+                }
+            ],
+            grasper_id,
+            "grasp",
+            host,
+            port,
+            camera_id,
+            timeout,
+            auto_execute,
+            req,
+            results,
         )
         req += 1
         if not results.get("grasp", {}).get("success", False):
@@ -170,8 +182,21 @@ def run_handoff(
     if not receive_only:
         print()
         send_ops(
-            [{"operation": "return_to_start_position", "params": {"robot_id": grasper_id, "speed": 0.5}}],
-            grasper_id, "return_start", host, port, camera_id, 60, auto_execute, req, results,
+            [
+                {
+                    "operation": "return_to_start_position",
+                    "params": {"robot_id": grasper_id, "speed": 0.5},
+                }
+            ],
+            grasper_id,
+            "return_start",
+            host,
+            port,
+            camera_id,
+            60,
+            auto_execute,
+            req,
+            results,
         )
         req += 1
         if not results.get("return_start", {}).get("success", False):
@@ -181,10 +206,26 @@ def run_handoff(
     if not receive_only:
         print()
         send_ops(
-            [{"operation": "move_to_coordinate", "params": {
-                "robot_id": grasper_id, "x": HANDOFF_X, "y": HANDOFF_Y, "z": HANDOFF_Z,
-            }}],
-            grasper_id, "move_present", host, port, camera_id, timeout, auto_execute, req, results,
+            [
+                {
+                    "operation": "move_to_coordinate",
+                    "params": {
+                        "robot_id": grasper_id,
+                        "x": HANDOFF_X,
+                        "y": HANDOFF_Y,
+                        "z": HANDOFF_Z,
+                    },
+                }
+            ],
+            grasper_id,
+            "move_present",
+            host,
+            port,
+            camera_id,
+            timeout,
+            auto_execute,
+            req,
+            results,
         )
         req += 1
         if not results.get("move_present", {}).get("success", False):
@@ -194,10 +235,26 @@ def run_handoff(
     if not receive_only:
         print()
         send_ops(
-            [{"operation": "adjust_end_effector_orientation", "params": {
-                "robot_id": grasper_id, "pitch": 0.0, "yaw": 0.0, "roll": 0.0,
-            }}],
-            grasper_id, "orient_wrist", host, port, camera_id, 30, auto_execute, req, results,
+            [
+                {
+                    "operation": "adjust_end_effector_orientation",
+                    "params": {
+                        "robot_id": grasper_id,
+                        "pitch": 0.0,
+                        "yaw": 0.0,
+                        "roll": 0.0,
+                    },
+                }
+            ],
+            grasper_id,
+            "orient_wrist",
+            host,
+            port,
+            camera_id,
+            30,
+            auto_execute,
+            req,
+            results,
         )
         req += 1
         if not results.get("orient_wrist", {}).get("success", False):
@@ -213,14 +270,52 @@ def run_handoff(
         signal_out: dict = {}
         wait_out: dict = {}
 
-        t_signal = threading.Thread(target=send_ops, args=(
-            [{"operation": "signal", "params": {"robot_id": grasper_id, "event_name": "r1_at_handoff"}}],
-            grasper_id, "signal", host, port, camera_id, 30, auto_execute, signal_req, signal_out,
-        ))
-        t_wait = threading.Thread(target=send_ops, args=(
-            [{"operation": "wait_for_signal", "params": {"robot_id": receiver_id, "event_name": "r1_at_handoff"}}],
-            receiver_id, "wait_signal", host, port, camera_id, 60, auto_execute, wait_req, wait_out,
-        ))
+        t_signal = threading.Thread(
+            target=send_ops,
+            args=(
+                [
+                    {
+                        "operation": "signal",
+                        "params": {
+                            "robot_id": grasper_id,
+                            "event_name": "r1_at_handoff",
+                        },
+                    }
+                ],
+                grasper_id,
+                "signal",
+                host,
+                port,
+                camera_id,
+                30,
+                auto_execute,
+                signal_req,
+                signal_out,
+            ),
+        )
+        t_wait = threading.Thread(
+            target=send_ops,
+            args=(
+                [
+                    {
+                        "operation": "wait_for_signal",
+                        "params": {
+                            "robot_id": receiver_id,
+                            "event_name": "r1_at_handoff",
+                        },
+                    }
+                ],
+                receiver_id,
+                "wait_signal",
+                host,
+                port,
+                camera_id,
+                60,
+                auto_execute,
+                wait_req,
+                wait_out,
+            ),
+        )
 
         t_signal.start()
         t_wait.start()
@@ -239,10 +334,25 @@ def run_handoff(
     if not grasp_only:
         print()
         send_ops(
-            [{"operation": "detect_object_stereo", "params": {
-                "robot_id": receiver_id, "camera_id": camera_id, "object_color": object_id,
-            }}],
-            receiver_id, "detect", host, port, camera_id, 60, auto_execute, req, results,
+            [
+                {
+                    "operation": "detect_object_stereo",
+                    "params": {
+                        "robot_id": receiver_id,
+                        "camera_id": camera_id,
+                        "object_color": object_id,
+                    },
+                }
+            ],
+            receiver_id,
+            "detect",
+            host,
+            port,
+            camera_id,
+            60,
+            auto_execute,
+            req,
+            results,
         )
         req += 1
         if not results.get("detect", {}).get("success", False):
@@ -260,24 +370,61 @@ def run_handoff(
         receive_out: dict = {}
         release_out: dict = {}
 
-        t_receive = threading.Thread(target=send_ops, args=(
-            [{"operation": "receive_handoff", "params": {
-                "robot_id": receiver_id,
-                "object_id": object_id,
-                "source_robot_id": grasper_id,
-                "release_signal": "r2_gripped",
-            }}],
-            receiver_id, "receive", host, port, camera_id, timeout, auto_execute, receive_req, receive_out,
-        ))
+        t_receive = threading.Thread(
+            target=send_ops,
+            args=(
+                [
+                    {
+                        "operation": "receive_handoff",
+                        "params": {
+                            "robot_id": receiver_id,
+                            "object_id": object_id,
+                            "source_robot_id": grasper_id,
+                            "release_signal": "r2_gripped",
+                        },
+                    }
+                ],
+                receiver_id,
+                "receive",
+                host,
+                port,
+                camera_id,
+                timeout,
+                auto_execute,
+                receive_req,
+                receive_out,
+            ),
+        )
 
         if not receive_only:
-            t_release = threading.Thread(target=send_ops, args=(
-                [
-                    {"operation": "wait_for_signal", "params": {"robot_id": grasper_id, "event_name": "r2_gripped", "timeout_ms": int(timeout * 1000)}},
-                    {"operation": "release_object", "params": {"robot_id": grasper_id}},
-                ],
-                grasper_id, "release", host, port, camera_id, timeout + 10, auto_execute, release_req, release_out,
-            ))
+            t_release = threading.Thread(
+                target=send_ops,
+                args=(
+                    [
+                        {
+                            "operation": "wait_for_signal",
+                            "params": {
+                                "robot_id": grasper_id,
+                                "event_name": "r2_gripped",
+                                "timeout_ms": int(timeout * 1000),
+                            },
+                        },
+                        {
+                            "operation": "release_object",
+                            "params": {"robot_id": grasper_id},
+                        },
+                    ],
+                    grasper_id,
+                    "release",
+                    host,
+                    port,
+                    camera_id,
+                    timeout + 10,
+                    auto_execute,
+                    release_req,
+                    release_out,
+                ),
+            )
             t_release.start()
 
         t_receive.start()
@@ -296,8 +443,21 @@ def run_handoff(
     if not grasp_only and not receive_only:
         print()
         send_ops(
-            [{"operation": "return_to_start_position", "params": {"robot_id": grasper_id, "speed": 1.0}}],
-            grasper_id, "home", host, port, camera_id, 60, True, req, results,
+            [
+                {
+                    "operation": "return_to_start_position",
+                    "params": {"robot_id": grasper_id, "speed": 1.0},
+                }
+            ],
+            grasper_id,
+            "home",
+            host,
+            port,
+            camera_id,
+            60,
+            True,
+            req,
+            results,
         )
         req += 1
 
@@ -347,10 +507,14 @@ def main():
         help=f"Per-step timeout in seconds (default: {DEFAULT_TIMEOUT})",
     )
     parser.add_argument(
-        "--grasp-only", action="store_true", help="Only run steps 1-4 (grasp + return + present + orient wrist)"
+        "--grasp-only",
+        action="store_true",
+        help="Only run steps 1-4 (grasp + return + present + orient wrist)",
     )
     parser.add_argument(
-        "--receive-only", action="store_true", help="Only run steps 5-8 (detect + approach + close)"
+        "--receive-only",
+        action="store_true",
+        help="Only run steps 5-8 (detect + approach + close)",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Parse without executing"

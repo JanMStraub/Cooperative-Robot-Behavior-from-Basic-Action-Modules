@@ -82,7 +82,11 @@ LLM_REQUEST_TIMEOUT = float(os.environ.get("LLM_REQUEST_TIMEOUT", "90.0"))
 WORLDSTATE_CHECK_INTERVAL = float(os.environ.get("WORLDSTATE_CHECK_INTERVAL", "5.0"))
 
 # Reflexion retry: re-parse failed commands with error context injected into the LLM prompt.
-REFLEXION_ENABLED = os.environ.get("REFLEXION_ENABLED", "true").lower() in ("true", "1", "yes")
+REFLEXION_ENABLED = os.environ.get("REFLEXION_ENABLED", "true").lower() in (
+    "true",
+    "1",
+    "yes",
+)
 REFLEXION_MAX_RETRIES = int(os.environ.get("REFLEXION_MAX_RETRIES", "2"))
 
 # Intermediate motion layer (RT-H style): when True, CommandParser sends the

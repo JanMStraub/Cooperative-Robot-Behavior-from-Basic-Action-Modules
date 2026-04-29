@@ -2184,7 +2184,9 @@ def receive_handoff(
         # Robot2 base is already 180° — yaw=0 in local frame points toward -X (handoff).
         # Mirrors Robot1's pitch=0,yaw=0,roll=0 lock exactly.
         static_yaw_deg = 0.0
-        logger.info("receive_handoff: using robot-local yaw=0° (base rotation handles world facing)")
+        logger.info(
+            "receive_handoff: using robot-local yaw=0° (base rotation handles world facing)"
+        )
 
         from .MoveOperations import move_to_coordinate
 
@@ -2200,7 +2202,10 @@ def receive_handoff(
             try:
                 from config.ROS import DEFAULT_CONTROL_MODE, ROS_ENABLED
 
-                _use_ros_approach = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
+                _use_ros_approach = ROS_ENABLED and DEFAULT_CONTROL_MODE in (
+                    "ros",
+                    "hybrid",
+                )
             except ImportError:
                 _use_ros_approach = False
 
@@ -2209,6 +2214,7 @@ def receive_handoff(
         # position+orientation so OMPL finds one consistent IK solution — same
         # pattern as top-down grasp, no separate orient step needed.
         import math as _math
+
         _half = _math.radians(90.0) / 2.0
         handoff_orientation = {
             "x": _math.sin(_half),
@@ -2230,7 +2236,9 @@ def receive_handoff(
                 constrain_joint6=True,
             )
             approach_success = approach_result and approach_result.get("success")
-            approach_error = (approach_result or {}).get("error", "No response from ROS bridge")
+            approach_error = (approach_result or {}).get(
+                "error", "No response from ROS bridge"
+            )
         else:
             _move = move_to_coordinate(
                 robot_id=robot_id,
@@ -2247,7 +2255,10 @@ def receive_handoff(
             return OperationResult.error_result(
                 "MOVE_FAILED",
                 f"receive_handoff: approach failed — {approach_error}",
-                ["Check for workspace collision", "Verify approach_position is reachable"],
+                [
+                    "Check for workspace collision",
+                    "Verify approach_position is reachable",
+                ],
             )
 
         # ── 7. Close gripper ──────────────────────────────────────────────────

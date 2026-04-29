@@ -165,7 +165,6 @@ class TestCommandParserKG(unittest.TestCase):
 
         self.assertEqual(result, "")
 
-
     def test_spatial_context_includes_handoff_candidates(self):
         """Handoff candidates are formatted when both robots can reach the object."""
         parser = self._make_parser()

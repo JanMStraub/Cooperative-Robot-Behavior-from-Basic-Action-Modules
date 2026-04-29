@@ -73,7 +73,11 @@ def build_sequence(cfg: DualRobotConfig) -> List[Dict[str, Any]]:
         },
         {
             "operation": "wait_for_signal",
-            "params": {"event_name": ev, "robot_id": B, "timeout_ms": cfg.sync_timeout_ms},
+            "params": {
+                "event_name": ev,
+                "robot_id": B,
+                "timeout_ms": cfg.sync_timeout_ms,
+            },
             "parallel_group": 3,
         },
         # Group 4: A lifts, B closes gripper

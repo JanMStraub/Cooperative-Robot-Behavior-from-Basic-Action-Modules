@@ -226,7 +226,9 @@ class TestParseWithHintMotionLayer:
         parser._do_llm_request = Mock(
             return_value={
                 "success": True,
-                "parsed": {"commands": [{"operation": "control_gripper", "params": {}}]},
+                "parsed": {
+                    "commands": [{"operation": "control_gripper", "params": {}}]
+                },
             }
         )
         parser._validate_commands = Mock(
@@ -242,10 +244,15 @@ class TestParseWithHintMotionLayer:
         self._stub_parser(parser, motions)
 
         result = parser.parse_with_hint(
-            "grasp the red cube", robot_id="Robot1", hint="prev error", use_motion_layer=True
+            "grasp the red cube",
+            robot_id="Robot1",
+            hint="prev error",
+            use_motion_layer=True,
         )
 
-        parser._decompose_to_motions.assert_called_once_with("grasp the red cube", "Robot1")
+        parser._decompose_to_motions.assert_called_once_with(
+            "grasp the red cube", "Robot1"
+        )
         prompt_call_arg = parser._prompt_builder.build.call_args[0][0]
         assert "approach from above" in prompt_call_arg
         assert result["success"] is True
