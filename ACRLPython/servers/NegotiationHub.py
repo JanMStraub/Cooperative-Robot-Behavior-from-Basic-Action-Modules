@@ -273,7 +273,9 @@ class NegotiationHub(SingletonBase):
                     # _normalize_commands() silently drops commands missing "operation",
                     # so validating after normalization misses those malformed entries.
                     if VERIFY_NEGOTIATED_PLANS:
-                        valid, validation_errors = self._validate_plan(proposal.commands)
+                        valid, validation_errors = self._validate_plan(
+                            proposal.commands
+                        )
                         if not valid:
                             logger.warning(
                                 f"Round {round_num}: plan validation failed: {validation_errors}"

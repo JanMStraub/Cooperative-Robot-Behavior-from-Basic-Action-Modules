@@ -108,8 +108,8 @@ export class NetworkManager {
             case 'autort_tasks':
                 this.autort.handleAutortTasks(msg);
                 break;
-            case 'vgn_debug':
-                if (this.renderer) this.renderer.updateVGNDebug(msg.data);
+            case 'stereo_pointcloud':
+                if (this.renderer) this.renderer.updateStereoPointCloud(msg.data);
                 break;
 default:
                 console.log("Unknown msg:", msg);

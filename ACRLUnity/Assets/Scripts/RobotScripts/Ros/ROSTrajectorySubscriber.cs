@@ -67,10 +67,11 @@ namespace Robotics
 
         [Tooltip(
             "Base time (seconds) to wait for joints to settle before firing 'completed' feedback anyway. "
-                + "Actual timeout = this value / _speedScaling so slower trajectories get proportionally more settle time."
+                + "Actual timeout = this value / _speedScaling so slower trajectories get proportionally more settle time. "
+                + "5s recommended: joints 2/3 need ~3-4s to damp below 5 deg/s after a trajectory end."
         )]
         [SerializeField]
-        private float _settleTimeoutSeconds = 2.0f;
+        private float _settleTimeoutSeconds = 5.0f;
 
         [Header("References")]
         [SerializeField]
@@ -200,6 +201,33 @@ namespace Robotics
                 $"{_logPrefix} Executing trajectory with {msg.points.Length} points "
                     + $"for {_robotController.robotId}"
             );
+
+            // Diagnostic: log joint_6 values across the full trajectory to detect ±π boundary crossings.
+            {
+                int j6idx = -1;
+                for (int i = 0; i < msg.joint_names.Length; i++)
+                    if (msg.joint_names[i] == "joint_6") { j6idx = i; break; }
+                if (j6idx >= 0 && msg.points.Length > 0)
+                {
+                    var sb = new System.Text.StringBuilder();
+                    sb.Append($"{_logPrefix} joint_6 trajectory (deg): ");
+                    int step = Mathf.Max(1, msg.points.Length / 10);
+                    for (int p = 0; p < msg.points.Length; p += step)
+                        sb.Append($"{msg.points[p].positions[j6idx] * Mathf.Rad2Deg:F1} ");
+                    sb.Append($"[last:{msg.points[msg.points.Length-1].positions[j6idx] * Mathf.Rad2Deg:F1}]");
+                    Debug.Log(sb.ToString());
+
+                    // Detect boundary crossings: consecutive waypoints with |delta| > 270° indicate the bug.
+                    for (int p = 1; p < msg.points.Length; p++)
+                    {
+                        double prev = msg.points[p-1].positions[j6idx] * Mathf.Rad2Deg;
+                        double cur  = msg.points[p].positions[j6idx]   * Mathf.Rad2Deg;
+                        double rawDelta = cur - prev;
+                        if (System.Math.Abs(rawDelta) > 270.0)
+                            Debug.LogWarning($"{_logPrefix} joint_6 BOUNDARY CROSSING at waypoint {p}: {prev:F1}° → {cur:F1}° (delta={rawDelta:F1}°) — NormalizeAngleRad will handle this.");
+                    }
+                }
+            }
 
             // Set IsManuallyDriven immediately (before the coroutine's first frame) so
             // the RobotController IK never fires between consecutive trajectories.
@@ -437,6 +465,13 @@ namespace Robotics
                                 double p1 = targetPoint.positions[j];
                                 double interpRad;
 
+                                // Shortest-path delta: if the planned segment crosses the ±π
+                                // wrap boundary (e.g. +2.9 → -2.9 rad through +π), normalising
+                                // the delta prevents the joint from spinning through the full
+                                // 2π arc in the wrong direction.
+                                double shortDelta = NormalizeAngleRad(p1 - p0);
+                                double p1Unwrapped = p0 + shortDelta;
+
                                 if (
                                     fromVelocities != null
                                     && toVelocities != null
@@ -451,20 +486,20 @@ namespace Robotics
                                     interpRad =
                                         (2 * t3 - 3 * t2 + 1) * p0
                                         + (t3 - 2 * t2 + t) * v0
-                                        + (-2 * t3 + 3 * t2) * p1
+                                        + (-2 * t3 + 3 * t2) * p1Unwrapped
                                         + (t3 - t2) * v1;
                                     // Clamp to segment endpoints so Hermite overshoot
                                     // (caused by large mid-trajectory velocities) never
-                                    // drives the joint outside [p0, p1]. Without this,
+                                    // drives the joint outside [p0, p1Unwrapped]. Without this,
                                     // the physics chases the overshooting drive target
                                     // and accumulates error it cannot recover from.
-                                    double segMin = System.Math.Min(p0, p1);
-                                    double segMax = System.Math.Max(p0, p1);
+                                    double segMin = System.Math.Min(p0, p1Unwrapped);
+                                    double segMax = System.Math.Max(p0, p1Unwrapped);
                                     interpRad = System.Math.Max(segMin, System.Math.Min(segMax, interpRad));
                                 }
                                 else
                                 {
-                                    interpRad = p0 + (p1 - p0) * t;
+                                    interpRad = p0 + shortDelta * t;
                                 }
 
                                 float targetDeg = (float)interpRad * Mathf.Rad2Deg;
@@ -545,7 +580,7 @@ namespace Robotics
                     if (toPos != null && fromPos != null)
                     {
                         for (int j = 0; j < _jointIndexMap.Length && j < toPos.Length && j < fromPos.Length; j++)
-                            maxDisp = Math.Max(maxDisp, Math.Abs(toPos[j] - fromPos[j]));
+                            maxDisp = Math.Max(maxDisp, Math.Abs(NormalizeAngleRad(toPos[j] - fromPos[j])));
                     }
                     double segDur = maxDisp > 1e-6
                         ? maxDisp / (_maxJointVelocity * 0.8)
@@ -582,13 +617,14 @@ namespace Robotics
                     double[] fromPositions = (seg == 0) ? _startPositions : msg.points[seg - 1].positions;
                     double[] toPositions = msg.points[seg].positions;
 
-                    // Linear interpolation (Hermite skipped — velocities were for original 0.02s segments)
+                    // Shortest-path linear interpolation (Hermite skipped — velocities were for original 0.02s segments).
+                    // NormalizeAngleRad ensures wrap-aware interpolation for ±π joints (e.g. joint_6).
                     if (toPositions != null && fromPositions != null)
                     {
                         for (int j = 0; j < _jointIndexMap.Length && j < toPositions.Length && j < fromPositions.Length; j++)
                         {
                             int idx = _jointIndexMap[j];
-                            double interpRad = fromPositions[j] + (toPositions[j] - fromPositions[j]) * t;
+                            double interpRad = fromPositions[j] + NormalizeAngleRad(toPositions[j] - fromPositions[j]) * t;
                             float targetDeg = (float)interpRad * Mathf.Rad2Deg;
                             ArticulationDrive drive = _joints[idx].xDrive;
                             drive.target = Mathf.Clamp(targetDeg, drive.lowerLimit, drive.upperLimit);
@@ -650,6 +686,7 @@ namespace Robotics
             // drive target (PD lag at trajectory end, or stall during return-to-home).
             // This catches the stall case that velocity-only settle misses.
             // Use the same near-target logic but always run it — even on velocity-settle success.
+            bool nearTargetReached = false;
             {
                 const float NEAR_TARGET_DEG = 2f;
                 const float NEAR_TARGET_TIMEOUT = 10f;
@@ -665,17 +702,37 @@ namespace Robotics
                         float err = Mathf.Abs(physDeg - _joints[idx].xDrive.target);
                         if (err > NEAR_TARGET_DEG) { allNear = false; break; }
                     }
-                    if (allNear) break;
+                    if (allNear) { nearTargetReached = true; break; }
                     yield return new WaitForFixedUpdate();
+                }
+
+                // Log which joints are still off-target after the wait (diagnostic only).
+                for (int j = 0; j < _jointIndexMap.Length; j++)
+                {
+                    int idx = _jointIndexMap[j];
+                    float physDeg = _joints[idx].jointPosition.dofCount > 0
+                        ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg : 0f;
+                    float velDeg = _joints[idx].jointVelocity.dofCount > 0
+                        ? _joints[idx].jointVelocity[0] * Mathf.Rad2Deg : 0f;
+                    float err = physDeg - _joints[idx].xDrive.target;
+                    if (Mathf.Abs(err) > NEAR_TARGET_DEG || Mathf.Abs(velDeg) > _settleVelocityThresholdDegPerSec)
+                        Debug.LogWarning($"{_logPrefix} joint_{j+1} unsettled: phys={physDeg:F1}° target={_joints[idx].xDrive.target:F1}° err={err:F1}° vel={velDeg:F1}°/s");
                 }
             }
 
             float totalDuration = Time.time - startTime;
-            string settleStatus = settled ? "OK" : "timeout";
+            // Near-target convergence (within 2°) is the sufficient condition for a clean
+            // handoff: MoveIt's start state matches where the arm physically is.
+            // Velocity settle is a prerequisite filter; if it times out but the near-target
+            // loop still converges, the arm is at its target and it is safe to proceed.
+            bool fullySettled = nearTargetReached;
+            string settleStatus = fullySettled
+                ? (settled ? "OK" : "near-target-OK")
+                : (settled ? "near-target-timeout" : "velocity-timeout");
             string logMessage =
                 $"{_logPrefix} Trajectory completed in {totalDuration:F2}s "
                 + $"(settle: {settleStatus}) for {_robotController.robotId}";
-            if (settled)
+            if (fullySettled)
                 Debug.Log(logMessage);
             else
                 Debug.LogWarning(logMessage);
@@ -727,7 +784,10 @@ namespace Robotics
             _robotController.IsManuallyDriven = false;
             _executionCoroutine = null;
 
-            PublishFeedback("completed", $"Finished in {totalDuration:F2}s");
+            // Use "completed_with_timeout" when the arm did not fully settle so that the
+            // Python side can apply an extra settle wait before planning the next move.
+            string feedbackStatus = fullySettled ? "completed" : "completed_with_timeout";
+            PublishFeedback(feedbackStatus, $"Finished in {totalDuration:F2}s (settle: {settleStatus})");
 
             // Notify listeners
             _robotController.SetTargetReached(true);

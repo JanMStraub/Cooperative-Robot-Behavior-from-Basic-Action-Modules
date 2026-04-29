@@ -1,5 +1,3 @@
-using System;
-using System.Collections;
 using Configuration;
 using Core;
 using Robotics.Grasp;
@@ -10,9 +8,8 @@ using Utilities;
 namespace Robotics
 {
     /// <summary>
-    /// MERGED CONTROLLER:
-    /// Combines the robust state machine, handoffs, and dynamic waits of Script A
-    /// with the smooth trajectory generation, velocity profiles, and precise kinematic math of Script B.
+    /// IK-based robot controller: manages grasp planning, trajectory following, and moving-target
+    /// tracking. Orchestrates IKSolver, GraspExecutor, GripperController, and ROS integration.
     /// </summary>
     public class RobotController : MonoBehaviour
     {
@@ -39,6 +36,10 @@ namespace Robotics
         private Transform _targetTransform;
 
         private bool _isManuallyDriven = false;
+
+        /// <summary>
+        /// Gets or sets whether the robot is driven externally, disabling the FixedUpdate IK loop.
+        /// </summary>
         public bool IsManuallyDriven
         {
             get => _isManuallyDriven;
@@ -152,7 +153,9 @@ namespace Robotics
                 _gripperController = GetComponentInChildren<GripperController>();
                 if (_gripperController == null)
                 {
-                    Debug.LogWarning($"[ROBOT_CONTROLLER] No GripperController found in children of {robotId}");
+                    Debug.LogWarning(
+                        $"[ROBOT_CONTROLLER] No GripperController found in children of {robotId}"
+                    );
                 }
             }
 
@@ -171,7 +174,9 @@ namespace Robotics
         {
             if (robotJoints == null || robotJoints.Length == 0)
             {
-                Debug.LogWarning($"[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies.");
+                Debug.LogWarning(
+                    $"[ROBOT_CONTROLLER] Robot joints are not assigned. Please assign ArticulationBodies."
+                );
                 return;
             }
 
@@ -247,13 +252,14 @@ namespace Robotics
                 logPrefix: _logPrefix,
                 setTargetInternal: SetTargetInternal,
                 getEndEffectorVelocityMagnitude: () => GetEndEffectorVelocity().magnitude,
-                getCachedTempObject: suffix => suffix switch
-                {
-                    "_pre" => GetCachedTempObject(ref _cachedTempTargetPre, suffix),
-                    "_retreat" => GetCachedTempObject(ref _cachedTempTargetRetreat, suffix),
-                    "_handoff" => GetCachedTempObject(ref _cachedTempTargetGrasp, suffix),
-                    _ => GetCachedTempObject(ref _cachedTempTargetGrasp, suffix),
-                },
+                getCachedTempObject: suffix =>
+                    suffix switch
+                    {
+                        "_pre" => GetCachedTempObject(ref _cachedTempTargetPre, suffix),
+                        "_retreat" => GetCachedTempObject(ref _cachedTempTargetRetreat, suffix),
+                        "_handoff" => GetCachedTempObject(ref _cachedTempTargetGrasp, suffix),
+                        _ => GetCachedTempObject(ref _cachedTempTargetGrasp, suffix),
+                    },
                 setIsGraspingTarget: value => _isGraspingTarget = value,
                 fireOnTargetReached: () => OnTargetReached?.Invoke(),
                 setActiveCoroutine: c => _activeGraspCoroutine = c
@@ -276,6 +282,10 @@ namespace Robotics
             }
         }
 
+        /// <summary>
+        /// Sets the target-reached state and notifies SimulationManager. When transitioning to true,
+        /// fires gripper close (if configured) or OnTargetReached.
+        /// </summary>
         public void SetTargetReached(bool setting)
         {
             if (_hasReachedTarget != setting)
@@ -287,11 +297,13 @@ namespace Robotics
                 {
                     if (_closeGripperAfterReach && _gripperController != null)
                     {
-                        StartCoroutine(_graspExecutor.CloseGripperAfterDelay(
-                            _targetObject,
-                            _gripperCloseDelay,
-                            _attachObjectOnGrasp
-                        ));
+                        StartCoroutine(
+                            _graspExecutor.CloseGripperAfterDelay(
+                                _targetObject,
+                                _gripperCloseDelay,
+                                _attachObjectOnGrasp
+                            )
+                        );
                     }
                     else
                     {
@@ -434,9 +446,18 @@ namespace Robotics
             }
         }
 
+        /// <summary>
+        /// Runs one IK step: refreshes frame cache, computes PD joint deltas, and applies them to
+        /// ArticulationBody drives. Safe to call externally when IsManuallyDriven is true.
+        /// </summary>
         public void PerformInverseKinematicsStep()
         {
-            if (robotJoints == null || robotJoints.Length == 0 || endEffectorBase == null || _targetTransform == null)
+            if (
+                robotJoints == null
+                || robotJoints.Length == 0
+                || endEffectorBase == null
+                || _targetTransform == null
+            )
                 return;
 
             RefreshIKFrameCache();
@@ -445,16 +466,36 @@ namespace Robotics
             float posThreshold = _isGraspingTarget
                 ? RobotConstants.MOVEMENT_THRESHOLD
                 : (_ikConfig != null ? _ikConfig.convergenceThreshold : 0.02f);
-            float rotThreshold = 7.0f;
+            float rotThreshold = RobotConstants.ROTATION_CONVERGENCE_THRESHOLD_DEG;
 
             float angleError = Quaternion.Angle(_endEffectorLocalRotation, _targetLocalRotation);
             bool isPosReached = _distanceToTarget < posThreshold;
             bool isRotReached = angleError < rotThreshold;
 
             Vector3 currentVelocity = GetEndEffectorVelocity();
-            bool isSettled = currentVelocity.sqrMagnitude < RobotConstants.VELOCITY_SETTLE_THRESHOLD_SQR;
+            bool isSettled =
+                currentVelocity.sqrMagnitude < RobotConstants.VELOCITY_SETTLE_THRESHOLD_SQR;
 
             bool isStalled = isSettled && (!isPosReached || !isRotReached);
+
+            // If settled + position reached + angle within stall acceptance, declare done
+            // rather than spinning forever against ArticulationBody friction.
+            if (
+                isStalled
+                && isPosReached
+                && angleError < RobotConstants.ROTATION_STALL_ACCEPTANCE_DEG
+            )
+            {
+                if (!_hasReachedTarget)
+                {
+                    Debug.Log(
+                        $"{_logPrefix} [{robotId}] TARGET REACHED (stall accept): dist={_distanceToTarget:F4}m, ang={angleError:F1}°"
+                    );
+                    SetTargetReached(true);
+                }
+                return;
+            }
+
             if (_enableDebugVisualization && isStalled && Time.frameCount % 60 == 0)
             {
                 Debug.Log(
@@ -484,7 +525,6 @@ namespace Robotics
 
             UpdateJointInfoCache();
 
-            // Check if IK solver is initialized
             if (_ikSolver == null)
                 return;
 
@@ -599,6 +639,10 @@ namespace Robotics
             _ikSolver?.ResetIterationCount();
         }
 
+        /// <summary>
+        /// Sets a GameObject as the grasp target. Selects execution path (handoff, three-waypoint,
+        /// two-waypoint, simplified, or plain IK) based on planning availability and options.
+        /// </summary>
         public void SetTarget(GameObject target, GraspOptions options = default)
         {
             if (target == null)
@@ -633,13 +677,23 @@ namespace Robotics
                         if (candidate.useSimplifiedExecution)
                         {
                             _activeGraspCoroutine = StartCoroutine(
-                                _graspExecutor.ExecuteSimplifiedGrasp(candidate, target, options, () => _hasReachedTarget)
+                                _graspExecutor.ExecuteSimplifiedGrasp(
+                                    candidate,
+                                    target,
+                                    options,
+                                    () => _hasReachedTarget
+                                )
                             );
                         }
                         else
                         {
                             _activeGraspCoroutine = StartCoroutine(
-                                _graspExecutor.ExecuteThreeWaypointGrasp(candidate, target, options, () => _hasReachedTarget)
+                                _graspExecutor.ExecuteThreeWaypointGrasp(
+                                    candidate,
+                                    target,
+                                    options,
+                                    () => _hasReachedTarget
+                                )
                             );
                         }
                         return;
@@ -663,13 +717,23 @@ namespace Robotics
                         if (candidate.useSimplifiedExecution)
                         {
                             _activeGraspCoroutine = StartCoroutine(
-                                _graspExecutor.ExecuteSimplifiedGrasp(candidate, target, options, () => _hasReachedTarget)
+                                _graspExecutor.ExecuteSimplifiedGrasp(
+                                    candidate,
+                                    target,
+                                    options,
+                                    () => _hasReachedTarget
+                                )
                             );
                         }
                         else
                         {
                             _activeGraspCoroutine = StartCoroutine(
-                                _graspExecutor.ExecuteTwoWaypointGrasp(candidate, target, options, () => _hasReachedTarget)
+                                _graspExecutor.ExecuteTwoWaypointGrasp(
+                                    candidate,
+                                    target,
+                                    options,
+                                    () => _hasReachedTarget
+                                )
                             );
                         }
                         return;
@@ -758,6 +822,10 @@ namespace Robotics
             SetTarget(target, options);
         }
 
+        /// <summary>
+        /// Sets a world-space position as the move target. Snaps to the nearest scene object if
+        /// one is within the object-finding radius.
+        /// </summary>
         public void SetTarget(Vector3 position, GraspOptions options = default)
         {
             StopActiveGraspCoroutine();
@@ -773,7 +841,8 @@ namespace Robotics
                 );
                 if (realObject != null)
                 {
-                    float distThreshold = _ikConfig != null ? _ikConfig.objectDistanceThreshold : 0.1f;
+                    float distThreshold =
+                        _ikConfig != null ? _ikConfig.objectDistanceThreshold : 0.1f;
                     if (
                         Vector3.SqrMagnitude(position - realObject.transform.position)
                         < distThreshold * distThreshold
@@ -798,6 +867,9 @@ namespace Robotics
             SetTargetInternal(temp.transform, null, options);
         }
 
+        /// <summary>
+        /// Sets a world-space position and rotation as the move target, bypassing grasp planning.
+        /// </summary>
         public void SetTarget(Vector3 position, Quaternion rotation, GraspOptions options = default)
         {
             StopActiveGraspCoroutine();
@@ -830,22 +902,30 @@ namespace Robotics
             return null;
         }
 
-        // --- Utilities ---
-
+        /// <summary>Returns current distance to target in IK frame, or 0 if no target is set.</summary>
         public float GetDistanceToTarget() => _targetTransform == null ? 0f : _distanceToTarget;
 
+        /// <summary>Returns the current target world position, or null if no target is set.</summary>
         public Vector3? GetCurrentTarget() => _targetTransform?.position;
 
+        /// <summary>Returns the current target world rotation, or null if no target is set.</summary>
         public Quaternion? GetCurrentTargetRotation() => _targetTransform?.rotation;
 
+        /// <summary>True if a target transform is currently assigned.</summary>
         public bool HasTarget => _targetTransform != null;
 
+        /// <summary>True if the IK solver has converged to the current target.</summary>
         public bool TargetReached => _hasReachedTarget;
 
+        /// <summary>Returns the original target GameObject (not the temp transform), or null for position-only targets.</summary>
         public GameObject GetTargetObject() => _targetObject;
 
+        /// <summary>Enables or disables real-time tracking of a moving target object.</summary>
         public void SetMovingTargetTracking(bool enable) => _enableMovingTargetTracking = enable;
 
+        /// <summary>
+        /// Sets the minimum positional change (in metres) before the IK target is re-issued for a moving target.
+        /// </summary>
         public void SetTargetMovementThreshold(float threshold)
         {
             _targetMovementThreshold = Mathf.Max(0.001f, threshold);
@@ -866,7 +946,6 @@ namespace Robotics
             _closeGripperAfterReach = false;
             _isTrackingMovingTarget = false;
 
-            // Reset trajectory
             _trajectoryController?.Reset();
 
             Debug.Log($"{_logPrefix} [{robotId}] Target cleared");
@@ -898,22 +977,25 @@ namespace Robotics
 
             _targetTransform = temp.transform;
             _targetObject = null;
-            _hasReachedTarget = true;       // IK will not fire until a new target is given
+            _hasReachedTarget = true; // IK will not fire until a new target is given
             _isGraspingTarget = false;
             _closeGripperAfterReach = false;
             _isTrackingMovingTarget = false; // Held objects must not feed back as moving targets
 
             Debug.Log(
                 $"{_logPrefix} [{robotId}] IK target synced to current EE pose "
-                + $"({endEffectorBase.position}) — IK quiesced"
+                    + $"({endEffectorBase.position}) — IK quiesced"
             );
         }
 
+        /// <summary>Returns whether moving-target tracking is currently enabled.</summary>
         public bool IsTargetTrackingEnabled() => _enableMovingTargetTracking;
 
+        /// <summary>Returns the end effector world position, or Vector3.zero if endEffectorBase is not assigned.</summary>
         public Vector3 GetCurrentEndEffectorPosition() =>
             endEffectorBase == null ? Vector3.zero : endEffectorBase.position;
 
+        /// <summary>Resets all joint drive targets to zero and clears velocity and force state.</summary>
         public void ResetJointTargets()
         {
             for (int i = 0; i < robotJoints.Length; i++)

@@ -10,7 +10,7 @@ import pytest
 from unittest.mock import Mock, patch
 import numpy as np
 from rag import RAGSystem
-from rag.VectorStore import VectorStore
+from rag.vector_store import VectorStore
 
 
 class TestRAGSystemIntegration:
@@ -108,7 +108,7 @@ class TestRAGSystemIntegration:
             {"name": "move_to_coordinate", "category": "navigation"},
         )
 
-        from rag.QueryEngine import QueryEngine
+        from rag.query_engine import QueryEngine
 
         rag.query_engine = QueryEngine(rag.vector_store, mock_emb, mock_reg)
 

@@ -21,8 +21,7 @@ import tempfile
 import numpy as np
 import pytest
 
-from rag.VectorStore import VectorStore
-
+from rag.vector_store import VectorStore
 
 # ---------------------------------------------------------------------------
 # Helpers

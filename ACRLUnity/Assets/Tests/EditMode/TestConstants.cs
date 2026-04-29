@@ -60,7 +60,7 @@ namespace Tests.EditMode
         // Communication Ports
         public const int STEREO_DETECTION_PORT = Core.CommunicationConstants.STEREO_DETECTION_PORT; // 5006
         public const int COMMAND_SERVER_PORT = Core.CommunicationConstants.COMMAND_SERVER_PORT; // 5007
-        public const int SEQUENCE_SERVER_PORT = Core.CommunicationConstants.SEQUENCE_SERVER_PORT; // 5011
+        public const int SEQUENCE_SERVER_PORT = Core.CommunicationConstants.SEQUENCE_SERVER_PORT; // 5008
 
         #endregion
 
@@ -277,7 +277,7 @@ namespace Tests.EditMode
         public const int TEST_COMMAND_SERVER_PORT = 6007;
 
         /// <summary>
-        /// Test port for SequenceServer (offset from production 5011)
+        /// Test port for SequenceServer (offset from production 5008)
         /// </summary>
         public const int TEST_SEQUENCE_SERVER_PORT = 6011;
 

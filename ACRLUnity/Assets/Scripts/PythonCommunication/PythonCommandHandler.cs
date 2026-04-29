@@ -63,7 +63,7 @@ namespace PythonCommunication
 
         // place_object parameters
         public float hover_offset; // Hover height above target before descent (metres)
-        public float tcp_offset;   // Gripper-open height above target surface (metres)
+        public float tcp_offset; // Gripper-open height above target surface (metres)
 
         // GraspNet: optional pre-computed neural grasp candidates.
         // When non-empty, GraspPlanningPipeline skips geometric candidate generation
@@ -138,7 +138,7 @@ namespace PythonCommunication
     /// Usage:
     /// 1. Attach this component to a GameObject in your scene
     /// 2. Ensure SequenceClient and RobotManager are active
-    /// 3. Python SequenceServer will send commands via port 5013
+    /// 3. Python SequenceServer will send commands via port 5008
     /// </summary>
     public class PythonCommandHandler : MonoBehaviour
     {
@@ -178,8 +178,10 @@ namespace PythonCommunication
         /// </summary>
         private sealed class CommandListenerManager
         {
-            private readonly System.Collections.Generic.Dictionary<string, System.Action> _listeners
-                = new System.Collections.Generic.Dictionary<string, System.Action>();
+            private readonly System.Collections.Generic.Dictionary<
+                string,
+                System.Action
+            > _listeners = new System.Collections.Generic.Dictionary<string, System.Action>();
 
             /// <summary>Register a callback for the given robot key, overwriting any prior entry.</summary>
             public void Register(string key, System.Action callback)
@@ -216,9 +218,12 @@ namespace PythonCommunication
         /// Per-command-type active listener managers — prevent zombie delegates on controller events.
         /// </summary>
         private readonly CommandListenerManager _activeMoveListeners = new CommandListenerManager();
-        private readonly CommandListenerManager _activeGraspListeners = new CommandListenerManager();
-        private readonly CommandListenerManager _activeGripperListeners = new CommandListenerManager();
-        private readonly CommandListenerManager _activeOrientationListeners = new CommandListenerManager();
+        private readonly CommandListenerManager _activeGraspListeners =
+            new CommandListenerManager();
+        private readonly CommandListenerManager _activeGripperListeners =
+            new CommandListenerManager();
+        private readonly CommandListenerManager _activeOrientationListeners =
+            new CommandListenerManager();
 
         /// <summary>
         /// Object lookup cache to avoid expensive FindObjectsByType calls
@@ -361,7 +366,6 @@ namespace PythonCommunication
                 case "adjust_end_effector_orientation":
                     ExecuteAdjustOrientation(command);
                     break;
-
 
                 case "align_object":
                     ExecuteAlignObject(command);
@@ -889,8 +893,9 @@ namespace PythonCommunication
                         controller.SetTarget(targetObject, options);
                         if (_verboseLogging)
                         {
-                            string planningMode =
-                                options.useAdvancedPlanning ? "Advanced" : "Standard";
+                            string planningMode = options.useAdvancedPlanning
+                                ? "Advanced"
+                                : "Standard";
                             Debug.Log(
                                 $"{_logPrefix} {planningMode} grasp planning: {command.robot_id} -> {objectId}"
                             );
@@ -1028,8 +1033,8 @@ namespace PythonCommunication
                         )
                         : Quaternion.identity;
 
-                Robotics.Grasp.GraspApproach approach = ParseApproachType(d.approach_type)
-                    ?? Robotics.Grasp.GraspApproach.Top;
+                Robotics.Grasp.GraspApproach approach =
+                    ParseApproachType(d.approach_type) ?? Robotics.Grasp.GraspApproach.Top;
 
                 var candidate = Robotics.Grasp.GraspCandidate.Create(
                     preGraspPos,
@@ -1397,7 +1402,9 @@ namespace PythonCommunication
 
                 if (command.parameters == null || command.parameters.target_position == null)
                 {
-                    Debug.LogError($"{_logPrefix} place_object: Missing parameters or target_position");
+                    Debug.LogError(
+                        $"{_logPrefix} place_object: Missing parameters or target_position"
+                    );
                     _failedCommands++;
                     return;
                 }
@@ -1413,16 +1420,14 @@ namespace PythonCommunication
                     return;
                 }
 
-                float hoverOffset = command.parameters.hover_offset > 0f
-                    ? command.parameters.hover_offset
-                    : 0.15f;
-                float tcpOffset = command.parameters.tcp_offset > 0f
-                    ? command.parameters.tcp_offset
-                    : 0.055f;
+                float hoverOffset =
+                    command.parameters.hover_offset > 0f ? command.parameters.hover_offset : 0.15f;
+                float tcpOffset =
+                    command.parameters.tcp_offset > 0f ? command.parameters.tcp_offset : 0.055f;
 
-                Vector3 targetPos  = TargetPositionToVector3(command.parameters.target_position);
-                Vector3 hoverPos   = targetPos + new Vector3(0f, hoverOffset, 0f);
-                Vector3 placePos   = targetPos + new Vector3(0f, tcpOffset,   0f);
+                Vector3 targetPos = TargetPositionToVector3(command.parameters.target_position);
+                Vector3 hoverPos = targetPos + new Vector3(0f, hoverOffset, 0f);
+                Vector3 placePos = targetPos + new Vector3(0f, tcpOffset, 0f);
 
                 StartCoroutine(
                     PlaceObjectCoroutine(
@@ -1489,7 +1494,9 @@ namespace PythonCommunication
                     timer += 0.1f;
                     if (timer > segmentTimeout)
                     {
-                        Debug.LogWarning($"{_logPrefix} place_object: Timeout reaching hover position.");
+                        Debug.LogWarning(
+                            $"{_logPrefix} place_object: Timeout reaching hover position."
+                        );
                         SendCommandCompletion(robotId, "place_object", false, requestId);
                         yield break;
                     }
@@ -1498,12 +1505,17 @@ namespace PythonCommunication
             }
             else
             {
-                while (controller != null && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD)
+                while (
+                    controller != null
+                    && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD
+                )
                 {
                     timer += 0.1f;
                     if (timer > segmentTimeout)
                     {
-                        Debug.LogWarning($"{_logPrefix} place_object: Timeout reaching hover position.");
+                        Debug.LogWarning(
+                            $"{_logPrefix} place_object: Timeout reaching hover position."
+                        );
                         SendCommandCompletion(robotId, "place_object", false, requestId);
                         yield break;
                     }
@@ -1525,7 +1537,9 @@ namespace PythonCommunication
                     timer += 0.1f;
                     if (timer > segmentTimeout)
                     {
-                        Debug.LogWarning($"{_logPrefix} place_object: Timeout reaching place position.");
+                        Debug.LogWarning(
+                            $"{_logPrefix} place_object: Timeout reaching place position."
+                        );
                         SendCommandCompletion(robotId, "place_object", false, requestId);
                         yield break;
                     }
@@ -1534,12 +1548,17 @@ namespace PythonCommunication
             }
             else
             {
-                while (controller != null && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD)
+                while (
+                    controller != null
+                    && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD
+                )
                 {
                     timer += 0.1f;
                     if (timer > segmentTimeout)
                     {
-                        Debug.LogWarning($"{_logPrefix} place_object: Timeout reaching place position.");
+                        Debug.LogWarning(
+                            $"{_logPrefix} place_object: Timeout reaching place position."
+                        );
                         SendCommandCompletion(robotId, "place_object", false, requestId);
                         yield break;
                     }
@@ -1570,7 +1589,10 @@ namespace PythonCommunication
             }
             else
             {
-                while (controller != null && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD)
+                while (
+                    controller != null
+                    && controller.GetDistanceToTarget() > RobotConstants.MOVEMENT_THRESHOLD
+                )
                 {
                     timer += 0.1f;
                     if (timer > segmentTimeout)
@@ -1813,11 +1835,19 @@ namespace PythonCommunication
                         ? controller.GetCurrentEndEffectorPosition()
                         : robotInstance.simpleController.GetCurrentEndEffectorPosition();
 
-                Quaternion targetRotation = Quaternion.Euler(
-                    command.parameters.roll,
-                    command.parameters.pitch,
-                    command.parameters.yaw
-                );
+                // Build rotation relative to the robot's base orientation so that
+                // pitch/yaw/roll are expressed in the robot's local frame, not world space.
+                Quaternion baseRotation =
+                    robotInstance.robotGameObject != null
+                        ? robotInstance.robotGameObject.transform.rotation
+                        : Quaternion.identity;
+                Quaternion targetRotation =
+                    baseRotation
+                    * Quaternion.Euler(
+                        command.parameters.pitch,
+                        command.parameters.yaw,
+                        command.parameters.roll
+                    );
 
                 string commandKey = $"adjust_orientation_{command.robot_id}_{command.request_id}";
                 _activeCommands[commandKey] = command.request_id;
@@ -2642,17 +2672,30 @@ namespace PythonCommunication
         /// </summary>
         private void ExecuteSetClearTargetOnComplete(RobotCommand command)
         {
-            if (!ValidateAndGetRobot(command.robot_id, "set_clear_target_on_complete",
-                    out _, out RobotController controller))
+            if (
+                !ValidateAndGetRobot(
+                    command.robot_id,
+                    "set_clear_target_on_complete",
+                    out _,
+                    out RobotController controller
+                )
+            )
                 return;
 
             var subscriber = controller?.GetComponentInChildren<ROSTrajectorySubscriber>();
             if (subscriber != null)
             {
                 subscriber.ClearTargetOnComplete = true;
-                Debug.Log($"[PythonCommandHandler] ClearTargetOnComplete=true set for {command.robot_id}");
+                Debug.Log(
+                    $"[PythonCommandHandler] ClearTargetOnComplete=true set for {command.robot_id}"
+                );
             }
-            SendCommandCompletion(command.robot_id, "set_clear_target_on_complete", true, command.request_id);
+            SendCommandCompletion(
+                command.robot_id,
+                "set_clear_target_on_complete",
+                true,
+                command.request_id
+            );
         }
 
         /// <summary>
@@ -2664,7 +2707,9 @@ namespace PythonCommunication
         private void ExecuteReturnToStartPosition(RobotCommand command)
         {
             // DEBUG: always log entry so we know the command reached Unity
-            Debug.Log($"[ReturnToStart] ExecuteReturnToStartPosition called for robot='{command.robot_id}' req={command.request_id}");
+            Debug.Log(
+                $"[ReturnToStart] ExecuteReturnToStartPosition called for robot='{command.robot_id}' req={command.request_id}"
+            );
             try
             {
                 // Validate robot and get controller
@@ -2677,7 +2722,9 @@ namespace PythonCommunication
                     )
                 )
                 {
-                    Debug.LogWarning($"[ReturnToStart] ValidateAndGetRobot FAILED for '{command.robot_id}'");
+                    Debug.LogWarning(
+                        $"[ReturnToStart] ValidateAndGetRobot FAILED for '{command.robot_id}'"
+                    );
                     return;
                 }
                 if (
@@ -2691,7 +2738,9 @@ namespace PythonCommunication
                 {
                     // In ROS mode Unity skips execution. Python must call set_clear_target_on_complete
                     // separately before pushing the return-to-start trajectory to MoveIt.
-                    Debug.Log($"[ReturnToStart] ROS mode — skipping Unity execution for '{command.robot_id}'");
+                    Debug.Log(
+                        $"[ReturnToStart] ROS mode — skipping Unity execution for '{command.robot_id}'"
+                    );
                     return;
                 }
 
@@ -2717,16 +2766,19 @@ namespace PythonCommunication
                 }
 
                 // Compute duration from speed_multiplier (speed=2.0 → 1s, speed=0.5 → 4s)
-                float speedMult = _applySpeedMultiplier && command.parameters.speed_multiplier > 0f
-                    ? Mathf.Clamp(command.parameters.speed_multiplier, 0.1f, 2.0f)
-                    : 1.0f;
+                float speedMult =
+                    _applySpeedMultiplier && command.parameters.speed_multiplier > 0f
+                        ? Mathf.Clamp(command.parameters.speed_multiplier, 0.1f, 2.0f)
+                        : 1.0f;
                 float duration = 2.0f / speedMult;
 
                 // Start coroutine based on controller type
                 if (controller != null)
                 {
                     // RobotController
-                    Debug.Log($"[ReturnToStart] Starting RobotController coroutine for '{command.robot_id}', duration={duration:F2}s, joints={robotInstance.startJointTargets.Length}");
+                    Debug.Log(
+                        $"[ReturnToStart] Starting RobotController coroutine for '{command.robot_id}', duration={duration:F2}s, joints={robotInstance.startJointTargets.Length}"
+                    );
                     StartCoroutine(
                         ReturnToStartPositionCoroutine(
                             controller,
@@ -2740,7 +2792,9 @@ namespace PythonCommunication
                 else if (robotInstance.simpleController != null)
                 {
                     // SimpleRobotController
-                    Debug.Log($"[ReturnToStart] Starting SimpleRobotController coroutine for '{command.robot_id}', duration={duration:F2}s");
+                    Debug.Log(
+                        $"[ReturnToStart] Starting SimpleRobotController coroutine for '{command.robot_id}', duration={duration:F2}s"
+                    );
                     StartCoroutine(
                         ReturnToStartPositionSimpleCoroutine(
                             robotInstance.simpleController,
@@ -2753,7 +2807,9 @@ namespace PythonCommunication
                 }
                 else
                 {
-                    Debug.LogError($"[ReturnToStart] No controller found for '{command.robot_id}' — neither RobotController nor SimpleRobotController");
+                    Debug.LogError(
+                        $"[ReturnToStart] No controller found for '{command.robot_id}' — neither RobotController nor SimpleRobotController"
+                    );
                 }
 
                 _successfulCommands++;
@@ -2796,9 +2852,10 @@ namespace PythonCommunication
                 for (int i = 0; i < controller.robotJoints.Length && i < startJoints.Length; i++)
                 {
                     var j = controller.robotJoints[i];
-                    startJoints[i] = j.jointPosition.dofCount > 0
-                        ? j.jointPosition[0] * Mathf.Rad2Deg
-                        : j.xDrive.target;
+                    startJoints[i] =
+                        j.jointPosition.dofCount > 0
+                            ? j.jointPosition[0] * Mathf.Rad2Deg
+                            : j.xDrive.target;
                 }
 
                 // DEBUG: log per-joint start vs target so we can see which joints move
@@ -2808,9 +2865,10 @@ namespace PythonCommunication
                 for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
                 {
                     var j = controller.robotJoints[i];
-                    float physDeg = j.jointPosition.dofCount > 0
-                        ? j.jointPosition[0] * Mathf.Rad2Deg
-                        : float.NaN;
+                    float physDeg =
+                        j.jointPosition.dofCount > 0
+                            ? j.jointPosition[0] * Mathf.Rad2Deg
+                            : float.NaN;
                     float driveDeg = j.xDrive.target;
                     float delta = targetJoints[i] - startJoints[i];
                     dbgSB.AppendLine(
@@ -2867,17 +2925,25 @@ namespace PythonCommunication
                     if (_debugFrameCounter % 20 == 0)
                     {
                         var midSB = new System.Text.StringBuilder();
-                        midSB.AppendLine($"[ReturnToStart] {robotId} t={t:F2} smoothT={smoothT:F2}");
-                        for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
+                        midSB.AppendLine(
+                            $"[ReturnToStart] {robotId} t={t:F2} smoothT={smoothT:F2}"
+                        );
+                        for (
+                            int i = 0;
+                            i < controller.robotJoints.Length && i < targetJoints.Length;
+                            i++
+                        )
                         {
                             var j = controller.robotJoints[i];
-                            float physNow = j.jointPosition.dofCount > 0
-                                ? j.jointPosition[0] * Mathf.Rad2Deg
-                                : float.NaN;
+                            float physNow =
+                                j.jointPosition.dofCount > 0
+                                    ? j.jointPosition[0] * Mathf.Rad2Deg
+                                    : float.NaN;
                             float driveNow = j.xDrive.target;
-                            float velNow = j.jointVelocity.dofCount > 0
-                                ? j.jointVelocity[0] * Mathf.Rad2Deg
-                                : float.NaN;
+                            float velNow =
+                                j.jointVelocity.dofCount > 0
+                                    ? j.jointVelocity[0] * Mathf.Rad2Deg
+                                    : float.NaN;
                             midSB.AppendLine(
                                 $"  J{i}: phys={physNow:F2}° drive={driveNow:F2}° vel={velNow:F2}°/s"
                             );
@@ -2899,7 +2965,8 @@ namespace PythonCommunication
                     controller.jointDriveTargets[i] = targetJoints[i];
 
                     var joint = controller.robotJoints[i];
-                    if (joint == null) continue;
+                    if (joint == null)
+                        continue;
 
                     var drive = joint.xDrive;
                     drive.target = targetJoints[i];
@@ -2908,13 +2975,16 @@ namespace PythonCommunication
 
                 // DEBUG: log final pinned state
                 var endSB = new System.Text.StringBuilder();
-                endSB.AppendLine($"[ReturnToStart] {robotId} FINAL — pinned drive targets (degrees):");
+                endSB.AppendLine(
+                    $"[ReturnToStart] {robotId} FINAL — pinned drive targets (degrees):"
+                );
                 for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
                 {
                     var j = controller.robotJoints[i];
-                    float physEnd = j.jointPosition.dofCount > 0
-                        ? j.jointPosition[0] * Mathf.Rad2Deg
-                        : float.NaN;
+                    float physEnd =
+                        j.jointPosition.dofCount > 0
+                            ? j.jointPosition[0] * Mathf.Rad2Deg
+                            : float.NaN;
                     float err = physEnd - targetJoints[i];
                     endSB.AppendLine(
                         $"  J{i}: phys={physEnd:F2}° target={targetJoints[i]:F2}° err={err:F2}°"
@@ -2937,7 +3007,8 @@ namespace PythonCommunication
                     for (int i = 0; i < controller.robotJoints.Length; i++)
                     {
                         var joint = controller.robotJoints[i];
-                        if (joint == null || joint.jointVelocity.dofCount == 0) continue;
+                        if (joint == null || joint.jointVelocity.dofCount == 0)
+                            continue;
                         if (Mathf.Abs(joint.jointVelocity[0]) > SETTLE_THRESHOLD_RAD_S)
                         {
                             allSettled = false;
@@ -2945,7 +3016,8 @@ namespace PythonCommunication
                         }
                     }
 
-                    if (allSettled) break;
+                    if (allSettled)
+                        break;
                 }
 
                 // FIX #5: Clear the target and mark as reached to allow IK to run again

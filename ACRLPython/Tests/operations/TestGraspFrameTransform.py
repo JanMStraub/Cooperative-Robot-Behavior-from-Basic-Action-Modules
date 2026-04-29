@@ -25,7 +25,6 @@ from operations.GraspFrameTransform import (
     _normalise_quat,
 )
 
-
 # ============================================================================
 # Internal quaternion math tests
 # ============================================================================

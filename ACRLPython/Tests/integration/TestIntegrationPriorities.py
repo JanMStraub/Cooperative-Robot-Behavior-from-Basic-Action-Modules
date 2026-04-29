@@ -31,13 +31,13 @@ class TestPriority1_RAGWorkflowIntegration:
         patterns = workflow_registry.get_all_patterns()
 
         assert len(patterns) > 0, "No workflow patterns found in registry"
-        print(f"✓ Found {len(patterns)} workflow patterns in registry")
+        print(f"Found {len(patterns)} workflow patterns in registry")
 
         # Check for expected patterns (actual pattern_id format: workflow_*_001)
         pattern_ids = [p.pattern_id for p in patterns]
         assert "workflow_detect_approach_001" in pattern_ids
         assert "workflow_pick_place_001" in pattern_ids
-        print(f"✓ Expected workflow patterns present: {pattern_ids}")
+        print(f"Expected workflow patterns present: {pattern_ids}")
 
     def test_workflows_in_rag_index(self):
         """Test that workflow patterns are included in RAG index."""
@@ -73,7 +73,7 @@ class TestPriority1_RAGWorkflowIntegration:
             results = rag.search(query, top_k=5, min_score=min_score)
             all_results.extend(results)
             if results:
-                print(f"✓ Found {len(results)} results for '{query}'")
+                print(f"Found {len(results)} results for '{query}'")
                 break
 
         if using_tfidf and len(all_results) == 0:
@@ -102,7 +102,7 @@ class TestPriority1_RAGWorkflowIntegration:
             )
         else:
             assert has_workflow, "No workflow patterns found in search results"
-            print("✓ Workflow patterns are searchable in RAG")
+            print("Workflow patterns are searchable in RAG")
 
     def test_workflow_search_returns_correct_metadata(self):
         """Test that workflow search returns proper metadata."""
@@ -120,7 +120,7 @@ class TestPriority1_RAGWorkflowIntegration:
 
             assert "step_count" in metadata, "Workflow missing step_count"
             assert metadata["step_count"] > 0, "Workflow has invalid step count"
-            print(f"✓ Workflow metadata includes step_count: {metadata['step_count']}")
+            print(f"Workflow metadata includes step_count: {metadata['step_count']}")
         else:
             print("⚠️ No workflows in top 3 results (may be normal depending on query)")
 
@@ -164,7 +164,7 @@ class TestPriority2_AutomatedParameterFlow:
         # Verify capture
         assert executor.get_variable("detect_object_stereo_x") == 0.3
         assert executor.get_variable("detect_object_stereo_result") is not None
-        print("✓ Outputs automatically captured to variables")
+        print("Outputs automatically captured to variables")
 
     def test_auto_inject_parameters(self):
         """Test that parameters are automatically injected from previous operations."""
@@ -192,7 +192,7 @@ class TestPriority2_AutomatedParameterFlow:
             assert enhanced.get("y") == 0.2, "Parameter y not injected"
             assert enhanced.get("z") == 0.1, "Parameter z not injected"
             print(
-                "✓ Parameters automatically injected from previous operations (x, y, z)"
+                "Parameters automatically injected from previous operations (x, y, z)"
             )
         else:
             # Parameter flows may not be defined yet in real operations
@@ -215,7 +215,7 @@ class TestPriority2_AutomatedParameterFlow:
         assert resolved["x"] == 0.4
         assert resolved["y"] == 0.3
         assert resolved["z"] == 0.2
-        print("✓ Manual $ variable resolution still works")
+        print("Manual $ variable resolution still works")
 
 
 class TestPriority3_UnifiedVerification:
@@ -265,7 +265,7 @@ class TestPriority3_UnifiedVerification:
         assert result["safe"] == True
         assert "precondition_check" in result["details"]
         assert "coordination_check" in result["details"]
-        print("✓ Unified verification combines both checks")
+        print("Unified verification combines both checks")
 
     @patch("operations.Verification.OperationVerifier")
     def test_verification_blocks_on_precondition_failure(self, mock_verifier):
@@ -298,7 +298,7 @@ class TestPriority3_UnifiedVerification:
         assert result["safe"] == False
         assert "Precondition failed" in result["error"]
         assert "target_within_reach" in result["error"]
-        print("✓ Precondition failures block execution")
+        print("Precondition failures block execution")
 
     @patch("operations.Verification.OperationVerifier")
     @patch("operations.CoordinationVerifier.CoordinationVerifier")
@@ -346,7 +346,7 @@ class TestPriority3_UnifiedVerification:
         assert result["safe"] == False
         assert "coordination issue" in result["error"].lower()
         assert "path_collision" in result["error"]
-        print("✓ Coordination failures block execution")
+        print("Coordination failures block execution")
 
 
 class TestEndToEndIntegration:
@@ -358,16 +358,16 @@ class TestEndToEndIntegration:
 
         # Check Priority 1: RAG integration (indirect - via operations registry)
         assert executor.registry is not None
-        print("✓ SequenceExecutor has access to operations registry (RAG backing)")
+        print("SequenceExecutor has access to operations registry (RAG backing)")
 
         # Check Priority 2: Parameter flow methods exist
         assert hasattr(executor, "_auto_capture_outputs")
         assert hasattr(executor, "_auto_inject_parameters")
-        print("✓ SequenceExecutor has automated parameter flow methods")
+        print("SequenceExecutor has automated parameter flow methods")
 
         # Check Priority 3: Unified verification exists
         assert hasattr(executor, "_verify_operation_safety")
-        print("✓ SequenceExecutor has unified verification method")
+        print("SequenceExecutor has unified verification method")
 
     def test_system_info_summary(self):
         """Print summary of system capabilities."""
@@ -380,17 +380,17 @@ class TestEndToEndIntegration:
         print("\n" + "=" * 60)
         print("SYSTEM INTEGRATION SUMMARY")
         print("=" * 60)
-        print(f"✓ Priority 1: RAG Workflow Integration")
+        print(f"Priority 1: RAG Workflow Integration")
         print(f"  - {len(operations)} operations indexed")
         print(f"  - {len(workflows)} workflow patterns indexed")
         print(f"  - Workflows searchable via semantic search")
         print()
-        print(f"✓ Priority 2: Automated Parameter Flow")
+        print(f"Priority 2: Automated Parameter Flow")
         print(f"  - Automatic output capture after operation completion")
         print(f"  - Automatic input injection before operation execution")
         print(f"  - Manual $ variable resolution preserved")
         print()
-        print(f"✓ Priority 3: Unified Verification")
+        print(f"Priority 3: Unified Verification")
         print(f"  - Single pre-execution safety check")
         print(f"  - Combines operation preconditions + coordination checks")
         print(f"  - Comprehensive error reporting with details")

@@ -13,7 +13,8 @@ import math
 import time
 from typing import List, Optional
 
-# Configure logging
+import numpy as np
+
 from core.LoggingSetup import setup_logging
 
 from .Base import (
@@ -23,64 +24,50 @@ from .Base import (
     OperationParameter,
     OperationRelationship,
     OperationResult,
-    ParameterFlow,
 )
+
+from .ROSDispatcher import _get_control_mode
 
 setup_logging(__name__)
 logger = logging.getLogger(__name__)
-# Conservative default for tabletop objects (4 cm cube).  When actual dimensions
-# are unavailable the axis selection degenerates to a direction-only offset based
-# on relative robot positions — still useful for preventing gripper collision.
-DEFAULT_HANDOFF_OBJECT_DIMENSIONS = (0.04, 0.04, 0.04)
-
-# Extra clearance added to the half-extent offset so grippers don't overlap.
-GRIPPER_CLEARANCE = 0.02
-
 
 # Import from centralized lazy import system (prevents circular dependencies)
 try:
     from ..core.Imports import get_command_broadcaster as _get_command_broadcaster
 except ImportError:
-    from core.Imports import get_command_broadcaster as _get_command_broadcaster
+    from core.Imports import get_command_broadcaster as _get_command_broadcaster  # type: ignore[no-redef]
 
+try:
+    from ..config.Vision import YOLO_MODEL_PATH as _YOLO_MODEL_PATH
+except ImportError:
+    from config.Vision import YOLO_MODEL_PATH as _YOLO_MODEL_PATH  # type: ignore[no-redef]
 
-# ============================================================================
-# Module-Level Grasp Offset Constants
-# ============================================================================
-
-# Hover height above object centre used for the pre-grasp approach move.
-# Must be high enough that the arm clears the object when it swings in.
-PRE_GRASP_HOVER_OFFSET: float = 0.15  # 15 cm above object centre
-
-# Safe clearance height (Unity world Y) used as an intermediate waypoint before
-# the pre-grasp descent.  The arm moves to this height first (joint-space, no
-# orientation constraint) so it cannot sweep through table-height objects on its
-# way to the pre-grasp position.  Should be above the tallest expected object.
-PRE_GRASP_CLEARANCE_Y: float = 0.35  # 35 cm above table surface
-
-# TCP offset at the final grasp position.
-# Placing ee_link this far above the object centre lets the fingers (which
-# extend ~5 cm beyond ee_link) wrap around the object rather than collide
-# with its top surface or the ground plane.
-# Increased from 0.03 to 0.08 to prevent gripper from slamming into ground.
-GRASP_TCP_OFFSET: float = 0.055  # 5,5 cm above object centre
-
-
-# ============================================================================
-# Follow-Target Configuration
-# ============================================================================
-
-# Toggle: when True the arm will re-plan to the live object position after each
-# trajectory if the cube has drifted (e.g. pushed by the other robot's approach).
-# Set to False to disable correction moves and always close at the planned position.
-FOLLOW_TARGET_ENABLED: bool = True
-
-# Maximum number of corrective moves before giving up and closing anyway.
-FOLLOW_TARGET_MAX_CORRECTIONS: int = 3
-
-# Minimum object drift (metres) that triggers a corrective plan_and_execute.
-# Smaller values react to tiny vibrations; larger values only correct real pushes.
-FOLLOW_TARGET_DRIFT_THRESHOLD: float = 0.015  # 1.5 cm
+try:
+    from ..config.Robot import (
+        FOLLOW_TARGET_DRIFT_THRESHOLD,
+        FOLLOW_TARGET_ENABLED,
+        FOLLOW_TARGET_MAX_CORRECTIONS,
+        GRASP_DESCENT_ACCELERATION_SCALING,
+        GRASP_DESCENT_VELOCITY_SCALING,
+        GRASP_TCP_OFFSET,
+        PRE_GRASP_CLEARANCE_Y,
+        PRE_GRASP_HOVER_OFFSET,
+        PREGRASP_ACCELERATION_SCALING,
+        PREGRASP_VELOCITY_SCALING,
+    )
+except ImportError:
+    from config.Robot import (  # type: ignore[no-redef]
+        FOLLOW_TARGET_DRIFT_THRESHOLD,
+        FOLLOW_TARGET_ENABLED,
+        FOLLOW_TARGET_MAX_CORRECTIONS,
+        GRASP_DESCENT_ACCELERATION_SCALING,
+        GRASP_DESCENT_VELOCITY_SCALING,
+        GRASP_TCP_OFFSET,
+        PRE_GRASP_CLEARANCE_Y,
+        PRE_GRASP_HOVER_OFFSET,
+        PREGRASP_ACCELERATION_SCALING,
+        PREGRASP_VELOCITY_SCALING,
+    )
 
 
 def _execute_grasp_with_follow_target(
@@ -214,6 +201,40 @@ def _vec_to_pos(seq, y_offset: float = 0.0) -> dict:
     return {"x": seq[0], "y": seq[1] + y_offset, "z": seq[2]}
 
 
+def _yaw_toward_object(robot_id: str, object_position) -> float:
+    """Return Unity-frame yaw (radians) that points the gripper jaw from the
+    robot base toward the object in the horizontal plane.
+
+    For a top-down grasp the gripper Z-axis (closing direction) should face the
+    object so the fingers straddle it along the robot-to-object axis.
+
+    Args:
+        robot_id: Robot identifier used to look up base position.
+        object_position: (x, y, z) object centre in Unity world space.
+
+    Returns:
+        Yaw angle in radians, normalised to (-π/2, π/2] for gripper symmetry.
+    """
+    try:
+        from config.Robot import ROBOT_BASE_POSITIONS
+
+        base = ROBOT_BASE_POSITIONS.get(robot_id, (0.0, 0.0, 0.0))
+    except Exception:
+        base = (0.0, 0.0, 0.0)
+
+    dx = object_position[0] - base[0]
+    dz = object_position[2] - base[2]
+    yaw = math.atan2(dz, dx)
+
+    # Normalise to (-π/2, π/2] to exploit 180° gripper symmetry.
+    if yaw > math.pi / 2:
+        yaw -= math.pi
+    elif yaw <= -math.pi / 2:
+        yaw += math.pi
+
+    return yaw
+
+
 def _get_control_mode() -> str:
     """Return DEFAULT_CONTROL_MODE from config, or 'ros' as fallback.
 
@@ -268,6 +289,7 @@ def _grasp_via_ros_planned(
     request_id: int,
     world_state,
     grasp_yaw_override: "Optional[float]" = None,
+    pre_grasp_distance: float = 0.0,
 ):
     """Execute grasp using the full GraspPlanner pipeline (ROS path).
 
@@ -301,32 +323,22 @@ def _grasp_via_ros_planned(
         return None, True  # signal caller to try position-only path
 
     # Build object rotation quaternion for GraspPlanner.
-    # Priority: explicit yaw override > WorldState rotation > identity.
+    # Priority: explicit yaw override > robot-to-object axis > identity.
+    # Using the robot-to-object axis aligns the gripper jaw toward the object
+    # so the fingers straddle it along the natural approach direction.
     # GraspPlanner expects a Unity-frame quaternion (x, y, z, w).
     obj_rot_quat = (0.0, 0.0, 0.0, 1.0)
-    yaw_unity = None
     if grasp_yaw_override is not None:
         yaw_unity = grasp_yaw_override
-    elif world_state is not None:
-        try:
-            with world_state._lock:
-                _obj = world_state._objects.get(object_id)
-                if _obj is None:
-                    _norm = object_id.lower().replace(" ", "_").replace("-", "_")
-                    for k, v in world_state._objects.items():
-                        if _norm in k.lower() or k.lower() in _norm:
-                            _obj = v
-                            break
-                if _obj is not None and _obj.rotation is not None:
-                    # rotation[1] = Unity Y-axis rotation (degrees)
-                    yaw_unity = math.radians(_obj.rotation[1])
-        except Exception as _e:
-            logger.warning(f"[ROS planned] WorldState yaw lookup failed: {_e}")
+    else:
+        yaw_unity = _yaw_toward_object(robot_id, object_position)
+        logger.info(
+            f"[ROS planned] gripper yaw toward object: {math.degrees(yaw_unity):.1f}°"
+        )
 
-    if yaw_unity is not None:
-        # Build a Unity Y-axis rotation quaternion: (0, sin(θ/2), 0, cos(θ/2))
-        half_y = yaw_unity / 2.0
-        obj_rot_quat = (0.0, math.sin(half_y), 0.0, math.cos(half_y))
+    # Build a Unity Y-axis rotation quaternion: (0, sin(θ/2), 0, cos(θ/2))
+    half_y = yaw_unity / 2.0
+    obj_rot_quat = (0.0, math.sin(half_y), 0.0, math.cos(half_y))
 
     try:
         planner = GraspPlanner()
@@ -363,41 +375,86 @@ def _grasp_via_ros_planned(
         f"score={best_grasp.total_score:.3f}"
     )
 
-    # The Python grasp planner produces quaternions in Unity world space (Y-up,
-    # left-handed, matching Unity's Quaternion.Euler ZYX convention). MoveIt expects
-    # orientations in ROS base_link space (Z-up, right-handed). Without this conversion,
-    # MoveIt plans a trajectory to a misinterpreted orientation and joint 4 spins
-    # extensively near the pre-grasp waypoint before settling.
+    # Build the MoveIt (ROS) orientation for the chosen grasp approach.
     #
-    # Conversion: (x,y,z,w)_unity → (z,-x,y,w)_ros
-    # Axis relabeling Unity(X,Y,Z)→ROS(Z,-X,Y) applied to vector components.
-    # w is preserved — negating it would invert the rotation (conjugate), not
-    # just change the handedness representation.
-    unity_q = best_grasp.grasp_rotation  # (x, y, z, w) in Unity frame
-    ros_x = unity_q[2]    # unity z → ros x
-    ros_y = -unity_q[0]   # unity x → ros -y
-    ros_z = unity_q[1]    # unity y → ros z
-    ros_w = unity_q[3]    # w preserved
-    # Canonicalize to w >= 0 hemisphere. The two quaternion representations
-    # (x,y,z,w) and (-x,-y,-z,-w) encode identical orientations, but MoveIt's
-    # IK solver may pick a wrist solution requiring an extra ±360° rotation when
-    # w < 0 (especially for Top grasps where Euler(180,0,90) puts w near zero).
-    if ros_w < 0.0:
-        ros_x, ros_y, ros_z, ros_w = -ros_x, -ros_y, -ros_z, -ros_w
+    # The general Unity→ROS swap (x,y,z,w)→(z,-x,y,w) breaks for top-down grasps:
+    # GraspCandidateGenerator produces Euler(180°,0°,90°) in Unity ZYX, which gives
+    # w=0 exactly.  After the axis swap the result is a pure rotation around ROS -Y
+    # (horizontal), so link5/6 end up horizontal instead of pointing down.
+    #
+    # For top: build the ROS quaternion directly from the already-computed yaw.
+    # In ROS (Z-up), top-down = tool-Z along -Z_ros = 180° around ROS X composed
+    # with yaw θ around ROS Z.  q_x180=(1,0,0,0); q_yaw=(0,0,sin(θ/2),cos(θ/2)).
+    # Product (q_yaw * q_x180): x=cos(θ/2), y=-sin(θ/2), z=0, w=0.
+    # w=0 is unavoidable for any 180° rotation; MoveIt normalises internally so the
+    # axis direction is what matters — and now it is correct (pointing down).
+    if best_grasp.approach_type == "top":
+        # Fold yaw into (-π/2, π/2] (jaw 180° symmetry).
+        yaw_ros = yaw_unity  # Unity Y-axis == ROS Z-axis
+        while yaw_ros > math.pi / 2:
+            yaw_ros -= math.pi
+        while yaw_ros < -math.pi / 2:
+            yaw_ros += math.pi
+        s = math.sin(yaw_ros / 2.0)
+        c = math.cos(yaw_ros / 2.0)
+        ros_x, ros_y, ros_z, ros_w = c, -s, 0.0, 0.0
+        logger.debug(
+            f"[_grasp_via_ros_planned] Top-down ROS orientation: "
+            f"yaw_ros={math.degrees(yaw_ros):.1f}° → q=({ros_x:.3f},{ros_y:.3f},{ros_z:.3f},{ros_w:.3f})"
+        )
+    else:
+        # Front/side: standard Unity→ROS axis swap (x,y,z,w)→(z,-x,y,w).
+        unity_q = best_grasp.grasp_rotation
+        ros_x = unity_q[2]
+        ros_y = -unity_q[0]
+        ros_z = unity_q[1]
+        ros_w = unity_q[3]
+        if ros_w < 0.0:
+            ros_x, ros_y, ros_z, ros_w = -ros_x, -ros_y, -ros_z, -ros_w
+        # Fold yaw into (-π/2, π/2] for jaw symmetry.
+        _yaw = math.atan2(
+            2.0 * (ros_w * ros_z + ros_x * ros_y),
+            1.0 - 2.0 * (ros_y * ros_y + ros_z * ros_z),
+        )
+        if _yaw > math.pi / 2 or _yaw < -math.pi / 2:
+            ros_x, ros_y, ros_z, ros_w = -ros_y, ros_x, ros_w, -ros_z
+            if ros_w < 0.0:
+                ros_x, ros_y, ros_z, ros_w = -ros_x, -ros_y, -ros_z, -ros_w
+            logger.debug(
+                f"[_grasp_via_ros_planned] Yaw {math.degrees(_yaw):.1f}° outside (-90°,90°] — "
+                f"applied 180° wrist flip to minimise joint-6 travel."
+            )
     grasp_orientation = {"x": ros_x, "y": ros_y, "z": ros_z, "w": ros_w}
 
     grasp_pos = _vec_to_pos(best_grasp.grasp_position)
 
+    # Override pre-grasp position if caller specified an explicit distance.
+    # GraspCandidateGenerator derives it from object size (min 5cm), which is too
+    # small for 2cm cubes — the caller's pre_grasp_distance (e.g. 0.15m) is used instead.
+    if pre_grasp_distance > 0.0 and best_grasp.approach_direction is not None:
+        pre_grasp_pt = (
+            np.array(best_grasp.grasp_position)
+            + np.array(best_grasp.approach_direction) * pre_grasp_distance
+        )
+        pre_grasp_pos = _vec_to_pos(tuple(pre_grasp_pt))
+    else:
+        pre_grasp_pos = _vec_to_pos(best_grasp.pre_grasp_position)
+
     # Step 1: Pre-grasp hover.
-    # TODO: remove orientation=grasp_orientation once VGN is implemented — VGN poses
-    #       are accurate enough that the pre-grasp orientation constraint is not needed
-    #       and only shrinks the IK solution space at borderline reach distances.
+    # Omit orientation constraint for non-top approaches: constraining orientation at
+    # pre-grasp shrinks the IK solution space and causes OMPL to fail at borderline
+    # reach distances (side/front poses near the edge of the workspace).
+    # Orientation is enforced at Step 2 (Cartesian descent) where it matters.
+    _pre_grasp_orientation = grasp_orientation if preferred_approach == "top" else None
     logger.info(f"Moving to pre-grasp position for {robot_id}")
     pre_result = bridge.plan_and_execute(
-        position=_vec_to_pos(best_grasp.pre_grasp_position),
-        orientation=grasp_orientation,
+        position=pre_grasp_pos,
+        orientation=_pre_grasp_orientation,
         planning_time=10.0,
         robot_id=robot_id,
+        max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
+        max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
+        constrain_joint6=True,
     )
     if not pre_result or not pre_result.get("success"):
         pre_err = pre_result.get("error", "Unknown") if pre_result else "No response"
@@ -415,8 +472,8 @@ def _grasp_via_ros_planned(
         position=grasp_pos,
         orientation=grasp_orientation,
         robot_id=robot_id,
-        max_velocity_scaling=0.3,
-        max_acceleration_scaling=0.3,
+        max_velocity_scaling=GRASP_DESCENT_VELOCITY_SCALING,
+        max_acceleration_scaling=GRASP_DESCENT_ACCELERATION_SCALING,
     )
 
     if not result or not result.get("success"):
@@ -507,30 +564,21 @@ def _grasp_via_ros_position_only(
     # ROS X axis, which flips ee_link Z downward.  A small positive w bias keeps
     # the quaternion in the w>0 hemisphere so MoveIt's IK solver always picks the
     # same wrist configuration and avoids the ±360° flip that occurs at w=0.
-    yaw_unity = 0.0
+    # Priority: explicit yaw override > robot-to-object axis.
+    # Using the robot-to-object axis aligns the gripper jaw toward the object
+    # so the fingers straddle it along the natural approach direction.
+    # Already normalised to (-π/2, π/2] inside _yaw_toward_object.
     if grasp_yaw_override is not None:
         yaw_unity = grasp_yaw_override
-    elif world_state is not None:
-        try:
-            with world_state._lock:
-                _obj = world_state._objects.get(object_id)
-                if _obj is None:
-                    _norm = object_id.lower().replace(" ", "_").replace("-", "_")
-                    for k, v in world_state._objects.items():
-                        if _norm in k.lower() or k.lower() in _norm:
-                            _obj = v
-                            break
-                if _obj is not None and _obj.rotation is not None:
-                    # rotation[1] = Unity Y-axis rotation (in-plane yaw, degrees)
-                    yaw_unity = -math.radians(_obj.rotation[1])
-        except Exception as _e:
-            logger.warning(f"[ROS pos-only] WorldState yaw lookup failed: {_e}")
-
-    # Normalise to (-π/2, π/2] to exploit 180° gripper symmetry and minimise wrist travel.
-    if yaw_unity > math.pi / 2:
-        yaw_unity -= math.pi
-    elif yaw_unity < -math.pi / 2:
-        yaw_unity += math.pi
+        if yaw_unity > math.pi / 2:
+            yaw_unity -= math.pi
+        elif yaw_unity <= -math.pi / 2:
+            yaw_unity += math.pi
+    else:
+        yaw_unity = _yaw_toward_object(robot_id, object_position)
+        logger.info(
+            f"[ROS pos-only] gripper yaw toward object: {math.degrees(yaw_unity):.1f}°"
+        )
 
     # Compose q_yaw_ros * q_topdown (same formula as _grasp_via_vgn_with_ros).
     half = yaw_unity / 2.0
@@ -572,6 +620,8 @@ def _grasp_via_ros_position_only(
         orientation=top_down_orientation,
         planning_time=10.0,
         robot_id=robot_id,
+        max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
+        max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
     )
     if not pre_result or not pre_result.get("success"):
         error_msg = pre_result.get("error", "Unknown") if pre_result else "No response"
@@ -596,8 +646,8 @@ def _grasp_via_ros_position_only(
         position=grasp_position,
         orientation=top_down_orientation,
         robot_id=robot_id,
-        max_velocity_scaling=0.3,
-        max_acceleration_scaling=0.3,
+        max_velocity_scaling=GRASP_DESCENT_VELOCITY_SCALING,
+        max_acceleration_scaling=GRASP_DESCENT_ACCELERATION_SCALING,
     )
 
     if not result or not result.get("success"):
@@ -727,32 +777,29 @@ def _grasp_via_vgn(
     img_w = 640
     img_h = 480
     try:
-        from operations.DetectionOperations import detect_objects
+        from core.Imports import get_unified_image_storage
+        from vision.YOLODetector import YOLODetector
 
-        det_result = detect_objects(robot_id=robot_id, camera_id="main")
-        if det_result.success and det_result.result:
-            detections = det_result.result.get("detections", [])
-            img_w = det_result.result.get("image_width", 640)
-            img_h = det_result.result.get("image_height", 480)
-            # Find first detection whose "color" matches object_id (case-insensitive)
-            # DetectionObject.to_dict() stores the class name in "color" not "label"
-            obj_id_lower = object_id.lower().replace("_", " ")
-            for det in detections:
-                color_field = det.get("color", "").lower()
-                if obj_id_lower in color_field or color_field in obj_id_lower:
-                    bbox = det.get("bbox") or det.get("bbox_px")  # "bbox" when 3D present, "bbox_px" otherwise
-                    if bbox:
-                        if isinstance(bbox, dict):
-                            yolo_bbox = (
-                                int(bbox.get("x", 0)),
-                                int(bbox.get("y", 0)),
-                                int(bbox.get("width", 0)),
-                                int(bbox.get("height", 0)),
-                            )
-                        elif len(bbox) == 4:
-                            yolo_bbox = tuple(int(v) for v in bbox)
+        _storage = get_unified_image_storage()
+        _stereo = _storage.get_latest_stereo()
+        if _stereo is not None:
+            _, _left_img, _, _ = _stereo
+            if _left_img is not None:
+                img_h, img_w = _left_img.shape[:2]
+                _detector = YOLODetector(model_path=_YOLO_MODEL_PATH)
+                _det_result = _detector.detect_objects(_left_img, camera_id="main")
+                obj_id_lower = object_id.lower().replace("_", " ")
+                for _obj in _det_result.detections:
+                    color_field = getattr(_obj, "color", "").lower()
+                    if obj_id_lower in color_field or color_field in obj_id_lower:
+                        yolo_bbox = (
+                            int(_obj.bbox_x),
+                            int(_obj.bbox_y),
+                            int(_obj.bbox_w),
+                            int(_obj.bbox_h),
+                        )
                         logger.debug(f"[VGN] YOLO bbox for {object_id}: {yolo_bbox}")
-                    break
+                        break
     except Exception as exc:
         logger.debug(f"[VGN] Could not get YOLO bbox (non-fatal): {exc}")
 
@@ -1004,9 +1051,11 @@ def _grasp_via_vgn_with_ros(
     image_np: "Optional[np.ndarray]" = None
     det_img_w = img_w
     det_img_h = img_h
+    _detection_depth_m: "Optional[float]" = None  # stereo bbox depth for VGN hint
 
-    # Pull world position from WorldState (set by detect_object_stereo / VisionProcessor).
+    # Pull world position and dimensions from WorldState.
     _detected_world_pos: "Optional[List[float]]" = None
+    _object_dimensions = None
     try:
         ws_pos = world_state.get_object_position(object_id)
         if ws_pos is not None:
@@ -1017,47 +1066,59 @@ def _grasp_via_vgn_with_ros(
             )
     except Exception:
         pass
-
-    # Always run detect_objects to get the YOLO bbox for VGN point-cloud masking.
     try:
-        from operations.DetectionOperations import detect_objects
+        _object_dimensions = world_state.get_object_dimensions(object_id)
+    except Exception:
+        pass
 
-        det_result = detect_objects(robot_id=robot_id, camera_id="main")
-        if det_result.success and det_result.result:
-            detections = det_result.result.get("detections", [])
-            det_img_w = det_result.result.get("image_width", det_img_w)
-            det_img_h = det_result.result.get("image_height", det_img_h)
-            obj_id_norm = object_id.lower().replace(" ", "_")
-            for det in detections:
-                color_field = det.get("color", "").lower().replace(" ", "_")
-                if obj_id_norm in color_field or color_field in obj_id_norm:
-                    # to_dict() uses "bbox" when world_position present, "bbox_px" without
-                    bbox = det.get("bbox") or det.get("bbox_px")
-                    if bbox:
-                        if isinstance(bbox, dict):
-                            yolo_bbox = (
-                                int(bbox.get("x", 0)),
-                                int(bbox.get("y", 0)),
-                                int(bbox.get("width", 0)),
-                                int(bbox.get("height", 0)),
-                            )
-                        elif len(bbox) == 4:
-                            yolo_bbox = tuple(int(v) for v in bbox)
-                    break
-            # Scale bbox from detection resolution to stereo/point-cloud resolution
-            if yolo_bbox != (0, 0, 0, 0) and (det_img_w != img_w or det_img_h != img_h):
-                scale_x = img_w / det_img_w
-                scale_y = img_h / det_img_h
-                bx, by, bw, bh = yolo_bbox
-                yolo_bbox = (
-                    int(bx * scale_x), int(by * scale_y),
-                    int(bw * scale_x), int(bh * scale_y),
-                )
-                logger.info(f"[VGN] Scaled bbox {det_img_w}x{det_img_h}→{img_w}x{img_h}: {yolo_bbox}")
-            if yolo_bbox == (0, 0, 0, 0):
-                logger.warning(f"[VGN] No valid bbox found for '{object_id}' — masking will use all points")
+    # Always run YOLO detection to get the bbox for VGN point-cloud masking.
+    try:
+        from core.Imports import get_unified_image_storage
+        from vision.YOLODetector import YOLODetector
+
+        _storage = get_unified_image_storage()
+        _stereo = _storage.get_latest_stereo()
+        if _stereo is not None:
+            _, _left_img, _, _ = _stereo
+            if _left_img is not None:
+                det_img_h, det_img_w = _left_img.shape[:2]
+                _detector = YOLODetector(model_path=_YOLO_MODEL_PATH)
+                _det_result = _detector.detect_objects(_left_img, camera_id="main")
+                obj_id_norm = object_id.lower().replace(" ", "_")
+                for _obj in _det_result.detections:
+                    color_field = getattr(_obj, "color", "").lower().replace(" ", "_")
+                    if obj_id_norm in color_field or color_field in obj_id_norm:
+                        yolo_bbox = (
+                            int(_obj.bbox_x),
+                            int(_obj.bbox_y),
+                            int(_obj.bbox_w),
+                            int(_obj.bbox_h),
+                        )
+                        _dm = getattr(_obj, "depth_m", None)
+                        if _dm is not None:
+                            _detection_depth_m = float(_dm)
+                        break
     except Exception as exc:
-        logger.debug(f"[VGN+ROS] YOLO bbox (non-fatal): {exc}")
+        logger.debug(f"[VGN] Could not get YOLO bbox (non-fatal): {exc}")
+
+    # Scale bbox from detection resolution to stereo/point-cloud resolution
+    if yolo_bbox != (0, 0, 0, 0) and (det_img_w != img_w or det_img_h != img_h):
+        scale_x = img_w / det_img_w
+        scale_y = img_h / det_img_h
+        bx, by, bw, bh = yolo_bbox
+        yolo_bbox = (
+            int(bx * scale_x),
+            int(by * scale_y),
+            int(bw * scale_x),
+            int(bh * scale_y),
+        )
+        logger.info(
+            f"[VGN] Scaled bbox {det_img_w}x{det_img_h}→{img_w}x{img_h}: {yolo_bbox}"
+        )
+    if yolo_bbox == (0, 0, 0, 0):
+        logger.warning(
+            f"[VGN] No valid bbox found for '{object_id}' — masking will use all points"
+        )
 
     try:
         from core.Imports import get_unified_image_storage
@@ -1075,9 +1136,14 @@ def _grasp_via_vgn_with_ros(
         image_np = np.zeros((img_h, img_w, 3), dtype=np.uint8)
 
     # 4. Query VGN (VLM bbox refinement + TSDF + inference internal to VGNClient)
-    logger.info(f"[VGN] Calling predict_grasps: image_width={img_w}, image_height={img_h}, fov={fov}, bbox={yolo_bbox}, points_shape={points_np.shape}")
+    logger.info(
+        f"[VGN] Calling predict_grasps: image_width={img_w}, image_height={img_h}, fov={fov}, bbox={yolo_bbox}, points_shape={points_np.shape}"
+    )
     import numpy as _np
-    logger.info(f"[VGN] Point cloud sample (first 3): {points_np[:3].tolist()}, X range=[{points_np[:,0].min():.3f},{points_np[:,0].max():.3f}], Y=[{points_np[:,1].min():.3f},{points_np[:,1].max():.3f}], Z=[{points_np[:,2].min():.3f},{points_np[:,2].max():.3f}]")
+
+    logger.info(
+        f"[VGN] Point cloud sample (first 3): {points_np[:3].tolist()}, X range=[{points_np[:,0].min():.3f},{points_np[:,0].max():.3f}], Y=[{points_np[:,1].min():.3f},{points_np[:,1].max():.3f}], Z=[{points_np[:,2].min():.3f},{points_np[:,2].max():.3f}]"
+    )
     grasps = client.predict_grasps(
         points=points_np,
         colors=colors_np,
@@ -1090,6 +1156,9 @@ def _grasp_via_vgn_with_ros(
         top_k=VGN_TOP_K,
         cam_pos=cam_pos,
         cam_rot=cam_rot,
+        object_world_pos=_detected_world_pos,
+        detection_depth_m=_detection_depth_m,
+        object_dimensions=_object_dimensions,
     )
     if not grasps:
         logger.info("[VGN+ROS] No candidates returned — falling back to geometric ROS")
@@ -1098,7 +1167,9 @@ def _grasp_via_vgn_with_ros(
     # 5. Transform to Unity world frame (skip if VGN already output world-frame grasps)
     if grasps and grasps[0].get("_world_frame"):
         world_grasps = grasps
-        logger.info("[VGN+ROS] Grasps already in Unity world frame - skipping transform")
+        logger.info(
+            "[VGN+ROS] Grasps already in Unity world frame - skipping transform"
+        )
     else:
         world_grasps = transform_grasp_poses_to_unity(grasps, cam_pos, cam_rot)
     if not world_grasps:
@@ -1131,32 +1202,90 @@ def _grasp_via_vgn_with_ros(
                 f"(from {len(grasps)} raw)"
             )
 
-    # 6. Pick top candidate: prefer grasps with upward approach (Y > 0.3) to avoid
-    # table collisions.  Fall back to best overall score if none qualify.
-    _y_approaches = sorted([g["approach_direction"][1] for g in world_grasps], reverse=True)
-    logger.info(f"[VGN+ROS] Approach Y distribution (top 5): {[round(v,2) for v in _y_approaches[:5]]}")
-    _MIN_Y_APPROACH = 0.3  # approach must have at least 30% upward component
-    top_down_candidates = [
-        g for g in world_grasps
-        if g.get("approach_direction", [0, 0, 0])[1] >= _MIN_Y_APPROACH
-    ]
-    if top_down_candidates:
-        top = max(top_down_candidates, key=lambda g: g.get("score", 0.0))
-        logger.info(
-            f"[VGN+ROS] Selected top-down-feasible grasp "
-            f"(Y_approach={top['approach_direction'][1]:.2f}) from "
-            f"{len(top_down_candidates)}/{len(world_grasps)} candidates"
-        )
+    # 6. Pick top candidate based on preferred_approach direction.
+    _y_approaches = sorted(
+        [g["approach_direction"][1] for g in world_grasps], reverse=True
+    )
+    logger.info(
+        f"[VGN+ROS] Approach Y distribution (top 5): {[round(v,2) for v in _y_approaches[:5]]}"
+    )
+    _approach_lower = preferred_approach.lower() if preferred_approach else "top"
+    if _approach_lower == "side":
+        # Side approach: prefer candidates with high horizontal (X) component, low Y.
+        _MIN_X_APPROACH = 0.3
+        side_candidates = [
+            g
+            for g in world_grasps
+            if abs(g.get("approach_direction", [0, 0, 0])[0]) >= _MIN_X_APPROACH
+        ]
+        if side_candidates:
+            top = max(side_candidates, key=lambda g: g.get("score", 0.0))
+            logger.info(
+                f"[VGN+ROS] Selected side grasp "
+                f"(X_approach={top['approach_direction'][0]:.2f}) from "
+                f"{len(side_candidates)}/{len(world_grasps)} candidates"
+            )
+        else:
+            top = max(
+                world_grasps,
+                key=lambda g: abs(g.get("approach_direction", [0, 0, 0])[0]),
+            )
+            logger.warning(
+                f"[VGN+ROS] No grasp with |X_approach| >= {_MIN_X_APPROACH} — "
+                f"using most-horizontal candidate (X_approach={top['approach_direction'][0]:.2f})"
+            )
+    elif _approach_lower == "front":
+        _MIN_Z_APPROACH = 0.3
+        front_candidates = [
+            g
+            for g in world_grasps
+            if abs(g.get("approach_direction", [0, 0, 0])[2]) >= _MIN_Z_APPROACH
+        ]
+        if front_candidates:
+            top = max(front_candidates, key=lambda g: g.get("score", 0.0))
+            logger.info(
+                f"[VGN+ROS] Selected front grasp "
+                f"(Z_approach={top['approach_direction'][2]:.2f}) from "
+                f"{len(front_candidates)}/{len(world_grasps)} candidates"
+            )
+        else:
+            top = max(
+                world_grasps,
+                key=lambda g: abs(g.get("approach_direction", [0, 0, 0])[2]),
+            )
+            logger.warning(
+                f"[VGN+ROS] No grasp with |Z_approach| >= {_MIN_Z_APPROACH} — "
+                f"using most-frontal candidate"
+            )
     else:
-        top = max(world_grasps, key=lambda g: g.get("score", 0.0))
-        logger.warning(
-            f"[VGN+ROS] No grasp with Y_approach >= {_MIN_Y_APPROACH} — "
-            f"using best-score candidate (Y_approach={top['approach_direction'][1]:.2f})"
-        )
+        # Default: top-down — prefer upward Y approach to avoid table collisions.
+        _MIN_Y_APPROACH = 0.2
+        top_down_candidates = [
+            g
+            for g in world_grasps
+            if g.get("approach_direction", [0, 0, 0])[1] >= _MIN_Y_APPROACH
+        ]
+        if top_down_candidates:
+            top = max(top_down_candidates, key=lambda g: g.get("score", 0.0))
+            logger.info(
+                f"[VGN+ROS] Selected top-down-feasible grasp "
+                f"(Y_approach={top['approach_direction'][1]:.2f}) from "
+                f"{len(top_down_candidates)}/{len(world_grasps)} candidates"
+            )
+        else:
+            top = max(
+                world_grasps, key=lambda g: g.get("approach_direction", [0, 0, 0])[1]
+            )
+            logger.warning(
+                f"[VGN+ROS] No grasp with Y_approach >= {_MIN_Y_APPROACH} — "
+                f"using most-top-down candidate (Y_approach={top['approach_direction'][1]:.2f})"
+            )
     pos = top["position"]
     rot = top["rotation"]
     approach = top["approach_direction"]
-    logger.info(f"[VGN+ROS] Top grasp world_pos={[round(v,3) for v in pos]}, approach={[round(v,3) for v in approach]}, cam_pos={cam_pos}, cam_rot={cam_rot}")
+    logger.info(
+        f"[VGN+ROS] Top grasp world_pos={[round(v,3) for v in pos]}, approach={[round(v,3) for v in approach]}, cam_pos={cam_pos}, cam_rot={cam_rot}"
+    )
 
     # Position anchor override: stereo reconstruction has a depth scale error for
     # synthetic Unity scenes (~1.8x overestimate).  DepthEstimator (WorldState) is
@@ -1171,6 +1300,8 @@ def _grasp_via_vgn_with_ros(
         pos = dp
 
     hover = pre_grasp_distance if pre_grasp_distance > 0 else PRE_GRASP_HOVER_OFFSET
+    _approach_lower = preferred_approach.lower() if preferred_approach else "top"
+    _is_top_down_approach = _approach_lower not in ("side", "front")
 
     # Orientation selection:
     # VGN rarely predicts near-vertical (top-down) grasps for table-top cubes —
@@ -1188,15 +1319,31 @@ def _grasp_via_vgn_with_ros(
         _rx, _ry, _rz, _rw = rot[2], -rot[0], rot[1], rot[3]
         if _rw < 0.0:
             _rx, _ry, _rz, _rw = -_rx, -_ry, -_rz, -_rw
+        # Exploit 180° gripper symmetry: fold yaw into (-π/2, π/2] to minimise
+        # joint-6 travel.  Same normalisation used on the top-down + yaw path.
+        _vgn_yaw = math.atan2(
+            2.0 * (_rw * _rz + _rx * _ry),
+            1.0 - 2.0 * (_ry * _ry + _rz * _rz),
+        )
+        if _vgn_yaw > math.pi / 2 or _vgn_yaw < -math.pi / 2:
+            _rx, _ry, _rz, _rw = -_ry, _rx, _rw, -_rz
+            if _rw < 0.0:
+                _rx, _ry, _rz, _rw = -_rx, -_ry, -_rz, -_rw
+            logger.debug(
+                f"[VGN+ROS] VGN yaw {math.degrees(_vgn_yaw):.1f}° outside (-90°,90°] — "
+                f"applied 180° wrist flip."
+            )
         orientation = {"x": _rx, "y": _ry, "z": _rz, "w": _rw}
         logger.info(
             f"[VGN+ROS] Using VGN orientation (|approach Y|={abs(_vgn_approach_y):.2f} >= {_TOP_DOWN_Y_THRESHOLD})"
         )
     else:
-        # VGN approach is too shallow/horizontal for a safe table grasp.
-        # Use pure upward pre-grasp offset so the arm hovers directly above the
-        # object, then descend straight down.
-        pre_approach = [0.0, 1.0, 0.0]  # straight up in Unity world frame
+        # For explicit side/front approach: use VGN approach direction for pre-grasp offset.
+        # For table top-down fallback (shallow VGN): hover directly above.
+        if not _is_top_down_approach:
+            pre_approach = approach  # VGN approach direction (points toward object)
+        else:
+            pre_approach = [0.0, 1.0, 0.0]  # straight up in Unity world frame
 
         # Yaw source priority:
         # 0. Explicit override (e.g. handoff — jaw must face the handoff axis)
@@ -1247,11 +1394,12 @@ def _grasp_via_vgn_with_ros(
                 logger.warning(f"[VGN+ROS] WorldState rotation lookup failed: {_e}")
 
         if yaw_source.startswith("fallback"):
-            # Fall back to VGN rotation: extract yaw from gripper X-axis projection.
+            # Fall back to VGN rotation: extract yaw from gripper X-axis projection
+            # onto the XZ plane. atan2(z, x) gives the angle from world +X toward +Z.
             qx, qy, qz, qw = rot
             gx_x = 1 - 2 * (qy * qy + qz * qz)
             gx_z = 2 * (qx * qz + qy * qw)
-            yaw_unity = math.atan2(gx_x, gx_z)
+            yaw_unity = math.atan2(gx_z, gx_x)
             yaw_source = f"VGN quaternion (yaw={math.degrees(yaw_unity):.1f}°)"
 
         # Exploit 180° gripper symmetry: normalise to (-π/2, π/2] to minimise
@@ -1274,10 +1422,10 @@ def _grasp_via_vgn_with_ros(
         #           aw*bz+az*bw+ax*by-ay*bx,
         #           aw*bw-ax*bx-ay*by-az*bz)
         bx, by, bz, bw = 0.9999, 0.0, 0.0, 0.0087
-        ox = qy_w * bx - qy_z * by   # qy_w*bx + 0*bw + 0*bz - qy_z*by
-        oy = qy_w * by + qy_z * bx   # qy_w*by + 0*bw + qy_z*bx - 0*bz
-        oz = qy_w * bz + qy_z * bw   # qy_w*bz + qy_z*bw + 0*by - 0*bx
-        ow = qy_w * bw - qy_z * bz   # qy_w*bw - 0*bx - 0*by - qy_z*bz
+        ox = qy_w * bx - qy_z * by  # qy_w*bx + 0*bw + 0*bz - qy_z*by
+        oy = qy_w * by + qy_z * bx  # qy_w*by + 0*bw + qy_z*bx - 0*bz
+        oz = qy_w * bz + qy_z * bw  # qy_w*bz + qy_z*bw + 0*by - 0*bx
+        ow = qy_w * bw - qy_z * bz  # qy_w*bw - 0*bx - 0*by - qy_z*bz
         # Normalise
         mag = math.sqrt(ox * ox + oy * oy + oz * oz + ow * ow)
         orientation = {
@@ -1298,24 +1446,29 @@ def _grasp_via_vgn_with_ros(
         "y": pos[1] + pre_approach[1] * hover,
         "z": pos[2] + pre_approach[2] * hover,
     }
-    # VGN already outputs the TCP/finger-pad position directly — do not apply
-    # the geometric GRASP_TCP_OFFSET (which is only for object-center-based grasps).
-    grasp_pos = {"x": pos[0], "y": pos[1], "z": pos[2]}
+    # Apply GRASP_TCP_OFFSET along the approach direction so fingers stop at the
+    # object surface rather than driving through it.
+    grasp_pos = {
+        "x": pos[0] + pre_approach[0] * GRASP_TCP_OFFSET,
+        "y": pos[1] + pre_approach[1] * GRASP_TCP_OFFSET,
+        "z": pos[2] + pre_approach[2] * GRASP_TCP_OFFSET,
+    }
 
-    # 7a. Clearance waypoint: move to a safe height directly above the target XZ
-    #     before approaching.  This prevents the arm from sweeping through
-    #     table-height space (and knocking the object) on its joint-space path
-    #     to the pre-grasp position.  No orientation constraint here — we only
-    #     care that the gripper is well above the table.
+    # 7a. Clearance waypoint: only for top-down approaches where the arm might sweep
+    #     through table-height space. Side/front approaches come from the side so no
+    #     clearance above the object is needed.
     clearance_pos = {"x": pos[0], "y": PRE_GRASP_CLEARANCE_Y, "z": pos[2]}
-    if pre_grasp_pos["y"] < PRE_GRASP_CLEARANCE_Y:
+    _is_top_down_approach = _approach_lower not in ("side", "front")
+    if _is_top_down_approach and pre_grasp_pos["y"] < PRE_GRASP_CLEARANCE_Y:
         # Pre-grasp is below clearance height — insert the waypoint.
         logger.info(f"[VGN+ROS] Clearance waypoint for {robot_id}: {clearance_pos}")
         clearance_result = bridge.plan_and_execute(
             position=clearance_pos,
-            orientation=None,
+            orientation=orientation,
             planning_time=10.0,
             robot_id=robot_id,
+            max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
+            max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
         )
         if not clearance_result or not clearance_result.get("success"):
             cl_err = (
@@ -1331,13 +1484,18 @@ def _grasp_via_vgn_with_ros(
             time.sleep(0.2)
 
     # 7b. MoveIt pre-grasp move.
+    # Omit orientation constraint for side/front: constraining orientation at pre-grasp
+    # shrinks the IK solution space and causes OMPL to fail near workspace boundaries.
+    _pre_grasp_orientation = orientation if _is_top_down_approach else None
     logger.info(f"[VGN+ROS] Moving to pre-grasp for {robot_id}: {pre_grasp_pos}")
-    # Attempt 1: with chosen orientation
+    # Attempt 1: with chosen orientation (top-down) or unconstrained (side/front)
     pre_result = bridge.plan_and_execute(
         position=pre_grasp_pos,
-        orientation=orientation,
+        orientation=_pre_grasp_orientation,
         planning_time=10.0,
         robot_id=robot_id,
+        max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
+        max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
     )
     if not pre_result or not pre_result.get("success"):
         pre_err = pre_result.get("error", "Unknown") if pre_result else "No response"
@@ -1351,6 +1509,8 @@ def _grasp_via_vgn_with_ros(
             orientation=None,
             planning_time=10.0,
             robot_id=robot_id,
+            max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
+            max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
         )
     if not pre_result or not pre_result.get("success"):
         pre_err = pre_result.get("error", "Unknown") if pre_result else "No response"
@@ -1369,8 +1529,8 @@ def _grasp_via_vgn_with_ros(
         position=grasp_pos,
         orientation=orientation,
         robot_id=robot_id,
-        max_velocity_scaling=0.3,
-        max_acceleration_scaling=0.3,
+        max_velocity_scaling=GRASP_DESCENT_VELOCITY_SCALING,
+        max_acceleration_scaling=GRASP_DESCENT_ACCELERATION_SCALING,
     )
     if not descent_result or not descent_result.get("success"):
         descent_err = (
@@ -1424,7 +1584,7 @@ def grasp_object(
     robot_id: str,
     object_id: str,
     use_advanced_planning: bool = True,
-    preferred_approach: str = "auto",  # "top", "front", "side", "auto"
+    preferred_approach: str = "top",  # "top", "front", "side", "auto"
     pre_grasp_distance: float = 0.0,  # 0 = use config default
     enable_retreat: bool = True,
     retreat_distance: float = 0.0,  # 0 = use config default
@@ -1455,8 +1615,8 @@ def grasp_object(
         object_id: ID or name of the object to grasp (must be detected/tracked)
         use_advanced_planning: Use full pipeline (True) or simple planner (False)
         preferred_approach: Preferred grasp approach direction
-            - "auto": Let pipeline determine best approach (recommended)
-            - "top": Approach from above (gripper pointing down)
+            - "top": Approach from above, gripper pointing down (default)
+            - "auto": Let pipeline determine best approach
             - "front": Approach from front/back
             - "side": Approach from left/right
         pre_grasp_distance: Custom pre-grasp distance in meters (0 = use config)
@@ -1535,8 +1695,8 @@ def grasp_object(
                 "INVALID_APPROACH",
                 f"Preferred approach must be one of {valid_approaches}, got: {preferred_approach}",
                 [
-                    "Use 'auto' to let pipeline determine best approach",
-                    "Or specify 'top', 'front', or 'side' explicitly",
+                    "Use 'top' for standard top-down approach (default)",
+                    "Or specify 'front', 'side', or 'auto' explicitly",
                 ],
             )
 
@@ -1680,10 +1840,6 @@ def grasp_object(
                         )
                         if result is not None:
                             return result
-                        logger.info(
-                            "[VGN+ROS] path unavailable or failed — "
-                            "falling back to geometric ROS planning"
-                        )
 
                     # PATH 2: Geometric ROS planning (existing code, unchanged)
                     # Try full GraspPlanner pipeline when dimensions + robot pose are available
@@ -1705,6 +1861,7 @@ def grasp_object(
                             request_id=request_id,
                             world_state=world_state,
                             grasp_yaw_override=grasp_yaw_override,
+                            pre_grasp_distance=pre_grasp_distance,
                         )
                         if not fallback:
                             assert ros_result is not None
@@ -1739,8 +1896,6 @@ def grasp_object(
                 _use_ros = False
 
         # --- VGN neural path (optional, falls back to geometric on failure) ---
-        # At this point _use_ros is always False: either it was never set, or the
-        # ROS block cleared it.  No need to guard against _use_ros here.
         if _vgn_enabled:
             vgn_result = _grasp_via_vgn(
                 robot_id=robot_id,
@@ -1838,13 +1993,9 @@ def grasp_object(
 
 
 # ============================================================================
-# Operation Definition for Registry
+# Implementation: Orient Gripper For Handoff Receive Operation (helper)
 # ============================================================================
 
-
-# ============================================================================
-# Implementation: Grasp Object For Handoff Operation
-# ============================================================================
 
 def _compute_handoff_approach_vector(
     object_position: tuple,
@@ -1905,552 +2056,8 @@ def _compute_handoff_approach_vector(
     return [v / mag for v in approach]
 
 
-def grasp_object_for_handoff(
-    robot_id: str,
-    object_id: str,
-    receiving_robot_id: str,
-    request_id: int = 0,
-    use_ros: Optional[bool] = None,
-) -> OperationResult:
-    """Grasp an object at the end that leaves room for the receiving robot.
-
-    For elongated objects (like the red bar in the scene) a centre grasp makes
-    handoff impossible because the two grippers collide.  This operation
-    automatically picks a grasp point at the end of the object's longest axis
-    that is furthest from the receiving robot, so that robot can approach from
-    the opposite (near) end.
-
-    The operation:
-    1. Queries WorldState for object dimensions and the receiving robot's
-       current end-effector position.
-    2. Computes a ``custom_approach_vector`` pointing toward the "far" end of
-       the longest object axis (away from the receiving robot).
-    3. Delegates to ``grasp_object()`` with that vector — no new Unity code
-       required.
-
-    Falls back gracefully to a standard top-down grasp if WorldState lacks
-    the necessary information (e.g. dimensions not yet detected).
-
-    Args:
-        robot_id: ID of the robot that will perform the grasp (e.g. "Robot1").
-        object_id: ID of the object to grasp (must be in WorldState).
-        receiving_robot_id: ID of the robot that will later receive the object.
-            Used to determine which end of the object to grasp from.
-        request_id: Request tracking ID (optional).
-        use_ros: Whether to use ROS motion planning (None = auto from config).
-
-    Returns:
-        OperationResult — same contract as ``grasp_object()``.
-
-    Example:
-        >>> # Robot1 grasps the long red bar from the far end so Robot2 can
-        >>> # approach from the near end for a handoff.
-        >>> result = grasp_object_for_handoff("Robot1", "red_bar", "Robot2")
-    """
-    try:
-        if not robot_id or not isinstance(robot_id, str):
-            return OperationResult.error_result(
-                "INVALID_ROBOT_ID",
-                f"robot_id must be a non-empty string, got: {robot_id}",
-                ["Provide a valid robot ID such as 'Robot1'"],
-            )
-        if not object_id or not isinstance(object_id, str):
-            return OperationResult.error_result(
-                "INVALID_OBJECT_ID",
-                f"object_id must be a non-empty string, got: {object_id}",
-                ["Provide a valid object ID such as 'red_bar'"],
-            )
-        if not receiving_robot_id or not isinstance(receiving_robot_id, str):
-            return OperationResult.error_result(
-                "INVALID_RECEIVING_ROBOT_ID",
-                f"receiving_robot_id must be a non-empty string, got: {receiving_robot_id}",
-                ["Provide a valid receiving robot ID such as 'Robot2'"],
-            )
-
-        # Retrieve spatial data from WorldState.
-        try:
-            from core.Imports import get_world_state
-
-            world_state = get_world_state()
-        except ImportError:
-            logger.warning("WorldState unavailable, falling back to centre grasp")
-            return grasp_object(
-                robot_id=robot_id,
-                object_id=object_id,
-                request_id=request_id,
-                use_ros=use_ros,
-            )
-
-        object_position = world_state.get_object_position(object_id)
-        object_dimensions = world_state.get_object_dimensions(object_id)
-        receiving_robot_state = world_state.get_robot_state(receiving_robot_id)
-
-        if object_position is None:
-            logger.warning(
-                f"grasp_object_for_handoff: '{object_id}' not in WorldState, "
-                f"falling back to standard grasp"
-            )
-            return grasp_object(
-                robot_id=robot_id,
-                object_id=object_id,
-                request_id=request_id,
-                use_ros=use_ros,
-            )
-
-        # Resolve receiving robot position: prefer live WorldState, fall back to
-        # configured base position (robot may not have moved yet when this runs).
-        receiving_robot_pos = None
-        if receiving_robot_state is not None and receiving_robot_state.position is not None:
-            receiving_robot_pos = receiving_robot_state.position
-        else:
-            try:
-                from config.Robot import ROBOT_BASE_POSITIONS
-                base = ROBOT_BASE_POSITIONS.get(receiving_robot_id)
-                if base is not None:
-                    receiving_robot_pos = base
-                    logger.info(
-                        f"grasp_object_for_handoff: '{receiving_robot_id}' not yet in "
-                        f"WorldState, using base position {base}"
-                    )
-            except ImportError:
-                pass
-
-        if receiving_robot_pos is None:
-            logger.warning(
-                f"grasp_object_for_handoff: receiving robot position unknown "
-                f"for '{receiving_robot_id}', falling back to standard grasp"
-            )
-            return grasp_object(
-                robot_id=robot_id,
-                object_id=object_id,
-                request_id=request_id,
-                use_ros=use_ros,
-            )
-
-        # Track whether we're using real or default dimensions.  With equal
-        # default dims the axis selection is arbitrary — we still use it for the
-        # positional offset, but we should NOT override yaw (let the normal
-        # WorldState/VGN rotation pipeline handle jaw alignment).
-        using_default_dims = False
-        if object_dimensions is None:
-            object_dimensions = DEFAULT_HANDOFF_OBJECT_DIMENSIONS
-            using_default_dims = True
-            logger.warning(
-                f"grasp_object_for_handoff: dimensions unknown for '{object_id}', "
-                f"using default {DEFAULT_HANDOFF_OBJECT_DIMENSIONS}"
-            )
-
-        approach_vector = _compute_handoff_approach_vector(
-            object_position=object_position,
-            object_dimensions=object_dimensions,
-            receiving_robot_position=receiving_robot_pos,
-        )
-
-        # Compute the handoff yaw only when real dimensions are available.
-        # With equal default dims the axis choice is degenerate — overriding
-        # the yaw would ignore the object's actual rotation and misalign the
-        # gripper jaw.
-        handoff_yaw = None
-        if not using_default_dims:
-            # The approach_vector points toward the far end of the object (away
-            # from Robot2). For a top-down handoff grasp the jaw must be
-            # PARALLEL to the approach vector.
-            #
-            # Gripper jaw orientation at yaw=0 opens along Unity X.
-            # Unity X ↔ yaw=0,  Unity Z ↔ yaw=π/2.
-            av_x = approach_vector[0]
-            av_z = approach_vector[2]
-            handoff_yaw = math.atan2(av_z, av_x)
-
-        logger.info(
-            f"grasp_object_for_handoff: {robot_id} grasping '{object_id}' "
-            f"with approach vector {approach_vector}, "
-            f"handoff_yaw={'auto (WorldState)' if handoff_yaw is None else f'{math.degrees(handoff_yaw):.1f}°'} "
-            f"(receiving robot '{receiving_robot_id}' at "
-            f"{receiving_robot_pos})"
-        )
-
-        return grasp_object(
-            robot_id=robot_id,
-            object_id=object_id,
-            preferred_approach="side",
-            custom_approach_vector=approach_vector,
-            grasp_yaw_override=handoff_yaw,
-            request_id=request_id,
-            use_ros=use_ros,
-        )
-
-    except Exception as e:
-        logger.exception(f"Exception in grasp_object_for_handoff: {e}")
-        return OperationResult.error_result(
-            "EXCEPTION",
-            f"Exception during handoff grasp: {str(e)}",
-            ["Check stack trace in logs", "Verify WorldState is populated"],
-        )
-
-
 # ============================================================================
-# Operation Definition for Registry — Handoff Grasp
-# ============================================================================
-
-
-GRASP_OBJECT_FOR_HANDOFF_OPERATION = BasicOperation(
-    operation_id="coordination_grasp_object_for_handoff_001",
-    name="grasp_object_for_handoff",
-    category=OperationCategory.COORDINATION,
-    complexity=OperationComplexity.COMPLEX,
-    description=(
-        "Grasp an object at the end furthest from a receiving robot, "
-        "leaving the near end clear for the handoff"
-    ),
-    long_description="""
-        For elongated objects a centre grasp blocks the receiving robot from
-        approaching for a handoff.  This operation automatically selects the
-        end of the object's longest axis that is furthest from the receiving
-        robot and grasps there, using the existing custom_approach_vector
-        pathway in the Unity grasp pipeline.
-
-        Steps:
-        1. Query WorldState for object position, dimensions, and receiving
-           robot end-effector position.
-        2. Identify the dominant horizontal extent axis (X or Z).
-        3. Compute approach vector pointing toward the far end of that axis.
-        4. Delegate to grasp_object() with that custom_approach_vector.
-        5. Falls back to a standard centre grasp when WorldState data is
-           incomplete.
-    """,
-    usage_examples=[
-        "Robot1 grasps red bar for handoff to Robot2: "
-        "grasp_object_for_handoff(robot_id='Robot1', object_id='red_bar', "
-        "receiving_robot_id='Robot2')",
-        "With ROS planning: grasp_object_for_handoff('Robot1', 'red_bar', "
-        "'Robot2', use_ros=True)",
-    ],
-    parameters=[
-        OperationParameter(
-            name="robot_id",
-            type="str",
-            description="ID of the robot that performs the grasp",
-            required=True,
-        ),
-        OperationParameter(
-            name="object_id",
-            type="str",
-            description="ID of the object to grasp (must be in WorldState)",
-            required=True,
-        ),
-        OperationParameter(
-            name="receiving_robot_id",
-            type="str",
-            description="ID of the robot that will receive the object; "
-            "determines which end to grasp from",
-            required=True,
-        ),
-        OperationParameter(
-            name="request_id",
-            type="int",
-            description="Optional request tracking ID",
-            required=False,
-            default=0,
-        ),
-    ],
-    preconditions=[
-        "robot_is_initialized(robot_id)",
-    ],
-    postconditions=[],
-    average_duration_ms=200.0,
-    success_rate=0.88,
-    failure_modes=[
-        "Object dimensions not in WorldState (falls back to centre grasp)",
-        "Receiving robot position unknown (falls back to centre grasp)",
-        "IK infeasible for computed approach vector",
-        "Object outside grasping robot's workspace",
-    ],
-    relationships=OperationRelationship(
-        operation_id="coordination_grasp_object_for_handoff_001",
-        required_operations=[
-            "perception_stereo_detect_001",
-            "status_check_robot_001",
-            "coordination_detect_robot_001",
-        ],
-        required_reasons={
-            "perception_stereo_detect_001": "Object must be detected with 3D coordinates and dimensions for handoff-aware grasp planning",
-            "status_check_robot_001": "Grasping robot must be ready before executing complex grasp sequence",
-            "coordination_detect_robot_001": "Receiving robot position must be known to determine which object end to grasp from",
-        },
-        commonly_paired_with=[
-            "sync_signal_001",
-            "sync_wait_for_signal_001",
-            "manipulation_control_gripper_001",
-        ],
-        pairing_reasons={
-            "sync_signal_001": "Signal to receiving robot that object is grasped and ready for handoff",
-            "sync_wait_for_signal_001": "Wait for receiving robot to confirm readiness before initiating handoff",
-            "manipulation_control_gripper_001": "Open gripper when receiving robot has secured the object",
-        },
-        typical_after=[
-            "coordination_detect_robot_001",
-            "perception_stereo_detect_001",
-            "sync_wait_for_signal_001",
-        ],
-        typical_before=["sync_signal_001", "manipulation_control_gripper_001"],
-        coordination_requirements={
-            "requires_peer_robot": True,
-            "peer_robot_param": "receiving_robot_id",
-            "coordination_pattern": "handoff",
-        },
-        parameter_flows=[
-            ParameterFlow(
-                source_operation="detect_object_stereo",
-                source_output_key="color",
-                target_operation="coordination_grasp_object_for_handoff_001",
-                target_input_param="object_id",
-                description="Object color/ID from stereo detection auto-injected as object_id",
-            ),
-            ParameterFlow(
-                source_operation="detect_objects",
-                source_output_key="color",
-                target_operation="coordination_grasp_object_for_handoff_001",
-                target_input_param="object_id",
-                description="Object color/ID from detection auto-injected as object_id",
-            ),
-        ],
-    ),
-    implementation=grasp_object_for_handoff,
-)
-
-
-# ============================================================================
-# Implementation: Orient Gripper For Handoff Receive Operation
-# ============================================================================
-
-
-def orient_gripper_for_handoff_receive(
-    robot_id: str,
-    object_id: str,
-    source_robot_id: str,
-    request_id: int = 0,
-    use_ros: Optional[bool] = None,
-) -> OperationResult:
-    """Orient the receiving robot's gripper to accept a handoff from below.
-
-    Computes the same handoff axis as ``grasp_object_for_handoff`` and applies
-    two rotations to the receiving robot's end effector:
-
-    - **pitch = 90°** — tilts the gripper upward so it approaches from below
-      rather than top-down, preventing collision with the source robot's
-      top-down gripper.
-    - **yaw = handoff_yaw** — rotates the jaw to open along the object's
-      handoff axis so the gripper fingers can wrap around the object as the
-      robot advances toward it.
-
-    Falls back to pitch=90°, yaw=0° if WorldState geometry is unavailable.
-
-    Args:
-        robot_id: ID of the receiving robot (e.g. "Robot2").
-        object_id: ID of the object being handed off (must be in WorldState).
-        source_robot_id: ID of the robot that holds the object.
-            Used to determine the handoff axis direction.
-        request_id: Request tracking ID (optional).
-        use_ros: Whether to use ROS motion planning (None = auto from config).
-
-    Returns:
-        OperationResult — same contract as ``adjust_end_effector_orientation()``.
-
-    Example:
-        >>> # Robot2 orients its gripper before receiving the red bar from Robot1.
-        >>> result = orient_gripper_for_handoff_receive("Robot2", "red_bar", "Robot1")
-    """
-    try:
-        if not robot_id or not isinstance(robot_id, str):
-            return OperationResult.error_result(
-                "INVALID_ROBOT_ID",
-                f"robot_id must be a non-empty string, got: {robot_id}",
-                ["Provide a valid robot ID such as 'Robot2'"],
-            )
-        if not object_id or not isinstance(object_id, str):
-            return OperationResult.error_result(
-                "INVALID_OBJECT_ID",
-                f"object_id must be a non-empty string, got: {object_id}",
-                ["Provide a valid object ID such as 'red_bar'"],
-            )
-        if not source_robot_id or not isinstance(source_robot_id, str):
-            return OperationResult.error_result(
-                "INVALID_SOURCE_ROBOT_ID",
-                f"source_robot_id must be a non-empty string, got: {source_robot_id}",
-                ["Provide a valid source robot ID such as 'Robot1'"],
-            )
-
-        # Default orientation: upward-facing gripper, jaw along X axis.
-        pitch_deg = 90.0
-        yaw_deg = 0.0
-
-        # Attempt to compute the handoff axis from WorldState geometry.
-        try:
-            from core.Imports import get_world_state
-
-            world_state = get_world_state()
-            object_position = world_state.get_object_position(object_id)
-            object_dimensions = world_state.get_object_dimensions(object_id)
-            source_robot_state = world_state.get_robot_state(source_robot_id)
-
-            source_robot_pos = None
-            if source_robot_state is not None and source_robot_state.position is not None:
-                source_robot_pos = source_robot_state.position
-            else:
-                try:
-                    from config.Robot import ROBOT_BASE_POSITIONS
-                    base = ROBOT_BASE_POSITIONS.get(source_robot_id)
-                    if base is not None:
-                        source_robot_pos = base
-                except ImportError:
-                    pass
-
-            if object_dimensions is None and object_position is not None:
-                object_dimensions = DEFAULT_HANDOFF_OBJECT_DIMENSIONS
-                logger.warning(
-                    f"orient_gripper_for_handoff_receive: dimensions unknown for "
-                    f"'{object_id}', using default {DEFAULT_HANDOFF_OBJECT_DIMENSIONS}"
-                )
-
-            if object_position is not None and object_dimensions is not None and source_robot_pos is not None:
-                # _compute_handoff_approach_vector returns the vector pointing toward
-                # the end the source robot grasps from (away from source robot's
-                # perspective).  The receiving robot approaches from the opposite
-                # side, but the jaw must still open along the same axis, so we use
-                # the same yaw value.
-                approach_vector = _compute_handoff_approach_vector(
-                    object_position=object_position,
-                    object_dimensions=object_dimensions,
-                    receiving_robot_position=source_robot_pos,
-                )
-                av_x = approach_vector[0]
-                av_z = approach_vector[2]
-                handoff_yaw_rad = math.atan2(av_z, av_x)
-                yaw_deg = math.degrees(handoff_yaw_rad)
-                logger.info(
-                    f"orient_gripper_for_handoff_receive: {robot_id} yaw={yaw_deg:.1f}° "
-                    f"(handoff axis from '{source_robot_id}' geometry)"
-                )
-            else:
-                logger.warning(
-                    f"orient_gripper_for_handoff_receive: insufficient WorldState data "
-                    f"for '{object_id}'/'{source_robot_id}', using yaw=0°"
-                )
-        except ImportError:
-            logger.warning(
-                "orient_gripper_for_handoff_receive: WorldState unavailable, using yaw=0°"
-            )
-
-        from .MoveOperations import adjust_end_effector_orientation
-
-        return adjust_end_effector_orientation(
-            robot_id=robot_id,
-            pitch=pitch_deg,
-            yaw=yaw_deg,
-            request_id=request_id,
-            use_ros=use_ros,
-        )
-
-    except Exception as e:
-        logger.exception(f"Exception in orient_gripper_for_handoff_receive: {e}")
-        return OperationResult.error_result(
-            "EXCEPTION",
-            f"Exception during handoff receive orientation: {str(e)}",
-            ["Check stack trace in logs", "Verify WorldState is populated"],
-        )
-
-
-ORIENT_GRIPPER_FOR_HANDOFF_RECEIVE_OPERATION = BasicOperation(
-    operation_id="coordination_orient_for_handoff_receive_001",
-    name="orient_gripper_for_handoff_receive",
-    category=OperationCategory.COORDINATION,
-    complexity=OperationComplexity.BASIC,
-    description=(
-        "Orient receiving robot's gripper upward (pitch=90°) and aligned to the "
-        "handoff axis (yaw computed from object geometry) before approaching handoff position"
-    ),
-    long_description="""
-        Sets two rotations on the receiving robot's end effector so it can accept
-        a handoff from below without colliding with the source robot's top-down gripper:
-
-        1. pitch=90° — tilts gripper upward (bottom-approach).
-        2. yaw=handoff_yaw — aligns jaw opening to the object's elongated axis,
-           matching the jaw orientation used by grasp_object_for_handoff on the
-           source robot.
-
-        The yaw is derived from the same WorldState geometry as
-        grasp_object_for_handoff: it resolves the object's longest horizontal
-        extent axis and the source robot's position.  Falls back to yaw=0°
-        if geometry data is unavailable.
-
-        Must be called AFTER grasp_object_for_handoff has run on the source robot
-        (so WorldState has up-to-date object dimensions) and BEFORE the receiving
-        robot moves to the handoff position.
-    """,
-    usage_examples=[
-        "Robot2 prepares to receive red bar from Robot1: "
-        "orient_gripper_for_handoff_receive(robot_id='Robot2', object_id='red_bar', "
-        "source_robot_id='Robot1')",
-    ],
-    parameters=[
-        OperationParameter(
-            name="robot_id", type="str", description="ID of the receiving robot", required=True
-        ),
-        OperationParameter(
-            name="object_id",
-            type="str",
-            description="ID of the object being handed off (must be in WorldState)",
-            required=True,
-        ),
-        OperationParameter(
-            name="source_robot_id",
-            type="str",
-            description="ID of the robot currently holding the object",
-            required=True,
-        ),
-    ],
-    preconditions=[
-        "robot_is_initialized(robot_id)",
-    ],
-    postconditions=[],
-    average_duration_ms=100.0,
-    success_rate=0.95,
-    failure_modes=[
-        "Object dimensions not in WorldState (falls back to yaw=0°)",
-        "Source robot position unknown (falls back to yaw=0°)",
-    ],
-    relationships=OperationRelationship(
-        operation_id="coordination_orient_for_handoff_receive_001",
-        required_operations=["coordination_grasp_object_for_handoff_001"],
-        required_reasons={
-            "coordination_grasp_object_for_handoff_001": (
-                "Source robot must have grasped the object so WorldState has current "
-                "object dimensions and position for yaw computation"
-            ),
-        },
-        commonly_paired_with=[
-            "sync_wait_for_signal_001",
-            "motion_move_to_coord_001",
-        ],
-        pairing_reasons={
-            "sync_wait_for_signal_001": "Wait for source robot's object_gripped signal before orienting",
-            "motion_move_to_coord_001": "Move to handoff position after orientation is set",
-        },
-        typical_after=["sync_wait_for_signal_001", "coordination_grasp_object_for_handoff_001"],
-        typical_before=["motion_move_to_coord_001", "manipulation_control_gripper_001"],
-        coordination_requirements={
-            "requires_peer_robot": True,
-            "peer_robot_param": "source_robot_id",
-            "coordination_pattern": "handoff",
-        },
-    ),
-    implementation=orient_gripper_for_handoff_receive,
-)
-
-
-# ============================================================================
-# Implementation: Receive Handoff Operation
+# receive_handoff — high-level receive: orient + move to approach + close
 # ============================================================================
 
 
@@ -2460,164 +2067,225 @@ def receive_handoff(
     source_robot_id: str,
     request_id: int = 0,
     use_ros: Optional[bool] = None,
+    release_signal: Optional[str] = None,
 ) -> OperationResult:
-    """Receive an object from another robot without gripper collision.
+    """Execute the full receive side of a handoff: orient gripper, move to approach, close.
 
-    Combines three sub-steps into a single operation so the LLM only needs to
-    emit one command for the receiving side of a handoff:
+    Autonomously computes approach position and orientation from WorldState
+    geometry — no hardcoded coordinates required.  Mirrors the autonomy of
+    ``grasp_object`` for the receiving robot.
 
-    1. **Orient** — calls ``orient_gripper_for_handoff_receive`` to pitch the
-       gripper upward (90°) and align the jaw yaw to the handoff axis.
-    2. **Move to offset position** — computes the opposite end of the object
-       from where the source robot is grasping and moves there, adding
-       ``GRIPPER_CLEARANCE`` to avoid finger overlap.
-    3. **Close gripper** — calls ``control_gripper(open_gripper=False)``.
-
-    This deliberately bypasses Unity's ``ExecuteHandoffGrasp`` path (which
-    positions the gripper at the exact object centre) by using
-    ``move_to_coordinate`` + ``control_gripper`` instead of ``grasp_object``.
+    Steps (internal):
+      1. Fetch object position + dimensions from WorldState.
+      2. Compute approach position: object centre offset toward receiver by
+         half object width + ``HANDOFF_GRIPPER_CLEARANCE``.
+      3. Compute yaw toward object using ``_yaw_toward_object``.  pitch=0 so
+         gripper stays horizontal (Robot1 presents at pitch=0).
+      4. ``plan_and_execute`` (ROS) or ``move_to_coordinate`` (Unity) — move directly to
+         approach position with orientation set, so OMPL finds the correct wrist config.
+      5. ``control_gripper(open_gripper=False)``.
+      8. Emit ``release_signal`` event (if provided) so source robot releases
+         immediately — prevents Unity physics conflict from dual-gripper hold.
 
     Args:
-        robot_id: ID of the receiving robot (e.g. "Robot2").
+        robot_id: ID of the receiving robot (e.g. ``"Robot2"``).
         object_id: ID of the object being handed off (must be in WorldState).
         source_robot_id: ID of the robot currently holding the object.
         request_id: Request tracking ID (optional).
         use_ros: Whether to use ROS motion planning (None = auto from config).
+        release_signal: If provided, emit this event name immediately after
+            gripper close so the source robot can release in parallel rather
+            than waiting for this operation to fully return.
 
     Returns:
-        OperationResult — success when the gripper closes on the object.
+        OperationResult with ``approach_position`` and ``orientation`` in result dict.
 
     Example:
         >>> result = receive_handoff("Robot2", "red_cube", "Robot1")
     """
     try:
-        # --- validation ---
-        if not robot_id or not isinstance(robot_id, str):
-            return OperationResult.error_result(
-                "INVALID_ROBOT_ID",
-                f"robot_id must be a non-empty string, got: {robot_id}",
-                ["Provide a valid robot ID such as 'Robot2'"],
-            )
-        if not object_id or not isinstance(object_id, str):
-            return OperationResult.error_result(
-                "INVALID_OBJECT_ID",
-                f"object_id must be a non-empty string, got: {object_id}",
-                ["Provide a valid object ID such as 'red_cube'"],
-            )
-        if not source_robot_id or not isinstance(source_robot_id, str):
-            return OperationResult.error_result(
-                "INVALID_SOURCE_ROBOT_ID",
-                f"source_robot_id must be a non-empty string, got: {source_robot_id}",
-                ["Provide a valid source robot ID such as 'Robot1'"],
-            )
+        for param, value in (
+            ("robot_id", robot_id),
+            ("object_id", object_id),
+            ("source_robot_id", source_robot_id),
+        ):
+            if not value or not isinstance(value, str):
+                return OperationResult.error_result(
+                    f"INVALID_{param.upper()}",
+                    f"{param} must be a non-empty string, got: {value}",
+                    [f"Provide a valid {param} such as 'Robot2'"],
+                )
 
-        # --- Step 1: Orient gripper ---
-        orient_result = orient_gripper_for_handoff_receive(
-            robot_id=robot_id,
-            object_id=object_id,
-            source_robot_id=source_robot_id,
-            request_id=request_id,
-            use_ros=use_ros,
-        )
-        if not orient_result.success:
-            return orient_result
+        # ── 1. Fetch geometry ────────────────────────────────────────────────
+        try:
+            from config.Robot import (
+                DEFAULT_HANDOFF_OBJECT_DIMENSIONS,
+                HANDOFF_GRIPPER_CLEARANCE,
+                ROBOT_BASE_POSITIONS,
+            )
+        except ImportError:
+            DEFAULT_HANDOFF_OBJECT_DIMENSIONS = (0.02, 0.02, 0.02)
+            HANDOFF_GRIPPER_CLEARANCE = 0.02
+            ROBOT_BASE_POSITIONS = {}
 
-        # --- Resolve WorldState data for offset computation ---
+        object_position = None
+        object_dimensions = None
+        receiver_pos = None
+
         try:
             from core.Imports import get_world_state
 
             world_state = get_world_state()
-        except ImportError:
-            return OperationResult.error_result(
-                "WORLDSTATE_UNAVAILABLE",
-                "WorldState not available — cannot compute handoff offset",
-                ["Ensure WorldStateServer is running"],
-            )
+            object_position = world_state.get_object_position(object_id)
+            object_dimensions = world_state.get_object_dimensions(object_id)
+            robot_state = world_state.get_robot_state(robot_id)
+            if robot_state is not None and robot_state.position is not None:
+                receiver_pos = robot_state.position
+        except Exception:
+            pass
 
-        object_position = world_state.get_object_position(object_id)
         if object_position is None:
             return OperationResult.error_result(
-                "OBJECT_NOT_FOUND",
-                f"Object '{object_id}' not in WorldState",
-                ["Run detect_object_stereo first"],
+                "OBJECT_NOT_IN_WORLD_STATE",
+                f"Object '{object_id}' position not found in WorldState",
+                ["Ensure detect_object_stereo was run before receive_handoff"],
             )
 
-        object_dimensions = world_state.get_object_dimensions(object_id)
         if object_dimensions is None:
             object_dimensions = DEFAULT_HANDOFF_OBJECT_DIMENSIONS
             logger.warning(
-                f"receive_handoff: dimensions unknown for '{object_id}', "
+                f"receive_handoff: dimensions for '{object_id}' unavailable, "
                 f"using default {DEFAULT_HANDOFF_OBJECT_DIMENSIONS}"
             )
 
-        # Source robot position (needed for approach vector).
-        source_robot_state = world_state.get_robot_state(source_robot_id)
-        source_robot_pos = None
-        if source_robot_state is not None and source_robot_state.position is not None:
-            source_robot_pos = source_robot_state.position
-        else:
-            try:
-                from config.Robot import ROBOT_BASE_POSITIONS
-                base = ROBOT_BASE_POSITIONS.get(source_robot_id)
-                if base is not None:
-                    source_robot_pos = base
-            except ImportError:
-                pass
-
-        if source_robot_pos is None:
-            return OperationResult.error_result(
-                "SOURCE_ROBOT_UNKNOWN",
-                f"Cannot determine position of source robot '{source_robot_id}'",
-                ["Ensure source robot is in WorldState or ROBOT_BASE_POSITIONS"],
+        if receiver_pos is None:
+            receiver_pos = ROBOT_BASE_POSITIONS.get(robot_id, (0.0, 0.0, 0.0))
+            logger.info(
+                f"receive_handoff: robot state unavailable, using base position {receiver_pos}"
             )
 
-        # --- Step 2: Compute position below the object ---
-        # Robot 2's gripper is pitched upward (90°) so it should approach from
-        # BELOW the object, not from the side.  Position at the object's XZ
-        # centre but offset downward in Y by the object's half-height + clearance.
-        obj_height = object_dimensions[1]  # Y extent
-        below_offset = (obj_height * 0.5) + GRIPPER_CLEARANCE
-
-        target_x = object_position[0]
-        target_y = object_position[1] - below_offset
-        target_z = object_position[2]
-
+        # ── 2. Compute approach position ─────────────────────────────────────
+        # Robot1 holds object sideways, long axis along Y, bottom face toward Robot2.
+        # ap_x: ee_link stops so fingertips land at the near face —
+        #   near_face + GRASP_TCP_OFFSET (finger reach) + clearance.
+        # ap_y: object centre — Robot1 grips from top, Robot2 approaches from side at same height.
+        obj_x = object_dimensions[0]
+        approach_sign = 1.0 if receiver_pos[0] > object_position[0] else -1.0
+        near_face_x = object_position[0] + approach_sign * obj_x * 0.5
+        ap_x = near_face_x + approach_sign * HANDOFF_GRIPPER_CLEARANCE
+        ap_y = object_position[1]
+        ap_z = object_position[2]
         logger.info(
-            f"receive_handoff: {robot_id} moving below object to "
-            f"({target_x:.3f}, {target_y:.3f}, {target_z:.3f}) "
-            f"[object_y={object_position[1]:.3f}, below_offset={below_offset:.3f}]"
+            f"receive_handoff: approach_position=({ap_x:.3f}, {ap_y:.3f}, {ap_z:.3f})"
         )
+
+        # ── 3. Static orientation ─────────────────────────────────────────────
+        # Unity applies yaw relative to robot base (baseRotation * Euler(pitch,yaw,roll)).
+        # Robot2 base is already 180° — yaw=0 in local frame points toward -X (handoff).
+        # Mirrors Robot1's pitch=0,yaw=0,roll=0 lock exactly.
+        static_yaw_deg = 0.0
+        logger.info("receive_handoff: using robot-local yaw=0° (base rotation handles world facing)")
 
         from .MoveOperations import move_to_coordinate
 
-        move_result = move_to_coordinate(
-            robot_id=robot_id,
-            x=target_x,
-            y=target_y,
-            z=target_z,
-            request_id=request_id,
-            use_ros=use_ros,
-        )
-        if not move_result.success:
-            return move_result
+        # ── 4–6. Move to final approach position with orientation ─────────────
+        # Mirrors the top-down grasp pattern: single plan_and_execute with both
+        # position AND orientation so OMPL finds a solution in the correct wrist
+        # configuration from the start — no separate orient step, no Cartesian
+        # complexity. pitch=0,yaw=0,roll=0 in Robot2's base_link = identity {w:1},
+        # which points the gripper toward -X (handoff side) because Robot2's
+        # base is already rotated 180° in Unity world space.
+        _use_ros_approach = use_ros
+        if _use_ros_approach is None:
+            try:
+                from config.ROS import DEFAULT_CONTROL_MODE, ROS_ENABLED
 
-        # --- Step 3: Close gripper ---
+                _use_ros_approach = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
+            except ImportError:
+                _use_ros_approach = False
+
+        # Side-approach orientation: roll=90° around ROS X-axis so fingers are
+        # horizontal. q = (sin45, 0, 0, cos45). Single plan_and_execute with
+        # position+orientation so OMPL finds one consistent IK solution — same
+        # pattern as top-down grasp, no separate orient step needed.
+        import math as _math
+        _half = _math.radians(90.0) / 2.0
+        handoff_orientation = {
+            "x": _math.sin(_half),
+            "y": 0.0,
+            "z": 0.0,
+            "w": _math.cos(_half),
+        }
+
+        if _use_ros_approach:
+            from ros2.ROSBridge import ROSBridge
+
+            bridge = ROSBridge.get_instance()
+            approach_result = bridge.plan_and_execute(
+                position={"x": ap_x, "y": ap_y, "z": ap_z},
+                orientation=handoff_orientation,
+                robot_id=robot_id,
+                max_velocity_scaling=0.4,
+                max_acceleration_scaling=0.3,
+                constrain_joint6=True,
+            )
+            approach_success = approach_result and approach_result.get("success")
+            approach_error = (approach_result or {}).get("error", "No response from ROS bridge")
+        else:
+            _move = move_to_coordinate(
+                robot_id=robot_id,
+                x=ap_x,
+                y=ap_y,
+                z=ap_z,
+                request_id=request_id,
+                use_ros=False,
+            )
+            approach_success = _move.success
+            approach_error = _move.error
+
+        if not approach_success:
+            return OperationResult.error_result(
+                "MOVE_FAILED",
+                f"receive_handoff: approach failed — {approach_error}",
+                ["Check for workspace collision", "Verify approach_position is reachable"],
+            )
+
+        # ── 7. Close gripper ──────────────────────────────────────────────────
         from .GripperOperations import control_gripper
 
-        close_result = control_gripper(
+        gripper_result = control_gripper(
             robot_id=robot_id,
             open_gripper=False,
-            object_id=object_id,
             request_id=request_id,
-            use_ros=use_ros,
         )
-
-        if close_result.success:
-            logger.info(
-                f"receive_handoff: {robot_id} successfully received '{object_id}' "
-                f"from {source_robot_id}"
+        if not gripper_result.success:
+            return OperationResult.error_result(
+                "GRIPPER_FAILED",
+                f"receive_handoff: gripper close failed — {gripper_result.error}",
+                ["Check gripper state", "Verify object is within gripper reach"],
             )
-        return close_result
+
+        # ── 8. Signal source robot to release immediately ─────────────────────
+        if release_signal:
+            try:
+                from .SyncOperations import EventBus
+
+                EventBus().signal(release_signal)
+                logger.info(
+                    f"receive_handoff: emitted release signal '{release_signal}'"
+                )
+            except Exception as e:
+                logger.warning(f"receive_handoff: failed to emit release signal — {e}")
+
+        return OperationResult.success_result(
+            {
+                "robot_id": robot_id,
+                "object_id": object_id,
+                "approach_position": {"x": ap_x, "y": ap_y, "z": ap_z},
+                "orientation": {"pitch": 0.0, "yaw": static_yaw_deg, "roll": 0.0},
+                "status": "handoff_received",
+            }
+        )
 
     except Exception as e:
         logger.exception(f"Exception in receive_handoff: {e}")
@@ -2628,38 +2296,37 @@ def receive_handoff(
         )
 
 
-# ============================================================================
-# Operation Definition for Registry — Receive Handoff
-# ============================================================================
-
-
 RECEIVE_HANDOFF_OPERATION = BasicOperation(
     operation_id="coordination_receive_handoff_001",
     name="receive_handoff",
     category=OperationCategory.COORDINATION,
     complexity=OperationComplexity.COMPLEX,
     description=(
-        "Receive an object from another robot: orient gripper upward, "
-        "move to the opposite end of the object, and close gripper"
+        "Full receive side of a handoff: orient gripper toward object, move to approach "
+        "position, and close gripper. Approach geometry computed autonomously from WorldState."
     ),
     long_description="""
-        Single operation for the receiving side of a handoff.  Internally
-        performs three steps:
+        High-level operation that handles the complete receive side of a robot-to-robot
+        handoff.  Equivalent to grasp_object for the receiving robot.
 
-        1. Orient gripper upward (pitch=90°) with jaw aligned to the handoff
-           axis (same computation as grasp_object_for_handoff).
-        2. Move to the opposite end of the object from the source robot's
-           grasp point, offset by half_extent + 2 cm clearance.
-        3. Close gripper.
+        Autonomously derives approach position (object centre ± half-width + clearance)
+        and gripper yaw (robot-base → object vector) from WorldState.  No hardcoded
+        coordinates required.
 
-        This deliberately bypasses Unity's ExecuteHandoffGrasp path (which
-        positions the gripper at the exact object centre, causing collision)
-        by using move_to_coordinate + control_gripper instead of grasp_object.
+        Internal sequence:
+          1. Fetch object position + dimensions from WorldState.
+          2. Compute approach position offset toward receiver.
+          3. Compute yaw from _yaw_toward_object(); pitch=0 (horizontal approach).
+          4. adjust_end_effector_orientation(pitch=0, yaw=yaw_deg, roll=0).
+          5. move_to_coordinate(approach_position).
+          6. control_gripper(open_gripper=False).
+
+        Must be called AFTER the source robot has signalled readiness (r1_at_handoff)
+        and AFTER detect_object_stereo so WorldState has current object geometry.
     """,
     usage_examples=[
-        "Robot2 receives red_cube from Robot1: "
-        "receive_handoff(robot_id='Robot2', object_id='red_cube', "
-        "source_robot_id='Robot1')",
+        "Robot2 receives red cube from Robot1: "
+        "receive_handoff(robot_id='Robot2', object_id='red_cube', source_robot_id='Robot1')",
     ],
     parameters=[
         OperationParameter(
@@ -2681,64 +2348,51 @@ RECEIVE_HANDOFF_OPERATION = BasicOperation(
             required=True,
         ),
         OperationParameter(
-            name="request_id",
-            type="int",
-            description="Optional request tracking ID",
+            name="release_signal",
+            type="str",
+            description="Event name to emit immediately after gripper close so source robot can release in parallel (optional)",
             required=False,
-            default=0,
         ),
     ],
     preconditions=[
         "robot_is_initialized(robot_id)",
     ],
-    postconditions=[],
-    average_duration_ms=300.0,
-    success_rate=0.85,
+    postconditions=["gripper_closed(robot_id)", "robot_at_approach_position(robot_id)"],
+    average_duration_ms=6000.0,
+    success_rate=0.90,
     failure_modes=[
-        "Object not in WorldState",
-        "Source robot position unknown",
-        "IK infeasible for offset position",
-        "Gripper close failed",
+        "Object not in WorldState (run detect_object_stereo first)",
+        "Approach position unreachable (workspace collision)",
+        "Gripper close fails (object not in reach)",
     ],
     relationships=OperationRelationship(
         operation_id="coordination_receive_handoff_001",
-        required_operations=[
-            "coordination_grasp_object_for_handoff_001",
-            "perception_stereo_detect_001",
-        ],
+        required_operations=["manipulation_grasp_object_001"],
         required_reasons={
-            "coordination_grasp_object_for_handoff_001": (
-                "Source robot must have grasped the object before receiving robot "
-                "can approach for handoff"
-            ),
-            "perception_stereo_detect_001": (
-                "Object must be re-detected at its current (moved) position"
+            "manipulation_grasp_object_001": (
+                "Source robot must hold the object so WorldState has current geometry"
             ),
         },
         commonly_paired_with=[
             "sync_wait_for_signal_001",
-            "manipulation_control_gripper_001",
+            "perception_detect_object_stereo_001",
+            "manipulation_release_object_001",
         ],
         pairing_reasons={
             "sync_wait_for_signal_001": "Wait for source robot signal before receiving",
-            "manipulation_control_gripper_001": "Source robot releases after receive completes",
+            "perception_detect_object_stereo_001": "Re-detect object position at presentation point",
+            "manipulation_release_object_001": "Source robot releases after receive_handoff succeeds",
         },
-        typical_after=["sync_wait_for_signal_001", "perception_stereo_detect_001"],
-        typical_before=["manipulation_control_gripper_001"],
+        typical_after=[
+            "sync_wait_for_signal_001",
+            "perception_detect_object_stereo_001",
+        ],
+        typical_before=["manipulation_release_object_001"],
         coordination_requirements={
             "requires_peer_robot": True,
             "peer_robot_param": "source_robot_id",
             "coordination_pattern": "handoff",
         },
-        parameter_flows=[
-            ParameterFlow(
-                source_operation="detect_object_stereo",
-                source_output_key="color",
-                target_operation="coordination_receive_handoff_001",
-                target_input_param="object_id",
-                description="Object color/ID from stereo detection auto-injected as object_id",
-            ),
-        ],
     ),
     implementation=receive_handoff,
 )
@@ -2773,8 +2427,8 @@ GRASP_OBJECT_OPERATION = BasicOperation(
         - Including safe retreat motions after grasping
     """,
     usage_examples=[
-        "Grasp object with automatic approach selection: grasp_object(robot_id='Robot1', object_id='Cube_01')",
-        "Grasp from specific direction: grasp_object(robot_id='Robot1', object_id='Cube_01', preferred_approach='top')",
+        "Grasp object top-down (default): grasp_object(robot_id='Robot1', object_id='Cube_01')",
+        "Grasp from specific direction: grasp_object(robot_id='Robot1', object_id='Cube_01', preferred_approach='side')",
         "Grasp with custom distances: grasp_object(robot_id='Robot1', object_id='Cube_01', pre_grasp_distance=0.12, retreat_distance=0.15)",
         "Grasp without retreat: grasp_object(robot_id='Robot1', object_id='Cube_01', enable_retreat=False)",
         "Grasp with custom approach vector: grasp_object(robot_id='Robot1', object_id='Cube_01', custom_approach_vector=[0, 1, 0.5])",
@@ -2802,9 +2456,9 @@ GRASP_OBJECT_OPERATION = BasicOperation(
         OperationParameter(
             name="preferred_approach",
             type="str",
-            description="Preferred grasp approach: 'auto', 'top', 'front', 'side'",
+            description="Preferred grasp approach: 'top' (default, top-down), 'front', 'side', 'auto'",
             required=False,
-            default="auto",
+            default="top",
             valid_values=["auto", "top", "front", "side"],
         ),
         OperationParameter(

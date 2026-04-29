@@ -94,7 +94,7 @@ class ROSBridge:
             self._socket.settimeout(timeout)
             self._socket.connect((self._host, self._port))
             self._connected = True
-            logger.info(f"Connected to ROS bridge at {self._host}:{self._port}")
+            logger.debug(f"Connected to ROS bridge at {self._host}:{self._port}")
 
             # Verify connection with ping
             result = self._send_command({"command": "ping"})
@@ -210,6 +210,7 @@ class ROSBridge:
         max_velocity_scaling=0.0,
         max_acceleration_scaling=0.0,
         coordinate_space="unity_world",
+        constrain_joint6=False,
     ):
         """
         Plan and execute a motion to target pose for a specific robot.
@@ -227,6 +228,10 @@ class ROSBridge:
                 (LLM-generated, move_to_coordinate). "unity_world" if position is in Unity
                 world space and needs the world→base_link transform applied (grasp planner,
                 detection-derived positions). Default: "unity_world".
+            constrain_joint6: When True, adds a ±30° path constraint on joint_6 around its
+                current position to prevent link-6 free-spin. Only set for pre-grasp hover
+                moves. Never set for descent/grasp moves where joint_6 must reach target
+                orientation.
 
         Returns:
             Dict with success status and details.
@@ -244,6 +249,8 @@ class ROSBridge:
             cmd["max_velocity_scaling"] = max_velocity_scaling
         if max_acceleration_scaling > 0.0:
             cmd["max_acceleration_scaling"] = max_acceleration_scaling
+        if constrain_joint6:
+            cmd["constrain_joint6"] = True
 
         return self._send_command(cmd, timeout=self._execution_timeout)
 
@@ -254,6 +261,7 @@ class ROSBridge:
         robot_id="Robot1",
         max_velocity_scaling=0.3,
         max_acceleration_scaling=0.3,
+        lock_orientation=True,
     ):
         """
         Plan and execute a straight-line Cartesian descent to a target position.
@@ -282,6 +290,51 @@ class ROSBridge:
             "position": position,
             "max_velocity_scaling": max_velocity_scaling,
             "max_acceleration_scaling": max_acceleration_scaling,
+            "lock_orientation": lock_orientation,
+        }
+        if orientation is not None:
+            cmd["orientation"] = orientation
+
+        return self._send_command(cmd, timeout=self._execution_timeout)
+
+    def plan_cartesian_move(
+        self,
+        position,
+        orientation=None,
+        robot_id="Robot1",
+        max_velocity_scaling=0.3,
+        max_acceleration_scaling=0.3,
+        lock_orientation=True,
+        avoid_collisions=True,
+    ):
+        """Plan and execute a straight-line Cartesian move to a target position.
+
+        Direction-agnostic alias for plan_cartesian_descent. Use whenever the
+        end-effector must translate in a straight line without wrist rotation
+        (e.g. handoff slide-in along X, grasp descent along Z).
+
+        Args:
+            position: Dict with x, y, z in Unity world coordinates.
+            orientation: Dict with x, y, z, w quaternion (optional).
+            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
+            max_velocity_scaling: Velocity scaling factor (default 0.3).
+            max_acceleration_scaling: Acceleration scaling factor (default 0.3).
+            lock_orientation: Keep orientation fixed during move (default True).
+            avoid_collisions: Enable MoveIt collision checking (default True).
+                Set False when the path intentionally passes near a cooperative
+                robot (e.g. handoff slide-in toward Robot1).
+
+        Returns:
+            Dict with success status and details.
+        """
+        cmd = {
+            "command": "plan_cartesian_move",
+            "robot_id": robot_id,
+            "position": position,
+            "max_velocity_scaling": max_velocity_scaling,
+            "max_acceleration_scaling": max_acceleration_scaling,
+            "lock_orientation": lock_orientation,
+            "avoid_collisions": avoid_collisions,
         }
         if orientation is not None:
             cmd["orientation"] = orientation
@@ -314,6 +367,19 @@ class ROSBridge:
             cmd["orientation"] = orientation
 
         return self._send_command(cmd, timeout=self._execution_timeout)
+
+    def get_ee_pose(self, robot_id="Robot1"):
+        """Get current end-effector Cartesian pose (position + orientation) via FK.
+
+        Returns position and orientation in ROS base_link frame.
+
+        Args:
+            robot_id: Robot namespace (e.g., "Robot1", "Robot2").
+
+        Returns:
+            Dict with success, position {x,y,z}, orientation {x,y,z,w} in base_link.
+        """
+        return self._send_command({"command": "get_ee_pose", "robot_id": robot_id})
 
     def get_current_pose(self, robot_id="Robot1"):
         """
@@ -424,7 +490,9 @@ class ROSBridge:
         }
         return self._send_command(cmd, timeout=planning_time + 10)
 
-    def plan_return_to_start(self, robot_id="Robot1", planning_time=5.0, target_joint_angles=None):
+    def plan_return_to_start(
+        self, robot_id="Robot1", planning_time=5.0, target_joint_angles=None
+    ):
         """
         Plan and execute a return to the robot's start/home configuration.
 

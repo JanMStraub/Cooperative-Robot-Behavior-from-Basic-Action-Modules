@@ -72,7 +72,7 @@ namespace PythonCommunication
                 Instance = this;
                 DontDestroyOnLoad(gameObject);
                 base.Awake(); // Call base to capture main thread context
-                _serverPort = CommunicationConstants.SEQUENCE_SERVER_PORT; // Port 5013
+                _serverPort = CommunicationConstants.SEQUENCE_SERVER_PORT; // Port 5008
                 Debug.Log($"{LogPrefix} Initialized (port {_serverPort})");
             }
             else

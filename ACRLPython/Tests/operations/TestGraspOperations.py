@@ -56,9 +56,10 @@ class TestGraspObjectOperation:
     @pytest.fixture
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
-        with patch(
-            "operations.GraspOperations._get_command_broadcaster"
-        ) as mock, patch("config.ROS.ROS_ENABLED", False):
+        with (
+            patch("operations.GraspOperations._get_command_broadcaster") as mock,
+            patch("config.ROS.ROS_ENABLED", False),
+        ):
             broadcaster = MagicMock()
             mock.return_value = broadcaster
             yield broadcaster
@@ -312,7 +313,7 @@ class TestGraspObjectOperationDefinition:
         params = {p.name: p for p in GRASP_OBJECT_OPERATION.parameters}
 
         assert params["use_advanced_planning"].default is True
-        assert params["preferred_approach"].default == "auto"
+        assert params["preferred_approach"].default == "top"
         assert params["pre_grasp_distance"].default == 0.0
         assert params["enable_retreat"].default is True
         assert params["retreat_distance"].default == 0.0
@@ -348,9 +349,9 @@ class TestGraspObjectOperationDefinition:
         """Test operation has examples."""
         assert len(GRASP_OBJECT_OPERATION.usage_examples) >= 3
 
-        # Check for basic example
+        # Check for basic example (top-down default)
         assert any(
-            "automatic approach" in ex.lower()
+            "top-down" in ex.lower() or "default" in ex.lower()
             for ex in GRASP_OBJECT_OPERATION.usage_examples
         )
 
@@ -386,9 +387,10 @@ class TestGraspObjectIntegration:
 
     def test_grasp_object_with_all_parameters(self, mock_world_state):
         """Test grasp operation with all parameters specified."""
-        with patch(
-            "operations.GraspOperations._get_command_broadcaster"
-        ) as mock_bc, patch("config.ROS.ROS_ENABLED", False):
+        with (
+            patch("operations.GraspOperations._get_command_broadcaster") as mock_bc,
+            patch("config.ROS.ROS_ENABLED", False),
+        ):
             broadcaster = MagicMock()
             broadcaster.send_command.return_value = True
             mock_bc.return_value = broadcaster
@@ -429,9 +431,10 @@ class TestGraspTrajectoryValidation:
     @pytest.fixture
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
-        with patch(
-            "operations.GraspOperations._get_command_broadcaster"
-        ) as mock, patch("config.ROS.ROS_ENABLED", False):
+        with (
+            patch("operations.GraspOperations._get_command_broadcaster") as mock,
+            patch("config.ROS.ROS_ENABLED", False),
+        ):
             broadcaster = MagicMock()
             mock.return_value = broadcaster
             yield broadcaster
@@ -519,9 +522,10 @@ class TestGraspForceEstimation:
     @pytest.fixture
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
-        with patch(
-            "operations.GraspOperations._get_command_broadcaster"
-        ) as mock, patch("config.ROS.ROS_ENABLED", False):
+        with (
+            patch("operations.GraspOperations._get_command_broadcaster") as mock,
+            patch("config.ROS.ROS_ENABLED", False),
+        ):
             broadcaster = MagicMock()
             mock.return_value = broadcaster
             yield broadcaster
@@ -553,9 +557,10 @@ class TestGraspFailureRecovery:
     @pytest.fixture
     def mock_broadcaster(self):
         """Mock CommandBroadcaster for testing."""
-        with patch(
-            "operations.GraspOperations._get_command_broadcaster"
-        ) as mock, patch("config.ROS.ROS_ENABLED", False):
+        with (
+            patch("operations.GraspOperations._get_command_broadcaster") as mock,
+            patch("config.ROS.ROS_ENABLED", False),
+        ):
             broadcaster = MagicMock()
             mock.return_value = broadcaster
             yield broadcaster
@@ -570,3 +575,49 @@ class TestGraspFailureRecovery:
         assert result["result"]["command_sent"] is True
         # Note: Multi-criteria verification (contact + force + closure) performed by
         # Unity's VerifyGraspSuccess() method as documented in RobotControlRedesign.md
+
+
+class TestComputeHandoffApproachVector:
+    """Tests for _compute_handoff_approach_vector helper."""
+
+    def test_approach_vector_along_x_axis(self):
+        """When the object is wider on X, approach vector should be along X."""
+        from operations.GraspOperations import _compute_handoff_approach_vector
+
+        # Object at origin, wider on X (0.10) than Z (0.05).
+        # Receiving robot is at positive X → approach goes negative X (far end).
+        result = _compute_handoff_approach_vector(
+            object_position=(0.0, 0.03, 0.0),
+            object_dimensions=(0.10, 0.05, 0.05),
+            receiving_robot_position=(0.3, 0.4, 0.0),
+        )
+        assert result[0] == -1.0, "Should approach from -X (away from receiver at +X)"
+        assert result[1] == 0.0
+        assert result[2] == 0.0
+
+    def test_approach_vector_along_z_axis(self):
+        """When the object is longer on Z, approach vector should be along Z."""
+        from operations.GraspOperations import _compute_handoff_approach_vector
+
+        result = _compute_handoff_approach_vector(
+            object_position=(0.0, 0.03, 0.0),
+            object_dimensions=(0.04, 0.04, 0.10),
+            receiving_robot_position=(0.0, 0.4, 0.3),
+        )
+        assert result[0] == 0.0
+        assert result[2] == -1.0, "Should approach from -Z (away from receiver at +Z)"
+
+    def test_symmetric_object_uses_receiver_direction(self):
+        """For symmetric (cube) objects, receiver direction still picks an axis."""
+        from operations.GraspOperations import _compute_handoff_approach_vector
+
+        result = _compute_handoff_approach_vector(
+            object_position=(0.0, 0.03, 0.0),
+            object_dimensions=(0.05, 0.05, 0.05),
+            receiving_robot_position=(0.2, 0.4, 0.0),
+        )
+        # X >= Z extent, so X axis is chosen. Receiver is at +X → sign = -1.
+        assert result[0] == -1.0
+        assert result[2] == 0.0
+
+

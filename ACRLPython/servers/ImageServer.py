@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
 """
-ImageServer.py - Unified image receiving server
+ImageServer.py - Stereo image receiving server
 
-Consolidates StreamingServer (port 5005) and StereoDetectionServer (port 5006)
-into a single server with unified storage.
-
-Ports:
-    5005 - Single camera images
-    5006 - Stereo image pairs
+Receives stereo image pairs from Unity on port 5006.
 """
 
 import socket
@@ -17,11 +12,9 @@ from typing import Optional
 import numpy as np
 import cv2
 
-# Import config
 try:
     from config.Servers import (
         DEFAULT_HOST,
-        STREAMING_SERVER_PORT,
         STEREO_DETECTION_PORT,
         MAX_STRING_LENGTH,
         MAX_IMAGE_SIZE,
@@ -31,7 +24,6 @@ try:
 except ImportError:
     from ..config.Servers import (
         DEFAULT_HOST,
-        STREAMING_SERVER_PORT,
         STEREO_DETECTION_PORT,
         MAX_STRING_LENGTH,
         MAX_IMAGE_SIZE,
@@ -39,7 +31,6 @@ except ImportError:
     from ..config.Vision import ENABLE_VISION_STREAMING
     from ..core.LoggingSetup import get_logger
 
-# Import base classes
 try:
     from core.TCPServerBase import TCPServerBase, ServerConfig, ConnectionState
     from core.UnityProtocol import UnityProtocol, MessageType
@@ -47,7 +38,6 @@ except ImportError:
     from ..core.TCPServerBase import TCPServerBase, ServerConfig, ConnectionState
     from ..core.UnityProtocol import UnityProtocol, MessageType
 
-# Import storage singleton from core module (no circular dependency)
 try:
     from .ImageStorageCore import UnifiedImageStorage
 except ImportError:
@@ -56,85 +46,8 @@ except ImportError:
 logger = get_logger(__name__)
 
 
-class SingleImageServer(TCPServerBase):
-    """
-    TCP server for receiving single camera images (port 5005).
-    """
-
-    def __init__(self, config: Optional[ServerConfig] = None):
-        if config is None:
-            config = ServerConfig(host=DEFAULT_HOST, port=STREAMING_SERVER_PORT)
-        super().__init__(config)
-        self._storage = UnifiedImageStorage()
-
-    def handle_client_connection(self, client: socket.socket, address: tuple):
-        """Handle single camera image reception."""
-        logger.info(f"Single camera client connected from {address}")
-        client.settimeout(None)
-
-        try:
-            while self.is_running():
-                self._update_client_state(client, ConnectionState.IDLE)
-
-                # Read Protocol V2 header
-                header = self._recv_exactly(client, UnityProtocol.HEADER_SIZE)
-                if not header:
-                    break
-
-                msg_type = header[0]
-                request_id = struct.unpack(UnityProtocol.INT_FORMAT, header[1:5])[0]
-
-                if msg_type != MessageType.IMAGE:
-                    logger.error(f"Expected IMAGE, got {msg_type}")
-                    break
-
-                # Read camera_id
-                id_len = self._read_int(client)
-                if id_len is None or id_len > MAX_STRING_LENGTH:
-                    break
-                camera_id_bytes = self._recv_exactly(client, id_len)
-                if camera_id_bytes is None:
-                    break
-                camera_id = camera_id_bytes.decode("utf-8")
-
-                # Read prompt
-                prompt_len = self._read_int(client)
-                if prompt_len is None or prompt_len > MAX_STRING_LENGTH:
-                    break
-                if prompt_len > 0:
-                    prompt_bytes = self._recv_exactly(client, prompt_len)
-                    if prompt_bytes is None:
-                        break
-                    prompt = prompt_bytes.decode("utf-8")
-                else:
-                    prompt = ""
-
-                # Read image
-                img_len = self._read_int(client)
-                if img_len is None or img_len > MAX_IMAGE_SIZE:
-                    break
-                img_data = self._recv_exactly(client, img_len)
-                if not img_data:
-                    break
-
-                # Decode and store
-                image = cv2.imdecode(
-                    np.frombuffer(img_data, np.uint8), cv2.IMREAD_COLOR
-                )
-                if image is not None:
-                    self._storage.store_single_image(camera_id, image, prompt)
-                    logger.info(
-                        f"[req={request_id}] Received {camera_id}: {image.shape[1]}x{image.shape[0]}"
-                    )
-
-        except Exception as e:
-            logger.error(f"Error handling client {address}: {e}")
-
-
 class StereoImageServer(TCPServerBase):
-    """
-    TCP server for receiving stereo image pairs (port 5006).
-    """
+    """TCP server for receiving stereo image pairs (port 5006)."""
 
     def __init__(self, config: Optional[ServerConfig] = None):
         if config is None:
@@ -150,7 +63,6 @@ class StereoImageServer(TCPServerBase):
             while self.is_running():
                 self._update_client_state(client, ConnectionState.IDLE)
 
-                # Read Protocol V2 header
                 header = self._recv_exactly(client, UnityProtocol.HEADER_SIZE)
                 if not header:
                     break
@@ -229,7 +141,6 @@ class StereoImageServer(TCPServerBase):
                 except Exception as e:
                     logger.debug(f"No metadata received (legacy client): {e}")
 
-                # Decode images
                 imgL = cv2.imdecode(
                     np.frombuffer(img_L_data, np.uint8), cv2.IMREAD_COLOR
                 )
@@ -253,53 +164,34 @@ class StereoImageServer(TCPServerBase):
 
 
 class ImageServer:
-    """
-    Unified image server that manages both single and stereo image reception.
-
-    Usage:
-        server = ImageServer()
-        server.start()
-
-        # Access images via storage
-        storage = server.get_storage()
-        latest = storage.get_latest_stereo()
-    """
+    """Image server managing stereo image reception (port 5006)."""
 
     def __init__(
         self,
-        single_port: int = STREAMING_SERVER_PORT,
         stereo_port: int = STEREO_DETECTION_PORT,
         host: str = DEFAULT_HOST,
     ):
         """
-        Initialize the unified image server.
-
         Args:
-            single_port: Port for single camera images
             stereo_port: Port for stereo image pairs
             host: Host to bind to
         """
-        self._single_config = ServerConfig(host=host, port=single_port)
         self._stereo_config = ServerConfig(host=host, port=stereo_port)
-
-        self._single_server = SingleImageServer(self._single_config)
         self._stereo_server = StereoImageServer(self._stereo_config)
         self._storage = UnifiedImageStorage()
 
     def start(self):
-        """Start both image servers."""
-        self._single_server.start()
+        """Start the stereo image server."""
         self._stereo_server.start()
 
     def stop(self):
-        """Stop both image servers."""
-        self._single_server.stop()
+        """Stop the stereo image server."""
         self._stereo_server.stop()
         logger.info("ImageServer stopped")
 
     def is_running(self) -> bool:
-        """Check if servers are running."""
-        return self._single_server.is_running() or self._stereo_server.is_running()
+        """Check if the server is running."""
+        return self._stereo_server.is_running()
 
     def get_storage(self) -> UnifiedImageStorage:
         """Get the unified image storage."""
@@ -307,22 +199,20 @@ class ImageServer:
 
 
 def run_image_server_background(
-    single_port: int = STREAMING_SERVER_PORT,
     stereo_port: int = STEREO_DETECTION_PORT,
     host: str = DEFAULT_HOST,
 ) -> ImageServer:
     """
-    Start the ImageServer in background threads.
+    Start the ImageServer in a background thread.
 
     Args:
-        single_port: Port for single camera images
         stereo_port: Port for stereo image pairs
         host: Host to bind to
 
     Returns:
         ImageServer instance
     """
-    server = ImageServer(single_port, stereo_port, host)
+    server = ImageServer(stereo_port, host)
     server.start()
     return server
 
@@ -331,13 +221,12 @@ if __name__ == "__main__":
     import argparse
     import signal
 
-    parser = argparse.ArgumentParser(description="Unified Image Server")
+    parser = argparse.ArgumentParser(description="Stereo Image Server")
     parser.add_argument("--host", default=DEFAULT_HOST)
-    parser.add_argument("--single-port", type=int, default=STREAMING_SERVER_PORT)
     parser.add_argument("--stereo-port", type=int, default=STEREO_DETECTION_PORT)
     args = parser.parse_args()
 
-    server = ImageServer(args.single_port, args.stereo_port, args.host)
+    server = ImageServer(args.stereo_port, args.host)
 
     def signal_handler(sig, frame):
         logger.info("Shutting down...")

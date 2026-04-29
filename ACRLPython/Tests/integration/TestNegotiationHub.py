@@ -31,7 +31,6 @@ from orchestrators.SequenceExecutor import SequenceExecutor
 from core.Imports import get_negotiation_hub
 import config.Negotiation as neg_config
 
-
 # ============================================================================
 # Helpers
 # ============================================================================
@@ -1000,9 +999,9 @@ class TestBugFixes:
         evaluation = agent.evaluate_proposal(
             proposal, "test task", {"robots": {}, "objects": {}}
         )
-        assert evaluation.accept is False, (
-            "A failed LLM call must produce accept=False, not auto-accept"
-        )
+        assert (
+            evaluation.accept is False
+        ), "A failed LLM call must produce accept=False, not auto-accept"
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_evaluate_proposal_json_failure_rejects(self, mock_post):
@@ -1019,9 +1018,9 @@ class TestBugFixes:
         evaluation = agent.evaluate_proposal(
             proposal, "test task", {"robots": {}, "objects": {}}
         )
-        assert evaluation.accept is False, (
-            "Unparseable LLM JSON must produce accept=False, not auto-accept"
-        )
+        assert (
+            evaluation.accept is False
+        ), "Unparseable LLM JSON must produce accept=False, not auto-accept"
 
     # ------------------------------------------------------------------ BUG 2
 
@@ -1032,15 +1031,17 @@ class TestBugFixes:
         # A plan where one command is missing the "operation" field entirely.
         # _normalize_commands() would silently drop it; verifying raw catches it.
         malformed_commands = [
-            {"params": {"robot_id": "Robot1", "x": 0, "y": 0.2, "z": 0}},  # no "operation"
+            {
+                "params": {"robot_id": "Robot1", "x": 0, "y": 0.2, "z": 0}
+            },  # no "operation"
         ]
 
         valid, errors = hub._validate_plan(malformed_commands)
         # The verifier must find the missing field before normalization strips it
         assert not valid, "Plan with missing 'operation' field must fail validation"
-        assert any("operation" in e.lower() or "empty" in e.lower() for e in errors), (
-            f"Expected error about missing 'operation', got: {errors}"
-        )
+        assert any(
+            "operation" in e.lower() or "empty" in e.lower() for e in errors
+        ), f"Expected error about missing 'operation', got: {errors}"
 
     # ------------------------------------------------------------------ BUG 3
 
@@ -1062,7 +1063,9 @@ class TestBugFixes:
         )
         # Round 1 proposal: empty commands → no consensus, triggers round 2
         proposal_empty = _mock_llm_response(
-            json.dumps({"reasoning": "plan", "commands": [], "estimated_duration_s": 5.0})
+            json.dumps(
+                {"reasoning": "plan", "commands": [], "estimated_duration_s": 5.0}
+            )
         )
         # Round 2 analysis responses (2 robots)
         analysis_r2_1 = _mock_llm_response(
@@ -1091,17 +1094,22 @@ class TestBugFixes:
         )
         # Round 2 proposal: also empty (so negotiation ends in FAILED)
         proposal_empty2 = _mock_llm_response(
-            json.dumps({"reasoning": "plan", "commands": [], "estimated_duration_s": 5.0})
+            json.dumps(
+                {"reasoning": "plan", "commands": [], "estimated_duration_s": 5.0}
+            )
         )
 
         # Sequence: R1-analysis×2, R1-proposal, R2-analysis×2, R2-proposal, …
         mock_post.side_effect = [
-            analysis_r, analysis_r,       # round 1 analysis
-            proposal_empty,               # round 1 proposal (empty → continue)
-            analysis_r2_1, analysis_r2_2, # round 2 analysis (re-run)
-            proposal_empty2,              # round 2 proposal
-            analysis_r, analysis_r,       # round 3 analysis (re-run)
-            proposal_empty,               # round 3 proposal
+            analysis_r,
+            analysis_r,  # round 1 analysis
+            proposal_empty,  # round 1 proposal (empty → continue)
+            analysis_r2_1,
+            analysis_r2_2,  # round 2 analysis (re-run)
+            proposal_empty2,  # round 2 proposal
+            analysis_r,
+            analysis_r,  # round 3 analysis (re-run)
+            proposal_empty,  # round 3 proposal
         ]
 
         hub = NegotiationHub()
@@ -1110,9 +1118,9 @@ class TestBugFixes:
         # With 3 rounds, round 1 has 2 analysis calls, rounds 2 and 3 add 2 each → 6 total
         # Plus 3 proposal calls → 9 total.  At minimum we need >4 calls (stale would be 2+3=5).
         call_count = mock_post.call_count
-        assert call_count >= 6, (
-            f"Expected ≥6 LLM calls (analysis re-run each round), got {call_count}"
-        )
+        assert (
+            call_count >= 6
+        ), f"Expected ≥6 LLM calls (analysis re-run each round), got {call_count}"
 
     # ------------------------------------------------------------------ BUG 4
 
@@ -1147,14 +1155,16 @@ class TestBugFixes:
 
         mock_post.assert_called_once()
         call_kwargs = mock_post.call_args
-        payload = call_kwargs[1]["json"] if "json" in call_kwargs[1] else call_kwargs[0][1]
+        payload = (
+            call_kwargs[1]["json"] if "json" in call_kwargs[1] else call_kwargs[0][1]
+        )
         user_msg = next(
             m["content"] for m in payload["messages"] if m["role"] == "user"
         )
         for op in ops:
-            assert op in user_msg, (
-                f"Operation '{op}' must appear in LLM prompt, but was missing"
-            )
+            assert (
+                op in user_msg
+            ), f"Operation '{op}' must appear in LLM prompt, but was missing"
 
     @patch("agents.RobotLLMAgent.requests.post")
     def test_propose_plan_no_operations_logs_warning(self, mock_post, caplog):
@@ -1175,10 +1185,11 @@ class TestBugFixes:
                 available_operations=None,
             )
 
-        assert any("hallucinate" in rec.message.lower() or "available_operations" in rec.message
-                   for rec in caplog.records), (
-            "Missing available_operations must produce a WARNING log"
-        )
+        assert any(
+            "hallucinate" in rec.message.lower()
+            or "available_operations" in rec.message
+            for rec in caplog.records
+        ), "Missing available_operations must produce a WARNING log"
 
     # ------------------------------------------------------------------ BUG 5
 

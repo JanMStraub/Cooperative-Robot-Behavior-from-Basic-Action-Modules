@@ -49,6 +49,22 @@ namespace Core
         /// </summary>
         public const float MOVEMENT_THRESHOLD = 0.01f;
 
+        /// <summary>
+        /// Rotation convergence threshold in degrees.
+        /// IK declares "target reached" once orientation error is below this value.
+        /// Tighter values improve accuracy; looser values reduce convergence time.
+        /// </summary>
+        public const float ROTATION_CONVERGENCE_THRESHOLD_DEG = 3.0f;
+
+        /// <summary>
+        /// Rotation acceptance threshold when stalled (degrees).
+        /// If the robot is settled, position is reached, and orientation error is below
+        /// this value, target is declared reached rather than stalling indefinitely.
+        /// Looser than ROTATION_CONVERGENCE_THRESHOLD_DEG to handle ArticulationBody
+        /// friction preventing full convergence.
+        /// </summary>
+        public const float ROTATION_STALL_ACCEPTANCE_DEG = 8.0f;
+
         // GameObject Naming
         /// <summary>
         /// Suffix for temporary grasp target GameObjects
@@ -153,17 +169,17 @@ namespace Core
         /// <summary>
         /// Sequence server port (multi-command sequence execution) - primary communication port
         /// </summary>
-        public const int SEQUENCE_SERVER_PORT = 5011;
+        public const int SEQUENCE_SERVER_PORT = 5008;
 
         /// <summary>
         /// AutoRT server port (autonomous task generation)
         /// </summary>
-        public const int AUTORT_SERVER_PORT = 5013;
+        public const int AUTORT_SERVER_PORT = 5010;
 
         /// <summary>
         /// World state streaming port (one-way broadcast of robot/object states)
         /// </summary>
-        public const int WORLD_STATE_PORT = 5012;
+        public const int WORLD_STATE_PORT = 5009;
 
         /// <summary>
         /// Maximum JSON message size (10MB)

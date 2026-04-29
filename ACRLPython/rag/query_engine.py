@@ -9,7 +9,7 @@ Semantic search and retrieval over operations.
 from typing import List, Dict, Any, Optional
 
 from .Embeddings import EmbeddingGenerator
-from .VectorStore import VectorStore
+from .vector_store import VectorStore
 
 # Import config
 try:
@@ -65,7 +65,7 @@ class QueryEngine:
             world_state: WorldState instance
         """
         self._world_state = world_state
-        logger.info("WorldState injected into QueryEngine for context-aware search")
+        logger.debug("WorldState injected into QueryEngine for context-aware search")
 
     def search(
         self,

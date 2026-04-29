@@ -19,7 +19,13 @@ from typing import Dict, Any, List, Optional
 
 import requests
 
-from config.Servers import LMSTUDIO_BASE_URL, DEFAULT_LMSTUDIO_MODEL, LLM_THINKING_BUDGET, LLM_THINKING_ENABLED, SYSTEM_PROMPT_BASE
+from config.Servers import (
+    LMSTUDIO_BASE_URL,
+    DEFAULT_LMSTUDIO_MODEL,
+    LLM_THINKING_BUDGET,
+    LLM_THINKING_ENABLED,
+    SYSTEM_PROMPT_BASE,
+)
 from core.LLMUtils import extract_json as _extract_json_util
 from config.Negotiation import (
     AGENT_LLM_TIMEOUT,
@@ -259,7 +265,9 @@ Output only valid JSON."""
         # Build operations section for the prompt
         if available_operations:
             ops_str = "\n".join(f"  - {op}" for op in available_operations)
-            ops_section = f"\nAvailable operations (use ONLY these exact names):\n{ops_str}\n"
+            ops_section = (
+                f"\nAvailable operations (use ONLY these exact names):\n{ops_str}\n"
+            )
         else:
             logger.warning(
                 f"[{self.robot_id}] propose_plan called without available_operations; "
@@ -363,9 +371,8 @@ Output only valid JSON."""
 {context}
 
 IMPORTANT operation semantics — do NOT raise concerns about missing coordinates for these:
-- orient_gripper_for_handoff_receive(robot_id, object_id, source_robot_id): computes gripper orientation from WorldState automatically. No coordinate params needed or expected.
-- receive_handoff(robot_id, object_id, source_robot_id): computes target position from WorldState automatically. No coordinate params needed or expected.
-- grasp_object_for_handoff(robot_id, object_id, receiving_robot_id): same — positions computed internally.
+- receive_handoff(robot_id, object_id, source_robot_id): full atomic receive — orients gripper, moves to approach position, closes gripper. All geometry computed from WorldState automatically. No coordinate params needed.
+- grasp_object(robot_id, object_id): positions computed internally — no coordinate params needed.
 Only flag missing coordinates for operations like move_to_coordinate that explicitly require them.
 
 Task: "{task}"
@@ -522,7 +529,16 @@ NOTE: Objects in the shared zone are reachable by both robots. Set can_contribut
                 ],
                 "temperature": self.temperature,
                 "max_tokens": 8192,  # Must cover thinking budget + actual JSON response
-                **({"thinking": {"type": "enabled", "budget_tokens": LLM_THINKING_BUDGET}} if LLM_THINKING_ENABLED else {}),
+                **(
+                    {
+                        "thinking": {
+                            "type": "enabled",
+                            "budget_tokens": LLM_THINKING_BUDGET,
+                        }
+                    }
+                    if LLM_THINKING_ENABLED
+                    else {}
+                ),
             }
             # Structured output forces the model to emit valid JSON directly,
             # eliminating prose wrapping and Markdown fences.  Kept as opt-in

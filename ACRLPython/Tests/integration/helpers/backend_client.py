@@ -4,7 +4,7 @@ Backend Client Helper
 =====================
 
 Shared Protocol V2 TCP client for integration tests that communicate with
-the live ACRL Python backend over the SequenceServer (port 5011).
+the live ACRL Python backend over the SequenceServer (port 5008).
 
 This module is the single source of truth for the BackendClient class.
 Both TestUnityIntegration.py and TestAllOperations.py import from here to
@@ -29,10 +29,10 @@ import socket
 import struct
 from typing import Any, Dict
 
-
 # ---------------------------------------------------------------------------
 # Port availability helpers
 # ---------------------------------------------------------------------------
+
 
 def port_open(port: int, timeout: float = 2.0) -> bool:
     """
@@ -57,26 +57,27 @@ def port_open(port: int, timeout: float = 2.0) -> bool:
 
 def backend_available() -> bool:
     """
-    Return True when both the CommandServer (5007) and SequenceServer (5011)
+    Return True when both the CommandServer (5007) and SequenceServer (5008)
     are reachable.
 
     We probe port 5007 as a proxy for Unity being connected — that port is
-    only active once Unity has registered with the backend.  Port 5011 is
+    only active once Unity has registered with the backend.  Port 5008 is
     the SequenceServer that tests actually send commands to.
 
     Returns:
         True if both ports are reachable, False otherwise.
     """
-    return port_open(5007) and port_open(5011)
+    return port_open(5007) and port_open(5008)
 
 
 # ---------------------------------------------------------------------------
 # Protocol V2 client
 # ---------------------------------------------------------------------------
 
+
 class BackendClient:
     """
-    Minimal Protocol V2 TCP client that talks to the SequenceServer (port 5011).
+    Minimal Protocol V2 TCP client that talks to the SequenceServer (port 5008).
 
     The SequenceServer receives natural-language or structured commands,
     executes them through the full operations pipeline
@@ -95,7 +96,7 @@ class BackendClient:
 
     SEQUENCE_QUERY: int = 0x08
     RESULT: int = 0x02
-    PORT: int = 5011
+    PORT: int = 5008
 
     def __init__(self, timeout: float = 30.0) -> None:
         """
@@ -203,8 +204,8 @@ class BackendClient:
             auto_execute: Execution flag.
             request_id: Protocol V2 correlation ID.
         """
-        header = struct.pack("B", self.SEQUENCE_QUERY)   # type byte
-        header += struct.pack("<I", request_id)           # request_id (4 bytes LE)
+        header = struct.pack("B", self.SEQUENCE_QUERY)  # type byte
+        header += struct.pack("<I", request_id)  # request_id (4 bytes LE)
         body = (
             self._encode_str(command)
             + self._encode_str(robot_id)

@@ -75,12 +75,8 @@ def validate_config(config_dict: Optional[Dict[str, Any]] = None) -> Dict[str, l
     # Port Validations
     # ========================================================================
     port_configs = [
-        "STREAMING_SERVER_PORT",
         "STEREO_DETECTION_PORT",
         "COMMAND_SERVER_PORT",
-        "DEPTH_RESULTS_PORT",
-        "RAG_SERVER_PORT",
-        "STATUS_SERVER_PORT",
         "SEQUENCE_SERVER_PORT",
     ]
 
@@ -173,6 +169,6 @@ def validate_config(config_dict: Optional[Dict[str, Any]] = None) -> Dict[str, l
             logger.warning(f"  - {warning}")
 
     if not errors and not warnings_list:
-        logger.info("✓ Configuration validation passed")
+        logger.info("Configuration validation passed")
 
     return {"errors": errors, "warnings": warnings_list}

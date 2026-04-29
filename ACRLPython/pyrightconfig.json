@@ -13,6 +13,9 @@
   ],
   "exclude": [
     "ros2/**",
-    "ros_unity_integration/**"
+    "ros_unity_integration/**",
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*"
   ]
 }

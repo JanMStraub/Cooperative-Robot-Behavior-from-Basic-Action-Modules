@@ -16,33 +16,16 @@ All operations are atomic - the LLM chains them to create complex workflows.
 
 import time
 import logging
-from typing import Optional
 
-# Import from centralized lazy import system
-try:
-    from ..core.Imports import get_command_broadcaster as _get_command_broadcaster
-except ImportError:
-    from core.Imports import get_command_broadcaster as _get_command_broadcaster
-
-# Handle both direct execution and package import
-try:
-    from .Base import (
-        BasicOperation,
-        OperationCategory,
-        OperationComplexity,
-        OperationParameter,
-        OperationResult,
-        OperationRelationship,
-    )
-except ImportError:
-    from operations.Base import (
-        BasicOperation,
-        OperationCategory,
-        OperationComplexity,
-        OperationParameter,
-        OperationResult,
-        OperationRelationship,
-    )
+from ._imports import get_command_broadcaster as _get_command_broadcaster
+from .Base import (
+    BasicOperation,
+    OperationCategory,
+    OperationComplexity,
+    OperationParameter,
+    OperationResult,
+    OperationRelationship,
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -215,29 +198,29 @@ def mirror_movement_of_other_robot(
     target_robot_id: str,
     mirror_axis: str = "x",
     scale_factor: float = 1.0,
+    duration_ms: int = 10000,
     request_id: int = 0,
-    use_ros: Optional[bool] = None,
 ) -> OperationResult:
     """
     Mirror the movement of another robot.
 
-    This operation commands a robot to mirror (copy/reflect) the movements
-    of another robot, useful for synchronized tasks or demonstration.
+    Activates Unity's mirroring coroutine on the specified robot for the given duration.
+    Unity executes the tracking loop internally; this function parametrises duration.
 
     Args:
         robot_id: ID of the mirroring robot
         target_robot_id: ID of the robot to mirror
         mirror_axis: Axis to mirror across ("x", "y", "z", or "none" for direct copy)
         scale_factor: Scale factor for mirrored movement (1.0 = same size)
+        duration_ms: Duration in milliseconds to run the mirroring loop (default: 10000ms)
         request_id: Optional request ID for tracking
-        use_ros: Whether to use ROS for motion planning (None = auto-detect from config)
 
     Returns:
         OperationResult with mirroring activation confirmation
 
     Example:
-        >>> # Robot2 mirrors Robot1's movements across X axis
-        >>> result = mirror_movement_of_other_robot("Robot2", "Robot1", "x")
+        >>> # Robot2 mirrors Robot1's movements across X axis for 5 seconds
+        >>> result = mirror_movement_of_other_robot("Robot2", "Robot1", "x", duration_ms=5000)
 
         >>> # Robot2 copies Robot1's movements exactly
         >>> result = mirror_movement_of_other_robot("Robot2", "Robot1", "none")
@@ -272,29 +255,20 @@ def mirror_movement_of_other_robot(
             return OperationResult.error_result(
                 "INVALID_SCALE_FACTOR",
                 f"scale_factor magnitude must be in range [0.1, 2.0], got: {scale_factor}",
-                ["Use scale between 0.1 (10%) and 2.0 (200%), negative values invert direction"],
+                [
+                    "Use scale between 0.1 (10%) and 2.0 (200%), negative values invert direction"
+                ],
             )
 
-        # Determine whether to use ROS or TCP path
-        _use_ros = use_ros
-        if _use_ros is None:
-            try:
-                from config.ROS import ROS_ENABLED, DEFAULT_CONTROL_MODE
-
-                _use_ros = ROS_ENABLED and DEFAULT_CONTROL_MODE in ("ros", "hybrid")
-            except ImportError:
-                _use_ros = False
-
-        # Note: Mirror movement is a continuous tracking operation
-        # ROS support would require real-time trajectory tracking via ROS topics
-        # For now, this is best handled by Unity directly (TCP path)
-        if _use_ros:
-            logger.info(
-                "Mirror movement via ROS not yet implemented - using Unity direct control"
+        # Validate duration
+        if not (1000 <= duration_ms <= 60000):
+            return OperationResult.error_result(
+                "INVALID_DURATION",
+                f"duration_ms must be in range [1000, 60000], got: {duration_ms}",
+                ["Use duration between 1000ms (1s) and 60000ms (60s)"],
             )
-            _use_ros = False
 
-        # Construct command (TCP path)
+        # Construct command — Unity executes the mirroring coroutine for duration_ms
         command = {
             "command_type": "mirror_movement",
             "robot_id": robot_id,
@@ -302,13 +276,14 @@ def mirror_movement_of_other_robot(
                 "target_robot_id": target_robot_id,
                 "mirror_axis": mirror_axis,
                 "scale_factor": scale_factor,
+                "duration_ms": duration_ms,
             },
             "timestamp": time.time(),
             "request_id": request_id,
         }
 
         logger.info(
-            f"Sending mirror_movement command: {robot_id} mirrors {target_robot_id}"
+            f"Sending mirror_movement command: {robot_id} mirrors {target_robot_id} for {duration_ms}ms"
         )
 
         success = _get_command_broadcaster().send_command(command, request_id)
@@ -328,6 +303,7 @@ def mirror_movement_of_other_robot(
                 "target_robot_id": target_robot_id,
                 "mirror_axis": mirror_axis,
                 "scale_factor": scale_factor,
+                "duration_ms": duration_ms,
                 "status": "mirroring_active",
                 "timestamp": time.time(),
             }
@@ -439,16 +415,18 @@ def create_mirror_movement_operation() -> BasicOperation:
         name="mirror_movement_of_other_robot",
         category=OperationCategory.NAVIGATION,
         complexity=OperationComplexity.COMPLEX,
-        description="Mirror the movements of another robot",
+        description="Mirror the movements of another robot for a configurable duration",
         long_description="""
-            This operation enables one robot to mirror (copy/reflect) the
-            movements of another robot in real-time.
+            Activates Unity's mirroring coroutine: one robot copies/reflects the
+            movements of another in real-time for the specified duration.
 
-            Useful for synchronized tasks, demonstration, or coordinated
-            manipulation where movements should be symmetric.
+            Unity executes the tracking loop internally. Use duration_ms to control
+            how long the mirroring runs (default 10s). Useful for synchronized tasks,
+            demonstration, or coordinated bimanual manipulation.
         """,
         usage_examples=[
-            "mirror_movement_of_other_robot('Robot2', 'Robot1', 'x')",
+            "mirror_movement_of_other_robot('Robot2', 'Robot1', 'x', duration_ms=10000)",
+            "mirror_movement_of_other_robot('Robot2', 'Robot1', 'none', duration_ms=5000)",
             "Synchronized bimanual manipulation with mirrored movements",
         ],
         parameters=[
@@ -478,11 +456,19 @@ def create_mirror_movement_operation() -> BasicOperation:
                 required=False,
                 default=1.0,
             ),
+            OperationParameter(
+                name="duration_ms",
+                type="int",
+                description="Duration to run mirroring in milliseconds (1000-60000)",
+                required=False,
+                default=10000,
+                valid_range=(1000, 60000),
+            ),
         ],
         preconditions=["robot_is_initialized(robot_id)"],
         postconditions=[],
-        average_duration_ms=50,  # Activation time
-        success_rate=0.89,
+        average_duration_ms=10000,
+        success_rate=0.92,
         failure_modes=["Workspace collision", "Robot limits exceeded"],
         relationships=OperationRelationship(
             operation_id="coordination_mirror_movement_002",

@@ -767,11 +767,16 @@ def gripper_holding_object(robot_id: str, world_state=None) -> Tuple[bool, str]:
     if state.gripper_state == "closed":
         return True, ""
 
-    return False, f"Robot '{robot_id}' gripper is '{state.gripper_state}', expected 'closed'"
+    return (
+        False,
+        f"Robot '{robot_id}' gripper is '{state.gripper_state}', expected 'closed'",
+    )
 
 
 @register_predicate("stereo_images_available")
-def stereo_images_available(max_age_seconds: float = 30.0, world_state=None) -> Tuple[bool, str]:
+def stereo_images_available(
+    max_age_seconds: float = 30.0, world_state=None
+) -> Tuple[bool, str]:
     """
     Check if a recent stereo image pair is available in UnifiedImageStorage.
 
@@ -801,11 +806,18 @@ def stereo_images_available(max_age_seconds: float = 30.0, world_state=None) -> 
         return False, "No stereo images in storage"
 
     # Guard against None, 0 or negative values (e.g. from LLM or missing params).
-    effective_max_age = max_age_seconds if (max_age_seconds is not None and max_age_seconds > 0) else 30.0
+    effective_max_age = (
+        max_age_seconds
+        if (max_age_seconds is not None and max_age_seconds > 0)
+        else 30.0
+    )
 
     age = time.time() - latest_ts
     if age > effective_max_age:
-        return False, f"Stereo images are stale ({age:.1f}s old, max {effective_max_age}s)"
+        return (
+            False,
+            f"Stereo images are stale ({age:.1f}s old, max {effective_max_age}s)",
+        )
 
     return True, ""
 

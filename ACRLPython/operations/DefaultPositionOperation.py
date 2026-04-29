@@ -158,9 +158,7 @@ def return_to_start_position(
                 "timestamp": time.time(),
                 "request_id": request_id,
             }
-            logger.info(
-                f"Sending return_to_start_position command to {robot_id}"
-            )
+            logger.info(f"Sending return_to_start_position command to {robot_id}")
             success = _get_command_broadcaster().send_command(command, request_id)
             if not success:
                 return OperationResult.error_result(
@@ -168,7 +166,7 @@ def return_to_start_position(
                     "Failed to send command to Unity - no clients connected",
                     [
                         "Ensure Unity is running with UnifiedPythonReceiver active",
-                        "Verify CommandServer is running (port 5010)",
+                        "Verify CommandServer is running (port 5007)",
                         "Check Unity console for connection errors",
                     ],
                 )

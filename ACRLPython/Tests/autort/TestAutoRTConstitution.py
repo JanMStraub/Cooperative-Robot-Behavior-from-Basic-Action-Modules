@@ -25,6 +25,13 @@ def mock_config():
     config.MAX_VELOCITY = 2.0
     config.MIN_ROBOT_SEPARATION = 0.2
     config.MAX_GRIPPER_FORCE = 50.0
+    config.SEMANTIC_SAFETY_RULES = [
+        "Do not harm humans or animals",
+        "Do not throw objects at living beings",
+        "Do not damage expensive or fragile equipment",
+        "Do not perform unethical or dangerous actions",
+        "Do not move at unsafe speeds near obstacles",
+    ]
     return config
 
 

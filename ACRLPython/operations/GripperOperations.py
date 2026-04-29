@@ -30,12 +30,7 @@ setup_logging(__name__)
 logger = logging.getLogger(__name__)
 
 
-# Import from centralized lazy import system (prevents circular dependencies)
-try:
-    from ..core.Imports import get_command_broadcaster as _get_command_broadcaster
-except ImportError:
-    from core.Imports import get_command_broadcaster as _get_command_broadcaster
-
+from ._imports import get_command_broadcaster as _get_command_broadcaster
 
 # ============================================================================
 # Implementation: Control Gripper Operation
@@ -122,7 +117,9 @@ def control_gripper(
                     {"gripper_state": "open" if open_gripper else "closed"},
                 )
             except Exception as _exc:
-                logger.debug(f"Could not update gripper WorldState for {robot_id}: {_exc}")
+                logger.debug(
+                    f"Could not update gripper WorldState for {robot_id}: {_exc}"
+                )
 
         def _ros_path():
             from ros2.ROSBridge import ROSBridge
@@ -164,7 +161,7 @@ def control_gripper(
                     "Failed to send command to Unity - no clients connected",
                     [
                         "Ensure Unity is running with UnifiedPythonReceiver active",
-                        "Verify CommandServer is running (port 5010)",
+                        "Verify CommandServer is running (port 5007)",
                         "Check Unity console for connection errors",
                         "Restart backend: python -m orchestrators.RunRobotController",
                     ],
@@ -374,7 +371,7 @@ def release_object(
                     "Failed to send command to Unity - no clients connected",
                     [
                         "Ensure Unity is running with UnifiedPythonReceiver active",
-                        "Verify CommandServer is running (port 5010)",
+                        "Verify CommandServer is running (port 5007)",
                     ],
                 )
             logger.info(f"Successfully sent release_object command to {robot_id}")
@@ -541,8 +538,14 @@ def place_object(
                 robot_id=robot_id,
             )
             if not hover_result or not hover_result.get("success"):
-                err = hover_result.get("error", "Unknown") if hover_result else "No response"
-                logger.warning(f"place_object: hover move failed ({err}), attempting direct descent")
+                err = (
+                    hover_result.get("error", "Unknown")
+                    if hover_result
+                    else "No response"
+                )
+                logger.warning(
+                    f"place_object: hover move failed ({err}), attempting direct descent"
+                )
 
             # Brief settle pause so /joint_states reflects the hover pose before
             # MoveIt samples the start state for the descent plan.
@@ -559,8 +562,14 @@ def place_object(
                 robot_id=robot_id,
             )
             if not descent_result or not descent_result.get("success"):
-                err = descent_result.get("error", "Unknown") if descent_result else "No response"
-                logger.warning(f"place_object: descent failed ({err}), releasing at current height")
+                err = (
+                    descent_result.get("error", "Unknown")
+                    if descent_result
+                    else "No response"
+                )
+                logger.warning(
+                    f"place_object: descent failed ({err}), releasing at current height"
+                )
 
             # Step 3: Open gripper and wait long enough for Unity to fully process
             # the detach before the ascent trajectory is published.  The gripper
@@ -598,7 +607,9 @@ def place_object(
                 "timestamp": time.time(),
                 "request_id": request_id,
             }
-            logger.info(f"Sending place_object command to {robot_id} at ({x}, {y}, {z})")
+            logger.info(
+                f"Sending place_object command to {robot_id} at ({x}, {y}, {z})"
+            )
             success = _get_command_broadcaster().send_command(command, request_id)
             if not success:
                 return OperationResult.error_result(
@@ -606,7 +617,7 @@ def place_object(
                     "Failed to send command to Unity - no clients connected",
                     [
                         "Ensure Unity is running with UnifiedPythonReceiver active",
-                        "Verify CommandServer is running (port 5010)",
+                        "Verify CommandServer is running (port 5007)",
                     ],
                 )
             return OperationResult.success_result(

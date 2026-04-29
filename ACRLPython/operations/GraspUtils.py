@@ -13,7 +13,7 @@ Currently contains:
 """
 
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     import numpy as np
@@ -26,6 +26,8 @@ def _build_segmentation_mask(
     image_height: int,
     fov: float,
     preferred_approach: str,
+    depth_hint: "Optional[float]" = None,
+    depth_margin: float = 0.07,
 ) -> "np.ndarray":
     """Project 3D camera-frame points to 2D and build a boolean mask from a YOLO bbox.
 
@@ -43,6 +45,11 @@ def _build_segmentation_mask(
     to the lateral halves of the object (left/right).  When it is "top" only
     the top third of the bounding box is kept.
 
+    When ``depth_hint`` is provided, an additional depth-range filter keeps
+    only points within ``[depth_hint - depth_margin, depth_hint + depth_margin]``
+    metres.  This removes background and table-surface points that project into
+    the object's 2D footprint but lie at a different depth, reducing TSDF noise.
+
     Args:
         points_camera:   (N, 3) float32 array in right-handed camera frame.
         yolo_bbox:       (x, y, w, h) pixel bounding box from detect_objects().
@@ -50,6 +57,14 @@ def _build_segmentation_mask(
         image_height:    Height of the stereo image in pixels.
         fov:             Horizontal field-of-view in degrees.
         preferred_approach: "auto", "top", "front", or "side".
+        depth_hint:      Optional expected camera-frame depth in metres
+                         (positive = in front of camera, equal to ``-Z`` in the
+                         Q-matrix frame).  Derived from WorldState object position
+                         converted to camera frame.  ``None`` disables depth
+                         filtering and preserves prior behaviour.
+        depth_margin:    Half-width of the depth acceptance window in metres.
+                         Default 0.07 m (±7 cm) covers a 5 cm cube with ±2 cm
+                         WorldState position uncertainty.
 
     Returns:
         Boolean ndarray of shape (N,) — True for points to include.
@@ -92,6 +107,54 @@ def _build_segmentation_mask(
     x0, y0 = float(bx), float(by)
     x1, y1 = x0 + float(bw), y0 + float(bh)
     mask = valid_z & (u >= x0) & (u <= x1) & (v >= y0) & (v <= y1)
+
+    # Optional depth-range filter: remove background/table points that project
+    # into the object's 2D bbox but lie at a different depth.  `depth` = -Z
+    # (positive for points in front of camera) is already computed above.
+    # Safety: if the depth filter would leave fewer points than the 2D-only
+    # mask, fall back to 2D-only and widen the margin using the actual bbox
+    # depth median, so stereo reconstruction errors don't hard-abort the pipeline.
+    if depth_hint is not None:
+        import logging as _logging
+
+        _log = _logging.getLogger(__name__)
+        _n_2d = int(np.count_nonzero(mask))
+        if _n_2d > 0:
+            _bbox_depths = depth[mask]
+            _depth_median = float(np.median(_bbox_depths))
+            _log.info(
+                f"[mask] bbox 2D points: {_n_2d}, "
+                f"depth range=[{_bbox_depths.min():.3f}, {_bbox_depths.max():.3f}] m, "
+                f"median={_depth_median:.3f} m | "
+                f"hint={depth_hint:.3f} ± {depth_margin:.3f} m"
+            )
+            # If the actual median depth differs from the hint by more than the
+            # margin, the WorldState hint is stale or the stereo is off — use the
+            # actual median as the filter centre instead.
+            _effective_hint = depth_hint
+            if abs(_depth_median - depth_hint) > depth_margin:
+                _log.warning(
+                    f"[mask] depth_hint {depth_hint:.3f} m differs from bbox median "
+                    f"{_depth_median:.3f} m by {abs(_depth_median - depth_hint):.3f} m "
+                    f"(> margin {depth_margin:.3f} m) — using bbox median as filter centre"
+                )
+                _effective_hint = _depth_median
+            depth_mask = (
+                mask
+                & (depth >= _effective_hint - depth_margin)
+                & (depth <= _effective_hint + depth_margin)
+            )
+            _n_depth = int(np.count_nonzero(depth_mask))
+            if _n_depth >= max(10, _n_2d // 4):
+                # Depth filter kept at least 25% of 2D points — apply it.
+                mask = depth_mask
+                _log.info(f"[mask] depth filter applied: {_n_2d} → {_n_depth} points")
+            else:
+                # Too aggressive — skip depth filter entirely to avoid starvation.
+                _log.warning(
+                    f"[mask] depth filter would leave only {_n_depth}/{_n_2d} points "
+                    f"— skipping depth filter"
+                )
 
     approach = preferred_approach.lower()
     if approach == "side":

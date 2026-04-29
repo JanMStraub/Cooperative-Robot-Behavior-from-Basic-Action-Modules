@@ -137,7 +137,7 @@ class SharedVisionState:
         self.claim_timeout = claim_timeout
         self.conflict_strategy = CONFLICT_RESOLUTION_STRATEGY
 
-        logger.info(
+        logger.debug(
             f"SharedVisionState initialized: timeout={claim_timeout}s, "
             f"strategy={self.conflict_strategy}"
         )

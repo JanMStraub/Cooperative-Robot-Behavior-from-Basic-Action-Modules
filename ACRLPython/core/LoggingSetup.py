@@ -146,9 +146,6 @@ def enable_file_logging() -> None:
         root_logger.addHandler(file_handler)
 
         root_logger.info(f"File logging enabled: {log_file_path}")
-        root_logger.info(
-            f"Log retention: {LOG_FILE_BACKUP_COUNT} most recent runs kept"
-        )
 
     except Exception as e:
         root_logger = logging.getLogger()

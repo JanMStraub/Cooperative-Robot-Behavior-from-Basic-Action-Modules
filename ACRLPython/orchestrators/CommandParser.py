@@ -35,8 +35,10 @@ try:
         LLM_THINKING_BUDGET,
         LLM_THINKING_ENABLED,
         SYSTEM_PROMPT_BASE,
+        USE_MOTION_LAYER,
     )
     from ..config.Negotiation import USE_STRUCTURED_OUTPUT
+    from ..config.Robot import HANDOFF_PRESENTATION_POSITION
     from ..operations.WorkflowPatterns import WorkflowPatternRegistry, WorkflowPattern
 except ImportError:
     from rag import RAGSystem
@@ -48,8 +50,10 @@ except ImportError:
         LLM_THINKING_BUDGET,
         LLM_THINKING_ENABLED,
         SYSTEM_PROMPT_BASE,
+        USE_MOTION_LAYER,
     )
     from config.Negotiation import USE_STRUCTURED_OUTPUT
+    from config.Robot import HANDOFF_PRESENTATION_POSITION
     from operations.WorkflowPatterns import WorkflowPatternRegistry, WorkflowPattern
 
 # Configure logging
@@ -58,6 +62,9 @@ from core.LLMUtils import extract_json as _extract_json_util
 
 setup_logging(__name__)
 logger = logging.getLogger(__name__)
+
+_HPP = HANDOFF_PRESENTATION_POSITION
+_HANDOFF_X, _HANDOFF_Y, _HANDOFF_Z = _HPP[0], _HPP[1], _HPP[2]
 
 
 class _PromptBuilder:
@@ -85,6 +92,7 @@ class _PromptBuilder:
         robot_id: str,
         anti_pattern_section: str = "",
         spatial_section: str = "",
+        hint: str = "",
     ) -> str:
         """
         Build the full LLM parsing prompt.
@@ -94,6 +102,7 @@ class _PromptBuilder:
             robot_id: Default robot ID for the command.
             anti_pattern_section: Formatted anti-pattern warning block (may be empty).
             spatial_section: Formatted knowledge-graph spatial context (may be empty).
+            hint: Reflexion hint injected when retrying after a failure (may be empty).
 
         Returns:
             Complete prompt string ready to send to the LLM.
@@ -103,6 +112,9 @@ class _PromptBuilder:
             f"\n        {anti_pattern_section}\n" if anti_pattern_section else ""
         )
         spatial_block = f"\n        {spatial_section}\n" if spatial_section else ""
+        reflection_block = (
+            f"\n        === REFLECTION ===\n        {hint}\n" if hint else ""
+        )
 
         return f"""You are a robot coordinator planning tasks for multiple robots.
 
@@ -127,30 +139,37 @@ class _PromptBuilder:
 
         Example for multi-robot handoff:
         {{
-        "reasoning": "Robot1 detects and grasps the red cube using grasp_object_for_handoff (far end). It moves to the shared zone and signals Robot2. Robot2 waits, re-detects the cube at its new position, then calls receive_handoff which orients the gripper upward and approaches from below. Robot1 releases after Robot2 has the object.",
+        "reasoning": "Robot1 detects and grasps, returns to start for a deterministic joint config, then moves to the fixed handoff position and signals. Robot2 waits, re-detects, then calls receive_handoff which autonomously orients, moves to approach, and closes the gripper. Robot1 releases after.",
         "plan": [
             {{"parallel_group": 1, "robot": "Robot1", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "capture_var": "target"}},
-            {{"parallel_group": 2, "robot": "Robot1", "operation": "grasp_object_for_handoff", "params": {{"robot_id": "Robot1", "object_id": "$target.color", "receiving_robot_id": "Robot2"}}}},
-            {{"parallel_group": 3, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": 0.0, "y": 0.3, "z": 0.07}}}},
-            {{"parallel_group": 4, "robot": "Robot1", "operation": "signal", "params": {{"event_name": "r1_at_handoff"}}}},
-            {{"parallel_group": 4, "robot": "Robot2", "operation": "wait_for_signal", "params": {{"event_name": "r1_at_handoff"}}}},
-            {{"parallel_group": 5, "robot": "Robot2", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot2", "color": "red"}}, "capture_var": "handoff_target"}},
-            {{"parallel_group": 6, "robot": "Robot2", "operation": "receive_handoff", "params": {{"robot_id": "Robot2", "object_id": "$handoff_target.color", "source_robot_id": "Robot1"}}}},
-            {{"parallel_group": 7, "robot": "Robot1", "operation": "release_object", "params": {{"robot_id": "Robot1"}}}}
+            {{"parallel_group": 2, "robot": "Robot1", "operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "$target.color"}}}},
+            {{"parallel_group": 3, "robot": "Robot1", "operation": "return_to_start_position", "params": {{"robot_id": "Robot1"}}}},
+            {{"parallel_group": 4, "robot": "Robot1", "operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": {_HANDOFF_X:.2f}, "y": {_HANDOFF_Y:.2f}, "z": {_HANDOFF_Z:.2f}}}}},
+            {{"parallel_group": 5, "robot": "Robot1", "operation": "adjust_end_effector_orientation", "params": {{"robot_id": "Robot1", "pitch": 0.0, "yaw": 0.0, "roll": 0.0}}}},
+            {{"parallel_group": 6, "robot": "Robot1", "operation": "signal", "params": {{"event_name": "r1_at_handoff"}}}},
+            {{"parallel_group": 6, "robot": "Robot2", "operation": "wait_for_signal", "params": {{"event_name": "r1_at_handoff"}}}},
+            {{"parallel_group": 7, "robot": "Robot2", "operation": "detect_object_stereo", "params": {{"robot_id": "Robot2", "color": "red"}}, "capture_var": "handoff_target"}},
+            {{"parallel_group": 8, "robot": "Robot2", "operation": "receive_handoff", "params": {{"robot_id": "Robot2", "object_id": "$handoff_target.color", "source_robot_id": "Robot1"}}}},
+            {{"parallel_group": 9, "robot": "Robot1", "operation": "release_object", "params": {{"robot_id": "Robot1"}}}}
         ]
         }}
 
         === HANDOFF RULE ===
 
-        For robot-to-robot handoffs:
-        1. Robot1 grasps with grasp_object_for_handoff, moves to the shared zone (x=0.0, y=0.3, z=0.07), then signals.
-        2. Robot2 waits for the signal, then re-detects the object (it has MOVED with Robot1 to the shared zone).
-        3. Robot2 calls receive_handoff — this orients the gripper upward and approaches from below the object.
-        4. Robot1 releases only after Robot2's receive_handoff completes.
+        For robot-to-robot handoffs use these exact explicit steps — no composite operations:
+        1. Robot1: grasp_object
+        2. Robot1: return_to_start_position (gives deterministic IK starting config)
+        3. Robot1: move_to_coordinate to ({_HANDOFF_X:.2f}, {_HANDOFF_Y:.2f}, {_HANDOFF_Z:.2f}) — always these exact coordinates
+        4. Robot1: adjust_end_effector_orientation(pitch=0, yaw=0, roll=0) — locks wrist, prevents joint 5/6 variance across runs
+        5. Robot1: signal. Robot2: wait_for_signal (same event name, same parallel_group).
+        6. Robot2: detect_object_stereo (object has MOVED with Robot1 — must re-detect)
+        7. Robot2: receive_handoff(robot_id, object_id, source_robot_id) — autonomously orients, moves to approach, closes gripper
+        8. Robot1: release_object
 
-        NEVER use grasp_object for the receiving robot during a handoff — it causes gripper collision.
-        NEVER hardcode Robot2's grasp position — the cube moves with Robot1 and its position changes.
-        receive_handoff automatically orients the gripper upward and approaches from below.
+        NEVER use grasp_object for the receiving robot — causes gripper collision.
+        NEVER use orient_gripper_for_handoff_receive — it was removed; use receive_handoff instead.
+        NEVER move Robot1 to any position other than ({_HANDOFF_X:.2f}, {_HANDOFF_Y:.2f}, {_HANDOFF_Z:.2f}).
+        NEVER skip step 4 — wrist orientation is non-deterministic without it.
 
         === SYNCHRONIZATION PRIMITIVES ===
 
@@ -171,11 +190,11 @@ class _PromptBuilder:
         - With a known object name: {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "blue_cube"}}}}
         - After detect_object_stereo with capture_var "target": {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "$target.color"}}}}
         - The object_id field in grasp_object ALWAYS uses ".color" from the detection result — NEVER ".id", ".name", or any other field
+        - NEVER use grasp_object with a $field variable — detect_field returns coordinates (center.x/y/z), NOT an object; $field has NO ".color" property
+        - NEVER emit grasp_object when the task says "place", "deposit", or "move to … and place" — the robot already holds the object; use place_object directly
         - Only use control_gripper directly for explicit open/close commands unrelated to picking
-        - ALWAYS use grasp_object_for_handoff (NOT grasp_object) when a multi-robot handoff is planned
-        - grasp_object_for_handoff grasps the far end of the object (away from the receiving robot), leaving the near end clear so both grippers never collide
-        - grasp_object_for_handoff REQUIRES both object_id AND receiving_robot_id — if either is omitted the operation will fail immediately
-        - NEVER use grasp_object_for_handoff for single-robot pick-and-place tasks
+        - Use grasp_object for both single-robot and multi-robot handoff source grasps
+        - NEVER use grasp_object for the receiving robot during a handoff — use receive_handoff instead
 
         === PLACE RULE (CRITICAL) ===
 
@@ -214,7 +233,7 @@ class _PromptBuilder:
         {{"operation": "detect_field", "params": {{"robot_id": "Robot1", "field_label": "G"}}, "capture_var": "field"}}
         {{"operation": "place_object", "params": {{"robot_id": "Robot1", "x": "$field.x", "y": "$field.y", "z": "$field.z"}}}}
         Note: detect_field stores center coordinates directly under the capture variable — use "$field.x" NOT "$field.center.x"
-{spatial_block}{anti_pattern_block}Output only valid JSON, no explanation, no comments."""
+{spatial_block}{anti_pattern_block}{reflection_block}Output only valid JSON, no explanation, no comments."""
 
     def get_available_operations_summary(self, command_text: str = "") -> str:
         """
@@ -400,9 +419,7 @@ class CommandParser:
                 self.rag = RAGSystem()
                 # Provide control over index rebuilding to speed up startups
                 self.rag.index_operations(rebuild=False)
-                logger.info(
-                    "RAG system initialized for command parsing (using existing index if present)"
-                )
+                logger.info("RAG system initialized for command parsing")
             except Exception as e:
                 logger.warning(f"Failed to initialize RAG: {e}. Using registry only.")
 
@@ -412,7 +429,11 @@ class CommandParser:
         )
 
     def parse(
-        self, command_text: str, robot_id: str = "Robot1", use_llm: bool = True
+        self,
+        command_text: str,
+        robot_id: str = "Robot1",
+        use_llm: bool = True,
+        use_motion_layer: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
         Parse a compound command into a sequence of operations.
@@ -421,6 +442,8 @@ class CommandParser:
             command_text: Natural language command (e.g., "move to (0.3, 0.2, 0.1) and close gripper")
             robot_id: Default robot ID to use for operations
             use_llm: Whether to use LLM parsing (falls back to regex if False or LLM unavailable)
+            use_motion_layer: Enable RT-H style two-stage parsing (Stage 1: motion decomposition,
+                Stage 2: op mapping). Defaults to the USE_MOTION_LAYER config value.
 
         Returns:
             Dict with structure:
@@ -436,9 +459,21 @@ class CommandParser:
         if not command_text or not command_text.strip():
             return {"success": False, "commands": [], "error": "Empty command text"}
 
+        motion_layer = (
+            USE_MOTION_LAYER if use_motion_layer is None else use_motion_layer
+        )
+
+        # Perception-only commands have no physical motions — motion layer Stage 1
+        # would hallucinate a move plan and corrupt Stage 2 intent. Bypass it.
+        if motion_layer and self._is_perception_only_command(command_text):
+            motion_layer = False
+
         # Try LLM parsing first
         if use_llm:
-            result = self._parse_with_llm(command_text, robot_id)
+            if motion_layer:
+                result = self._parse_with_motion_layer(command_text, robot_id)
+            else:
+                result = self._parse_with_llm(command_text, robot_id)
             if result["success"]:
                 return result
             logger.warning(
@@ -451,6 +486,194 @@ class CommandParser:
             return regex_result
 
         return regex_result
+
+    def parse_with_hint(
+        self,
+        command_text: str,
+        robot_id: str = "Robot1",
+        hint: str = "",
+        use_motion_layer: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """
+        Re-parse a command with a Reflexion hint injected into the prompt.
+
+        Called by SequenceExecutor when retrying a failed command. The hint
+        typically contains the previous error message and recovery suggestions
+        so the LLM can correct its parameter choices.
+
+        When use_motion_layer is True (or USE_MOTION_LAYER config is True), Stage 1
+        motion decomposition runs first and the resulting motion strings are prepended
+        to the command before the hinted Stage 2 parse — keeping Reflexion retries
+        consistent with the main parse() path.
+
+        Args:
+            command_text: Original natural language command.
+            robot_id: Default robot for the command.
+            hint: Reflexion context string (error + suggestions).
+            use_motion_layer: Enable RT-H two-stage decomposition on retry.
+                Defaults to the USE_MOTION_LAYER config value.
+
+        Returns:
+            Same structure as parse().
+        """
+        motion_layer = USE_MOTION_LAYER if use_motion_layer is None else use_motion_layer
+
+        # Stage 1: decompose to motions if enabled (same as main parse() path)
+        effective_command = command_text
+        if motion_layer:
+            motions = self._decompose_to_motions(command_text, robot_id)
+            if motions:
+                motion_context = "\n".join(
+                    f"  {i + 1}. {m}" for i, m in enumerate(motions)
+                )
+                effective_command = (
+                    f"{command_text}\n\n"
+                    f"Motion plan (use as chain-of-thought guidance):\n{motion_context}"
+                )
+                logger.info(
+                    f"Reflexion retry: motion layer Stage 1 produced {len(motions)} steps"
+                )
+
+        spatial_section = self._get_spatial_context(robot_id)
+        prompt = self._prompt_builder.build(
+            effective_command,
+            robot_id,
+            spatial_section=spatial_section,
+            hint=hint,
+        )
+        try:
+            result = self._do_llm_request(prompt, command_text)
+            if not result.get("success"):
+                return {"success": False, "commands": [], "error": result.get("error")}
+            parsed = result["parsed"]
+            if "plan" in parsed and "commands" not in parsed:
+                parsed["commands"] = parsed["plan"]
+            commands = parsed.get("commands", [])
+            validated = self._validate_commands(commands, robot_id)
+            if not validated:
+                return {
+                    "success": False,
+                    "commands": [],
+                    "error": "Reflexion retry produced no valid commands",
+                }
+            return {"success": True, "commands": validated, "error": None}
+        except Exception as e:
+            return {
+                "success": False,
+                "commands": [],
+                "error": f"Reflexion LLM error: {e}",
+            }
+
+    _PERCEPTION_ONLY_PATTERNS = re.compile(
+        r"\b(analyze\s+(the\s+)?scene|describe\s+(the\s+)?(scene|workspace|environment)|"
+        r"what\s+(do\s+you\s+see|objects?\s+are|can\s+you\s+see|'?s\s+on\s+the\s+table)|"
+        r"(scan|inspect|observe|survey|look\s+at)\s+(the\s+)?(scene|workspace)|"
+        r"what\s+is\s+in\s+(the\s+)?scene|"
+        r"detect\s+(object|field|all\s+fields?)|"
+        r"generate\s+point\s+cloud|"
+        r"check\s+(robot\s+)?status|"
+        r"wait\s+\d|"
+        r"wait\s+for\s+(signal|event))\b",
+        re.IGNORECASE,
+    )
+
+    def _is_perception_only_command(self, command_text: str) -> bool:
+        """Return True if the command is purely perceptual with no physical motion intent."""
+        if re.match(r"\s*signal\s+\S", command_text, re.IGNORECASE):
+            return True
+        return bool(self._PERCEPTION_ONLY_PATTERNS.search(command_text))
+
+    def _decompose_to_motions(self, command_text: str, robot_id: str) -> List[str]:
+        """
+        Stage 1 of the RT-H motion layer: decompose a high-level command into
+        an ordered list of natural-language motion strings.
+
+        Each motion string is a brief, concrete physical action (e.g.
+        "approach red cube from above at 0.05 m/s"). These act as chain-of-thought
+        anchors that constrain Stage 2 operation selection.
+
+        Args:
+            command_text: High-level natural language command.
+            robot_id: Default robot for the task.
+
+        Returns:
+            List of motion strings, or empty list on failure.
+        """
+        prompt = (
+            f"You are a motion planner for a robot arm.\n\n"
+            f'High-level command: "{command_text}"\n'
+            f"Default robot: {robot_id}\n\n"
+            "Decompose this command into an ordered list of short, concrete physical "
+            "motion descriptions. Each entry should describe one distinct robot motion "
+            "(e.g. 'approach red cube from above', 'close gripper slowly', 'lift to 0.3m'). "
+            "Output only a JSON array of strings, no explanation.\n"
+            'Example: ["move end-effector above target", "descend to grasp height", "close gripper"]'
+        )
+        try:
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT_BASE},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": DEFAULT_TEMPERATURE,
+                "max_tokens": 512,
+            }
+            response = self._session.post(
+                f"{self.lm_studio_url}/chat/completions",
+                json=payload,
+                timeout=LLM_REQUEST_TIMEOUT,
+            )
+            if response.status_code != 200:
+                logger.warning(
+                    f"Motion decomposition LLM returned {response.status_code}"
+                )
+                return []
+            content = response.json()["choices"][0]["message"]["content"]
+            motions = _extract_json_util(content)
+            if isinstance(motions, list) and all(isinstance(m, str) for m in motions):
+                logger.debug(f"Motion decomposition: {motions}")
+                return motions
+            logger.warning(
+                f"Motion decomposition returned unexpected format: {content[:200]}"
+            )
+            return []
+        except Exception as e:
+            logger.warning(f"Motion decomposition failed: {e}")
+            return []
+
+    def _parse_with_motion_layer(
+        self, command_text: str, robot_id: str
+    ) -> Dict[str, Any]:
+        """
+        Two-stage RT-H style parsing.
+
+        Stage 1: decompose command to motion strings via _decompose_to_motions().
+        Stage 2: use motion strings as chain-of-thought context in _parse_with_llm().
+
+        Falls back to single-stage LLM parsing if Stage 1 produces no motions.
+
+        Args:
+            command_text: High-level natural language command.
+            robot_id: Default robot ID.
+
+        Returns:
+            Same structure as parse().
+        """
+        motions = self._decompose_to_motions(command_text, robot_id)
+        if not motions:
+            logger.info(
+                "Motion decomposition empty, falling back to standard LLM parse"
+            )
+            return self._parse_with_llm(command_text, robot_id)
+
+        motion_context = "\n".join(f"  {i + 1}. {m}" for i, m in enumerate(motions))
+        augmented_command = (
+            f"{command_text}\n\n"
+            f"Motion plan (use as chain-of-thought guidance):\n{motion_context}"
+        )
+        logger.info(f"Motion layer Stage 2 with {len(motions)} motion steps")
+        return self._parse_with_llm(augmented_command, robot_id)
 
     def _parse_with_llm(self, command_text: str, robot_id: str) -> Dict[str, Any]:
         """
@@ -545,7 +768,16 @@ class CommandParser:
                 ],
                 "temperature": DEFAULT_TEMPERATURE,  # Low temperature for deterministic parsing
                 "max_tokens": 8192,  # Must cover thinking budget + actual JSON response
-                **({"thinking": {"type": "enabled", "budget_tokens": LLM_THINKING_BUDGET}} if LLM_THINKING_ENABLED else {}),
+                **(
+                    {
+                        "thinking": {
+                            "type": "enabled",
+                            "budget_tokens": LLM_THINKING_BUDGET,
+                        }
+                    }
+                    if LLM_THINKING_ENABLED
+                    else {}
+                ),
             }
             # Structured output forces the model to emit valid JSON at the inference layer.
             # Set USE_STRUCTURED_OUTPUT=false for models that don't support response_format.
@@ -600,14 +832,18 @@ class CommandParser:
         except Exception as e:
             raise
 
-    def _get_spatial_context(self, robot_id: str) -> str:
+    def _get_spatial_context(self, robot_id: str, target: Optional[tuple] = None) -> str:
         """
         Retrieve formatted spatial context from the Knowledge Graph for the given robot.
 
-        Queries reachable objects and nearby robots to enrich the LLM prompt with live spatial awareness. Returns an empty string if the KG is disabled, unavailable, or raises any exception (graceful degrade).
+        Queries reachable objects, nearby robots, handoff candidates, and path
+        blocking to enrich the LLM prompt with live spatial awareness. Returns an
+        empty string if the KG is disabled, unavailable, or raises any exception
+        (graceful degrade).
 
         Args:
             robot_id: The robot whose spatial context to retrieve.
+            target: Optional (x, y, z) target position for path-blocking check.
 
         Returns:
             A formatted spatial context block string, or empty string if unavailable.
@@ -651,6 +887,31 @@ class CommandParser:
                 lines.append("Nearby robots:")
                 for r in nearby:
                     lines.append(f"  - {r['robot_id']} ({r['distance']:.2f}m)")
+
+            # Handoff candidates for each reachable object × every other robot
+            if reachable:
+                all_robots = qe._graph.get_all_nodes(node_type="robot")
+                other_robots = [r for r in all_robots if r != robot_id]
+                for other in other_robots:
+                    for obj in reachable:
+                        candidates = qe.get_handoff_candidates(
+                            robot_id, other, obj["object_id"]
+                        )
+                        if candidates:
+                            c = candidates[0]
+                            pos = c["position"]
+                            lines.append(
+                                f"Handoff {obj['object_id']} with {other}: "
+                                f"pos=({pos[0]:.2f},{pos[1]:.2f},{pos[2]:.2f}) "
+                                f"r1={c['r1_distance']:.2f}m r2={c['r2_distance']:.2f}m"
+                            )
+
+            # Path blocking check when a target coordinate is known
+            if target is not None:
+                blocked = qe.is_path_blocked(robot_id, target)
+                lines.append(
+                    f"Path to target: {'BLOCKED' if blocked else 'clear'}"
+                )
 
             if len(lines) == 1:
                 return ""  # Only header, no data
@@ -829,7 +1090,16 @@ class CommandParser:
             )
             if detect_color_match:
                 color = detect_color_match.group(1).lower()
-                if color in ["red", "green", "blue", "yellow", "purple", "orange", "cyan", "magenta"]:
+                if color in [
+                    "red",
+                    "green",
+                    "blue",
+                    "yellow",
+                    "purple",
+                    "orange",
+                    "cyan",
+                    "magenta",
+                ]:
                     last_detection_var = "target"
                     commands.append(
                         {
@@ -934,14 +1204,14 @@ class CommandParser:
                 )
                 continue
 
-            # Parse simple object detection (2D pixel coordinates)
+            # Parse simple object detection — route to stereo detection (3D)
             if re.search(
                 r"detect\s+(?:objects?|cubes?)|find\s+(?:objects?|cubes?)|look\s+for|scan\s+for|locate\s+(?:objects?|cubes?)",
                 part,
             ):
                 commands.append(
                     {
-                        "operation": "detect_objects",
+                        "operation": "detect_object_stereo",
                         "params": {"robot_id": robot_id},
                     }
                 )
@@ -1017,32 +1287,6 @@ class CommandParser:
                 )
                 continue
 
-            # Parse move_from_a_to_b (e.g. "move Robot1 from X Y Z to X Y Z")
-            move_ab_match = re.search(
-                r"move\s+(?:\w+\s+)?from\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+to\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)",
-                part,
-            )
-            if move_ab_match:
-                g = move_ab_match.groups()
-                commands.append(
-                    {
-                        "operation": "move_from_a_to_b",
-                        "params": {
-                            "robot_id": robot_id,
-                            "point_a": {
-                                "x": float(g[0]),
-                                "y": float(g[1]),
-                                "z": float(g[2]),
-                            },
-                            "point_b": {
-                                "x": float(g[3]),
-                                "y": float(g[4]),
-                                "z": float(g[5]),
-                            },
-                        },
-                    }
-                )
-                continue
 
         if commands:
             return {"success": True, "commands": commands, "error": None}
@@ -1062,7 +1306,6 @@ class CommandParser:
             "open gripper / release / drop - Open the gripper",
             "check status / get status - Get robot status",
             "return to start / go home / home position - Return to start position",
-            "detect objects / find cubes / scan for - Detect objects (2D)",
             "detect with depth / find 3d positions / detect stereo - Detect objects with 3D positions",
             "Commands can be chained with 'and', 'then', 'after that', or commas",
         ]

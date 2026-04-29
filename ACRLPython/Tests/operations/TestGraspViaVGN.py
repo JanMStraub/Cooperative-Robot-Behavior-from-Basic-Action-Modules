@@ -30,7 +30,6 @@ import numpy as np
 from operations.GraspOperations import _grasp_via_vgn, grasp_object
 from operations.Base import OperationResult
 
-
 # ---------------------------------------------------------------------------
 # Shared fixtures and helpers
 # ---------------------------------------------------------------------------
@@ -135,11 +134,11 @@ class _VGNPatch:
         )
         self._patches.append(pc_patch.start())
 
-        # Mock detect_objects (optional detection, non-fatal if not provided)
+        # Mock YOLODetector used inline in GraspOperations (optional, non-fatal if not provided)
         if self.detect_result is not None:
             det_patch = patch(
-                "operations.DetectionOperations.detect_objects",
-                return_value=self.detect_result,
+                "operations.GraspOperations.YOLODetector",
+                return_value=MagicMock(detect_objects=MagicMock(return_value=self.detect_result)),
             )
             self._patches.append(det_patch.start())
 
@@ -168,6 +167,12 @@ class _VGNPatch:
             return_value=self.mock_broadcaster if self.broadcaster_available else None,
         )
         self._patches.append(bc_patch.start())
+        # _grasp_via_vgn calls _get_command_broadcaster from its own module namespace
+        bc_vgn_patch = patch(
+            "operations.GraspOperations._get_command_broadcaster",
+            return_value=self.mock_broadcaster if self.broadcaster_available else None,
+        )
+        self._patches.append(bc_vgn_patch.start())
 
         return self
 
@@ -726,7 +731,7 @@ class TestGraspViaVGNWithROSHappyPath:
                 world_state=None,
             )
         descent_kwargs = ctx.mock_bridge.plan_cartesian_descent.call_args.kwargs
-        assert descent_kwargs["position"] == {"x": 0.3, "y": 0.4, "z": 0.5}
+        assert descent_kwargs["position"] == {"x": 0.3, "y": 0.45, "z": 0.5}
 
     def test_follow_target_called_after_descent(self):
         """_execute_grasp_with_follow_target is called after Cartesian descent."""

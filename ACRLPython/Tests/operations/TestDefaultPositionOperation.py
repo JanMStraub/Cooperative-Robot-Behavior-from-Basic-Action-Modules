@@ -18,7 +18,6 @@ from operations.DefaultPositionOperation import (
     RETURN_TO_START_POSITION_OPERATION,
 )
 
-
 # ============================================================================
 # Test Class: return_to_start_position - Basic Functionality
 # ============================================================================

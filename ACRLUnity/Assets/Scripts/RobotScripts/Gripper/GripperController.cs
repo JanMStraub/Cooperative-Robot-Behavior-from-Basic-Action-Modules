@@ -57,21 +57,21 @@ namespace Robotics
 
         [Header("Motion Parameters")]
         [Tooltip("Speed of gripper opening/closing in meters per second.")]
-        public float gripSpeed = 0.10f;  // Doubled from 0.05 → halves close time (~280ms → ~140ms)
+        public float gripSpeed = 0.10f; // Doubled from 0.05 → halves close time (~280ms → ~140ms)
 
         [Tooltip(
             "Maximum distance the target can be ahead of the physical finger. Prevents tunneling."
         )]
-        public float maxTargetLead = 0.008f;  // Increased from 0.005 to reduce anti-tunneling clamping
+        public float maxTargetLead = 0.008f; // Increased from 0.005 to reduce anti-tunneling clamping
 
         [Tooltip("Stiffness (P-Gain).")]
-        public float stiffness = 8000f;  // Increased from 5000 for stronger, more positive grip
+        public float stiffness = 8000f; // Increased from 5000 for stronger, more positive grip
 
         [Tooltip("Damping (D-Gain).")]
         public float damping = 500f;
 
         [Tooltip("Force Limit.")]
-        public float maxForce = 300f;  // Increased from 200 to maintain grip under object weight/inertia
+        public float maxForce = 300f; // Increased from 200 to maintain grip under object weight/inertia
 
         [Range(0f, 1f)]
         public float targetPosition = 1f;
@@ -89,9 +89,11 @@ namespace Robotics
         private bool _isHoldingObject = false;
         private GameObject _targetObjectToGrasp;
         private bool _shouldAttachOnClose = false;
+
         // Deferred attachment flag: set in Update() when closing completes, consumed in
         // FixedUpdate() so the AttachObject call runs in sync with the physics engine.
         private bool _attachmentPending = false;
+
         // Deferred detachment flag: set in OpenGrippers(), consumed in FixedUpdate()
         // once the gripper has opened enough to avoid trapping the object between fingers.
         private bool _detachmentPending = false;
@@ -132,7 +134,6 @@ namespace Robotics
             SetupDrive(leftGripper);
             SetupDrive(rightGripper);
 
-            // Initialize from the saved initial target
             _currentPhysicalTarget = initialTarget;
             targetPosition = MapPhysicalToNormalized(initialTarget);
 
@@ -174,7 +175,11 @@ namespace Robotics
             // While the gripper is opening, check if it has opened enough to safely detach
             // the held object. Threshold 0.5 means the gripper is at least half open,
             // ensuring the fingers have cleared the object before re-enabling physics.
-            if (_detachmentPending && targetPosition > 0.5f && MapPhysicalToNormalized(currentRealPosition) > 0.4f)
+            if (
+                _detachmentPending
+                && targetPosition > 0.5f
+                && MapPhysicalToNormalized(currentRealPosition) > 0.4f
+            )
             {
                 _detachmentPending = false;
                 _detachInFixedUpdate = true;
@@ -432,7 +437,6 @@ namespace Robotics
                 return;
             }
 
-            // Check if object is currently held by another gripper (handoff scenario)
             GripperController otherGripper = FindGripperHoldingObject(obj);
             if (otherGripper != null && otherGripper != this)
             {
@@ -449,7 +453,6 @@ namespace Robotics
                 _graspedObjectOriginalParent = obj.transform.parent;
             }
 
-            // Disable physics on the object so it moves with the gripper
             Rigidbody rb = obj.GetComponent<Rigidbody>();
             if (rb != null)
             {
@@ -460,7 +463,6 @@ namespace Robotics
                 rb.useGravity = false; // Disable gravity while held
             }
 
-            // Parent to attachment point
             obj.transform.SetParent(attachmentPoint, worldPositionStays: true);
             _graspedObject = obj;
             _isHoldingObject = true;
@@ -526,7 +528,6 @@ namespace Robotics
                 return;
             }
 
-            // Store current world position and rotation before changing anything
             Vector3 worldPosition = _graspedObject.transform.position;
             Quaternion worldRotation = _graspedObject.transform.rotation;
 
@@ -534,7 +535,6 @@ namespace Robotics
                 $"{_logPrefix} Detaching object '{_graspedObject.name}' at world position {worldPosition}"
             );
 
-            // Get Rigidbody before making changes
             Rigidbody rb = _graspedObject.GetComponent<Rigidbody>();
 
             // CRITICAL: Unparent while still kinematic to avoid physics snap-back
@@ -544,11 +544,8 @@ namespace Robotics
             _graspedObject.transform.position = worldPosition;
             _graspedObject.transform.rotation = worldRotation;
 
-            // If there's a Rigidbody, handle physics carefully
             if (rb != null)
             {
-                // While still kinematic, explicitly set the Rigidbody's position
-                // This ensures the physics engine knows where the object is
                 rb.position = worldPosition;
                 rb.rotation = worldRotation;
 

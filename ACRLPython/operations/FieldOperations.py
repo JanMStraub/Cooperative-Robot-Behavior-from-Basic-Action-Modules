@@ -217,6 +217,25 @@ def detect_field(
         else:
             center_dict = {"x": 0.0, "y": 0.0, "z": 0.0}
 
+        # Persist field position to WorldState as object_type="field" so
+        # confidence decay (keyed on Unity object list) never evicts it.
+        try:
+            from core.Imports import get_world_state
+
+            world_state = get_world_state()
+            ws_key = f"field_{detected_letter.lower()}"
+            pos_tuple = (center_dict["x"], center_dict["y"], center_dict["z"])
+            world_state.update_object_position(
+                object_id=ws_key,
+                position=pos_tuple,
+                color=ws_key,
+                object_type="field",
+                confidence=detection.confidence,
+            )
+            logger.info(f"WorldState updated: key='{ws_key}' at {pos_tuple}")
+        except Exception as e:
+            logger.error(f"Failed to update WorldState after field detection: {e}", exc_info=True)
+
         return OperationResult.success_result(
             {
                 "field_label": detected_letter,
@@ -243,68 +262,6 @@ def detect_field(
                 "Verify YOLO model is loaded correctly",
                 "Ensure stereo images are available",
             ],
-        )
-
-
-# ============================================================================
-# Implementation: get_field_center - Get field center coordinates
-# ============================================================================
-
-
-def get_field_center(
-    robot_id: str,
-    field_label: str,
-    camera_id: str = "stereo",
-    request_id: int = 0,
-) -> OperationResult:
-    """
-    Get the 3D center coordinates of a labeled field.
-
-    This is a convenience wrapper around detect_field that returns just
-    the center coordinates.
-
-    Args:
-        robot_id: Robot identifier (for context)
-        field_label: Field letter (A-I)
-        camera_id: Camera ID for detection (default: "stereo")
-
-    Returns:
-        OperationResult with center coordinates
-
-    Example:
-        >>> result = get_field_center("Robot1", "E")
-        >>> if result.success:
-        ...     center = result.result["center"]
-        ...     print(f"Field E center: {center}")
-    """
-    try:
-        # Use detect_field to get full detection
-        detection_result = detect_field(
-            robot_id, field_label, camera_id, request_id=request_id
-        )
-
-        if not detection_result.success:
-            return detection_result  # Forward error
-
-        # Extract center coordinates
-        center = (
-            detection_result.result.get("center") if detection_result.result else None
-        )
-
-        return OperationResult.success_result(
-            {
-                "field_label": field_label.upper(),
-                "center": center,
-                "timestamp": time.time(),
-            }
-        )
-
-    except Exception as e:
-        logger.error(f"Error in get_field_center: {e}", exc_info=True)
-        return OperationResult.error_result(
-            "OPERATION_ERROR",
-            f"Failed to get field center: {str(e)}",
-            ["Check logs for details"],
         )
 
 
@@ -383,7 +340,9 @@ def detect_all_fields(
         stereo_params = camera_config_from_metadata(stereo_metadata)
 
         # Run YOLO detection with all field classes (field_a-field_i)
-        field_classes = [f"field_{chr(ord('a') + i)}" for i in range(9)]  # field_a-field_i
+        field_classes = [
+            f"field_{chr(ord('a') + i)}" for i in range(9)
+        ]  # field_a-field_i
 
         try:
             from config.Vision import YOLO_MODEL_PATH
@@ -577,68 +536,6 @@ def create_detect_field_operation() -> BasicOperation:
     )
 
 
-def create_get_field_center_operation() -> BasicOperation:
-    """Create the BasicOperation definition for get_field_center."""
-    return BasicOperation(
-        operation_id="perception_get_field_center_005",
-        name="get_field_center",
-        category=OperationCategory.PERCEPTION,
-        complexity=OperationComplexity.BASIC,
-        description="Get 3D center coordinates of a labeled field",
-        long_description="""
-            Convenience wrapper around detect_field that returns just the
-            center coordinates of a field.
-
-            Useful for navigation operations: move to field center before
-            placing object.
-        """,
-        usage_examples=[
-            "get_field_center('Robot1', 'E') - Get field E center coordinates",
-            "center = get_field_center('Robot1', 'D').result['center']",
-        ],
-        parameters=[
-            OperationParameter(
-                name="robot_id",
-                type="str",
-                description="Robot identifier (for context)",
-                required=True,
-            ),
-            OperationParameter(
-                name="field_label",
-                type="str",
-                description="Field letter (A-I)",
-                required=True,
-            ),
-            OperationParameter(
-                name="camera_id",
-                type="str",
-                description="Camera ID",
-                required=False,
-                default="stereo",
-            ),
-        ],
-        preconditions=[],
-        postconditions=[],
-        average_duration_ms=100,
-        success_rate=0.92,
-        failure_modes=["Field not detected"],
-        relationships=OperationRelationship(
-            operation_id="perception_get_field_center_005",
-            required_operations=["perception_detect_field_004"],
-            required_reasons={
-                "perception_detect_field_004": "Field must be visible and detected before its center can be retrieved",
-            },
-            commonly_paired_with=["motion_move_to_coord_001"],
-            pairing_reasons={
-                "motion_move_to_coord_001": "Move robot to the field center for precise pick/place operations",
-            },
-            typical_after=["perception_detect_field_004"],
-            typical_before=["motion_move_to_coord_001"],
-        ),
-        implementation=get_field_center,
-    )
-
-
 def create_detect_all_fields_operation() -> BasicOperation:
     """Create the BasicOperation definition for detect_all_fields."""
     return BasicOperation(
@@ -706,5 +603,4 @@ def create_detect_all_fields_operation() -> BasicOperation:
 # ============================================================================
 
 DETECT_FIELD_OPERATION = create_detect_field_operation()
-GET_FIELD_CENTER_OPERATION = create_get_field_center_operation()
 DETECT_ALL_FIELDS_OPERATION = create_detect_all_fields_operation()

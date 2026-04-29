@@ -40,26 +40,46 @@ export class UIManager {
 
     /* --- CAMERA STREAM RETRY --- */
     initCameraRetry() {
-        const streams = [
-            { id: 'stream-rgb',   url: '/api/stream/rgb' },
-            { id: 'stream-depth', url: '/api/stream/depth' },
-        ];
-        streams.forEach(({ id, url }) => {
-            const img = document.getElementById(id);
-            if (!img) return;
-            // Set src with cache-busting timestamp on first load
-            img.src = `${url}?_t=${Date.now()}`;
-            img.addEventListener('error', () => {
-                setTimeout(() => {
-                    img.style.display = '';
-                    const placeholder = img.nextElementSibling;
-                    if (placeholder && placeholder.classList.contains('feed-placeholder')) {
-                        placeholder.style.display = 'none';
-                    }
-                    img.src = `${url}?_t=${Date.now()}`;
-                }, 5000);
-            });
+        const img = document.getElementById('stream-rgb');
+        if (!img) return;
+        const url = '/api/stream/rgb';
+        const placeholder = img.nextElementSibling;
+
+        const showStream = () => {
+            img.style.display = 'block';
+            if (placeholder) placeholder.style.display = 'none';
+        };
+
+        const showOffline = () => {
+            img.style.display = 'none';
+            if (placeholder && placeholder.classList.contains('feed-placeholder')) {
+                const icon = placeholder.querySelector('i');
+                if (icon) icon.className = 'fa-solid fa-video-slash';
+                const label = placeholder.querySelector('span');
+                if (label) label.textContent = 'Camera (Offline)';
+                placeholder.style.display = 'flex';
+            }
+        };
+
+        // MJPEG streams never fire 'load' reliably — poll naturalWidth which is set
+        // once the browser decodes the first frame from the multipart stream.
+        let pollTimer = null;
+        const pollStream = () => {
+            if (img.naturalWidth > 0) { showStream(); return; }
+            pollTimer = setTimeout(pollStream, 500);
+        };
+
+        img.addEventListener('error', () => {
+            clearTimeout(pollTimer);
+            showOffline();
+            setTimeout(() => {
+                img.src = `${url}?_t=${Date.now()}`;
+                pollStream();
+            }, 5000);
         });
+
+        img.src = `${url}?_t=${Date.now()}`;
+        pollStream();
     }
 
     /* --- LOGGING & CHAT UI --- */

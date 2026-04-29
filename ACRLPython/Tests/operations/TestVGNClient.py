@@ -245,7 +245,9 @@ class _VGNPatchedClient:
         setattr(vgn_det, "process", MagicMock(return_value=(None, None, None)))
         setattr(vgn_det, "select", MagicMock(return_value=(mock_grasps, mock_scores)))
         vgn_grasp = types.ModuleType("vgn.grasp")
-        setattr(vgn_grasp, "from_voxel_coordinates", MagicMock(side_effect=lambda g, vs: g))
+        setattr(
+            vgn_grasp, "from_voxel_coordinates", MagicMock(side_effect=lambda g, vs: g)
+        )
         vgn_mod = types.ModuleType("vgn")
         setattr(vgn_mod, "detection", vgn_det)
         setattr(vgn_mod, "grasp", vgn_grasp)
@@ -391,6 +393,7 @@ class TestPredictGraspsOutputContract:
 
         if result is None:
             pytest.skip("VGN mock produced None — check test setup")
+        assert result is not None
         for g in result:
             q = np.array(g["rotation"])
             assert (
@@ -419,6 +422,7 @@ class TestPredictGraspsOutputContract:
 
         if result is None:
             pytest.skip("VGN mock produced None — check test setup")
+        assert result is not None
         assert len(result) <= top_k
 
 
@@ -432,10 +436,6 @@ class TestSegmentationMaskLabelBugFix:
 
     def test_segmentation_mask_uses_color_field(self):
         """_grasp_via_vgn uses det.get('color') to match detections, not 'label'."""
-        import numpy as np
-        from operations.VGNClient import _parse_bbox_from_vlm_response
-        from operations.GraspOperations import _build_segmentation_mask
-
         # Simulate what the detection dict looks like after DetectionObject.to_dict()
         detection_with_color = {
             "color": "red_cube",

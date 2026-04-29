@@ -19,7 +19,6 @@ import requests
 
 from orchestrators.CommandParser import CommandParser, get_command_parser
 
-
 # ============================================================================
 # Fixtures
 # ============================================================================
@@ -247,13 +246,14 @@ class TestCommandParserLLM:
             }
         )
 
-        with patch("requests.post", return_value=llm_response):
-            with patch.object(command_parser, "registry", mock_registry):
-                result = command_parser.parse("detect the blue cube", robot_id="Robot1")
+        with patch("orchestrators.CommandParser.requests.post", return_value=llm_response):
+            with patch("orchestrators.CommandParser.USE_MOTION_LAYER", False):
+                with patch.object(command_parser, "registry", mock_registry):
+                    result = command_parser.parse("detect the blue cube", robot_id="Robot1")
 
-                assert result["success"] is True
-                assert result["commands"][0]["operation"] == "detect_object_stereo"
-                assert "capture_var" in result["commands"][0]
+                    assert result["success"] is True
+                    assert result["commands"][0]["operation"] == "detect_object_stereo"
+                    assert "capture_var" in result["commands"][0]
 
     def test_parse_compound_command(
         self, command_parser, mock_lm_studio_response, mock_registry

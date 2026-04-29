@@ -18,7 +18,6 @@ from .GraspConfig import GraspConfig
 from .GraspCandidateGenerator import GraspCandidateGenerator
 from .GraspScorer import GraspScorer
 
-
 logger = logging.getLogger(__name__)
 
 

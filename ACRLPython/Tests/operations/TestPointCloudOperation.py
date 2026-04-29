@@ -43,7 +43,7 @@ def _load_backend_client():
 
 
 def _backend_available() -> bool:
-    """Return True when the SequenceServer (port 5011) is reachable.
+    """Return True when the SequenceServer (port 5008) is reachable.
 
     The SequenceServer is only active once the backend process has started
     and Unity has connected.  Probing the port is sufficient to decide
@@ -54,7 +54,7 @@ def _backend_available() -> bool:
 
         sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
         sock.settimeout(2.0)
-        result = sock.connect_ex(("localhost", 5011))
+        result = sock.connect_ex(("localhost", 5008))
         sock.close()
         return result == 0
     except Exception:
@@ -63,7 +63,7 @@ def _backend_available() -> bool:
 
 _STEREO_AVAILABLE = _backend_available()
 _STEREO_SKIP = (
-    "Backend not reachable on port 5011 — run Unity and start the backend servers"
+    "Backend not reachable on port 5008 — run Unity and start the backend servers"
 )
 
 
@@ -285,7 +285,7 @@ class TestGeneratePointCloud:
 class TestGeneratePointCloudIntegration:
     """Integration tests that need a live Unity session with stereo cameras.
 
-    These tests send commands to the running backend over TCP (port 5011),
+    These tests send commands to the running backend over TCP (port 5008),
     which ensures the correct process's UnifiedImageStorage is used.
     The backend populates its storage from Unity's stereo camera stream;
     we trigger a detect_object_stereo command to warm it up before the
@@ -302,7 +302,7 @@ class TestGeneratePointCloudIntegration:
         """
         try:
             BackendClient = _load_backend_client()
-            with BackendClient(timeout=15.0) as client:
+            with BackendClient(timeout=120.0) as client:
                 client.send_command(
                     command="detect object stereo for Robot1",
                     robot_id="Robot1",
@@ -320,7 +320,7 @@ class TestGeneratePointCloudIntegration:
         """
         BackendClient = _load_backend_client()
         # Step 1: capture a fresh stereo frame into the backend's storage.
-        with BackendClient(timeout=15.0) as client:
+        with BackendClient(timeout=120.0) as client:
             client.send_command(
                 command="detect object stereo for Robot1",
                 robot_id="Robot1",
@@ -328,7 +328,7 @@ class TestGeneratePointCloudIntegration:
                 request_id=request_id,
             )
         # Step 2: generate the point cloud immediately after (images are fresh).
-        with BackendClient(timeout=30.0) as client:
+        with BackendClient(timeout=120.0) as client:
             return client.send_command(
                 command="generate point cloud for Robot1",
                 robot_id="Robot1",

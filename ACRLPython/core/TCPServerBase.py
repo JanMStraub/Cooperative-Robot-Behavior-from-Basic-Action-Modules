@@ -187,6 +187,10 @@ class TCPServerBase(ABC):
         )
         self._running = False
 
+        # Close the server socket first so accept() unblocks immediately
+        # instead of waiting for the socket_timeout (up to 1s per server).
+        self._cleanup()
+
         # Wait for accept and heartbeat threads to finish
         if self._accept_thread and self._accept_thread.is_alive():
             self._accept_thread.join(timeout=2.0)
@@ -665,7 +669,7 @@ class TCPServerBase(ABC):
             )
             if snapshot != self._last_heartbeat_snapshot:
                 self._last_heartbeat_snapshot = snapshot
-                self._logger.info(
+                self._logger.debug(
                     f"[HEARTBEAT] {self.__class__.__name__} on :{self._config.port} | "
                     f"uptime={stats['uptime_seconds']:.0f}s | "
                     f"active_clients={stats['active_clients']} | "

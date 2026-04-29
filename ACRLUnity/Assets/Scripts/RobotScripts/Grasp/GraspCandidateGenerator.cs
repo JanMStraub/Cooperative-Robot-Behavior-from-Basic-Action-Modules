@@ -64,7 +64,8 @@ namespace Robotics.Grasp
                     objectPosition,
                     objectRotation,
                     objectSize,
-                    basePreGraspDist
+                    basePreGraspDist,
+                    gripperPosition
                 );
             }
 
@@ -77,12 +78,15 @@ namespace Robotics.Grasp
             Vector3 objPos,
             Quaternion objRot,
             Vector3 objSize,
-            float basePreGraspDist
+            float basePreGraspDist,
+            Vector3 gripperPos
         )
         {
             GetApproachBasis(
                 approach,
                 objRot,
+                objPos,
+                gripperPos,
                 out Vector3 approachAxisWorld,
                 out Vector3 approachTangentWorld
             );
@@ -164,6 +168,8 @@ namespace Robotics.Grasp
         private void GetApproachBasis(
             GraspApproach approach,
             Quaternion objRot,
+            Vector3 objPos,
+            Vector3 gripperPos,
             out Vector3 axis,
             out Vector3 tangent
         )
@@ -175,12 +181,15 @@ namespace Robotics.Grasp
                     tangent = objRot * Vector3.right;
                     break;
                 case GraspApproach.Side:
-                    float sideSign = _random.NextDouble() > 0.5 ? 1f : -1f;
+                    // Approach from the gripper's side: axis points from gripper toward object center.
+                    float sideSign = Mathf.Sign(objPos.x - gripperPos.x);
                     axis = objRot * (Vector3.right * sideSign);
                     tangent = objRot * Vector3.up;
                     break;
                 case GraspApproach.Front:
-                    float frontSign = _random.NextDouble() > 0.5 ? 1f : -1f;
+                    float frontSign = Mathf.Sign(objPos.z - gripperPos.z);
+                    if (frontSign == 0f)
+                        frontSign = 1f;
                     axis = objRot * (Vector3.forward * frontSign);
                     tangent = objRot * Vector3.up;
                     break;
@@ -352,6 +361,8 @@ namespace Robotics.Grasp
             GetApproachBasis(
                 selectedApproach,
                 targetObject.transform.rotation,
+                objPos,
+                gripperPosition,
                 out Vector3 approachDir,
                 out Vector3 tangent
             );

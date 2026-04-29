@@ -5,6 +5,7 @@ AutoRT configuration.
 Extends the existing config pattern (config/Vision.py, config/Servers.py).
 Uses environment variables for overrides where appropriate.
 """
+
 import os
 from config.Servers import LMSTUDIO_BASE_URL, DEFAULT_LMSTUDIO_MODEL
 
@@ -14,8 +15,12 @@ TASK_GENERATION_MODEL = os.environ.get("AUTORT_TASK_MODEL", DEFAULT_LMSTUDIO_MOD
 SAFETY_VALIDATION_MODEL = os.environ.get("AUTORT_SAFETY_MODEL", DEFAULT_LMSTUDIO_MODEL)
 
 # LLM temperature settings (configurable via env vars)
-TASK_GENERATION_TEMPERATURE = float(os.environ.get("AUTORT_TASK_GENERATION_TEMPERATURE", "0.7"))
-SAFETY_VALIDATION_TEMPERATURE = float(os.environ.get("AUTORT_SAFETY_VALIDATION_TEMPERATURE", "0.0"))
+TASK_GENERATION_TEMPERATURE = float(
+    os.environ.get("AUTORT_TASK_GENERATION_TEMPERATURE", "0.7")
+)
+SAFETY_VALIDATION_TEMPERATURE = float(
+    os.environ.get("AUTORT_SAFETY_VALIDATION_TEMPERATURE", "0.0")
+)
 
 # AutoRT loop settings
 MAX_TASK_CANDIDATES = int(os.environ.get("AUTORT_MAX_TASKS", "3"))
@@ -27,6 +32,22 @@ USE_VLM_REASONING = os.environ.get("AUTORT_USE_VLM", "true").lower() == "true"
 ENABLE_SAFETY_VALIDATION = (
     os.environ.get("AUTORT_ENABLE_SAFETY", "true").lower() == "true"
 )
+
+# Semantic safety rules checked by the LLM layer of RobotConstitution.
+# Override at runtime via AUTORT_EXTRA_SAFETY_RULES (semicolon-delimited additions).
+SEMANTIC_SAFETY_RULES: list[str] = [
+    "Do not harm humans or animals",
+    "Do not throw objects at living beings",
+    "Do not damage expensive or fragile equipment",
+    "Do not perform unethical or dangerous actions",
+    "Do not move at unsafe speeds near obstacles",
+]
+_extra_rules_raw = os.environ.get("AUTORT_EXTRA_SAFETY_RULES", "")
+if _extra_rules_raw:
+    SEMANTIC_SAFETY_RULES = SEMANTIC_SAFETY_RULES + [
+        r.strip() for r in _extra_rules_raw.split(";") if r.strip()
+    ]
+
 WORKSPACE_BOUNDS = {
     "min_corner": (-0.4, 0.0, -0.4),
     "max_corner": (0.4, 0.5, 0.4),

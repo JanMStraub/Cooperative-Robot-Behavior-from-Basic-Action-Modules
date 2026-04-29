@@ -17,7 +17,6 @@ from config.Servers import (
     DEFAULT_LMSTUDIO_MODEL,
     DEFAULT_OUTPUT_DIR,
     DEFAULT_TEMPERATURE,
-    DEPTH_RESULTS_PORT,
     LLM_REQUEST_TIMEOUT,
     LMSTUDIO_BASE_URL,
     LOG_FORMAT,
@@ -27,13 +26,9 @@ from config.Servers import (
     MAX_IMAGE_SIZE,
     MAX_RESULT_QUEUE_SIZE,
     MAX_STRING_LENGTH,
-    RAG_SERVER_PORT,
     SEQUENCE_SERVER_PORT,
-    SERVER_INIT_WAIT_TIME,
     SOCKET_ACCEPT_TIMEOUT,
-    STATUS_SERVER_PORT,
     STEREO_DETECTION_PORT,
-    STREAMING_SERVER_PORT,
     VISION_MODELS,
     WORLDSTATE_CHECK_INTERVAL,
 )
@@ -42,7 +37,6 @@ from config.Vision import (
     BLUE_HSV_UPPER,
     DEFAULT_STEREO_BASELINE,
     DEFAULT_STEREO_FOV,
-    DUPLICATE_TIME_THRESHOLD,
     IMAGE_CHECK_INTERVAL,
     MAX_ASPECT_RATIO,
     MAX_CUBE_AREA_PX,
@@ -63,13 +57,9 @@ class TestConfigConstants:
     def test_network_config(self):
         """Test network configuration constants"""
         assert DEFAULT_HOST == "127.0.0.1"
-        assert STREAMING_SERVER_PORT == 5005
         assert STEREO_DETECTION_PORT == 5006
         assert COMMAND_SERVER_PORT == 5007
-        assert DEPTH_RESULTS_PORT == 5008
-        assert RAG_SERVER_PORT == 5009
-        assert STATUS_SERVER_PORT == 5010
-        assert SEQUENCE_SERVER_PORT == 5011
+        assert SEQUENCE_SERVER_PORT == 5008
         assert MAX_CONNECTIONS_BACKLOG > 0
         assert MAX_CLIENT_THREADS > 0
         assert SOCKET_ACCEPT_TIMEOUT > 0
@@ -86,8 +76,6 @@ class TestConfigConstants:
         assert MIN_IMAGE_AGE >= 0
         assert MAX_IMAGE_AGE > MIN_IMAGE_AGE
         assert IMAGE_CHECK_INTERVAL > 0
-        assert SERVER_INIT_WAIT_TIME > 0
-        assert DUPLICATE_TIME_THRESHOLD >= 0
         assert LLM_REQUEST_TIMEOUT > 0
         assert WORLDSTATE_CHECK_INTERVAL > 0
         assert VISION_OPERATION_TIMEOUT > 0
@@ -121,9 +109,9 @@ class TestConfigConstants:
             importlib.reload(servers_mod)
             url = servers_mod.LMSTUDIO_BASE_URL
 
-        assert url.startswith("http"), (
-            f"Default LMSTUDIO_BASE_URL must be an http URL, got: {url!r}"
-        )
+        assert url.startswith(
+            "http"
+        ), f"Default LMSTUDIO_BASE_URL must be an http URL, got: {url!r}"
 
     def test_queue_config(self):
         """Test queue configuration"""
@@ -165,7 +153,7 @@ class TestConfigModuleStructure:
 
         # Network constants
         assert hasattr(Servers, "DEFAULT_HOST")
-        assert hasattr(Servers, "STREAMING_SERVER_PORT")
+        assert hasattr(Servers, "STEREO_DETECTION_PORT")
         assert hasattr(Servers, "SEQUENCE_SERVER_PORT")
 
         # LLM constants

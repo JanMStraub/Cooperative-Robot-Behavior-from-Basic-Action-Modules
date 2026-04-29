@@ -25,12 +25,7 @@ from core.LoggingSetup import get_logger
 logger = get_logger(__name__)
 
 
-# Import from centralized lazy import system (prevents circular dependencies)
-try:
-    from ..core.Imports import get_command_broadcaster as _get_command_broadcaster
-except ImportError:
-    from core.Imports import get_command_broadcaster as _get_command_broadcaster
-
+from ._imports import get_command_broadcaster as _get_command_broadcaster
 
 # ============================================================================
 # Implementation: Check Robot Status
@@ -123,7 +118,7 @@ def check_robot_status(
         }
 
         # Send to Unity via CommandBroadcaster
-        logger.info(f"Sending status check to {robot_id} (detailed={detailed})")
+        logger.debug(f"Sending status check to {robot_id} (detailed={detailed})")
 
         success = _get_command_broadcaster().send_command(command, request_id)
 
@@ -133,7 +128,7 @@ def check_robot_status(
                 "Failed to send command to Unity - no clients connected",
                 [
                     "Ensure Unity is running with UnifiedPythonReceiver active",
-                    "Verify CommandServer is running (port 5010)",
+                    "Verify CommandServer is running (port 5007)",
                     "Check Unity console for connection errors",
                     "Restart backend: python -m orchestrators.RunRobotController",
                 ],

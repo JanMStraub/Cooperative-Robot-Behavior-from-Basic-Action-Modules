@@ -33,7 +33,7 @@ kill_process_by_pattern() {
     local name="$2"
     # Send SIGTERM (15) for graceful shutdown. -f matches the full command line.
     if pkill -f "$pattern"; then
-        echo "  ✓ Sent stop signal to $name"
+        echo "  Sent stop signal to $name"
     fi
 }
 
@@ -45,7 +45,7 @@ kill_existing_servers() {
 
     # Wait until the key server ports are actually free (avoids EADDRINUSE on fast restarts)
     echo "Waiting for processes to shut down..."
-    local ports=(5005 5006 5010 5013 5014 5015)
+    local ports=(5006 5007 5008 5009 5010)
     local timeout=15
     for port in "${ports[@]}"; do
         for (( i=0; i<timeout; i++ )); do
@@ -121,9 +121,9 @@ start_controller() {
     export PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH:-}"
 
     # Run RobotController - it starts all required servers internally:
-    # - ImageServer (ports 5005/5006) - receives single and stereo images
-    # - CommandServer (port 5010) - bidirectional commands and completions
-    # - SequenceServer (port 5013) - sequence orchestration with RAG
+    # - ImageServer (port 5006) - receives stereo images
+    # - CommandServer (port 5007) - bidirectional commands and completions
+    # - SequenceServer (port 5008) - sequence orchestration with RAG
     cd "$SCRIPT_DIR"
 
     # Build optional extra arguments forwarded from the shell script flags
@@ -160,7 +160,7 @@ cleanup() {
     if "$ROS_INTEGRATION" && "$STOP_DOCKER_ON_EXIT" && [ -d "$ROS_DIR" ] && command -v docker &>/dev/null; then
         echo "Stopping ROS Docker containers..."
         "$ROS_DIR/start_ros_endpoint.sh" down
-        echo "  ✓ ROS Docker containers stopped."
+        echo "  ROS Docker containers stopped."
     fi
 
     echo "Server stopped."

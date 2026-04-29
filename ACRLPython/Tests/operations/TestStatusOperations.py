@@ -17,7 +17,6 @@ from unittest.mock import Mock
 
 from operations.StatusOperations import check_robot_status, CHECK_ROBOT_STATUS_OPERATION
 
-
 # ============================================================================
 # Test Class: Basic Status Operations
 # ============================================================================

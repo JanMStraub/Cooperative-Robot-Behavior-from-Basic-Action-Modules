@@ -10,9 +10,9 @@ from dataclasses import dataclass
 from typing import Optional
 
 try:
-    from config.Servers import DEFAULT_HOST, STREAMING_SERVER_PORT
+    from config.Servers import DEFAULT_HOST, STEREO_DETECTION_PORT
 except ImportError:
-    from ..config.Servers import DEFAULT_HOST, STREAMING_SERVER_PORT
+    from ..config.Servers import DEFAULT_HOST, STEREO_DETECTION_PORT
 
 
 @dataclass
@@ -83,7 +83,7 @@ class ServerConfig:
     """Streaming server configuration"""
 
     host: str = DEFAULT_HOST
-    port: int = STREAMING_SERVER_PORT
+    port: int = STEREO_DETECTION_PORT
     max_connections: int = 5
     timeout: float = 1.0
 

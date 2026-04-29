@@ -76,7 +76,7 @@ class PerceptionRefreshLoop:
             daemon=True,
         )
         self._thread.start()
-        logger.info(
+        logger.debug(
             f"PerceptionRefreshLoop started "
             f"(interval={self._refresh_interval}s, stale_threshold={self._stale_threshold})"
         )
@@ -130,6 +130,9 @@ class PerceptionRefreshLoop:
         try:
             all_objects = self._world_state.get_all_objects()
             for obj in all_objects:
+                # Fields are static landmarks — never refresh via cube detector.
+                if getattr(obj, "object_type", None) == "field":
+                    continue
                 color = getattr(obj, "color", None)
                 if color and color != "unknown" and color not in seen:
                     is_stale = getattr(obj, "stale", False)
@@ -155,7 +158,6 @@ class PerceptionRefreshLoop:
 
             result = detect_object_stereo(
                 color=color,
-                camera_id=None,
                 selection="closest",
                 request_id=0,
             )
@@ -163,7 +165,9 @@ class PerceptionRefreshLoop:
                 logger.debug(f"PerceptionRefreshLoop: stereo refresh OK for '{color}'")
                 return True
         except Exception as exc:
-            logger.debug(f"PerceptionRefreshLoop stereo refresh failed for '{color}': {exc}")
+            logger.debug(
+                f"PerceptionRefreshLoop stereo refresh failed for '{color}': {exc}"
+            )
         return False
 
     def _refresh_llm_fallback(self, color: str) -> None:
@@ -196,15 +200,23 @@ class PerceptionRefreshLoop:
                 try:
                     with self._world_state._lock:
                         # _objects keys are color labels (set by detect_object_stereo)
-                        obj = self._world_state._objects.get(color) or self._world_state._objects.get(color.lower())
+                        obj = self._world_state._objects.get(
+                            color
+                        ) or self._world_state._objects.get(color.lower())
                         if obj is not None:
-                            obj.confidence = max(obj.confidence, self._stale_threshold + 0.1)
+                            obj.confidence = max(
+                                obj.confidence, self._stale_threshold + 0.1
+                            )
                             obj.last_seen = time.time()
                             obj.stale = False
                             logger.debug(
                                 f"PerceptionRefreshLoop: LLM fallback refreshed confidence for '{color}'"
                             )
                 except Exception as exc:
-                    logger.debug(f"LLM fallback confidence update failed for '{color}': {exc}")
+                    logger.debug(
+                        f"LLM fallback confidence update failed for '{color}': {exc}"
+                    )
         except Exception as exc:
-            logger.debug(f"PerceptionRefreshLoop LLM fallback error for '{color}': {exc}")
+            logger.debug(
+                f"PerceptionRefreshLoop LLM fallback error for '{color}': {exc}"
+            )

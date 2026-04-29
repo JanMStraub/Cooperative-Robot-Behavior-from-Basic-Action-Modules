@@ -108,7 +108,9 @@ class RobotState:
     is_moving: bool = False
     is_initialized: bool = False
     joint_angles: Optional[list[float]] = None
-    start_joint_angles: Optional[list[float]] = None  # Saved at registration; radians, ROS convention
+    start_joint_angles: Optional[list[float]] = (
+        None  # Saved at registration; radians, ROS convention
+    )
     timestamp: float = field(default_factory=time.time)
 
 
@@ -295,7 +297,9 @@ class WorldState(SingletonBase):
                 if robot_state.joint_angles and len(robot_state.joint_angles) == 6:
                     try:
                         import math as _math
-                        from operations.AR4Kinematics import compute_end_effector_position
+                        from operations.AR4Kinematics import (
+                            compute_end_effector_position,
+                        )
 
                         base_pos = ROBOT_BASE_POSITIONS.get(robot_id)
                         if base_pos is not None:
@@ -413,9 +417,13 @@ class WorldState(SingletonBase):
             y = float(value.get("y", 0.0))
             z = float(value.get("z", 0.0))
             w = float(value.get("w", 1.0))
-            roll = math.degrees(math.atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y)))
+            roll = math.degrees(
+                math.atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y))
+            )
             pitch = math.degrees(math.asin(max(-1.0, min(1.0, 2.0 * (w * y - z * x)))))
-            yaw = math.degrees(math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z)))
+            yaw = math.degrees(
+                math.atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z))
+            )
             return (roll, pitch, yaw)
         if isinstance(value, (list, tuple)) and len(value) >= 3:
             return (float(value[0]), float(value[1]), float(value[2]))
@@ -462,14 +470,18 @@ class WorldState(SingletonBase):
             new_joint_angles = state_data.get("joint_angles", None)
             if new_joint_angles is not None:
                 state.joint_angles = new_joint_angles
-            state.start_joint_angles = state_data.get("start_joint_angles", state.start_joint_angles)
+            state.start_joint_angles = state_data.get(
+                "start_joint_angles", state.start_joint_angles
+            )
             state.timestamp = time.time()
 
             # Derive end-effector pose from FK when joint_angles were just updated
             # and no explicit ground-truth position was provided in this update.
             # This makes WorldState self-sufficient when Unity WorldStateServer is absent.
             if new_joint_angles is not None and "position" not in state_data:
-                self._update_position_from_fk(robot_id, state, new_joint_angles, prev_joint_angles)
+                self._update_position_from_fk(
+                    robot_id, state, new_joint_angles, prev_joint_angles
+                )
 
             logger.debug(f"Updated robot state for {robot_id}")
 
@@ -517,9 +529,15 @@ class WorldState(SingletonBase):
             # existing consumers of state.rotation expect (roll,pitch,yaw) degrees,
             # so we convert here for compatibility.
             qx, qy, qz, qw = quat
-            roll = _math.degrees(_math.atan2(2.0 * (qw * qx + qy * qz), 1.0 - 2.0 * (qx * qx + qy * qy)))
-            pitch = _math.degrees(_math.asin(max(-1.0, min(1.0, 2.0 * (qw * qy - qz * qx)))))
-            yaw = _math.degrees(_math.atan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz)))
+            roll = _math.degrees(
+                _math.atan2(2.0 * (qw * qx + qy * qz), 1.0 - 2.0 * (qx * qx + qy * qy))
+            )
+            pitch = _math.degrees(
+                _math.asin(max(-1.0, min(1.0, 2.0 * (qw * qy - qz * qx))))
+            )
+            yaw = _math.degrees(
+                _math.atan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz))
+            )
             state.rotation = (roll, pitch, yaw)
 
             # Derive is_moving from joint angle delta
@@ -624,7 +642,12 @@ class WorldState(SingletonBase):
                 obj.color = color
                 obj.object_type = object_type
                 obj.confidence = confidence
-                obj.dimensions = dimensions
+                # Preserve existing dimensions when the new update has none.
+                # Unity streams accurate collider-based dimensions; Python detection
+                # (especially cached SharedVisionState) often sends None.
+                # Overwriting with None would erase good dimension data.
+                if dimensions is not None:
+                    obj.dimensions = dimensions
                 # Preserve existing rotation if the new update doesn't carry one
                 # (vision-detected objects don't have rotation; physics-scene objects do).
                 if rotation is not None:
@@ -691,6 +714,39 @@ class WorldState(SingletonBase):
                 "grasped_by": obj.grasped_by,
                 "confidence": obj.confidence,
             }
+
+    def get_object_rotation(
+        self, object_id: str
+    ) -> Optional[Tuple[float, float, float]]:
+        """Get object rotation (roll, pitch, yaw) in degrees with partial-match fallback.
+
+        Uses the same normalised-key lookup as ``get_object_state`` and
+        ``get_object_position`` so compound names like "red_cube" resolve to an
+        object stored as "red".  Returns ``None`` when the object is not found or
+        has no rotation recorded.
+
+        Args:
+            object_id: Object identifier (exact key, color, or compound name).
+
+        Returns:
+            Rotation tuple ``(roll_deg, pitch_deg, yaw_deg)`` or ``None``.
+        """
+        with self._lock:
+            obj = self._objects.get(object_id)
+            if obj is None:
+                normalised = object_id.lower().replace(" ", "_").replace("-", "_")
+                norm_cache = self._get_normalized_keys()
+                original_key = norm_cache.get(normalised)
+                if original_key is None:
+                    for key_norm, orig in norm_cache.items():
+                        if key_norm in normalised or normalised in key_norm:
+                            original_key = orig
+                            break
+                if original_key is not None:
+                    obj = self._objects.get(original_key)
+            if obj is None:
+                return None
+            return obj.rotation
 
     def get_object_position(
         self, object_id: str
@@ -855,6 +911,9 @@ class WorldState(SingletonBase):
             to_delete = []
 
             for obj_id, obj in self._objects.items():
+                # Fields are static landmarks not tracked by Unity — skip decay.
+                if getattr(obj, "object_type", None) == "field":
+                    continue
                 if obj_id in seen_object_ids:
                     # Object was seen - refresh confidence
                     obj.confidence = 1.0

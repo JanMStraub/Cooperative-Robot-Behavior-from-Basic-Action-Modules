@@ -32,11 +32,13 @@ try:
     from ..operations.Verification import OperationVerifier
     from ..operations.CoordinationVerifier import CoordinationVerifier
     from ..core.Imports import get_world_state
+    from ..config.Servers import REFLEXION_ENABLED, REFLEXION_MAX_RETRIES
 except ImportError:
     from operations.Base import OperationCategory
     from operations.Verification import OperationVerifier
     from operations.CoordinationVerifier import CoordinationVerifier
     from core.Imports import get_world_state
+    from config.Servers import REFLEXION_ENABLED, REFLEXION_MAX_RETRIES
 
 # Configure logging with safe handler for background threads
 logger = logging.getLogger(__name__)
@@ -44,9 +46,9 @@ logger.setLevel(logging.INFO)
 
 # Import pytest-safe logging helpers from LoggingSetup
 try:
-    from ..core.LoggingSetup import SafeStreamHandler, _safe_log, _make_handler_safe
+    from ..core.LoggingSetup import _safe_log, _make_handler_safe
 except ImportError:
-    from core.LoggingSetup import SafeStreamHandler, _safe_log, _make_handler_safe
+    from core.LoggingSetup import _safe_log, _make_handler_safe
 
 # Apply safe patching to all existing handlers (including pytest's handlers)
 for _handler in logger.handlers[:]:
@@ -178,6 +180,8 @@ class SequenceExecutor:
             self.coordination_verifier = None
             self.world_state = None
 
+        self.outcome_tracker: Optional[Any] = None
+
     def _get_command_broadcaster(self):
         """Get command broadcaster using centralized lazy import system"""
         from core.Imports import get_command_broadcaster
@@ -260,7 +264,7 @@ class SequenceExecutor:
 
         if has_parallel_groups:
             # Execute with parallel group support
-            logger.info("Parallel execution mode enabled (parallel_group detected)")
+            logger.info("Parallel execution mode enabled")
             group_results, group_completed = self._execute_parallel_groups(
                 commands, timeout
             )
@@ -323,8 +327,125 @@ class SequenceExecutor:
                         logger.error,
                         f"Command {i + 1} failed: {cmd_result.get('error')}",
                     )
-                    # Stop sequence on first failure
-                    break
+
+                    # Reflexion retry: re-parse the original command with error context.
+                    # Only applies to NAVIGATION and MANIPULATION ops — re-planning a
+                    # status check or sync primitive with the LLM makes no sense and
+                    # would block for LLM_REQUEST_TIMEOUT seconds if the LLM is unavailable.
+                    reflexion_succeeded = False
+                    original_text = cmd.get("_original_text", "")
+                    _reflexion_eligible_categories = {
+                        OperationCategory.NAVIGATION,
+                        OperationCategory.MANIPULATION,
+                    }
+                    try:
+                        from ..core.Imports import get_global_registry
+                    except ImportError:
+                        from core.Imports import get_global_registry
+                    _registry = get_global_registry()
+                    _op_def = (
+                        _registry.get_operation_by_name(operation)
+                        if _registry
+                        else None
+                    )
+                    _op_category = _op_def.category if _op_def else None
+                    _reflexion_allowed = _op_category in _reflexion_eligible_categories
+                    if (
+                        original_text
+                        and REFLEXION_ENABLED
+                        and REFLEXION_MAX_RETRIES > 0
+                        and _reflexion_allowed
+                    ):
+                        error_msg = cmd_result.get("error", "Unknown error")
+                        recovery = cmd_result.get("recovery_suggestions", [])
+                        hint = f"Previous attempt failed: {error_msg}."
+                        if recovery:
+                            hint += " Suggestions: " + "; ".join(recovery)
+
+                        try:
+                            from ..orchestrators.CommandParser import get_command_parser
+                        except ImportError:
+                            from orchestrators.CommandParser import get_command_parser
+
+                        parser = get_command_parser()
+                        robot_id = params.get("robot_id", "Robot1")
+
+                        for retry_n in range(1, REFLEXION_MAX_RETRIES + 1):
+                            logger.info(
+                                f"Reflexion retry {retry_n}/{REFLEXION_MAX_RETRIES} "
+                                f"for command {i + 1}: {operation}"
+                            )
+                            retry_parse = parser.parse_with_hint(
+                                original_text, robot_id=robot_id, hint=hint,
+                                use_motion_layer=False,
+                            )
+                            if (
+                                not retry_parse["success"]
+                                or not retry_parse["commands"]
+                            ):
+                                logger.warning(
+                                    f"Reflexion retry {retry_n} parse failed"
+                                )
+                                continue
+
+                            # Re-resolve variables for the retried command(s)
+                            retry_cmd = retry_parse["commands"][0]
+                            retry_op = retry_cmd.get("operation", operation)
+                            retry_params = self._resolve_variables(
+                                retry_cmd.get("params", params)
+                            )
+                            retry_params = self._auto_inject_parameters(
+                                retry_op, retry_params
+                            )
+
+                            retry_start = time.time()
+                            retry_result = self._execute_single_command(
+                                retry_op, retry_params, timeout
+                            )
+                            retry_duration = (time.time() - retry_start) * 1000
+
+                            if retry_result["success"]:
+                                logger.info(
+                                    f"Reflexion retry {retry_n} succeeded for command {i + 1}"
+                                )
+                                # Overwrite the failed result entry with the successful one
+                                results[-1] = {
+                                    "index": i,
+                                    "operation": retry_op,
+                                    "success": True,
+                                    "result": retry_result.get("result"),
+                                    "error": None,
+                                    "error_code": None,
+                                    "duration_ms": retry_duration,
+                                }
+                                completed += 1
+                                self._notify_progress(
+                                    i, len(commands), retry_op, "completed"
+                                )
+                                if cmd.get("capture_var") and retry_result.get(
+                                    "result"
+                                ):
+                                    self._capture_result_to_var(
+                                        cmd["capture_var"], retry_result["result"]
+                                    )
+                                self._auto_capture_outputs(
+                                    retry_op, retry_result.get("result", {})
+                                )
+                                reflexion_succeeded = True
+                                break
+                            else:
+                                error_msg = retry_result.get("error", "Unknown error")
+                                recovery = retry_result.get("recovery_suggestions", [])
+                                hint = f"Retry {retry_n} failed: {error_msg}."
+                                if recovery:
+                                    hint += " Suggestions: " + "; ".join(recovery)
+                                logger.warning(
+                                    f"Reflexion retry {retry_n} failed: {error_msg}"
+                                )
+
+                    if not reflexion_succeeded:
+                        # Stop sequence on exhausted retries
+                        break
 
         total_duration = (time.time() - start_time) * 1000
         success = completed == len(commands)
@@ -448,7 +569,15 @@ class SequenceExecutor:
             # Using as_completed with an overall timeout so that unhandled
             # exceptions inside execute_command_thread propagate via
             # future.result() instead of silently disappearing.
-            with ThreadPoolExecutor(max_workers=len(group_commands)) as pool:
+            #
+            # NOTE: We manage the pool explicitly (not via context manager) so
+            # that shutdown(wait=False) is used on timeout/abort.  The context
+            # manager form always calls shutdown(wait=True) on __exit__, which
+            # would block here for the full operation timeout even after
+            # as_completed gives up — the root cause of the 30-second hang on
+            # graceful shutdown.
+            pool = ThreadPoolExecutor(max_workers=len(group_commands))
+            try:
                 future_to_idx = {
                     pool.submit(execute_command_thread, idx, cmd): idx
                     for idx, cmd in group_commands
@@ -479,17 +608,19 @@ class SequenceExecutor:
                                     cmd.get("capture_var"),
                                 )
                 except FuturesTimeoutError:
-                    # One or more futures did not finish within timeout+5s;
-                    # remaining futures are cancelled automatically by the
-                    # context-manager exit.  The results loop below will
-                    # produce a timeout error for any idx not in thread_results.
+                    # One or more futures did not finish within timeout+5s.
+                    # Return immediately — do not wait for stray threads.
                     logger.warning(
                         f"[Group {group_num}] as_completed timed out; some commands may not have finished"
                     )
+            finally:
+                # shutdown(wait=False) returns immediately; any still-running
+                # threads will complete in the background without blocking us.
+                pool.shutdown(wait=False)
 
             # Process results from this group
             group_success = True
-            for thread_idx, (idx, cmd) in enumerate(group_commands):
+            for _, (idx, cmd) in enumerate(group_commands):
                 if idx in thread_results:
                     result_entry, cmd_result, capture_var = thread_results[idx]
                     results[idx] = result_entry
@@ -505,7 +636,9 @@ class SequenceExecutor:
 
                         # Capture variables (thread-safe write)
                         if capture_var and cmd_result.get("result"):
-                            self._capture_result_to_var(capture_var, cmd_result["result"])
+                            self._capture_result_to_var(
+                                capture_var, cmd_result["result"]
+                            )
 
                         # Auto-capture outputs
                         self._auto_capture_outputs(
@@ -609,6 +742,12 @@ class SequenceExecutor:
             "error": "internal",
         }
         try:
+            # Resolve common LLM name abbreviations to registered names.
+            _OP_ALIASES = {
+                "return_to_start": "return_to_start_position",
+            }
+            operation = _OP_ALIASES.get(operation, operation)
+
             # Get operation definition for verification
             op_def = self.registry.get_operation_by_name(operation)
             if op_def is None:
@@ -706,11 +845,12 @@ class SequenceExecutor:
                 return _result
 
             # Skip completion waiting for operations that executed via ROS
-            # (Unity never received the command, so it won't send completion)
+            # (no Unity command with outer request_id was sent).
             if op_result.result and op_result.result.get("status") in (
                 "ros_executed",
                 "ros_command_sent",
                 "vgn_ros_executed",
+                "handoff_received",
             ):
                 logger.debug(
                     f"Skipping completion wait for ROS-executed operation: {operation}"
@@ -1135,9 +1275,7 @@ class SequenceExecutor:
                 parts = output_key.split(".", 1)
                 parent_val = result.get(parts[0])
                 value = (
-                    parent_val.get(parts[1])
-                    if isinstance(parent_val, dict)
-                    else None
+                    parent_val.get(parts[1]) if isinstance(parent_val, dict) else None
                 )
             else:
                 value = result.get(output_key)
@@ -1288,7 +1426,11 @@ class SequenceExecutor:
 
             # Pattern: "$target.id" / "$target.name" used instead of "$target.color"
             # for object_id parameters in grasp operations.
-            if key.startswith("object_id") and isinstance(base_val, dict) and "color" in base_val:
+            if (
+                key.startswith("object_id")
+                and isinstance(base_val, dict)
+                and "color" in base_val
+            ):
                 logger.warning(
                     f"Variable {value} not found for object_id — "
                     f"falling back to ${base_var}.color='{base_val['color']}'"
@@ -1364,7 +1506,11 @@ class SequenceExecutor:
                         resolved_list.append(self._resolve_single_value("", element))
                     else:
                         resolved_list.append(element)
-                resolved[key] = type(value)(resolved_list) if isinstance(value, tuple) else resolved_list
+                resolved[key] = (
+                    type(value)(resolved_list)
+                    if isinstance(value, tuple)
+                    else resolved_list
+                )
             else:
                 resolved[key] = value
 

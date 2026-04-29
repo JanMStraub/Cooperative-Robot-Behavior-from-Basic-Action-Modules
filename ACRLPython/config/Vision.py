@@ -24,9 +24,6 @@ MAX_IMAGE_AGE = float(os.environ.get("MAX_IMAGE_AGE", "30.0"))
 # Monitoring intervals (seconds)
 IMAGE_CHECK_INTERVAL = float(os.environ.get("IMAGE_CHECK_INTERVAL", "1.0"))
 
-# Duplicate detection
-DUPLICATE_TIME_THRESHOLD = float(os.environ.get("DUPLICATE_TIME_THRESHOLD", "0.1"))
-
 VISION_OPERATION_TIMEOUT = float(os.environ.get("VISION_OPERATION_TIMEOUT", "20.0"))
 
 # ============================================================================
@@ -151,8 +148,12 @@ POINT_CLOUD_MAX_DEPTH = float(os.environ.get("POINT_CLOUD_MAX_DEPTH", "2.0"))
 # nb_neighbors: how many neighbors to consider for the mean distance computation.
 # std_ratio: points further than mean + std_ratio * std_dev are removed.
 # Lower std_ratio = more aggressive removal (RoboScan uses 0.5 for final pass).
-POINT_CLOUD_OUTLIER_NB_NEIGHBORS = int(os.environ.get("POINT_CLOUD_OUTLIER_NB_NEIGHBORS", "20"))
-POINT_CLOUD_OUTLIER_STD_RATIO = float(os.environ.get("POINT_CLOUD_OUTLIER_STD_RATIO", "1.5"))
+POINT_CLOUD_OUTLIER_NB_NEIGHBORS = int(
+    os.environ.get("POINT_CLOUD_OUTLIER_NB_NEIGHBORS", "20")
+)
+POINT_CLOUD_OUTLIER_STD_RATIO = float(
+    os.environ.get("POINT_CLOUD_OUTLIER_STD_RATIO", "1.5")
+)
 
 # ============================================================================
 # Camera Identity
@@ -160,14 +161,20 @@ POINT_CLOUD_OUTLIER_STD_RATIO = float(os.environ.get("POINT_CLOUD_OUTLIER_STD_RA
 
 # Default camera used for perception operations when Unity sends no camera_id.
 # Override with the DEFAULT_CAMERA_ID env var to match your scene's camera name.
-DEFAULT_CAMERA_ID = os.environ.get("DEFAULT_CAMERA_ID", "TableStereoCamera")  # Must match the StereoCameraController GameObject name in Unity
+DEFAULT_CAMERA_ID = os.environ.get(
+    "DEFAULT_CAMERA_ID", "TableStereoCamera"
+)  # Must match the StereoCameraController GameObject name in Unity
 
 # Maximum long-edge resolution fed to YOLO. Images larger than this are
 # downscaled before inference (YOLO letterboxes to 640×640 internally anyway,
 # so sending e.g. a 1280×960 image just wastes preprocessing time).
 # Set to 0 or "" to disable resizing and pass full-resolution images.
 _yolo_size_raw = os.environ.get("YOLO_INPUT_SIZE", "0")
-YOLO_INPUT_SIZE: Optional[int] = int(_yolo_size_raw) if _yolo_size_raw.strip().isdigit() and int(_yolo_size_raw) > 0 else None
+YOLO_INPUT_SIZE: Optional[int] = (
+    int(_yolo_size_raw)
+    if _yolo_size_raw.strip().isdigit() and int(_yolo_size_raw) > 0
+    else None
+)
 
 # Scene-change detection for VisionProcessor.
 # A downsampled thumbnail (SCENE_DIFF_THUMB_SIZE × SCENE_DIFF_THUMB_SIZE pixels)
@@ -182,7 +189,9 @@ YOLO_INPUT_SIZE: Optional[int] = int(_yolo_size_raw) if _yolo_size_raw.strip().i
 # Default of 8.0 gives a 13× safety margin over the measured noise floor.
 # Set SCENE_DIFF_THUMB_SIZE=0 to disable scene-change detection entirely.
 _thumb_raw = os.environ.get("SCENE_DIFF_THUMB_SIZE", "64")
-SCENE_DIFF_THUMB_SIZE: Optional[int] = int(_thumb_raw) if _thumb_raw.strip().isdigit() and int(_thumb_raw) > 0 else None
+SCENE_DIFF_THUMB_SIZE: Optional[int] = (
+    int(_thumb_raw) if _thumb_raw.strip().isdigit() and int(_thumb_raw) > 0 else None
+)
 SCENE_DIFF_THRESHOLD = float(os.environ.get("SCENE_DIFF_THRESHOLD", "8.0"))
 
 # ============================================================================
@@ -237,6 +246,17 @@ STEREO_MAX_SIZE_RATIO = float(os.environ.get("STEREO_MAX_SIZE_RATIO", "0.3"))
 STEREO_MIN_IOU = float(os.environ.get("STEREO_MIN_IOU", "0.0"))
 
 # ============================================================================
+# World State Position Source
+# ============================================================================
+
+# When True, object positions streamed from Unity (WorldStatePublisher) are
+# written into WorldState, potentially overwriting vision-detected positions.
+# Set to False to keep only stereo/vision-detected positions in WorldState.
+USE_UNITY_OBJECT_POSITIONS = os.environ.get(
+    "USE_UNITY_OBJECT_POSITIONS", "true"
+).lower() in ("true", "1", "yes")
+
+# ============================================================================
 # Object Tracking
 # ============================================================================
 
@@ -256,7 +276,7 @@ TRACKING_MIN_IOU = float(os.environ.get("TRACKING_MIN_IOU", "0.3"))
 YOLO_TASK = os.environ.get("YOLO_TASK", "detect")  # detect or segment
 YOLO_SEGMENTATION_MODEL = os.environ.get(
     "YOLO_SEGMENTATION_MODEL",
-    str(_CONFIG_DIR / "yolo" / "models" / "field_detector_seg.onnx"),
+    str(_CONFIG_DIR / "yolo" / "models" / "more_cubes_detector.onnx"),
 )
 
 # ============================================================================
@@ -272,6 +292,13 @@ CONFLICT_RESOLUTION_STRATEGY = os.environ.get(
     "CONFLICT_RESOLUTION_STRATEGY", "closest_robot"
 )
 CONFLICT_MIN_DISTANCE_DIFF = float(os.environ.get("CONFLICT_MIN_DISTANCE_DIFF", "0.05"))
+
+# ============================================================================
+# VGN Debug Export
+# ============================================================================
+
+VGN_EXPORT_TSDF = os.environ.get("VGN_EXPORT_TSDF", "false").lower() in ("true", "1", "yes")
+VGN_EXPORT_TSDF_PATH = os.environ.get("VGN_EXPORT_TSDF_PATH", "/tmp/vgn_tsdf_last.npz")
 
 # ============================================================================
 # Visualization and Performance

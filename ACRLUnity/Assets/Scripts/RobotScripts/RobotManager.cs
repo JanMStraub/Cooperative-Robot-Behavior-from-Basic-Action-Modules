@@ -103,7 +103,6 @@ namespace Robotics
         {
             try
             {
-                // Create default profile if not assigned in inspector
                 if (robotProfile == null)
                 {
                     robotProfile = ScriptableObject.CreateInstance<RobotConfig>();
@@ -112,7 +111,8 @@ namespace Robotics
                 // Ensure default profile is properly initialized.
                 // Note: RobotConfig field initializer creates a 6-element array of nulls,
                 // so we must also check for null entries, not just an empty/null array.
-                bool hasNullJoints = robotProfile.joints == null
+                bool hasNullJoints =
+                    robotProfile.joints == null
                     || robotProfile.joints.Length == 0
                     || System.Array.Exists(robotProfile.joints, j => j == null);
                 if (hasNullJoints)
@@ -135,7 +135,6 @@ namespace Robotics
         {
             try
             {
-                // Auto-discover robots
                 DiscoverRobots();
             }
             catch (Exception ex)
@@ -149,7 +148,6 @@ namespace Robotics
         /// </summary>
         private void DiscoverRobots()
         {
-            // Find RobotController components
             RobotController[] controllers = FindObjectsByType<RobotController>(
                 FindObjectsInactive.Exclude,
                 FindObjectsSortMode.None
@@ -157,7 +155,6 @@ namespace Robotics
 
             foreach (var controller in controllers)
             {
-                // Generate unique ID for this robot
                 string robotId = GenerateUniqueRobotId(controller.gameObject.name);
 
                 if (!_robotInstances.ContainsKey(robotId))
@@ -166,7 +163,6 @@ namespace Robotics
                 }
             }
 
-            // Also find SimpleRobotController components
             SimpleRobotController[] simpleControllers = FindObjectsByType<SimpleRobotController>(
                 FindObjectsInactive.Exclude,
                 FindObjectsSortMode.None
@@ -174,12 +170,10 @@ namespace Robotics
 
             foreach (var simpleController in simpleControllers)
             {
-                // Use the robotId from SimpleRobotController if set, otherwise generate one
                 string robotId = !string.IsNullOrEmpty(simpleController.robotId)
                     ? simpleController.robotId
                     : GenerateUniqueRobotId(simpleController.gameObject.name);
 
-                // Only register if not already registered (in case both controllers exist)
                 if (!_robotInstances.ContainsKey(robotId))
                 {
                     RegisterRobot(robotId, simpleController.gameObject);
@@ -217,12 +211,15 @@ namespace Robotics
                 // Do not re-issue SetTarget when the robot is holding the target itself.
                 // The gripper moves the object kinematically, so any arm motion would appear
                 // as target drift and spin up a new grasp coroutine against a held object.
-                GripperController gripper = robot.controller != null
-                    ? robot.controller.GetComponentInChildren<GripperController>()
-                    : null;
-                if (gripper != null
+                GripperController gripper =
+                    robot.controller != null
+                        ? robot.controller.GetComponentInChildren<GripperController>()
+                        : null;
+                if (
+                    gripper != null
                     && gripper.IsHoldingObject
-                    && gripper.GraspedObject == robot.targetGameObject)
+                    && gripper.GraspedObject == robot.targetGameObject
+                )
                     continue;
 
                 Vector3 currentPos = robot.targetGameObject.transform.position;
@@ -263,17 +260,14 @@ namespace Robotics
         /// <returns>A unique robot ID</returns>
         private string GenerateUniqueRobotId(string baseName)
         {
-            // Clean the base name (remove any existing counters)
             string cleanBaseName = baseName;
 
-            // If ID is unique, use it directly
             if (!_usedRobotIds.Contains(cleanBaseName))
             {
                 _usedRobotIds.Add(cleanBaseName);
                 return cleanBaseName;
             }
 
-            // Otherwise, append a counter
             string uniqueId;
             do
             {
@@ -302,7 +296,6 @@ namespace Robotics
         {
             try
             {
-                // Generate unique ID if not provided
                 if (string.IsNullOrEmpty(robotId))
                 {
                     robotId = GenerateUniqueRobotId(robotObject.name);
@@ -310,7 +303,6 @@ namespace Robotics
                 }
                 else if (!_usedRobotIds.Contains(robotId))
                 {
-                    // Mark provided ID as used
                     _usedRobotIds.Add(robotId);
                 }
 
@@ -321,7 +313,6 @@ namespace Robotics
                     );
                 }
 
-                // Check for both controller types
                 var controller = robotObject.GetComponent<RobotController>();
                 var simpleController = robotObject.GetComponent<SimpleRobotController>();
 
@@ -341,7 +332,6 @@ namespace Robotics
                 }
                 else if (simpleController != null && simpleController.robotJoints != null)
                 {
-                    // For SimpleRobotController, get current joint positions
                     jointTargets = new float[simpleController.robotJoints.Length];
                     for (int i = 0; i < simpleController.robotJoints.Length; i++)
                     {
@@ -365,10 +355,8 @@ namespace Robotics
 
                 _robotInstances[robotId] = instance;
 
-                // Apply configuration to robot
                 ApplyProfileToRobot(robotId);
 
-                // Set target on the controller if available
                 if (targetObject != null)
                 {
                     if (controller != null)
@@ -438,7 +426,6 @@ namespace Robotics
                 )
                     return;
 
-                // Validate joint count matches
                 int jointCount = Mathf.Min(
                     controller.robotJoints.Length,
                     robot.profile.joints.Length
@@ -451,7 +438,6 @@ namespace Robotics
                     );
                 }
 
-                // Apply joint configurations
                 for (int i = 0; i < jointCount; i++)
                 {
                     var joint = controller.robotJoints[i];

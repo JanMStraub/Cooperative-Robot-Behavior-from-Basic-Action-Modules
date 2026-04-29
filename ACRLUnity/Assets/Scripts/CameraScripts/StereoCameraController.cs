@@ -34,7 +34,9 @@ namespace Vision
         private int _imageHeight = 1080;
 
         [SerializeField]
-        [Tooltip("JPEG compression quality (1-100). Mirrors STEREO_JPEG_QUALITY in ACRLPython/config/Vision.py (default: 75).")]
+        [Tooltip(
+            "JPEG compression quality (1-100). Mirrors STEREO_JPEG_QUALITY in ACRLPython/config/Vision.py (default: 75)."
+        )]
         [Range(1, 100)]
         private int _JPEGQuality = 75;
 
@@ -86,7 +88,6 @@ namespace Vision
         {
             if (_leftCamera != null && _rightCamera != null)
             {
-                // Calculate distance between cameras (typically horizontal X distance)
                 float distance = Vector3.Distance(
                     _leftCamera.transform.position,
                     _rightCamera.transform.position
@@ -197,7 +198,10 @@ namespace Vision
                 // Re-establish connection if it doesn't exist or is broken
                 if (_tcpClient == null || !_tcpClient.Connected)
                 {
-                    if (_tcpClient != null) { _tcpClient.Close(); }
+                    if (_tcpClient != null)
+                    {
+                        _tcpClient.Close();
+                    }
                     _tcpClient = new TcpClient();
                     _tcpClient.Connect(
                         CommunicationConstants.SERVER_HOST,
@@ -362,16 +366,13 @@ namespace Vision
 
             try
             {
-                // Render into the shared RenderTexture
                 camera.targetTexture = _sharedRT;
                 camera.Render();
 
-                // Read pixels into the shared Texture2D
                 RenderTexture.active = _sharedRT;
                 _sharedTex.ReadPixels(new Rect(0, 0, _imageWidth, _imageHeight), 0, 0);
                 _sharedTex.Apply();
 
-                // Restore camera and active RT before encoding
                 camera.targetTexture = null;
                 RenderTexture.active = null;
 

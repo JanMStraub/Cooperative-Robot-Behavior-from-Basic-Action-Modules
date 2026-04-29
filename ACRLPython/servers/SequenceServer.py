@@ -5,7 +5,7 @@ SequenceServer.py - TCP server for multi-command sequence execution
 Receives compound commands from Unity, parses them into operation sequences,
 and executes them sequentially with completion tracking.
 
-Port: 5013 (SEQUENCE_SERVER_PORT)
+Port: 5008 (SEQUENCE_SERVER_PORT)
 
 Protocol V2:
     Query (Unity → Python):
@@ -114,6 +114,11 @@ class SequenceQueryHandler(SingletonBase):
             logger.error(f"Failed to initialize SequenceQueryHandler: {e}")
             return False
 
+    # Prefix used by the test scripts (tools/send_command.py etc.) to send a
+    # pre-parsed operation list without going through the LLM.
+    # Format: "EXEC:" + JSON-encoded list of {"operation": str, "params": dict}
+    DIRECT_EXEC_PREFIX = "EXEC:"
+
     def execute_sequence(
         self,
         command_text: str,
@@ -125,8 +130,14 @@ class SequenceQueryHandler(SingletonBase):
         """
         Parse and execute a command sequence.
 
+        When command_text starts with ``EXEC:`` the remainder is treated as a
+        JSON-encoded list of already-parsed commands
+        (``[{"operation": str, "params": dict}, ...]``) and is passed directly
+        to the executor, bypassing the LLM entirely.  This is used by test
+        scripts (tools/send_command.py) to drive Unity without LLM latency.
+
         Args:
-            command_text: Natural language command
+            command_text: Natural language command, or "EXEC:<json>" for direct execution.
             robot_id: Default robot ID
             camera_id: Camera ID for perception operations (depth detection)
             auto_execute: Whether to automatically execute parsed operations
@@ -138,6 +149,44 @@ class SequenceQueryHandler(SingletonBase):
         if not self._parser or not self._executor:
             return {"success": False, "error": "SequenceQueryHandler not initialized"}
 
+        # ── Direct execution path (no LLM) ────────────────────────────────────
+        if command_text.startswith(self.DIRECT_EXEC_PREFIX):
+            raw = command_text[len(self.DIRECT_EXEC_PREFIX) :]
+            try:
+                commands = json.loads(raw)
+                if not isinstance(commands, list):
+                    return {
+                        "success": False,
+                        "error": "EXEC: payload must be a JSON array",
+                    }
+            except json.JSONDecodeError as e:
+                return {"success": False, "error": f"EXEC: invalid JSON — {e}"}
+
+            logger.info(
+                f"Direct execution (no LLM): {len(commands)} command(s) for {robot_id}"
+            )
+
+            if not auto_execute:
+                return {
+                    "success": True,
+                    "parsed_commands": commands,
+                    "original_command": command_text,
+                    "auto_execute": False,
+                    "total_commands": len(commands),
+                    "completed_commands": 0,
+                    "results": [],
+                    "total_duration_ms": 0,
+                }
+
+            exec_result = self._executor.execute_sequence(
+                commands, timeout_per_command=timeout
+            )
+            exec_result["parsed_commands"] = commands
+            exec_result["original_command"] = command_text
+            exec_result["direct_exec"] = True
+            return exec_result
+
+        # ── Normal path: LLM parsing ───────────────────────────────────────────
         # Check if negotiation is needed (before parsing)
         if self._executor and auto_execute:
             negotiated = self._executor.negotiate_if_needed(command_text, robot_id)
@@ -167,12 +216,17 @@ class SequenceQueryHandler(SingletonBase):
                 "commands": [],
             }
 
+        # Tag each command with the original text so SequenceExecutor can
+        # re-parse it with Reflexion context on failure.
+        for cmd in commands:
+            cmd["_original_text"] = command_text
+
         # Add camera_id to commands that need it (perception operations).
         # detect_objects is intentionally excluded: it reads from single-camera
         # storage (port 5005) using its own "main" default, not the stereo camera.
         perception_ops = [
             "detect_object_stereo",  # Stereo detection with depth (port 5006)
-            "analyze_scene",         # LLM vision analysis (single camera)
+            "analyze_scene",  # LLM vision analysis (single camera)
         ]
         for cmd in commands:
             if cmd.get("operation") in perception_ops:
@@ -214,7 +268,7 @@ class SequenceServer(TCPServerBase):
     """
     TCP server for receiving and executing command sequences from Unity.
 
-    Listens on port 5013 for sequence queries and returns execution results.
+    Listens on port 5008 for sequence queries and returns execution results.
     """
 
     def __init__(self, config: Optional[ServerConfig] = None):
@@ -337,7 +391,7 @@ class SequenceServer(TCPServerBase):
                 auto_execute = auto_execute_bytes[0] == 1
 
                 logger.info(
-                    f"Received sequence query (id={request_id}): {command_text[:100]}... (camera={camera_id}, auto_execute={auto_execute})"
+                    f"Received sequence query (id={request_id}): {command_text} (camera={camera_id}, auto_execute={auto_execute})"
                 )
 
                 # Execute the sequence

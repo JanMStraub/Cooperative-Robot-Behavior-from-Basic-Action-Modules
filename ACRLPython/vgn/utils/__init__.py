@@ -25,4 +25,3 @@ def workspace_lines(size):
         [0.0, size, 0.0],
         [0.0, size, size],
     ]
-

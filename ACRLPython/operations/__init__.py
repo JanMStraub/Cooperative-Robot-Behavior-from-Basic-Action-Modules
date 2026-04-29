@@ -32,6 +32,7 @@ from .MoveOperations import (
     create_move_to_coordinate_operation,
 )
 from .Registry import OperationRegistry, get_global_registry
+from . import GraspOperations
 
 # VisionOperations are imported by Registry
 
@@ -49,4 +50,6 @@ __all__ = [
     # Registry
     "OperationRegistry",
     "get_global_registry",
+    # Modules (imported for 'from operations import GraspOperations' usage)
+    "GraspOperations",
 ]

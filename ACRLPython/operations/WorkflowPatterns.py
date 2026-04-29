@@ -360,13 +360,12 @@ HANDOFF_PATTERN = WorkflowPattern(
             description="Detect object to handoff",
         ),
         WorkflowStep(
-            operation_id="coordination_grasp_object_for_handoff_001",
+            operation_id="manipulation_grasp_object_001",
             parameter_bindings={
                 "robot_id": "{source_robot_id}",
                 "object_id": "{object_id}",
-                "receiving_robot_id": "{target_robot_id}",
             },
-            description="Source robot grasps object at far end for handoff, leaving near end clear for receiving robot",
+            description="Source robot grasps object",
         ),
         WorkflowStep(
             operation_id="sync_signal_001",
@@ -379,14 +378,44 @@ HANDOFF_PATTERN = WorkflowPattern(
             description="Target robot waits for grip confirmation (in parallel)",
         ),
         WorkflowStep(
+            operation_id="motion_return_to_start_001",
+            parameter_bindings={"robot_id": "{source_robot_id}", "speed": "0.5"},
+            description="Source robot returns to start for deterministic joint config",
+        ),
+        WorkflowStep(
             operation_id="motion_move_to_coord_001",
             parameter_bindings={
-                "robot_id": "source_robot",
-                "x": "handoff_x",
-                "y": "handoff_y",
-                "z": "handoff_z",
+                "robot_id": "{source_robot_id}",
+                "x": "{handoff_x}",
+                "y": "{handoff_y}",
+                "z": "{handoff_z}",
             },
-            description="Source robot moves to handoff position",
+            description="Source robot moves to HANDOFF_PRESENTATION_POSITION",
+        ),
+        WorkflowStep(
+            operation_id="motion_adjust_orientation_003",
+            parameter_bindings={
+                "robot_id": "{source_robot_id}",
+                "pitch": "0.0",
+                "yaw": "0.0",
+                "roll": "0.0",
+            },
+            description="Lock wrist to deterministic orientation (prevents joint 5/6 variance)",
+        ),
+        WorkflowStep(
+            operation_id="sync_signal_001",
+            parameter_bindings={"event_name": "r1_at_handoff"},
+            description="Source robot signals it is at handoff position",
+        ),
+        WorkflowStep(
+            operation_id="sync_wait_for_signal_001",
+            parameter_bindings={"event_name": "r1_at_handoff", "timeout_ms": "10000"},
+            description="Target robot waits for source at handoff position",
+        ),
+        WorkflowStep(
+            operation_id="perception_stereo_detect_001",
+            parameter_bindings={"color": "object_color", "robot_id": "{target_robot_id}"},
+            description="Target robot re-detects object at presentation position",
         ),
         WorkflowStep(
             operation_id="coordination_receive_handoff_001",
@@ -395,16 +424,11 @@ HANDOFF_PATTERN = WorkflowPattern(
                 "object_id": "{object_id}",
                 "source_robot_id": "{source_robot_id}",
             },
-            description="Target robot orients gripper upward, moves below object, and closes gripper",
+            description="Target robot receives handoff: orient gripper, move to approach, close gripper",
         ),
         WorkflowStep(
-            operation_id="sync_wait_001",
-            parameter_bindings={"duration_ms": "500"},
-            description="Wait for gripper to fully close",
-        ),
-        WorkflowStep(
-            operation_id="manipulation_control_gripper_001",
-            parameter_bindings={"robot_id": "source_robot", "open_gripper": "True"},
+            operation_id="manipulation_release_object_001",
+            parameter_bindings={"robot_id": "{source_robot_id}"},
             description="Source robot releases object",
         ),
         WorkflowStep(
@@ -634,53 +658,52 @@ def get_global_workflow_registry() -> WorkflowPatternRegistry:
 # ============================================================================
 
 HANDOFF_TEXT_PATTERN = """
-REMOVED OPERATION: hand_over_object_to_another_robot
-=====================================================
+HANDOFF OPERATION: Explicit flat step sequence
+==============================================
 
-This operation was REMOVED because it is NON-ATOMIC (combines 5 steps).
-
-To perform an object handoff, the LLM should chain these ATOMIC operations:
+Object handoff uses individual atomic operations — no composite present_for_handoff
+or receive_handoff ops exist. Each step gets its own Unity ACK via SequenceExecutor.
 
 **Step-by-Step Atomic Operation Sequence:**
 
-1. Detect the object to hand off (required precondition for grasp step)
+1. Detect the object (precondition for grasp)
    → detect_object_stereo(source_robot, color=object_color)
 
-2. Source robot grasps object at the FAR END (away from receiving robot)
-   → grasp_object_for_handoff(source_robot, object_id, receiving_robot)
-   NOTE: Do NOT use move_to_coordinate + control_gripper here. The
-   grasp_object_for_handoff operation automatically selects the far end of
-   elongated objects and aligns the jaw axis — preventing gripper collision.
+2. Source robot grasps object
+   → grasp_object(source_robot, object_id)
+   NOTE: Do NOT use move_to_coordinate + control_gripper here.
 
-3. Source robot signals it has grasped
-   → signal(source_robot, "object_gripped")
+3. Source robot returns to start (deterministic joint config for reproducible IK)
+   → return_to_start_position(source_robot, speed=0.5)
 
-4. Target robot waits for signal (runs in parallel with step 3)
-   → wait_for_signal(target_robot, "object_gripped", timeout_ms=10000)
+4. Source robot moves to HANDOFF_PRESENTATION_POSITION
+   → move_to_coordinate(source_robot, x=HANDOFF_X, y=HANDOFF_Y, z=HANDOFF_Z)
 
-5. Target robot receives the object (orient upward + move below + close gripper)
-   → receive_handoff(target_robot, object_id, source_robot)
-   NOTE: receive_handoff internally orients the gripper upward (pitch=90°),
-   moves directly below the object with clearance, and closes the gripper.
-   NEVER use grasp_object for the receiving robot — it routes through Unity's
-   ExecuteHandoffGrasp which positions the gripper at the object centre,
-   causing collision with the source robot's gripper.
+5. Source robot locks wrist (deterministic joint 5/6 — prevents pose variance across runs)
+   → adjust_end_effector_orientation(source_robot, pitch=0, yaw=0, roll=0)
 
-6. Source robot releases after target has the object
-   → control_gripper(source_robot, open_gripper=True)   # source releases
-   → signal(target_robot, "handoff_complete")
+6a. Source robot signals ready (parallel with 6b)
+   → signal(source_robot, "r1_at_handoff")
 
-**Why Removed:**
-The original operation hid coordination complexity from the LLM.
-By exposing atomic operations, the LLM can:
-- See exactly what happens at each step
-- Debug failures more easily
-- Adapt the sequence to specific contexts
-- Learn from successful coordination patterns
+6b. Target robot waits (parallel with 6a)
+   → wait_for_signal(target_robot, "r1_at_handoff", timeout_ms=10000)
+
+7. Target robot re-detects the object at its new position
+   → detect_object_stereo(target_robot, color=object_color)
+
+8. Target robot receives handoff (orient + move to approach + close gripper — fully atomic)
+   → receive_handoff(target_robot, object_id, source_robot_id=source_robot)
+
+9. Source robot releases
+    → release_object(source_robot)
 
 **Key Anti-Patterns to Avoid:**
-- Do NOT use move_to_coordinate + control_gripper for step 2 — use grasp_object_for_handoff
-- Do NOT use grasp_object for the receiving robot — use receive_handoff
+- Do NOT use move_to_coordinate + control_gripper for step 2 — use grasp_object
+- Do NOT use grasp_object for the receiving robot — use receive_handoff instead
+- Do NOT use orient_gripper_for_handoff_receive — it was removed; receive_handoff is the replacement
+- Do NOT skip step 3 — return_to_start is required for deterministic IK convergence
+- Do NOT skip step 4 — source MUST move to the presentation position before receiver approaches
+- Do NOT skip step 5 — adjust_end_effector_orientation locks wrist (joint 5/6 variance otherwise)
 
 **Example LLM Usage:**
 "Robot1, hand the red bar to Robot2"
@@ -688,14 +711,15 @@ By exposing atomic operations, the LLM can:
 LLM generates:
 ```
 detect_object_stereo("Robot1", color="red")
-grasp_object_for_handoff("Robot1", object_id="RedBar", receiving_robot_id="Robot2")
-move_to_coordinate("Robot1", x=0.0, y=0.3, z=0.07)
-signal("Robot1", "r1_at_handoff")
-wait_for_signal("Robot2", "r1_at_handoff", timeout_ms=10000)
+grasp_object("Robot1", object_id="RedBar")
+return_to_start_position("Robot1", speed=0.5)
+move_to_coordinate("Robot1", x=HANDOFF_X, y=HANDOFF_Y, z=HANDOFF_Z)
+adjust_end_effector_orientation("Robot1", pitch=0, yaw=0, roll=0)
+signal("Robot1", "r1_at_handoff")          # parallel
+wait_for_signal("Robot2", "r1_at_handoff") # parallel
 detect_object_stereo("Robot2", color="red")
 receive_handoff("Robot2", object_id="RedBar", source_robot_id="Robot1")
 release_object("Robot1")
-signal("Robot2", "handoff_complete")
 ```
 """
 

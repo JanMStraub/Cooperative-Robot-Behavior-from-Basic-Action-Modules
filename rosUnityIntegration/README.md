@@ -74,9 +74,9 @@ Set via `ROSControlModeManager` component in Unity Inspector:
 
 | Mode | Unity IK | ROS Planning | Use Case |
 |------|----------|--------------|----------|
-| **Unity** (default) | ✓ Active | ✗ Disabled | Testing, no Docker dependency |
-| **ROS** | ✗ Bypassed | ✓ Active | Collision-aware planning |
-| **Hybrid** | ✓ Dynamic | ✓ Dynamic | Best of both (auto-switching) |
+| **Unity** (default) | Active | ✗ Disabled | Testing, no Docker dependency |
+| **ROS** | ✗ Bypassed | Active | Collision-aware planning |
+| **Hybrid** | Dynamic | Dynamic | Best of both (auto-switching) |
 
 **Default behavior**: ROS disabled (`ROS_ENABLED = False` in `ACRLPython/config/ROS.py`)
 

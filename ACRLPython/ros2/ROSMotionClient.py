@@ -163,6 +163,12 @@ class ROSMotionServer:
     and publishers for each robot namespace.
     """
 
+    # Extra settle wait (seconds) injected after a "completed_with_timeout" trajectory.
+    # When Unity reports that the arm did not fully settle, the arm is still moving at the
+    # point where Python begins planning the next move.  This wait lets the physics
+    # catch up so /joint_states reflects the actual resting pose.
+    SETTLE_WAIT_AFTER_TIMEOUT = 3.0
+
     # Robot base positions and rotations in Unity world coordinates.
     # Positions sourced from ROBOT_BASE_POSITIONS in config/Robot.py.
     # Robot1: Unity rotation (0, 0, 0, -1) = 360° = 0° effective rotation - facing forward (+Z in Unity)
@@ -186,13 +192,19 @@ class ROSMotionServer:
         self._move_group_clients = {}  # robot_id -> ActionClient
         self._ik_service_clients = {}  # robot_id -> Service Client for IK
         self._fk_service_clients = {}  # robot_id -> Service Client for FK
-        self._cartesian_path_clients = {}  # robot_id -> Service Client for Cartesian paths
+        self._cartesian_path_clients = (
+            {}
+        )  # robot_id -> Service Client for Cartesian paths
         self._trajectory_pubs = {}  # robot_id -> Publisher
         self._gripper_pubs = {}  # robot_id -> Publisher
         self._joint_state_subs = {}  # robot_id -> Subscription
         self._current_joint_states = {}  # robot_id -> JointState msg
-        self._move_group_server_ready = {}  # robot_id -> bool, cached server availability
-        self._joint_states_lock = threading.Lock()  # guards _current_joint_states (writer: ROS spin thread, readers: TCP handler threads)
+        self._move_group_server_ready = (
+            {}
+        )  # robot_id -> bool, cached server availability
+        self._joint_states_lock = (
+            threading.Lock()
+        )  # guards _current_joint_states (writer: ROS spin thread, readers: TCP handler threads)
         self._last_planned_trajectories = {}  # robot_id -> JointTrajectory
         self._trajectory_feedback = {}  # robot_id -> last feedback status string
         self._trajectory_feedback_event = {}  # robot_id -> threading.Event
@@ -298,9 +310,8 @@ class ROSMotionServer:
         """Publish a ground/table collision object to a robot's MoveIt planning scene.
 
         The table surface in Unity is at Y=0 (same as robot base_link origin).
-        In ROS base_link frame (Z-up), Z=0 is the floor. We add a large flat box
-        at Z=-0.01 (just below the surface) so MoveIt treats the table surface as
-        a collision boundary and plans paths that stay above it.
+        In ROS base_link frame (Z-up), Z=0 is the table surface. We add a large
+        flat box with its top face at Z=0 so MoveIt treats the actual table surface as a collision boundary and plans paths that stay above it.
 
         Published to /{robot_id}/planning_scene once at startup. MoveIt's planning
         scene monitor picks it up and applies it to all subsequent planning requests.
@@ -321,13 +332,10 @@ class ROSMotionServer:
         scene.is_diff = True  # Incremental update, not a full scene replacement
 
         # Ground plane: 2m x 2m x 10cm slab in base_link frame.
-        # Top face at Z=-0.10 (10cm below table surface).
-        # Prevents trajectories from going far below the table while giving
-        # enough room for the arm links (link_2, link_3) to sweep low when
-        # reaching laterally at grasp height. At full extension (Y≈-0.27),
-        # the elbow can dip to Z≈-0.07 — a ground plane at Z=-0.05 caused
-        # "Unable to sample any valid states for goal tree" because the arm
-        # geometry collided with the collision box at every IK solution.
+        # Ground plane: 2m x 2m x 10cm slab in base_link frame.
+        # Unity table surface (BottomPanel) is at Y=0, which maps to Z=0 in ROS
+        # base_link (Z-up). Top face of the box is placed at Z=0 so MoveIt treats the actual table surface as the collision boundary.
+        # Box center at Z=-0.05 with 10cm thickness → top face at Z=0.
         ground = CollisionObject()
         ground.header.frame_id = "base_link"
         ground.id = "ground_plane"
@@ -340,7 +348,7 @@ class ROSMotionServer:
         box_pose = Pose()
         box_pose.position.x = 0.0
         box_pose.position.y = 0.0
-        box_pose.position.z = -0.15  # Top face at Z=-0.10, 10cm below table surface
+        box_pose.position.z = -0.05  # Top face at Z=0, matching Unity Y=0 table surface
         box_pose.orientation.w = 1.0
 
         ground.primitives = [box]
@@ -363,11 +371,12 @@ class ROSMotionServer:
         Unity coordinate system: X=right, Y=up, Z=forward (left-handed)
         ROS coordinate system: X=forward, Y=left, Z=up (right-handed)
 
-        Example for Robot2 at Unity world (0.475, 0, 0):
-        - User sends Unity world: (0.2, 0.15, 0)
-        - Translate: (0.2-0.475, 0.15, 0) = (-0.275, 0.15, 0) in Unity local
-        - Rotate 180°: (0.275, 0.15, 0) in Unity local
-        - Convert to ROS: (Z, -X, Y) = (0, -0.275, 0.15) in ROS base_link
+        Example for Robot1 at Unity world (-0.475, 0, 0), base_link facing +Z (y_rotation=0°):
+        - Target Unity world: (0, 0.089, 0.05)
+        - Translate: (0-(-0.475), 0.089, 0.05) = (0.475, 0.089, 0.05) in Unity local
+        - Rotate 0°: unchanged (0.475, 0.089, 0.05)
+        - Convert to ROS: x=local_z=0.05 (forward), y=-local_x=-0.475 (left), z=0.089 (up)
+
 
         Args:
             world_position: Dict with x, y, z in Unity world coordinates (Y-up)
@@ -522,14 +531,14 @@ class ROSMotionServer:
             data = json.loads(msg.data)
             status = data.get("status", "")
             self._trajectory_feedback[robot_id] = status
-            if status in ("completed", "aborted", "rejected"):
+            if status in ("completed", "completed_with_timeout", "aborted", "rejected"):
                 self._trajectory_feedback_event[robot_id].set()
         except (json.JSONDecodeError, Exception):
             pass
 
     def _wait_for_trajectory_completion(
         self, robot_id: str, timeout: float = 30.0
-    ) -> bool:
+    ) -> str:
         """Wait until Unity reports the current trajectory as completed or aborted.
 
         Args:
@@ -537,15 +546,15 @@ class ROSMotionServer:
             timeout: Maximum seconds to wait
 
         Returns:
-            True if completed successfully, False if aborted/rejected/timed out.
+            Final feedback status string: "completed", "completed_with_timeout",
+            "aborted", "rejected", or "timeout" (Python-side wait expired).
         """
         event = self._trajectory_feedback_event[robot_id]
         signalled = event.wait(timeout=timeout)
         if not signalled:
             logger.warning(f"{robot_id}: Timed out waiting for trajectory completion")
-            return False
-        status = self._trajectory_feedback.get(robot_id, "")
-        return status == "completed"
+            return "timeout"
+        return self._trajectory_feedback.get(robot_id, "timeout")
 
     def start(self):
         """Start the TCP server and ROS spin thread."""
@@ -653,6 +662,8 @@ class ROSMotionServer:
                 return self._plan_and_publish(request, robot_id)
             elif command == "get_current_pose":
                 return self._get_current_pose(robot_id)
+            elif command == "get_ee_pose":
+                return self._compute_fk(robot_id)
             elif command == "control_gripper":
                 return self._control_gripper(request, robot_id)
             elif command == "plan_multi_waypoint":
@@ -663,8 +674,8 @@ class ROSMotionServer:
                 return self._plan_return_to_start(request, robot_id)
             elif command == "validate_grasp_candidates":
                 return self._validate_grasp_candidates(request, robot_id)
-            elif command == "plan_cartesian_descent":
-                return self._plan_cartesian_descent(request, robot_id)
+            elif command in ("plan_cartesian_descent", "plan_cartesian_move"):
+                return self._plan_cartesian_move(request, robot_id)
             elif command == "ping":
                 return {"success": True, "message": "pong", "timestamp": time.time()}
             else:
@@ -696,6 +707,10 @@ class ROSMotionServer:
         # coords (LLM-generated, move_to_coordinate). "unity_world" means Unity world
         # coords that must be transformed (grasp planner, detection-derived positions).
         coordinate_space = request.get("coordinate_space", "unity_world")
+        # constrain_joint6: when True, add a ±30° path constraint on joint_6 around its
+        # current position to prevent link-6 free-spin during pre-grasp hover moves.
+        # Must NOT be set for descent/grasp moves where joint_6 must reach target orientation.
+        constrain_joint6 = request.get("constrain_joint6", False)
 
         logger.info(
             f"[GRASP_DEBUG] {robot_id} incoming position ({coordinate_space}): "
@@ -713,9 +728,9 @@ class ROSMotionServer:
         goal.request = MotionPlanRequest()
         goal.request.group_name = "arm"
         # Explicitly select OMPL pipeline and RRTConnect planner.
-        # Without pipeline_id, MoveIt 2 Humble may pick CHOMP (also installed) as
-        # the default pipeline, which does not support pose goals and fails with
-        # "Start state violates joint limits" / INVALID_GOAL_CONSTRAINTS.
+        # pipeline_id="ompl" is required — without it, MoveIt 2 Humble may pick
+        # CHOMP (also installed) as the default, which does not support pose goals
+        # and fails with "Start state violates joint limits" / INVALID_GOAL_CONSTRAINTS.
         goal.request.pipeline_id = "ompl"
         goal.request.planner_id = "RRTConnect"
         goal.request.num_planning_attempts = MOVEIT_PLANNING_ATTEMPTS
@@ -845,6 +860,31 @@ class ROSMotionServer:
 
         goal.request.goal_constraints.append(constraints)
 
+        if constrain_joint6 and joint_state is not None and "joint_6" in joint_state.name:
+            # Prevent link-6 free-spin during pre-grasp hover: pin joint_6 within ±30°
+            # of its current value so RRTConnect cannot spin the wrist 180-360° to an
+            # equivalent ee_link pose. Only applied when caller sets constrain_joint6=True
+            # (pre-grasp hover). Never set for descent/grasp moves where joint_6 must
+            # reach the target orientation.
+            _j6_idx = list(joint_state.name).index("joint_6")
+            _j6_current = joint_state.position[_j6_idx]
+            _j6_lower, _j6_upper = ARM_JOINT_LIMITS.get(
+                "joint_6", (-3.1405926535897932, 3.1405926535897932)
+            )
+            _window = 0.5236  # ±30° in radians
+            _j6_path_lower = max(_j6_lower, _j6_current - _window)
+            _j6_path_upper = min(_j6_upper, _j6_current + _window)
+            _j6_center = (_j6_path_lower + _j6_path_upper) / 2.0
+            _j6c = JointConstraint()
+            _j6c.joint_name = "joint_6"
+            _j6c.position = _j6_center
+            _j6c.tolerance_below = _j6_center - _j6_path_lower
+            _j6c.tolerance_above = _j6_path_upper - _j6_center
+            _j6c.weight = 1.0
+            _j6_path_constraints = Constraints()
+            _j6_path_constraints.joint_constraints.append(_j6c)
+            goal.request.path_constraints = _j6_path_constraints
+
         return goal
 
     def _wait_for_joint_states(self, robot_id: str, timeout: float = 5.0) -> bool:
@@ -964,8 +1004,10 @@ class ROSMotionServer:
 
             # Diagnostic: warn if TOTG did not produce timestamps (silent failure).
             if trajectory.points:
-                last_ts = (trajectory.points[-1].time_from_start.sec
-                           + trajectory.points[-1].time_from_start.nanosec * 1e-9)
+                last_ts = (
+                    trajectory.points[-1].time_from_start.sec
+                    + trajectory.points[-1].time_from_start.nanosec * 1e-9
+                )
                 if last_ts < 1e-9:
                     logger.warning(
                         f"{robot_id}: MoveIt returned zero timestamps on all "
@@ -1081,6 +1123,33 @@ class ROSMotionServer:
         self._trajectory_feedback_event[robot_id].clear()
         self._trajectory_feedback[robot_id] = None
 
+        # Diagnostic: log joint_6 values to detect ±π boundary crossings.
+        if trajectory.joint_names and trajectory.points:
+            _j6i = None
+            for _ji, _jn in enumerate(trajectory.joint_names):
+                if _jn == "joint_6":
+                    _j6i = _ji
+                    break
+            if _j6i is not None:
+                import math as _mth
+
+                _j6v = [
+                    _mth.degrees(pt.positions[_j6i])
+                    for pt in trajectory.points
+                    if pt.positions
+                ]
+                _step = max(1, len(_j6v) // 10)
+                _sampled = [f"{v:.1f}" for v in _j6v[::_step]] + [f"{_j6v[-1]:.1f}"]
+                logger.info(
+                    f"{robot_id}: joint_6 plan (deg, sampled): {' '.join(_sampled)}"
+                )
+                for _pi in range(1, len(_j6v)):
+                    if abs(_j6v[_pi] - _j6v[_pi - 1]) > 270.0:
+                        logger.warning(
+                            f"{robot_id}: joint_6 BOUNDARY CROSSING at waypoint {_pi}: "
+                            f"{_j6v[_pi-1]:.1f}° → {_j6v[_pi]:.1f}°"
+                        )
+
         trajectory_pub.publish(trajectory)
 
         logger.info(
@@ -1111,21 +1180,33 @@ class ROSMotionServer:
             traj_duration = 5.0
         execution_timeout = max(30.0, traj_duration * 2.5 + 15.0)
 
-        completed = self._wait_for_trajectory_completion(
+        feedback_status = self._wait_for_trajectory_completion(
             robot_id, timeout=execution_timeout
         )
-        if not completed:
+
+        # "completed_with_timeout" means Unity executed the trajectory but the arm
+        # did not fully settle at its drive target before the timeout expired.  The
+        # arm is still moving when Python receives this status, so plan the next move
+        # from stale /joint_states unless we wait for physics to catch up.
+        if feedback_status == "completed_with_timeout":
+            logger.warning(
+                f"{robot_id}: Arm did not fully settle — waiting {self.SETTLE_WAIT_AFTER_TIMEOUT}s "
+                "for physics to catch up before planning next move"
+            )
+            time.sleep(self.SETTLE_WAIT_AFTER_TIMEOUT)
+        elif feedback_status not in ("completed",):
             logger.warning(
                 f"{robot_id}: Trajectory completion not confirmed within {execution_timeout:.1f}s "
-                "(may have timed out or been aborted)"
+                f"(status={feedback_status})"
             )
 
+        success = feedback_status in ("completed", "completed_with_timeout")
         return {
-            "success": completed,
+            "success": success,
             "robot_id": robot_id,
             "trajectory_points": len(trajectory.points),
             "planning_time": plan_time,
-            "status": "completed" if completed else "timeout",
+            "status": feedback_status,
         }
 
     def _get_current_pose(self, robot_id):
@@ -1289,9 +1370,11 @@ class ROSMotionServer:
             return {"success": False, "error": "FK returned no poses"}
 
         pos = response.pose_stamped[0].pose.position
+        ori = response.pose_stamped[0].pose.orientation
         return {
             "success": True,
             "position": {"x": pos.x, "y": pos.y, "z": pos.z},
+            "orientation": {"x": ori.x, "y": ori.y, "z": ori.z, "w": ori.w},
         }
 
     def _plan_orientation_change(self, request, robot_id):
@@ -1353,7 +1436,9 @@ class ROSMotionServer:
         }
         return self._plan_and_publish(orient_request, robot_id)
 
-    def _apply_time_parameterization(self, trajectory, vel_scaling, acc_scaling, robot_id):
+    def _apply_time_parameterization(
+        self, trajectory, vel_scaling, acc_scaling, robot_id
+    ):
         """Apply time parameterization to an untimed JointTrajectory using TOTG.
 
         Used when GetCartesianPath returns a trajectory with all time_from_start = 0
@@ -1390,7 +1475,8 @@ class ROSMotionServer:
             if success:
                 last_ts = (
                     robot_traj.joint_trajectory.points[-1].time_from_start.sec
-                    + robot_traj.joint_trajectory.points[-1].time_from_start.nanosec * 1e-9
+                    + robot_traj.joint_trajectory.points[-1].time_from_start.nanosec
+                    * 1e-9
                 )
                 logger.info(
                     f"{robot_id}: Manual TOTG applied to Cartesian trajectory — "
@@ -1406,7 +1492,9 @@ class ROSMotionServer:
             logger.warning(
                 f"{robot_id}: Manual TOTG unavailable ({e}) — applying linear time parameterization"
             )
-            return self._apply_linear_time_parameterization(trajectory, vel_scaling, robot_id)
+            return self._apply_linear_time_parameterization(
+                trajectory, vel_scaling, robot_id
+            )
 
     def _apply_linear_time_parameterization(self, trajectory, vel_scaling, robot_id):
         """Assign uniform time stamps to an untimed JointTrajectory.
@@ -1455,9 +1543,7 @@ class ROSMotionServer:
             prev = points[i - 1]
             # Segment duration = max over joints of |delta_pos| / vel_limit
             seg_dur = 0.0
-            for j, (cur_pos, prev_pos) in enumerate(
-                zip(pt.positions, prev.positions)
-            ):
+            for j, (cur_pos, prev_pos) in enumerate(zip(pt.positions, prev.positions)):
                 delta = abs(cur_pos - prev_pos)
                 lim = vel_limits[j] if j < len(vel_limits) else 1.0
                 if lim > 0:
@@ -1475,17 +1561,16 @@ class ROSMotionServer:
         )
         return trajectory
 
-    def _plan_cartesian_descent(self, request, robot_id):
-        """Plan and publish a straight-line Cartesian descent to a target position.
+    def _plan_cartesian_move(self, request, robot_id):
+        """Plan and publish a straight-line Cartesian move to a target position.
 
         Uses MoveIt's GetCartesianPath service to constrain the end-effector to
         follow a straight line from the current pose to the target. This prevents
-        IK redundancy from causing joint 4 (or any wrist joint) to rotate to a
-        different solution mid-descent, which would offset the gripper laterally.
+        IK redundancy from causing joints to rotate to a different solution
+        mid-move, which would cause unwanted rotation instead of pure translation.
 
-        Intended for the final grasp descent: after arriving at the pre-grasp
-        hover, call this instead of plan_and_execute so the arm descends straight
-        down to the object without any lateral drift.
+        Use instead of plan_and_execute whenever the end-effector must travel in
+        a straight line (grasp descent, handoff slide-in, etc.).
 
         Args:
             request: Dict with keys:
@@ -1517,6 +1602,8 @@ class ROSMotionServer:
         orientation = request.get("orientation")
         vel_scaling = request.get("max_velocity_scaling", 0.6)
         acc_scaling = request.get("max_acceleration_scaling", 0.4)
+        lock_orientation = request.get("lock_orientation", True)
+        avoid_collisions = request.get("avoid_collisions", True)
 
         # Transform Unity world coords → ROS base_link frame
         local_position = self._transform_world_to_local(position, robot_id)
@@ -1551,14 +1638,14 @@ class ROSMotionServer:
         req.waypoints = [target_pose.pose]
         req.max_step = 0.10  # 10cm maximum interpolation step — reduces waypoints for short descents (5cm → 150 pts, 10cm → ~75 pts)
         req.jump_threshold = 0.0  # Disable jump detection; non-zero values prematurely terminate descent at workspace edges
-        req.avoid_collisions = True
+        req.avoid_collisions = avoid_collisions
 
         # Lock wrist orientation throughout the descent so MoveIt's IK solver
         # cannot flip to a redundant wrist solution mid-path (which would cause
         # the gripper to visibly rotate around its own axis during descent).
         # Without this constraint, GetCartesianPath solves each waypoint
         # independently and may choose a different J4/J6 configuration each time.
-        if OrientationConstraint is not None:
+        if lock_orientation and OrientationConstraint is not None:
             orient_constraint = OrientationConstraint()
             orient_constraint.header.frame_id = "base_link"
             orient_constraint.link_name = "ee_link"
@@ -1656,6 +1743,34 @@ class ROSMotionServer:
             f"{len(trajectory.points)} points"
         )
 
+        # Diagnostic: log joint_6 values to detect ±π boundary crossings in the planned trajectory.
+        if trajectory.joint_names and trajectory.points:
+            j6_idx = None
+            for _ji, _jn in enumerate(trajectory.joint_names):
+                if _jn == "joint_6":
+                    j6_idx = _ji
+                    break
+            if j6_idx is not None:
+                import math as _mth
+
+                j6_vals = [
+                    _mth.degrees(pt.positions[j6_idx])
+                    for pt in trajectory.points
+                    if pt.positions
+                ]
+                step = max(1, len(j6_vals) // 10)
+                sampled = [f"{v:.1f}" for v in j6_vals[::step]] + [f"{j6_vals[-1]:.1f}"]
+                logger.info(
+                    f"{robot_id}: joint_6 trajectory (deg, sampled): {' '.join(sampled)}"
+                )
+                for _pi in range(1, len(j6_vals)):
+                    raw_delta = j6_vals[_pi] - j6_vals[_pi - 1]
+                    if abs(raw_delta) > 270.0:
+                        logger.warning(
+                            f"{robot_id}: joint_6 BOUNDARY CROSSING at waypoint {_pi}: "
+                            f"{j6_vals[_pi-1]:.1f}° → {j6_vals[_pi]:.1f}° (delta={raw_delta:.1f}°)"
+                        )
+
         # When moveit_msgs < 2.3, GetCartesianPath does not accept scaling factors
         # and returns an untimed trajectory (all time_from_start = 0). Apply TOTG
         # manually so Unity receives a properly timed trajectory.
@@ -1679,20 +1794,28 @@ class ROSMotionServer:
             traj_duration = 5.0
         execution_timeout = max(15.0, traj_duration * 2.5 + 10.0)
 
-        completed = self._wait_for_trajectory_completion(
+        feedback_status = self._wait_for_trajectory_completion(
             robot_id, timeout=execution_timeout
         )
-        if not completed:
+        if feedback_status == "completed_with_timeout":
             logger.warning(
-                f"{robot_id}: Cartesian trajectory completion not confirmed within {execution_timeout:.1f}s"
+                f"{robot_id}: Cartesian trajectory arm did not fully settle — "
+                f"waiting {self.SETTLE_WAIT_AFTER_TIMEOUT}s for physics to catch up"
+            )
+            time.sleep(self.SETTLE_WAIT_AFTER_TIMEOUT)
+        elif feedback_status not in ("completed",):
+            logger.warning(
+                f"{robot_id}: Cartesian trajectory completion not confirmed within {execution_timeout:.1f}s "
+                f"(status={feedback_status})"
             )
 
+        success = feedback_status in ("completed", "completed_with_timeout")
         return {
-            "success": completed,
+            "success": success,
             "robot_id": robot_id,
             "trajectory_points": len(trajectory.points),
             "cartesian_fraction": fraction,
-            "status": "completed" if completed else "timeout",
+            "status": feedback_status,
         }
 
     def _plan_return_to_start(self, request, robot_id):
@@ -1828,15 +1951,20 @@ class ROSMotionServer:
             traj_duration = 5.0
         execution_timeout = max(15.0, traj_duration * 2.5 + 10.0)
 
-        completed = self._wait_for_trajectory_completion(
+        feedback_status = self._wait_for_trajectory_completion(
             robot_id, timeout=execution_timeout
         )
+        if feedback_status not in ("completed", "completed_with_timeout"):
+            logger.warning(
+                f"{robot_id}: Return-to-start completion not confirmed within {execution_timeout:.1f}s "
+                f"(status={feedback_status})"
+            )
         return {
-            "success": completed,
+            "success": feedback_status in ("completed", "completed_with_timeout"),
             "robot_id": robot_id,
             "trajectory_points": len(trajectory.points),
             "planning_time": plan_time,
-            "status": "completed" if completed else "timeout",
+            "status": feedback_status,
         }
 
     def _validate_grasp_candidates(self, request, robot_id):
