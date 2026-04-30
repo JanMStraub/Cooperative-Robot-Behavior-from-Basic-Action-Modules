@@ -10,6 +10,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const network = new NetworkManager(ui, renderer, autort);
     autort.setNetwork(network);
 
+    const wsTimeout = setTimeout(() => {
+        const robotList = document.getElementById('ws-robot-list');
+        if (robotList) {
+            const empty = robotList.querySelector('.ws-empty');
+            if (empty) {
+                empty.innerHTML = `
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    <span>No data from Unity after 30s.<br>Check backend is running.</span>
+                `;
+            }
+        }
+    }, 30000);
+    renderer.wsConnectionTimeout = wsTimeout;
+
     // Event Wiring
     document.getElementById('btn-send').addEventListener('click', () => {
         const text = ui.promptInput.value.trim();

@@ -12,6 +12,11 @@
     overflow-y: auto;
 }
 
+#benchmark-details {
+    flex-direction: column;
+    gap: 1rem;
+}
+
 .history-list {
     flex: 1;
     overflow-y: auto;
@@ -186,6 +191,10 @@
     letter-spacing: 0.02em;
 }
 
+.kpi-value--accent {
+    color: var(--primary);
+}
+
 /* Charts */
 .charts-row {
     height: 280px;
@@ -223,7 +232,7 @@
 .benchmark-table th {
     position: sticky;
     top: 0;
-    background: #10141a;
+    background: var(--bg-table-header);
     color: var(--text-muted);
     font-family: var(--font-mono);
     font-size: 0.72rem;

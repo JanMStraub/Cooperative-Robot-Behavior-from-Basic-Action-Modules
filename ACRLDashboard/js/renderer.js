@@ -5,6 +5,10 @@ export class Renderer {
     }
 
     updateWorldState(data) {
+        if (this.wsConnectionTimeout) {
+            clearTimeout(this.wsConnectionTimeout);
+            this.wsConnectionTimeout = null;
+        }
         // ── DOM world state panel ──────────────────────────────────
         const robotList = document.getElementById('ws-robot-list');
         const objectSection = document.getElementById('ws-object-section');
