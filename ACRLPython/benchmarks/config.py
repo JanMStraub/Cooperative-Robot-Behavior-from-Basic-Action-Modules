@@ -15,6 +15,8 @@ class BenchmarkConfig:
     max_retries: int = 1
     dry_run: bool = False
     task_count: int = 5  # B8 sub-task count
+    reflexion: bool = False
+    check_completion: bool = False
 
 
 @dataclasses.dataclass

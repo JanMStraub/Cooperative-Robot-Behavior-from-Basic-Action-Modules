@@ -211,6 +211,10 @@ UNITY_URDF_DIR = os.path.join(
 # Ensure webui dir exists
 os.makedirs(WEBUI_DIR, exist_ok=True)
 
+# Ensure benchmark results dir exists
+BENCHMARK_RESULTS_DIR = os.path.join(BASE_DIR, "benchmark_results")
+os.makedirs(BENCHMARK_RESULTS_DIR, exist_ok=True)
+
 # Mount static files — only when fastapi is available
 if _FASTAPI_AVAILABLE:
     app.mount("/static", StaticFiles(directory=WEBUI_DIR), name="static")
@@ -305,6 +309,56 @@ async def api_world_state():
     except Exception as e:
         logger.error(f"Error getting world state: {e}")
         return {"error": str(e)}
+
+
+@app.get("/api/benchmarks")
+async def api_get_benchmarks():
+    """List all benchmark result files."""
+    try:
+        results = []
+        if os.path.exists(BENCHMARK_RESULTS_DIR):
+            for file in os.listdir(BENCHMARK_RESULTS_DIR):
+                if file.startswith("benchmark") and file.endswith(".json"):
+                    file_path = os.path.join(BENCHMARK_RESULTS_DIR, file)
+                    # Quickly parse just the top level metadata without the huge steps array if possible
+                    # but since files are small, we can just load to get metadata
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        results.append({
+                            "filename": file,
+                            "benchmark_id": data.get("benchmark_id"),
+                            "benchmark_name": data.get("benchmark_name"),
+                            "run_id": data.get("run_id"),
+                            "success": data.get("success"),
+                            "total_duration_ms": data.get("total_duration_ms"),
+                            "success_rate": data.get("success_rate"),
+                            "mtime": os.path.getmtime(file_path)
+                        })
+        # Sort by mtime descending
+        results.sort(key=lambda x: x["mtime"], reverse=True)
+        return {"success": True, "files": results}
+    except Exception as e:
+        logger.error(f"Error listing benchmarks: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/benchmarks/{filename}")
+async def api_get_benchmark_detail(filename: str):
+    """Get full details of a specific benchmark run."""
+    try:
+        # Prevent directory traversal
+        clean_name = os.path.basename(filename)
+        file_path = os.path.join(BENCHMARK_RESULTS_DIR, clean_name)
+        
+        if not os.path.exists(file_path):
+            return {"success": False, "error": "File not found"}
+            
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return {"success": True, "data": data}
+    except Exception as e:
+        logger.error(f"Error reading benchmark file {filename}: {e}")
+        return {"success": False, "error": str(e)}
 
 
 def _make_placeholder_frame(text="Waiting for Unity..."):

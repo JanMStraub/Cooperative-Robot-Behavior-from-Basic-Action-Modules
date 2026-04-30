@@ -1,0 +1,100 @@
+{
+  "benchmark_id": 6,
+  "benchmark_name": "Dual-Robot Lift",
+  "run_id": "20260429T143311_5faa8d",
+  "config_snapshot": {
+    "robot_id": "Robot1",
+    "timeout_per_step_s": 90.0,
+    "max_retries": 1,
+    "dry_run": true,
+    "task_count": 5,
+    "reflexion": false,
+    "check_completion": false,
+    "robot_id_a": "Robot1",
+    "robot_id_b": "Robot2",
+    "sync_timeout_ms": 30000
+  },
+  "success": true,
+  "total_duration_ms": 213.79828453063965,
+  "steps": [
+    {
+      "index": 0,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 55.09185791015625,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 1,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 51.31697654724121,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 2,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 51.20682716369629,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 3,
+      "operation": "control_gripper",
+      "success": true,
+      "duration_ms": 50.07481575012207,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 4,
+      "operation": "signal",
+      "success": true,
+      "duration_ms": 53.29394340515137,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 5,
+      "operation": "wait_for_signal",
+      "success": true,
+      "duration_ms": 53.27010154724121,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 6,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 52.41107940673828,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 7,
+      "operation": "control_gripper",
+      "success": true,
+      "duration_ms": 52.28590965270996,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    }
+  ],
+  "ops_executed": 8,
+  "ops_succeeded": 8,
+  "success_rate": 1.0,
+  "avg_step_duration_ms": 52.4,
+  "retry_count": 0,
+  "first_failure_step": null,
+  "chain_metrics": null
+}

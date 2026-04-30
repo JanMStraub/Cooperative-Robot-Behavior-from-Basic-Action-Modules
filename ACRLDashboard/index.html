@@ -6,7 +6,7 @@
 		<title>ACRL Mission Control</title>
 		<!-- Modern Typography -->
 		<link
-			href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap"
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;600&display=swap"
 			rel="stylesheet"
 		/>
 		<!-- Font Awesome for Icons -->
@@ -15,9 +15,9 @@
 			href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
 		/>
 
-		<link rel="stylesheet" href="/static/css/variables.css?v=20260420_0001" />
-		<link rel="stylesheet" href="/static/css/layout.css?v=20260420_0001" />
-		<link rel="stylesheet" href="/static/css/components.css?v=20260420_0002" />
+		<link rel="stylesheet" href="/static/css/variables.css?v=20260430_0001" />
+		<link rel="stylesheet" href="/static/css/layout.css?v=20260430_0001" />
+		<link rel="stylesheet" href="/static/css/components.css?v=20260430_0001" />
 		<!-- Three.js Library -->
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 		<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -41,11 +41,17 @@
 					<i class="fa-solid fa-robot"></i>
 					<div class="title-group">
 						<h1>ACRL Mission Control</h1>
-						<span class="subtitle"
-							>Sim-to-Real Operations Dashboard</span
-						>
+						<span class="subtitle">Sim-to-Real Operations · AR4 Dual Arm</span>
 					</div>
 				</div>
+				<nav class="header-nav">
+					<a href="/static/index.html" class="nav-pill" id="nav-mission">
+						<i class="fa-solid fa-robot"></i> Mission Control
+					</a>
+					<a href="/static/benchmarks.html" class="nav-pill" id="nav-benchmarks">
+						<i class="fa-solid fa-chart-line"></i> Benchmarks
+					</a>
+				</nav>
 				<div class="system-status">
 					<div class="status-indicator">
 						<span
@@ -271,6 +277,9 @@
 				</section>
 			</main>
 		</div>
+		<script>
+			document.getElementById('nav-mission').classList.add('nav-pill--active');
+		</script>
 		<script type="module" src="/static/js/main.js?v=20260328_0005"></script>
 	</body>
 </html>

@@ -65,7 +65,8 @@ class BenchmarkRunner:
         # SequenceExecutor does `from config.Servers import REFLEXION_ENABLED` at
         # load time, binding the bool value into its own module namespace.
         prev_reflexion = _seq_mod.REFLEXION_ENABLED
-        _seq_mod.REFLEXION_ENABLED = False
+        if not cfg.reflexion:
+            _seq_mod.REFLEXION_ENABLED = False
         mock_original = None
 
         try:
@@ -79,7 +80,7 @@ class BenchmarkRunner:
 
             executor = SequenceExecutor(
                 default_timeout=cfg.timeout_per_step_s,
-                check_completion=False,
+                check_completion=cfg.check_completion,
                 enable_verification=False,
             )
             sequence = module.build_sequence(cfg)
@@ -193,7 +194,7 @@ class BenchmarkRunner:
         for task_name, sequence in sub_tasks:
             executor = SequenceExecutor(
                 default_timeout=cfg.timeout_per_step_s,
-                check_completion=False,
+                check_completion=cfg.check_completion,
                 enable_verification=False,
             )
             raw = executor.execute_sequence(sequence)

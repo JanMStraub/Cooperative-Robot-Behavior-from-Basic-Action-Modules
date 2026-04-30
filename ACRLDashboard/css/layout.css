@@ -206,3 +206,38 @@
 		height: 500px;
 	}
 }
+
+/* ── Header nav pills ─────────────────────────────────────── */
+.header-nav {
+    display: flex;
+    gap: 0.25rem;
+    align-items: center;
+}
+
+.nav-pill {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.9rem;
+    border-radius: 999px;
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-decoration: none;
+    border: 1px solid transparent;
+    transition: var(--transition);
+    white-space: nowrap;
+}
+
+.nav-pill:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--glass-border);
+}
+
+.nav-pill--active {
+    color: var(--primary);
+    background: var(--primary-dim);
+    border-color: var(--primary-border);
+}

@@ -1,0 +1,79 @@
+{
+  "benchmark_id": 2,
+  "benchmark_name": "Sequential Navigation",
+  "run_id": "20260429T143310_821eda",
+  "config_snapshot": {
+    "robot_id": "Robot1",
+    "timeout_per_step_s": 90.0,
+    "max_retries": 1,
+    "dry_run": true,
+    "task_count": 5,
+    "reflexion": false,
+    "check_completion": false
+  },
+  "success": true,
+  "total_duration_ms": 326.21121406555176,
+  "steps": [
+    {
+      "index": 0,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 55.1149845123291,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 1,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 55.10091781616211,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 2,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 53.79295349121094,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 3,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 52.258968353271484,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 4,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 53.189754486083984,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 5,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 55.05204200744629,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    }
+  ],
+  "ops_executed": 6,
+  "ops_succeeded": 6,
+  "success_rate": 1.0,
+  "avg_step_duration_ms": 54.1,
+  "retry_count": 0,
+  "first_failure_step": null,
+  "chain_metrics": null
+}

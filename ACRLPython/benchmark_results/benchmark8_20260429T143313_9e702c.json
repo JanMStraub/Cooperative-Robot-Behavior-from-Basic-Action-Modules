@@ -1,0 +1,205 @@
+{
+  "benchmark_id": 8,
+  "benchmark_name": "Heterogeneous Chain",
+  "run_id": "20260429T143313_9e702c",
+  "config_snapshot": {
+    "robot_id": "Robot1",
+    "timeout_per_step_s": 90.0,
+    "max_retries": 1,
+    "dry_run": true,
+    "task_count": 5,
+    "reflexion": false,
+    "check_completion": false,
+    "robot_id_a": "Robot1",
+    "robot_id_b": "Robot2",
+    "sync_timeout_ms": 30000
+  },
+  "success": true,
+  "total_duration_ms": 1017.5120830535889,
+  "steps": [
+    {
+      "index": 0,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 53.27296257019043,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 1,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 55.10401725769043,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 2,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 54.535865783691406,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 3,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 55.13906478881836,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 4,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 53.8020133972168,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 5,
+      "operation": "control_gripper",
+      "success": true,
+      "duration_ms": 53.14898490905762,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 6,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 50.447940826416016,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 7,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 53.07888984680176,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 8,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 54.11982536315918,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 9,
+      "operation": "control_gripper",
+      "success": true,
+      "duration_ms": 53.726911544799805,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 10,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 54.63886260986328,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 11,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 52.474021911621094,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 12,
+      "operation": "control_gripper",
+      "success": true,
+      "duration_ms": 51.24616622924805,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 13,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 54.90708351135254,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 14,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 50.96602439880371,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 15,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 52.45089530944824,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 16,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 54.23712730407715,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 17,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 52.65378952026367,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 18,
+      "operation": "control_gripper",
+      "success": true,
+      "duration_ms": 51.011085510253906,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    }
+  ],
+  "ops_executed": 19,
+  "ops_succeeded": 19,
+  "success_rate": 1.0,
+  "avg_step_duration_ms": 53.55326752913626,
+  "retry_count": 0,
+  "first_failure_step": null,
+  "chain_metrics": {
+    "total_tasks": 5,
+    "completed_tasks": 5,
+    "error_rate": 0.0,
+    "recovery_count": 0,
+    "per_error_code": {}
+  }
+}

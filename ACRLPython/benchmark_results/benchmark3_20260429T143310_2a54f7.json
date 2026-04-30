@@ -1,0 +1,61 @@
+{
+  "benchmark_id": 3,
+  "benchmark_name": "Navigate and Lift",
+  "run_id": "20260429T143310_2a54f7",
+  "config_snapshot": {
+    "robot_id": "Robot1",
+    "timeout_per_step_s": 90.0,
+    "max_retries": 1,
+    "dry_run": true,
+    "task_count": 5,
+    "reflexion": false,
+    "check_completion": false
+  },
+  "success": true,
+  "total_duration_ms": 213.08374404907227,
+  "steps": [
+    {
+      "index": 0,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 50.549983978271484,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 1,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 51.12886428833008,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 2,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 55.07397651672363,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 3,
+      "operation": "control_gripper",
+      "success": true,
+      "duration_ms": 55.06491661071777,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    }
+  ],
+  "ops_executed": 4,
+  "ops_succeeded": 4,
+  "success_rate": 1.0,
+  "avg_step_duration_ms": 52.9,
+  "retry_count": 0,
+  "first_failure_step": null,
+  "chain_metrics": null
+}

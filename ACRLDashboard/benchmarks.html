@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>ACRL Benchmarks</title>
+		<!-- Modern Typography -->
+		<link
+			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;600&display=swap"
+			rel="stylesheet"
+		/>
+		<!-- Font Awesome for Icons -->
+		<link
+			rel="stylesheet"
+			href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+		/>
+
+		<link rel="stylesheet" href="/static/css/variables.css" />
+		<link rel="stylesheet" href="/static/css/layout.css" />
+		<link rel="stylesheet" href="/static/css/components.css" />
+		<link rel="stylesheet" href="/static/css/benchmarks.css" />
+
+		<!-- Chart.js for visualizations -->
+		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+	</head>
+
+	<body class="dark-theme">
+		<div class="app-container">
+			<!-- Header -->
+			<header class="glass-header">
+				<div class="logo">
+					<i class="fa-solid fa-chart-line"></i>
+					<div class="title-group">
+						<h1>ACRL Mission Control</h1>
+						<span class="subtitle">Performance Analytics · AR4 System</span>
+					</div>
+				</div>
+				<nav class="header-nav">
+					<a href="/static/index.html" class="nav-pill" id="nav-mission">
+						<i class="fa-solid fa-robot"></i> Mission Control
+					</a>
+					<a href="/static/benchmarks.html" class="nav-pill" id="nav-benchmarks">
+						<i class="fa-solid fa-chart-line"></i> Benchmarks
+					</a>
+				</nav>
+				<div class="system-status">
+					<button class="btn-icon" id="btn-theme" title="Toggle light/dark mode">
+						<i class="fa-solid fa-circle-half-stroke"></i>
+					</button>
+				</div>
+			</header>
+
+			<!-- Main Content -->
+			<main class="dashboard-grid benchmark-grid">
+				<!-- Left Column: Benchmark History List -->
+				<section class="panel command-panel">
+					<div class="panel-header">
+						<h2>
+							<i class="fa-solid fa-history"></i> Run History
+						</h2>
+						<div class="panel-actions">
+							<button class="btn-icon-small" id="btn-refresh" title="Refresh">
+								<i class="fa-solid fa-sync"></i>
+							</button>
+						</div>
+					</div>
+
+					<div class="history-list glass-box" id="history-list">
+						<div class="ws-empty" id="history-loading">
+							<i class="fa-solid fa-circle-notch fa-spin"></i>
+							<span>Loading benchmarks...</span>
+						</div>
+					</div>
+				</section>
+
+				<!-- Right Area: Details & Charts -->
+				<section class="panel visualization-panel benchmark-details-panel">
+					<div id="no-selection" class="empty-state glass-box">
+						<i class="fa-solid fa-chart-bar" style="font-size: 3rem; opacity: 0.5; margin-bottom: 1rem;"></i>
+						<h2>Select a benchmark to view details</h2>
+					</div>
+
+					<div id="benchmark-details" style="display: none; height: 100%; display: flex; flex-direction: column; gap: 1rem;">
+						<!-- KPI Row -->
+						<div class="kpi-row">
+							<div class="kpi-card glass-box">
+								<div class="kpi-icon"><i class="fa-solid fa-stopwatch"></i></div>
+								<div class="kpi-content">
+									<span class="kpi-label">Total Duration</span>
+									<span class="kpi-value" id="kpi-duration">-</span>
+								</div>
+							</div>
+							<div class="kpi-card glass-box">
+								<div class="kpi-icon"><i class="fa-solid fa-check-circle"></i></div>
+								<div class="kpi-content">
+									<span class="kpi-label">Success Rate</span>
+									<span class="kpi-value" id="kpi-success-rate">-</span>
+								</div>
+							</div>
+							<div class="kpi-card glass-box">
+								<div class="kpi-icon"><i class="fa-solid fa-cogs"></i></div>
+								<div class="kpi-content">
+									<span class="kpi-label">Ops Executed</span>
+									<span class="kpi-value" id="kpi-ops">-</span>
+								</div>
+							</div>
+							<div class="kpi-card glass-box">
+								<div class="kpi-icon"><i class="fa-solid fa-bolt"></i></div>
+								<div class="kpi-content">
+									<span class="kpi-label">Avg Step Time</span>
+									<span class="kpi-value" id="kpi-avg-step">-</span>
+								</div>
+							</div>
+						</div>
+
+						<!-- Charts Row -->
+						<div class="charts-row">
+							<div class="chart-container glass-box">
+								<canvas id="stepDurationChart"></canvas>
+							</div>
+						</div>
+
+						<!-- Table Row -->
+						<div class="table-container glass-box">
+							<div class="panel-header" style="margin-bottom: 0.5rem;">
+								<h2><i class="fa-solid fa-list"></i> Step Details</h2>
+							</div>
+							<div class="table-wrapper">
+								<table class="benchmark-table">
+									<thead>
+										<tr>
+											<th>Step</th>
+											<th>Operation</th>
+											<th>Status</th>
+											<th>Duration (ms)</th>
+											<th>Error</th>
+										</tr>
+									</thead>
+									<tbody id="step-table-body">
+										<!-- Populated by JS -->
+									</tbody>
+								</table>
+							</div>
+						</div>
+					</div>
+				</section>
+			</main>
+		</div>
+		<script>
+			document.getElementById('nav-benchmarks').classList.add('nav-pill--active');
+		</script>
+		<script type="module" src="/static/js/benchmarks.js"></script>
+	</body>
+</html>

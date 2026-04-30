@@ -1,0 +1,70 @@
+{
+  "benchmark_id": 5,
+  "benchmark_name": "Pose-Aware Grasp",
+  "run_id": "20260429T143311_a5d073",
+  "config_snapshot": {
+    "robot_id": "Robot1",
+    "timeout_per_step_s": 90.0,
+    "max_retries": 1,
+    "dry_run": true,
+    "task_count": 5,
+    "reflexion": false,
+    "check_completion": false
+  },
+  "success": true,
+  "total_duration_ms": 261.6410255432129,
+  "steps": [
+    {
+      "index": 0,
+      "operation": "detect_object_stereo",
+      "success": true,
+      "duration_ms": 55.08303642272949,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 1,
+      "operation": "move_to_coordinate",
+      "success": true,
+      "duration_ms": 54.08620834350586,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 2,
+      "operation": "adjust_end_effector_orientation",
+      "success": true,
+      "duration_ms": 50.81295967102051,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 3,
+      "operation": "grasp_object",
+      "success": true,
+      "duration_ms": 50.849199295043945,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    },
+    {
+      "index": 4,
+      "operation": "control_gripper",
+      "success": true,
+      "duration_ms": 50.26102066040039,
+      "error_code": null,
+      "error_message": null,
+      "retry_count": 0
+    }
+  ],
+  "ops_executed": 5,
+  "ops_succeeded": 5,
+  "success_rate": 1.0,
+  "avg_step_duration_ms": 52.2,
+  "retry_count": 0,
+  "first_failure_step": null,
+  "chain_metrics": null
+}
