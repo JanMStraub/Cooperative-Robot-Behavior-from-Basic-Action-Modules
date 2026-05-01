@@ -734,6 +734,11 @@ def main():
         metavar="PORT",
         help="Start Web UI on this port (e.g. --web 8000)",
     )
+    parser.add_argument(
+        "--no-web",
+        action="store_true",
+        help="Disable Web UI (no-op; web is off by default unless --web is passed)",
+    )
 
     args = parser.parse_args()
 

@@ -1094,6 +1094,39 @@ class ROSMotionServer:
             "planning_time": plan_time,
         }
 
+    def _normalize_trajectory_angles(self, trajectory, joint_names_to_limits):
+        """Wrap trajectory joint positions into their physical limit range via shortest arc.
+
+        MoveIt can return wrist-joint values that cross the ±π boundary (e.g. +3.0 rad
+        when the limit is ±π), which Unity interprets as a full-rotation command.  This
+        method clamps each waypoint position back into [lower, upper] by subtracting or
+        adding 2π until the value is within range.
+
+        Args:
+            trajectory: JointTrajectory whose points.positions will be mutated in-place.
+            joint_names_to_limits: Dict mapping joint-name str → (lower_rad, upper_rad).
+        """
+        import math as _math
+
+        for point in trajectory.points:
+            if not point.positions:
+                continue
+            positions = list(point.positions)
+            for idx, name in enumerate(trajectory.joint_names):
+                if name not in joint_names_to_limits or idx >= len(positions):
+                    continue
+                lower, upper = joint_names_to_limits[name]
+                pos = positions[idx]
+                range_size = upper - lower
+                if range_size <= 0:
+                    continue
+                while pos > upper:
+                    pos -= 2.0 * _math.pi
+                while pos < lower:
+                    pos += 2.0 * _math.pi
+                positions[idx] = pos
+            point.positions = tuple(positions)
+
     def _plan_and_publish(self, request, robot_id):
         """Plan a trajectory, then publish it to the ROS topic for Unity.
 
@@ -1153,6 +1186,10 @@ class ROSMotionServer:
                             f"{robot_id}: joint_6 BOUNDARY CROSSING at waypoint {_pi}: "
                             f"{_j6v[_pi-1]:.1f}° → {_j6v[_pi]:.1f}°"
                         )
+
+        # Normalize all joint angles into their physical limit range before publishing.
+        # Prevents MoveIt ±π boundary crossings from causing Unity to spin 360°.
+        self._normalize_trajectory_angles(trajectory, ARM_JOINT_LIMITS)
 
         trajectory_pub.publish(trajectory)
 

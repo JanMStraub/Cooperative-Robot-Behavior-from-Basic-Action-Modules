@@ -197,3 +197,4 @@ documents/
 ACRLUnity/TestResults-*.xml
 ACRLUnity/unity-*-test.log
 ACRLPython/acrl/
+ACRLPython/benchmark_results/

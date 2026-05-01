@@ -479,11 +479,15 @@ namespace Robotics
                 float deltaAngleDegree = (float)(finalDeltaRad * Mathf.Rad2Deg);
 
                 ArticulationDrive drive = robotJoints[i].xDrive;
-                float newTarget = Mathf.Clamp(
-                    drive.target + deltaAngleDegree,
-                    drive.lowerLimit,
-                    drive.upperLimit
-                );
+                float rawTarget = drive.target + deltaAngleDegree;
+                bool isFullCircleJoint = Mathf.Approximately(drive.upperLimit, 180f)
+                    && Mathf.Approximately(drive.lowerLimit, -180f);
+                if (isFullCircleJoint)
+                {
+                    float shortDelta = Mathf.DeltaAngle(drive.target, rawTarget);
+                    rawTarget = drive.target + shortDelta;
+                }
+                float newTarget = Mathf.Clamp(rawTarget, drive.lowerLimit, drive.upperLimit);
 
                 if (Mathf.Abs(newTarget - drive.target) > Mathf.Epsilon)
                 {

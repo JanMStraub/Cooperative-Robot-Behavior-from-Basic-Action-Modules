@@ -877,8 +877,10 @@ namespace Robotics
             for (int j = 0; j < _jointIndexMap.Length && j < positions.Length; j++)
             {
                 int idx = _jointIndexMap[j];
-                float targetDeg = (float)positions[j] * Mathf.Rad2Deg;
+                float rawDeg = (float)positions[j] * Mathf.Rad2Deg;
                 ArticulationDrive drive = _joints[idx].xDrive;
+                float targetDeg = drive.lowerLimit + (float)((rawDeg - drive.lowerLimit) % 360.0);
+                if (targetDeg < drive.lowerLimit) targetDeg += 360f;
                 drive.target = Mathf.Clamp(targetDeg, drive.lowerLimit, drive.upperLimit);
                 _joints[idx].xDrive = drive;
                 if (idx < _robotController.jointDriveTargets.Length)
