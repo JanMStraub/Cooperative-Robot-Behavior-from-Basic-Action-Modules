@@ -8,20 +8,43 @@ Usage:
     python -m benchmarks.run --benchmark 8 --task-count 20 --dry-run
     python -m benchmarks.run --all --output-dir ./results/
     python -m benchmarks.run --benchmark 1 --reflexion
-    python -m benchmarks.run --benchmark 1 --startup-timeout 180
 """
 
 from __future__ import annotations
 
 import argparse
+import socket
 import sys
 
 from .config import BenchmarkConfig, DualRobotConfig
 from .reporter import print_summary, write_json
 from .runner import BenchmarkRunner
-from .server_manager import ServerManager
 
 _DUAL_ROBOT_BENCHMARKS = {6, 7, 8}
+_REQUIRED_PORTS = (5007, 5008)
+
+
+def _check_servers_running() -> None:
+    """Abort with a clear message if required server ports are not open."""
+    missing = []
+    for port in _REQUIRED_PORTS:
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1.0)
+            if sock.connect_ex(("localhost", port)) != 0:
+                missing.append(port)
+            sock.close()
+        except Exception:
+            missing.append(port)
+    if missing:
+        ports = ", ".join(str(p) for p in missing)
+        print(
+            f"ERROR: Required servers not reachable on port(s) {ports}.\n"
+            "Start the backend first:\n"
+            "  cd ACRLPython && ./start_servers.sh",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
 
 def _make_config(benchmark_id: int, args: argparse.Namespace) -> BenchmarkConfig:
@@ -109,23 +132,15 @@ def main() -> None:
         default=5,
         help="Number of sub-tasks for B8 (default: 5)",
     )
-    parser.add_argument(
-        "--startup-timeout",
-        type=float,
-        default=120.0,
-        help="Seconds to wait for servers to become ready (default: 120)",
-    )
     args = parser.parse_args()
 
     runner = BenchmarkRunner()
     benchmark_ids = list(range(1, 9)) if args.all else [args.benchmark]
 
-    if args.dry_run:
-        exit_code = _run_benchmarks(runner, benchmark_ids, args)
-    else:
-        with ServerManager(startup_timeout=args.startup_timeout) as _mgr:
-            exit_code = _run_benchmarks(runner, benchmark_ids, args)
+    if not args.dry_run:
+        _check_servers_running()
 
+    exit_code = _run_benchmarks(runner, benchmark_ids, args)
     sys.exit(exit_code)
 
 

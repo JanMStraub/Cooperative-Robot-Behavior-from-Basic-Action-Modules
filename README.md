@@ -9,11 +9,10 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
 **Key Features**:
 - Unity 6000.3.0f1 simulation environment with physics-based ArticulationBody robots
 - Damped least-squares inverse kinematics (6-DOF control)
-- Multiple coordination modes: Independent (✅), Sequential (✅), Collaborative (⚠️ partial), Master-Slave (❌), Distributed (❌)
+- Multi-robot coordination via signal/wait primitives and collaborative operations
 - **Unified Python Backend**: Single entry point (RunRobotController) orchestrates all servers
-- **Operations System**: 29 registered operations including atomic actions, perception, and sync primitives
+- **Operations System**: 22 registered operations including atomic actions, perception, and sync primitives
 - **AutoRT System**: Autonomous task generation with LLM-based planning and human-in-the-loop approval
-- **Self-Improvement Loop**: Dynamic runtime code generation, structure/syntax validation, sandbox execution, and success/failure outcome tracking
 - **Knowledge Graph**: Dynamic relation tracking for tracking complex topological environment states
 - **ROS 2 & Docker Integration**: Physical robot control capabilities via `ROSMotionClient` and containerized ROS deployments
 - **Advanced Python Grasp Planning**: Approach-aware motion (Top/Front/Side) generation and scoring via Python backend
@@ -24,7 +23,6 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
 - **Web UI (Mission Control)**: Optional dashboard served via `--web PORT`; REST/WebSocket endpoints
 - **Protocol V2**: Request ID correlation for reliable multi-robot communication
 - **RAG System**: Integrated semantic search for operation matching in natural language commands
-- JSONL logging system for execution data collection
 - Python-Unity TCP communication with persistent connections and health checks
 
 ## Getting Started
@@ -87,7 +85,7 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
    python -m orchestrators.RunRobotController
    ```
 
-   This starts all servers: ImageServer (5005/5006), CommandServer (5010), SequenceServer (5013), WorldStateServer (5014), AutoRTServer (5015). WebUIServer (8000) is optional via `--web 8000`.
+   This starts all servers: ImageServer (5006), CommandServer (5007), SequenceServer (5008), WorldStateServer (5009), AutoRTServer (5010). WebUIServer (8000) is optional via `--web 8000`.
 
 2. **Run Unity simulation**:
    - Open `ACRLUnity/Assets/Scenes/1xAR4Scene.unity` for single robot testing
@@ -113,7 +111,6 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
 3. **Using SimulationManager**:
    - Select SimulationManager GameObject in hierarchy
    - Use Inspector controls: Start, Pause, Resume, Reset
-   - Configure coordination mode and settings via SimulationConfig asset
 
 #### Testing and Development
 
@@ -128,17 +125,6 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
 - Click "Build" or "Build and Run"
 
 ## Recent Major Updates
-
-### Self-Improvement Loop & Dynamic Operations (March 2026)
-
-**Autonomous Code Generation & Validation** - System that dynamically generates, validates, and incorporates new operations:
-
-**Core Features**:
-- **Dynamic Operation Generation**: LLM generates new operations on-the-fly when existing ones lack required capabilities.
-- **Validation Pipeline**: `SyntaxValidator`, `StructureValidator`, and `SandboxExecutor` ensure generated code is safe and structurally sound.
-- **Review System**: CLI tool (`ReviewOperations.py`) for human review and approval of generated operations.
-- **Execution Feedback**: `OutcomeTracker` and `FeedbackCollector` monitor success/failure rates of operations.
-- **RAG Indexing**: Failed operations preserve metadata to inform future LLM generation and avoid repeating mistakes.
 
 ### VGN & Stereo Vision Integration (March 2026)
 
@@ -159,11 +145,11 @@ Advanced 3D perception pipeline for physical robot integration:
 - **Human-in-the-Loop**: Unity custom inspector UI for task approval/rejection before execution
 - **Continuous Loop Mode**: Optional autonomous mode with configurable delay between generations
 - **Multi-Robot Coordination**: Supports collaborative tasks using signal/wait primitives
-- **Registry Integration**: Tasks validated against 29 registered operations
+- **Registry Integration**: Tasks validated against 22 registered operations
 - **Pydantic Validation**: Type-safe task structures with automatic JSON schema enforcement
 
 **Architecture**:
-- **Unity Side**: `AutoRTManager` (singleton, shares port 5013 with SequenceServer)
+- **Unity Side**: `AutoRTManager` (singleton, communicates with AutoRTServer on port 5010)
 - **Python Side**: `TaskGenerator` (LLM querying) + integration in `SequenceServer`
 - **Configuration**: `AutoRTConfig.asset` (Unity) + `config/AutoRT.py` (Python)
 - **Custom Editor**: Inspector UI with task list, approve/reject buttons, loop controls
@@ -246,11 +232,10 @@ New approach-aware grasping:
 
 ### Core Systems
 
-**Four Singleton Managers**:
-- **SimulationManager**: Top-level orchestrator controlling simulation state and coordination modes
+**Core Singleton Managers**:
+- **SimulationManager**: Top-level orchestrator controlling simulation state
 - **RobotManager**: Robot lifecycle management, configuration loading, target assignment
-- **MainLogger**: Unified logging system for execution data with action tracking and trajectories
-- **AutoRTManager**: Autonomous task generation client with human-in-the-loop approval UI (port 5013)
+- **AutoRTManager**: Autonomous task generation client with human-in-the-loop approval UI (port 5010)
 
 **Robot Control Layers**:
 1. **RobotController**: Inverse kinematics computation using damped least-squares method
@@ -267,11 +252,11 @@ New approach-aware grasping:
 
 - **Unified Entry Point**: `RunRobotController` orchestrates all servers
 - **6 Active Servers**:
-  - **ImageServer** (5005/5006): Unified single and stereo image receiver
-  - **CommandServer** (5010): Bidirectional commands and completions
-  - **SequenceServer** (5013): Multi-command sequence orchestration + AutoRT integration
-  - **WorldStateServer** (5014): Robot/object state streaming
-  - **AutoRTServer** (5015): Autonomous task generation
+  - **ImageServer** (5006): Stereo image receiver
+  - **CommandServer** (5007): Bidirectional commands and completions
+  - **SequenceServer** (5008): Multi-command sequence orchestration + AutoRT integration
+  - **WorldStateServer** (5009): Robot/object state streaming
+  - **AutoRTServer** (5010): Autonomous task generation
   - **WebUIServer** (8000, optional): Mission Control dashboard (`--web PORT`)
 - **camera/ & hardware/ Abstraction**: Sim↔real switching without code changes (`--env sim|real`)
 - **AutoRT Module**: LLM-based autonomous task generation with Pydantic validation
@@ -280,21 +265,16 @@ New approach-aware grasping:
 
 **LLM-Driven Control Systems**:
 
-- **Operations System**: 29 registered operations organized by complexity (Levels 1-5)
-  - **Level 1-2 Basic** (19 ops): Navigation, gripper control, perception (incl. `generate_point_cloud`), field detection, sync primitives
-  - **Level 3 Intermediate** (6 ops): `grasp_object`, `align_object`, `move_to_region`, `follow_path`, `move_relative_to_object`, `move_between_objects`
-  - **Level 4 Multi-Robot** (3 ops): `detect_other_robot`, `mirror_movement`, `grasp_object_for_handoff`
+- **Operations System**: 22 registered operations organized by complexity (Levels 1-5)
+  - **Level 1-2 Basic** (16 ops): Navigation, gripper control, perception (incl. `generate_point_cloud`), field detection, sync primitives
+  - **Level 3 Intermediate** (2 ops): `grasp_object`, `move_relative_to_object`
+  - **Level 4 Multi-Robot** (3 ops): `detect_other_robot`, `mirror_movement`, `receive_handoff`
   - **Level 5 Collaborative** (1 op): `stabilize_object`
   - Variable passing: `detect -> $target`, then `move to $target`
 - **AutoRT System**: Autonomous task generation with LLM planning and human approval workflow
 - **Integrated RAG System**: Semantic search using LM Studio embeddings for natural language command parsing
 - **CommandParser**: LLM/regex hybrid parser with operation registry matching
 - **SequenceExecutor**: Sequential operation execution with state tracking
-
-**Data Logging**:
-- JSONL logging per robot or per session
-- Export format with action types, trajectories, and metrics
-- Thread-safe concurrent writes for multi-robot scenarios
 
 ### Key Directories
 
@@ -307,7 +287,6 @@ Auto-Cooperative-Robot-Learning/
 │   │   ├── Scenes/                      # 1xAR4Scene, 16xAR4Scene
 │   │   ├── Scripts/                     # C# source code
 │   │   │   ├── ConfigScripts/           # ScriptableObject configs
-│   │   │   ├── Logging/                 # Data logging system
 │   │   │   ├── PythonCommunication/     # TCP clients and Protocol V2
 │   │   │   ├── RobotScripts/            # Robot control and IK
 │   │   │   ├── SimulationScripts/       # Coordination strategies
@@ -326,11 +305,11 @@ Auto-Cooperative-Robot-Learning/
 │   │   ├── UnityInterface.py            # Adapter for Unity robot control
 │   │   └── ROSInterface.py              # Adapter for ROS/MoveIt control
 │   ├── servers/                         # 6 active servers (+ 1 optional)
-│   │   ├── ImageServer.py               # ✅ Unified image receiver (5005/5006)
-│   │   ├── CommandServer.py             # ✅ Bidirectional commands (5010)
-│   │   ├── SequenceServer.py            # ✅ Multi-command sequences (5013)
-│   │   ├── WorldStateServer.py          # ✅ Robot/object state streaming (5014)
-│   │   ├── AutoRTServer.py              # ✅ Autonomous task generation (5015)
+│   │   ├── ImageServer.py               # ✅ Stereo image receiver (5006)
+│   │   ├── CommandServer.py             # ✅ Bidirectional commands (5007)
+│   │   ├── SequenceServer.py            # ✅ Multi-command sequences (5008)
+│   │   ├── WorldStateServer.py          # ✅ Robot/object state streaming (5009)
+│   │   ├── AutoRTServer.py              # ✅ Autonomous task generation (5010)
 │   │   ├── NegotiationHub.py            # Multi-robot negotiation (NOT a TCP server)
 │   │   ├── AutoRTIntegration.py         # AutoRTHandler singleton
 │   │   └── WebUIServer.py               # ✅ Mission Control dashboard (8000, optional)
@@ -338,19 +317,18 @@ Auto-Cooperative-Robot-Learning/
 │   │   ├── TaskGenerator.py             # LLM-based task proposals
 │   │   └── DataModels.py                # Pydantic models (ProposedTask, SceneDescription)
 │   ├── agents/                          # LLM agents
-│   │   ├── RobotLLMAgent.py             # Per-robot LLM agents
-│   │   └── FeedbackCollector.py         # Injects anti-pattern warnings into CommandParser
+│   │   └── RobotLLMAgent.py             # Per-robot LLM agents
 │   ├── knowledge_graph/                 # Optional spatial reasoning (disabled by default)
 │   ├── ros2/                            # ROSMotionClient, ROSBridge
 │   ├── vision/                          # Object detection, depth estimation
 │   ├── orchestrators/                   # Unified backend orchestrator
 │   │   ├── RunRobotController.py        # ✅ PRIMARY entry point
+│   │   ├── RunAutoRT.py                 # Standalone AutoRT entry point
 │   │   ├── CommandParser.py             # LLM/regex command parser
-│   │   ├── SequenceExecutor.py          # Sequential operation executor
-│   │   └── OutcomeTracker.py            # Self-improvement outcome recording
-│   ├── operations/                      # 29 registered operations (Levels 1-5)
+│   │   └── SequenceExecutor.py          # Sequential operation executor
+│   ├── operations/                      # 22 registered operations (Levels 1-5)
 │   │   ├── Base.py                      # Core operation classes
-│   │   ├── Registry.py                  # Operation registry (29 ops)
+│   │   ├── Registry.py                  # Operation registry (22 ops)
 │   │   ├── MoveOperations.py            # Navigation primitives
 │   │   ├── GripperOperations.py         # Gripper control
 │   │   ├── DetectionOperations.py       # Object detection + point cloud
@@ -366,7 +344,10 @@ Auto-Cooperative-Robot-Learning/
 │   │   └── QueryEngine.py               # Semantic search
 │   ├── config/                          # Configuration modules
 │   │   ├── AutoRT.py                    # ✅ AutoRT settings (LLM, safety, multi-robot)
-│   │   └── Memory.py                    # LLM memory system config (MEMORY_ENABLED flag)
+│   │   ├── Servers.py                   # Port assignments and server settings
+│   │   ├── Robot.py                     # Robot base positions and transforms
+│   │   ├── ROS.py                       # ROS integration settings
+│   │   └── KnowledgeGraph.py            # Knowledge graph settings
 │   ├── tests/                           # Comprehensive test suite (80+ files)
 │   ├── ACRLDashboard/                   # Web UI source (served by WebUIServer)
 │   ├── LLMConfig.py                     # Backward-compatible config aggregator
@@ -395,7 +376,6 @@ ACRLUnity/Assets/Configuration/SimulationConfig.asset
 
 Options:
 - Time scale, auto-start, reset on error
-- Coordination mode (Independent/Collaborative/Master-Slave/etc.)
 - Performance settings (target FPS, vSync)
 
 ### AutoRT Configuration
@@ -421,14 +401,7 @@ Python Options:
 ## Development Branches
 
 - `main` - Stable release branch
-- `feature_self_improvement` - **CURRENT**: Dynamic operations, outcome tracking, and Sandbox execution
-- `feature_autort` - AutoRT autonomous task generation system
-- `feature_streaming` - YOLO streaming, unified backend, Protocol V2
-- `feature_robot_cooperation` - Multi-robot coordination strategies
-- `feature_rag` - RAG system integration (merged into feature_streaming)
-- `feature_detect_object` - Object detection and stereo vision systems
-- `navigate_to_object` - Navigation to detected objects
-- `feature_gripper` - Gripper control implementation
+- `fix/operations` - **CURRENT**: Operations fixes, benchmark suite, grasp/handoff improvements
 
 ## Quick Start
 
@@ -474,6 +447,33 @@ Python Options:
    );
    ```
 
+**Run Benchmarks**:
+
+```bash
+cd ACRLPython
+source acrl/bin/activate
+# Ensure servers are running first (./start_servers.sh)
+
+# Run all 8 benchmarks
+python -m benchmarks.run --all
+
+# Run single benchmark (1-8)
+python -m benchmarks.run --benchmark 3
+
+# Dry-run (no hardware required)
+python -m benchmarks.run --all --dry-run
+```
+
+Benchmark cases:
+- **B1**: Navigate to object (detect + grasp)
+- **B2**: Sequential multi-target navigation
+- **B3**: Navigate and lift (approach-aware grasp)
+- **B4**: Pick and place
+- **B5**: Pose-aware grasp (oriented top-down)
+- **B6**: Dual-robot synchronized lift
+- **B7**: Dual-robot reorient with sync barriers
+- **B8**: Heterogeneous chain (cycles B1/B3/B4 sub-tasks)
+
 **For Autonomous Task Generation (AutoRT)**:
 
 1. Ensure Python backend is running (see step 2 above)
@@ -487,24 +487,24 @@ Python Options:
    - Click "Execute" to approve or "Reject" to discard
    - Optional: Enable "Start Loop" for continuous autonomous operation
 
-**Available Operations** (29 total, organized by complexity):
+**Available Operations** (22 total, organized by complexity):
 
-**Level 1-2 Basic Operations** (19):
+**Level 1-2 Basic Operations** (16):
 
-- Navigation: `move_to_coordinate`, `move_from_a_to_b`, `adjust_end_effector_orientation`, `return_to_start`
-- Gripper: `control_gripper`, `release_object`
-- Perception: `detect_objects`, `detect_object_stereo`, `analyze_scene`, `estimate_distance_to_object`, `estimate_distance_between_objects`, `generate_point_cloud`
-- Field Detection: `detect_field`, `get_field_center`, `detect_all_fields`
+- Navigation: `move_to_coordinate`, `pick_object_at_coordinate`, `adjust_end_effector_orientation`, `return_to_start`
+- Gripper: `control_gripper`, `release_object`, `place_object`
+- Perception: `detect_object_stereo`, `analyze_scene`, `generate_point_cloud`
+- Field Detection: `detect_field`, `detect_all_fields`
 - Status: `check_robot_status`
 - Sync: `signal`, `wait_for_signal`, `wait`
 
-**Level 3 Intermediate** (6):
+**Level 3 Intermediate** (2):
 
-- `grasp_object`, `align_object`, `move_relative_to_object`, `move_between_objects`, `move_to_region`, `follow_path`
+- `grasp_object`, `move_relative_to_object`
 
 **Level 4 Multi-Robot** (3):
 
-- `detect_other_robot`, `mirror_movement`, `grasp_object_for_handoff`
+- `detect_other_robot`, `mirror_movement`, `receive_handoff`
 
 **Level 5 Collaborative** (1):
 

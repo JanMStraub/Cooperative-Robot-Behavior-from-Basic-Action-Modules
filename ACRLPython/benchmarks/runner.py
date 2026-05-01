@@ -1,24 +1,34 @@
 #!/usr/bin/env python3
 """
-BenchmarkRunner — wraps SequenceExecutor for benchmark execution.
+BenchmarkRunner — sends benchmark tasks to the running SequenceServer over TCP.
 
-Disables Reflexion retries and optionally installs dry-run mocks before
-each run, restoring both in a finally block.
+B1–B5 and B8 send natural language task strings; the LLM parses them into
+operations. B6–B7 use explicit op lists with parallel_group fields that the
+LLM cannot express, sent via the EXEC: prefix.
 """
 
 from __future__ import annotations
 
 import dataclasses
 import importlib
+import json
+import random
+import socket
+import struct
 import time
-from typing import Any, Dict, List, Optional
-
-import orchestrators.SequenceExecutor as _seq_mod
-from orchestrators.SequenceExecutor import SequenceExecutor
+from typing import Any, Dict, List, Optional, Union
 
 from . import mock_registry
-from .config import BenchmarkConfig, DualRobotConfig
+from .config import BenchmarkConfig
 from .result import BenchmarkResult, ChainMetrics, StepResult, make_run_id
+
+# Protocol V2 constants (mirrors core/UnityProtocol.py)
+_SEQUENCE_QUERY = 0x08
+_RESULT_TYPE = 0x02
+_HOST = "127.0.0.1"
+_PORT = 5008
+_DEFAULT_CAMERA = "TableStereoCamera"
+_EXEC_PREFIX = "EXEC:"
 
 _BENCHMARK_NAMES: Dict[int, str] = {
     1: "Navigate to Object",
@@ -48,27 +58,19 @@ class BenchmarkRunner:
 
     def run(self, benchmark_id: int, cfg: BenchmarkConfig) -> BenchmarkResult:
         """
-        Run a single benchmark.
+        Run a single benchmark by sending a natural language task to the LLM.
 
-        Patches REFLEXION_ENABLED=False in the SequenceExecutor module namespace
-        for deterministic timing. Installs dry-run mocks when cfg.dry_run=True.
-        Both patches are always restored via finally.
+        All benchmarks use get_task() → NL string → SequenceServer → LLM → ops.
+        B8 chains multiple sub-tasks. B6/B7 use DualRobotConfig.
 
         Args:
-            benchmark_id: Integer 1–8 identifying the benchmark.
+            benchmark_id: Integer 1–8.
             cfg: BenchmarkConfig (or DualRobotConfig for B6–B8).
 
         Returns:
             BenchmarkResult with full metrics and step details.
         """
-        # Patch in SequenceExecutor module namespace — not in config.Servers.
-        # SequenceExecutor does `from config.Servers import REFLEXION_ENABLED` at
-        # load time, binding the bool value into its own module namespace.
-        prev_reflexion = _seq_mod.REFLEXION_ENABLED
-        if not cfg.reflexion:
-            _seq_mod.REFLEXION_ENABLED = False
         mock_original = None
-
         try:
             if cfg.dry_run:
                 mock_original = mock_registry.install_mock("always_succeed")
@@ -78,42 +80,150 @@ class BenchmarkRunner:
             if benchmark_id == 8:
                 return self._run_b8_chain(cfg, module)
 
-            executor = SequenceExecutor(
-                default_timeout=cfg.timeout_per_step_s,
-                check_completion=cfg.check_completion,
-                enable_verification=False,
-            )
-            sequence = module.build_sequence(cfg)
-            raw = executor.execute_sequence(sequence)
-            metrics = executor.get_metrics()
-            return self._build_result(benchmark_id, cfg, raw, metrics)
+            task = module.get_task(cfg)
+            robot_id = getattr(cfg, "robot_id_a", cfg.robot_id)
+            raw = self._send(task, robot_id, cfg)
+            return self._build_result(benchmark_id, cfg, raw)
 
         finally:
-            _seq_mod.REFLEXION_ENABLED = prev_reflexion
             if mock_original is not None:
                 mock_registry.restore_mock(mock_original)
+
+    def _send(
+        self,
+        payload: Union[str, List[Dict[str, Any]]],
+        robot_id: str,
+        cfg: BenchmarkConfig,
+    ) -> Dict[str, Any]:
+        """
+        Send a task string or op list to SequenceServer and return result dict.
+
+        Natural language strings go as-is (LLM path).
+        Op lists are prefixed with EXEC: to bypass the LLM.
+        Dry-run mode executes in-process instead.
+
+        Args:
+            payload: NL task string → LLM parses; list of op dicts → EXEC: prefix.
+            robot_id: Primary robot for this sequence.
+            cfg: Benchmark config (timeout, dry_run).
+
+        Returns:
+            Result dict with keys: success, results, total_duration_ms.
+        """
+        if cfg.dry_run:
+            ops = payload if isinstance(payload, list) else []
+            return self._run_local(ops, cfg)
+
+        if isinstance(payload, list):
+            command_text = _EXEC_PREFIX + json.dumps(payload)
+        else:
+            command_text = payload
+
+        timeout = cfg.timeout_per_step_s * 10  # generous: LLM + execution
+        request_id = random.randint(1, 0xFFFFFFFF)
+
+        cmd_b = command_text.encode("utf-8")
+        rob_b = robot_id.encode("utf-8")
+        cam_b = _DEFAULT_CAMERA.encode("utf-8")
+        msg = struct.pack("<BI", _SEQUENCE_QUERY, request_id)
+        msg += struct.pack("<I", len(cmd_b)) + cmd_b
+        msg += struct.pack("<I", len(rob_b)) + rob_b
+        msg += struct.pack("<I", len(cam_b)) + cam_b
+        msg += struct.pack("<B", 1)  # auto_execute=True
+
+        start = time.monotonic()
+        with socket.create_connection((_HOST, _PORT), timeout=10) as sock:
+            sock.sendall(msg)
+            raw = self._read_response(sock, timeout)
+
+        elapsed_ms = (time.monotonic() - start) * 1000.0
+        raw.setdefault("total_duration_ms", elapsed_ms)
+        return raw
+
+    def _read_response(self, sock: socket.socket, timeout: float) -> Dict[str, Any]:
+        """
+        Read a RESULT response from SequenceServer.
+
+        Args:
+            sock: Connected socket.
+            timeout: Seconds to wait.
+
+        Returns:
+            Parsed JSON response dict.
+        """
+        sock.settimeout(timeout + 30)
+        header = b""
+        while len(header) < 9:
+            chunk = sock.recv(9 - len(header))
+            if not chunk:
+                raise ConnectionError("Server closed connection before response")
+            header += chunk
+
+        msg_type = header[0]
+        resp_len = struct.unpack("<I", header[5:9])[0]
+
+        if msg_type != _RESULT_TYPE:
+            raise ValueError(f"Unexpected response type 0x{msg_type:02x}")
+
+        body = b""
+        while len(body) < resp_len:
+            chunk = sock.recv(resp_len - len(body))
+            if not chunk:
+                raise ConnectionError("Server closed connection mid-response")
+            body += chunk
+
+        return json.loads(body.decode("utf-8"))
+
+    def _run_local(
+        self, ops: List[Dict[str, Any]], cfg: BenchmarkConfig
+    ) -> Dict[str, Any]:
+        """
+        Execute ops in-process via SequenceExecutor (dry-run only).
+
+        Args:
+            ops: Operation list.
+            cfg: Benchmark config.
+
+        Returns:
+            Raw result dict from SequenceExecutor.
+        """
+        import orchestrators.SequenceExecutor as _seq_mod
+        from orchestrators.SequenceExecutor import SequenceExecutor
+
+        prev = _seq_mod.REFLEXION_ENABLED
+        _seq_mod.REFLEXION_ENABLED = False
+        try:
+            executor = SequenceExecutor(
+                default_timeout=cfg.timeout_per_step_s,
+                check_completion=False,
+                enable_verification=False,
+            )
+            return executor.execute_sequence(ops)
+        finally:
+            _seq_mod.REFLEXION_ENABLED = prev
 
     def _build_result(
         self,
         benchmark_id: int,
         cfg: BenchmarkConfig,
         raw: Dict[str, Any],
-        metrics: Dict[str, Any],
     ) -> BenchmarkResult:
         """
-        Convert raw SequenceExecutor output into a BenchmarkResult.
+        Convert raw SequenceServer response into a BenchmarkResult.
 
         Args:
             benchmark_id: Benchmark identifier.
             cfg: Config used for this run.
-            raw: Return value of executor.execute_sequence().
-            metrics: Return value of executor.get_metrics().
+            raw: Response dict.
 
         Returns:
             Populated BenchmarkResult.
         """
         steps = self._parse_steps(raw.get("results") or [])
         first_fail = next((s.index for s in steps if not s.success), None)
+        total_ms = float(raw.get("total_duration_ms", 0.0))
+        ops_executed = len(steps)
+        ops_succeeded = sum(1 for s in steps if s.success)
 
         return BenchmarkResult(
             benchmark_id=benchmark_id,
@@ -121,12 +231,12 @@ class BenchmarkRunner:
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
             success=bool(raw.get("success", False)),
-            total_duration_ms=float(raw.get("total_duration_ms", 0.0)),
+            total_duration_ms=total_ms,
             steps=steps,
-            ops_executed=metrics["ops_executed"],
-            ops_succeeded=metrics["ops_succeeded"],
-            success_rate=metrics["ops_success_rate"],
-            avg_step_duration_ms=metrics["avg_duration_ms"],
+            ops_executed=ops_executed,
+            ops_succeeded=ops_succeeded,
+            success_rate=(ops_succeeded / ops_executed) if ops_executed else 0.0,
+            avg_step_duration_ms=(total_ms / ops_executed) if ops_executed else 0.0,
             first_failure_step=first_fail,
         )
 
@@ -135,7 +245,7 @@ class BenchmarkRunner:
         Convert raw result dicts to StepResult list, skipping None entries.
 
         Args:
-            results: List of per-step result dicts from SequenceExecutor.
+            results: Per-step result dicts from SequenceServer.
 
         Returns:
             List of StepResult objects.
@@ -170,12 +280,11 @@ class BenchmarkRunner:
         """
         Run B8 heterogeneous chain benchmark.
 
-        Creates a fresh SequenceExecutor per sub-task to prevent variable/metric
-        bleed between tasks. Accumulates ChainMetrics across all sub-tasks.
+        Each sub-task is a natural language string sent as a separate sequence.
 
         Args:
             cfg: BenchmarkConfig with task_count controlling chain length.
-            module: The b8 cases module (must expose get_sub_tasks).
+            module: b8 cases module (exposes get_sub_tasks).
 
         Returns:
             BenchmarkResult with chain_metrics populated.
@@ -188,20 +297,10 @@ class BenchmarkRunner:
         recovery_count = 0
         all_steps: List[StepResult] = []
         total_ms = 0.0
-        ops_executed = 0
-        ops_succeeded = 0
 
-        for task_name, sequence in sub_tasks:
-            executor = SequenceExecutor(
-                default_timeout=cfg.timeout_per_step_s,
-                check_completion=cfg.check_completion,
-                enable_verification=False,
-            )
-            raw = executor.execute_sequence(sequence)
-            metrics = executor.get_metrics()
+        for _, task in sub_tasks:
+            raw = self._send(task, cfg.robot_id, cfg)
             total_ms += float(raw.get("total_duration_ms", 0.0))
-            ops_executed += metrics["ops_executed"]
-            ops_succeeded += metrics["ops_succeeded"]
 
             step_offset = len(all_steps)
             task_steps = self._parse_steps(raw.get("results") or [])
@@ -216,6 +315,8 @@ class BenchmarkRunner:
             else:
                 recovery_count += 1
 
+        ops_executed = len(all_steps)
+        ops_succeeded = sum(1 for s in all_steps if s.success)
         error_rate = (total - completed) / total if total > 0 else 0.0
         first_fail = next((s.index for s in all_steps if not s.success), None)
 
@@ -230,7 +331,7 @@ class BenchmarkRunner:
             ops_executed=ops_executed,
             ops_succeeded=ops_succeeded,
             success_rate=(completed / total) if total > 0 else 0.0,
-            avg_step_duration_ms=(total_ms / len(all_steps)) if all_steps else 0.0,
+            avg_step_duration_ms=(total_ms / ops_executed) if ops_executed else 0.0,
             first_failure_step=first_fail,
             chain_metrics=ChainMetrics(
                 total_tasks=total,

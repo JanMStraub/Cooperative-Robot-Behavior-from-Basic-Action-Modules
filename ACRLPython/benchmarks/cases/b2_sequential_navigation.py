@@ -3,42 +3,21 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
-
 from ..config import BenchmarkConfig
 
-_COLORS = ["red", "green", "blue"]
 
-
-def build_sequence(cfg: BenchmarkConfig) -> List[Dict[str, Any]]:
+def get_task(cfg: BenchmarkConfig) -> str:
     """
-    Build 2×N-step sequence: for each color, detect then move.
+    Return natural language task description for B2.
 
     Args:
         cfg: Benchmark configuration.
 
     Returns:
-        List of command dicts for SequenceExecutor (6 steps for default 3 colors).
+        Task string sent to the LLM via SequenceServer.
     """
-    steps: List[Dict[str, Any]] = []
-    for color in _COLORS:
-        var = f"target_{color}"
-        steps.append(
-            {
-                "operation": "detect_object_stereo",
-                "params": {"robot_id": cfg.robot_id, "color": color},
-                "capture_var": var,
-            }
-        )
-        steps.append(
-            {
-                "operation": "move_to_coordinate",
-                "params": {
-                    "robot_id": cfg.robot_id,
-                    "x": f"${var}.x",
-                    "y": f"${var}.y",
-                    "z": f"${var}.z",
-                },
-            }
-        )
-    return steps
+    return (
+        f"Robot {cfg.robot_id}: detect the red object and move to it, "
+        f"then detect the green object and move to it, "
+        f"then detect the blue object and move to it."
+    )

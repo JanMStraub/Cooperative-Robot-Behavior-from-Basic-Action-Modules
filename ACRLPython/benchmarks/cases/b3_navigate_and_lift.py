@@ -1,51 +1,22 @@
 #!/usr/bin/env python3
-"""B3: Navigate and Lift — detect object, hover above, move to grasp position, close gripper."""
+"""B3: Navigate and Lift — detect red object, approach from above, grasp it."""
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
-
 from ..config import BenchmarkConfig
 
-_HOVER_OFFSET = 0.05  # metres above object for approach
 
-
-def build_sequence(cfg: BenchmarkConfig) -> List[Dict[str, Any]]:
+def get_task(cfg: BenchmarkConfig) -> str:
     """
-    Build 4-step sequence: detect → hover → grasp position → gripper close.
+    Return natural language task description for B3.
 
     Args:
         cfg: Benchmark configuration.
 
     Returns:
-        List of command dicts for SequenceExecutor.
+        Task string sent to the LLM via SequenceServer.
     """
-    return [
-        {
-            "operation": "detect_object_stereo",
-            "params": {"robot_id": cfg.robot_id, "color": "red"},
-            "capture_var": "target",
-        },
-        {
-            "operation": "move_to_coordinate",
-            "params": {
-                "robot_id": cfg.robot_id,
-                "x": "$target.x",
-                "y": f"$target.y + {_HOVER_OFFSET}",
-                "z": "$target.z",
-            },
-        },
-        {
-            "operation": "move_to_coordinate",
-            "params": {
-                "robot_id": cfg.robot_id,
-                "x": "$target.x",
-                "y": "$target.y",
-                "z": "$target.z",
-            },
-        },
-        {
-            "operation": "control_gripper",
-            "params": {"robot_id": cfg.robot_id, "open_gripper": False},
-        },
-    ]
+    return (
+        f"Robot {cfg.robot_id}: detect the red object, "
+        f"approach it from above, then grasp it."
+    )
