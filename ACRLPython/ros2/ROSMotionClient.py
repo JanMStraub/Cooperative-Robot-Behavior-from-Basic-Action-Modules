@@ -707,15 +707,18 @@ class ROSMotionServer:
         # coords (LLM-generated, move_to_coordinate). "unity_world" means Unity world
         # coords that must be transformed (grasp planner, detection-derived positions).
         coordinate_space = request.get("coordinate_space", "unity_world")
-        # constrain_joint6: when True, add a ±30° path constraint on joint_6 around its
-        # current position to prevent link-6 free-spin during pre-grasp hover moves.
-        # Must NOT be set for descent/grasp moves where joint_6 must reach target orientation.
+        # constrain_joint6: when True, add a path constraint on joint_6 around its current
+        # position. Window defaults to ±30°; pass joint6_window_rad to override (e.g. 1.5708
+        # for ±90° during handoff approach — wide enough for OMPL, blocks full 180°+ spin).
         constrain_joint6 = request.get("constrain_joint6", False)
+        joint6_window_rad = request.get("joint6_window_rad", 0.5236)  # default ±30°
         # constrain_joint4: when True, add a ±90° path constraint on joint_4 around its
         # current position. Prevents RRTConnect from choosing the long-arc (~338°) IK
         # solution for the pre-grasp hover — robot arrives at hover in the short-arc config
         # so the subsequent Cartesian descent starts from the correct joint configuration.
         constrain_joint4 = request.get("constrain_joint4", False)
+        joint4_window_rad = request.get("joint4_window_rad", 1.5708)  # default ±90°
+
 
         logger.info(
             f"[GRASP_DEBUG] {robot_id} incoming position ({coordinate_space}): "
@@ -870,17 +873,15 @@ class ROSMotionServer:
             and joint_state is not None
             and "joint_6" in joint_state.name
         ):
-            # Prevent link-6 free-spin during pre-grasp hover: pin joint_6 within ±30°
-            # of its current value so RRTConnect cannot spin the wrist 180-360° to an
-            # equivalent ee_link pose. Only applied when caller sets constrain_joint6=True
-            # (pre-grasp hover). Never set for descent/grasp moves where joint_6 must
-            # reach the target orientation.
+            # Prevent link-6 free-spin: pin joint_6 within joint6_window_rad of its
+            # current value. Default ±30° for pre-grasp hover; pass a wider window
+            # (e.g. ±90°) for handoff approach where OMPL needs more freedom.
             _j6_idx = list(joint_state.name).index("joint_6")
             _j6_current = joint_state.position[_j6_idx]
             _j6_lower, _j6_upper = ARM_JOINT_LIMITS.get(
                 "joint_6", (-3.1405926535897932, 3.1405926535897932)
             )
-            _window = 0.5236  # ±30° in radians
+            _window = joint6_window_rad
             _j6_path_lower = max(_j6_lower, _j6_current - _window)
             _j6_path_upper = min(_j6_upper, _j6_current + _window)
             _j6_center = (_j6_path_lower + _j6_path_upper) / 2.0
@@ -893,6 +894,11 @@ class ROSMotionServer:
             _j6_path_constraints = Constraints()
             _j6_path_constraints.joint_constraints.append(_j6c)
             goal.request.path_constraints = _j6_path_constraints
+            logger.info(
+                f"[HANDOFF] {robot_id} joint_6 path constraint: "
+                f"current={_j6_current:.3f} rad ({_j6_current * 57.296:.1f}°), "
+                f"window=[{_j6_path_lower:.3f}, {_j6_path_upper:.3f}], center={_j6_center:.3f}"
+            )
 
         if (
             constrain_joint4
@@ -905,7 +911,7 @@ class ROSMotionServer:
             _j4_lower, _j4_upper = ARM_JOINT_LIMITS.get(
                 "joint_4", (-3.1405926535897932, 3.1405926535897932)
             )
-            _j4_window = 1.5708  # ±90° — allows normal wrist rotation, blocks long-arc flip
+            _j4_window = joint4_window_rad
             _j4_path_lower = max(_j4_lower, _j4_current - _j4_window)
             _j4_path_upper = min(_j4_upper, _j4_current + _j4_window)
             _j4_center = (_j4_path_lower + _j4_path_upper) / 2.0

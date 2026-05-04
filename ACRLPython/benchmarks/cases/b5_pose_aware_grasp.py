@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B5: Pose-Aware Grasp — detect blue object, orient gripper downward, grasp it."""
+"""B5: Pose-Aware Grasp — detect red object, orient gripper downward, grasp it."""
 
 from __future__ import annotations
 
@@ -17,7 +17,5 @@ def get_task(cfg: BenchmarkConfig) -> str:
         Task string sent to the LLM via SequenceServer.
     """
     return (
-        f"Robot {cfg.robot_id}: detect the blue object, "
-        f"orient the gripper to face downward (pitch -90 degrees), "
-        f"then grasp the object."
+        f"Robot {cfg.robot_id}: Grasp red cube."
     )

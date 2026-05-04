@@ -2128,6 +2128,8 @@ def receive_handoff(
       1. Fetch object position + dimensions from WorldState.
       2. Compute approach position: object centre offset toward receiver by
          half object width + ``HANDOFF_GRIPPER_CLEARANCE``.
+         Y target = object_center + 0.4 * height (upper 40%) so receiver
+         grips above the source robot's fingers which hold near center.
       3. Compute yaw toward object using ``_yaw_toward_object``.  pitch=0 so
          gripper stays horizontal (Robot1 presents at pitch=0).
       4. ``plan_and_execute`` (ROS) or ``move_to_coordinate`` (Unity) — move directly to
@@ -2224,13 +2226,21 @@ def receive_handoff(
         # Robot1 grips across the short axis and presents the short face toward Robot2.
         # The X half-extent Robot2 must clear = short axis / 2.
         lx = object_dimensions[0]
-        lz = object_dimensions[2] if len(object_dimensions) > 2 else lx
-        obj_x = min(lx, lz)
+        # Approach is along the world X axis — use the X half-extent to find the near face.
         approach_sign = 1.0 if receiver_pos[0] > object_position[0] else -1.0
-        near_face_x = object_position[0] + approach_sign * obj_x * 0.5
-        ap_x = near_face_x + approach_sign * HANDOFF_GRIPPER_CLEARANCE
+        near_face_x = object_position[0] + approach_sign * lx * 0.5
+        # TCP stops at the near face — fingers extend beyond and wrap around the object.
+        # No extra clearance needed; HANDOFF_GRIPPER_CLEARANCE was calibrated for the
+        # old min(lx,lz) face which was much closer to center.
+        ap_x = near_face_x
         obj_height = object_dimensions[1] if len(object_dimensions) > 1 else 0.02
-        ap_y = object_position[1] + obj_height * 0.25
+        logger.info(
+            f"receive_handoff: object_dimensions={object_dimensions}, obj_height={obj_height:.4f}m"
+        )
+        # Target well above object center — source robot grips near center, so receiver
+        # must grasp higher to avoid colliding with source gripper fingers.
+        # Clamp to at least 0.03m above center so short objects still get a meaningful offset.
+        ap_y = object_position[1] + max(obj_height * 0.4, 0.04)
         ap_z = object_position[2]
         logger.info(
             f"receive_handoff: approach_position=({ap_x:.3f}, {ap_y:.3f}, {ap_z:.3f})"
@@ -2247,13 +2257,12 @@ def receive_handoff(
 
         from .MoveOperations import move_to_coordinate
 
-        # ── 4–6. Move to final approach position with orientation ─────────────
-        # Mirrors the top-down grasp pattern: single plan_and_execute with both
-        # position AND orientation so OMPL finds a solution in the correct wrist
-        # configuration from the start — no separate orient step, no Cartesian
-        # complexity. pitch=0,yaw=0,roll=0 in Robot2's base_link = identity {w:1},
-        # which points the gripper toward -X (handoff side) because Robot2's
-        # base is already rotated 180° in Unity world space.
+        # ── 4–6. Two-step approach: pre-waypoint then Cartesian move ────────────
+        # Mirrors top-down grasp pattern:
+        #   Step A: plan_and_execute to pre-waypoint (no orientation) — robot finds
+        #           a joint config that faces the object without wrist spin constraints.
+        #   Step B: plan_cartesian_move to final position (with orientation, lock_orientation)
+        #           — straight-line Cartesian path keeps joint_6 from spinning mid-approach.
         _use_ros_approach = use_ros
         if _use_ros_approach is None:
             try:
@@ -2267,9 +2276,7 @@ def receive_handoff(
                 _use_ros_approach = False
 
         # Side-approach orientation: roll=90° around ROS X-axis so fingers are
-        # horizontal. q = (sin45, 0, 0, cos45). Single plan_and_execute with
-        # position+orientation so OMPL finds one consistent IK solution — same
-        # pattern as top-down grasp, no separate orient step needed.
+        # horizontal. q = (sin45, 0, 0, cos45).
         import math as _math
 
         _half = _math.radians(90.0) / 2.0
@@ -2281,16 +2288,42 @@ def receive_handoff(
         }
 
         if _use_ros_approach:
+            import time as _time
+
             from ros2.ROSBridge import ROSBridge
 
             bridge = ROSBridge.get_instance()
-            approach_result = bridge.plan_and_execute(
+
+            # Step A: pre-waypoint — 0.10m further back on the approach axis.
+            # No orientation constraint so OMPL freely finds the correct joint config.
+            pre_x = ap_x + approach_sign * 0.10
+            logger.info(
+                f"receive_handoff: pre-waypoint=({pre_x:.3f}, {ap_y:.3f}, {ap_z:.3f})"
+            )
+            pre_result = bridge.plan_and_execute(
+                position={"x": pre_x, "y": ap_y, "z": ap_z},
+                orientation=handoff_orientation,
+                robot_id=robot_id,
+                max_velocity_scaling=0.5,
+                max_acceleration_scaling=0.4,
+                constrain_joint4=True,
+            )
+            if not pre_result or not pre_result.get("success"):
+                logger.warning(
+                    f"receive_handoff: pre-waypoint failed ({(pre_result or {}).get('error', 'no response')}) — proceeding to final position"
+                )
+
+            # Let joint states settle before MoveIt samples start state.
+            _time.sleep(0.3)
+
+            # Step B: Cartesian move to final position with orientation locked.
+            approach_result = bridge.plan_cartesian_move(
                 position={"x": ap_x, "y": ap_y, "z": ap_z},
                 orientation=handoff_orientation,
                 robot_id=robot_id,
-                max_velocity_scaling=0.4,
-                max_acceleration_scaling=0.3,
-                constrain_joint4=True,
+                max_velocity_scaling=0.2,
+                max_acceleration_scaling=0.15,
+                lock_orientation=True,
             )
             approach_success = approach_result and approach_result.get("success")
             approach_error = (approach_result or {}).get(

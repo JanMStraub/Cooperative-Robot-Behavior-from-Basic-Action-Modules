@@ -212,6 +212,8 @@ class ROSBridge:
         coordinate_space="unity_world",
         constrain_joint6=False,
         constrain_joint4=False,
+        joint6_window_rad=0.5236,
+        joint4_window_rad=1.5708,
     ):
         """
         Plan and execute a motion to target pose for a specific robot.
@@ -229,13 +231,16 @@ class ROSBridge:
                 (LLM-generated, move_to_coordinate). "unity_world" if position is in Unity
                 world space and needs the world→base_link transform applied (grasp planner,
                 detection-derived positions). Default: "unity_world".
-            constrain_joint6: When True, adds a ±30° path constraint on joint_6 around its
-                current position to prevent link-6 free-spin. Only set for pre-grasp hover
-                moves. Never set for descent/grasp moves where joint_6 must reach target
-                orientation.
-            constrain_joint4: When True, adds a ±90° path constraint on joint_4 around its
-                current position. Prevents RRTConnect from choosing the long-arc (~338°) IK
-                solution during pre-grasp hover so the robot arrives in the short-arc config.
+            constrain_joint6: When True, adds a path constraint on joint_6 around its current
+                position. Window controlled by joint6_window_rad (default ±30°). Only set for
+                pre-grasp hover or handoff approach; never for descent/grasp moves.
+            constrain_joint4: When True, adds a path constraint on joint_4 around its current
+                position. Window controlled by joint4_window_rad (default ±90°). Prevents
+                RRTConnect from choosing the long-arc IK solution.
+            joint6_window_rad: Half-window in radians for joint_6 constraint. Default 0.5236
+                (±30°). Use 1.5708 (±90°) for handoff approach.
+            joint4_window_rad: Half-window in radians for joint_4 constraint. Default 1.5708
+                (±90°). Use 2.3562 (±135°) when robot starts far from neutral pose.
 
         Returns:
             Dict with success status and details.
@@ -255,8 +260,10 @@ class ROSBridge:
             cmd["max_acceleration_scaling"] = max_acceleration_scaling
         if constrain_joint6:
             cmd["constrain_joint6"] = True
+            cmd["joint6_window_rad"] = joint6_window_rad
         if constrain_joint4:
             cmd["constrain_joint4"] = True
+            cmd["joint4_window_rad"] = joint4_window_rad
 
         return self._send_command(cmd, timeout=self._execution_timeout)
 
