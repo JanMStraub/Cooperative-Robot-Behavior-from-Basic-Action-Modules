@@ -24,9 +24,9 @@ exits.  Call ``stop()`` for a graceful shutdown.
 
 import threading
 import time
-import logging
 from typing import Optional
 
+from config.Servers import PERCEPTION_ONLY_MODE
 from core.LoggingSetup import get_logger
 
 logger = get_logger(__name__)
@@ -147,6 +147,9 @@ class PerceptionRefreshLoop:
     def _refresh_stereo(self, color: str) -> bool:
         """Attempt to re-detect ``color`` via stereo+YOLO.
 
+        In PERCEPTION_ONLY_MODE, uses cached images from ImageStorage rather than
+        requesting a fresh capture from Unity, avoiding a blocking command round-trip.
+
         Args:
             color: Object color label to search for.
 
@@ -160,6 +163,7 @@ class PerceptionRefreshLoop:
                 color=color,
                 selection="closest",
                 request_id=0,
+                request_fresh_capture=not PERCEPTION_ONLY_MODE,
             )
             if result and result.success:
                 logger.debug(f"PerceptionRefreshLoop: stereo refresh OK for '{color}'")

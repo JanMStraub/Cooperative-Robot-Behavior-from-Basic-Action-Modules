@@ -407,9 +407,26 @@ namespace PythonCommunication
                 if (obj == null)
                     continue;
 
-                // Infer dimensions from collider bounds; fall back to uniform 1m cube
+                // Infer dimensions from collider local size (object frame, unaffected by rotation).
+                // BoxCollider.size gives local extents scaled by lossyScale; Bounds.size gives
+                // the world-space AABB which changes with rotation and cannot be used to determine
+                // which local axis is longer.
                 var col = obj.GetComponent<Collider>();
-                Vector3 size = col != null ? col.bounds.size : Vector3.one;
+                Vector3 size;
+                if (col is BoxCollider box)
+                {
+                    // Local-frame extents * world scale = physical size independent of rotation.
+                    Vector3 ls = obj.transform.lossyScale;
+                    size = new Vector3(
+                        Mathf.Abs(box.size.x * ls.x),
+                        Mathf.Abs(box.size.y * ls.y),
+                        Mathf.Abs(box.size.z * ls.z)
+                    );
+                }
+                else
+                {
+                    size = col != null ? col.bounds.size : Vector3.one;
+                }
 
                 var objectState = new ObjectStateData
                 {

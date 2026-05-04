@@ -214,6 +214,11 @@ class _PromptBuilder:
         4. "open gripper" or "release" means control_gripper with open_gripper=true
         5. Include robot_id in every operation's params
         6. Preserve the order of operations as specified in the command
+        7. NEVER add return_to_start_position, signal, move_to_coordinate, or adjust_end_effector_orientation after a grasp unless the task explicitly requests them — return_to_start and signalling are ONLY for handoff sequences
+
+        Simple single-robot grasp example ("grab the blue cube"):
+        {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "blue"}}, "capture_var": "target"}}
+        {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "$target.color"}}}}
 
         === VARIABLE PASSING ===
 

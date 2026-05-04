@@ -73,6 +73,7 @@ from backend_client import (  # type: ignore[import]
     BackendClient,
     backend_available,
     port_open,
+    reset_simulation,
 )
 
 # ---------------------------------------------------------------------------
@@ -94,26 +95,6 @@ _R2_COORD = (0.25, 0.30, 0.10)  # x, y, z  — Robot2 reachable point
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
-
-
-def _reset_robot(robot_id: str, timeout: float = 120.0) -> None:
-    """
-    Send return_to_start for the given robot and ignore the result.
-
-    Called by autouse fixtures before movement-heavy tests so each test
-    starts from a known home configuration regardless of what the previous
-    test left behind.
-
-    Args:
-        robot_id: Target robot identifier (e.g. "Robot1", "Robot2").
-        timeout: Socket timeout in seconds.
-    """
-    _cmd(
-        f"return {robot_id} to start position",
-        robot_id=robot_id,
-        timeout=timeout,
-        request_id=0,
-    )
 
 
 def _cmd(
@@ -333,9 +314,8 @@ class TestNavigationOps:
 
     @pytest.fixture(autouse=True)
     def reset_before_each(self):
-        """Return both robots to home before every navigation test."""
-        _reset_robot("Robot1")
-        _reset_robot("Robot2")
+        """Reset simulation before every navigation test."""
+        reset_simulation()
 
     def test_move_to_coordinate_robot1(self):
         """move_to_coordinate moves Robot1 to a reachable left-workspace point."""
@@ -503,8 +483,8 @@ class TestSpatialOps:
 
     @pytest.fixture(autouse=True)
     def reset_before_each(self):
-        """Return Robot1 to home before every spatial operation test."""
-        _reset_robot("Robot1")
+        """Reset simulation before every spatial operation test."""
+        reset_simulation()
 
     def test_move_relative_to_object(self):
         """move_relative_to_object moves Robot1 relative to a named object."""
@@ -541,21 +521,12 @@ class TestGraspOps:
 
     @pytest.fixture(autouse=True)
     def reset_before_each(self):
-        """Return Robot2 to home and open gripper before every grasp test.
+        """Reset simulation before every grasp test.
 
-        redCube starts at x=+0.300 (Robot2's workspace).  Earlier spatial tests
-        may have moved it, so we also move redCube back to its nominal position
-        before attempting a grasp.
+        reset_simulation restores robots to home, opens grippers, and
+        returns all scene objects (including redCube) to initial positions.
         """
-        _reset_robot("Robot2")
-        _cmd("open gripper for Robot2", robot_id="Robot2", timeout=240.0, request_id=0)
-        x, y, z = _R2_COORD
-        _cmd(
-            f"move Robot2 to coordinate {x} {y} {z}",
-            robot_id="Robot2",
-            timeout=240.0,
-            request_id=0,
-        )
+        reset_simulation()
 
     def test_grasp_object(self):
         """grasp_object runs the full grasp planning pipeline for redCube with Robot2.
@@ -623,11 +594,8 @@ class TestMultiRobotOps:
 
     @pytest.fixture(autouse=True)
     def reset_before_each(self):
-        """Return both robots to home and open grippers before every multi-robot test."""
-        _reset_robot("Robot1")
-        _reset_robot("Robot2")
-        _cmd("open gripper for Robot1", robot_id="Robot1", timeout=240.0, request_id=0)
-        _cmd("open gripper for Robot2", robot_id="Robot2", timeout=240.0, request_id=0)
+        """Reset simulation before every multi-robot test."""
+        reset_simulation()
 
     def test_detect_other_robot(self):
         """detect_other_robot reports Robot2's position relative to Robot1."""
@@ -689,9 +657,8 @@ class TestCollaborativeOps:
 
     @pytest.fixture(autouse=True)
     def reset_before_each(self):
-        """Return both robots to home before the collaborative test."""
-        _reset_robot("Robot1")
-        _reset_robot("Robot2")
+        """Reset simulation before the collaborative test."""
+        reset_simulation()
 
     def test_stabilize_object(self):
         """stabilize_object coordinates both arms to stabilise a shared object."""
@@ -729,9 +696,8 @@ class TestVariableChaining:
 
     @pytest.fixture(autouse=True)
     def reset_before_each(self):
-        """Return Robot1 to home and open gripper before every chaining test."""
-        _reset_robot("Robot1")
-        _cmd("open gripper for Robot1", robot_id="Robot1", timeout=240.0, request_id=0)
+        """Reset simulation before every chaining test."""
+        reset_simulation()
 
     def test_detect_then_move_to_detected_position(self):
         """detect_object_stereo → $target → move_to_coordinate uses 3D stereo coords."""

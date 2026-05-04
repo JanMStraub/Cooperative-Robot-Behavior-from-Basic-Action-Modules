@@ -202,29 +202,29 @@ namespace Robotics
                     + $"for {_robotController.robotId}"
             );
 
-            // Diagnostic: log joint_6 values across the full trajectory to detect ±π boundary crossings.
+            // Diagnostic: log all joint trajectories + detect large inter-waypoint jumps.
             {
-                int j6idx = -1;
-                for (int i = 0; i < msg.joint_names.Length; i++)
-                    if (msg.joint_names[i] == "joint_6") { j6idx = i; break; }
-                if (j6idx >= 0 && msg.points.Length > 0)
+                for (int ji = 0; ji < msg.joint_names.Length; ji++)
                 {
+                    if (msg.points.Length == 0 || msg.points[0].positions == null || ji >= msg.points[0].positions.Length)
+                        continue;
+                    string jname = msg.joint_names[ji];
                     var sb = new System.Text.StringBuilder();
-                    sb.Append($"{_logPrefix} joint_6 trajectory (deg): ");
+                    sb.Append($"{_logPrefix} {jname} trajectory (deg): ");
                     int step = Mathf.Max(1, msg.points.Length / 10);
                     for (int p = 0; p < msg.points.Length; p += step)
-                        sb.Append($"{msg.points[p].positions[j6idx] * Mathf.Rad2Deg:F1} ");
-                    sb.Append($"[last:{msg.points[msg.points.Length-1].positions[j6idx] * Mathf.Rad2Deg:F1}]");
+                        sb.Append($"{msg.points[p].positions[ji] * Mathf.Rad2Deg:F1} ");
+                    sb.Append($"[last:{msg.points[msg.points.Length-1].positions[ji] * Mathf.Rad2Deg:F1}]");
                     Debug.Log(sb.ToString());
 
-                    // Detect boundary crossings: consecutive waypoints with |delta| > 270° indicate the bug.
+                    // Flag any consecutive jump > 90° — indicates redundant-IK solution flip.
                     for (int p = 1; p < msg.points.Length; p++)
                     {
-                        double prev = msg.points[p-1].positions[j6idx] * Mathf.Rad2Deg;
-                        double cur  = msg.points[p].positions[j6idx]   * Mathf.Rad2Deg;
+                        double prev = msg.points[p-1].positions[ji] * Mathf.Rad2Deg;
+                        double cur  = msg.points[p].positions[ji]   * Mathf.Rad2Deg;
                         double rawDelta = cur - prev;
-                        if (System.Math.Abs(rawDelta) > 270.0)
-                            Debug.LogWarning($"{_logPrefix} joint_6 BOUNDARY CROSSING at waypoint {p}: {prev:F1}° → {cur:F1}° (delta={rawDelta:F1}°) — NormalizeAngleRad will handle this.");
+                        if (System.Math.Abs(rawDelta) > 90.0)
+                            Debug.LogWarning($"{_logPrefix} {jname} LARGE JUMP at waypoint {p}: {prev:F1}° → {cur:F1}° (delta={rawDelta:F1}°)");
                     }
                 }
             }
@@ -879,9 +879,10 @@ namespace Robotics
                 int idx = _jointIndexMap[j];
                 float rawDeg = (float)positions[j] * Mathf.Rad2Deg;
                 ArticulationDrive drive = _joints[idx].xDrive;
-                float targetDeg = drive.lowerLimit + (float)((rawDeg - drive.lowerLimit) % 360.0);
-                if (targetDeg < drive.lowerLimit) targetDeg += 360f;
-                drive.target = Mathf.Clamp(targetDeg, drive.lowerLimit, drive.upperLimit);
+                // Use shortest-path delta from current drive target to avoid snapping
+                // through 360° when a planned angle crosses the ±π boundary.
+                float shortDelta = Mathf.DeltaAngle(drive.target, rawDeg);
+                drive.target = Mathf.Clamp(drive.target + shortDelta, drive.lowerLimit, drive.upperLimit);
                 _joints[idx].xDrive = drive;
                 if (idx < _robotController.jointDriveTargets.Length)
                     _robotController.jointDriveTargets[idx] = drive.target;

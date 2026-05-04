@@ -181,16 +181,26 @@ def _apply_camera_rotation(points: np.ndarray, quaternion: list) -> np.ndarray:
     Returns:
         Float32 (N, 3) in Unity world frame.
     """
-    x, y, z, w = quaternion
+    x, y, z, w = [float(v) for v in quaternion]
     R = np.array(
         [
             [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
             [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
             [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
         ],
-        dtype=np.float32,
+        dtype=np.float64,
     )
-    return points @ R.T
+    pts64 = np.asarray(points, dtype=np.float64)
+    finite_mask = np.isfinite(pts64).all(axis=1)
+    if not finite_mask.all():
+        logger.debug(
+            f"_apply_camera_rotation: dropped {(~finite_mask).sum()} non-finite points before matmul"
+        )
+        pts64 = pts64[finite_mask]
+    if pts64.shape[0] == 0:
+        return np.empty((0, 3), dtype=np.float32)
+    result = pts64 @ R.T
+    return result.astype(np.float32)
 
 
 def _clean_point_cloud(
@@ -440,8 +450,15 @@ def generate_point_cloud(
         raw_points: np.ndarray = np.asarray(point_cloud["points"], dtype=np.float32)
         raw_colors: np.ndarray = np.asarray(point_cloud["colors"], dtype=np.uint8)
 
-        # Remove NaN / Inf points that SGBM sometimes produces at depth discontinuities
-        valid_mask = np.isfinite(raw_points).all(axis=1)
+        # Remove NaN / Inf points that SGBM sometimes produces at depth discontinuities.
+        # Also clip extreme-magnitude points (float32 overflow in rotation matmul):
+        # small disparities produce Z values that are finite but large enough that
+        # squaring them during @ R.T overflows to inf.  10 m is well outside the
+        # robot workspace and safely excludes these outliers.
+        _MAX_COORD_M = 10.0
+        valid_mask = np.isfinite(raw_points).all(axis=1) & (
+            np.abs(raw_points).max(axis=1) < _MAX_COORD_M
+        )
         raw_points = raw_points[valid_mask]
         raw_colors = raw_colors[valid_mask]
 

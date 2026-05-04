@@ -88,6 +88,8 @@ class BenchmarkRunner:
         finally:
             if mock_original is not None:
                 mock_registry.restore_mock(mock_original)
+            if not cfg.dry_run:
+                self._reset(cfg)
 
     def _send(
         self,
@@ -173,6 +175,21 @@ class BenchmarkRunner:
             body += chunk
 
         return json.loads(body.decode("utf-8"))
+
+    def _reset(self, cfg: BenchmarkConfig) -> None:
+        """
+        Send reset_simulation to Unity via EXEC: prefix and wait for completion.
+
+        Silently ignores errors — a failed reset should not fail the benchmark result.
+
+        Args:
+            cfg: Benchmark config (used for timeout).
+        """
+        try:
+            reset_op = [{"operation": "reset_simulation", "params": {}}]
+            self._send(reset_op, "system", cfg)
+        except Exception:
+            pass
 
     def _run_local(
         self, ops: List[Dict[str, Any]], cfg: BenchmarkConfig
@@ -309,6 +326,9 @@ class BenchmarkRunner:
                 if not s.success and s.error_code:
                     error_counts[s.error_code] = error_counts.get(s.error_code, 0) + 1
             all_steps.extend(task_steps)
+
+            if not cfg.dry_run:
+                self._reset(cfg)
 
             if raw.get("success"):
                 completed += 1

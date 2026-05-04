@@ -191,7 +191,9 @@ def _make_3d(
     )
     points = cv2.reprojectImageTo3D(depth_map, Q)
     colors = cv2.cvtColor(imgL_color, cv2.COLOR_BGR2RGB)
-    mask = depth_map > min_disp
+    # depth_map > min_disp removes zero/negative disparity; also drop non-finite
+    # points produced when disparity is near-zero (Z → ±inf in Q-matrix division).
+    mask = (depth_map > min_disp) & np.isfinite(points).all(axis=2)
     return {"points": points[mask], "colors": colors[mask]}
 
 

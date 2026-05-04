@@ -23,6 +23,7 @@ from .Base import (
     OperationComplexity,
     OperationResult,
 )
+from ._imports import get_command_broadcaster as _get_command_broadcaster
 from core.SingletonBase import SingletonBase
 
 
@@ -465,4 +466,54 @@ WAIT_OPERATION = BasicOperation(
     ],
     relationships=None,
     implementation=_execute_wait,
+)
+
+
+def _execute_reset_simulation(**kwargs) -> OperationResult:
+    """Send reset_simulation command to Unity and wait for completion."""
+    command = {
+        "command_type": "reset_simulation",
+        "robot_id": "system",
+    }
+
+    broadcaster = _get_command_broadcaster()
+    completion = broadcaster.send_command_and_wait(command, timeout=15.0)
+
+    if completion is None:
+        return OperationResult.error_result(
+            "COMMUNICATION_FAILED",
+            "Failed to send reset_simulation to Unity or timed out",
+            ["Ensure Unity is running and connected to CommandServer (port 5007)"],
+        )
+
+    if not completion.get("success", False):
+        return OperationResult.error_result(
+            "RESET_FAILED",
+            "Simulation reset did not complete successfully",
+            ["Check Unity console for SimulationManager errors"],
+        )
+
+    return OperationResult.success_result({"reset": True})
+
+
+RESET_SIMULATION_OPERATION = BasicOperation(
+    operation_id="sync_reset_001",
+    name="reset_simulation",
+    category=OperationCategory.SYNC,
+    complexity=OperationComplexity.ATOMIC,
+    description="Reset simulation to initial state (robots, objects, scene)",
+    long_description=(
+        "Triggers a full simulation reset: robots return to start positions, "
+        "all scene objects return to their initial positions. "
+        "Used between benchmark runs or after errors."
+    ),
+    parameters=[],
+    preconditions=[],
+    postconditions=[],
+    average_duration_ms=3000,
+    success_rate=99.0,
+    failure_modes=["Unity not connected", "SimulationManager not found"],
+    usage_examples=["reset_simulation() - Reset scene between benchmark runs"],
+    relationships=None,
+    implementation=_execute_reset_simulation,
 )

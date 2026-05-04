@@ -711,6 +711,11 @@ class ROSMotionServer:
         # current position to prevent link-6 free-spin during pre-grasp hover moves.
         # Must NOT be set for descent/grasp moves where joint_6 must reach target orientation.
         constrain_joint6 = request.get("constrain_joint6", False)
+        # constrain_joint4: when True, add a ±90° path constraint on joint_4 around its
+        # current position. Prevents RRTConnect from choosing the long-arc (~338°) IK
+        # solution for the pre-grasp hover — robot arrives at hover in the short-arc config
+        # so the subsequent Cartesian descent starts from the correct joint configuration.
+        constrain_joint4 = request.get("constrain_joint4", False)
 
         logger.info(
             f"[GRASP_DEBUG] {robot_id} incoming position ({coordinate_space}): "
@@ -888,6 +893,36 @@ class ROSMotionServer:
             _j6_path_constraints = Constraints()
             _j6_path_constraints.joint_constraints.append(_j6c)
             goal.request.path_constraints = _j6_path_constraints
+
+        if (
+            constrain_joint4
+            and joint_state is not None
+            and "joint_4" in joint_state.name
+            and JointConstraint is not None
+        ):
+            _j4_idx = list(joint_state.name).index("joint_4")
+            _j4_current = joint_state.position[_j4_idx]
+            _j4_lower, _j4_upper = ARM_JOINT_LIMITS.get(
+                "joint_4", (-3.1405926535897932, 3.1405926535897932)
+            )
+            _j4_window = 1.5708  # ±90° — allows normal wrist rotation, blocks long-arc flip
+            _j4_path_lower = max(_j4_lower, _j4_current - _j4_window)
+            _j4_path_upper = min(_j4_upper, _j4_current + _j4_window)
+            _j4_center = (_j4_path_lower + _j4_path_upper) / 2.0
+            _j4c = JointConstraint()
+            _j4c.joint_name = "joint_4"
+            _j4c.position = _j4_center
+            _j4c.tolerance_below = _j4_center - _j4_path_lower
+            _j4c.tolerance_above = _j4_path_upper - _j4_center
+            _j4c.weight = 1.0
+            if goal.request.path_constraints is None or not hasattr(goal.request, "path_constraints"):
+                goal.request.path_constraints = Constraints()
+            goal.request.path_constraints.joint_constraints.append(_j4c)
+            logger.info(
+                f"[HOVER] {robot_id} joint_4 path constraint: "
+                f"current={_j4_current:.3f} rad ({_j4_current * 57.296:.1f}°), "
+                f"window=[{_j4_path_lower:.3f}, {_j4_path_upper:.3f}]"
+            )
 
         return goal
 
@@ -1095,12 +1130,17 @@ class ROSMotionServer:
         }
 
     def _normalize_trajectory_angles(self, trajectory, joint_names_to_limits):
-        """Wrap trajectory joint positions into their physical limit range via shortest arc.
+        """Enforce joint continuity across consecutive trajectory waypoints.
 
-        MoveIt can return wrist-joint values that cross the ±π boundary (e.g. +3.0 rad
-        when the limit is ±π), which Unity interprets as a full-rotation command.  This
-        method clamps each waypoint position back into [lower, upper] by subtracting or
-        adding 2π until the value is within range.
+        Two passes:
+        1. Clamp each waypoint into [lower, upper] by ±2π steps. Handles ±π
+           boundary crossings where MoveIt emits +3.15 when the limit is ±π.
+        2. Walk waypoints sequentially: if the delta between two consecutive
+           waypoints exceeds π for a ±π-range joint (joint_4, joint_6), shift
+           the current waypoint by ±2π so the joint takes the shorter arc —
+           but ONLY if the shifted value stays within [lower, upper].
+           This corrects MoveIt choosing the 333° arc when 27° is available
+           across the ±π boundary.
 
         Args:
             trajectory: JointTrajectory whose points.positions will be mutated in-place.
@@ -1108,23 +1148,65 @@ class ROSMotionServer:
         """
         import math as _math
 
+        if not trajectory.points:
+            return
+
+        joint_indices = {}
+        for idx, name in enumerate(trajectory.joint_names):
+            if name in joint_names_to_limits:
+                joint_indices[idx] = (name, joint_names_to_limits[name])
+
+        # Pass 1: clamp each waypoint into [lower, upper]
         for point in trajectory.points:
             if not point.positions:
                 continue
             positions = list(point.positions)
-            for idx, name in enumerate(trajectory.joint_names):
-                if name not in joint_names_to_limits or idx >= len(positions):
+            for idx, (name, (lower, upper)) in joint_indices.items():
+                if idx >= len(positions):
                     continue
-                lower, upper = joint_names_to_limits[name]
                 pos = positions[idx]
-                range_size = upper - lower
-                if range_size <= 0:
-                    continue
                 while pos > upper:
                     pos -= 2.0 * _math.pi
                 while pos < lower:
                     pos += 2.0 * _math.pi
                 positions[idx] = pos
+            point.positions = tuple(positions)
+
+        # Pass 2: sequential shortest-path for ±π joints (joint_4, joint_6).
+        # Only applies where the joint range spans nearly 2π so both +2π and
+        # -2π shifts are meaningful options. Skip joints with smaller ranges
+        # (joint_1 ±170°, joint_2/3 with asymmetric limits) where a shift
+        # would likely leave the value out of bounds.
+        FULL_ROTATION_JOINTS = {"joint_4", "joint_6"}
+        prev_positions = None
+        for point in trajectory.points:
+            if not point.positions:
+                prev_positions = None
+                continue
+            positions = list(point.positions)
+            if prev_positions is not None:
+                for idx, (name, (lower, upper)) in joint_indices.items():
+                    if name not in FULL_ROTATION_JOINTS:
+                        continue
+                    if idx >= len(positions) or idx >= len(prev_positions):
+                        continue
+                    delta = positions[idx] - prev_positions[idx]
+                    if abs(delta) > _math.pi:
+                        # Shift by ±2π to take the shorter arc
+                        shift = -2.0 * _math.pi if delta > 0 else 2.0 * _math.pi
+                        shifted = positions[idx] + shift
+                        # Apply if shifted value is within limits OR within 0.05 rad
+                        # (~3°) of the limit boundary (joint_4/6 are inset 0.001 rad
+                        # from ±π, so +180.7° → clamped to +179.94°).
+                        clamped_shifted = max(lower, min(upper, shifted))
+                        if abs(shifted - clamped_shifted) <= 0.05:
+                            old_deg = _math.degrees(positions[idx])
+                            positions[idx] = clamped_shifted
+                            logger.debug(
+                                f"{name} short-arc correction: {old_deg:.1f}° → "
+                                f"{_math.degrees(clamped_shifted):.1f}°"
+                            )
+            prev_positions = list(positions)
             point.positions = tuple(positions)
 
     def _plan_and_publish(self, request, robot_id):
@@ -1681,11 +1763,18 @@ class ROSMotionServer:
         req.jump_threshold = 0.0  # Disable jump detection; non-zero values prematurely terminate descent at workspace edges
         req.avoid_collisions = avoid_collisions
 
+        # Fetch current joint state early — needed for both start_state and path constraints.
+        with self._joint_states_lock:
+            joint_state = self._current_joint_states.get(robot_id)
+
         # Lock wrist orientation throughout the descent so MoveIt's IK solver
         # cannot flip to a redundant wrist solution mid-path (which would cause
         # the gripper to visibly rotate around its own axis during descent).
         # Without this constraint, GetCartesianPath solves each waypoint
         # independently and may choose a different J4/J6 configuration each time.
+        # joint_4 constraint added alongside orientation to prevent MoveIt from
+        # choosing the long-arc (~338°) IK solution over the short-arc (~22°) one —
+        # both are valid orientations but the long arc causes a large physical wrist swing.
         if lock_orientation and OrientationConstraint is not None:
             orient_constraint = OrientationConstraint()
             orient_constraint.header.frame_id = "base_link"
@@ -1697,6 +1786,48 @@ class ROSMotionServer:
             orient_constraint.weight = 1.0
             path_constraints = Constraints()
             path_constraints.orientation_constraints.append(orient_constraint)
+            if joint_state is not None and "joint_4" in joint_state.name and JointConstraint is not None:
+                _j4_idx = list(joint_state.name).index("joint_4")
+                _j4_current = joint_state.position[_j4_idx]
+                _j4_lower, _j4_upper = ARM_JOINT_LIMITS.get(
+                    "joint_4", (-3.1405926535897932, 3.1405926535897932)
+                )
+                _j4_window = 1.5708  # ±90° — wide enough for normal descent, blocks long-arc flip
+                _j4_path_lower = max(_j4_lower, _j4_current - _j4_window)
+                _j4_path_upper = min(_j4_upper, _j4_current + _j4_window)
+                _j4_center = (_j4_path_lower + _j4_path_upper) / 2.0
+                _j4c = JointConstraint()
+                _j4c.joint_name = "joint_4"
+                _j4c.position = _j4_center
+                _j4c.tolerance_below = _j4_center - _j4_path_lower
+                _j4c.tolerance_above = _j4_path_upper - _j4_center
+                _j4c.weight = 1.0
+                path_constraints.joint_constraints.append(_j4c)
+                logger.info(
+                    f"[CARTESIAN] {robot_id} joint_4 path constraint: "
+                    f"current={_j4_current:.3f} rad, window=[{_j4_path_lower:.3f}, {_j4_path_upper:.3f}]"
+                )
+            if joint_state is not None and "joint_6" in joint_state.name and JointConstraint is not None:
+                _j6_idx = list(joint_state.name).index("joint_6")
+                _j6_current = joint_state.position[_j6_idx]
+                _j6_lower, _j6_upper = ARM_JOINT_LIMITS.get(
+                    "joint_6", (-3.1405926535897932, 3.1405926535897932)
+                )
+                _j6_window = 1.5708  # ±90° — orientation constraint alone insufficient; two joint configs give identical EE pose
+                _j6_path_lower = max(_j6_lower, _j6_current - _j6_window)
+                _j6_path_upper = min(_j6_upper, _j6_current + _j6_window)
+                _j6_center = (_j6_path_lower + _j6_path_upper) / 2.0
+                _j6c = JointConstraint()
+                _j6c.joint_name = "joint_6"
+                _j6c.position = _j6_center
+                _j6c.tolerance_below = _j6_center - _j6_path_lower
+                _j6c.tolerance_above = _j6_path_upper - _j6_center
+                _j6c.weight = 1.0
+                path_constraints.joint_constraints.append(_j6c)
+                logger.info(
+                    f"[CARTESIAN] {robot_id} joint_6 path constraint: "
+                    f"current={_j6_current:.3f} rad, window=[{_j6_path_lower:.3f}, {_j6_path_upper:.3f}]"
+                )
             req.path_constraints = path_constraints
         # max_velocity/acceleration_scaling_factor were added to GetCartesianPath in
         # moveit_msgs ~2.3. _CARTESIAN_HAS_SCALING is set once at import time.
@@ -1706,9 +1837,6 @@ class ROSMotionServer:
         # else: scaling fields unavailable in this moveit_msgs version; TOTG will be
         # applied manually after GetCartesianPath returns (see below).
 
-        # Set current joint state as start (clamped to URDF bounds, is_diff=True)
-        with self._joint_states_lock:
-            joint_state = self._current_joint_states.get(robot_id)
         if joint_state is not None:
             filtered_js = JointState()
             filtered_js.header = joint_state.header
@@ -1819,6 +1947,9 @@ class ROSMotionServer:
             trajectory = self._apply_time_parameterization(
                 trajectory, vel_scaling, acc_scaling, robot_id
             )
+
+        # Enforce shortest-path continuity before publishing.
+        self._normalize_trajectory_angles(trajectory, ARM_JOINT_LIMITS)
 
         # Publish and wait for completion (same as _plan_and_publish)
         trajectory_pub = self._trajectory_pubs[robot_id]
@@ -1976,6 +2107,9 @@ class ROSMotionServer:
         # the Python host's CommandServer). Unity's ROSTrajectorySubscriber will
         # SyncIKTargetToCurrentPose after the trajectory completes, which is acceptable
         # for return-to-start since the home pose has near-zero IK error.
+
+        # Enforce shortest-path continuity before publishing (same as _plan_and_publish)
+        self._normalize_trajectory_angles(trajectory, ARM_JOINT_LIMITS)
 
         # Publish trajectory to Unity and wait for completion (same as _plan_and_publish)
         trajectory_pub = self._trajectory_pubs[robot_id]

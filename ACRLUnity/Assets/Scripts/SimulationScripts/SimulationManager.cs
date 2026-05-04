@@ -87,6 +87,10 @@ namespace Simulation
             ArticulationBody,
             (Vector3 position, Quaternion rotation)
         > _initialRobotPoses = new Dictionary<ArticulationBody, (Vector3, Quaternion)>();
+        private Dictionary<
+            Rigidbody,
+            (Vector3 position, Quaternion rotation)
+        > _initialObjectPoses = new Dictionary<Rigidbody, (Vector3, Quaternion)>();
         private Coroutine _activeResetCoroutine;
 
         public event System.Action<SimulationState, SimulationState> OnStateChanged;
@@ -202,6 +206,17 @@ namespace Simulation
                     _initializationFailed = true;
                     HandleError("No robots found. Scene may be misconfigured.");
                     return;
+                }
+
+                // Cache initial poses of all dynamic scene objects (Rigidbody, not part of a robot)
+                var allRigidbodies = FindObjectsByType<Rigidbody>(
+                    FindObjectsInactive.Exclude,
+                    FindObjectsSortMode.None
+                );
+                foreach (var rb in allRigidbodies)
+                {
+                    if (rb.GetComponentInParent<RobotController>() == null)
+                        _initialObjectPoses[rb] = (rb.transform.position, rb.transform.rotation);
                 }
 
                 Debug.Log(
@@ -365,11 +380,25 @@ namespace Simulation
                             }
                         }
 
+                        robot.ReleaseGrasp();
                         robot.ResetJointTargets();
+
                         string robotId = robot.gameObject.name;
                         _robotTargetReached[robotId] = true;
                     }
                 }
+            }
+
+            // Restore all dynamic scene objects to their initial poses
+            foreach (var kvp in _initialObjectPoses)
+            {
+                Rigidbody rb = kvp.Key;
+                if (rb == null) continue;
+                rb.transform.SetParent(null, worldPositionStays: false);
+                rb.transform.position = kvp.Value.position;
+                rb.transform.rotation = kvp.Value.rotation;
+                rb.linearVelocity = Vector3.zero;
+                rb.angularVelocity = Vector3.zero;
             }
 
             yield return new WaitForFixedUpdate();

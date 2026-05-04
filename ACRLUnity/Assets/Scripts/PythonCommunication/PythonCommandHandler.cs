@@ -4,6 +4,7 @@ using System.Linq;
 using Core;
 using Robotics;
 using Robotics.Grasp;
+using Simulation;
 using UnityEngine;
 using Vision;
 
@@ -389,6 +390,10 @@ namespace PythonCommunication
 
                 case "capture_stereo_images":
                     ExecuteCaptureSteroImages(command);
+                    break;
+
+                case "reset_simulation":
+                    ExecuteResetSimulation(command);
                     break;
 
                 default:
@@ -3600,6 +3605,53 @@ namespace PythonCommunication
         public (int successful, int failed) GetCommandStats()
         {
             return (_successfulCommands, _failedCommands);
+        }
+
+        /// <summary>
+        /// Execute reset_simulation command — resets all robots and scene objects to initial state.
+        /// Sends completion after SimulationManager finishes the reset coroutine.
+        /// </summary>
+        private void ExecuteResetSimulation(RobotCommand command)
+        {
+            string robotId = command.robot_id ?? "system";
+            uint requestId = command.request_id;
+            try
+            {
+                var sim = SimulationManager.Instance;
+                if (sim == null)
+                {
+                    Debug.LogWarning($"{_logPrefix} reset_simulation: SimulationManager not found");
+                    SendCommandCompletion(robotId, "reset_simulation", false, requestId);
+                    return;
+                }
+                StopAllCoroutines();
+                StartCoroutine(ResetAndConfirm(sim, robotId, requestId));
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogError($"{_logPrefix} reset_simulation error: {ex.Message}");
+                SendCommandCompletion(robotId, "reset_simulation", false, requestId);
+            }
+        }
+
+        /// <summary>
+        /// Triggers SimulationManager.ResetSimulation() then waits for it to finish
+        /// before sending completion back to Python.
+        /// </summary>
+        private System.Collections.IEnumerator ResetAndConfirm(SimulationManager sim, string robotId, uint requestId)
+        {
+            sim.ResetSimulation();
+            // Wait until SimulationManager leaves the Resetting state
+            float timeout = 10f;
+            float elapsed = 0f;
+            yield return new UnityEngine.WaitForSeconds(0.1f);
+            while (sim.CurrentState == SimulationState.Resetting && elapsed < timeout)
+            {
+                elapsed += UnityEngine.Time.deltaTime;
+                yield return null;
+            }
+            bool success = sim.CurrentState != SimulationState.Resetting;
+            SendCommandCompletion(robotId, "reset_simulation", success, requestId);
         }
 
         /// <summary>

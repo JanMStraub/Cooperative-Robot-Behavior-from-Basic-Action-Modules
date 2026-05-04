@@ -18,6 +18,6 @@ def get_task(cfg: BenchmarkConfig) -> str:
     """
     return (
         f"Robot {cfg.robot_id}: detect the red object and move to it, "
-        f"then detect the green object and move to it, "
-        f"then detect the blue object and move to it."
+        f"then detect the yellow object and move to it, "
+        f"then detect the purple object and move to it."
     )

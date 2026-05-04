@@ -41,6 +41,7 @@ from .SyncOperations import (
     SIGNAL_OPERATION,
     WAIT_FOR_SIGNAL_OPERATION,
     WAIT_OPERATION,
+    RESET_SIMULATION_OPERATION,
 )
 from .FieldOperations import (
     DETECT_FIELD_OPERATION,
@@ -99,6 +100,7 @@ class OperationRegistry:
             SIGNAL_OPERATION,
             WAIT_FOR_SIGNAL_OPERATION,
             WAIT_OPERATION,
+            RESET_SIMULATION_OPERATION,
             # ============================================================================
             # LEVEL 3: INTERMEDIATE OPERATIONS (Complex single-robot tasks)
             # ============================================================================

@@ -941,6 +941,19 @@ namespace Robotics
         /// Call this when the robot should no longer maintain its current position
         /// (e.g., after opening gripper to release an object).
         /// </summary>
+        /// <summary>
+        /// Release any grasped object and open the gripper. Called during simulation reset.
+        /// </summary>
+        public void ReleaseGrasp()
+        {
+            if (_gripperController != null)
+            {
+                if (_gripperController.GraspedObject != null)
+                    _gripperController.DetachObject();
+                _gripperController.OpenGrippers();
+            }
+        }
+
         public void ClearTarget()
         {
             _targetTransform = null;
@@ -1002,6 +1015,7 @@ namespace Robotics
         /// <summary>Resets all joint drive targets to zero and clears velocity and force state.</summary>
         public void ResetJointTargets()
         {
+            ClearTarget();
             for (int i = 0; i < robotJoints.Length; i++)
             {
                 var drive = robotJoints[i].xDrive;

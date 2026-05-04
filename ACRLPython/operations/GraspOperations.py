@@ -202,11 +202,12 @@ def _vec_to_pos(seq, y_offset: float = 0.0) -> dict:
 
 
 def _yaw_toward_object(robot_id: str, object_position) -> float:
-    """Return Unity-frame yaw (radians) that points the gripper jaw from the
-    robot base toward the object in the horizontal plane.
+    """Return Unity-frame yaw (radians) that orients the gripper jaw perpendicular
+    to the robot-to-object vector so the fingers straddle the object from the sides.
 
-    For a top-down grasp the gripper Z-axis (closing direction) should face the
-    object so the fingers straddle it along the robot-to-object axis.
+    For a top-down grasp the jaw (open/close axis) must be perpendicular to the
+    approach direction so the fingers land on either side of the object rather than
+    on top of it.  We compute the robot→object azimuth and rotate +90°.
 
     Args:
         robot_id: Robot identifier used to look up base position.
@@ -224,7 +225,8 @@ def _yaw_toward_object(robot_id: str, object_position) -> float:
 
     dx = object_position[0] - base[0]
     dz = object_position[2] - base[2]
-    yaw = math.atan2(dz, dx)
+    # +90° rotation makes jaw perpendicular to approach so fingers straddle the object.
+    yaw = math.atan2(dz, dx) + math.pi / 2
 
     # Normalise to (-π/2, π/2] to exploit 180° gripper symmetry.
     if yaw > math.pi / 2:
@@ -278,6 +280,57 @@ def _handle_ros_failure(error_msg: str, context: str):
     )
 
 
+def _yaw_from_world_state_or_robot(
+    robot_id: str,
+    object_id: str,
+    object_position,
+    world_state,
+) -> tuple:
+    """Return (yaw_unity_radians, yaw_source_str) for a top-down grasp.
+
+    Priority:
+    1. WorldState object rotation: jaw = object_Y_rotation + 90° (across short axis).
+       Used when the object has a meaningful Y rotation (elongated objects).
+    2. Approach-perpendicular fallback (robot-to-object + 90°) for symmetric/unknown objects.
+
+    Normalised to (-π/2, π/2] for gripper symmetry.
+    """
+    if world_state is not None:
+        try:
+            with world_state._lock:
+                _obj = world_state._objects.get(object_id)
+                if _obj is None:
+                    _norm = object_id.lower().replace(" ", "_").replace("-", "_")
+                    for k, v in world_state._objects.items():
+                        if _norm in k.lower() or k.lower() in _norm:
+                            _obj = v
+                            break
+                if _obj is not None and _obj.rotation is not None:
+                    # rotation[1] = Unity Y (up-axis) rotation in degrees.
+                    # Unity Y is left-handed (CW from above) → negate for ROS.
+                    # The jaw must align with the long axis of the object.
+                    # If local X is longer: long axis is at -rotation[1] in ROS frame.
+                    # If local Z is longer: long axis is at -rotation[1] + 90° (local Z is 90° from local X).
+                    yaw_deg = _obj.rotation[1]
+                    z_longer = (
+                        _obj.dimensions is not None
+                        and _obj.dimensions[2] > _obj.dimensions[0]
+                    )
+                    offset = math.pi / 2 if z_longer else 0.0
+                    yaw_unity = -math.radians(yaw_deg) + offset
+                    if yaw_unity > math.pi / 2:
+                        yaw_unity -= math.pi
+                    elif yaw_unity <= -math.pi / 2:
+                        yaw_unity += math.pi
+                    axis = "Z" if z_longer else "X"
+                    return yaw_unity, f"WorldState long-{axis} (obj_yaw={yaw_deg:.1f}°→jaw={math.degrees(yaw_unity):.1f}°)"
+        except Exception as _e:
+            logger.warning(f"WorldState rotation lookup failed: {_e}")
+
+    yaw_unity = _yaw_toward_object(robot_id, object_position)
+    return yaw_unity, f"approach-perpendicular ({math.degrees(yaw_unity):.1f}°)"
+
+
 def _grasp_via_ros_planned(
     bridge,
     robot_id: str,
@@ -323,18 +376,16 @@ def _grasp_via_ros_planned(
         return None, True  # signal caller to try position-only path
 
     # Build object rotation quaternion for GraspPlanner.
-    # Priority: explicit yaw override > robot-to-object axis > identity.
-    # Using the robot-to-object axis aligns the gripper jaw toward the object
-    # so the fingers straddle it along the natural approach direction.
+    # Priority: explicit yaw override > WorldState object rotation > robot-to-object axis.
     # GraspPlanner expects a Unity-frame quaternion (x, y, z, w).
     obj_rot_quat = (0.0, 0.0, 0.0, 1.0)
     if grasp_yaw_override is not None:
         yaw_unity = grasp_yaw_override
     else:
-        yaw_unity = _yaw_toward_object(robot_id, object_position)
-        logger.info(
-            f"[ROS planned] gripper yaw toward object: {math.degrees(yaw_unity):.1f}°"
+        yaw_unity, yaw_source = _yaw_from_world_state_or_robot(
+            robot_id, object_id, object_position, world_state
         )
+        logger.info(f"[ROS planned] gripper yaw from {yaw_source}")
 
     # Build a Unity Y-axis rotation quaternion: (0, sin(θ/2), 0, cos(θ/2))
     half_y = yaw_unity / 2.0
@@ -454,7 +505,7 @@ def _grasp_via_ros_planned(
         robot_id=robot_id,
         max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
         max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
-        constrain_joint6=True,
+        constrain_joint4=True,
     )
     if not pre_result or not pre_result.get("success"):
         pre_err = pre_result.get("error", "Unknown") if pre_result else "No response"
@@ -539,8 +590,8 @@ def _grasp_via_ros_position_only(
     """Execute grasp using position-only ROS planning (no GraspPlanner).
 
     Used when object dimensions are unavailable or GraspPlanner is not
-    installed.  Moves to a top-down hover position, then descends via a
-    Cartesian path, then closes the gripper.
+    installed.  Moves to a clearance height, then a top-down hover position,
+    then descends via a Cartesian path, then closes the gripper.
 
     Args:
         bridge: Connected ROSBridge instance.
@@ -564,10 +615,7 @@ def _grasp_via_ros_position_only(
     # ROS X axis, which flips ee_link Z downward.  A small positive w bias keeps
     # the quaternion in the w>0 hemisphere so MoveIt's IK solver always picks the
     # same wrist configuration and avoids the ±360° flip that occurs at w=0.
-    # Priority: explicit yaw override > robot-to-object axis.
-    # Using the robot-to-object axis aligns the gripper jaw toward the object
-    # so the fingers straddle it along the natural approach direction.
-    # Already normalised to (-π/2, π/2] inside _yaw_toward_object.
+    # Priority: explicit yaw override > WorldState object rotation > robot-to-object axis.
     if grasp_yaw_override is not None:
         yaw_unity = grasp_yaw_override
         if yaw_unity > math.pi / 2:
@@ -575,10 +623,10 @@ def _grasp_via_ros_position_only(
         elif yaw_unity <= -math.pi / 2:
             yaw_unity += math.pi
     else:
-        yaw_unity = _yaw_toward_object(robot_id, object_position)
-        logger.info(
-            f"[ROS pos-only] gripper yaw toward object: {math.degrees(yaw_unity):.1f}°"
+        yaw_unity, yaw_source = _yaw_from_world_state_or_robot(
+            robot_id, object_id, object_position, world_state
         )
+        logger.info(f"[ROS pos-only] gripper yaw from {yaw_source}")
 
     # Compose q_yaw_ros * q_topdown (same formula as _grasp_via_vgn_with_ros).
     half = yaw_unity / 2.0
@@ -609,7 +657,38 @@ def _grasp_via_ros_position_only(
         f"pre_grasp_y={pre_grasp_position['y']:.3f}, grasp_y={grasp_position['y']:.3f}"
     )
 
-    # Step 1: Move to pre-grasp hover position.
+    # Step 1: Clearance waypoint — move to safe height before descending toward object.
+    # Mirrors VGN+ROS path (lines ~1460-1484): only insert when pre-grasp hover is below
+    # PRE_GRASP_CLEARANCE_Y so the arm sweeps over obstacles before committing to approach.
+    clearance_pos = {
+        "x": pre_grasp_position["x"],
+        "y": PRE_GRASP_CLEARANCE_Y,
+        "z": pre_grasp_position["z"],
+    }
+    if pre_grasp_position["y"] < PRE_GRASP_CLEARANCE_Y:
+        logger.info(f"[ROS pos-only] Clearance waypoint for {robot_id}: {clearance_pos}")
+        clearance_result = bridge.plan_and_execute(
+            position=clearance_pos,
+            orientation=top_down_orientation,
+            planning_time=10.0,
+            robot_id=robot_id,
+            max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
+            max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
+        )
+        if not clearance_result or not clearance_result.get("success"):
+            cl_err = (
+                clearance_result.get("error", "Unknown")
+                if clearance_result
+                else "No response"
+            )
+            logger.warning(
+                f"[ROS pos-only] Clearance waypoint failed ({cl_err}) — "
+                "proceeding directly to pre-grasp"
+            )
+        else:
+            time.sleep(0.2)
+
+    # Step 2: Move to pre-grasp hover position.
     # TODO: remove orientation=top_down_orientation once VGN is implemented — VGN will
     #       supply approach-aligned orientations, making this heuristic unnecessary.
     #       The top-down constraint shrinks the IK solution space at borderline reach
@@ -637,7 +716,7 @@ def _grasp_via_ros_position_only(
     # Brief pause so /joint_states has the settled pose before MoveIt samples start state.
     time.sleep(0.3)
 
-    # Step 2: Straight-line Cartesian descent to grasp position
+    # Step 3: Straight-line Cartesian descent to grasp position
     logger.info(
         f"[GRASP_DEBUG] {robot_id} starting Cartesian descent to "
         f"Unity y={grasp_position['y']:.3f} (object_y + {GRASP_TCP_OFFSET}m)"
@@ -660,7 +739,7 @@ def _grasp_via_ros_position_only(
             return None, True
         return err, False
 
-    # Step 3: Follow-target drift correction + gripper close
+    # Step 4: Follow-target drift correction + gripper close
     logger.info(f"Arm at grasp position, starting follow-target for {robot_id}")
     gripper_ok = _execute_grasp_with_follow_target(
         bridge=bridge,
@@ -1281,7 +1360,6 @@ def _grasp_via_vgn_with_ros(
                 f"using most-top-down candidate (Y_approach={top['approach_direction'][1]:.2f})"
             )
     pos = top["position"]
-    rot = top["rotation"]
     approach = top["approach_direction"]
     logger.info(
         f"[VGN+ROS] Top grasp world_pos={[round(v,3) for v in pos]}, approach={[round(v,3) for v in approach]}, cam_pos={cam_pos}, cam_rot={cam_rot}"
@@ -1313,29 +1391,43 @@ def _grasp_via_vgn_with_ros(
     _TOP_DOWN_Y_THRESHOLD = 0.7
     _vgn_approach_y = approach[1]  # Unity Y = up
     if abs(_vgn_approach_y) >= _TOP_DOWN_Y_THRESHOLD:
-        # VGN orientation is sufficiently top-down — use VGN approach for pre-grasp
-        # offset and convert the full orientation for MoveIt.
+        # VGN approach is sufficiently top-down — use VGN direction for pre-grasp offset,
+        # but use approach-perpendicular yaw so the jaw straddles the object from the sides.
         pre_approach = approach
-        _rx, _ry, _rz, _rw = rot[2], -rot[0], rot[1], rot[3]
-        if _rw < 0.0:
-            _rx, _ry, _rz, _rw = -_rx, -_ry, -_rz, -_rw
-        # Exploit 180° gripper symmetry: fold yaw into (-π/2, π/2] to minimise
-        # joint-6 travel.  Same normalisation used on the top-down + yaw path.
-        _vgn_yaw = math.atan2(
-            2.0 * (_rw * _rz + _rx * _ry),
-            1.0 - 2.0 * (_ry * _ry + _rz * _rz),
-        )
-        if _vgn_yaw > math.pi / 2 or _vgn_yaw < -math.pi / 2:
-            _rx, _ry, _rz, _rw = -_ry, _rx, _rw, -_rz
-            if _rw < 0.0:
-                _rx, _ry, _rz, _rw = -_rx, -_ry, -_rz, -_rw
-            logger.debug(
-                f"[VGN+ROS] VGN yaw {math.degrees(_vgn_yaw):.1f}° outside (-90°,90°] — "
-                f"applied 180° wrist flip."
+
+        if grasp_yaw_override is not None:
+            yaw_unity = grasp_yaw_override
+            if yaw_unity > math.pi / 2:
+                yaw_unity -= math.pi
+            elif yaw_unity < -math.pi / 2:
+                yaw_unity += math.pi
+            yaw_source = f"override ({math.degrees(yaw_unity):.1f}°)"
+        else:
+            yaw_unity, yaw_source = _yaw_from_world_state_or_robot(
+                robot_id, object_id, pos, world_state
             )
-        orientation = {"x": _rx, "y": _ry, "z": _rz, "w": _rw}
+
+        # Compose: q_yaw_ros * q_topdown (same as else branch)
+        half = yaw_unity / 2.0
+        qy_z = math.sin(half)
+        qy_w = math.cos(half)
+        bx, by, bz, bw = 0.9999, 0.0, 0.0, 0.0087
+        ox = qy_w * bx - qy_z * by
+        oy = qy_w * by + qy_z * bx
+        oz = qy_w * bz + qy_z * bw
+        ow = qy_w * bw - qy_z * bz
+        mag = math.sqrt(ox * ox + oy * oy + oz * oz + ow * ow)
+        orientation = {
+            "x": ox / mag,
+            "y": oy / mag,
+            "z": oz / mag,
+            "w": ow / mag,
+        }
         logger.info(
-            f"[VGN+ROS] Using VGN orientation (|approach Y|={abs(_vgn_approach_y):.2f} >= {_TOP_DOWN_Y_THRESHOLD})"
+            f"[VGN+ROS] Top-down + yaw={math.degrees(yaw_unity):.1f}° "
+            f"from {yaw_source} "
+            f"(VGN approach |Y|={abs(_vgn_approach_y):.2f} >= {_TOP_DOWN_Y_THRESHOLD}), "
+            f"orientation={orientation}"
         )
     else:
         # For explicit side/front approach: use VGN approach direction for pre-grasp offset.
@@ -1345,62 +1437,14 @@ def _grasp_via_vgn_with_ros(
         else:
             pre_approach = [0.0, 1.0, 0.0]  # straight up in Unity world frame
 
-        # Yaw source priority:
-        # 0. Explicit override (e.g. handoff — jaw must face the handoff axis)
-        # 1. WorldState object rotation (exact, from Unity physics engine)
-        # 2. VGN rotation quaternion (estimated from TSDF grasp prediction)
-        # 3. Zero yaw (axis-aligned fallback)
-        yaw_unity = 0.0
-        yaw_source = "fallback (zero)"
-
+        # Yaw: explicit override > WorldState short-axis > approach-perpendicular.
         if grasp_yaw_override is not None:
             yaw_unity = grasp_yaw_override
             yaw_source = f"override ({math.degrees(grasp_yaw_override):.1f}°)"
-        elif world_state is not None:
-            # get_object_state() doesn't expose rotation; access _objects directly.
-            try:
-                with world_state._lock:
-                    _obj = world_state._objects.get(object_id)
-                    if _obj is None:
-                        # partial-match fallback (same logic as get_object_position)
-                        _norm = object_id.lower().replace(" ", "_").replace("-", "_")
-                        for k, v in world_state._objects.items():
-                            if _norm in k.lower() or k.lower() in _norm:
-                                _obj = v
-                                break
-                    if _obj is None:
-                        _keys = list(world_state._objects.keys())
-                        logger.info(
-                            f"[VGN+ROS] WorldState object '{object_id}' not found. "
-                            f"Available keys: {_keys[:10]}"
-                        )
-                    elif _obj.rotation is None:
-                        logger.info(
-                            f"[VGN+ROS] WorldState object '{object_id}' found but rotation=None"
-                        )
-                    else:
-                        # rotation is (roll, pitch, yaw) from ZXY decomposition where:
-                        #   roll  = index 0 = rotation around Unity X
-                        #   pitch = index 1 = rotation around Unity Y (up) = in-plane yaw
-                        #   yaw   = index 2 = rotation around Unity Z
-                        # For top-down grasping, we need rotation around Unity Y → index 1.
-                        yaw_deg = _obj.rotation[1]
-                        # Unity Y rotation is left-handed (positive = clockwise from above).
-                        # ROS Z rotation is right-handed (positive = counter-clockwise).
-                        # Negate to convert between the two conventions.
-                        yaw_unity = -math.radians(yaw_deg)
-                        yaw_source = f"WorldState (yaw={yaw_deg:.1f}°)"
-            except Exception as _e:
-                logger.warning(f"[VGN+ROS] WorldState rotation lookup failed: {_e}")
-
-        if yaw_source.startswith("fallback"):
-            # Fall back to VGN rotation: extract yaw from gripper X-axis projection
-            # onto the XZ plane. atan2(z, x) gives the angle from world +X toward +Z.
-            qx, qy, qz, qw = rot
-            gx_x = 1 - 2 * (qy * qy + qz * qz)
-            gx_z = 2 * (qx * qz + qy * qw)
-            yaw_unity = math.atan2(gx_z, gx_x)
-            yaw_source = f"VGN quaternion (yaw={math.degrees(yaw_unity):.1f}°)"
+        else:
+            yaw_unity, yaw_source = _yaw_from_world_state_or_robot(
+                robot_id, object_id, pos, world_state
+            )
 
         # Exploit 180° gripper symmetry: normalise to (-π/2, π/2] to minimise
         # wrist travel (grasping at θ and θ+π are physically identical).
@@ -1469,6 +1513,7 @@ def _grasp_via_vgn_with_ros(
             robot_id=robot_id,
             max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
             max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
+            constrain_joint4=True,
         )
         if not clearance_result or not clearance_result.get("success"):
             cl_err = (
@@ -1496,6 +1541,7 @@ def _grasp_via_vgn_with_ros(
         robot_id=robot_id,
         max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
         max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
+        constrain_joint4=True,
     )
     if not pre_result or not pre_result.get("success"):
         pre_err = pre_result.get("error", "Unknown") if pre_result else "No response"
@@ -1503,7 +1549,8 @@ def _grasp_via_vgn_with_ros(
             f"[VGN+ROS] Pre-grasp with orientation failed ({pre_err}) — "
             "retrying without orientation constraint"
         )
-        # Attempt 2: position-only (MoveIt picks any IK solution)
+        # Attempt 2: position-only. constrain_joint6 prevents free-spin when orientation
+        # is unconstrained; constrain_joint4 prevents long-arc IK solution.
         pre_result = bridge.plan_and_execute(
             position=pre_grasp_pos,
             orientation=None,
@@ -1511,6 +1558,8 @@ def _grasp_via_vgn_with_ros(
             robot_id=robot_id,
             max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
             max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
+            constrain_joint6=True,
+            constrain_joint4=True,
         )
     if not pre_result or not pre_result.get("success"):
         pre_err = pre_result.get("error", "Unknown") if pre_result else "No response"
@@ -2131,6 +2180,7 @@ def receive_handoff(
         object_position = None
         object_dimensions = None
         receiver_pos = None
+        world_state = None
 
         try:
             from core.Imports import get_world_state
@@ -2169,11 +2219,18 @@ def receive_handoff(
         # ap_x: ee_link stops so fingertips land at the near face —
         #   near_face + GRASP_TCP_OFFSET (finger reach) + clearance.
         # ap_y: object centre — Robot1 grips from top, Robot2 approaches from side at same height.
-        obj_x = object_dimensions[0]
+        #
+        # object_dimensions are local-frame (from BoxCollider.size * lossyScale).
+        # Robot1 grips across the short axis and presents the short face toward Robot2.
+        # The X half-extent Robot2 must clear = short axis / 2.
+        lx = object_dimensions[0]
+        lz = object_dimensions[2] if len(object_dimensions) > 2 else lx
+        obj_x = min(lx, lz)
         approach_sign = 1.0 if receiver_pos[0] > object_position[0] else -1.0
         near_face_x = object_position[0] + approach_sign * obj_x * 0.5
         ap_x = near_face_x + approach_sign * HANDOFF_GRIPPER_CLEARANCE
-        ap_y = object_position[1]
+        obj_height = object_dimensions[1] if len(object_dimensions) > 1 else 0.02
+        ap_y = object_position[1] + obj_height * 0.25
         ap_z = object_position[2]
         logger.info(
             f"receive_handoff: approach_position=({ap_x:.3f}, {ap_y:.3f}, {ap_z:.3f})"
@@ -2233,7 +2290,7 @@ def receive_handoff(
                 robot_id=robot_id,
                 max_velocity_scaling=0.4,
                 max_acceleration_scaling=0.3,
-                constrain_joint6=True,
+                constrain_joint4=True,
             )
             approach_success = approach_result and approach_result.get("success")
             approach_error = (approach_result or {}).get(

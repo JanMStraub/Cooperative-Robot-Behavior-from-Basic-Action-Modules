@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B1: Navigate to Object — detect blue object and grasp it."""
+"""B1: Navigate to Object — detect blue object and move to it."""
 
 from __future__ import annotations
 
@@ -16,4 +16,4 @@ def get_task(cfg: BenchmarkConfig) -> str:
     Returns:
         Task string sent to the LLM via SequenceServer.
     """
-    return f"Robot {cfg.robot_id}: detect the blue object and grasp it."
+    return f"Robot {cfg.robot_id}: Detect the blue cube and move to it."

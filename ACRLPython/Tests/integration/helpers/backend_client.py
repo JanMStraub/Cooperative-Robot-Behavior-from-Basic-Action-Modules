@@ -55,6 +55,29 @@ def port_open(port: int, timeout: float = 2.0) -> bool:
         return False
 
 
+def reset_simulation(timeout: float = 20.0) -> Dict[str, Any]:
+    """
+    Send reset_simulation to the backend and wait for completion.
+
+    Resets all robots to start positions, releases grasped objects, and
+    restores all dynamic scene objects to their initial positions.
+
+    Args:
+        timeout: Seconds to wait for the reset to complete.
+
+    Returns:
+        Decoded JSON response dict with a "success" key.
+    """
+    import random
+
+    with BackendClient(timeout=timeout) as client:
+        return client.send_command(
+            command="EXEC:" + json.dumps([{"operation": "reset_simulation", "params": {}}]),
+            robot_id="system",
+            request_id=random.randint(1, 0xFFFFFFFF),
+        )
+
+
 def backend_available() -> bool:
     """
     Return True when both the CommandServer (5007) and SequenceServer (5008)

@@ -14,11 +14,13 @@ PYTHON_EXEC="$SCRIPT_DIR/acrl/bin/python"
 CONTROLLER_PATTERN="orchestrators.RunRobotController"
 SEQUENCE_SERVER_PATTERN="orchestrators.RunSequenceServer"
 ROS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)/rosUnityIntegration"
+UNITY_BUILD="$(cd "$SCRIPT_DIR/.." && pwd)/ACRLUnity/ACRLUnity_build.app"
 CONTROLLER_PID=""
 ROS_INTEGRATION=true
 STOP_DOCKER_ON_EXIT=false
 WEB_PORT="8000"
 ENV_FLAG="sim"
+LAUNCH_UNITY=false
 
 # --- Functions ---
 
@@ -143,6 +145,37 @@ start_controller() {
     echo "Press Ctrl+C to stop all servers."
 }
 
+launch_unity() {
+    if ! "$LAUNCH_UNITY"; then
+        return
+    fi
+
+    if [ ! -d "$UNITY_BUILD" ]; then
+        echo "WARNING: Unity build not found at '$UNITY_BUILD' — skipping launch."
+        return
+    fi
+
+    echo -n "Waiting for command server (port 5007)..."
+    local timeout=60
+    for (( i=0; i<timeout; i++ )); do
+        if nc -z 127.0.0.1 5007 2>/dev/null; then
+            echo " ready."
+            break
+        fi
+        printf "."
+        sleep 1
+        if (( i == timeout - 1 )); then
+            echo " FAILED."
+            echo "WARNING: Command server did not become available — skipping Unity launch." >&2
+            return
+        fi
+    done
+
+    echo "Launching Unity build: $UNITY_BUILD"
+    open "$UNITY_BUILD"
+    echo ""
+}
+
 # Function to kill all processes on exit
 cleanup() {
     echo ""
@@ -154,6 +187,16 @@ cleanup() {
         # Kill process group first, fall back to individual process if that fails
         kill -SIGTERM -- "-$CONTROLLER_PID" 2>/dev/null || kill -SIGTERM "$CONTROLLER_PID" 2>/dev/null || true
         wait "$CONTROLLER_PID" 2>/dev/null || true
+    fi
+
+    # Stop Unity build if it was launched
+    if "$LAUNCH_UNITY" && [ -d "$UNITY_BUILD" ]; then
+        local unity_exe
+        unity_exe="$(ls "$UNITY_BUILD/Contents/MacOS/" 2>/dev/null | head -1)"
+        if [ -n "$unity_exe" ] && pgrep -x "$unity_exe" &>/dev/null; then
+            echo "Stopping Unity build ($unity_exe)..."
+            pkill -x "$unity_exe" 2>/dev/null || true
+        fi
     fi
 
     # Stop ROS Docker containers if ROS integration was enabled and stop-on-exit is active
@@ -195,9 +238,17 @@ main() {
                 fi
                 shift 2
                 ;;
+            --no-unity)
+                LAUNCH_UNITY=false
+                shift
+                ;;
+            --unity)
+                UNITY_BUILD="$2"
+                shift 2
+                ;;
             *)
                 echo "Unknown option: $1" >&2
-                echo "Usage: $0 [--without-ros] [--no-stop-docker] [--web PORT] [--no-web] [--env sim|real]" >&2
+                echo "Usage: $0 [--without-ros] [--no-stop-docker] [--web PORT] [--no-web] [--env sim|real] [--no-unity] [--unity PATH]" >&2
                 exit 1
                 ;;
         esac
@@ -209,6 +260,7 @@ main() {
     kill_existing_servers
     start_ros
     start_controller
+    launch_unity
 
     # Wait for background process to exit. Cleanup is handled by the trap.
     wait "$CONTROLLER_PID"

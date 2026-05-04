@@ -851,6 +851,7 @@ class SequenceExecutor:
             if op_result.result and op_result.result.get("status") in (
                 "ros_executed",
                 "ros_command_sent",
+                "ros_executed_with_grasp_planning",
                 "vgn_ros_executed",
                 "handoff_received",
             ):

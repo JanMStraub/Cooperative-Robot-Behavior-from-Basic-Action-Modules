@@ -211,6 +211,7 @@ class ROSBridge:
         max_acceleration_scaling=0.0,
         coordinate_space="unity_world",
         constrain_joint6=False,
+        constrain_joint4=False,
     ):
         """
         Plan and execute a motion to target pose for a specific robot.
@@ -232,6 +233,9 @@ class ROSBridge:
                 current position to prevent link-6 free-spin. Only set for pre-grasp hover
                 moves. Never set for descent/grasp moves where joint_6 must reach target
                 orientation.
+            constrain_joint4: When True, adds a ±90° path constraint on joint_4 around its
+                current position. Prevents RRTConnect from choosing the long-arc (~338°) IK
+                solution during pre-grasp hover so the robot arrives in the short-arc config.
 
         Returns:
             Dict with success status and details.
@@ -251,6 +255,8 @@ class ROSBridge:
             cmd["max_acceleration_scaling"] = max_acceleration_scaling
         if constrain_joint6:
             cmd["constrain_joint6"] = True
+        if constrain_joint4:
+            cmd["constrain_joint4"] = True
 
         return self._send_command(cmd, timeout=self._execution_timeout)
 

@@ -37,7 +37,7 @@ AUTORT_SERVER_PORT = int(
 # Perception-Only Mode
 # ============================================================================
 
-# When True, WorldStateServer (port 5014) is NOT started even in sim mode.
+# When True, WorldStateServer (port 5009) is NOT started even in sim mode.
 # WorldState is populated entirely by FK (from joint angles) and stereo perception.
 # Useful for testing real-robot code paths in the sim environment without Unity
 # broadcasting ground-truth positions.
