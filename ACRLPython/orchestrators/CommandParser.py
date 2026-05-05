@@ -182,6 +182,20 @@ class _PromptBuilder:
         - wait(duration_ms): Simple time-based pause
         * Example: {{"operation": "wait", "params": {{"duration_ms": 500}}}}
 
+        === NAVIGATION RULE (CRITICAL) ===
+
+        When the task involves moving to, navigating to, or approaching an object WITHOUT explicit pick/grab/grasp language:
+        - Use ONLY move_to_coordinate — do NOT add control_gripper or grasp_object
+        - "detect X and move to it" = detect_object_stereo + move_to_coordinate (nothing else)
+        - "navigate to X" = move_to_coordinate only
+        - "approach X" = move_to_coordinate only
+        - The gripper stays in its current state — do NOT open or close it
+
+        Example for "detect the blue cube and move to it":
+        {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "blue"}}, "capture_var": "target"}}
+        {{"operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": "$target.x", "y": "$target.y", "z": "$target.z"}}}}
+        ← NO control_gripper, NO grasp_object
+
         === GRASP RULE (CRITICAL) ===
 
         When the task involves picking up, grabbing, or grasping an object:
@@ -612,9 +626,15 @@ class CommandParser:
             f"Default robot: {robot_id}\n\n"
             "Decompose this command into an ordered list of short, concrete physical "
             "motion descriptions. Each entry should describe one distinct robot motion "
-            "(e.g. 'approach red cube from above', 'close gripper slowly', 'lift to 0.3m'). "
+            "(e.g. 'move end-effector to target position', 'lower arm to 0.3m height').\n"
+            "IMPORTANT: Do NOT add gripper open/close or grasp motions unless the command "
+            "EXPLICITLY says to pick up, grab, grasp, or grip an object. "
+            "Pure navigation ('move to it', 'navigate to X', 'go to position') must NOT include any gripper step.\n"
             "Output only a JSON array of strings, no explanation.\n"
-            'Example: ["move end-effector above target", "descend to grasp height", "close gripper"]'
+            "Navigation example — 'detect the blue cube and move to it': "
+            '["detect blue cube position", "move end-effector to detected position"]\n'
+            "Pick example — 'pick up the red cube': "
+            '["move end-effector above red cube", "descend to grasp height", "close gripper"]'
         )
         try:
             payload = {

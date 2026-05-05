@@ -36,7 +36,7 @@ _BENCHMARK_NAMES: Dict[int, str] = {
     3: "Navigate and Lift",
     4: "Pick and Place",
     5: "Pose-Aware Grasp",
-    6: "Dual-Robot Lift",
+    6: "Robot Handoff",
     7: "Dual-Robot Reorient",
     8: "Heterogeneous Chain",
 }
@@ -47,7 +47,7 @@ _CASE_MODULES: Dict[int, str] = {
     3: "benchmarks.cases.b3_navigate_and_lift",
     4: "benchmarks.cases.b4_pick_and_place",
     5: "benchmarks.cases.b5_pose_aware_grasp",
-    6: "benchmarks.cases.b6_dual_robot_lift",
+    6: "benchmarks.cases.b6_robot_handoff",
     7: "benchmarks.cases.b7_dual_robot_reorient",
     8: "benchmarks.cases.b8_heterogeneous_chain",
 }

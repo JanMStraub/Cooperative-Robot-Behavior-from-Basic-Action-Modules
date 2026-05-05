@@ -17,5 +17,5 @@ def get_task(cfg: BenchmarkConfig) -> str:
         Task string sent to the LLM via SequenceServer.
     """
     return (
-        f"Robot {cfg.robot_id}: Grasp blue cube."
+        f"Robot {cfg.robot_id}: Grasp blue cube and lift it to y=0.1."
     )

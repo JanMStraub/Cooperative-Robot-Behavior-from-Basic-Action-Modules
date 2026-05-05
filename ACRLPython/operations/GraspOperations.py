@@ -323,7 +323,10 @@ def _yaw_from_world_state_or_robot(
                     elif yaw_unity <= -math.pi / 2:
                         yaw_unity += math.pi
                     axis = "Z" if z_longer else "X"
-                    return yaw_unity, f"WorldState long-{axis} (obj_yaw={yaw_deg:.1f}°→jaw={math.degrees(yaw_unity):.1f}°)"
+                    return (
+                        yaw_unity,
+                        f"WorldState long-{axis} (obj_yaw={yaw_deg:.1f}°→jaw={math.degrees(yaw_unity):.1f}°)",
+                    )
         except Exception as _e:
             logger.warning(f"WorldState rotation lookup failed: {_e}")
 
@@ -666,7 +669,9 @@ def _grasp_via_ros_position_only(
         "z": pre_grasp_position["z"],
     }
     if pre_grasp_position["y"] < PRE_GRASP_CLEARANCE_Y:
-        logger.info(f"[ROS pos-only] Clearance waypoint for {robot_id}: {clearance_pos}")
+        logger.info(
+            f"[ROS pos-only] Clearance waypoint for {robot_id}: {clearance_pos}"
+        )
         clearance_result = bridge.plan_and_execute(
             position=clearance_pos,
             orientation=top_down_orientation,

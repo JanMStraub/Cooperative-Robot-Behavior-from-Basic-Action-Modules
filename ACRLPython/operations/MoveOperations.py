@@ -251,9 +251,9 @@ def create_move_to_coordinate_operation() -> BasicOperation:
         usage_examples=[
             "After detecting an object at (0.3, 0.15, 0.1), move there: move_to_coordinate(robot_id='Robot1', x=0.3, y=0.15, z=0.1)",
             "Move to home position: move_to_coordinate(robot_id='Robot1', x=0.0, y=0.0, z=0.3)",
-            "Approach detected object coordinates before grasping",
+            "Navigate to detected object coordinates (no gripper): move_to_coordinate(robot_id='Robot1', x=0.3, y=0.15, z=0.1)",
             "Move slowly to precise position: move_to_coordinate(robot_id='Robot1', x=0.2, y=0.1, z=0.15, speed=0.2)",
-            "Approach with 5cm offset: move_to_coordinate(robot_id='Robot1', x=0.3, y=0.0, z=0.1, approach_offset=0.05)",
+            "Hover 5cm above a target without grasping: move_to_coordinate(robot_id='Robot1', x=0.3, y=0.0, z=0.1, approach_offset=0.05)",
         ],
         parameters=[
             OperationParameter(
@@ -294,7 +294,7 @@ def create_move_to_coordinate_operation() -> BasicOperation:
             OperationParameter(
                 name="approach_offset",
                 type="float",
-                description="Lift above target by this many meters along Unity Y (up-axis) before grasping",
+                description="Lift above target by this many meters along Unity Y (up-axis). Only set this when an explicit hover-then-descend pattern is needed; leave at 0.0 for pure navigation.",
                 required=False,
                 default=0.0,
                 valid_range=(0.0, 0.1),
@@ -330,10 +330,10 @@ def create_move_to_coordinate_operation() -> BasicOperation:
             pairing_reasons={
                 "perception_stereo_detect_001": "Move to detected object coordinates after detection",
                 "manipulation_control_gripper_001": (
-                    "IMPORTANT: Never call control_gripper immediately after move_to_coordinate "
-                    "with approach_offset > 0 — the gripper will close in mid-air. "
-                    "Always add a second move_to_coordinate(approach_offset=0) descent step first, "
-                    "or use pick_object_at_coordinate which encodes the full hover→descent→grasp pattern."
+                    "Only pair with control_gripper when the task EXPLICITLY asks to open or close the gripper. "
+                    "Pure navigation tasks ('move to X', 'detect and move to it') must NOT include any gripper operation. "
+                    "If grasping is needed, use pick_object_at_coordinate (coords) or grasp_object (by name) instead — "
+                    "never manually chain move_to_coordinate + control_gripper for picking."
                 ),
                 "status_check_robot_001": "Verify arrival at target position after movement",
                 "motion_pick_at_coord_004": "Use pick_object_at_coordinate when the goal is grasping at known coords",

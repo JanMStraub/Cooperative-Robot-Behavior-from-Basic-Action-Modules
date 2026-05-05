@@ -20,9 +20,24 @@ _FALLBACK_BUILDERS = [
 ]
 
 _DEFAULT_SCENE_OBJECTS = [
-    {"object_id": "red_cube", "color": "red", "position": (-0.2, 0.05, 0.3), "confidence": 0.9},
-    {"object_id": "blue_cube", "color": "blue", "position": (0.2, 0.05, 0.3), "confidence": 0.9},
-    {"object_id": "green_cube", "color": "green", "position": (0.0, 0.05, 0.15), "confidence": 0.85},
+    {
+        "object_id": "red_cube",
+        "color": "red",
+        "position": (-0.2, 0.05, 0.3),
+        "confidence": 0.9,
+    },
+    {
+        "object_id": "blue_cube",
+        "color": "blue",
+        "position": (0.2, 0.05, 0.3),
+        "confidence": 0.9,
+    },
+    {
+        "object_id": "green_cube",
+        "color": "green",
+        "position": (0.0, 0.05, 0.15),
+        "confidence": 0.85,
+    },
 ]
 
 
@@ -84,9 +99,7 @@ def _generate_autort_tasks(
     return [(t.task_id, t.description) for t in proposed]
 
 
-def _fallback_tasks(
-    cfg: BenchmarkConfig, task_count: int
-) -> List[Tuple[str, str]]:
+def _fallback_tasks(cfg: BenchmarkConfig, task_count: int) -> List[Tuple[str, str]]:
     """Cycle B1/B3/B4 tasks — used in dry-run or on generation failure."""
     tasks: List[Tuple[str, str]] = []
     for i, (name, builder) in enumerate(cycle(_FALLBACK_BUILDERS)):
@@ -96,9 +109,7 @@ def _fallback_tasks(
     return tasks
 
 
-def get_sub_tasks(
-    cfg: BenchmarkConfig, task_count: int
-) -> List[Tuple[str, str]]:
+def get_sub_tasks(cfg: BenchmarkConfig, task_count: int) -> List[Tuple[str, str]]:
     """
     Generate heterogeneous sub-tasks via AutoRT TaskGenerator.
 
