@@ -17,7 +17,6 @@ namespace Robotics
     /// - Assign left and right finger ArticulationBodies
     /// - Call HasContact() and EstimateGraspForce() to verify grasp success
     /// </summary>
-    [RequireComponent(typeof(Collider))]
     public class GripperContactSensor : MonoBehaviour
     {
         /// <summary>
@@ -244,6 +243,19 @@ namespace Robotics
             }
 
             return objects.ToList();
+        }
+
+        /// <summary>
+        /// Returns true when both fingers have any contact with the target object.
+        /// Unlike HasContact(), does not require minimum contact duration.
+        /// Used to stop gripper closure before full force is applied.
+        /// </summary>
+        public bool BothFingersContact(GameObject targetObject)
+        {
+            if (targetObject == null) return false;
+            bool leftTouching = _leftContacts.Any(c => c != null && c.gameObject == targetObject);
+            bool rightTouching = _rightContacts.Any(c => c != null && c.gameObject == targetObject);
+            return leftTouching && rightTouching;
         }
 
         // Public methods for trigger forwarding (called by GripperCollisionForwarder)

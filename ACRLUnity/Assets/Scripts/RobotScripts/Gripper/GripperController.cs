@@ -73,6 +73,10 @@ namespace Robotics
         [Tooltip("Force Limit.")]
         public float maxForce = 300f; // Increased from 200 to maintain grip under object weight/inertia
 
+        [Header("Contact Sensing")]
+        [Tooltip("Contact sensor used to stop gripper closure when object is gripped.")]
+        public GripperContactSensor contactSensor;
+
         [Range(0f, 1f)]
         public float targetPosition = 1f;
 
@@ -185,7 +189,13 @@ namespace Robotics
                 _detachInFixedUpdate = true;
             }
 
-            if (!isAtGoal && !isStalled)
+            // Stop closure when both fingers contact the target — prevents force-through on lightweight objects.
+            bool isContactStop = isClosing
+                && contactSensor != null
+                && _targetObjectToGrasp != null
+                && contactSensor.BothFingersContact(_targetObjectToGrasp);
+
+            if (!isAtGoal && !isStalled && !isContactStop)
             {
                 IsMoving = true;
                 SetDriveTarget(leftGripper, _currentPhysicalTarget);
@@ -193,13 +203,31 @@ namespace Robotics
             }
             else
             {
+                if (isContactStop && leftGripper.jointPosition.dofCount > 0)
+                {
+                    // Freeze drive at current physical position so the ArticulationBody stops
+                    // applying force immediately, not after one more frame of penetration.
+                    float holdLeft = leftGripper.jointPosition[0];
+                    float holdRight = rightGripper.jointPosition.dofCount > 0
+                        ? rightGripper.jointPosition[0]
+                        : holdLeft;
+                    SetDriveTarget(leftGripper, holdLeft);
+                    SetDriveTarget(rightGripper, holdRight);
+                    _currentPhysicalTarget = holdLeft;
+                    // Update targetPosition so isAtGoal stays true after _targetObjectToGrasp
+                    // is cleared — prevents jaws from re-driving toward 0 through the held object.
+                    targetPosition = Mathf.Clamp01(MapPhysicalToNormalized(holdLeft));
+                }
                 if (_wasMoving)
                 {
-                    if (
-                        _shouldAttachOnClose
+                    bool attachOnContactStop = isContactStop
+                        && _shouldAttachOnClose
+                        && _targetObjectToGrasp != null;
+                    bool attachOnFullClose = _shouldAttachOnClose
                         && _targetObjectToGrasp != null
-                        && targetPosition < 0.1f
-                    )
+                        && targetPosition < 0.1f;
+
+                    if (attachOnContactStop || attachOnFullClose)
                     {
                         // Defer attachment to FixedUpdate so it runs in sync with the physics
                         // engine. Calling AttachObject here (Update) may see stale physics state

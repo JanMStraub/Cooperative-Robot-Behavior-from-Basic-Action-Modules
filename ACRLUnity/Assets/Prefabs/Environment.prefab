@@ -696,6 +696,7 @@ GameObject:
   - component: {fileID: 3164397251616631266}
   - component: {fileID: 9077691574197648432}
   - component: {fileID: 5297347772950526665}
+  - component: {fileID: 4441356027873134462}
   m_Layer: 7
   m_Name: gripper_jaw1_link_0
   m_TagString: Untagged
@@ -761,6 +762,20 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.0175, y: 0.02, z: 0.015}
   m_Center: {x: 0.02, y: 0, z: -0.0075}
+--- !u!114 &4441356027873134462
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 453488171754353684}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e4beba8a0a78e49db8692db8466d4a34, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.GripperCollisionForwarder
+  sensor: {fileID: 0}
+  fingerType: 0
 --- !u!1 &494932687179825932
 GameObject:
   m_ObjectHideFlags: 0
@@ -1077,7 +1092,7 @@ Rigidbody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 526609850944652542}
   serializedVersion: 5
-  m_Mass: 0.01
+  m_Mass: 0.1
   m_LinearDamping: 10
   m_AngularDamping: 10
   m_CenterOfMass: {x: 0, y: 0, z: 0}
@@ -1656,6 +1671,7 @@ GameObject:
   - component: {fileID: 8545733770894863286}
   - component: {fileID: 2589768376494306734}
   - component: {fileID: 3570591909796377904}
+  - component: {fileID: 8093641180294728262}
   m_Layer: 7
   m_Name: gripper_jaw1_link_0
   m_TagString: Untagged
@@ -1721,6 +1737,20 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.0175, y: 0.02, z: 0.015}
   m_Center: {x: 0.02, y: 0, z: -0.0075}
+--- !u!114 &8093641180294728262
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 976761775013539552}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e4beba8a0a78e49db8692db8466d4a34, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.GripperCollisionForwarder
+  sensor: {fileID: 0}
+  fingerType: 0
 --- !u!1 &991608374987760628
 GameObject:
   m_ObjectHideFlags: 0
@@ -1826,7 +1856,7 @@ ArticulationBody:
   m_GameObject: {fileID: 1069065045880323607}
   m_Enabled: 1
   serializedVersion: 6
-  m_Mass: 0.01
+  m_Mass: 0.1
   m_ParentAnchorPosition: {x: 0.036000133, y: -0.000000014901161, z: 0.000000045767678}
   m_ParentAnchorRotation: {x: -0.000000021073621, y: 0.70710707, z: 0.000000021073621, w: 0.70710695}
   m_AnchorPosition: {x: 0, y: 0, z: 0}
@@ -2038,7 +2068,7 @@ Rigidbody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1074344561378000880}
   serializedVersion: 5
-  m_Mass: 0.01
+  m_Mass: 0.1
   m_LinearDamping: 10
   m_AngularDamping: 10
   m_CenterOfMass: {x: 0, y: 0, z: 0}
@@ -4115,6 +4145,7 @@ GameObject:
   - component: {fileID: 3301339430658133277}
   - component: {fileID: 4177278617152292230}
   - component: {fileID: 1116772510549147897}
+  - component: {fileID: 7078987041976601038}
   m_Layer: 7
   m_Name: gripper_base_link
   m_TagString: Untagged
@@ -4275,7 +4306,24 @@ MonoBehaviour:
   stiffness: 500
   damping: 5
   maxForce: 20
+  contactSensor: {fileID: 0}
   targetPosition: 1
+--- !u!114 &7078987041976601038
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2248478849752354509}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9174152649aac4e56841fce10f719399, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.GripperContactSensor
+  leftFinger: {fileID: 1842315821876788058}
+  rightFinger: {fileID: 8827493265013950776}
+  _gripperConfig: {fileID: 11400000, guid: edadb3dad460b4bf7b91f602d6065e10, type: 2}
+  debugLogging: 0
 --- !u!1 &2276408368286962627
 GameObject:
   m_ObjectHideFlags: 0
@@ -4534,7 +4582,7 @@ Rigidbody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2297682068063052943}
   serializedVersion: 5
-  m_Mass: 0.01
+  m_Mass: 0.1
   m_LinearDamping: 10
   m_AngularDamping: 10
   m_CenterOfMass: {x: 0, y: 0, z: 0}
@@ -5035,6 +5083,7 @@ GameObject:
   - component: {fileID: 8729754609221301804}
   - component: {fileID: 4117535858010422035}
   - component: {fileID: 2736012837209455996}
+  - component: {fileID: 1940381518378949016}
   m_Layer: 7
   m_Name: gripper_jaw2_link_0
   m_TagString: Untagged
@@ -5100,6 +5149,20 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.0175, y: 0.02, z: 0.015}
   m_Center: {x: 0.02, y: 0, z: -0.0075}
+--- !u!114 &1940381518378949016
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2473176813746655072}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e4beba8a0a78e49db8692db8466d4a34, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.GripperCollisionForwarder
+  sensor: {fileID: 0}
+  fingerType: 1
 --- !u!1 &2501238725785385204
 GameObject:
   m_ObjectHideFlags: 0
@@ -5290,7 +5353,7 @@ ArticulationBody:
   m_GameObject: {fileID: 2720413079156695704}
   m_Enabled: 1
   serializedVersion: 6
-  m_Mass: 0.01
+  m_Mass: 0.1
   m_ParentAnchorPosition: {x: 0.036000133, y: -0.000000014901161, z: 0.000000045767678}
   m_ParentAnchorRotation: {x: -0.000000021073621, y: 0.70710707, z: 0.000000021073621, w: 0.70710695}
   m_AnchorPosition: {x: 0, y: 0, z: 0}
@@ -7951,7 +8014,7 @@ ArticulationBody:
   m_GameObject: {fileID: 4086825755509145924}
   m_Enabled: 1
   serializedVersion: 6
-  m_Mass: 0.013863
+  m_Mass: 0.13863
   m_ParentAnchorPosition: {x: -0.000000030942985, y: 0.041000158, z: -0.00000002983539}
   m_ParentAnchorRotation: {x: 0.707107, y: -0.707107, z: 0.0000025686754, w: -0.0000024505175}
   m_AnchorPosition: {x: 0, y: 0, z: 0}
@@ -8862,7 +8925,7 @@ Rigidbody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 4699154504404944203}
   serializedVersion: 5
-  m_Mass: 0.01
+  m_Mass: 0.1
   m_LinearDamping: 0.05
   m_AngularDamping: 0.05
   m_CenterOfMass: {x: 0, y: 0, z: 0}
@@ -9249,6 +9312,7 @@ GameObject:
   - component: {fileID: 8663010867732936812}
   - component: {fileID: 8312399086043864861}
   - component: {fileID: 7409242131979378376}
+  - component: {fileID: 7323648673042258773}
   m_Layer: 7
   m_Name: gripper_base_link
   m_TagString: Untagged
@@ -9409,7 +9473,24 @@ MonoBehaviour:
   stiffness: 500
   damping: 5
   maxForce: 20
+  contactSensor: {fileID: 0}
   targetPosition: 1
+--- !u!114 &7323648673042258773
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4930399898244180664}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9174152649aac4e56841fce10f719399, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.GripperContactSensor
+  leftFinger: {fileID: 4982495115171254795}
+  rightFinger: {fileID: 8146800775272521711}
+  _gripperConfig: {fileID: 11400000, guid: edadb3dad460b4bf7b91f602d6065e10, type: 2}
+  debugLogging: 0
 --- !u!1 &4942088316609073664
 GameObject:
   m_ObjectHideFlags: 0
@@ -10139,7 +10220,7 @@ Rigidbody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 5232535901379417394}
   serializedVersion: 5
-  m_Mass: 0.01
+  m_Mass: 0.1
   m_LinearDamping: 10
   m_AngularDamping: 10
   m_CenterOfMass: {x: 0, y: 0, z: 0}
@@ -11741,7 +11822,7 @@ Rigidbody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 5985811518645940055}
   serializedVersion: 5
-  m_Mass: 0.01
+  m_Mass: 0.1
   m_LinearDamping: 10
   m_AngularDamping: 10
   m_CenterOfMass: {x: 0, y: 0, z: 0}
@@ -12354,7 +12435,7 @@ Rigidbody:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6179772147469832828}
   serializedVersion: 5
-  m_Mass: 0.01
+  m_Mass: 0.1
   m_LinearDamping: 0.05
   m_AngularDamping: 0.05
   m_CenterOfMass: {x: 0, y: 0, z: 0}
@@ -13595,7 +13676,7 @@ ArticulationBody:
   m_GameObject: {fileID: 7214549768632691240}
   m_Enabled: 1
   serializedVersion: 6
-  m_Mass: 0.013863
+  m_Mass: 0.13863
   m_ParentAnchorPosition: {x: -0.000000030942985, y: 0.041000158, z: -0.00000002983539}
   m_ParentAnchorRotation: {x: 0.707107, y: -0.707107, z: 0.0000025686757, w: -0.0000024505177}
   m_AnchorPosition: {x: 0, y: 0, z: 0}
@@ -13857,8 +13938,11 @@ MonoBehaviour:
   validSplit: 0.1
   positionJitter: 0.02
   rotationJitter: 2
+  randomizeObjectPositions: 1
   objectSpawnMin: {x: -0.4, y: 0, z: -0.4}
   objectSpawnMax: {x: 0.4, y: 0.5, z: 0.4}
+  biasSpawnToFar: 0
+  farSpawnBias: 0.75
   allCubes: []
   allFields: []
   cubeVisibilityChance: 0.6
@@ -14639,6 +14723,7 @@ GameObject:
   - component: {fileID: 110223971993918360}
   - component: {fileID: 2813649083053946168}
   - component: {fileID: 4283656134887797922}
+  - component: {fileID: 8403422903450897033}
   m_Layer: 7
   m_Name: gripper_jaw2_link_0
   m_TagString: Untagged
@@ -14704,6 +14789,20 @@ BoxCollider:
   serializedVersion: 3
   m_Size: {x: 0.0175, y: 0.02, z: 0.015}
   m_Center: {x: 0.02, y: 0, z: -0.0075}
+--- !u!114 &8403422903450897033
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 7710888106592055844}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e4beba8a0a78e49db8692db8466d4a34, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.GripperCollisionForwarder
+  sensor: {fileID: 0}
+  fingerType: 1
 --- !u!1 &7718498868381026515
 GameObject:
   m_ObjectHideFlags: 0
@@ -14853,7 +14952,7 @@ ArticulationBody:
   m_GameObject: {fileID: 7741838244144730095}
   m_Enabled: 1
   serializedVersion: 6
-  m_Mass: 0.01
+  m_Mass: 0.1
   m_ParentAnchorPosition: {x: 0.036000133, y: -0.000000014901161, z: 0.000000045767678}
   m_ParentAnchorRotation: {x: -0.70710707, y: -0.00000005268372, z: -0.70710695, w: -0.0000000105365565}
   m_AnchorPosition: {x: 0, y: 0, z: 0}
@@ -16767,7 +16866,7 @@ ArticulationBody:
   m_GameObject: {fileID: 8762323862680578501}
   m_Enabled: 1
   serializedVersion: 6
-  m_Mass: 0.01
+  m_Mass: 0.1
   m_ParentAnchorPosition: {x: 0.036000133, y: -0.000000014901161, z: 0.000000045767678}
   m_ParentAnchorRotation: {x: -0.70710707, y: -0.00000005268372, z: -0.70710695, w: -0.0000000105365565}
   m_AnchorPosition: {x: 0, y: 0, z: 0}

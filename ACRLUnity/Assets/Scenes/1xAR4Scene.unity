@@ -179,16 +179,55 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 1390263129166398193, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
   m_PrefabInstance: {fileID: 9060350412813614532}
   m_PrefabAsset: {fileID: 0}
+--- !u!134 &320334267
+PhysicsMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: GripperMaterial (Instance) (Instance)
+  serializedVersion: 2
+  m_DynamicFriction: 1.5
+  m_StaticFriction: 1.5
+  m_Bounciness: 0
+  m_FrictionCombine: 3
+  m_BounceCombine: 2
 --- !u!1 &328583065 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 6010296060648620106, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
   m_PrefabInstance: {fileID: 9060350412813614532}
   m_PrefabAsset: {fileID: 0}
+--- !u!134 &454614906
+PhysicsMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: GripperMaterial (Instance) (Instance)
+  serializedVersion: 2
+  m_DynamicFriction: 1.5
+  m_StaticFriction: 1.5
+  m_Bounciness: 0
+  m_FrictionCombine: 3
+  m_BounceCombine: 2
 --- !u!1 &551221089 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 5503568802072259119, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
   m_PrefabInstance: {fileID: 9060350412813614532}
   m_PrefabAsset: {fileID: 0}
+--- !u!134 &551493042
+PhysicsMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: GripperMaterial (Instance) (Instance)
+  serializedVersion: 2
+  m_DynamicFriction: 1.5
+  m_StaticFriction: 1.5
+  m_Bounciness: 0
+  m_FrictionCombine: 3
+  m_BounceCombine: 2
 --- !u!1 &625490194 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 240051077821224847, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
@@ -204,6 +243,19 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 4699154504404944203, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
   m_PrefabInstance: {fileID: 9060350412813614532}
   m_PrefabAsset: {fileID: 0}
+--- !u!134 &924085259
+PhysicsMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: GripperMaterial (Instance) (Instance)
+  serializedVersion: 2
+  m_DynamicFriction: 1.5
+  m_StaticFriction: 1.5
+  m_Bounciness: 0
+  m_FrictionCombine: 3
+  m_BounceCombine: 2
 --- !u!1 &1032633142
 GameObject:
   m_ObjectHideFlags: 0
@@ -264,16 +316,16 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp-ACRL::Simulation.WorkspaceManager
   _workspaceRegions:
   - regionName: Left_Workspace
-    minBounds: {x: -0.65, y: 0, z: -0.5}
-    maxBounds: {x: -0.1, y: 0.7, z: 0.5}
+    minBounds: {x: -0.6, y: 0, z: -0.5}
+    maxBounds: {x: -0.1, y: 0.6, z: 0.5}
     debugColor: {r: 0.7529412, g: 0.21176471, b: 0.24488194, a: 0}
   - regionName: Right_Workspace
     minBounds: {x: 0.1, y: 0, z: -0.5}
-    maxBounds: {x: 0.65, y: 0.7, z: 0.5}
+    maxBounds: {x: 0.6, y: 0.6, z: 0.5}
     debugColor: {r: 0.16731933, g: 0.5732999, b: 0.754717, a: 0}
   - regionName: Shared_Workspace
     minBounds: {x: -0.1, y: 0, z: -0.5}
-    maxBounds: {x: 0.1, y: 0.7, z: 0.5}
+    maxBounds: {x: 0.1, y: 0.6, z: 0.5}
     debugColor: {r: 0.7529412, g: 0.74099845, b: 0.16862744, a: 0}
   - regionName: Center_Workspace
     minBounds: {x: -0.3, y: 0, z: -0.3}
@@ -487,6 +539,19 @@ MonoBehaviour:
   _maxGraspableMass: 5
   _enableCaching: 1
   _cacheCleanupInterval: 60
+--- !u!134 &1266503659
+PhysicsMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: GripperMaterial (Instance) (Instance)
+  serializedVersion: 2
+  m_DynamicFriction: 1.5
+  m_StaticFriction: 1.5
+  m_Bounciness: 0
+  m_FrictionCombine: 3
+  m_BounceCombine: 2
 --- !u!1 &1420007114 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 3369921039827679538, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
@@ -497,6 +562,41 @@ GameObject:
   m_CorrespondingSourceObject: {fileID: 1523614578368514234, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
   m_PrefabInstance: {fileID: 9060350412813614532}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &1525330026 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 7078987041976601038, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9174152649aac4e56841fce10f719399, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.GripperContactSensor
+--- !u!114 &1525330027 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 7323648673042258773, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+  m_PrefabInstance: {fileID: 9060350412813614532}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9174152649aac4e56841fce10f719399, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.GripperContactSensor
+--- !u!134 &1569992738
+PhysicsMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: GripperMaterial (Instance) (Instance)
+  serializedVersion: 2
+  m_DynamicFriction: 1.5
+  m_StaticFriction: 1.5
+  m_Bounciness: 0
+  m_FrictionCombine: 3
+  m_BounceCombine: 2
 --- !u!1 &1595579014
 GameObject:
   m_ObjectHideFlags: 0
@@ -661,6 +761,19 @@ Camera:
   m_CorrespondingSourceObject: {fileID: 1924621710956839310, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
   m_PrefabInstance: {fileID: 9060350412813614532}
   m_PrefabAsset: {fileID: 0}
+--- !u!134 &1789566251
+PhysicsMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: GripperMaterial (Instance) (Instance)
+  serializedVersion: 2
+  m_DynamicFriction: 1.5
+  m_StaticFriction: 1.5
+  m_Bounciness: 0
+  m_FrictionCombine: 3
+  m_BounceCombine: 2
 --- !u!1 &1800216808
 GameObject:
   m_ObjectHideFlags: 0
@@ -815,6 +928,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d022baada5fcb4ff9bb0b5fe65f2d0c8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp-ACRL::Robotics.RobotController
+--- !u!134 &2099700521
+PhysicsMaterial:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: GripperMaterial (Instance) (Instance)
+  serializedVersion: 2
+  m_DynamicFriction: 1.5
+  m_StaticFriction: 1.5
+  m_Bounciness: 0
+  m_FrictionCombine: 3
+  m_BounceCombine: 2
 --- !u!114 &2107300040 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 1440759134938604137, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
@@ -870,6 +996,10 @@ PrefabInstance:
       propertyPath: m_ParentAnchorPosition.z
       value: 0.000000021885862
       objectReference: {fileID: 0}
+    - target: {fileID: 1116772510549147897, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: contactSensor
+      value: 
+      objectReference: {fileID: 1525330026}
     - target: {fileID: 1249087451279245037, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
       value: field_i
@@ -902,6 +1032,10 @@ PrefabInstance:
       propertyPath: field of view
       value: 45
       objectReference: {fileID: 0}
+    - target: {fileID: 1940381518378949016, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: sensor
+      value: 
+      objectReference: {fileID: 1525330027}
     - target: {fileID: 1997307404626030059, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.x
       value: -0.1
@@ -930,6 +1064,30 @@ PrefabInstance:
       propertyPath: _enableStreaming
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 2589768376494306734, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2589768376494306734, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 551493042}
+    - target: {fileID: 2736012837209455996, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 1789566251}
+    - target: {fileID: 2736012837209455996, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_IsTrigger
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2813649083053946168, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2813649083053946168, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 454614906}
     - target: {fileID: 2963748001625226335, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_ParentAnchorPosition.x
       value: 0.0000000011408725
@@ -958,6 +1116,18 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 3570591909796377904, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Center.z
+      value: -0.0075
+      objectReference: {fileID: 0}
+    - target: {fileID: 3570591909796377904, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 1569992738}
+    - target: {fileID: 3570591909796377904, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_IsTrigger
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 4025504087195576168, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_ParentAnchorPosition.x
       value: 0.000000029802482
@@ -970,6 +1140,18 @@ PrefabInstance:
       propertyPath: m_ParentAnchorPosition.x
       value: 0.30499998
       objectReference: {fileID: 0}
+    - target: {fileID: 4117535858010422035, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4117535858010422035, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 924085259}
+    - target: {fileID: 4117535858010422035, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_IsTrigger
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 4237859500205483745, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_ParentAnchorPosition.x
       value: -0.0000000011406602
@@ -978,10 +1160,22 @@ PrefabInstance:
       propertyPath: m_ParentAnchorPosition.z
       value: -0.000000029835505
       objectReference: {fileID: 0}
+    - target: {fileID: 4283656134887797922, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 2099700521}
+    - target: {fileID: 4283656134887797922, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_IsTrigger
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 4381120814900928537, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_IsActive
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 4441356027873134462, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: sensor
+      value: 
+      objectReference: {fileID: 1525330027}
     - target: {fileID: 4699154504404944203, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
       value: green_cube
@@ -1482,6 +1676,18 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 5297347772950526665, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Center.z
+      value: -0.0075
+      objectReference: {fileID: 0}
+    - target: {fileID: 5297347772950526665, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 1266503659}
+    - target: {fileID: 5297347772950526665, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_IsTrigger
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 5503568802072259119, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_IsActive
       value: 1
@@ -1538,6 +1744,14 @@ PrefabInstance:
       propertyPath: m_Name
       value: field_c
       objectReference: {fileID: 0}
+    - target: {fileID: 7323648673042258773, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: debugLogging
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7409242131979378376, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: contactSensor
+      value: 
+      objectReference: {fileID: 1525330027}
     - target: {fileID: 7507869540839737869, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.y
       value: 0.45
@@ -1550,6 +1764,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: field_d
       objectReference: {fileID: 0}
+    - target: {fileID: 8093641180294728262, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: sensor
+      value: 
+      objectReference: {fileID: 1525330026}
     - target: {fileID: 8105344575724452762, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_ParentAnchorPosition.x
       value: -0.000000025008092
@@ -1566,6 +1784,22 @@ PrefabInstance:
       propertyPath: m_ParentAnchorPosition.z
       value: 0.000000045768004
       objectReference: {fileID: 0}
+    - target: {fileID: 8403422903450897033, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: sensor
+      value: 
+      objectReference: {fileID: 1525330026}
+    - target: {fileID: 8545733770894863286, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8545733770894863286, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8545733770894863286, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8551235259843544395, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
       value: field_f
@@ -1581,6 +1815,18 @@ PrefabInstance:
     - target: {fileID: 9022166157412028997, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_Name
       value: field_h
+      objectReference: {fileID: 0}
+    - target: {fileID: 9077691574197648432, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 9077691574197648432, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_Material
+      value: 
+      objectReference: {fileID: 320334267}
+    - target: {fileID: 9077691574197648432, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
+      propertyPath: m_IsTrigger
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 9086981115628272307, guid: bc94cecef5e7344db807aa84d18d723a, type: 3}
       propertyPath: m_LocalPosition.y
