@@ -50,6 +50,16 @@ def print_summary(result: BenchmarkResult) -> None:
         err = f"  [{s.error_code}]" if s.error_code else ""
         print(f"    [{s.index}] {s.operation:<35} {tag} {s.duration_ms:>7.0f}ms{err}")
 
+    if result.ablation is not None:
+        ab = result.ablation
+        print("")
+        print("  ABLATION METRICS")
+        print(f"  Condition:             {ab.condition}")
+        print(f"  Hallucinated ops:      {ab.hallucinated_ops}")
+        print(f"  Reflexion recoveries:  {ab.reflexion_recoveries}")
+        print(f"  Negotiation rounds:    {ab.negotiation_rounds}")
+        print(f"  Ablation success rate: {ab.success_rate:.1%}")
+
     if result.chain_metrics is not None:
         cm = result.chain_metrics
         print("  Chain Metrics:")

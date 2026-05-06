@@ -121,7 +121,12 @@ class NegotiationHub(SingletonBase):
         """Initialize the negotiation hub (called once by SingletonBase)."""
         self._agents: Dict[str, RobotLLMAgent] = {}
         self._active_session: Optional[NegotiationSession] = None
+        self._last_round_count: int = 0
         logger.info("NegotiationHub initialized")
+
+    def get_last_round_count(self) -> int:
+        """Return the number of negotiation rounds used in the last negotiate() call."""
+        return self._last_round_count
 
     def _get_or_create_agent(self, robot_id: str) -> RobotLLMAgent:
         """
@@ -219,6 +224,7 @@ class NegotiationHub(SingletonBase):
 
         start_time = time.time()
         result = NegotiationResult()
+        self._last_round_count = 0
 
         try:
             # Get world state snapshot
@@ -318,6 +324,7 @@ class NegotiationHub(SingletonBase):
             result.duration_s = time.time() - start_time
             return result
         finally:
+            self._last_round_count = result.rounds_taken
             self._active_session = None
 
     def _run_analysis_phase(

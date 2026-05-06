@@ -93,6 +93,7 @@ class GraphBuilder:
             self._update_grasp_edges()
             self._update_allocation_edges()
             logger.debug("Graph updated from world state")
+            self._graph.auto_save_png_if_enabled("world_state")
 
         except Exception as e:
             logger.error(f"Error updating graph from state: {e}", exc_info=True)

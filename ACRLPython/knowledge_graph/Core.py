@@ -339,16 +339,21 @@ class KnowledgeGraph:
             node_count = self._graph.number_of_nodes()
             edge_count = self._graph.number_of_edges()
 
-        # Convert tuple attributes to strings for GraphML compatibility (no lock needed)
+        # GraphML only supports str/int/float/bool — convert everything else
+        import json as _json
+
+        def _graphml_safe(v):
+            if isinstance(v, (str, int, float, bool)):
+                return v
+            return _json.dumps(v, default=str)
+
         for node_id, attrs in graph_copy.nodes(data=True):
             for key, value in list(attrs.items()):
-                if isinstance(value, tuple):
-                    attrs[key] = str(value)
+                attrs[key] = _graphml_safe(value)
 
         for u, v, key, attrs in graph_copy.edges(data=True, keys=True):
             for attr_key, value in list(attrs.items()):
-                if isinstance(value, tuple):
-                    attrs[attr_key] = str(value)
+                attrs[attr_key] = _graphml_safe(value)
 
         try:
             nx.write_graphml(graph_copy, path)
@@ -379,6 +384,139 @@ class KnowledgeGraph:
             logger.info(
                 f"Loaded graph from {path} ({self._graph.number_of_nodes()} nodes, {self._graph.number_of_edges()} edges)"
             )
+
+    def save_png(self, path: str, title: str = "Knowledge Graph",
+                 dpi: Optional[int] = None,
+                 figsize: Optional[tuple] = None) -> None:
+        """
+        Render the graph to a PNG using matplotlib.
+
+        DPI and figsize default to config.KnowledgeGraph.KG_VIZ_DPI /
+        KG_VIZ_FIGSIZE when not supplied.
+
+        Node colour encodes type: robot=steelblue, object=coral, region=mediumseagreen,
+        other=lightgrey. Edge labels show edge_type. Nodes are labelled with their ID.
+
+        Args:
+            path: Output file path (e.g. "kg.png").
+            title: Figure title.
+            dpi: PNG resolution; falls back to KG_VIZ_DPI config value.
+            figsize: (width, height) in inches; falls back to KG_VIZ_FIGSIZE config value.
+        """
+        try:
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as plt
+            import matplotlib.patches as mpatches
+        except ImportError:
+            raise ImportError("matplotlib is required for save_png. pip install matplotlib")
+
+        import config.KnowledgeGraph as _viz_cfg
+
+        _dpi = dpi if dpi is not None else _viz_cfg.KG_VIZ_DPI
+        _figsize = figsize if figsize is not None else _viz_cfg.KG_VIZ_FIGSIZE
+
+        _NODE_COLORS = {
+            "robot": "steelblue",
+            "object": "coral",
+            "region": "mediumseagreen",
+        }
+        _EDGE_COLORS = {
+            "CAN_REACH": "#2ecc71",
+            "NEAR": "#f39c12",
+            "GRASPING": "#e74c3c",
+            "IN_REGION": "#9b59b6",
+            "ALLOCATED": "#1abc9c",
+            "ADJACENT_TO": "#95a5a6",
+            "EXECUTED": "#3498db",
+            "REQUIRES": "#e67e22",
+            "CONFLICTS_WITH": "#c0392b",
+        }
+
+        with self._lock:
+            graph_copy = self._graph.copy()
+
+        if graph_copy.number_of_nodes() == 0:
+            logger.warning("Graph is empty — nothing to render")
+            return
+
+        fig, ax = plt.subplots(figsize=_figsize)
+        ax.set_title(title, fontsize=14, fontweight="bold")
+        ax.axis("off")
+
+        try:
+            pos = nx.spring_layout(graph_copy, seed=42, k=2.5)
+        except Exception:
+            pos = nx.shell_layout(graph_copy)
+
+        node_colors = [
+            _NODE_COLORS.get(graph_copy.nodes[n].get("node_type", ""), "lightgrey")
+            for n in graph_copy.nodes()
+        ]
+
+        nx.draw_networkx_nodes(graph_copy, pos, node_color=node_colors,
+                               node_size=1200, ax=ax, alpha=0.9)
+        nx.draw_networkx_labels(graph_copy, pos, font_size=7,
+                                font_weight="bold", ax=ax)
+
+        seen_types: set = set()
+        for u, v, data in graph_copy.edges(data=True):
+            etype = data.get("edge_type", "")
+            color = _EDGE_COLORS.get(etype, "#bdc3c7")
+            nx.draw_networkx_edges(
+                graph_copy, pos, edgelist=[(u, v)],
+                edge_color=color, arrows=True,
+                arrowsize=15, width=1.5,
+                connectionstyle="arc3,rad=0.1", ax=ax,
+            )
+            seen_types.add(etype)
+
+        handles = [
+            mpatches.Patch(color=_EDGE_COLORS.get(t, "#bdc3c7"), label=t)
+            for t in sorted(seen_types)
+        ]
+        for ntype, color in _NODE_COLORS.items():
+            handles.append(mpatches.Patch(color=color, label=f"[{ntype}]"))
+        ax.legend(handles=handles, loc="lower left", fontsize=7,
+                  framealpha=0.8, ncol=2)
+
+        stats = (f"{graph_copy.number_of_nodes()} nodes  "
+                 f"{graph_copy.number_of_edges()} edges")
+        fig.text(0.5, 0.01, stats, ha="center", fontsize=8, color="grey")
+
+        plt.tight_layout()
+        plt.savefig(path, dpi=_dpi, bbox_inches="tight")
+        plt.close(fig)
+        logger.info(f"Saved KG visualisation to {path}")
+
+    def auto_save_png_if_enabled(self, label: str = "") -> None:
+        """
+        Save timestamped PNG and GraphML snapshots if KG_VIZ_AUTO_SAVE is enabled.
+
+        Writes both formats so kg_inspect can reload the graphml for accurate
+        re-rendering and stats, and the PNG can be viewed immediately.
+
+        Args:
+            label: Optional suffix appended to the filename (e.g. "world_state").
+        """
+        import config.KnowledgeGraph as _viz_cfg
+        if not _viz_cfg.KG_VIZ_AUTO_SAVE:
+            return
+        import os
+        import time
+        out_dir = _viz_cfg.KG_VIZ_OUTPUT_DIR
+        os.makedirs(out_dir, exist_ok=True)
+        ts = int(time.time() * 1000)
+        suffix = f"_{label}" if label else ""
+        base = os.path.join(out_dir, f"kg_{ts}{suffix}")
+        try:
+            self.save_png(f"{base}.png", title=f"KG snapshot {label or ts}")
+        except Exception as exc:
+            logger.warning(f"auto_save_png failed: {exc}")
+        try:
+            self.save_graphml(f"{base}.graphml")
+        except Exception as exc:
+            logger.warning(f"auto_save_graphml failed: {exc}")
 
     def get_stats(self) -> Dict[str, Any]:
         """

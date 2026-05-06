@@ -254,6 +254,7 @@ class SequenceExecutor:
         start_time = time.time()
         results = []
         completed = 0
+        reflexion_recoveries = 0
 
         logger.info(
             f"Starting sequence {self._current_sequence_id} with {len(commands)} commands"
@@ -434,6 +435,7 @@ class SequenceExecutor:
                                     retry_op, retry_result.get("result", {})
                                 )
                                 reflexion_succeeded = True
+                                reflexion_recoveries += 1
                                 break
                             else:
                                 error_msg = retry_result.get("error", "Unknown error")
@@ -479,6 +481,7 @@ class SequenceExecutor:
             "results": results,
             "total_duration_ms": total_duration,
             "error": error_message,
+            "reflexion_recoveries": reflexion_recoveries,
         }
 
         _safe_log(

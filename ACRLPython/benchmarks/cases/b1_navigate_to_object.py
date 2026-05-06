@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B1: Navigate to Object — detect blue object and move to it."""
+"""B1: Navigate to Object — detect blue cube and move to it."""
 
 from __future__ import annotations
 

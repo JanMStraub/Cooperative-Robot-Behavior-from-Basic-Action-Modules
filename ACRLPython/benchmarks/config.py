@@ -17,6 +17,10 @@ class BenchmarkConfig:
     task_count: int = 5  # B8 sub-task count
     reflexion: bool = False
     check_completion: bool = False
+    use_rag: bool = True
+    reflexion_enabled: bool = True
+    use_knowledge_graph: bool = True
+    execution_mode: str = "offline"  # "offline" = dry-run+mocks, "live" = real SequenceServer
 
 
 @dataclasses.dataclass
@@ -26,3 +30,4 @@ class DualRobotConfig(BenchmarkConfig):
     robot_id_a: str = "Robot1"
     robot_id_b: str = "Robot2"
     sync_timeout_ms: int = 30000
+    use_negotiation: bool = True

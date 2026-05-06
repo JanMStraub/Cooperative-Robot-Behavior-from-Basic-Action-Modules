@@ -20,7 +20,9 @@ from .config import BenchmarkConfig, DualRobotConfig
 from .reporter import print_summary, write_json
 from .runner import BenchmarkRunner
 
-_DUAL_ROBOT_BENCHMARKS = {6, 7, 8}
+_DUAL_ROBOT_BENCHMARKS = {6, 7, 8, 11}
+_ABLATION_BENCHMARKS = {9, 10, 11, 12}
+_PARSE_ONLY_BENCHMARKS = {9, 12}  # no server required
 _REQUIRED_PORTS = (5007, 5008)
 
 
@@ -52,21 +54,25 @@ def _make_config(benchmark_id: int, args: argparse.Namespace) -> BenchmarkConfig
     Instantiate the appropriate config type for a given benchmark.
 
     Args:
-        benchmark_id: Benchmark number 1–8.
+        benchmark_id: Benchmark number 1–12.
         args: Parsed CLI arguments.
 
     Returns:
         BenchmarkConfig or DualRobotConfig instance.
     """
-    live = not args.dry_run
+    live = not args.dry_run and benchmark_id not in _PARSE_ONLY_BENCHMARKS
     kwargs = dict(
         dry_run=args.dry_run,
         task_count=args.task_count,
         reflexion=args.reflexion,
         check_completion=live,
+        use_rag=not args.no_rag,
+        reflexion_enabled=args.reflexion,
+        use_knowledge_graph=not args.no_kg,
+        execution_mode="live" if getattr(args, "live", False) else "offline",
     )
     if benchmark_id in _DUAL_ROBOT_BENCHMARKS:
-        return DualRobotConfig(**kwargs)
+        return DualRobotConfig(**kwargs, use_negotiation=not args.no_negotiation)
     return BenchmarkConfig(**kwargs)
 
 
@@ -108,18 +114,38 @@ def main() -> None:
     group.add_argument(
         "--benchmark",
         type=int,
-        choices=range(1, 9),
+        choices=range(1, 13),
         metavar="N",
-        help="Run a single benchmark (1–8)",
+        help="Run a single benchmark (1–12); 9–12 are ablation benchmarks",
     )
-    group.add_argument("--all", action="store_true", help="Run all 8 benchmarks")
+    group.add_argument("--all", action="store_true", help="Run all benchmarks (1–12)")
+    group.add_argument(
+        "--ablation",
+        action="store_true",
+        help="Run ablation benchmarks only (9–12, no server required for 9 and 12)",
+    )
     parser.add_argument(
         "--dry-run", action="store_true", help="Use mock operations (no hardware)"
+    )
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        default=False,
+        help="Run B10/B11 ablations against live SequenceServer instead of dry-run mocks",
     )
     parser.add_argument(
         "--reflexion",
         action="store_true",
         help="Enable Reflexion LLM retry on operation failure (live mode only)",
+    )
+    parser.add_argument(
+        "--no-rag", action="store_true", help="Disable RAG retrieval (B9 ablation: disabled condition)"
+    )
+    parser.add_argument(
+        "--no-kg", action="store_true", help="Disable Knowledge Graph context (B12 ablation: disabled condition)"
+    )
+    parser.add_argument(
+        "--no-negotiation", action="store_true", help="Disable LLM negotiation (B11 ablation: disabled condition)"
     )
     parser.add_argument(
         "--output-dir",
@@ -135,9 +161,19 @@ def main() -> None:
     args = parser.parse_args()
 
     runner = BenchmarkRunner()
-    benchmark_ids = list(range(1, 9)) if args.all else [args.benchmark]
+    if args.all:
+        benchmark_ids = list(range(1, 13))
+    elif args.ablation:
+        benchmark_ids = list(range(9, 13))
+    else:
+        benchmark_ids = [args.benchmark]
 
-    if not args.dry_run:
+    needs_server = any(
+        (bid not in _PARSE_ONLY_BENCHMARKS and not args.dry_run)
+        or (bid in {10, 11} and getattr(args, "live", False))
+        for bid in benchmark_ids
+    )
+    if needs_server:
         _check_servers_running()
 
     exit_code = _run_benchmarks(runner, benchmark_ids, args)

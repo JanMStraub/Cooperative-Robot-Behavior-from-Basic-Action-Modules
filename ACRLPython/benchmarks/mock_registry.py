@@ -14,7 +14,10 @@ import random
 import time
 from typing import Callable, Optional
 
-PROFILES = ("always_succeed", "10pct_failure", "detect_fails")
+PROFILES = ("always_succeed", "10pct_failure", "detect_fails", "first_fail_nav")
+
+# Per-op call counter for the first_fail_nav profile — reset on each install_mock call.
+_call_counts: dict = {}
 
 
 class _MockOperation:
@@ -35,6 +38,8 @@ class _MockOperation:
         """
         self.__dict__.update(real_op.__dict__)
         self._profile = profile
+        if profile == "first_fail_nav":
+            _call_counts.clear()
 
     def execute(self, **kwargs):
         """
@@ -78,6 +83,21 @@ class _MockOperation:
                 )
             return OperationResult.success_result({"mock": True})
 
+        if self._profile == "first_fail_nav":
+            from operations.Base import OperationCategory
+            is_nav = getattr(self, "category", None) == OperationCategory.NAVIGATION
+            if is_nav:
+                key = getattr(self, "name", id(self))
+                count = _call_counts.get(key, 0)
+                _call_counts[key] = count + 1
+                if count == 0:
+                    return OperationResult.error_result(
+                        "MOCK_NAV_FAIL",
+                        "Simulated navigation failure (first attempt)",
+                        ["Try adjusting target coordinates"],
+                    )
+            return OperationResult.success_result({"mock": True})
+
         return OperationResult.success_result({"mock": True})
 
 
@@ -96,6 +116,7 @@ def install_mock(profile: str = "always_succeed") -> Callable:
     if profile not in PROFILES:
         raise ValueError(f"Unknown mock profile '{profile}'. Choose from: {PROFILES}")
 
+    _call_counts.clear()
     registry = get_global_registry()
     original = registry.get_operation_by_name
 
