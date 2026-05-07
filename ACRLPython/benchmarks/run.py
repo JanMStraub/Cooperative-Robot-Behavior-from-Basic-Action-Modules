@@ -21,7 +21,7 @@ from .reporter import print_summary, write_json
 from .runner import BenchmarkRunner
 
 _DUAL_ROBOT_BENCHMARKS = {6, 7, 8, 11}
-_ABLATION_BENCHMARKS = {9, 10, 11, 12}
+_ABLATION_BENCHMARKS = {9, 10, 11, 12, 13, 14}
 _PARSE_ONLY_BENCHMARKS = {9, 12}  # no server required
 _REQUIRED_PORTS = (5007, 5008)
 
@@ -69,6 +69,8 @@ def _make_config(benchmark_id: int, args: argparse.Namespace) -> BenchmarkConfig
         use_rag=not args.no_rag,
         reflexion_enabled=args.reflexion,
         use_knowledge_graph=not args.no_kg,
+        use_vgn=not args.no_vgn,
+        use_ros_movement=not args.no_ros,
         execution_mode="live" if getattr(args, "live", False) else "offline",
     )
     if benchmark_id in _DUAL_ROBOT_BENCHMARKS:
@@ -114,15 +116,15 @@ def main() -> None:
     group.add_argument(
         "--benchmark",
         type=int,
-        choices=range(1, 13),
+        choices=range(1, 15),
         metavar="N",
-        help="Run a single benchmark (1–12); 9–12 are ablation benchmarks",
+        help="Run a single benchmark (1–14); 9–14 are ablation benchmarks",
     )
-    group.add_argument("--all", action="store_true", help="Run all benchmarks (1–12)")
+    group.add_argument("--all", action="store_true", help="Run all benchmarks (1–14)")
     group.add_argument(
         "--ablation",
         action="store_true",
-        help="Run ablation benchmarks only (9–12, no server required for 9 and 12)",
+        help="Run ablation benchmarks only (9–14, no server required for 9 and 12)",
     )
     parser.add_argument(
         "--dry-run", action="store_true", help="Use mock operations (no hardware)"
@@ -148,6 +150,12 @@ def main() -> None:
         "--no-negotiation", action="store_true", help="Disable LLM negotiation (B11 ablation: disabled condition)"
     )
     parser.add_argument(
+        "--no-vgn", action="store_true", help="Disable VGN neural grasp (B13 ablation: disabled condition)"
+    )
+    parser.add_argument(
+        "--no-ros", action="store_true", help="Disable ROS/MoveIt movement (B14 ablation: disabled condition)"
+    )
+    parser.add_argument(
         "--output-dir",
         default="./benchmark_results",
         help="Directory for JSON result files (default: ./benchmark_results)",
@@ -162,9 +170,9 @@ def main() -> None:
 
     runner = BenchmarkRunner()
     if args.all:
-        benchmark_ids = list(range(1, 13))
+        benchmark_ids = list(range(1, 15))
     elif args.ablation:
-        benchmark_ids = list(range(9, 13))
+        benchmark_ids = list(range(9, 15))
     else:
         benchmark_ids = [args.benchmark]
 

@@ -20,6 +20,8 @@ class BenchmarkConfig:
     use_rag: bool = True
     reflexion_enabled: bool = True
     use_knowledge_graph: bool = True
+    use_vgn: bool = True
+    use_ros_movement: bool = True
     execution_mode: str = "offline"  # "offline" = dry-run+mocks, "live" = real SequenceServer
 
 

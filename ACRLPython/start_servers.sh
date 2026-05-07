@@ -20,7 +20,7 @@ ROS_INTEGRATION=true
 STOP_DOCKER_ON_EXIT=false
 WEB_PORT="8000"
 ENV_FLAG="sim"
-LAUNCH_UNITY=false
+LAUNCH_UNITY=true
 
 # --- Functions ---
 

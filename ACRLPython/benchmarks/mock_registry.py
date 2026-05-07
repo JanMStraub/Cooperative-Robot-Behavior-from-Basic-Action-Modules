@@ -38,8 +38,6 @@ class _MockOperation:
         """
         self.__dict__.update(real_op.__dict__)
         self._profile = profile
-        if profile == "first_fail_nav":
-            _call_counts.clear()
 
     def execute(self, **kwargs):
         """
