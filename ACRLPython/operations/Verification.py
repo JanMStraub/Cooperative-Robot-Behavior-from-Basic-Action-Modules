@@ -263,15 +263,20 @@ class OperationVerifier:
             # Resolve parameter values
             predicate_params = PredicateParser.resolve_parameters(param_names, params)
 
-            # Skip predicate if required params are missing — params may use
-            # variable references (e.g. "$target") that are only resolved at
-            # execution time, so we cannot evaluate the predicate statically.
+            # Skip predicate if required params are missing or still hold unresolved
+            # variable references (e.g. "$target.x") — only resolvable at execution time.
             required_names = [p for p in param_names if p != "world_state"]
             missing_params = [p for p in required_names if p not in predicate_params]
-            if missing_params:
+            unresolved_params = [
+                p for p in required_names
+                if p in predicate_params and isinstance(predicate_params[p], str)
+                and predicate_params[p].startswith("$")
+            ]
+            if missing_params or unresolved_params:
                 logger.warning(
-                    f"Skipping precondition '{precondition}': params {missing_params} "
-                    f"not yet resolved (may be runtime variable references)"
+                    f"Skipping precondition '{precondition}': params "
+                    f"{missing_params + unresolved_params} not yet resolved "
+                    f"(runtime variable references)"
                 )
                 continue
 

@@ -50,7 +50,7 @@ class TaskGenerator:
         include_collaborative: Optional[bool] = None,
     ) -> List[ProposedTask]:
         """
-        Generate task proposals in parallel — one LLM request per task.
+        Generate task proposals in parallel - one LLM request per task.
 
         Sends ``num_tasks`` concurrent requests to the LLM, each asking for a
         single task.  Results are merged and deduplicated by task_id.  Any
@@ -87,7 +87,7 @@ class TaskGenerator:
                 try:
                     task = future.result()
                     if task is not None:
-                        # Deduplicate by task_id — drop tasks with the same ID
+                        # Deduplicate by task_id - drop tasks with the same ID
                         if task.task_id not in seen_ids:
                             seen_ids.add(task.task_id)
                             validated_tasks.append(task)
@@ -105,7 +105,7 @@ class TaskGenerator:
         """
         Generate and validate a single task with retries.
 
-        Called concurrently by ``generate_tasks`` — each invocation runs in its
+        Called concurrently by ``generate_tasks`` - each invocation runs in its
         own thread and retries independently on JSON/validation errors.
 
         Args:
@@ -176,10 +176,7 @@ Please fix these issues and generate a valid task following the parameter schema
                     "content": (
                         SYSTEM_PROMPT_BASE
                         + " You are an autonomous task planner. Generate grounded, executable "
-                        "task plans using ONLY the objects and operations listed in the user "
-                        "message. Never invent object IDs, operation names, camera IDs, or "
-                        "coordinates outside the specified workspace bounds. "
-                        "Return a JSON array directly — no preamble, no [THINK] tags."
+                        "task plans using ONLY the objects and operations listed in the user message."
                     ),
                 },
                 {"role": "user", "content": prompt},
@@ -189,7 +186,7 @@ Please fix these issues and generate a valid task following the parameter schema
                 "model": self.model,
                 "messages": messages,
                 "temperature": self.temperature,
-                # Single task JSON — 2048 tokens covers verbose multi-step tasks.
+                # Single task JSON - 2048 tokens covers verbose multi-step tasks.
                 "max_tokens": 2048,
             }
             # Structured output forces valid JSON at the inference layer.
@@ -275,7 +272,7 @@ Use 'signal' and 'wait_for_signal' for coordination between robots.
         if "[/THINK]" in summary:
             summary = summary.split("[/THINK]", 1)[1].strip()
         elif "[THINK]" in summary:
-            # Incomplete reasoning block — drop it entirely, use fallback
+            # Incomplete reasoning block - drop it entirely, use fallback
             summary = f"Detected {len(scene.objects)} objects in workspace."
         # Hard cap as final safety net (~200 tokens)
         if len(summary) > 800:
@@ -295,14 +292,6 @@ DETECTED OBJECTS:
 
 AVAILABLE ROBOTS:
 {robot_ids}{spatial_hints}
-
-WORKSPACE LAYOUT:
-- X axis: -0.6 (left) to +0.6 (right)
-- Y axis: 0.0 (table surface) to 0.6 (above table)
-- Z axis: -0.6 (back) to +0.6 (front)
-- Center workspace: X near 0.0
-- Left workspace: X negative (Robot1's area)
-- Right workspace: X positive (Robot2's area)
 
 AVAILABLE CAMERAS:
 - {DEFAULT_CAMERA_ID}: Stereo camera for depth perception and object detection
@@ -378,14 +367,14 @@ GENERAL RULES:
    - Objects at X > 0.1 should be handled by Robot2 (right robot)
    - Objects at X near 0.0 can be handled by either robot
 8. Complexity: 1 (trivial) to 10 (very complex)
-9. Return ONLY valid JSON, no markdown formatting, no reasoning, no [THINK] tags
+9. Return compact JSON with no extra whitespace, no markdown, no reasoning
 10. CRITICAL: Every operation MUST have a valid "robot_id" field (never null/None)
 11. Every robot_id in operations must appear in required_robots
 12. CRITICAL: Each operation MUST have a "parameters" field (use empty dict {{{{}}}} if no parameters needed)
 13. Only use parameter names and values shown in AVAILABLE OPERATIONS schemas
 14. Pay close attention to valid_values constraints in parameter schemas - violating these will cause operation failures
 
-COORDINATE GUIDELINES (ROS base_link frame — robot-local, Z-up):
+COORDINATE GUIDELINES (ROS base_link frame, robot-local, Z-up):
 - X: forward from robot base, range -0.5 to 0.5
 - Y: left from robot base, range -0.5 to 0.5
 - Z: height above robot base, range 0.0 to 0.6
@@ -406,8 +395,7 @@ COMMON TASK PATTERNS:
    - move_to_coordinate(x=0.0, y=0.2, z=0.3)
    - release_object()
 
-IMPORTANT: Output the JSON array immediately without any preamble, reasoning, or explanatory text.
-IMPORTANT: Output compact JSON with no extra whitespace or indentation to minimize token usage.
+Output the JSON array immediately without any preamble or explanatory text.
 
 Generate tasks now:
 """
@@ -739,7 +727,7 @@ Generate tasks now:
     }
 
     _FAILURE_HINTS: dict = {
-        "grasp_object": "Re-detect the object before retrying grasp — position may have drifted.",
+        "grasp_object": "Re-detect the object before retrying grasp - position may have drifted.",
         "detect_object_stereo": "Move to a different viewpoint before re-scanning.",
     }
 

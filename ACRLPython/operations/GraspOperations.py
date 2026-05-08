@@ -47,6 +47,7 @@ try:
         FOLLOW_TARGET_DRIFT_THRESHOLD,
         FOLLOW_TARGET_ENABLED,
         FOLLOW_TARGET_MAX_CORRECTIONS,
+        FOLLOW_TARGET_RETRACT_HEIGHT,
         GRASP_DESCENT_ACCELERATION_SCALING,
         GRASP_DESCENT_VELOCITY_SCALING,
         GRASP_TCP_OFFSET,
@@ -60,6 +61,7 @@ except ImportError:
         FOLLOW_TARGET_DRIFT_THRESHOLD,
         FOLLOW_TARGET_ENABLED,
         FOLLOW_TARGET_MAX_CORRECTIONS,
+        FOLLOW_TARGET_RETRACT_HEIGHT,
         GRASP_DESCENT_ACCELERATION_SCALING,
         GRASP_DESCENT_VELOCITY_SCALING,
         GRASP_TCP_OFFSET,
@@ -134,22 +136,72 @@ def _execute_grasp_with_follow_target(
                 f"(correction {correction + 1}/{FOLLOW_TARGET_MAX_CORRECTIONS}), re-planning"
             )
 
-            # Build corrected target from live object position
+            # Retract straight up before replanning so the gripper doesn't drag
+            # along the table surface on the way to the new object position.
+            retract_pos = dict(current_position)
+            retract_pos["y"] = current_position["y"] + FOLLOW_TARGET_RETRACT_HEIGHT
+            logger.info(
+                f"[follow_target] {robot_id}: retracting {FOLLOW_TARGET_RETRACT_HEIGHT * 100:.0f} cm before replan"
+            )
+            retract_result = bridge.plan_and_execute(
+                position=retract_pos,
+                orientation=orientation,
+                planning_time=5.0,
+                robot_id=robot_id,
+                max_velocity_scaling=0.4,
+                max_acceleration_scaling=0.4,
+            )
+            if not retract_result or not retract_result.get("success"):
+                logger.warning(
+                    f"[follow_target] {robot_id}: retract failed — "
+                    f"{retract_result.get('error') if retract_result else 'no response'}, aborting correction"
+                )
+                break
+
+            # Build corrected grasp and hover positions from live object position.
             corrected = _vec_to_pos(live_pos, tcp_y_offset)
+            hover_pos = _vec_to_pos(live_pos, PRE_GRASP_HOVER_OFFSET)
             current_position = corrected
 
-            correction_result = bridge.plan_and_execute(
-                position=corrected,
-                orientation=orientation,
+            # Step A: move to pre-grasp hover above the new object position.
+            # No orientation constraint here — constraining at hover shrinks the IK
+            # solution space and causes OMPL to fail at borderline reach distances
+            # (same reasoning as _grasp_via_ros_planned for non-top approaches).
+            # Orientation is enforced at descent (Step B) where it matters.
+            logger.info(
+                f"[follow_target] {robot_id}: moving to hover above corrected position"
+            )
+            hover_result = bridge.plan_and_execute(
+                position=hover_pos,
+                orientation=None,
                 planning_time=8.0,
                 robot_id=robot_id,
-                max_velocity_scaling=0.3,
-                max_acceleration_scaling=0.3,
+                max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
+                max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
+            )
+            if not hover_result or not hover_result.get("success"):
+                logger.warning(
+                    f"[follow_target] {robot_id}: hover move failed — "
+                    f"{hover_result.get('error') if hover_result else 'no response'}"
+                )
+                break
+            time.sleep(0.3)
+
+            # Step B: Cartesian descent to corrected grasp position.
+            logger.info(
+                f"[follow_target] {robot_id}: descending to corrected grasp position"
+            )
+            correction_result = bridge.plan_cartesian_descent(
+                position=corrected,
+                orientation=orientation,
+                robot_id=robot_id,
+                max_velocity_scaling=GRASP_DESCENT_VELOCITY_SCALING,
+                max_acceleration_scaling=GRASP_DESCENT_ACCELERATION_SCALING,
             )
 
             if not correction_result or not correction_result.get("success"):
                 logger.warning(
-                    f"[follow_target] {robot_id}: corrective move failed — "
+                    f"[follow_target] {robot_id}: corrective descent failed — "
                     f"{correction_result.get('error') if correction_result else 'no response'}"
                 )
                 break

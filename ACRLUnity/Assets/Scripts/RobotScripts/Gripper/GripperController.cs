@@ -365,6 +365,13 @@ namespace Robotics
             if (leftGripper == null || rightGripper == null)
                 return;
 
+            // Clear all deferred flags to prevent post-reset attachment/detachment
+            _attachmentPending = false;
+            _detachmentPending = false;
+            _detachInFixedUpdate = false;
+            _targetObjectToGrasp = null;
+            _shouldAttachOnClose = false;
+
             // Ensure limits are cached before mapping (handles call before Start())
             if (_cachedUpperLimit == 0f)
                 CacheLimits();

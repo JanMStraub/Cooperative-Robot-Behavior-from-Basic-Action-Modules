@@ -44,9 +44,9 @@ class TestPromptBuilderHint:
     def test_hint_does_not_affect_other_sections(self, builder):
         prompt_no_hint = builder.build("move to (0,0,0)", "Robot1")
         prompt_with_hint = builder.build("move to (0,0,0)", "Robot1", hint="some hint")
-        # Core instruction still present in both
-        assert "Output only valid JSON" in prompt_no_hint
-        assert "Output only valid JSON" in prompt_with_hint
+        # Core sections still present in both
+        assert "=== HANDOFF RULE ===" in prompt_no_hint
+        assert "=== HANDOFF RULE ===" in prompt_with_hint
 
 
 # ============================================================================

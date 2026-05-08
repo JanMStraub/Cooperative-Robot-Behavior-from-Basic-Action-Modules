@@ -954,6 +954,15 @@ namespace Robotics
             }
         }
 
+        /// <summary>
+        /// Resets gripper to open state and clears all deferred attachment/detachment flags.
+        /// Call during simulation reset after ReleaseGrasp().
+        /// </summary>
+        public void ResetGripperState()
+        {
+            _gripperController?.ResetGrippers();
+        }
+
         public void ClearTarget()
         {
             _targetTransform = null;

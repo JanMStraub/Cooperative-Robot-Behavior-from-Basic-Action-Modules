@@ -58,6 +58,15 @@ def extract_json(content: str) -> Optional[Dict]:
             return json.loads(json_str_clean)
         except json.JSONDecodeError:
             pass
+        # Stage 2b: JSONL fallback — model emitted newline-delimited JSON objects
+        # Wrap into {"commands": [...]} so downstream parser can handle it
+        lines = [l.strip() for l in json_str.splitlines() if l.strip().startswith("{")]
+        if len(lines) > 1:
+            try:
+                commands = [json.loads(l.rstrip(",")) for l in lines]
+                return {"commands": commands}
+            except json.JSONDecodeError:
+                pass
 
     # Stage 3: bare {…} regex
     json_match = re.search(r"\{.*?\}", content, re.DOTALL)

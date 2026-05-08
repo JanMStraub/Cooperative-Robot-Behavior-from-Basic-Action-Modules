@@ -210,7 +210,7 @@ namespace Simulation
 
                 // Cache initial poses of all dynamic scene objects (Rigidbody, not part of a robot)
                 var allRigidbodies = FindObjectsByType<Rigidbody>(
-                    FindObjectsInactive.Exclude,
+                    FindObjectsInactive.Include,
                     FindObjectsSortMode.None
                 );
                 foreach (var rb in allRigidbodies)
@@ -382,6 +382,7 @@ namespace Simulation
 
                         robot.ReleaseGrasp();
                         robot.ResetJointTargets();
+                        robot.ResetGripperState();
 
                         string robotId = robot.gameObject.name;
                         _robotTargetReached[robotId] = true;
@@ -395,8 +396,12 @@ namespace Simulation
                 Rigidbody rb = kvp.Key;
                 if (rb == null) continue;
                 rb.transform.SetParent(null, worldPositionStays: false);
+                rb.isKinematic = false;
+                rb.useGravity = true;
                 rb.transform.position = kvp.Value.position;
                 rb.transform.rotation = kvp.Value.rotation;
+                rb.position = kvp.Value.position;
+                rb.rotation = kvp.Value.rotation;
                 rb.linearVelocity = Vector3.zero;
                 rb.angularVelocity = Vector3.zero;
             }

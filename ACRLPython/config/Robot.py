@@ -110,6 +110,12 @@ FOLLOW_TARGET_DRIFT_THRESHOLD = float(
     os.environ.get("FOLLOW_TARGET_DRIFT_THRESHOLD", "0.015")
 )
 
+# How far (meters) to lift the gripper above the grasp Y before replanning to a
+# drifted object — prevents dragging the gripper along the table surface.
+FOLLOW_TARGET_RETRACT_HEIGHT = float(
+    os.environ.get("FOLLOW_TARGET_RETRACT_HEIGHT", "0.10")
+)
+
 # ============================================================================
 # Grasp Geometry & Approach Parameters
 # ============================================================================

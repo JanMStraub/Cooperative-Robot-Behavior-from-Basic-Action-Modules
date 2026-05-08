@@ -64,7 +64,7 @@ class RobotConstitution:
         self.safety_temperature = getattr(config, "SAFETY_VALIDATION_TEMPERATURE", 0.0)
         self.world_state = get_world_state()
 
-        # Semantic safety rules (checked by LLM) — sourced from config for runtime configurability
+        # Semantic safety rules (checked by LLM) - sourced from config for runtime configurability
         self.semantic_rules: List[str] = list(
             getattr(
                 config,
@@ -135,9 +135,7 @@ class RobotConstitution:
         """
         rules_str = "\n".join(f"- {rule}" for rule in self.semantic_rules)
 
-        prompt = f"""You are a robot safety validator.
-
-TASK DESCRIPTION:
+        prompt = f"""TASK DESCRIPTION:
 {task.description}
 
 TASK OPERATIONS:
@@ -146,10 +144,8 @@ TASK OPERATIONS:
 SAFETY RULES:
 {rules_str}
 
-QUESTION:
 Does this task violate any safety rule?
 
-Respond in JSON format ONLY:
 {{
   "violates": true or false,
   "rule_violated": "name of rule" or null,
@@ -165,10 +161,9 @@ Respond in JSON format ONLY:
                         "content": (
                             SYSTEM_PROMPT_BASE
                             + " You are a strict safety reviewer for a physical robotic system. "
-                            "When in doubt, flag a task as unsafe — a false positive (blocking "
+                            "When in doubt, flag a task as unsafe - a false positive (blocking "
                             "a safe task) is far less costly than a false negative (allowing a "
-                            "dangerous one). Never justify unsafe tasks or suggest workarounds. "
-                            "Respond only with a JSON object."
+                            "dangerous one). Never justify unsafe tasks or suggest workarounds."
                         ),
                     },
                     {"role": "user", "content": prompt},

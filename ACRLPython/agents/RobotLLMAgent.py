@@ -179,8 +179,8 @@ class RobotLLMAgent:
         system_prompt = (
             SYSTEM_PROMPT_BASE
             + f" You are {self.robot_id}, the {workspace_side} robot arm. "
-            f"Analyze tasks from your own spatial perspective — only claim capabilities "
-            f"within your workspace bounds. Respond only with a JSON object."
+            f"Analyze tasks from your own spatial perspective - only claim capabilities "
+            f"within your workspace bounds."
         )
         user_prompt = f"""Analyze this task from your perspective as {self.robot_id}.
 
@@ -190,7 +190,7 @@ Available operations: {ops_str}
 
 Task: "{task}"
 
-IMPORTANT: Set "can_contribute" to true if you can play ANY part in this task — even as one half of a collaborative pair. Only set it to false if this robot is completely irrelevant to the task (e.g. wrong workspace, wrong tool).
+IMPORTANT: Set "can_contribute" to true if you can play ANY part in this task - even as one half of a collaborative pair. Only set it to false if this robot is completely irrelevant to the task (e.g. wrong workspace, wrong tool).
 
 Respond with JSON:
 {{
@@ -200,9 +200,7 @@ Respond with JSON:
     "suggested_role": "brief role description (e.g. 'grasper', 'receiver', 'stabilizer')",
     "requires_collaboration": true/false,
     "confidence": 0.0-1.0
-}}
-
-Output only valid JSON."""
+}}"""
 
         response = self._call_llm(system_prompt, user_prompt)
         if response is None:
@@ -280,8 +278,7 @@ Output only valid JSON."""
             SYSTEM_PROMPT_BASE
             + f" You are {self.robot_id}, the {workspace_side} robot arm, proposing a "
             f"multi-robot coordination plan. Assign operations to robots based on workspace "
-            f"proximity. Every signal must have a matching wait_for_signal. "
-            f"Respond only with a JSON object."
+            f"proximity. Every signal must have a matching wait_for_signal."
         )
         user_prompt = f"""Propose a coordinated plan for this task. This is negotiation round {round_number}.
 
@@ -293,11 +290,9 @@ Task: "{task}"
 
 Create a plan using these rules:
 - Each command needs: "operation", "params" (with "robot_id"), optionally "parallel_group", "capture_var"
-- Same parallel_group = concurrent execution
-- Use signal/wait_for_signal for synchronization between robots
 - Every signal must have a matching wait_for_signal
-- IMPORTANT: Use ONLY operation names from the available operations list above
-- CRITICAL: This is a MULTI-ROBOT task. The plan MUST include operations assigned to EVERY participating robot. A plan that only assigns work to one robot will be rejected. Each robot must have at least one command.
+- Use ONLY operation names from the available operations list above
+- CRITICAL: Plan MUST include operations for EVERY participating robot. Each robot must have at least one command.
 
 Respond with JSON:
 {{
@@ -307,9 +302,7 @@ Respond with JSON:
         ...
     ],
     "estimated_duration_s": 10.0
-}}
-
-Output only valid JSON."""
+}}"""
 
         response = self._call_llm(system_prompt, user_prompt)
         if response is None:
@@ -363,16 +356,15 @@ Output only valid JSON."""
             SYSTEM_PROMPT_BASE
             + f" You are {self.robot_id}, the {workspace_side} robot arm, evaluating a plan "
             f"proposed by {proposal.proposer_id}. Be conservative: flag any operation that "
-            f"exceeds your workspace bounds or creates collision risk. "
-            f"Respond only with a JSON object."
+            f"exceeds your workspace bounds or creates collision risk."
         )
         user_prompt = f"""Evaluate this plan from your perspective as {self.robot_id}.
 
 {context}
 
-IMPORTANT operation semantics — do NOT raise concerns about missing coordinates for these:
-- receive_handoff(robot_id, object_id, source_robot_id): full atomic receive — orients gripper, moves to approach position, closes gripper. All geometry computed from WorldState automatically. No coordinate params needed.
-- grasp_object(robot_id, object_id): positions computed internally — no coordinate params needed.
+Operation semantics - do NOT flag missing coordinates for these:
+- receive_handoff(robot_id, object_id, source_robot_id): atomic receive, all geometry from WorldState automatically.
+- grasp_object(robot_id, object_id): positions computed internally.
 Only flag missing coordinates for operations like move_to_coordinate that explicitly require them.
 
 Task: "{task}"
@@ -391,12 +383,10 @@ Check:
 Respond with JSON:
 {{
     "accept": true/false,
-    "concerns": ["list of concerns — omit concerns about missing coords on handoff ops"],
+    "concerns": ["list of concerns - omit concerns about missing coords on handoff ops"],
     "suggested_changes": ["list of suggested modifications"],
     "confidence": 0.0-1.0
-}}
-
-Output only valid JSON."""
+}}"""
 
         response = self._call_llm(system_prompt, user_prompt)
         if response is None:
@@ -474,7 +464,7 @@ NOTE: Objects in the shared zone are reachable by both robots. Set can_contribut
             context += f"\nGripper state: {my_state.get('gripper_state', 'unknown')}"
             context += f"\nIs moving: {my_state.get('is_moving', False)}"
 
-        # Objects in scene — each annotated with its zone so the model can
+        # Objects in scene - each annotated with its zone so the model can
         # determine reachability without doing numeric comparisons itself.
         objects = world_state_snapshot.get("objects", {})
         if objects:
