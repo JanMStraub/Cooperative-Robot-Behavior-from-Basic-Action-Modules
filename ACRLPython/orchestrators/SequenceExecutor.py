@@ -141,7 +141,7 @@ class SequenceExecutor:
 
     def __init__(
         self,
-        default_timeout: float = 90.0,  # Increased from 60s for complex movements
+        default_timeout: float = 120.0,  # Increased from 90s; handoff grasps can take 40-60s under load
         check_completion: bool = True,
         enable_verification: bool = True,
     ):

@@ -3001,9 +3001,13 @@ namespace PythonCommunication
                 // frame, matching the same isSettled pattern in RobotController.
                 // IsManuallyDriven stays true throughout so IK does not interfere.
                 // Cap at MAX_SETTLE_FRAMES to avoid hanging if a joint is truly stuck.
-                const int MAX_SETTLE_FRAMES = 120; // 2s at 60 Hz physics
+                const int MAX_SETTLE_FRAMES = 180; // 3s at 60 Hz physics
                 const float SETTLE_THRESHOLD_RAD_S = 0.01f;
+                // Require consecutive frames to avoid false-positive at oscillation peak
+                // where velocity briefly crosses zero while link4 is still swinging.
+                const int CONSECUTIVE_SETTLED_REQUIRED = 15; // ~250ms at 60Hz
 
+                int settledCount = 0;
                 for (int frame = 0; frame < MAX_SETTLE_FRAMES; frame++)
                 {
                     yield return new WaitForFixedUpdate();
@@ -3022,6 +3026,11 @@ namespace PythonCommunication
                     }
 
                     if (allSettled)
+                        settledCount++;
+                    else
+                        settledCount = 0;
+
+                    if (settledCount >= CONSECUTIVE_SETTLED_REQUIRED)
                         break;
                 }
 

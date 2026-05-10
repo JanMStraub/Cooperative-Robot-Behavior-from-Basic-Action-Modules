@@ -102,12 +102,12 @@ FOLLOW_TARGET_ENABLED = (
 
 # Maximum number of corrective moves before closing the gripper regardless.
 FOLLOW_TARGET_MAX_CORRECTIONS = int(
-    os.environ.get("FOLLOW_TARGET_MAX_CORRECTIONS", "3")
+    os.environ.get("FOLLOW_TARGET_MAX_CORRECTIONS", "1")
 )
 
 # Minimum object drift (meters) that triggers a corrective plan_and_execute.
 FOLLOW_TARGET_DRIFT_THRESHOLD = float(
-    os.environ.get("FOLLOW_TARGET_DRIFT_THRESHOLD", "0.015")
+    os.environ.get("FOLLOW_TARGET_DRIFT_THRESHOLD", "0.025")
 )
 
 # How far (meters) to lift the gripper above the grasp Y before replanning to a
@@ -129,7 +129,7 @@ GRASP_TCP_OFFSET = float(os.environ.get("GRASP_TCP_OFFSET", "0.05"))  # meters
 # Hover height above object centre for the pre-grasp approach waypoint.
 # Must be high enough that the arm clears the object when it swings in.
 PRE_GRASP_HOVER_OFFSET = float(
-    os.environ.get("PRE_GRASP_HOVER_OFFSET", "0.17")
+    os.environ.get("PRE_GRASP_HOVER_OFFSET", "0.15")
 )  # meters
 
 # Absolute world-Y safety height used as an intermediate waypoint before descent.
@@ -148,10 +148,10 @@ PREGRASP_ACCELERATION_SCALING = float(
 # Velocity/acceleration scaling for the final Cartesian descent to grasp position.
 # Must be slow enough that the gripper doesn't slam into the object on arrival.
 GRASP_DESCENT_VELOCITY_SCALING = float(
-    os.environ.get("GRASP_DESCENT_VELOCITY_SCALING", "0.7")
+    os.environ.get("GRASP_DESCENT_VELOCITY_SCALING", "0.9")
 )
 GRASP_DESCENT_ACCELERATION_SCALING = float(
-    os.environ.get("GRASP_DESCENT_ACCELERATION_SCALING", "0.5")
+    os.environ.get("GRASP_DESCENT_ACCELERATION_SCALING", "0.7")
 )
 
 # ============================================================================

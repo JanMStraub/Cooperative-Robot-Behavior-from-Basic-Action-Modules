@@ -186,8 +186,8 @@ Please fix these issues and generate a valid task following the parameter schema
                 "model": self.model,
                 "messages": messages,
                 "temperature": self.temperature,
-                # Single task JSON - 2048 tokens covers verbose multi-step tasks.
-                "max_tokens": 2048,
+                # Single task JSON - 4096 tokens covers verbose multi-step tasks.
+                "max_tokens": 4096,
             }
             # Structured output forces valid JSON at the inference layer.
             # Set USE_STRUCTURED_OUTPUT=false for models that don't support response_format.

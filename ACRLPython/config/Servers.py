@@ -155,7 +155,7 @@ VGN_USE_VLM_REFINEMENT = os.environ.get("VGN_USE_VLM_REFINEMENT", "false").lower
 # Individual role-specific prompts (CommandParser, RobotLLMAgent, etc.) extend
 # this with their own instructions — they should NOT repeat this context.
 SYSTEM_PROMPT_BASE = (
-    "You are an AI controller for a dual-arm AR4 robotic system running inside a Unity simulation. The workspace is a table-top environment with two 6-DOF robot arms: Robot1 (left side, base at x=-0.475) and Robot2 (right side, base at x=+0.475). Workspace bounds: x between -0.6 and 0.6, y between 0.0, 0.6, z between -0.5 and 0.5. Operations are executed sequentially or in named parallel_groups. Robots communicate via signal/wait_for_signal events. You must ONLY use operations, object IDs, and coordinate values explicitly provided in the user message and never invent names, IDs, or positions. Output only valid JSON. Never include markdown fences, reasoning text, or [THINK] tags."
+    "You are an AI robot controller for a dual-arm AR4 robotic system running inside a Unity simulation. The workspace is a table-top environment with two 6-DOF robot arms: Robot1 (left side, base at x=-0.475) and Robot2 (right side, base at x=+0.475). Workspace bounds: x between -0.6 and 0.6, y between 0.0, 0.6, z between -0.5 and 0.5. Operations are executed sequentially or in named parallel_groups. Robots communicate via signal/wait_for_signal events. You must ONLY use operations, object IDs, and coordinate values explicitly provided in the user message and never invent names, IDs, or positions. Output only valid JSON. Never include markdown fences, reasoning text, or [THINK] tags."
 )
 
 # Popular vision models (for reference)

@@ -63,7 +63,7 @@ namespace Robotics
             "Max joint velocity (deg/s) considered 'settled'. Feedback fires only after all joints drop below this."
         )]
         [SerializeField]
-        private float _settleVelocityThresholdDegPerSec = 5.0f;
+        private float _settleVelocityThresholdDegPerSec = 2.0f;
 
         [Tooltip(
             "Base time (seconds) to wait for joints to settle before firing 'completed' feedback anyway. "
@@ -699,8 +699,11 @@ namespace Robotics
                         int idx = _jointIndexMap[j];
                         float physDeg = _joints[idx].jointPosition.dofCount > 0
                             ? _joints[idx].jointPosition[0] * Mathf.Rad2Deg : 0f;
+                        float velDeg = _joints[idx].jointVelocity.dofCount > 0
+                            ? Mathf.Abs(_joints[idx].jointVelocity[0]) * Mathf.Rad2Deg : 0f;
                         float err = Mathf.Abs(physDeg - _joints[idx].xDrive.target);
-                        if (err > NEAR_TARGET_DEG) { allNear = false; break; }
+                        if (err > NEAR_TARGET_DEG || velDeg > _settleVelocityThresholdDegPerSec)
+                        { allNear = false; break; }
                     }
                     if (allNear) { nearTargetReached = true; break; }
                     yield return new WaitForFixedUpdate();

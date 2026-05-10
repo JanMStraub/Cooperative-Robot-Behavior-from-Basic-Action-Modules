@@ -713,6 +713,7 @@ class WorldState(SingletonBase):
                 "is_graspable": obj.is_graspable,
                 "grasped_by": obj.grasped_by,
                 "confidence": obj.confidence,
+                "timestamp": obj.timestamp,
             }
 
     def get_object_rotation(

@@ -33,8 +33,9 @@ DEFAULT_CONTROL_MODE = "hybrid"
 # Auto-connect to ROS bridge on startup (wired into RunRobotController._auto_connect_ros)
 AUTO_CONNECT_ROS = True
 
-# Timeout for waiting on ROS motion execution — used in ros2/ROSBridge.py
-ROS_EXECUTION_TIMEOUT = 30.0
+# Timeout for waiting on ROS motion execution — used in ros2/ROSBridge.py.
+# Raised from 30s: handoff grasps with complex paths can require 40s+ for pre-grasp + descent.
+ROS_EXECUTION_TIMEOUT = 60.0
 
 # Grasp validation timeout: base + per-candidate increment
 ROS_TIMEOUT_BASE = 5.0

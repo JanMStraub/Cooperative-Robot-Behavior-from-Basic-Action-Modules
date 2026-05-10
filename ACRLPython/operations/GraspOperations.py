@@ -148,8 +148,8 @@ def _execute_grasp_with_follow_target(
                 orientation=orientation,
                 planning_time=5.0,
                 robot_id=robot_id,
-                max_velocity_scaling=0.4,
-                max_acceleration_scaling=0.4,
+                max_velocity_scaling=0.8,
+                max_acceleration_scaling=0.7,
             )
             if not retract_result or not retract_result.get("success"):
                 logger.warning(
@@ -174,7 +174,7 @@ def _execute_grasp_with_follow_target(
             hover_result = bridge.plan_and_execute(
                 position=hover_pos,
                 orientation=None,
-                planning_time=8.0,
+                planning_time=5.0,
                 robot_id=robot_id,
                 max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
                 max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
@@ -184,16 +184,20 @@ def _execute_grasp_with_follow_target(
                     f"[follow_target] {robot_id}: hover move failed — "
                     f"{hover_result.get('error') if hover_result else 'no response'}"
                 )
-                break
-            time.sleep(0.3)
+                return False  # arm at retract height — closing gripper here would miss the object
+            time.sleep(0.1)
 
-            # Step B: Cartesian descent to corrected grasp position.
+            # Step B: Move to corrected grasp position.
+            # Uses free-space planner (OMPL) rather than Cartesian descent — the retract
+            # in Step A already lifted the arm clear of the table, so dragging is not a risk.
+            # OMPL is more robust than Cartesian descent at workspace-edge configurations.
             logger.info(
-                f"[follow_target] {robot_id}: descending to corrected grasp position"
+                f"[follow_target] {robot_id}: moving to corrected grasp position"
             )
-            correction_result = bridge.plan_cartesian_descent(
+            correction_result = bridge.plan_and_execute(
                 position=corrected,
                 orientation=orientation,
+                planning_time=8.0,
                 robot_id=robot_id,
                 max_velocity_scaling=GRASP_DESCENT_VELOCITY_SCALING,
                 max_acceleration_scaling=GRASP_DESCENT_ACCELERATION_SCALING,
@@ -201,30 +205,25 @@ def _execute_grasp_with_follow_target(
 
             if not correction_result or not correction_result.get("success"):
                 logger.warning(
-                    f"[follow_target] {robot_id}: corrective descent failed — "
+                    f"[follow_target] {robot_id}: corrective move failed — "
                     f"{correction_result.get('error') if correction_result else 'no response'}"
                 )
-                break
+                return False  # arm at hover height — closing gripper here would miss the object
     else:
         if not FOLLOW_TARGET_ENABLED:
             logger.debug(
                 f"[follow_target] disabled — closing gripper at planned position"
             )
 
-    # Arm is at (corrected) grasp position.
-    # Wait for the ArticulationBody PD controller to settle before closing so the
-    # gripper doesn't fire while the arm is still oscillating at the target pose.
-    logger.info(
-        f"[follow_target] {robot_id}: waiting for arm to settle before closing gripper"
-    )
-    time.sleep(0.5)
-
-    # Close gripper
+    # Arm is at (corrected) grasp position. ROS plan_and_execute is synchronous —
+    # arm velocity is already ~0 on return. Close immediately.
     logger.info(f"[follow_target] {robot_id}: closing gripper")
     gripper_result = bridge.control_gripper(0.0, robot_id=robot_id)
     if gripper_result and gripper_result.get("success"):
-        # Give Unity physics time to register the contact before returning
-        time.sleep(0.8)
+        # Give Unity physics time to register the contact before returning.
+        # GripperContactSensor needs 100ms min contact + 167ms force average ≈ 270ms;
+        # 0.3s provides 30ms margin above the physical minimum.
+        time.sleep(0.3)
         logger.info(f"[follow_target] {robot_id}: gripper closed")
         return True
     else:
@@ -532,7 +531,11 @@ def _grasp_via_ros_planned(
             )
     grasp_orientation = {"x": ros_x, "y": ros_y, "z": ros_z, "w": ros_w}
 
-    grasp_pos = _vec_to_pos(best_grasp.grasp_position)
+    # GraspCandidateGenerator.grasp_position is the contact point (object surface).
+    # Add GRASP_TCP_OFFSET so ee_link stops above the object, matching the position-only path.
+    # Without this offset, the ROS Cartesian descent places ee_link at contact height and
+    # fingers penetrate the table.
+    grasp_pos = _vec_to_pos(best_grasp.grasp_position, GRASP_TCP_OFFSET)
 
     # Override pre-grasp position if caller specified an explicit distance.
     # GraspCandidateGenerator derives it from object size (min 5cm), which is too
@@ -546,12 +549,40 @@ def _grasp_via_ros_planned(
     else:
         pre_grasp_pos = _vec_to_pos(best_grasp.pre_grasp_position)
 
-    # Step 1: Pre-grasp hover.
+    # Step 1: Clearance waypoint — sweep to safe height before descending toward object.
+    # Ensures the arm always arrives at pre-grasp from above, giving a reproducible
+    # joint configuration for the subsequent Cartesian descent.
+    _pre_grasp_orientation = grasp_orientation if preferred_approach == "top" else None
+    if pre_grasp_pos["y"] < PRE_GRASP_CLEARANCE_Y:
+        clearance_pos = {
+            "x": pre_grasp_pos["x"],
+            "y": PRE_GRASP_CLEARANCE_Y,
+            "z": pre_grasp_pos["z"],
+        }
+        logger.info(f"[ROS planned] Clearance waypoint for {robot_id}: {clearance_pos}")
+        clearance_result = bridge.plan_and_execute(
+            position=clearance_pos,
+            orientation=None,  # no orientation needed at clearance height — constraint causes slow planning
+            planning_time=3.0,
+            robot_id=robot_id,
+            max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
+            max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
+        )
+        if not clearance_result or not clearance_result.get("success"):
+            cl_err = (
+                clearance_result.get("error", "Unknown") if clearance_result else "No response"
+            )
+            logger.warning(
+                f"[ROS planned] Clearance waypoint failed ({cl_err}) — proceeding to pre-grasp"
+            )
+        else:
+            time.sleep(0.2)
+
+    # Step 2: Pre-grasp hover.
     # Omit orientation constraint for non-top approaches: constraining orientation at
     # pre-grasp shrinks the IK solution space and causes OMPL to fail at borderline
     # reach distances (side/front poses near the edge of the workspace).
-    # Orientation is enforced at Step 2 (Cartesian descent) where it matters.
-    _pre_grasp_orientation = grasp_orientation if preferred_approach == "top" else None
+    # Orientation is enforced at Step 3 (Cartesian descent) where it matters.
     logger.info(f"Moving to pre-grasp position for {robot_id}")
     pre_result = bridge.plan_and_execute(
         position=pre_grasp_pos,
@@ -567,7 +598,8 @@ def _grasp_via_ros_planned(
         logger.warning(f"Pre-grasp move failed ({pre_err}), attempting direct grasp")
 
     # Brief pause so /joint_states has the settled pose before MoveIt samples start state.
-    time.sleep(0.3)
+    # ROSJointStatePublisher runs at 50Hz (20ms/tick); 0.1s = 5 ticks — sufficient margin.
+    time.sleep(0.1)
 
     # Step 2: Cartesian descent to grasp position.
     # plan_cartesian_descent (not plan_and_execute) is required here: it constrains
@@ -599,7 +631,7 @@ def _grasp_via_ros_planned(
         object_id=object_id,
         planned_position=grasp_pos,
         orientation=grasp_orientation,
-        tcp_y_offset=0.0,
+        tcp_y_offset=GRASP_TCP_OFFSET,
         world_state=world_state,
     )
     if not gripper_ok:
@@ -726,8 +758,8 @@ def _grasp_via_ros_position_only(
         )
         clearance_result = bridge.plan_and_execute(
             position=clearance_pos,
-            orientation=top_down_orientation,
-            planning_time=10.0,
+            orientation=None,  # no orientation needed at clearance height — constraint causes slow planning
+            planning_time=3.0,
             robot_id=robot_id,
             max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
             max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
@@ -750,6 +782,8 @@ def _grasp_via_ros_position_only(
     #       supply approach-aligned orientations, making this heuristic unnecessary.
     #       The top-down constraint shrinks the IK solution space at borderline reach
     #       distances and can cause OMPL to fail before planning even starts.
+    # constrain_joint4=True: ensures joint_4 arrives in the short-arc configuration so
+    # the subsequent Cartesian descent's ±90° joint_4 window includes valid grasp configs.
     logger.info(f"Moving to pre-grasp position for {robot_id}")
     pre_result = bridge.plan_and_execute(
         position=pre_grasp_position,
@@ -758,6 +792,7 @@ def _grasp_via_ros_position_only(
         robot_id=robot_id,
         max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
         max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
+        constrain_joint4=True,
     )
     if not pre_result or not pre_result.get("success"):
         error_msg = pre_result.get("error", "Unknown") if pre_result else "No response"
@@ -771,7 +806,8 @@ def _grasp_via_ros_position_only(
         return err, False
 
     # Brief pause so /joint_states has the settled pose before MoveIt samples start state.
-    time.sleep(0.3)
+    # ROSJointStatePublisher runs at 50Hz (20ms/tick); 0.1s = 5 ticks — sufficient margin.
+    time.sleep(0.1)
 
     # Step 3: Straight-line Cartesian descent to grasp position
     logger.info(
@@ -1565,8 +1601,8 @@ def _grasp_via_vgn_with_ros(
         logger.info(f"[VGN+ROS] Clearance waypoint for {robot_id}: {clearance_pos}")
         clearance_result = bridge.plan_and_execute(
             position=clearance_pos,
-            orientation=orientation,
-            planning_time=10.0,
+            orientation=None,  # no orientation needed at clearance height — constraint causes slow planning
+            planning_time=3.0,
             robot_id=robot_id,
             max_velocity_scaling=PREGRASP_VELOCITY_SCALING,
             max_acceleration_scaling=PREGRASP_ACCELERATION_SCALING,
@@ -1626,8 +1662,9 @@ def _grasp_via_vgn_with_ros(
         )
         return None
 
-    # 8. Settle pause (let /joint_states stabilise before MoveIt samples start state)
-    time.sleep(0.3)
+    # 8. Settle pause (let /joint_states stabilise before MoveIt samples start state).
+    # ROSJointStatePublisher runs at 50Hz (20ms/tick); 0.15s = 7 ticks — sufficient margin.
+    time.sleep(0.15)
 
     # 9. Cartesian descent to grasp position
     logger.info(f"[VGN+ROS] Cartesian descent for {robot_id}: {grasp_pos}")
@@ -1656,7 +1693,7 @@ def _grasp_via_vgn_with_ros(
         object_id=object_id,
         planned_position=grasp_pos,
         orientation=orientation,
-        tcp_y_offset=0.0,
+        tcp_y_offset=GRASP_TCP_OFFSET,
         world_state=world_state,
     )
     if not gripper_ok:
@@ -1930,7 +1967,8 @@ def grasp_object(
                     object_dimensions = world_state.get_object_dimensions(object_id)
                     robot_state = world_state.get_robot_state(robot_id)
 
-                    # PATH 1: VGN pose + MoveIt execution (highest priority when both enabled)
+                    # PATH 1: VGN pose + MoveIt execution (highest priority when both enabled).
+                    # VGN provides 6-DOF grasp orientation — required for angled targets.
                     if _vgn_enabled:
                         assert bridge is not None
                         result = _grasp_via_vgn_with_ros(
@@ -2371,7 +2409,10 @@ def receive_handoff(
                 )
 
             # Let joint states settle before MoveIt samples start state.
-            _time.sleep(0.3)
+            # Locked-orientation Cartesian moves are more sensitive to start-state
+            # accuracy than free-space moves — needs extra margin vs the 0.1s used
+            # in grasp paths.
+            _time.sleep(0.2)
 
             # Step B: Cartesian move to final position with orientation locked.
             approach_result = bridge.plan_cartesian_move(
@@ -2422,6 +2463,13 @@ def receive_handoff(
                 f"receive_handoff: gripper close failed — {gripper_result.error}",
                 ["Check gripper state", "Verify object is within gripper reach"],
             )
+
+        # Wait for GripperContactSensor to register secure contact before returning.
+        # Without this, group 3 completes and Robot1 releases before fingers close.
+        # GripperContactSensor needs 100ms min contact + 167ms force average ≈ 270ms;
+        # 0.5s gives extra margin for side-grasp contact which is less stable than top-down.
+        import time as _time_grip
+        _time_grip.sleep(0.5)
 
         # ── 8. Signal source robot to release immediately ─────────────────────
         if release_signal:

@@ -441,7 +441,7 @@ class KnowledgeGraph:
             return
 
         fig, ax = plt.subplots(figsize=_figsize)
-        ax.set_title(title, fontsize=14, fontweight="bold")
+        ax.set_title(title, fontsize=16, fontweight="bold")
         ax.axis("off")
 
         try:
@@ -456,7 +456,7 @@ class KnowledgeGraph:
 
         nx.draw_networkx_nodes(graph_copy, pos, node_color=node_colors,
                                node_size=1200, ax=ax, alpha=0.9)
-        nx.draw_networkx_labels(graph_copy, pos, font_size=7,
+        nx.draw_networkx_labels(graph_copy, pos, font_size=14,
                                 font_weight="bold", ax=ax)
 
         seen_types: set = set()
@@ -477,12 +477,12 @@ class KnowledgeGraph:
         ]
         for ntype, color in _NODE_COLORS.items():
             handles.append(mpatches.Patch(color=color, label=f"[{ntype}]"))
-        ax.legend(handles=handles, loc="lower left", fontsize=7,
+        ax.legend(handles=handles, loc="lower left", fontsize=12,
                   framealpha=0.8, ncol=2)
 
         stats = (f"{graph_copy.number_of_nodes()} nodes  "
                  f"{graph_copy.number_of_edges()} edges")
-        fig.text(0.5, 0.01, stats, ha="center", fontsize=8, color="grey")
+        fig.text(0.5, 0.01, stats, ha="center", fontsize=12, color="grey")
 
         plt.tight_layout()
         plt.savefig(path, dpi=_dpi, bbox_inches="tight")
@@ -510,7 +510,7 @@ class KnowledgeGraph:
         suffix = f"_{label}" if label else ""
         base = os.path.join(out_dir, f"kg_{ts}{suffix}")
         try:
-            self.save_png(f"{base}.png", title=f"KG snapshot {label or ts}")
+            self.save_png(f"{base}.png", title=f"Knowledge Graph snapshot {label or ts}")
         except Exception as exc:
             logger.warning(f"auto_save_png failed: {exc}")
         try:

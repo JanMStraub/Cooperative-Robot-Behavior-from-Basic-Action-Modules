@@ -549,7 +549,7 @@ def place_object(
 
             # Brief settle pause so /joint_states reflects the hover pose before
             # MoveIt samples the start state for the descent plan.
-            time.sleep(0.3)
+            time.sleep(0.1)
 
             # Step 2: Descend to place height using free-space planning.
             # plan_cartesian_descent is NOT used here: MoveIt's collision model does
@@ -571,13 +571,12 @@ def place_object(
                     f"place_object: descent failed ({err}), releasing at current height"
                 )
 
-            # Step 3: Open gripper and wait long enough for Unity to fully process
-            # the detach before the ascent trajectory is published.  The gripper
-            # command is fire-and-forget (ROS topic publish) so we must sleep to
-            # let ROSGripperSubscriber detach the object before we move away.
+            # Step 3: Open gripper and wait for Unity to detach the object before
+            # the ascent trajectory is published. The gripper command is a fire-and-forget
+            # ROS topic publish; 0.5s is well above the ~50ms ROS topic round-trip.
             logger.info(f"place_object: releasing object for {robot_id}")
             bridge.control_gripper(1.0, robot_id=robot_id)
-            time.sleep(1.0)
+            time.sleep(0.5)
 
             # Step 4: Ascend back to hover height to clear the placed object.
             logger.info(f"place_object: ascending after place for {robot_id}")
