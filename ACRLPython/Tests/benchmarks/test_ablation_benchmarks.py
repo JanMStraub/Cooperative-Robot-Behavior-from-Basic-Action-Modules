@@ -212,7 +212,7 @@ def test_b10_live_dispatches_to_send(monkeypatch):
     runner = BenchmarkRunner()
     calls = []
 
-    def patched_send(payload, robot_id, cfg):
+    def patched_send(payload, robot_id, cfg, flags=None):
         calls.append(payload)
         return {"success": True, "ops_executed": 2, "ops_succeeded": 2, "reflexion_recoveries": 1, "results": []}
 
@@ -236,7 +236,7 @@ def test_b11_live_dispatches_to_send(monkeypatch):
 
     calls = []
 
-    def patched_send(payload, robot_id, cfg):
+    def patched_send(payload, robot_id, cfg, flags=None):
         calls.append(payload)
         return {"success": True, "ops_executed": 3, "ops_succeeded": 3, "results": []}
 

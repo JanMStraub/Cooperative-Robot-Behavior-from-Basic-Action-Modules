@@ -126,6 +126,7 @@ class SequenceQueryHandler(SingletonBase):
         camera_id: str = DEFAULT_CAMERA_ID,
         auto_execute: bool = True,
         timeout: float = 30.0,
+        flags_json: str = "",
     ) -> Dict[str, Any]:
         """
         Parse and execute a command sequence.
@@ -136,16 +137,38 @@ class SequenceQueryHandler(SingletonBase):
         to the executor, bypassing the LLM entirely.  This is used by test
         scripts (tools/send_command.py) to drive Unity without LLM latency.
 
+        When flags_json is non-empty, feature overrides are applied for the
+        duration of this sequence and restored afterwards via FeatureFlagContext.
+
         Args:
             command_text: Natural language command, or "EXEC:<json>" for direct execution.
             robot_id: Default robot ID
             camera_id: Camera ID for perception operations (depth detection)
             auto_execute: Whether to automatically execute parsed operations
             timeout: Timeout per command in seconds (default 180s matches executor default)
+            flags_json: JSON string from BenchmarkFeatureFlags.to_json(); "" = no overrides.
 
         Returns:
             Execution result dictionary
         """
+        from benchmarks.feature_flags import BenchmarkFeatureFlags
+        from servers.feature_flag_context import FeatureFlagContext
+
+        flags = BenchmarkFeatureFlags.from_json(flags_json)
+        with FeatureFlagContext(flags):
+            return self._execute_sequence_inner(
+                command_text, robot_id, camera_id, auto_execute, timeout
+            )
+
+    def _execute_sequence_inner(
+        self,
+        command_text: str,
+        robot_id: str = "Robot1",
+        camera_id: str = DEFAULT_CAMERA_ID,
+        auto_execute: bool = True,
+        timeout: float = 30.0,
+    ) -> Dict[str, Any]:
+        """Inner implementation of execute_sequence (no flag handling)."""
         if not self._parser or not self._executor:
             return {"success": False, "error": "SequenceQueryHandler not initialized"}
 
@@ -390,6 +413,17 @@ class SequenceServer(TCPServerBase):
                     break
                 auto_execute = auto_execute_bytes[0] == 1
 
+                # Read optional feature-flag overrides (benchmark runner only).
+                # flags_len=0 or missing (Unity / legacy clients) → no overrides.
+                flags_json = ""
+                flags_len_bytes = self._recv_exact(client, 4)
+                if flags_len_bytes:
+                    flags_len = struct.unpack("<I", flags_len_bytes)[0]
+                    if flags_len > 0:
+                        flag_bytes = self._recv_exact(client, flags_len)
+                        if flag_bytes:
+                            flags_json = flag_bytes.decode("utf-8")
+
                 logger.info(
                     f"Received sequence query (id={request_id}): {command_text} (camera={camera_id}, auto_execute={auto_execute})"
                 )
@@ -397,7 +431,8 @@ class SequenceServer(TCPServerBase):
                 # Execute the sequence
                 handler = SequenceQueryHandler()
                 result = handler.execute_sequence(
-                    command_text, robot_id, camera_id, auto_execute
+                    command_text, robot_id, camera_id, auto_execute,
+                    flags_json=flags_json,
                 )
 
                 # Send response

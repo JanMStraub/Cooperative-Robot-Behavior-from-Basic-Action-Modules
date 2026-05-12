@@ -161,9 +161,7 @@ default:
         fetch('/api/command', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                command: { type: 'estop', action: 'halt_all' }
-            })
+            body: JSON.stringify({ type: 'estop', action: 'halt_all' })
         }).catch(err => this.ui.logToConsole(`E-Stop API failed: ${err}`, 'error'));
     }
 

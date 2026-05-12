@@ -126,6 +126,11 @@ def install_mock(profile: str = "always_succeed") -> Callable:
     return original
 
 
+def reset_counts() -> None:
+    """Reset per-op call counters for the first_fail_nav profile between tasks."""
+    _call_counts.clear()
+
+
 def restore_mock(original: Callable) -> None:
     """
     Restore get_operation_by_name to original implementation.

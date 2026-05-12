@@ -20,6 +20,8 @@ class StepResult:
     error_code: Optional[str]
     error_message: Optional[str]
     retry_count: int = 0
+    robot_id: Optional[str] = None
+    parallel_group_id: Optional[int] = None
 
 
 @dataclasses.dataclass
@@ -68,6 +70,10 @@ class BenchmarkResult:
     reflexion_recoveries: int = 0
     negotiation_rounds: int = 0
     ablation: Optional[AblationMetrics] = None
+    feature_flags: dict = dataclasses.field(default_factory=dict)
+    parsed_plan: List[str] = dataclasses.field(default_factory=list)
+    per_op_stats: dict = dataclasses.field(default_factory=dict)
+    execution_mode: str = "offline"
 
 
 def make_run_id() -> str:

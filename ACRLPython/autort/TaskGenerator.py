@@ -187,7 +187,7 @@ Please fix these issues and generate a valid task following the parameter schema
                 "messages": messages,
                 "temperature": self.temperature,
                 # Single task JSON - 4096 tokens covers verbose multi-step tasks.
-                "max_tokens": 4096,
+                "max_tokens": 4096 + (LLM_THINKING_BUDGET if LLM_THINKING_ENABLED else 0),
             }
             # Structured output forces valid JSON at the inference layer.
             # Set USE_STRUCTURED_OUTPUT=false for models that don't support response_format.
@@ -248,8 +248,7 @@ Please fix these issues and generate a valid task following the parameter schema
         collaborative_hint = ""
         if include_collaborative and len(robot_ids) > 1:
             collaborative_hint = f"""
-MULTI-ROBOT COORDINATION:
-You have {len(robot_ids)} robots: {robot_ids}
+MULTI-ROBOT COORDINATION: You have {len(robot_ids)} robots: {robot_ids}
 {robot_layout}
 
 Collaborative patterns:
@@ -293,112 +292,29 @@ DETECTED OBJECTS:
 AVAILABLE ROBOTS:
 {robot_ids}{spatial_hints}
 
-AVAILABLE CAMERAS:
-- {DEFAULT_CAMERA_ID}: Stereo camera for depth perception and object detection
-- MainCamera: Main camera for scene analysis
-
 AVAILABLE OPERATIONS:
 {operations_str}
 
 {collaborative_hint}
 
 {previous_task_section}
-TASK:
-Generate {num_tasks} diverse robotic tasks in JSON format.
+Generate {num_tasks} diverse robotic tasks as a JSON array. Each task:
+{{
+  "task_id": "task_001",
+  "description": "one sentence",
+  "operations": [{{"type": "op_name", "robot_id": "RobotN", "parameters": {{}}}}],
+  "required_robots": ["RobotN"],
+  "estimated_complexity": 1-10,
+  "reasoning": "one sentence"
+}}
 
-OUTPUT FORMAT (strict JSON array):
-[
-  {{
-    "task_id": "task_001",
-    "description": "Pick up red cube from workspace",
-    "operations": [
-      {{"type": "detect_object_stereo", "robot_id": "Robot1", "parameters": {{"color": "red", "selection": "closest", "camera_id": "{DEFAULT_CAMERA_ID}"}}}},
-      {{"type": "grasp_object", "robot_id": "Robot1", "parameters": {{"object_id": "red_cube"}}}}
-    ],
-    "required_robots": ["Robot1"],
-    "estimated_complexity": 4,
-    "reasoning": "Detect red objects, select closest, then grasp it"
-  }},
-  {{
-    "task_id": "task_002",
-    "description": "Move robot to central position",
-    "operations": [
-      {{"type": "move_to_coordinate", "robot_id": "Robot1", "parameters": {{"x": 0.0, "y": 0.2, "z": 0.0}}}}
-    ],
-    "required_robots": ["Robot1"],
-    "estimated_complexity": 2,
-    "reasoning": "Simple navigation to workspace center"
-  }},
-  {{
-    "task_id": "task_003",
-    "description": "Detect all objects and analyze scene",
-    "operations": [
-      {{"type": "detect_object_stereo", "robot_id": "Robot1", "parameters": {{"color": null, "selection": "all", "camera_id": "{DEFAULT_CAMERA_ID}"}}}}
-    ],
-    "required_robots": ["Robot1"],
-    "estimated_complexity": 2,
-    "reasoning": "Detection only, no filtering - returns all detected objects"
-  }}
-]
-
-CRITICAL PARAMETER RULES:
-1. detect_object_stereo parameters:
-   - color: Must be "red", "green", "blue", "yellow", "purple", "orange", "cyan", "magenta", or null (for all colors)
-   - selection: MUST be "left", "right", "closest", "first", or "all" (NOT object names!)
-   - camera_id: Must be "{DEFAULT_CAMERA_ID}"
-   - Example: {{"color": "red", "selection": "closest"}} finds the closest red object
-   - Example: {{"color": null, "selection": "all"}} finds all objects regardless of color
-
-2. grasp_object parameters:
-   - object_id: Full object name from DETECTED OBJECTS (e.g., "red_cube", "blue_cube", "field_a")
-   - approach: Optional, one of "top", "front", "side" (default: "top")
-
-3. move_to_coordinate parameters:
-   - x, y, z: Numeric coordinates in workspace bounds
-   - NOT "target_position" - use separate x, y, z parameters
-
-4. Camera IDs: ONLY "{DEFAULT_CAMERA_ID}" or "MainCamera" - no other camera IDs exist
-
-GENERAL RULES:
-5. ONLY use objects from DETECTED OBJECTS list above
-6. ONLY use operations from AVAILABLE OPERATIONS list above
-7. ROBOT ASSIGNMENT EFFICIENCY: Assign objects to their nearest robot based on X coordinate
-   - Objects at X < -0.1 should be handled by Robot1 (left robot)
-   - Objects at X > 0.1 should be handled by Robot2 (right robot)
-   - Objects at X near 0.0 can be handled by either robot
-8. Complexity: 1 (trivial) to 10 (very complex)
-9. Return compact JSON with no extra whitespace, no markdown, no reasoning
-10. CRITICAL: Every operation MUST have a valid "robot_id" field (never null/None)
-11. Every robot_id in operations must appear in required_robots
-12. CRITICAL: Each operation MUST have a "parameters" field (use empty dict {{{{}}}} if no parameters needed)
-13. Only use parameter names and values shown in AVAILABLE OPERATIONS schemas
-14. Pay close attention to valid_values constraints in parameter schemas - violating these will cause operation failures
-
-COORDINATE GUIDELINES (ROS base_link frame, robot-local, Z-up):
-- X: forward from robot base, range -0.5 to 0.5
-- Y: left from robot base, range -0.5 to 0.5
-- Z: height above robot base, range 0.0 to 0.6
-- Typical reachable positions: x in [-0.4, 0.4], y in [-0.3, 0.3], z in [0.05, 0.5]
-
-COMMON TASK PATTERNS:
-1. Detection + Grasp:
-   - detect_object_stereo(color="red", selection="closest") → returns position
-   - grasp_object(object_id="red_cube")
-
-2. Navigation + Detection:
-   - move_to_coordinate(x=0.2, y=0.0, z=0.3)
-   - detect_object_stereo(color=null, selection="all")
-
-3. Multi-step manipulation:
-   - detect_object_stereo(color="blue", selection="first")
-   - grasp_object(object_id="blue_cube")
-   - move_to_coordinate(x=0.0, y=0.2, z=0.3)
-   - release_object()
-
-Output the JSON array immediately without any preamble or explanatory text.
-
-Generate tasks now:
-"""
+Rules:
+Only use objects from DETECTED OBJECTS and operations from AVAILABLE OPERATIONS
+Every operation needs robot_id and parameters ({{}} if none)
+detect_object_stereo: color must be a named color or null; selection must be "left"/"right"/"closest"/"first"/"all"; camera_id="{DEFAULT_CAMERA_ID}"
+Assign objects to nearest robot (X<-0.1: Robot1, X>0.1: Robot2, center: either)
+Every robot_id in operations must appear in required_robots
+Output compact JSON array only, no markdown"""
 
     def _parse_llm_response(self, raw_response: str) -> List[ProposedTask]:
         """

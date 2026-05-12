@@ -135,22 +135,13 @@ class RobotConstitution:
         """
         rules_str = "\n".join(f"- {rule}" for rule in self.semantic_rules)
 
-        prompt = f"""TASK DESCRIPTION:
-{task.description}
+        ops_summary = ", ".join(op.type for op in task.operations)
+        prompt = f"""Task: "{task.description}"
+Operations: {ops_summary}
 
-TASK OPERATIONS:
-{json.dumps([op.model_dump() for op in task.operations], indent=2)}
+Safety rules: {rules_str}
 
-SAFETY RULES:
-{rules_str}
-
-Does this task violate any safety rule?
-
-{{
-  "violates": true or false,
-  "rule_violated": "name of rule" or null,
-  "reason": "brief explanation"
-}}"""
+Does this task violate any rule? JSON: {{"violates":bool,"rule_violated":null,"reason":""}}"""
 
         try:
             response = self.llm_client.chat.completions.create(

@@ -197,7 +197,7 @@ namespace PythonCommunication.Core
                 tempClient.Client.Blocking = true;
 
                 tempStream = tempClient.GetStream();
-                tempStream.ReadTimeout = 30000; // 30 seconds
+                tempStream.ReadTimeout = System.Threading.Timeout.Infinite; // subclasses guard reads with DataAvailable check
 
                 // Atomically update connection state
                 lock (_connectionLock)

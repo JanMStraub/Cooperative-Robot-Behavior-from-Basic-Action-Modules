@@ -342,6 +342,114 @@ async def api_get_benchmarks():
         return {"success": False, "error": str(e)}
 
 
+@app.get("/api/benchmarks/aggregate")
+async def api_get_benchmarks_aggregate():
+    """Aggregate benchmark results grouped by benchmark_id for cross-run analysis."""
+    import statistics
+    from collections import defaultdict
+
+    try:
+        groups: dict = defaultdict(list)
+        if os.path.exists(BENCHMARK_RESULTS_DIR):
+            for file in os.listdir(BENCHMARK_RESULTS_DIR):
+                if file.startswith("benchmark") and file.endswith(".json"):
+                    file_path = os.path.join(BENCHMARK_RESULTS_DIR, file)
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    bid = data.get("benchmark_id")
+                    if bid is not None:
+                        groups[bid].append(data)
+
+        result = {}
+        for bid, runs in sorted(groups.items()):
+            success_rates = [r.get("success_rate", 0.0) for r in runs]
+            durations = [r.get("total_duration_ms", 0.0) for r in runs]
+            pass_count = sum(1 for r in runs if r.get("success"))
+
+            entry: Dict[str, Any] = {
+                "benchmark_id": bid,
+                "benchmark_name": runs[0].get("benchmark_name", f"B{bid}"),
+                "run_count": len(runs),
+                "pass_count": pass_count,
+                "mean_success_rate": statistics.mean(success_rates),
+                "std_success_rate": statistics.stdev(success_rates) if len(success_rates) > 1 else 0.0,
+                "mean_duration_ms": statistics.mean(durations),
+                "std_duration_ms": statistics.stdev(durations) if len(durations) > 1 else 0.0,
+            }
+
+            # Ablation metrics — split by condition (enabled/disabled)
+            ablation_runs = [r for r in runs if r.get("ablation")]
+            if ablation_runs:
+                by_condition: dict = defaultdict(list)
+                for r in ablation_runs:
+                    ab = r["ablation"]
+                    by_condition[ab.get("condition", "unknown")].append(ab)
+                entry["ablation"] = {
+                    cond: {
+                        "mean_success_rate": statistics.mean(a.get("success_rate", 0.0) for a in abs_list),
+                        "mean_hallucinated_ops": statistics.mean(a.get("hallucinated_ops", 0) for a in abs_list),
+                        "mean_reflexion_recoveries": statistics.mean(a.get("reflexion_recoveries", 0) for a in abs_list),
+                        "mean_negotiation_rounds": statistics.mean(a.get("negotiation_rounds", 0) for a in abs_list),
+                        "run_count": len(abs_list),
+                    }
+                    for cond, abs_list in by_condition.items()
+                }
+
+            # Per-operation stats across all steps in all runs
+            op_buckets = defaultdict(lambda: {"durations": [], "fails": 0})
+            robot_buckets: dict = defaultdict(lambda: {"total_duration_ms": 0.0, "step_count": 0})
+            for r in runs:
+                for s in r.get("steps", []):
+                    op = s.get("operation", "unknown")
+                    dur = s.get("duration_ms", 0.0)
+                    op_buckets[op]["durations"].append(dur)  # type: ignore[union-attr]
+                    if not s.get("success"):
+                        op_buckets[op]["fails"] += 1
+                    robot_id = s.get("robot_id")
+                    if robot_id:
+                        robot_buckets[robot_id]["total_duration_ms"] += dur
+                        robot_buckets[robot_id]["step_count"] += 1
+            entry["op_stats"] = {
+                op: {
+                    "mean_duration_ms": statistics.mean(v["durations"]),
+                    "fail_count": v["fails"],
+                    "call_count": len(v["durations"]),
+                }
+                for op, v in op_buckets.items()
+            }
+            entry["per_robot_stats"] = dict(robot_buckets)
+
+            plan_lengths = [len(r.get("parsed_plan", [])) for r in runs]
+            entry["mean_plan_length"] = statistics.mean(plan_lengths) if plan_lengths else 0.0
+
+            result[str(bid)] = entry
+
+        return {"success": True, "data": result}
+    except Exception as e:
+        logger.error(f"Error aggregating benchmarks: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/api/benchmarks/export/{filename}")
+async def api_export_benchmark(filename: str):
+    """Download a benchmark JSON result file as an attachment."""
+    try:
+        from fastapi.responses import FileResponse
+
+        clean_name = os.path.basename(filename)
+        file_path = os.path.join(BENCHMARK_RESULTS_DIR, clean_name)
+        if not os.path.exists(file_path):
+            return {"success": False, "error": "File not found"}
+        return FileResponse(
+            file_path,
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="{clean_name}"'},
+        )
+    except Exception as e:
+        logger.error(f"Error exporting benchmark {filename}: {e}")
+        return {"success": False, "error": str(e)}
+
+
 @app.get("/api/benchmarks/{filename}")
 async def api_get_benchmark_detail(filename: str):
     """Get full details of a specific benchmark run."""
@@ -527,6 +635,19 @@ async def api_send_command(command_data: Dict[str, Any]):
     """Send a command directly to the CommandBroadcaster or AutoRT"""
     try:
         cmd_type = command_data.get("type", "direct")
+
+        if cmd_type == "estop":
+            from core.Imports import get_sequence_executor
+            from servers.AutoRTIntegration import AutoRTHandler
+            try:
+                get_sequence_executor().abort()
+            except Exception:
+                pass
+            try:
+                AutoRTHandler.get_instance().stop_loop()
+            except Exception:
+                pass
+            return {"success": True, "message": "E-Stop: sequence aborted, AutoRT stopped"}
 
         # Determine if it's an AutoRT or Direct command
         if cmd_type == "autort":

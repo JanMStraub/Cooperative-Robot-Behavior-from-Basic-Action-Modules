@@ -111,14 +111,17 @@ class _PromptBuilder:
         anti_pattern_block = (
             f"\n        {anti_pattern_section}\n" if anti_pattern_section else ""
         )
-        spatial_block = f"\n        {spatial_section}\n" if spatial_section else ""
+        spatial_block = (
+            f"\n        {spatial_section}\n"
+            "        NOTE: Spatial context is reference only. Use ONLY operations from Available Operations above.\n"
+            if spatial_section else ""
+        )
         reflection_block = (
             f"\n        === REFLECTION ===\n        {hint}\n" if hint else ""
         )
 
         return f"""
-        Available Operations:
-        {available_ops}
+        Available Operations: {available_ops}
 
         Command to parse: "{command_text}"
         Default robot_id: "{robot_id}"
@@ -133,22 +136,21 @@ class _PromptBuilder:
         5. Operations in LATER parallel_groups wait for ALL operations in previous groups to complete
         6. ONLY use "plan" format (with "reasoning" + per-operation "parallel_group") for multi-robot tasks
         7. Single-robot tasks always use "commands" format
-        8. ⚠ VARIABLE DEPENDENCY LAW (never violate): if operation B reads $var captured by operation A,
-           B MUST have a STRICTLY HIGHER parallel_group number than A.
-           detect_object_stereo capture_var="x" → grasp_object "$x.color" MUST be in the NEXT group.
-           NEVER put a capture and its consumer in the same parallel_group.
+        8. VARIABLE DEPENDENCY LAW (never violate): if operation B reads $var captured by operation A, B MUST have a STRICTLY HIGHER parallel_group number than A. 
+        detect_object_stereo capture_var="x" -> grasp_object "$x.color" MUST be in the NEXT group. 
+        NEVER put a capture and its consumer in the same parallel_group.
 
         === HANDOFF RULE ===
 
-        For robot-to-robot handoffs use these exact explicit steps — no composite operations:
+        For robot-to-robot handoffs use these exact explicit steps (no composite operations):
         1. Robot1: detect_object_stereo (capture_var="target")
-        2. Robot1: grasp_object(object_id="$target.color")  ← separate group from step 1 (variable dependency)
+        2. Robot1: grasp_object(object_id="$target.color") <- separate group from step 1 (variable dependency)
         3. Robot1: return_to_start_position (gives deterministic IK starting config)
-        4. Robot1: move_to_coordinate to ({_HANDOFF_X:.2f}, {_HANDOFF_Y:.2f}, {_HANDOFF_Z:.2f}) — always these exact coordinates, NO approach_offset (approach_offset lifts the arm away from the handoff height and must not be used here); step 4 MUST be in its own parallel_group
-        5. Robot1: adjust_end_effector_orientation(pitch=0, yaw=0, roll=0) — locks wrist, prevents joint 5/6 variance across runs; step 5 MUST be in a strictly later parallel_group than step 4 (arm must finish moving before wrist is locked)
-        6. Robot1: signal("r1_at_handoff") AND Robot2: wait_for_signal("r1_at_handoff") — SAME parallel_group
-        7. Robot2: detect_object_stereo(color=<SAME color as step 1>, capture_var="handoff_target") — object has MOVED with Robot1, must re-detect
-        8. Robot2: receive_handoff(object_id="$handoff_target.color", source_robot_id="Robot1") — autonomously orients, moves to approach, closes gripper
+        4. Robot1: move_to_coordinate to ({_HANDOFF_X:.2f}, {_HANDOFF_Y:.2f}, {_HANDOFF_Z:.2f}) -> always these exact coordinates, NO approach_offset (approach_offset lifts the arm away from the handoff height and must not be used here); step 4 MUST be in its own parallel_group
+        5. Robot1: adjust_end_effector_orientation(pitch=0, yaw=0, roll=0): locks wrist, prevents joint 5/6 variance across runs; step 5 MUST be in a strictly later parallel_group than step 4 (arm must finish moving before wrist is locked)
+        6. Robot1: signal("r1_at_handoff") AND Robot2: wait_for_signal("r1_at_handoff") -> SAME parallel_group
+        7. Robot2: detect_object_stereo(color=<SAME color as step 1>, capture_var="handoff_target"): object has MOVED with Robot1, must re-detect
+        8. Robot2: receive_handoff(object_id="$handoff_target.color", source_robot_id="Robot1"): autonomously orients, moves to approach, closes gripper
         9. Robot1: release_object
 
         NEVER use grasp_object for the receiving robot (causes gripper collision); use receive_handoff instead.
@@ -162,29 +164,28 @@ class _PromptBuilder:
 
         === SYNCHRONIZATION PRIMITIVES ===
 
-        - signal(event_name): Emit named event for other robots to wait on
-        * Example: {{"operation": "signal", "params": {{"event_name": "cube_gripped"}}}}
+        signal(event_name): Emit named event for other robots to wait on
+        Example: {{"operation": "signal", "params": {{"event_name": "cube_gripped"}}}}
 
-        - wait_for_signal(event_name, timeout_ms): Wait for event (default timeout: 30000ms)
-        * Example: {{"operation": "wait_for_signal", "params": {{"event_name": "cube_gripped"}}}}
+        wait_for_signal(event_name, timeout_ms): Wait for event (default timeout: 30000ms) 
+        Example: {{"operation": "wait_for_signal", "params": {{"event_name": "cube_gripped"}}}}
 
-        - wait(duration_ms): Simple time-based pause
-        * Example: {{"operation": "wait", "params": {{"duration_ms": 500}}}}
+        wait(duration_ms): Simple time-based pause
+        Example: {{"operation": "wait", "params": {{"duration_ms": 500}}}}
 
         === NAVIGATION RULE (CRITICAL) ===
 
         When the task involves moving to, navigating to, or approaching an object WITHOUT explicit pick/grab/grasp language:
-        - Use ONLY move_to_coordinate (do NOT add control_gripper or grasp_object)
-        - "detect X and move to it" = detect_object_stereo + move_to_coordinate (nothing else)
-        - "navigate to X" = move_to_coordinate only
-        - "approach X" = move_to_coordinate only
-        - The gripper stays in its current state (do NOT open or close it)
-        - ALWAYS set approach_offset=0.10 when navigating to a detected object (the object Y is at table level; without this offset the gripper drags along the table surface; valid range: 0.0 to 0.10)
+        Use ONLY move_to_coordinate (do NOT add control_gripper or grasp_object)
+        "detect X and move to it" = detect_object_stereo + move_to_coordinate (nothing else)
+        "navigate to X" = move_to_coordinate only
+        "approach X" = move_to_coordinate only
+        The gripper stays in its current state (do NOT open or close it)
+        ALWAYS set approach_offset=0.10 when navigating to a detected object (the object Y is at table level; without this offset the gripper drags along the table surface; valid range: 0.0 to 0.10)
 
         Example for "detect the blue cube and move to it":
         {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "blue"}}, "capture_var": "target"}}
-        {{"operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": "$target.x", "y": "$target.y", "z": "$target.z", "approach_offset": 0.10}}}}
-        ← NO control_gripper, NO grasp_object
+        {{"operation": "move_to_coordinate", "params": {{"robot_id": "Robot1", "x": "$target.x", "y": "$target.y", "z": "$target.z", "approach_offset": 0.10}}}} <- NO control_gripper, NO grasp_object
         approach_offset=0.10 lifts gripper 10 cm above the object centre (ALWAYS include this for navigation to avoid dragging the gripper on the table)
 
         NOTE: receive_handoff is NOT navigation. It is the full receive side of a handoff and must never be replaced with move_to_coordinate.
@@ -192,26 +193,26 @@ class _PromptBuilder:
         === GRASP RULE (CRITICAL) ===
 
         When the task involves picking up, grabbing, or grasping an object:
-        - ALWAYS use grasp_object (NOT move_to_coordinate + control_gripper)
-        - grasp_object handles the full approach, descent, and grip internally (do NOT add a separate move_to_coordinate before it)
-        - With a known object name: {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "blue_cube"}}}}
-        - After detect_object_stereo with capture_var "target": {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "$target.color"}}}}
-        - The object_id field in grasp_object ALWAYS uses ".color" from the detection result (NEVER ".id", ".name", or any other field)
-        - NEVER use grasp_object with a $field variable (detect_field returns coordinates center.x/y/z, NOT an object; $field has NO ".color" property)
-        - NEVER emit grasp_object when the task says "place", "deposit", or "move to and place" (the robot already holds the object; use place_object directly)
-        - Only use control_gripper directly for explicit open/close commands unrelated to picking
-        - Use grasp_object for both single-robot and multi-robot handoff source grasps
-        - NEVER use grasp_object for the receiving robot during a handoff (use receive_handoff instead)
+        ALWAYS use grasp_object (NOT move_to_coordinate + control_gripper)
+        grasp_object handles the full approach, descent, and grip internally (do NOT add a separate move_to_coordinate before it)
+        With a known object name: {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "blue_cube"}}}}
+        After detect_object_stereo with capture_var "target": {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "$target.color"}}}}
+        The object_id field in grasp_object ALWAYS uses ".color" from the detection result (NEVER ".id", ".name", or any other field)
+        NEVER use grasp_object with a $field variable (detect_field returns coordinates center.x/y/z, NOT an object; $field has NO ".color" property)
+        NEVER emit grasp_object when the task says "place", "deposit", or "move to and place" (the robot already holds the object; use place_object directly)
+        Only use control_gripper directly for explicit open/close commands unrelated to picking
+        Use grasp_object for both single-robot and multi-robot handoff source grasps
+        NEVER use grasp_object for the receiving robot during a handoff (use receive_handoff instead)
 
         === PLACE RULE (CRITICAL) ===
 
         When the task involves placing, dropping, depositing, or setting down a held object at a location:
-        - ALWAYS use place_object with the target coordinates (NOT release_object, NOT control_gripper)
-        - place_object performs: hover above target, controlled descent, open gripper, ascend
-        - Example: {{"operation": "place_object", "params": {{"robot_id": "Robot1", "x": -0.18, "y": 0.06, "z": 0.05}}}}
-        - A typical pick-and-place sequence: detect_field → place_object (using $field.x/y/z)
-        - Only use release_object for an explicit immediate gripper-open at the current position (e.g. emergency drop or handoff transfer)
-        - Only use control_gripper with open_gripper=true for explicit open commands unrelated to placing
+        ALWAYS use place_object with the target coordinates (NOT release_object, NOT control_gripper)
+        place_object performs: hover above target, controlled descent, open gripper, ascend
+        Example: {{"operation": "place_object", "params": {{"robot_id": "Robot1", "x": -0.18, "y": 0.06, "z": 0.05}}}}
+        A typical pick-and-place sequence: detect_field -> place_object (using $field.x/y/z)
+        Only use release_object for an explicit immediate gripper-open at the current position (e.g. emergency drop or handoff transfer)
+        Only use control_gripper with open_gripper=true for explicit open commands unrelated to placing
 
         === SINGLE-ROBOT RULES ===
 
@@ -223,21 +224,19 @@ class _PromptBuilder:
         6. Preserve the order of operations as specified in the command
         7. NEVER add return_to_start_position, signal, move_to_coordinate, or adjust_end_effector_orientation after a grasp unless the task explicitly requests them (return_to_start and signalling are ONLY for handoff sequences)
 
-        Simple single-robot grasp example ("grab the blue cube"):
-        {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "blue"}}, "capture_var": "target"}}
-        {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "$target.color"}}}}
+        Simple single-robot grasp example ("grab the blue cube"):         {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "blue"}}, "capture_var": "target"}}         {{"operation": "grasp_object", "params": {{"robot_id": "Robot1", "object_id": "$target.color"}}}}
 
         === VARIABLE PASSING ===
 
         CRITICAL: Variables must be DEFINED before they are USED!
-        - Use "capture_var": "target" on detect_object_stereo to store the result
-        - Use "$target" in LATER operations to reference the stored result
-        - NEVER use a $variable before it has been captured by a previous operation
-        - NEVER hardcode coordinates when a detection operation can provide them
+        Use "capture_var": "target" on detect_object_stereo to store the result
+        Use "$target" in LATER operations to reference the stored result
+        NEVER use a $variable before it has been captured by a previous operation
+        NEVER hardcode coordinates when a detection operation can provide them
 
         detect_object_stereo result fields: x, y, z, color, confidence
-        - Position: "$target.x", "$target.y", "$target.z"
-        - Object identifier for grasp_object: "$target.color"  ← ALWAYS .color, NEVER .id or .name
+        Position: "$target.x", "$target.y", "$target.z"
+        Object identifier for grasp_object: "$target.color"  <- ALWAYS .color, NEVER .id or .name
 
         Full pick-and-place example (detect, grasp, detect field, place):
         {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "blue"}}, "capture_var": "target"}}
@@ -245,7 +244,8 @@ class _PromptBuilder:
         {{"operation": "detect_field", "params": {{"robot_id": "Robot1", "field_label": "G"}}, "capture_var": "field"}}
         {{"operation": "place_object", "params": {{"robot_id": "Robot1", "x": "$field.x", "y": "$field.y", "z": "$field.z"}}}}
         Note: detect_field stores center coordinates directly under the capture variable (use "$field.x" NOT "$field.center.x")
-{spatial_block}{anti_pattern_block}{reflection_block}Output only valid JSON, no explanation, no comments."""
+        
+        {spatial_block}{anti_pattern_block}{reflection_block} Output only valid JSON, no explanation, no comments."""
 
     def get_available_operations_summary(self, command_text: str = "") -> str:
         """
@@ -548,7 +548,7 @@ class CommandParser:
                     f"Reflexion retry: motion layer Stage 1 produced {len(motions)} steps"
                 )
 
-        spatial_section = self._get_spatial_context(robot_id)
+        spatial_section = self._get_spatial_context(robot_id, command_text=command_text)
         prompt = self._prompt_builder.build(
             effective_command,
             robot_id,
@@ -627,16 +627,8 @@ class CommandParser:
         prompt = (
             f'High-level command: "{command_text}"\n'
             f"Default robot: {robot_id}\n\n"
-            "Decompose this command into an ordered list of short, concrete physical "
-            "motion descriptions. Each entry should describe one distinct robot motion "
-            "(e.g. 'move end-effector to target position', 'lower arm to 0.3m height').\n"
-            "IMPORTANT: Do NOT add gripper open/close or grasp motions unless the command "
-            "EXPLICITLY says to pick up, grab, grasp, or grip an object. "
-            "Pure navigation ('move to it', 'navigate to X', 'go to position') must NOT include any gripper step.\n"
-            "Navigation example: 'detect the blue cube and move to it': "
-            '["detect blue cube position", "move end-effector to detected position"]\n'
-            "Pick example: 'grasp the red cube': "
-            '["grasp red cube (full approach and grip)"]\n'
+            "Decompose this command into an ordered list of short, concrete physical motion descriptions. Each entry should describe one distinct robot motion (e.g. 'move end-effector to target position', 'lower arm to 0.3m height').\n"
+            "IMPORTANT: Do NOT add gripper open/close or grasp motions unless the command EXPLICITLY says to pick up, grab, grasp, or grip an object. Pure navigation ('move to it', 'navigate to X', 'go to position') must NOT include any gripper step.\n Navigation example: 'detect the blue cube and move to it': "'["detect blue cube position", "move end-effector to detected position"]\n' "Pick example: 'grasp the red cube': "'["grasp red cube (full approach and grip)"]\n'
             "IMPORTANT: grasp/pick/grab is always a SINGLE step (do NOT split into approach + descend + close).\n"
             "Output a JSON array of strings only. No markdown."
         )
@@ -663,7 +655,7 @@ class CommandParser:
             content = response.json()["choices"][0]["message"]["content"]
             motions = _extract_json_util(content)
             if isinstance(motions, list) and all(isinstance(m, str) for m in motions):
-                logger.debug(f"Motion decomposition: {motions}")
+                logger.info(f"Motion decomposition: {motions}")
                 return motions
             logger.warning(
                 f"Motion decomposition returned unexpected format: {content[:200]}"
@@ -718,7 +710,7 @@ class CommandParser:
             Parsed command structure
         """
         # Build prompt for LLM using _PromptBuilder
-        spatial_section = self._get_spatial_context(robot_id)
+        spatial_section = self._get_spatial_context(robot_id, command_text=command_text)
         prompt = self._prompt_builder.build(
             command_text,
             robot_id,
@@ -881,7 +873,7 @@ class CommandParser:
             raise
 
     def _get_spatial_context(
-        self, robot_id: str, target: Optional[tuple] = None
+        self, robot_id: str, target: Optional[tuple] = None, command_text: str = ""
     ) -> str:
         """
         Retrieve formatted spatial context from the Knowledge Graph for the given robot.
@@ -938,8 +930,11 @@ class CommandParser:
                 for r in nearby:
                     lines.append(f"  - {r['robot_id']} ({r['distance']:.2f}m)")
 
-            # Handoff candidates for each reachable object × every other robot
-            if reachable:
+            _handoff_keywords = ("hand", "pass", "give", "transfer", "handoff")
+            mentions_handoff = any(kw in command_text.lower() for kw in _handoff_keywords)
+            # Handoff candidates — only inject when command mentions handoff intent
+            # to avoid polluting single-robot prompts with multi-robot context noise
+            if reachable and mentions_handoff:
                 all_robots = qe._graph.get_all_nodes(node_type="robot")
                 other_robots = [r for r in all_robots if r != robot_id]
                 for other in other_robots:
@@ -974,7 +969,7 @@ class CommandParser:
         self, command_text: str, robot_id: str, available_ops: str
     ) -> str:
         """Build the prompt for LLM command parsing. Delegates to _PromptBuilder."""
-        spatial_section = self._get_spatial_context(robot_id)
+        spatial_section = self._get_spatial_context(robot_id, command_text=command_text)
         return self._prompt_builder.build(
             command_text,
             robot_id,

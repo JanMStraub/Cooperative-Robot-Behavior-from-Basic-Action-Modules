@@ -19,7 +19,7 @@ Message Type Enumeration:
 - 0x05: STATUS_QUERY - Robot status request
 - 0x06: STATUS_RESPONSE - Robot status data
 - 0x07: STEREO_IMAGE - Stereo camera pair
-- 0x08: SEQUENCE_QUERY - Sqeuencial robot coordination
+- 0x08: SEQUENCE_QUERY - Sequential robot coordination
 
 Message formats (ALL with header):
 1. Image Message (Unity → Python, single camera):
@@ -47,6 +47,17 @@ Message formats (ALL with header):
 
 7. Status Response Message (Python → Unity):
    [type:1][request_id:4][json_len:4][robot_status_json:N]
+
+8. Sequence Query Message (Python → SequenceServer, type 0x08):
+   [type:1][request_id:4]
+   [cmd_len:4][command_text:N]
+   [robot_id_len:4][robot_id:N]
+   [camera_id_len:4][camera_id:N]
+   [auto_execute:1]
+   [flags_len:4][flags_json:N]   ← optional; flags_len=0 means no overrides (backward-compatible)
+   flags_json is a compact JSON object from BenchmarkFeatureFlags.to_json().
+   Unity clients and legacy senders omit the flags field entirely; SequenceServer
+   handles EOF after auto_execute gracefully (defaults flags_len=0).
 
 All integers are little-endian unsigned 32-bit (struct format 'I').
 All strings are UTF-8 encoded.

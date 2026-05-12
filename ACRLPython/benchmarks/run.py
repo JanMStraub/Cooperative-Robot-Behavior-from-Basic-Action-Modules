@@ -21,7 +21,6 @@ from .reporter import print_summary, write_json
 from .runner import BenchmarkRunner
 
 _DUAL_ROBOT_BENCHMARKS = {6, 7, 8, 11}
-_ABLATION_BENCHMARKS = {9, 10, 11, 12, 13, 14}
 _PARSE_ONLY_BENCHMARKS = {9, 12}  # no server required
 _REQUIRED_PORTS = (5007, 5008)
 

@@ -177,30 +177,17 @@ class RobotLLMAgent:
 
         workspace_side = self._get_workspace_label()
         system_prompt = (
-            SYSTEM_PROMPT_BASE
-            + f" You are {self.robot_id}, the {workspace_side} robot arm. "
-            f"Analyze tasks from your own spatial perspective - only claim capabilities "
-            f"within your workspace bounds."
+            SYSTEM_PROMPT_BASE + f" You are {self.robot_id}, the {workspace_side} robot arm. Analyze tasks from your own spatial perspective and only claim capabilities within your workspace bounds."
         )
-        user_prompt = f"""Analyze this task from your perspective as {self.robot_id}.
+        user_prompt = f"""{context}
 
-{context}
-
-Available operations: {ops_str}
+Operations: {ops_str}
 
 Task: "{task}"
 
-IMPORTANT: Set "can_contribute" to true if you can play ANY part in this task - even as one half of a collaborative pair. Only set it to false if this robot is completely irrelevant to the task (e.g. wrong workspace, wrong tool).
+Set can_contribute=true if you can play ANY part (even as one half of a pair). Only false if completely irrelevant.
 
-Respond with JSON:
-{{
-    "can_contribute": true/false,
-    "capabilities": ["what you can do for this task"],
-    "constraints": ["your limitations"],
-    "suggested_role": "brief role description (e.g. 'grasper', 'receiver', 'stabilizer')",
-    "requires_collaboration": true/false,
-    "confidence": 0.0-1.0
-}}"""
+JSON: {{"can_contribute":bool,"capabilities":[],"constraints":[],"suggested_role":"","requires_collaboration":bool,"confidence":0.0}}"""
 
         response = self._call_llm(system_prompt, user_prompt)
         if response is None:
@@ -254,10 +241,7 @@ Respond with JSON:
         analyses_summary = ""
         for analysis in other_analyses:
             analyses_summary += (
-                f"\n{analysis.robot_id}: can_contribute={analysis.can_contribute}, "
-                f"role='{analysis.suggested_role}', "
-                f"capabilities={analysis.capabilities}, "
-                f"constraints={analysis.constraints}"
+                f"\n{analysis.robot_id}: role='{analysis.suggested_role}' contribute={analysis.can_contribute}, collab={analysis.requires_collaboration}"
             )
 
         # Build operations section for the prompt
@@ -268,41 +252,26 @@ Respond with JSON:
             )
         else:
             logger.warning(
-                f"[{self.robot_id}] propose_plan called without available_operations; "
-                f"LLM may hallucinate operation names"
+                f"[{self.robot_id}] propose_plan called without available_operations; LLM may hallucinate operation names"
             )
             ops_section = ""
 
         workspace_side = self._get_workspace_label()
         system_prompt = (
             SYSTEM_PROMPT_BASE
-            + f" You are {self.robot_id}, the {workspace_side} robot arm, proposing a "
-            f"multi-robot coordination plan. Assign operations to robots based on workspace "
-            f"proximity. Every signal must have a matching wait_for_signal."
+            + f" You are {self.robot_id}, the {workspace_side} robot arm, proposing a multi-robot coordination plan. Assign operations to robots based on workspace proximity. Every signal must have a matching wait_for_signal."
         )
-        user_prompt = f"""Propose a coordinated plan for this task. This is negotiation round {round_number}.
+        user_prompt = f"""Round {round_number}: propose a coordinated plan.
 
 {context}
 {ops_section}
-Other robots' analyses:{analyses_summary}
+Other robots:{analyses_summary}
 
 Task: "{task}"
 
-Create a plan using these rules:
-- Each command needs: "operation", "params" (with "robot_id"), optionally "parallel_group", "capture_var"
-- Every signal must have a matching wait_for_signal
-- Use ONLY operation names from the available operations list above
-- CRITICAL: Plan MUST include operations for EVERY participating robot. Each robot must have at least one command.
+Rules: each command needs operation+params(robot_id), optional parallel_group/capture_var. Every signal needs matching wait_for_signal. Every participating robot must have >= 1 command.
 
-Respond with JSON:
-{{
-    "reasoning": "why this plan works",
-    "commands": [
-        {{"parallel_group": 1, "operation": "op_name", "params": {{"robot_id": "Robot1", ...}}}},
-        ...
-    ],
-    "estimated_duration_s": 10.0
-}}"""
+JSON: {{"reasoning":"","commands":[{{"parallel_group":1,"operation":"","params":{{"robot_id":""}}}}],"estimated_duration_s":0.0}}"""
 
         response = self._call_llm(system_prompt, user_prompt)
         if response is None:
@@ -354,39 +323,20 @@ Respond with JSON:
         workspace_side = self._get_workspace_label()
         system_prompt = (
             SYSTEM_PROMPT_BASE
-            + f" You are {self.robot_id}, the {workspace_side} robot arm, evaluating a plan "
-            f"proposed by {proposal.proposer_id}. Be conservative: flag any operation that "
-            f"exceeds your workspace bounds or creates collision risk."
+            + f" You are {self.robot_id}, the {workspace_side} robot arm, evaluating a plan proposed by {proposal.proposer_id}. Be conservative: flag any operation that exceeds your workspace bounds or creates collision risk."
         )
-        user_prompt = f"""Evaluate this plan from your perspective as {self.robot_id}.
+        user_prompt = f"""{context}
 
-{context}
-
-Operation semantics - do NOT flag missing coordinates for these:
-- receive_handoff(robot_id, object_id, source_robot_id): atomic receive, all geometry from WorldState automatically.
-- grasp_object(robot_id, object_id): positions computed internally.
-Only flag missing coordinates for operations like move_to_coordinate that explicitly require them.
+Note: grasp_object and receive_handoff compute positions internally -> do NOT flag missing coords for these.
 
 Task: "{task}"
-Proposed by: {proposal.proposer_id}
-Reasoning: {proposal.reasoning}
+Proposed by {proposal.proposer_id}: {proposal.reasoning}
 
-Plan:
-{commands_json}
+Plan: {commands_json}
 
-Check:
-1. Are your assigned actions within your workspace and reach?
-2. Is synchronization correct (signal/wait pairs match)?
-3. Are there collision risks?
-4. Is the plan efficient?
+Check: (1) your actions within reach? (2) signal/wait pairs match? (3) collision risks? (4) efficient?
 
-Respond with JSON:
-{{
-    "accept": true/false,
-    "concerns": ["list of concerns - omit concerns about missing coords on handoff ops"],
-    "suggested_changes": ["list of suggested modifications"],
-    "confidence": 0.0-1.0
-}}"""
+JSON: {{"accept":bool,"concerns":[],"suggested_changes":[],"confidence":0.0}}"""
 
         response = self._call_llm(system_prompt, user_prompt)
         if response is None:
@@ -446,15 +396,13 @@ Respond with JSON:
             Formatted context string for LLM prompt
         """
         # Robot identity and workspace
-        workspace_bounds = WORKSPACE_REGIONS.get(self.workspace, {})
-        shared_bounds = WORKSPACE_REGIONS.get("shared_zone", {})
-        context = f"""Your identity: {self.robot_id}
-Base position: {self.base_position}
-Assigned workspace: {self.workspace}
-Workspace bounds: {workspace_bounds}
-Shared zone (reachable by ALL robots): {shared_bounds}
-Max reach: {self.max_reach}m
-NOTE: Objects in the shared zone are reachable by both robots. Set can_contribute=true if the target object is in your workspace OR the shared zone."""
+        wb = WORKSPACE_REGIONS.get(self.workspace, {})
+        sz = WORKSPACE_REGIONS.get("shared_zone", {})
+        context = (
+            f"Robot: {self.robot_id} | Base: {self.base_position} | Reach: {self.max_reach}m\n"
+            f"Workspace: {self.workspace} x=[{wb.get('x_min')},{wb.get('x_max')}] z=[{wb.get('z_min')},{wb.get('z_max')}]\n"
+            f"Shared zone (both robots): x=[{sz.get('x_min')},{sz.get('x_max')}] -> objects here are reachable by either robot"
+        )
 
         # Robot state from world state
         robot_states = world_state_snapshot.get("robots", {})

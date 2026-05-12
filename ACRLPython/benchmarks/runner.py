@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from . import mock_registry
 from .config import BenchmarkConfig
+from .feature_flags import BenchmarkFeatureFlags
 from .result import BenchmarkResult, ChainMetrics, StepResult, make_run_id
 
 # Protocol V2 constants (mirrors core/UnityProtocol.py)
@@ -116,11 +117,48 @@ class BenchmarkRunner:
             if not cfg.dry_run:
                 self._reset(cfg)
 
+    def _build_sequence_message(
+        self,
+        payload: Union[str, List[Dict[str, Any]]],
+        robot_id: str,
+        flags: BenchmarkFeatureFlags,
+    ) -> bytes:
+        """
+        Build the raw SEQUENCE_QUERY bytes for the given payload and flags.
+
+        Args:
+            payload: NL string or op list (EXEC: prefix added for lists).
+            robot_id: Robot to execute the sequence.
+            flags: Feature flag overrides to embed in message.
+
+        Returns:
+            Complete message bytes ready to send over TCP.
+        """
+        if isinstance(payload, list):
+            command_text = _EXEC_PREFIX + json.dumps(payload)
+        else:
+            command_text = payload
+
+        request_id = random.randint(1, 0xFFFFFFFF)
+        cmd_b = command_text.encode("utf-8")
+        rob_b = robot_id.encode("utf-8")
+        cam_b = _DEFAULT_CAMERA.encode("utf-8")
+        flags_b = flags.to_json().encode("utf-8")
+
+        msg = struct.pack("<BI", _SEQUENCE_QUERY, request_id)
+        msg += struct.pack("<I", len(cmd_b)) + cmd_b
+        msg += struct.pack("<I", len(rob_b)) + rob_b
+        msg += struct.pack("<I", len(cam_b)) + cam_b
+        msg += struct.pack("<B", 1)  # auto_execute=True
+        msg += struct.pack("<I", len(flags_b)) + flags_b
+        return msg
+
     def _send(
         self,
         payload: Union[str, List[Dict[str, Any]]],
         robot_id: str,
         cfg: BenchmarkConfig,
+        flags: Optional[BenchmarkFeatureFlags] = None,
     ) -> Dict[str, Any]:
         """
         Send a task string or op list to SequenceServer and return result dict.
@@ -133,6 +171,7 @@ class BenchmarkRunner:
             payload: NL task string → LLM parses; list of op dicts → EXEC: prefix.
             robot_id: Primary robot for this sequence.
             cfg: Benchmark config (timeout, dry_run).
+            flags: Optional feature flag overrides embedded in message (live mode only).
 
         Returns:
             Result dict with keys: success, results, total_duration_ms.
@@ -147,24 +186,17 @@ class BenchmarkRunner:
                     payload, robot_id=robot_id
                 )
                 ops = parse_result.get("commands", []) if parse_result.get("success") else []
-            return self._run_local(ops, cfg)
+            result = self._run_local(ops, cfg)
+            # Inject parsed_commands so _build_result can extract robot_id and
+            # parallel_group_id per step, matching the live-mode structure.
+            result.setdefault("parsed_commands", ops)
+            return result
 
-        if isinstance(payload, list):
-            command_text = _EXEC_PREFIX + json.dumps(payload)
-        else:
-            command_text = payload
+        if flags is None:
+            flags = BenchmarkFeatureFlags()
 
         timeout = cfg.timeout_per_step_s * 10  # generous: LLM + execution
-        request_id = random.randint(1, 0xFFFFFFFF)
-
-        cmd_b = command_text.encode("utf-8")
-        rob_b = robot_id.encode("utf-8")
-        cam_b = _DEFAULT_CAMERA.encode("utf-8")
-        msg = struct.pack("<BI", _SEQUENCE_QUERY, request_id)
-        msg += struct.pack("<I", len(cmd_b)) + cmd_b
-        msg += struct.pack("<I", len(rob_b)) + rob_b
-        msg += struct.pack("<I", len(cam_b)) + cam_b
-        msg += struct.pack("<B", 1)  # auto_execute=True
+        msg = self._build_sequence_message(payload, robot_id, flags)
 
         start = time.monotonic()
         with socket.create_connection((_HOST, _PORT), timeout=10) as sock:
@@ -224,6 +256,58 @@ class BenchmarkRunner:
         except Exception:
             pass
 
+    def _extract_feature_flags(self, cfg: BenchmarkConfig) -> dict:
+        """
+        Extract active feature flags from a BenchmarkConfig as a flat, indexed dict.
+
+        Having these at the top level of BenchmarkResult makes them trivially
+        queryable without digging into config_snapshot.
+
+        Args:
+            cfg: BenchmarkConfig or DualRobotConfig instance.
+
+        Returns:
+            Dict of boolean feature flags.
+        """
+        return {
+            "use_rag": getattr(cfg, "use_rag", False),
+            "use_vgn": getattr(cfg, "use_vgn", False),
+            "use_knowledge_graph": getattr(cfg, "use_knowledge_graph", False),
+            "use_ros_movement": getattr(cfg, "use_ros_movement", False),
+            "reflexion_enabled": getattr(cfg, "reflexion_enabled", False),
+            "dry_run": getattr(cfg, "dry_run", False),
+            "use_negotiation": getattr(cfg, "use_negotiation", False),
+        }
+
+    def _compute_per_op_stats(self, steps: List[StepResult]) -> dict:
+        """
+        Aggregate per-operation statistics from a step list.
+
+        Useful for thesis analysis of which operation types fail most and their
+        timing characteristics.
+
+        Args:
+            steps: List of StepResult objects.
+
+        Returns:
+            Dict keyed by operation name with count, fail_count, avg_duration_ms.
+        """
+        buckets: Dict[str, Dict[str, Any]] = {}
+        for s in steps:
+            b = buckets.setdefault(s.operation, {"count": 0, "fail_count": 0, "total_ms": 0.0})
+            b["count"] += 1
+            b["total_ms"] += s.duration_ms
+            if not s.success:
+                b["fail_count"] += 1
+        return {
+            op: {
+                "count": v["count"],
+                "fail_count": v["fail_count"],
+                "avg_duration_ms": round(v["total_ms"] / v["count"], 1) if v["count"] else 0.0,
+            }
+            for op, v in buckets.items()
+        }
+
     def _run_local(
         self, ops: List[Dict[str, Any]], cfg: BenchmarkConfig
     ) -> Dict[str, Any]:
@@ -269,7 +353,8 @@ class BenchmarkRunner:
         Returns:
             Populated BenchmarkResult.
         """
-        steps = self._parse_steps(raw.get("results") or [])
+        parsed_cmds = raw.get("parsed_commands") or []
+        steps = self._parse_steps(raw.get("results") or [], parsed_cmds)
         first_fail = next((s.index for s in steps if not s.success), None)
         total_ms = float(raw.get("total_duration_ms", 0.0))
         ops_executed = len(steps)
@@ -288,18 +373,38 @@ class BenchmarkRunner:
             success_rate=(ops_succeeded / ops_executed) if ops_executed else 0.0,
             avg_step_duration_ms=(total_ms / ops_executed) if ops_executed else 0.0,
             first_failure_step=first_fail,
+            feature_flags=self._extract_feature_flags(cfg),
+            parsed_plan=[c.get("operation", "") for c in parsed_cmds],
+            per_op_stats=self._compute_per_op_stats(steps),
+            execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
-    def _parse_steps(self, results: List[Optional[Dict[str, Any]]]) -> List[StepResult]:
+    def _parse_steps(
+        self,
+        results: List[Optional[Dict[str, Any]]],
+        parsed_cmds: Optional[List[Dict[str, Any]]] = None,
+    ) -> List[StepResult]:
         """
         Convert raw result dicts to StepResult list, skipping None entries.
 
+        When parsed_cmds is provided (from raw["parsed_commands"] or injected
+        in dry-run), robot_id and parallel_group_id are populated per step by
+        matching on step index.
+
         Args:
             results: Per-step result dicts from SequenceServer.
+            parsed_cmds: Parsed command list; used to populate robot_id and
+                parallel_group_id on each StepResult.
 
         Returns:
             List of StepResult objects.
         """
+        # Build a quick lookup from step index → parsed command dict
+        cmd_by_index: Dict[int, Dict[str, Any]] = {}
+        if parsed_cmds:
+            for i, cmd in enumerate(parsed_cmds):
+                cmd_by_index[i] = cmd
+
         steps = []
         for r in results:
             if r is None:
@@ -314,14 +419,19 @@ class BenchmarkRunner:
             else:
                 error_code = None
                 error_message = None
+
+            step_index = r["index"]
+            cmd = cmd_by_index.get(step_index, {})
             steps.append(
                 StepResult(
-                    index=r["index"],
+                    index=step_index,
                     operation=r["operation"],
                     success=bool(r.get("success", False)),
                     duration_ms=float(r.get("duration_ms", 0.0)),
                     error_code=error_code,
                     error_message=error_message,
+                    robot_id=cmd.get("params", {}).get("robot_id") or None,
+                    parallel_group_id=cmd.get("parallel_group") or None,
                 )
             )
         return steps
@@ -353,7 +463,7 @@ class BenchmarkRunner:
             total_ms += float(raw.get("total_duration_ms", 0.0))
 
             step_offset = len(all_steps)
-            task_steps = self._parse_steps(raw.get("results") or [])
+            task_steps = self._parse_steps(raw.get("results") or [], raw.get("parsed_commands") or [])
             for s in task_steps:
                 s.index += step_offset
                 if not s.success and s.error_code:
@@ -393,6 +503,9 @@ class BenchmarkRunner:
                 recovery_count=recovery_count,
                 per_error_code=error_counts,
             ),
+            feature_flags=self._extract_feature_flags(cfg),
+            per_op_stats=self._compute_per_op_stats(all_steps),
+            execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
     def _run_b9_rag(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
@@ -459,6 +572,8 @@ class BenchmarkRunner:
             avg_step_duration_ms=0.0,
             hallucinated_ops=hallucinated,
             ablation=ablation,
+            feature_flags=self._extract_feature_flags(cfg),
+            execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
     def _run_b10_reflexion_live(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
@@ -479,16 +594,23 @@ class BenchmarkRunner:
         completed = 0
         ops_executed = 0
         ops_succeeded = 0
+        all_steps: List[StepResult] = []
+        total_ms = 0.0
+        _flags = BenchmarkFeatureFlags(use_reflexion=cfg.reflexion_enabled)
 
         for task in tasks:
-            raw = self._send(task, cfg.robot_id, cfg)
+            raw = self._send(task, cfg.robot_id, cfg, flags=_flags)
             if raw.get("success"):
                 completed += 1
             total_recoveries += raw.get("reflexion_recoveries", 0)
-            ops_executed += raw.get("ops_executed", len(self._parse_steps(raw.get("results") or [])))
-            ops_succeeded += raw.get("ops_succeeded", sum(
-                1 for s in self._parse_steps(raw.get("results") or []) if s.success
-            ))
+            task_steps = self._parse_steps(raw.get("results") or [], raw.get("parsed_commands") or [])
+            step_offset = len(all_steps)
+            for s in task_steps:
+                s.index += step_offset
+            all_steps.extend(task_steps)
+            ops_executed += raw.get("ops_executed", len(task_steps))
+            ops_succeeded += raw.get("ops_succeeded", sum(1 for s in task_steps if s.success))
+            total_ms += float(raw.get("total_duration_ms", 0.0))
 
         success_rate = completed / len(tasks) if tasks else 0.0
         ablation = AblationMetrics(
@@ -506,14 +628,17 @@ class BenchmarkRunner:
             run_id=make_run_id(),
             config_snapshot=dataclasses.asdict(cfg),
             success=success_rate > 0.5,
-            total_duration_ms=0.0,
-            steps=[],
+            total_duration_ms=total_ms,
+            steps=all_steps,
             ops_executed=ops_executed,
             ops_succeeded=ops_succeeded,
             success_rate=success_rate,
-            avg_step_duration_ms=0.0,
+            avg_step_duration_ms=(total_ms / ops_executed) if ops_executed else 0.0,
             reflexion_recoveries=total_recoveries,
             ablation=ablation,
+            feature_flags=self._extract_feature_flags(cfg),
+            per_op_stats=self._compute_per_op_stats(all_steps),
+            execution_mode="live",
         )
 
     def _run_b10_reflexion(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
@@ -548,6 +673,7 @@ class BenchmarkRunner:
         try:
             parser = CommandParser(use_rag=cfg.use_rag)
             for task in tasks:
+                mock_registry.reset_counts()
                 parse_result = parser.parse(task, robot_id=cfg.robot_id)
                 if not parse_result["success"]:
                     continue
@@ -561,7 +687,7 @@ class BenchmarkRunner:
                 total_ms += float(raw.get("total_duration_ms", 0.0))
                 total_recoveries += raw.get("reflexion_recoveries", 0)
 
-                task_steps = self._parse_steps(raw.get("results") or [])
+                task_steps = self._parse_steps(raw.get("results") or [], ops)
                 step_offset = len(all_steps)
                 for s in task_steps:
                     s.index += step_offset
@@ -603,6 +729,9 @@ class BenchmarkRunner:
             avg_step_duration_ms=(total_ms / ops_executed) if ops_executed else 0.0,
             reflexion_recoveries=total_recoveries,
             ablation=ablation,
+            feature_flags=self._extract_feature_flags(cfg),
+            per_op_stats=self._compute_per_op_stats(all_steps),
+            execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
     def _run_b11_negotiation_live(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
@@ -616,59 +745,60 @@ class BenchmarkRunner:
         Returns:
             BenchmarkResult with negotiation_rounds populated.
         """
-        import config.Negotiation as _neg_cfg
         from core.Imports import get_negotiation_hub
         from .result import AblationMetrics
 
-        prev_neg = _neg_cfg.NEGOTIATION_ENABLED
-        _neg_cfg.NEGOTIATION_ENABLED = getattr(cfg, "use_negotiation", True)
-        try:
-            tasks = module.get_tasks(cfg)
-            total_rounds = 0
-            completed = 0
-            ops_executed = 0
-            ops_succeeded = 0
-            hub = get_negotiation_hub()
-            robot_id = getattr(cfg, "robot_id_a", cfg.robot_id)
+        tasks = module.get_tasks(cfg)
+        total_rounds = 0
+        completed = 0
+        ops_executed = 0
+        ops_succeeded = 0
+        all_steps: List[StepResult] = []
+        total_ms = 0.0
+        hub = get_negotiation_hub()
+        robot_id = getattr(cfg, "robot_id_a", cfg.robot_id)
+        _flags = BenchmarkFeatureFlags(use_negotiation=getattr(cfg, "use_negotiation", True))
 
-            for task in tasks:
-                raw = self._send(task, robot_id, cfg)
-                if raw.get("success"):
-                    completed += 1
-                ops_executed += raw.get("ops_executed", len(self._parse_steps(raw.get("results") or [])))
-                ops_succeeded += raw.get("ops_succeeded", sum(
-                    1 for s in self._parse_steps(raw.get("results") or []) if s.success
-                ))
-                if hub is not None:
-                    total_rounds += hub.get_last_round_count()
+        for task in tasks:
+            raw = self._send(task, robot_id, cfg, flags=_flags)
+            if raw.get("success"):
+                completed += 1
+            task_steps = self._parse_steps(raw.get("results") or [])
+            step_offset = len(all_steps)
+            for s in task_steps:
+                s.index += step_offset
+            all_steps.extend(task_steps)
+            ops_executed += raw.get("ops_executed", len(task_steps))
+            ops_succeeded += raw.get("ops_succeeded", sum(1 for s in task_steps if s.success))
+            total_ms += float(raw.get("total_duration_ms", 0.0))
+            if hub is not None:
+                total_rounds += hub.get_last_round_count()
 
-            success_rate = completed / len(tasks) if tasks else 0.0
-            ablation = AblationMetrics(
-                condition="enabled" if getattr(cfg, "use_negotiation", True) else "disabled",
-                hallucinated_ops=0,
-                reflexion_recoveries=0,
-                negotiation_rounds=total_rounds,
-                success_rate=success_rate,
-                ops_executed=ops_executed,
-                ops_succeeded=ops_succeeded,
-            )
-            return BenchmarkResult(
-                benchmark_id=11,
-                benchmark_name=_BENCHMARK_NAMES[11],
-                run_id=make_run_id(),
-                config_snapshot=dataclasses.asdict(cfg),
-                success=success_rate > 0.5,
-                total_duration_ms=0.0,
-                steps=[],
-                ops_executed=ops_executed,
-                ops_succeeded=ops_succeeded,
-                success_rate=success_rate,
-                avg_step_duration_ms=0.0,
-                negotiation_rounds=total_rounds,
-                ablation=ablation,
-            )
-        finally:
-            _neg_cfg.NEGOTIATION_ENABLED = prev_neg
+        success_rate = completed / len(tasks) if tasks else 0.0
+        ablation = AblationMetrics(
+            condition="enabled" if getattr(cfg, "use_negotiation", True) else "disabled",
+            hallucinated_ops=0,
+            reflexion_recoveries=0,
+            negotiation_rounds=total_rounds,
+            success_rate=success_rate,
+            ops_executed=ops_executed,
+            ops_succeeded=ops_succeeded,
+        )
+        return BenchmarkResult(
+            benchmark_id=11,
+            benchmark_name=_BENCHMARK_NAMES[11],
+            run_id=make_run_id(),
+            config_snapshot=dataclasses.asdict(cfg),
+            success=success_rate > 0.5,
+            total_duration_ms=total_ms,
+            steps=all_steps,
+            ops_executed=ops_executed,
+            ops_succeeded=ops_succeeded,
+            success_rate=success_rate,
+            avg_step_duration_ms=(total_ms / ops_executed) if ops_executed else 0.0,
+            negotiation_rounds=total_rounds,
+            ablation=ablation,
+        )
 
     def _run_b11_negotiation(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
         """
@@ -725,7 +855,7 @@ class BenchmarkRunner:
                 raw = self._run_local(ops, cfg_local)
                 total_ms += float(raw.get("total_duration_ms", 0.0))
 
-                task_steps = self._parse_steps(raw.get("results") or [])
+                task_steps = self._parse_steps(raw.get("results") or [], ops)
                 step_offset = len(all_steps)
                 for s in task_steps:
                     s.index += step_offset
@@ -766,6 +896,9 @@ class BenchmarkRunner:
             avg_step_duration_ms=(total_ms / ops_executed) if ops_executed else 0.0,
             negotiation_rounds=total_negotiation_rounds,
             ablation=ablation,
+            feature_flags=self._extract_feature_flags(cfg),
+            per_op_stats=self._compute_per_op_stats(all_steps),
+            execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
     def _run_b13_vgn(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
@@ -788,25 +921,27 @@ class BenchmarkRunner:
         from .result import AblationMetrics
 
         tasks = module.get_tasks(cfg)
-        prev_vgn = _srv_cfg.VGN_ENABLED
-        _srv_cfg.VGN_ENABLED = cfg.use_vgn
 
         if cfg.execution_mode == "live":
             completed = 0
             ops_executed = 0
             ops_succeeded = 0
-            try:
-                for task in tasks:
-                    raw = self._send(task, cfg.robot_id, cfg)
-                    if raw.get("success"):
-                        completed += 1
-                    ops_executed += raw.get("ops_executed", len(self._parse_steps(raw.get("results") or [])))
-                    ops_succeeded += raw.get("ops_succeeded", sum(
-                        1 for s in self._parse_steps(raw.get("results") or []) if s.success
-                    ))
-                    self._reset(cfg)
-            finally:
-                _srv_cfg.VGN_ENABLED = prev_vgn
+            all_steps: List[StepResult] = []
+            total_ms = 0.0
+            _flags = BenchmarkFeatureFlags(use_vgn=cfg.use_vgn)
+            for task in tasks:
+                raw = self._send(task, cfg.robot_id, cfg, flags=_flags)
+                if raw.get("success"):
+                    completed += 1
+                task_steps = self._parse_steps(raw.get("results") or [])
+                step_offset = len(all_steps)
+                for s in task_steps:
+                    s.index += step_offset
+                all_steps.extend(task_steps)
+                ops_executed += raw.get("ops_executed", len(task_steps))
+                ops_succeeded += raw.get("ops_succeeded", sum(1 for s in task_steps if s.success))
+                total_ms += float(raw.get("total_duration_ms", 0.0))
+                self._reset(cfg)
 
             success_rate = completed / len(tasks) if tasks else 0.0
             ablation = AblationMetrics(
@@ -824,16 +959,21 @@ class BenchmarkRunner:
                 run_id=make_run_id(),
                 config_snapshot=dataclasses.asdict(cfg),
                 success=success_rate > 0.5,
-                total_duration_ms=0.0,
-                steps=[],
+                total_duration_ms=total_ms,
+                steps=all_steps,
                 ops_executed=ops_executed,
                 ops_succeeded=ops_succeeded,
                 success_rate=success_rate,
-                avg_step_duration_ms=0.0,
+                avg_step_duration_ms=(total_ms / ops_executed) if ops_executed else 0.0,
                 ablation=ablation,
+                feature_flags=self._extract_feature_flags(cfg),
+                per_op_stats=self._compute_per_op_stats(all_steps),
+                execution_mode="live",
             )
 
         # Offline: parse + dry-run with always_succeed mock
+        prev_vgn = _srv_cfg.VGN_ENABLED
+        _srv_cfg.VGN_ENABLED = cfg.use_vgn
         mock_original = mock_registry.install_mock("always_succeed")
         all_steps: List[StepResult] = []
         total_ms = 0.0
@@ -848,7 +988,7 @@ class BenchmarkRunner:
                 cfg_local = dataclasses.replace(cfg, dry_run=True)
                 raw = self._run_local(ops, cfg_local)
                 total_ms += float(raw.get("total_duration_ms", 0.0))
-                task_steps = self._parse_steps(raw.get("results") or [])
+                task_steps = self._parse_steps(raw.get("results") or [], ops)
                 step_offset = len(all_steps)
                 for s in task_steps:
                     s.index += step_offset
@@ -884,6 +1024,9 @@ class BenchmarkRunner:
             success_rate=success_rate,
             avg_step_duration_ms=(total_ms / ops_executed) if ops_executed else 0.0,
             ablation=ablation,
+            feature_flags=self._extract_feature_flags(cfg),
+            per_op_stats=self._compute_per_op_stats(all_steps),
+            execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
     def _run_b14_ros(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
@@ -907,29 +1050,27 @@ class BenchmarkRunner:
         from .result import AblationMetrics
 
         tasks = module.get_tasks(cfg)
-        prev_enabled = _ros_cfg.ROS_ENABLED
-        prev_mode = _ros_cfg.DEFAULT_CONTROL_MODE
-        _ros_cfg.ROS_ENABLED = cfg.use_ros_movement
-        _ros_cfg.DEFAULT_CONTROL_MODE = "ros" if cfg.use_ros_movement else "unity"
 
         if cfg.execution_mode == "live":
             completed = 0
             ops_executed = 0
             ops_succeeded = 0
+            all_steps: List[StepResult] = []
             total_ms = 0.0
-            try:
-                for task in tasks:
-                    raw = self._send(task, cfg.robot_id, cfg)
-                    if raw.get("success"):
-                        completed += 1
-                    task_steps = self._parse_steps(raw.get("results") or [])
-                    ops_executed += len(task_steps)
-                    ops_succeeded += sum(1 for s in task_steps if s.success)
-                    total_ms += float(raw.get("total_duration_ms", 0.0))
-                    self._reset(cfg)
-            finally:
-                _ros_cfg.ROS_ENABLED = prev_enabled
-                _ros_cfg.DEFAULT_CONTROL_MODE = prev_mode
+            _flags = BenchmarkFeatureFlags(use_ros=cfg.use_ros_movement)
+            for task in tasks:
+                raw = self._send(task, cfg.robot_id, cfg, flags=_flags)
+                if raw.get("success"):
+                    completed += 1
+                task_steps = self._parse_steps(raw.get("results") or [])
+                step_offset = len(all_steps)
+                for s in task_steps:
+                    s.index += step_offset
+                all_steps.extend(task_steps)
+                ops_executed += len(task_steps)
+                ops_succeeded += sum(1 for s in task_steps if s.success)
+                total_ms += float(raw.get("total_duration_ms", 0.0))
+                self._reset(cfg)
 
             success_rate = completed / len(tasks) if tasks else 0.0
             ablation = AblationMetrics(
@@ -948,15 +1089,22 @@ class BenchmarkRunner:
                 config_snapshot=dataclasses.asdict(cfg),
                 success=success_rate > 0.5,
                 total_duration_ms=total_ms,
-                steps=[],
+                steps=all_steps,
                 ops_executed=ops_executed,
                 ops_succeeded=ops_succeeded,
                 success_rate=success_rate,
                 avg_step_duration_ms=(total_ms / ops_executed) if ops_executed else 0.0,
                 ablation=ablation,
+                feature_flags=self._extract_feature_flags(cfg),
+                per_op_stats=self._compute_per_op_stats(all_steps),
+                execution_mode="live",
             )
 
         # Offline: parse + dry-run with always_succeed mock
+        prev_enabled = _ros_cfg.ROS_ENABLED
+        prev_mode = _ros_cfg.DEFAULT_CONTROL_MODE
+        _ros_cfg.ROS_ENABLED = cfg.use_ros_movement
+        _ros_cfg.DEFAULT_CONTROL_MODE = "ros" if cfg.use_ros_movement else "unity"
         mock_original = mock_registry.install_mock("always_succeed")
         all_steps: List[StepResult] = []
         total_ms = 0.0
@@ -971,7 +1119,7 @@ class BenchmarkRunner:
                 cfg_local = dataclasses.replace(cfg, dry_run=True)
                 raw = self._run_local(ops, cfg_local)
                 total_ms += float(raw.get("total_duration_ms", 0.0))
-                task_steps = self._parse_steps(raw.get("results") or [])
+                task_steps = self._parse_steps(raw.get("results") or [], ops)
                 step_offset = len(all_steps)
                 for s in task_steps:
                     s.index += step_offset
@@ -1008,6 +1156,9 @@ class BenchmarkRunner:
             success_rate=success_rate,
             avg_step_duration_ms=(total_ms / ops_executed) if ops_executed else 0.0,
             ablation=ablation,
+            feature_flags=self._extract_feature_flags(cfg),
+            per_op_stats=self._compute_per_op_stats(all_steps),
+            execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
 
     def _run_b12_kg(self, cfg: BenchmarkConfig, module) -> BenchmarkResult:
@@ -1106,4 +1257,6 @@ class BenchmarkRunner:
             avg_step_duration_ms=0.0,
             hallucinated_ops=total_bad,
             ablation=ablation,
+            feature_flags=self._extract_feature_flags(cfg),
+            execution_mode=getattr(cfg, "execution_mode", "offline"),
         )
