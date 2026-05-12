@@ -32,6 +32,7 @@ namespace PythonCommunication
         public float[] joint_angles;
         public float[] start_joint_angles; // Saved at registration time; used by ROS return-to-start
         public string control_mode; // "unity", "ros", "hybrid" (null if no ROSControlModeManager)
+        public bool proximity_frozen; // true when ProximityGuard has halted this robot due to inter-robot proximity
     }
 
     [System.Serializable]
@@ -364,6 +365,7 @@ namespace PythonCommunication
                     joint_angles = jointAngles,
                     start_joint_angles = startJointAnglesRad,
                     control_mode = controlMode,
+                    proximity_frozen = controller.IsFrozenByProximity,
                 };
 
                 robotStates.Add(robotState);

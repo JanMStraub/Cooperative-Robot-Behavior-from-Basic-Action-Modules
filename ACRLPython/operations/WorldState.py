@@ -111,6 +111,7 @@ class RobotState:
     start_joint_angles: Optional[list[float]] = (
         None  # Saved at registration; radians, ROS convention
     )
+    proximity_frozen: bool = False  # True when Unity ProximityGuard has halted this robot
     timestamp: float = field(default_factory=time.time)
 
 
@@ -473,6 +474,7 @@ class WorldState(SingletonBase):
             state.start_joint_angles = state_data.get(
                 "start_joint_angles", state.start_joint_angles
             )
+            state.proximity_frozen = state_data.get("proximity_frozen", False)
             state.timestamp = time.time()
 
             # Derive end-effector pose from FK when joint_angles were just updated

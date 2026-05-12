@@ -302,7 +302,11 @@ VGN_EXPORT_TSDF = os.environ.get("VGN_EXPORT_TSDF", "false").lower() in (
     "1",
     "yes",
 )
-VGN_EXPORT_TSDF_PATH = os.environ.get("VGN_EXPORT_TSDF_PATH", "/tmp/vgn_tsdf_last.npz")
+VGN_EXPORT_TSDF_PATH = os.environ.get(
+    "VGN_EXPORT_TSDF_PATH",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "documents", "vgn_tsdf_last.npz"),
+)
+VGN_EXPORT_TSDF_OBJ = os.environ.get("VGN_EXPORT_TSDF_OBJ", "true").lower() in ("true", "1", "yes")
 
 # ============================================================================
 # Visualization and Performance

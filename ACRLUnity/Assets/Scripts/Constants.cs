@@ -232,4 +232,26 @@ namespace Core
         /// </summary>
         public const float UI_REFRESH_RATE = 0.5f;
     }
+
+    /// <summary>
+    /// Constants for inter-robot proximity safety.
+    /// Thresholds must match Python's CoordinationVerifier.STATIC_COLLISION_RADIUS.
+    /// </summary>
+    public static class ProximityConstants
+    {
+        /// <summary>EE-to-EE distance below which motion is halted (meters).</summary>
+        public const float EE_STOP_THRESHOLD = 0.25f;
+
+        /// <summary>EE-to-EE distance above which a frozen robot resumes (meters). Hysteresis band prevents chattering.</summary>
+        public const float EE_RESUME_THRESHOLD = 0.35f;
+
+        /// <summary>Link-to-link stop threshold (meters). Tighter than EE since link positions are less precise.</summary>
+        public const float LINK_STOP_THRESHOLD = 0.15f;
+
+        /// <summary>Link-to-link resume threshold (meters).</summary>
+        public const float LINK_RESUME_THRESHOLD = 0.22f;
+
+        /// <summary>Joint indices (0-based) checked for link-to-link proximity. Joints 2-5 are most collision-prone on AR4.</summary>
+        public static readonly int[] MONITORED_LINK_INDICES = { 2, 3, 4, 5 };
+    }
 }

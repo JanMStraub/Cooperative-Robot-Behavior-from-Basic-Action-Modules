@@ -22,6 +22,7 @@ try:
         ROBOT_WORKSPACE_ASSIGNMENTS,
         WORKSPACE_REGIONS,
         MIN_ROBOT_SEPARATION,
+        STATIC_COLLISION_RADIUS,
     )
 except ImportError:
     from ..config.Robot import (
@@ -29,6 +30,7 @@ except ImportError:
         ROBOT_WORKSPACE_ASSIGNMENTS,
         WORKSPACE_REGIONS,
         MIN_ROBOT_SEPARATION,
+        STATIC_COLLISION_RADIUS,
     )
 from .WorldState import get_world_state
 from .SpatialPredicates import robots_will_collide, is_in_shared_zone
@@ -192,6 +194,14 @@ class CoordinationVerifier:
                         robot_id, target_pos, other_robot, world_state
                     )
                     if collision_issue:
+                        safe_wp = self._compute_safe_waypoint(
+                            robot_id, target_pos, other_robot, world_state
+                        )
+                        if safe_wp is not None:
+                            collision_issue.resolution_suggestions.insert(
+                                0,
+                                f"WAYPOINT:{safe_wp[0]:.3f},{safe_wp[1]:.3f},{safe_wp[2]:.3f}",
+                            )
                         result.add_issue(collision_issue)
 
         # Check 2: Workspace conflicts
@@ -272,11 +282,9 @@ class CoordinationVerifier:
         if other_robot_state is None:
             return None  # Other robot not tracked
 
-        # If other robot is not moving, only flag actual physical overlap (gripper
-        # collision radius ~5cm), not the full motion-safety separation (0.2m).
-        # The 0.2m separation applies when both robots are in motion; using it
-        # against a static idle robot incorrectly blocks valid workspace targets.
-        STATIC_COLLISION_RADIUS = 0.05  # meters
+        # From config.Robot.STATIC_COLLISION_RADIUS (default 0.03m).
+        # Only blocks commands that would place EE inside the other robot's physical
+        # radius. Unity ProximityGuard handles the broader runtime safety margin.
         if not other_robot_state.is_moving:
             if other_robot_state.position is not None:
                 dx = target_pos[0] - other_robot_state.position[0]
@@ -322,6 +330,44 @@ class CoordinationVerifier:
                 ],
             )
 
+        return None
+
+    def _compute_safe_waypoint(
+        self,
+        robot_id: str,
+        target_pos: Tuple[float, float, float],
+        other_robot_id: str,
+        world_state,
+    ) -> Optional[Tuple[float, float, float]]:
+        """
+        Compute a simple safe intermediate waypoint for robot_id that avoids other_robot_id.
+
+        Lifts the target 0.10m along the Y axis (Unity up) and checks whether the lifted
+        point satisfies MIN_ROBOT_SEPARATION from the other robot.  Returns None if no
+        trivial fix is found — caller should serialize the operations instead.
+
+        Args:
+            robot_id: ID of robot that needs to move
+            target_pos: Intended target position
+            other_robot_id: ID of blocking robot
+            world_state: WorldState instance
+
+        Returns:
+            Safe waypoint tuple or None
+        """
+        other_state = world_state._robot_states.get(other_robot_id)
+        if other_state is None or other_state.position is None:
+            return None
+
+        ox, oy, oz = other_state.position
+        tx, ty, tz = target_pos
+        # Lift the target 0.10m upward to move away from the other robot's EE plane.
+        safe = (tx, ty + 0.10, tz)
+        dx = safe[0] - ox
+        dy = safe[1] - oy
+        dz = safe[2] - oz
+        if (dx * dx + dy * dy + dz * dz) ** 0.5 >= MIN_ROBOT_SEPARATION:
+            return safe
         return None
 
     def _check_workspace_conflict(

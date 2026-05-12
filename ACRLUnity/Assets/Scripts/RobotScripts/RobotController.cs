@@ -46,6 +46,18 @@ namespace Robotics
             set => _isManuallyDriven = value;
         }
 
+        private bool _isFrozenByProximity = false;
+
+        /// <summary>
+        /// Set by ProximityGuard when inter-robot EE distance drops below threshold.
+        /// Cleared automatically once separation is restored.
+        /// </summary>
+        public bool IsFrozenByProximity
+        {
+            get => _isFrozenByProximity;
+            set => _isFrozenByProximity = value;
+        }
+
         private Vector3 _endEffectorLocalPosition;
         private Quaternion _endEffectorLocalRotation;
         private Vector3 _targetLocalPosition;
@@ -316,6 +328,9 @@ namespace Robotics
         private void FixedUpdate()
         {
             if (_simulationManager != null && _simulationManager.ShouldStopRobots)
+                return;
+
+            if (_isFrozenByProximity)
                 return;
 
             if (_isManuallyDriven)

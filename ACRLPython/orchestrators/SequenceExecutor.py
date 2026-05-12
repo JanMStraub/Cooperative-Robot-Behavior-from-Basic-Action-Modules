@@ -57,6 +57,30 @@ for _handler in logging.root.handlers[:]:
     _make_handler_safe(_handler)
 
 
+def _extract_waypoint_from_verification(
+    verification_result: dict,
+) -> "tuple[float, float, float] | None":
+    """
+    Parse a WAYPOINT suggestion embedded by CoordinationVerifier into a coordinate tuple.
+
+    CoordinationVerifier encodes safe waypoints as "WAYPOINT:x,y,z" strings in the
+    resolution_suggestions list.  Returns the first match as a float tuple, or None.
+    """
+    details = verification_result.get("details", {})
+    coord_check = details.get("coordination_check", {}) if isinstance(details, dict) else {}
+    issues = coord_check.get("issues", []) if isinstance(coord_check, dict) else []
+    for issue in issues:
+        for suggestion in issue.get("resolution_suggestions", []):
+            if isinstance(suggestion, str) and suggestion.startswith("WAYPOINT:"):
+                try:
+                    parts = suggestion[len("WAYPOINT:") :].split(",")
+                    if len(parts) == 3:
+                        return (float(parts[0]), float(parts[1]), float(parts[2]))
+                except ValueError:
+                    pass
+    return None
+
+
 class SequenceExecutor:
     """
     Executes command sequences with completion tracking and error handling.
@@ -768,6 +792,25 @@ class SequenceExecutor:
                 verification_result = self._verify_operation_safety(op_def, params)
 
                 if not verification_result["safe"]:
+                    # Attempt waypoint replan if CoordinationVerifier embedded one
+                    waypoint = _extract_waypoint_from_verification(verification_result)
+                    if waypoint is not None:
+                        logger.info(
+                            f"Proximity pre-check blocked {operation} — replanning via safe waypoint {waypoint}"
+                        )
+                        robot_id = params.get("robot_id", "")
+                        wp_result = self.registry.execute_operation_by_name(
+                            "move_to_coordinate",
+                            robot_id=robot_id,
+                            x=waypoint[0],
+                            y=waypoint[1],
+                            z=waypoint[2],
+                            request_id=self._generate_request_id(),
+                        )
+                        if wp_result.success:
+                            # Waypoint dispatched — retry original command
+                            return self._execute_single_command(operation, params, timeout)
+                        logger.warning("Waypoint move failed — aborting original command")
                     _result = {
                         "success": False,
                         "result": None,
@@ -933,6 +976,15 @@ class SequenceExecutor:
         while time.time() - start_time < timeout:
             if self._abort_flag:
                 return False
+
+            # Detect mid-execution proximity freeze reported by Unity
+            if self.world_state is not None:
+                for robot_id, robot_state in list(self.world_state._robot_states.items()):
+                    if getattr(robot_state, "proximity_frozen", False):
+                        logger.warning(
+                            f"Robot {robot_id} frozen by proximity mid-execution of {operation}"
+                        )
+                        return False
 
             try:
                 # Wait for completion signal from Unity

@@ -763,7 +763,7 @@ class VGNClient:
         debug_info["tsdf_size"] = _TSDF_SIZE
         debug_info["tsdf_res"] = _TSDF_RES
 
-        from config.Vision import VGN_EXPORT_TSDF, VGN_EXPORT_TSDF_PATH
+        from config.Vision import VGN_EXPORT_TSDF, VGN_EXPORT_TSDF_PATH, VGN_EXPORT_TSDF_OBJ
 
         if VGN_EXPORT_TSDF:
             np.savez(
@@ -773,6 +773,22 @@ class VGNClient:
                 res=np.int32(_TSDF_RES),
             )
             logger.info(f"[VGN] TSDF grid exported to {VGN_EXPORT_TSDF_PATH}")
+
+            if VGN_EXPORT_TSDF_OBJ:
+                try:
+                    from skimage import measure
+                    import os as _os
+                    verts, faces, _, _ = measure.marching_cubes(grid.squeeze(), level=0.0)
+                    verts = verts / grid.shape[0] * _TSDF_SIZE
+                    obj_path = _os.path.splitext(VGN_EXPORT_TSDF_PATH)[0] + ".obj"
+                    with open(obj_path, "w") as _f:
+                        for v in verts:
+                            _f.write(f"v {v[0]} {v[1]} {v[2]}\n")
+                        for face in faces:
+                            _f.write(f"f {face[0]+1} {face[1]+1} {face[2]+1}\n")
+                    logger.info(f"[VGN] TSDF mesh exported to {obj_path}")
+                except ImportError:
+                    logger.warning("[VGN] skimage not installed — skipping OBJ export (pip install scikit-image)")
 
         # ----------------------------------------------------------------
         # Step 4 — VGN inference

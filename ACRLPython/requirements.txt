@@ -16,6 +16,7 @@ tqdm
 ultralytics
 onnx
 onnxruntime
+scikit-image
 
 # Web UI server
 fastapi>=0.100.0
