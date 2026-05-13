@@ -128,6 +128,17 @@ class _PromptBuilder:
 
         === MULTI-ROBOT COORDINATION ===
 
+        === ROBOT WORKSPACE BOUNDARIES (CRITICAL) ===
+
+        Robot1 base: (-0.475, 0, 0) — LEFT side. Max reach: 0.64m. Reachable x range: roughly x < 0.165.
+        Robot2 base: (0.475, 0, 0) — RIGHT side. Max reach: 0.64m. Reachable x range: roughly x > -0.165.
+        NEVER assign Robot1 to coordinates with x > 0.16 (out of reach — Robot2's side).
+        NEVER assign Robot2 to coordinates with x < -0.16 (out of reach — Robot1's side).
+        Objects with x > 0 are on Robot2's side. Objects with x < 0 are on Robot1's side. x ≈ 0 is shared zone (reachable by either).
+        If a task requires reaching an object on the wrong side, use a HANDOFF sequence instead.
+
+        === MULTI-ROBOT COORDINATION ===
+
         When the task involves multiple robots:
         1. Decide which robot is best positioned for each subtask
         2. Use "parallel_group" to mark operations that can run concurrently
@@ -173,6 +184,9 @@ class _PromptBuilder:
         wait(duration_ms): Simple time-based pause
         Example: {{"operation": "wait", "params": {{"duration_ms": 500}}}}
 
+        mirror_movement_of_other_robot(duration_ms): duration_ms MUST be in range [1000, 60000]. NEVER use values below 1000.
+        Example: {{"operation": "mirror_movement_of_other_robot", "params": {{"robot_id": "Robot2", "target_robot_id": "Robot1", "duration_ms": 3000}}}}
+
         === NAVIGATION RULE (CRITICAL) ===
 
         When the task involves moving to, navigating to, or approaching an object WITHOUT explicit pick/grab/grasp language:
@@ -214,6 +228,25 @@ class _PromptBuilder:
         Only use release_object for an explicit immediate gripper-open at the current position (e.g. emergency drop or handoff transfer)
         Only use control_gripper with open_gripper=true for explicit open commands unrelated to placing
 
+        === BETWEEN PLACEMENT ===
+
+        When the task says "place between X and Y", "put it midway between", or "place in the middle of X and Y":
+        PREFER place_between_objects — it resolves both objects from WorldState and computes the midpoint internally.
+
+        Example — "place the held object between the blue and red cube":
+        {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "blue"}}, "parallel_group": 1}}
+        {{"operation": "detect_object_stereo", "params": {{"robot_id": "Robot1", "color": "red"}}, "parallel_group": 1}}
+        {{"operation": "place_between_objects", "params": {{"robot_id": "Robot1", "object_id_1": "blue", "object_id_2": "red"}}, "parallel_group": 2}}
+
+        The two detect calls CAN share the same parallel_group (they are independent of each other).
+        place_between_objects MUST be in a strictly higher parallel_group than both detects.
+
+        Fallback — if objects are already in WorldState (no detection needed):
+        {{"operation": "place_between_objects", "params": {{"robot_id": "Robot1", "object_id_1": "blue_cube", "object_id_2": "red_cube"}}}}
+
+        Multi-variable arithmetic in params is also supported when you need a custom midpoint:
+        {{"operation": "place_object", "params": {{"robot_id": "Robot1", "x": "($blue_obj.x + $red_obj.x) / 2", "y": "($blue_obj.y + $red_obj.y) / 2", "z": "($blue_obj.z + $red_obj.z) / 2"}}}}
+
         === SINGLE-ROBOT RULES ===
 
         1. Extract each distinct action as a separate operation
@@ -244,6 +277,12 @@ class _PromptBuilder:
         {{"operation": "detect_field", "params": {{"robot_id": "Robot1", "field_label": "G"}}, "capture_var": "field"}}
         {{"operation": "place_object", "params": {{"robot_id": "Robot1", "x": "$field.x", "y": "$field.y", "z": "$field.z"}}}}
         Note: detect_field stores center coordinates directly under the capture variable (use "$field.x" NOT "$field.center.x")
+
+        === DETECT_FIELD RULE (CRITICAL) ===
+        detect_field ALWAYS requires field_label (a single letter A-I). NEVER omit it.
+        WRONG: {{"operation": "detect_field", "params": {{"robot_id": "Robot1"}}}}
+        RIGHT: {{"operation": "detect_field", "params": {{"robot_id": "Robot1", "field_label": "A"}}}}
+        If the task does not specify a field letter, infer it from context or ask — do NOT emit detect_field without field_label.
         
         {spatial_block}{anti_pattern_block}{reflection_block} Output only valid JSON, no explanation, no comments."""
 

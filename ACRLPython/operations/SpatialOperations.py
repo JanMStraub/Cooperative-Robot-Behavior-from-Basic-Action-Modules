@@ -97,6 +97,10 @@ def move_relative_to_object(
             # Direct position
             position = object_ref
 
+        # Normalize common aliases before validation
+        _aliases = {"right": "right_of", "left": "left_of", "front": "in_front_of"}
+        relation = _aliases.get(relation, relation)
+
         # Validate relation
         valid_relations = [
             "left_of",

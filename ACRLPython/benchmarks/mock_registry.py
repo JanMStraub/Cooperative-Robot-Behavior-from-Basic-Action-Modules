@@ -37,7 +37,12 @@ class _MockOperation:
             profile: One of PROFILES controlling stub behaviour.
         """
         self.__dict__.update(real_op.__dict__)
+        self._real_op = real_op
         self._profile = profile
+
+    def __getattr__(self, name: str):
+        """Delegate missing attributes to the wrapped real operation."""
+        return getattr(self._real_op, name)
 
     def execute(self, **kwargs):
         """

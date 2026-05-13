@@ -1470,6 +1470,19 @@ def _grasp_via_vgn_with_ros(
         )
         pos = dp
 
+    # Early reach check: fail fast before MoveIt if grasp position is outside robot reach.
+    try:
+        from .SpatialPredicates import target_within_reach as _twr
+        _reachable, _reach_reason = _twr(robot_id, pos[0], pos[1], pos[2])
+        if not _reachable:
+            logger.warning(
+                f"[VGN+ROS] Grasp position {[round(v,3) for v in pos]} unreachable "
+                f"for {robot_id}: {_reach_reason} — falling back to geometric ROS"
+            )
+            return None
+    except Exception:
+        pass  # non-fatal: SpatialPredicates unavailable
+
     hover = pre_grasp_distance if pre_grasp_distance > 0 else PRE_GRASP_HOVER_OFFSET
     _approach_lower = preferred_approach.lower() if preferred_approach else "top"
     _is_top_down_approach = _approach_lower not in ("side", "front")
@@ -2060,6 +2073,21 @@ def grasp_object(
             )
 
         # --- TCP path (Unity grasp pipeline) ---
+        # Resolve to the canonical WorldState key (= Unity's obj.name) so Unity's
+        # FindObjectFlexible receives "Red Cube" instead of LLM-generated "redCube".
+        try:
+            from core.Imports import get_world_state as _get_ws
+            _ws = _get_ws()
+            if _ws is not None:
+                _canonical = _ws.resolve_canonical_id(object_id)
+                if _canonical and _canonical != object_id:
+                    logger.debug(
+                        f"grasp_object: resolved object_id '{object_id}' → '{_canonical}' via WorldState"
+                    )
+                    object_id = _canonical
+        except Exception as _resolve_err:
+            logger.debug(f"grasp_object: canonical resolution skipped: {_resolve_err}")
+
         parameters = {
             "object_id": object_id,
             "use_advanced_planning": use_advanced_planning,

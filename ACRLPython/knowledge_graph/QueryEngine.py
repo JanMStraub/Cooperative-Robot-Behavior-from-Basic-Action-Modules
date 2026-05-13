@@ -370,6 +370,71 @@ class GraphQueryEngine:
 
         return objects
 
+    def can_reach_position(
+        self,
+        robot_id: str,
+        position: Tuple[float, float, float],
+    ) -> Dict[str, Any]:
+        """
+        Check whether a robot can physically reach an arbitrary world position.
+
+        Combines two checks:
+        1. Workspace reach radius — distance from robot base must be within MAX_ROBOT_REACH.
+        2. Path obstruction — no object node within 5cm of the straight-line path.
+
+        This is more general than find_reachable_robots() (which only works for
+        objects already registered in the graph) and is intended for computed
+        positions such as midpoints that have no graph node.
+
+        Args:
+            robot_id: Robot identifier (e.g. "Robot1").
+            position: Target position (x, y, z) in Unity world space.
+
+        Returns:
+            Dict with keys:
+                reachable (bool): True if both checks pass.
+                reason (str): Empty string if reachable, explanation otherwise.
+                path_blocked (bool): True if an obstacle lies on the path.
+                within_reach (bool): True if position is within reach radius.
+        """
+        try:
+            from operations.SpatialPredicates import target_within_reach
+        except ImportError:
+            logger.debug("SpatialPredicates unavailable; skipping reach radius check")
+            target_within_reach = None  # type: ignore[assignment]
+
+        x, y, z = position
+        within_reach = True
+        reason = ""
+
+        if target_within_reach is not None:
+            within_reach, reason = target_within_reach(robot_id, x, y, z)
+
+        path_blocked = self.is_path_blocked(robot_id, position)
+
+        if not within_reach:
+            return {
+                "reachable": False,
+                "reason": reason,
+                "within_reach": False,
+                "path_blocked": path_blocked,
+            }
+
+        if path_blocked:
+            return {
+                "reachable": False,
+                "reason": f"Path to ({x:.3f}, {y:.3f}, {z:.3f}) is blocked by an obstacle",
+                "within_reach": True,
+                "path_blocked": True,
+            }
+
+        return {
+            "reachable": True,
+            "reason": "",
+            "within_reach": True,
+            "path_blocked": False,
+        }
+
     def get_graph_stats(self) -> Dict[str, Any]:
         """
         Get comprehensive graph statistics.

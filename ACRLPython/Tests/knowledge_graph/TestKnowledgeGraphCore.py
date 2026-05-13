@@ -325,5 +325,118 @@ class TestKnowledgeGraphCore(unittest.TestCase):
                 )
 
 
+class TestCanReachPosition(unittest.TestCase):
+    """Tests for GraphQueryEngine.can_reach_position()."""
+
+    def setUp(self):
+        from knowledge_graph.Core import KnowledgeGraph
+        from knowledge_graph.QueryEngine import GraphQueryEngine
+        from unittest.mock import patch
+
+        self.graph = KnowledgeGraph()
+        self.qe = GraphQueryEngine(self.graph)
+        self._patch = patch
+
+    def tearDown(self):
+        self.graph.clear()
+
+    def _add_robot(self, robot_id="Robot1", pos=(-0.475, 0.3, 0.0)):
+        self.graph.add_node(robot_id, node_type="robot", position=pos)
+
+    def test_reachable_clear_path(self):
+        """Position within reach and no obstacles → reachable."""
+        self._add_robot()
+        from unittest.mock import patch as mpatch
+        with mpatch(
+            "knowledge_graph.QueryEngine.target_within_reach",
+            return_value=(True, ""),
+            create=True,
+        ):
+            result = self.qe.can_reach_position("Robot1", (-0.475, 0.3, 0.2))
+        self.assertTrue(result["reachable"])
+        self.assertFalse(result["path_blocked"])
+        self.assertTrue(result["within_reach"])
+
+    def test_unreachable_outside_reach(self):
+        """Position beyond reach radius → not reachable."""
+        self._add_robot()
+        # target_within_reach imported inside method; patch at import location
+        from unittest.mock import patch as mpatch
+        with mpatch(
+            "operations.SpatialPredicates.target_within_reach",
+            return_value=(False, "exceeds max reach"),
+        ):
+            result = self.qe.can_reach_position("Robot1", (5.0, 5.0, 5.0))
+        self.assertFalse(result["reachable"])
+        self.assertFalse(result["within_reach"])
+        self.assertIn("reach", result["reason"])
+
+    def test_unreachable_path_blocked(self):
+        """Obstacle on path → path_blocked=True → not reachable."""
+        self._add_robot(pos=(-0.475, 0.0, 0.0))
+        # Place an obstacle directly on the path
+        self.graph.add_node("obstacle", node_type="object", position=(-0.475, 0.0, 0.1))
+
+        from unittest.mock import patch as mpatch
+        with mpatch(
+            "operations.SpatialPredicates.target_within_reach",
+            return_value=(True, ""),
+        ):
+            result = self.qe.can_reach_position("Robot1", (-0.475, 0.0, 0.2))
+
+        self.assertFalse(result["reachable"])
+        self.assertTrue(result["path_blocked"])
+
+    def test_kg_disabled_returns_kg_disabled(self):
+        """When KG is disabled _check_placement_reachability returns 'kg_disabled'."""
+        from unittest.mock import patch as mpatch
+        import operations.GripperOperations as mod
+        with mpatch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", False):
+            note = mod._check_placement_reachability("Robot1", 0.0, 0.06, 0.0)
+        self.assertEqual(note, "kg_disabled")
+
+    def test_check_reachable_returns_reachable(self):
+        """_check_placement_reachability returns 'reachable' when KG check passes."""
+        from unittest.mock import patch as mpatch, MagicMock
+        mock_qe = MagicMock()
+        mock_qe.can_reach_position.return_value = {
+            "reachable": True, "reason": "", "within_reach": True, "path_blocked": False
+        }
+        import operations.GripperOperations as mod
+        with mpatch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True), \
+             mpatch("core.Imports.get_graph_query_engine", return_value=mock_qe):
+            note = mod._check_placement_reachability("Robot1", 0.0, 0.06, 0.0)
+        self.assertEqual(note, "reachable")
+
+    def test_check_unreachable_logs_warning(self):
+        """_check_placement_reachability returns 'unreachable:...' when check fails."""
+        from unittest.mock import patch as mpatch, MagicMock
+        mock_qe = MagicMock()
+        mock_qe.can_reach_position.return_value = {
+            "reachable": False,
+            "reason": "exceeds max reach",
+            "within_reach": False,
+            "path_blocked": False,
+        }
+        import operations.GripperOperations as mod
+        with mpatch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True), \
+             mpatch("core.Imports.get_graph_query_engine", return_value=mock_qe):
+            note = mod._check_placement_reachability("Robot1", 5.0, 5.0, 5.0)
+        self.assertTrue(note.startswith("unreachable:"))
+
+    def test_result_includes_reachability_key(self, ):
+        """place_object success result includes reachability key."""
+        from unittest.mock import patch as mpatch, MagicMock
+        mock_bc = MagicMock()
+        mock_bc.send_command = MagicMock(return_value=True)
+        import operations.GripperOperations as mod
+        with mpatch("config.ROS.ROS_ENABLED", False), \
+             mpatch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", False), \
+             mpatch.object(mod, "_get_command_broadcaster", return_value=mock_bc):
+            result = mod.place_object("Robot1", x=0.0, y=0.06, z=0.0)
+        self.assertTrue(result.success)
+        self.assertIn("reachability", result.result)
+
+
 if __name__ == "__main__":
     unittest.main()

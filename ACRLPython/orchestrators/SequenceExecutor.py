@@ -362,6 +362,7 @@ class SequenceExecutor:
                     _reflexion_eligible_categories = {
                         OperationCategory.NAVIGATION,
                         OperationCategory.MANIPULATION,
+                        OperationCategory.PERCEPTION,
                     }
                     try:
                         from ..core.Imports import get_global_registry
@@ -685,7 +686,8 @@ class SequenceExecutor:
                     # Thread didn't complete
                     group_success = False
                     logger.error(
-                        f"[Group {group_num}] Command {idx} did not complete (thread timeout)"
+                        f"[Group {group_num}] Command {idx} did not complete (thread timeout): "
+                        f"operation={cmd.get('operation', '?')} params={cmd.get('params', {})}"
                     )
                     results[idx] = {
                         "index": idx,
@@ -743,7 +745,7 @@ class SequenceExecutor:
         self._metrics.reset()
 
     def _execute_single_command(
-        self, operation: str, params: Dict[str, Any], timeout: float
+        self, operation: str, params: Dict[str, Any], timeout: float, _replan_depth: int = 0
     ) -> Dict[str, Any]:
         """
         Execute a single command and wait for completion.
@@ -752,6 +754,7 @@ class SequenceExecutor:
             operation: Operation name
             params: Operation parameters
             timeout: Timeout in seconds
+            _replan_depth: Internal counter preventing infinite waypoint-replan loops.
 
         Returns:
             Operation result
@@ -792,9 +795,9 @@ class SequenceExecutor:
                 verification_result = self._verify_operation_safety(op_def, params)
 
                 if not verification_result["safe"]:
-                    # Attempt waypoint replan if CoordinationVerifier embedded one
+                    # Attempt waypoint replan if CoordinationVerifier embedded one (max 1 replan)
                     waypoint = _extract_waypoint_from_verification(verification_result)
-                    if waypoint is not None:
+                    if waypoint is not None and _replan_depth == 0:
                         logger.info(
                             f"Proximity pre-check blocked {operation} — replanning via safe waypoint {waypoint}"
                         )
@@ -808,8 +811,8 @@ class SequenceExecutor:
                             request_id=self._generate_request_id(),
                         )
                         if wp_result.success:
-                            # Waypoint dispatched — retry original command
-                            return self._execute_single_command(operation, params, timeout)
+                            # Waypoint dispatched — retry original command (no further replanning)
+                            return self._execute_single_command(operation, params, timeout, _replan_depth=1)
                         logger.warning("Waypoint move failed — aborting original command")
                     _result = {
                         "success": False,
@@ -1373,7 +1376,7 @@ class SequenceExecutor:
         """
         # Get operation definition to access relationships
         op_def = self.registry.get_operation_by_name(operation_name)
-        if not op_def or not op_def.relationships:
+        if not op_def or not getattr(op_def, 'relationships', None):
             return params
 
         # Check if operation has parameter flows (inputs from other operations)

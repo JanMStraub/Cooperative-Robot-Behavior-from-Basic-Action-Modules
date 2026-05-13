@@ -3568,7 +3568,42 @@ namespace PythonCommunication
                 }
             }
 
+            // Strategy 5: Strip all non-alphanumeric chars, compare lowercase.
+            // Handles camelCase / snake_case / space-separated mismatches:
+            // "redCube" → "redcube" matches "Red Cube" → "redcube".
+            string queryAlnum = StripToAlnum(objectId);
+            if (queryAlnum.Length > 0)
+            {
+                foreach (var candidate in allObjects)
+                {
+                    if (StripToAlnum(candidate.name) == queryAlnum)
+                    {
+                        _objectCache[objectId] = candidate;
+                        if (_verboseLogging)
+                            Debug.Log(
+                                $"{_logPrefix} Found object '{candidate.name}' via alnum-strip match for '{objectId}'"
+                            );
+                        return candidate;
+                    }
+                }
+            }
+
             return null;
+        }
+
+        /// <summary>
+        /// Remove all non-alphanumeric characters and lowercase.
+        /// "Red Cube" → "redcube", "red_cube" → "redcube", "redCube" → "redcube".
+        /// </summary>
+        private static string StripToAlnum(string s)
+        {
+            var sb = new System.Text.StringBuilder(s.Length);
+            foreach (char c in s)
+            {
+                if (char.IsLetterOrDigit(c))
+                    sb.Append(char.ToLower(c));
+            }
+            return sb.ToString();
         }
 
         /// <summary>

@@ -11,7 +11,7 @@ The goal of this project is to have two AR4 robot arms positioned side by side t
 - Damped least-squares inverse kinematics (6-DOF control)
 - Multi-robot coordination via signal/wait primitives and collaborative operations
 - **Unified Python Backend**: Single entry point (RunRobotController) orchestrates all servers
-- **Operations System**: 22 registered operations including atomic actions, perception, and sync primitives
+- **Operations System**: 24 registered operations including atomic actions, perception, and sync primitives
 - **AutoRT System**: Autonomous task generation with LLM-based planning and human-in-the-loop approval
 - **Knowledge Graph**: Dynamic relation tracking for tracking complex topological environment states
 - **ROS 2 & Docker Integration**: Physical robot control capabilities via `ROSMotionClient` and containerized ROS deployments
@@ -145,7 +145,7 @@ Advanced 3D perception pipeline for physical robot integration:
 - **Human-in-the-Loop**: Unity custom inspector UI for task approval/rejection before execution
 - **Continuous Loop Mode**: Optional autonomous mode with configurable delay between generations
 - **Multi-Robot Coordination**: Supports collaborative tasks using signal/wait primitives
-- **Registry Integration**: Tasks validated against 22 registered operations
+- **Registry Integration**: Tasks validated against 24 registered operations
 - **Pydantic Validation**: Type-safe task structures with automatic JSON schema enforcement
 
 **Architecture**:
@@ -220,7 +220,7 @@ New approach-aware grasping:
 
 ### Operations System
 
-17 registered operations providing structured robot control:
+24 registered operations providing structured robot control:
 
 - Type-safe parameter validation
 - Rich metadata (descriptions, examples, failure modes)
@@ -265,7 +265,7 @@ New approach-aware grasping:
 
 **LLM-Driven Control Systems**:
 
-- **Operations System**: 22 registered operations organized by complexity (Levels 1-5)
+- **Operations System**: 24 registered operations organized by complexity (Atomic/Basic/Intermediate/Complex)
   - **Level 1-2 Basic** (16 ops): Navigation, gripper control, perception (incl. `generate_point_cloud`), field detection, sync primitives
   - **Level 3 Intermediate** (2 ops): `grasp_object`, `move_relative_to_object`
   - **Level 4 Multi-Robot** (3 ops): `detect_other_robot`, `mirror_movement`, `receive_handoff`
@@ -326,9 +326,9 @@ Auto-Cooperative-Robot-Learning/
 │   │   ├── RunAutoRT.py                 # Standalone AutoRT entry point
 │   │   ├── CommandParser.py             # LLM/regex command parser
 │   │   └── SequenceExecutor.py          # Sequential operation executor
-│   ├── operations/                      # 22 registered operations (Levels 1-5)
+│   ├── operations/                      # 24 registered operations (Atomic/Basic/Intermediate/Complex)
 │   │   ├── Base.py                      # Core operation classes
-│   │   ├── Registry.py                  # Operation registry (22 ops)
+│   │   ├── Registry.py                  # Operation registry (24 ops)
 │   │   ├── MoveOperations.py            # Navigation primitives
 │   │   ├── GripperOperations.py         # Gripper control
 │   │   ├── DetectionOperations.py       # Object detection + point cloud
@@ -487,28 +487,23 @@ Benchmark cases:
    - Click "Execute" to approve or "Reject" to discard
    - Optional: Enable "Start Loop" for continuous autonomous operation
 
-**Available Operations** (22 total, organized by complexity):
+**Available Operations** (24 total, organized by complexity):
 
-**Level 1-2 Basic Operations** (16):
+**Atomic** (7):
 
-- Navigation: `move_to_coordinate`, `pick_object_at_coordinate`, `adjust_end_effector_orientation`, `return_to_start`
-- Gripper: `control_gripper`, `release_object`, `place_object`
-- Perception: `detect_object_stereo`, `analyze_scene`, `generate_point_cloud`
-- Field Detection: `detect_field`, `detect_all_fields`
-- Status: `check_robot_status`
-- Sync: `signal`, `wait_for_signal`, `wait`
+- `control_gripper`, `release_object`, `check_robot_status`, `signal`, `wait_for_signal`, `wait`, `reset_simulation`
 
-**Level 3 Intermediate** (2):
+**Basic** (6):
 
-- `grasp_object`, `move_relative_to_object`
+- `move_to_coordinate`, `adjust_end_effector_orientation`, `return_to_start_position`, `generate_point_cloud`, `detect_field`, `detect_all_fields`
 
-**Level 4 Multi-Robot** (3):
+**Intermediate** (7):
 
-- `detect_other_robot`, `mirror_movement`, `receive_handoff`
+- `pick_object_at_coordinate`, `place_object`, `place_between_objects`, `detect_object_stereo`, `analyze_scene`, `move_relative_to_object`, `detect_other_robot`
 
-**Level 5 Collaborative** (1):
+**Complex** (4):
 
-- `stabilize_object`
+- `grasp_object`, `mirror_movement_of_other_robot`, `receive_handoff`, `stabilize_object`
 
 ## License
 

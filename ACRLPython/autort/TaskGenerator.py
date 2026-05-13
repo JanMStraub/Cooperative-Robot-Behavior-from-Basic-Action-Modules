@@ -298,7 +298,7 @@ AVAILABLE OPERATIONS:
 {collaborative_hint}
 
 {previous_task_section}
-Generate {num_tasks} diverse robotic tasks as a JSON array. Each task:
+TASK: Generate {num_tasks} diverse robotic tasks as a JSON array. Each task:
 {{
   "task_id": "task_001",
   "description": "one sentence",

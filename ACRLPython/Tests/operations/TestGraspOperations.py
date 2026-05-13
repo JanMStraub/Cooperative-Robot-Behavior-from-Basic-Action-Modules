@@ -382,6 +382,7 @@ class TestGraspObjectIntegration:
         with patch("operations.WorldState.WorldState") as mock:
             state = MagicMock()
             state.get_object_position.return_value = (0.0, 0.0, 0.15)
+            state.resolve_canonical_id.side_effect = lambda oid: oid
             mock.return_value = state
             yield state
 

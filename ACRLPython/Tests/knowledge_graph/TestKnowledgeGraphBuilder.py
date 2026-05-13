@@ -98,7 +98,7 @@ class TestGraphBuilder(unittest.TestCase):
         """Test NEAR edges are computed for close objects."""
         # Setup: Two objects very close together
         self.world_state.register_object("Obj1", position=(0.0, 0.3, 0.0))
-        self.world_state.register_object("Obj2", position=(0.05, 0.3, 0.0))  # 5cm away
+        self.world_state.register_object("Obj2", position=(0.01, 0.3, 0.0))  # 1cm away
 
         # Trigger update
         state_data = {

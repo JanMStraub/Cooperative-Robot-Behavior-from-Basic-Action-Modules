@@ -1,0 +1,227 @@
+#!/usr/bin/env python3
+"""
+Unit tests for ROSMotionServer coordinate transform methods
+============================================================
+
+Tests the pure-Python coordinate math in ROSMotionServer without requiring
+ROS 2 packages. All tests exercise the static transform logic:
+- _transform_world_to_local: Unity world → ROS base_link position
+- _transform_orientation_to_ros: Unity quaternion → ROS quaternion
+
+These transforms are safety-critical — a wrong frame transform sends the robot
+to the wrong physical location. No live Unity/ROS connection needed.
+
+Reference values from CLAUDE.md (verified April 2026):
+    Unity→ROS axis:  (X,Y,Z)_unity → (Z,-X,Y)_ros
+    Robot1 base:     (-0.475, 0, 0), y_rotation=0°
+    Robot2 base:     (0.475, 0, 0),  y_rotation=180°
+"""
+
+import math
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+
+# ---------------------------------------------------------------------------
+# Minimal stub of ROSMotionServer usable without ROS packages
+# ---------------------------------------------------------------------------
+
+def _make_server(robot1_base=(-0.475, 0.0, 0.0), robot2_base=(0.475, 0.0, 0.0)):
+    """Instantiate ROSMotionServer with ROS deps stubbed out."""
+    with patch.dict("sys.modules", {
+        "rclpy": MagicMock(),
+        "rclpy.node": MagicMock(),
+        "rclpy.action": MagicMock(),
+        "geometry_msgs": MagicMock(),
+        "geometry_msgs.msg": MagicMock(),
+        "moveit_msgs": MagicMock(),
+        "moveit_msgs.action": MagicMock(),
+        "moveit_msgs.msg": MagicMock(),
+        "moveit_msgs.srv": MagicMock(),
+        "sensor_msgs": MagicMock(),
+        "sensor_msgs.msg": MagicMock(),
+        "shape_msgs": MagicMock(),
+        "shape_msgs.msg": MagicMock(),
+        "std_msgs": MagicMock(),
+        "std_msgs.msg": MagicMock(),
+        "trajectory_msgs": MagicMock(),
+        "trajectory_msgs.msg": MagicMock(),
+    }):
+        from ros2.ROSMotionClient import ROSMotionServer
+
+    server = ROSMotionServer.__new__(ROSMotionServer)
+    server.ROBOT_BASE_TRANSFORMS = {
+        "Robot1": {"position": robot1_base, "y_rotation": 0.0},
+        "Robot2": {"position": robot2_base, "y_rotation": 180.0},
+    }
+    return server
+
+
+# ---------------------------------------------------------------------------
+# _transform_world_to_local
+# ---------------------------------------------------------------------------
+
+class TestTransformWorldToLocal:
+    def setup_method(self):
+        self.server = _make_server()
+
+    def test_robot1_identity_at_origin(self):
+        """Target at world origin, Robot1 base at (-0.475,0,0). ROS X = unity Z."""
+        result = self.server._transform_world_to_local({"x": 0.0, "y": 0.0, "z": 0.0}, "Robot1")
+        # unity_local = (0-(-0.475), 0, 0) = (0.475, 0, 0)
+        # no rotation (0°)
+        # ROS: x=local_z=0, y=-local_x=-0.475, z=local_y=0
+        assert result["x"] == pytest.approx(0.0)
+        assert result["y"] == pytest.approx(-0.475)
+        assert result["z"] == pytest.approx(0.0)
+
+    def test_robot1_forward_target(self):
+        """Target directly in front of Robot1 (unity +Z = ros +X)."""
+        result = self.server._transform_world_to_local({"x": -0.475, "y": 0.0, "z": 0.3}, "Robot1")
+        # unity_local = (0, 0, 0.3), y_rot=0 → ros: x=0.3, y=0, z=0
+        assert result["x"] == pytest.approx(0.3)
+        assert result["y"] == pytest.approx(0.0)
+        assert result["z"] == pytest.approx(0.0)
+
+    def test_robot1_height(self):
+        """Unity Y (up) maps to ROS Z (up)."""
+        result = self.server._transform_world_to_local({"x": -0.475, "y": 0.089, "z": 0.0}, "Robot1")
+        assert result["z"] == pytest.approx(0.089)
+        assert result["x"] == pytest.approx(0.0)
+
+    def test_robot1_documented_example(self):
+        """Example from CLAUDE.md: target (0, 0.089, 0.05) for Robot1."""
+        result = self.server._transform_world_to_local({"x": 0.0, "y": 0.089, "z": 0.05}, "Robot1")
+        # unity_local = (0.475, 0.089, 0.05), no rotation
+        # ros: x=0.05, y=-0.475, z=0.089
+        assert result["x"] == pytest.approx(0.05)
+        assert result["y"] == pytest.approx(-0.475)
+        assert result["z"] == pytest.approx(0.089)
+
+    def test_robot2_180_flip(self):
+        """Robot2 faces -Z. A target in front of Robot2 (world -Z) should map to ROS +X."""
+        # Robot2 base at (0.475, 0, 0). Put target at (0.475, 0, -0.3) — directly "in front"
+        result = self.server._transform_world_to_local({"x": 0.475, "y": 0.0, "z": -0.3}, "Robot2")
+        # unity_local = (0, 0, -0.3)
+        # y_rot=180°: cos=−1, sin=0
+        # rotated_x = -1*0 + 0*(-0.3) = 0
+        # rotated_z = -0*0 + (-1)*(-0.3) = 0.3  ← now +Z after 180 flip
+        # ros: x=0.3, y=0, z=0
+        assert result["x"] == pytest.approx(0.3)
+        assert result["y"] == pytest.approx(0.0)
+        assert result["z"] == pytest.approx(0.0)
+
+    def test_robot2_right_maps_to_left(self):
+        """Unity +X (right) for Robot2 should flip to -Y in ROS after 180° rotation."""
+        result = self.server._transform_world_to_local({"x": 0.475 + 0.1, "y": 0.0, "z": 0.0}, "Robot2")
+        # unity_local = (0.1, 0, 0)
+        # y_rot=180°: rotated_x = -0.1, rotated_z = 0
+        # ros: x=0, y=-(-0.1)=0.1, z=0
+        assert result["y"] == pytest.approx(0.1)
+
+    def test_unknown_robot_returns_passthrough(self):
+        """Unknown robot_id logs warning and returns original coordinates."""
+        result = self.server._transform_world_to_local({"x": 1.0, "y": 2.0, "z": 3.0}, "RobotUnknown")
+        assert result == {"x": 1.0, "y": 2.0, "z": 3.0}
+
+    def test_missing_keys_default_to_zero(self):
+        """Missing x/y/z keys default to 0.0 (no KeyError)."""
+        result = self.server._transform_world_to_local({}, "Robot1")
+        # unity_local = (0.475, 0, 0), ros: x=0, y=-0.475, z=0
+        assert result["y"] == pytest.approx(-0.475)
+
+
+# ---------------------------------------------------------------------------
+# _transform_orientation_to_ros
+# ---------------------------------------------------------------------------
+
+class TestTransformOrientationToRos:
+    def setup_method(self):
+        self.server = _make_server()
+
+    def _quat_norm(self, q):
+        return math.sqrt(q["x"]**2 + q["y"]**2 + q["z"]**2 + q["w"]**2)
+
+    def test_identity_quaternion_robot1(self):
+        """Unity identity {0,0,0,1} → ROS identity for Robot1 (no Y-rotation)."""
+        result = self.server._transform_orientation_to_ros({"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}, "Robot1")
+        # axis relabel: rx=qz=0, ry=-qx=0, rz=qy=0, rw=qw=1
+        # no extra robot2 rotation
+        assert result["x"] == pytest.approx(0.0)
+        assert result["y"] == pytest.approx(0.0)
+        assert result["z"] == pytest.approx(0.0)
+        assert result["w"] == pytest.approx(1.0)
+
+    def test_unity_z_rotation_maps_to_ros_y(self):
+        """90° rotation around Unity Z → 90° around ROS Y (since unity_z → ros_x, unity_y → ros_z)."""
+        # 90° around Unity Z: q = (0, 0, sin(45°), cos(45°))
+        s = math.sin(math.pi / 4)
+        c = math.cos(math.pi / 4)
+        result = self.server._transform_orientation_to_ros({"x": 0.0, "y": 0.0, "z": s, "w": c}, "Robot1")
+        # axis relabel: rx=qz=s, ry=-qx=0, rz=qy=0, rw=qw=c
+        assert result["x"] == pytest.approx(s)
+        assert result["y"] == pytest.approx(0.0)
+        assert result["z"] == pytest.approx(0.0)
+        assert result["w"] == pytest.approx(c)
+
+    def test_output_is_unit_quaternion_robot1(self):
+        """Output quaternion norm == 1 for Robot1."""
+        q = {"x": 0.1, "y": 0.2, "z": 0.3, "w": math.sqrt(1 - 0.1**2 - 0.2**2 - 0.3**2)}
+        result = self.server._transform_orientation_to_ros(q, "Robot1")
+        assert self._quat_norm(result) == pytest.approx(1.0, abs=1e-6)
+
+    def test_output_is_unit_quaternion_robot2(self):
+        """Output quaternion norm == 1 for Robot2 (extra Z-rotation applied)."""
+        q = {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}
+        result = self.server._transform_orientation_to_ros(q, "Robot2")
+        assert self._quat_norm(result) == pytest.approx(1.0, abs=1e-6)
+
+    def test_robot2_identity_rotated_180(self):
+        """Robot2 identity quaternion should be rotated 180° around Z in ROS frame."""
+        result = self.server._transform_orientation_to_ros({"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}, "Robot2")
+        # After axis relabel: (0, 0, 0, 1) in ROS
+        # Robot2 applies inverse -180° around ROS Z: half=-90°, rz2=(0,0,-1,0)
+        # Product rz2 * identity = rz2 itself
+        half = math.radians(-180.0 / 2.0)  # = -90°
+        expected_z = math.sin(half)
+        expected_w = math.cos(half)
+        assert result["z"] == pytest.approx(expected_z, abs=1e-6)
+        assert result["w"] == pytest.approx(expected_w, abs=1e-6)
+
+    def test_w_preserved_not_negated(self):
+        """w must not be negated (negation inverts the rotation, not just representation)."""
+        q = {"x": 0.0, "y": 0.0, "z": 0.0, "w": 0.9}
+        result = self.server._transform_orientation_to_ros(q, "Robot1")
+        assert result["w"] == pytest.approx(0.9)
+
+    def test_missing_keys_default_to_identity(self):
+        """Missing quaternion keys default to identity (x=y=z=0, w=1)."""
+        result = self.server._transform_orientation_to_ros({}, "Robot1")
+        # default: qx=0, qy=0, qz=0, qw=1 → identity after relabel
+        assert result["w"] == pytest.approx(1.0)
+        assert result["x"] == pytest.approx(0.0)
+
+
+# ---------------------------------------------------------------------------
+# ROBOT_BASE_TRANSFORMS structure
+# ---------------------------------------------------------------------------
+
+class TestRobotBaseTransforms:
+    def test_robot1_y_rotation_zero(self):
+        server = _make_server()
+        assert server.ROBOT_BASE_TRANSFORMS["Robot1"]["y_rotation"] == pytest.approx(0.0)
+
+    def test_robot2_y_rotation_180(self):
+        server = _make_server()
+        assert server.ROBOT_BASE_TRANSFORMS["Robot2"]["y_rotation"] == pytest.approx(180.0)
+
+    def test_robot1_base_position(self):
+        server = _make_server()
+        pos = server.ROBOT_BASE_TRANSFORMS["Robot1"]["position"]
+        assert pos[0] == pytest.approx(-0.475)
+
+    def test_robot2_base_position(self):
+        server = _make_server()
+        pos = server.ROBOT_BASE_TRANSFORMS["Robot2"]["position"]
+        assert pos[0] == pytest.approx(0.475)

@@ -1330,13 +1330,16 @@ class ROSMotionServer:
             )
 
         success = feedback_status in ("completed", "completed_with_timeout")
-        return {
+        result = {
             "success": success,
             "robot_id": robot_id,
             "trajectory_points": len(trajectory.points),
             "planning_time": plan_time,
             "status": feedback_status,
         }
+        if not success:
+            result["error"] = f"Trajectory execution did not complete (status={feedback_status})"
+        return result
 
     def _get_current_pose(self, robot_id):
         """Get the current joint state from Unity via namespaced /joint_states topic.

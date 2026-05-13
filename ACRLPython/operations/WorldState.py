@@ -660,6 +660,16 @@ class WorldState(SingletonBase):
             # Invalidate normalized key cache on any structural change
             self._normalized_object_keys = None
 
+    @staticmethod
+    def _strip_to_alnum(s: str) -> str:
+        """Return lowercase string with all non-alphanumeric chars removed.
+
+        'Red Cube' → 'redcube', 'red_cube' → 'redcube', 'redCube' → 'redcube'.
+        Used as a last-resort normalization so camelCase, snake_case, and
+        space-separated names all resolve to the same canonical form.
+        """
+        return "".join(c for c in s.lower() if c.isalnum())
+
     def _get_normalized_keys(self) -> Dict[str, str]:
         """
         Return (building if necessary) the normalized-key-to-original-key cache.
@@ -674,6 +684,50 @@ class WorldState(SingletonBase):
                 k.lower().replace(" ", "_").replace("-", "_"): k for k in self._objects
             }
         return self._normalized_object_keys
+
+    def resolve_canonical_id(self, object_id: str) -> Optional[str]:
+        """Return the canonical WorldState key for object_id, or None if not found.
+
+        Uses the same resolution order as get_object_position (exact → normalised →
+        substring → alnum-strip) but returns the stored key rather than the position.
+        Call this before sending object_id to Unity so the command uses the actual
+        scene object name instead of the raw LLM-generated identifier.
+
+        Args:
+            object_id: LLM-generated or user-supplied object identifier.
+
+        Returns:
+            The canonical key stored in WorldState (mirrors Unity's obj.name), or None.
+        """
+        with self._lock:
+            if object_id in self._objects:
+                return object_id
+
+            normalised = object_id.lower().replace(" ", "_").replace("-", "_")
+            norm_cache = self._get_normalized_keys()
+
+            original_key = norm_cache.get(normalised)
+            if original_key is None:
+                for key_norm, orig in norm_cache.items():
+                    if key_norm in normalised or normalised in key_norm:
+                        original_key = orig
+                        break
+
+            if original_key is not None:
+                return original_key
+
+            # Last resort: strip all non-alphanumeric chars and compare.
+            # Handles camelCase ↔ snake_case ↔ space-separated mismatches,
+            # e.g. "redCube" → "redcube" matches stored "Red Cube" → "redcube".
+            query_alnum = self._strip_to_alnum(object_id)
+            for orig_key in self._objects:
+                if self._strip_to_alnum(orig_key) == query_alnum:
+                    logger.debug(
+                        f"resolve_canonical_id: alnum-strip resolved '{object_id}' → '{orig_key}'"
+                    )
+                    return orig_key
+
+            return None
 
     def get_object_state(self, object_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -792,6 +846,17 @@ class WorldState(SingletonBase):
                 )
                 return self._objects[original_key].position
 
+            # Last resort: strip all non-alphanumeric chars and compare.
+            # Handles camelCase ↔ snake_case ↔ space-separated mismatches,
+            # e.g. "redCube" → "redcube" matches stored "Red Cube" → "redcube".
+            query_alnum = self._strip_to_alnum(object_id)
+            for orig_key, obj in self._objects.items():
+                if self._strip_to_alnum(orig_key) == query_alnum:
+                    logger.debug(
+                        f"get_object_position: alnum-strip resolved '{object_id}' → '{orig_key}'"
+                    )
+                    return obj.position
+
             return None
 
     def get_object_dimensions(
@@ -825,6 +890,12 @@ class WorldState(SingletonBase):
 
             if original_key is not None:
                 return self._objects[original_key].dimensions
+
+            # Last resort: alnum-strip match (same as get_object_position).
+            query_alnum = self._strip_to_alnum(object_id)
+            for orig_key, obj in self._objects.items():
+                if self._strip_to_alnum(orig_key) == query_alnum:
+                    return obj.dimensions
 
             return None
 

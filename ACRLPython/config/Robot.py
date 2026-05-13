@@ -165,9 +165,9 @@ COLLISION_SAFETY_MARGIN = float(
 MIN_ROBOT_SEPARATION = float(os.environ.get("MIN_ROBOT_SEPARATION", "0.2"))  # meters
 
 # Python pre-check: block a move command whose target is within this radius of another
-# robot's EE (static case).  Intentionally small — only catch outright physical overlap.
+# robot's EE (static case).  6 cm catches close-approach safety violations while
 # Unity's ProximityGuard (EE_STOP_THRESHOLD = 0.25m) enforces the broader runtime margin.
-STATIC_COLLISION_RADIUS = float(os.environ.get("STATIC_COLLISION_RADIUS", "0.03"))  # meters
+STATIC_COLLISION_RADIUS = float(os.environ.get("STATIC_COLLISION_RADIUS", "0.06"))  # meters
 
 # Unity ProximityGuard EE stop threshold mirrored here for Python-side awareness.
 # Must stay in sync with Assets/Scripts/Constants.cs ProximityConstants.EE_STOP_THRESHOLD.

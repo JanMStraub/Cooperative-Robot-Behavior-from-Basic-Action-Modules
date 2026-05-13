@@ -473,11 +473,88 @@ PLACE_HOVER_OFFSET: float = 0.15  # 15 cm above target
 PLACE_TCP_OFFSET: float = 0.055  # 5.5 cm above target (matches GRASP_TCP_OFFSET)
 
 
+def _check_placement_reachability(
+    robot_id: str, x: float, y: float, z: float
+) -> str:
+    """Non-blocking KG reachability check for the placement position.
+
+    Returns a short note string included in the OperationResult payload.
+    Never raises — if KG is disabled or unavailable the check is silently skipped.
+    """
+    try:
+        from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
+
+        if not KNOWLEDGE_GRAPH_ENABLED:
+            return "kg_disabled"
+
+        from core.Imports import get_graph_query_engine
+
+        qe = get_graph_query_engine()
+        if qe is None:
+            return "kg_unavailable"
+
+        result = qe.can_reach_position(robot_id, (x, y, z))
+        if not result["reachable"]:
+            logger.warning(
+                f"place_object: KG reachability check failed for {robot_id} "
+                f"→ ({x:.3f}, {y:.3f}, {z:.3f}): {result['reason']}"
+            )
+            return f"unreachable:{result['reason']}"
+
+        return "reachable"
+    except Exception as e:
+        logger.debug(f"place_object: KG reachability check skipped: {e}")
+        return "kg_check_skipped"
+
+
+def _resolve_placement_y(
+    on_top_of: str,
+    placed_object_height: float,
+    fallback_y: float,
+) -> tuple[float, str]:
+    """Compute placement Y when stacking on another object via WorldState lookup."""
+    try:
+        from ._imports import get_world_state
+    except ImportError:
+        from operations._imports import get_world_state  # type: ignore
+
+    ws = get_world_state()
+    canonical_id = ws.resolve_canonical_id(on_top_of)
+    if canonical_id is None:
+        logger.warning(
+            f"place_object: on_top_of='{on_top_of}' not in WorldState; fallback to explicit y"
+        )
+        return fallback_y, "fallback_object_not_found"
+
+    obj_pos = ws.get_object_position(canonical_id)
+    obj_dims = ws.get_object_dimensions(canonical_id)
+
+    if obj_pos is None:
+        logger.warning(f"place_object: '{canonical_id}' has no position; fallback to explicit y")
+        return fallback_y, "fallback_no_position"
+    if obj_dims is None:
+        logger.warning(
+            f"place_object: '{canonical_id}' has no dimensions (vision-only detection); fallback to explicit y"
+        )
+        return fallback_y, "fallback_no_dimensions"
+
+    _, obj_height, _ = obj_dims
+    computed_y = obj_pos[1] + obj_height / 2.0 + placed_object_height / 2.0
+    logger.info(
+        f"place_object: stacking on '{canonical_id}' — "
+        f"obj_center_y={obj_pos[1]:.4f}, obj_height={obj_height:.4f}, "
+        f"placed_obj_height={placed_object_height:.4f} → computed_y={computed_y:.4f}"
+    )
+    return computed_y, f"stacked_on:{canonical_id}"
+
+
 def place_object(
     robot_id: str,
     x: float,
     y: float,
     z: float,
+    on_top_of: Optional[str] = None,
+    placed_object_height: float = 0.0,
     use_ros: Optional[bool] = None,
     request_id: int = 0,
 ) -> OperationResult:
@@ -502,18 +579,27 @@ def place_object(
     Args:
         robot_id: ID of the robot performing the placement.
         x: Target X coordinate in Unity world space (metres).
-        y: Target Y coordinate in Unity world space (metres).
+        y: Target Y coordinate in Unity world space (metres).  Ignored when
+           on_top_of resolves successfully; used as fallback otherwise.
         z: Target Z coordinate in Unity world space (metres).
+        on_top_of: Optional name or ID of a WorldState object to stack on.
+           When provided and resolved, placement Y is computed automatically
+           from target object position + dimensions.  Falls back to explicit y
+           if the object is not found or lacks dimension data.
+        placed_object_height: Height of the held object (metres).  Used with
+           on_top_of so the held object lands flush on the target surface.
+           Defaults to 0.0.
         use_ros: Override ROS/TCP path selection.  None = use config default.
         request_id: Optional request ID for tracking.
 
     Returns:
         OperationResult with placement confirmation or error details.
+        Includes a ``resolution`` key: ``"explicit_coords"``,
+        ``"stacked_on:<id>"``, or a ``"fallback_*"`` reason.
 
     Example:
         >>> result = place_object("Robot1", x=-0.18, y=0.06, z=0.05)
-        >>> if result.success:
-        ...     print("Object placed successfully")
+        >>> result = place_object("Robot1", x=0.0, y=0.0, z=0.05, on_top_of="blue_cube")
     """
     try:
         if not robot_id or not isinstance(robot_id, str):
@@ -523,13 +609,24 @@ def place_object(
                 ["Provide a valid robot ID (e.g., 'Robot1')"],
             )
 
+        effective_y = y
+        resolution_note = "explicit_coords"
+        if on_top_of:
+            effective_y, resolution_note = _resolve_placement_y(
+                on_top_of, placed_object_height, fallback_y=y
+            )
+
+        reachability_note = _check_placement_reachability(
+            robot_id, x, effective_y, z
+        )
+
         def _ros_path():
             from ros2.ROSBridge import ROSBridge
 
             bridge = ROSBridge.get_instance()
 
-            hover_pos = {"x": x, "y": y + PLACE_HOVER_OFFSET, "z": z}
-            place_pos = {"x": x, "y": y + PLACE_TCP_OFFSET, "z": z}
+            hover_pos = {"x": x, "y": effective_y + PLACE_HOVER_OFFSET, "z": z}
+            place_pos = {"x": x, "y": effective_y + PLACE_TCP_OFFSET, "z": z}
 
             # Step 1: Move to hover above target.
             logger.info(f"place_object: moving to hover above target for {robot_id}")
@@ -585,11 +682,13 @@ def place_object(
             return OperationResult.success_result(
                 {
                     "robot_id": robot_id,
-                    "placed_at": {"x": x, "y": y, "z": z},
+                    "placed_at": {"x": x, "y": effective_y, "z": z},
                     # "ros_executed" tells SequenceExecutor to skip the Unity
                     # completion-signal wait — the ROS path is fully synchronous
                     # and Unity never sends a TCP completion message for it.
                     "status": "ros_executed",
+                    "resolution": resolution_note,
+                    "reachability": reachability_note,
                     "timestamp": time.time(),
                 }
             )
@@ -599,7 +698,7 @@ def place_object(
                 "command_type": "place_object",
                 "robot_id": robot_id,
                 "parameters": {
-                    "target_position": {"x": x, "y": y, "z": z},
+                    "target_position": {"x": x, "y": effective_y, "z": z},
                     "hover_offset": PLACE_HOVER_OFFSET,
                     "tcp_offset": PLACE_TCP_OFFSET,
                 },
@@ -607,7 +706,7 @@ def place_object(
                 "request_id": request_id,
             }
             logger.info(
-                f"Sending place_object command to {robot_id} at ({x}, {y}, {z})"
+                f"Sending place_object command to {robot_id} at ({x}, {effective_y}, {z})"
             )
             success = _get_command_broadcaster().send_command(command, request_id)
             if not success:
@@ -622,8 +721,10 @@ def place_object(
             return OperationResult.success_result(
                 {
                     "robot_id": robot_id,
-                    "placed_at": {"x": x, "y": y, "z": z},
+                    "placed_at": {"x": x, "y": effective_y, "z": z},
                     "status": "command_sent",
+                    "resolution": resolution_note,
+                    "reachability": reachability_note,
                     "timestamp": time.time(),
                 }
             )
@@ -688,6 +789,26 @@ PLACE_OBJECT_OPERATION = BasicOperation(
             description="Target Z coordinate in Unity world space (metres)",
             required=True,
         ),
+        OperationParameter(
+            name="on_top_of",
+            type="str",
+            description=(
+                "Optional: name or ID of a WorldState object to stack on. "
+                "When provided, placement Y is computed from target object "
+                "position + dimensions. x and z still control horizontal alignment. "
+                "Falls back to explicit y if object not found or lacks dimensions."
+            ),
+            required=False,
+        ),
+        OperationParameter(
+            name="placed_object_height",
+            type="float",
+            description=(
+                "Height of the held object (metres). Used with on_top_of so "
+                "the held object lands flush on the target surface. Default 0.0."
+            ),
+            required=False,
+        ),
     ],
     preconditions=[],
     postconditions=[],
@@ -717,4 +838,214 @@ PLACE_OBJECT_OPERATION = BasicOperation(
         typical_before=["manipulation_release_object_002"],
     ),
     implementation=place_object,
+)
+
+
+# ============================================================================
+# Implementation: Place Between Objects
+# ============================================================================
+
+
+def place_between_objects(
+    robot_id: str,
+    object_id_1: str,
+    object_id_2: str,
+    y: float = 0.06,
+    on_top_of: Optional[str] = None,
+    placed_object_height: float = 0.0,
+    use_ros: Optional[bool] = None,
+    request_id: int = 0,
+) -> OperationResult:
+    """
+    Place a held object at the midpoint between two world-state objects.
+
+    Looks up both objects in WorldState, computes the XZ midpoint, and
+    delegates to place_object.  The Y coordinate defaults to the caller-
+    supplied value (typically the surface height); pass on_top_of to let
+    the stacking logic compute it automatically from one of the reference
+    objects instead.
+
+    Args:
+        robot_id: ID of the robot performing the placement.
+        object_id_1: Name or ID of the first reference object.
+        object_id_2: Name or ID of the second reference object.
+        y: Placement surface Y in Unity world space (metres).  Used when
+           on_top_of is not provided or cannot be resolved.
+        on_top_of: Optional object name/ID whose top surface sets the Y.
+           Passed through to place_object's stacking logic.
+        placed_object_height: Height of the held object (metres).  Used
+           with on_top_of for flush stacking.
+        use_ros: Override ROS/TCP path selection.  None = config default.
+        request_id: Optional request ID for tracking.
+
+    Returns:
+        OperationResult with placement confirmation or error details.
+        Includes midpoint coordinates and resolution notes.
+
+    Example:
+        >>> result = place_between_objects("Robot1", "blue_cube", "red_cube")
+    """
+    try:
+        if not robot_id or not isinstance(robot_id, str):
+            return OperationResult.error_result(
+                "INVALID_ROBOT_ID",
+                f"Robot ID must be a non-empty string, got: {robot_id}",
+                ["Provide a valid robot ID (e.g., 'Robot1')"],
+            )
+
+        try:
+            from ._imports import get_world_state
+        except ImportError:
+            from operations._imports import get_world_state  # type: ignore
+
+        ws = get_world_state()
+
+        def _resolve_pos(obj_id: str):
+            canonical = ws.resolve_canonical_id(obj_id)
+            if canonical is None:
+                return None, obj_id
+            pos = ws.get_object_position(canonical)
+            return pos, canonical
+
+        pos1, id1 = _resolve_pos(object_id_1)
+        pos2, id2 = _resolve_pos(object_id_2)
+
+        if pos1 is None:
+            return OperationResult.error_result(
+                "OBJECT_NOT_FOUND",
+                f"Object '{object_id_1}' not found in WorldState",
+                [
+                    f"Detect '{object_id_1}' with detect_object_stereo first",
+                    "Check object name matches WorldState entry",
+                ],
+            )
+        if pos2 is None:
+            return OperationResult.error_result(
+                "OBJECT_NOT_FOUND",
+                f"Object '{object_id_2}' not found in WorldState",
+                [
+                    f"Detect '{object_id_2}' with detect_object_stereo first",
+                    "Check object name matches WorldState entry",
+                ],
+            )
+
+        mid_x = (pos1[0] + pos2[0]) / 2.0
+        mid_z = (pos1[2] + pos2[2]) / 2.0
+        logger.info(
+            f"place_between_objects: midpoint of '{id1}' {pos1} and '{id2}' {pos2}"
+            f" → x={mid_x:.4f}, z={mid_z:.4f}"
+        )
+
+        result = place_object(
+            robot_id=robot_id,
+            x=mid_x,
+            y=y,
+            z=mid_z,
+            on_top_of=on_top_of,
+            placed_object_height=placed_object_height,
+            use_ros=use_ros,
+            request_id=request_id,
+        )
+
+        # Augment the result with midpoint metadata while preserving success/error.
+        if result.success and result.result is not None:
+            result.result["midpoint"] = {"x": mid_x, "y": result.result["placed_at"]["y"], "z": mid_z}
+            result.result["reference_objects"] = [id1, id2]
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Unexpected error in place_between_objects: {e}", exc_info=True)
+        return OperationResult.error_result(
+            "UNEXPECTED_ERROR",
+            f"Unexpected error occurred: {str(e)}",
+            ["Check logs for detailed error information", "Retry the operation"],
+        )
+
+
+PLACE_BETWEEN_OBJECTS_OPERATION = BasicOperation(
+    operation_id="manipulation_place_between_objects_004",
+    name="place_between_objects",
+    category=OperationCategory.MANIPULATION,
+    complexity=OperationComplexity.INTERMEDIATE,
+    description=(
+        "Place a held object at the midpoint between two reference objects"
+    ),
+    long_description="""
+        Resolves both reference objects from WorldState, computes the XZ midpoint,
+        and executes a controlled place sequence (hover, descent, release, ascent).
+        Use this instead of manually averaging coordinates in the prompt.
+
+        Supports the same on_top_of and placed_object_height stacking options
+        as place_object for precise vertical placement.
+    """,
+    usage_examples=[
+        "place_between_objects('Robot1', 'blue_cube', 'red_cube') — place at XZ midpoint, default Y",
+        "place_between_objects('Robot1', 'blue_cube', 'red_cube', on_top_of='blue_cube') — stack height from blue_cube",
+    ],
+    parameters=[
+        OperationParameter(
+            name="robot_id",
+            type="str",
+            description="ID of the robot performing the placement",
+            required=True,
+        ),
+        OperationParameter(
+            name="object_id_1",
+            type="str",
+            description="Name or ID of the first reference object in WorldState",
+            required=True,
+        ),
+        OperationParameter(
+            name="object_id_2",
+            type="str",
+            description="Name or ID of the second reference object in WorldState",
+            required=True,
+        ),
+        OperationParameter(
+            name="y",
+            type="float",
+            description="Placement surface Y coordinate (metres). Default 0.06 (typical table surface).",
+            required=False,
+        ),
+        OperationParameter(
+            name="on_top_of",
+            type="str",
+            description=(
+                "Optional: name or ID of a WorldState object whose top surface sets Y. "
+                "Overrides the y parameter when resolvable."
+            ),
+            required=False,
+        ),
+        OperationParameter(
+            name="placed_object_height",
+            type="float",
+            description="Height of the held object (metres). Used with on_top_of for flush stacking.",
+            required=False,
+        ),
+    ],
+    preconditions=[],
+    postconditions=[],
+    average_duration_ms=8000.0,
+    success_rate=0.88,
+    failure_modes=[
+        "Either reference object not found in WorldState",
+        "Midpoint outside robot reach envelope",
+        "IK infeasible at computed midpoint",
+    ],
+    relationships=OperationRelationship(
+        operation_id="manipulation_place_between_objects_004",
+        required_operations=[],
+        commonly_paired_with=[
+            "manipulation_grasp_object_001",
+            "vision_detect_object_stereo_001",
+        ],
+        pairing_reasons={
+            "manipulation_grasp_object_001": "Grasp precedes between-placement in a pick-and-place sequence",
+            "vision_detect_object_stereo_001": "Detect both reference objects before placing between them",
+        },
+        typical_after=["manipulation_grasp_object_001"],
+        typical_before=["manipulation_release_object_002"],
+    ),
+    implementation=place_between_objects,
 )

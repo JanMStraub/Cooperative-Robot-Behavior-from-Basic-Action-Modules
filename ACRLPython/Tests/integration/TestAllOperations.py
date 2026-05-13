@@ -189,7 +189,8 @@ class TestSyncOps:
         elapsed = time.time() - start
         assert result.get("success") is True, f"wait failed: {result.get('error')}"
         # Allow generous tolerance for network + LLM parsing + backend overhead.
-        assert elapsed < 28.0, f"wait(0.5) took unexpectedly long: {elapsed:.1f}s"
+        # 60s covers LLM parsing + network round-trip overhead; the actual wait is 500ms.
+        assert elapsed < 60.0, f"wait(0.5) took unexpectedly long: {elapsed:.1f}s"
 
     def test_signal_and_wait_for_signal_paired(self):
         """

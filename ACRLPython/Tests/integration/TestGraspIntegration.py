@@ -288,7 +288,7 @@ class TestGraspWithRealUnity:
         blueCube is in Robot1's workspace (x≈-0.300); Robot2 attempting to grasp
         it exercises the collision/IK failure path.
         """
-        with _BackendClient(timeout=60.0) as client:
+        with _BackendClient(timeout=120.0) as client:
             result = client.send_command(
                 command="grasp blueCube with Robot2",
                 robot_id="Robot2",

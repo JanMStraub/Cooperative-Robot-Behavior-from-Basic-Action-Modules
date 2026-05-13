@@ -26,6 +26,7 @@ from .GripperOperations import (
     CONTROL_GRIPPER_OPERATION,
     RELEASE_OBJECT_OPERATION,
     PLACE_OBJECT_OPERATION,
+    PLACE_BETWEEN_OBJECTS_OPERATION,
 )
 from .GraspOperations import (
     GRASP_OBJECT_OPERATION,
@@ -87,6 +88,7 @@ class OperationRegistry:
             CONTROL_GRIPPER_OPERATION,
             RELEASE_OBJECT_OPERATION,
             PLACE_OBJECT_OPERATION,
+            PLACE_BETWEEN_OBJECTS_OPERATION,
             # Perception & Detection
             DETECT_OBJECT_STEREO_OPERATION,
             GENERATE_POINT_CLOUD_OPERATION,

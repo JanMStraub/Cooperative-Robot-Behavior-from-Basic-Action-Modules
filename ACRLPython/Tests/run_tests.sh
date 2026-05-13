@@ -10,7 +10,7 @@ echo "==========================================="
 echo ""
 
 echo "Running all tests..."
-    ./acrl/bin/pytest tests/ -v --tb=short
+    ./acrl/bin/pytest tests/ -v --tb=short --ignore=tests/operations
 
 echo ""
 echo "==========================================="

@@ -192,7 +192,7 @@ class TestCommandParserKG(unittest.TestCase):
             patch("config.KnowledgeGraph.KNOWLEDGE_GRAPH_ENABLED", True),
             patch("core.Imports.get_graph_query_engine", return_value=mock_qe),
         ):
-            result = parser._get_spatial_context("Robot1")
+            result = parser._get_spatial_context("Robot1", command_text="handoff red_cube to Robot2")
 
         self.assertIn("Handoff red_cube with Robot2", result)
         self.assertIn("r1=0.40m", result)
@@ -297,6 +297,45 @@ class TestCommandParserKG(unittest.TestCase):
 
         self.assertNotIn("Path to target", result)
         mock_qe.is_path_blocked.assert_not_called()
+
+
+class TestCommandParserBetweenPrompt(unittest.TestCase):
+    """Verify the BETWEEN PLACEMENT block is present in the system prompt."""
+
+    def _get_prompt(self, robot_id="Robot1"):
+        with patch("orchestrators.CommandParser.RAGSystem", MagicMock()):
+            from orchestrators.CommandParser import _PromptBuilder
+
+            builder = _PromptBuilder(registry=MagicMock(), workflow_registry=MagicMock(), rag=None)
+            return builder.build("place between blue and red cube", robot_id)
+
+    def test_between_section_header_present(self):
+        """Prompt includes the BETWEEN PLACEMENT section."""
+        prompt = self._get_prompt()
+        self.assertIn("BETWEEN PLACEMENT", prompt)
+
+    def test_between_prompt_mentions_arithmetic(self):
+        """Prompt documents multi-variable arithmetic expressions."""
+        prompt = self._get_prompt()
+        self.assertIn("$blue_obj", prompt)
+        self.assertIn("$red_obj", prompt)
+
+    def test_between_prompt_has_midpoint_example(self):
+        """Prompt contains the midpoint averaging example."""
+        prompt = self._get_prompt()
+        self.assertIn("blue_obj.x + $red_obj.x", prompt)
+        self.assertIn("/ 2", prompt)
+
+    def test_between_prompt_mentions_parallel_groups(self):
+        """Prompt explains that detects can share a parallel_group."""
+        prompt = self._get_prompt()
+        self.assertIn("parallel_group", prompt)
+
+    def test_between_prompt_uses_two_capture_vars(self):
+        """Example uses two different capture_var names."""
+        prompt = self._get_prompt()
+        self.assertIn("blue_obj", prompt)
+        self.assertIn("red_obj", prompt)
 
 
 if __name__ == "__main__":

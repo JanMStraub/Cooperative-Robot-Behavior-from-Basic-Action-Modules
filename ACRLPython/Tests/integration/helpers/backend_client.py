@@ -234,6 +234,7 @@ class BackendClient:
             + self._encode_str(robot_id)
             + self._encode_str(camera_id)
             + struct.pack("B", 1 if auto_execute else 0)  # auto_execute flag
+            + struct.pack("<I", 0)  # flags_len = 0 (no feature-flag overrides)
         )
         self._sock.sendall(header + body)
 
