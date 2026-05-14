@@ -280,7 +280,7 @@ class RobotController:
                                 rot = world_state._to_rotation_tuple(
                                     obj.get("rotation")
                                 )
-                                world_state.update_object_position(
+                                world_state.supplement_object_from_unity(
                                     obj_id,
                                     pos,
                                     color=obj.get("color", "unknown"),

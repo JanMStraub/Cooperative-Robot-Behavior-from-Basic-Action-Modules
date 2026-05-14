@@ -149,6 +149,7 @@ class ObjectState:
     timestamp: float = field(default_factory=time.time)
     last_seen: float = field(default_factory=time.time)
     stale: bool = False
+    source: str = "unity"  # "vision" or "unity"; tracks which system last set position
 
 
 @dataclass
@@ -648,6 +649,7 @@ class WorldState(SingletonBase):
         confidence: float = 1.0,
         dimensions: Optional[Tuple[float, float, float]] = None,
         rotation: Optional[Tuple[float, float, float]] = None,
+        source: str = "vision",
     ):
         """
         Update object position from detection results.
@@ -660,6 +662,7 @@ class WorldState(SingletonBase):
             confidence: Detection confidence
             dimensions: Optional object dimensions (width, height, depth) in meters
             rotation: Optional object rotation (roll, pitch, yaw) in degrees
+            source: Which system set this position ("vision" or "unity")
         """
         with self._lock:
             if object_id not in self._objects:
@@ -671,6 +674,7 @@ class WorldState(SingletonBase):
                     confidence=confidence,
                     dimensions=dimensions,
                     rotation=rotation,
+                    source=source,
                 )
             else:
                 obj = self._objects[object_id]
@@ -678,6 +682,7 @@ class WorldState(SingletonBase):
                 obj.color = color
                 obj.object_type = object_type
                 obj.confidence = confidence
+                obj.source = source
                 # Preserve existing dimensions when the new update has none.
                 # Unity streams accurate collider-based dimensions; Python detection
                 # (especially cached SharedVisionState) often sends None.
@@ -700,6 +705,62 @@ class WorldState(SingletonBase):
                 cb(object_id, position)
             except Exception:
                 pass
+
+    def supplement_object_from_unity(
+        self,
+        object_id: str,
+        position: Tuple[float, float, float],
+        color: str = "unknown",
+        object_type: str = "unknown",
+        confidence: float = 1.0,
+        dimensions: Optional[Tuple[float, float, float]] = None,
+        rotation: Optional[Tuple[float, float, float]] = None,
+    ):
+        """
+        Update object state from Unity, but only as a supplement to vision.
+
+        Creates the object if not yet in WorldState (source="unity").
+        If already present (populated by vision), only fills in missing
+        dimensions/rotation/color/type — never overwrites position.
+        Does not fire object observers since no position change occurs for
+        already-tracked objects.
+
+        Args:
+            object_id: Unique object identifier
+            position: Object position (x, y, z) — used only when creating new entry
+            color: Object color
+            object_type: Object type
+            confidence: Detection confidence
+            dimensions: Optional object dimensions (width, height, depth) in meters
+            rotation: Optional object rotation (roll, pitch, yaw) in degrees
+        """
+        with self._lock:
+            if object_id not in self._objects:
+                self._objects[object_id] = ObjectState(
+                    object_id=object_id,
+                    position=position,
+                    color=color,
+                    object_type=object_type,
+                    confidence=confidence,
+                    dimensions=dimensions,
+                    rotation=rotation,
+                    source="unity",
+                )
+                self._normalized_object_keys = None
+                logger.debug(f"Supplemented (created) object {object_id} from Unity at {position}")
+            else:
+                obj = self._objects[object_id]
+                # Fill missing metadata only — never overwrite position set by vision
+                if dimensions is not None and obj.dimensions is None:
+                    obj.dimensions = dimensions
+                if rotation is not None and obj.rotation is None:
+                    obj.rotation = rotation
+                if obj.color == "unknown" and color != "unknown":
+                    obj.color = color
+                if obj.object_type == "unknown" and object_type != "unknown":
+                    obj.object_type = object_type
+                obj.timestamp = time.time()
+                logger.debug(f"Supplemented (metadata only) object {object_id} from Unity")
 
     def register_object_observer(self, callback) -> None:
         """
