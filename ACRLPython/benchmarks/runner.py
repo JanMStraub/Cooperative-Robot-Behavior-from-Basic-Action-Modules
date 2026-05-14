@@ -12,6 +12,7 @@ from __future__ import annotations
 import dataclasses
 import importlib
 import json
+import os
 import random
 import socket
 import struct
@@ -26,7 +27,7 @@ from .result import BenchmarkResult, ChainMetrics, StepResult, make_run_id
 # Protocol V2 constants (mirrors core/UnityProtocol.py)
 _SEQUENCE_QUERY = 0x08
 _RESULT_TYPE = 0x02
-_HOST = "127.0.0.1"
+_HOST = os.environ.get("ACRL_HOST", "127.0.0.1")
 _PORT = 5008
 _DEFAULT_CAMERA = "TableStereoCamera"
 _EXEC_PREFIX = "EXEC:"

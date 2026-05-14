@@ -30,7 +30,12 @@ setup_logging(__name__)
 logger = logging.getLogger(__name__)
 
 
-from ._imports import get_command_broadcaster as _get_command_broadcaster
+from ._imports import (
+    get_command_broadcaster as _get_command_broadcaster,
+    PLACE_HOVER_OFFSET,
+    PLACE_MIN_Y,
+    PLACE_TCP_OFFSET,
+)
 
 # ============================================================================
 # Implementation: Control Gripper Operation
@@ -98,7 +103,7 @@ def control_gripper(
             return err
 
         # Validate open_gripper parameter
-        if not isinstance(open_gripper, bool):
+        if not isinstance(open_gripper, bool):  # pyright: ignore[reportUnnecessaryIsInstance]
             return OperationResult.error_result(
                 "INVALID_OPEN_GRIPPER_PARAMETER",
                 f"open_gripper must be a boolean, got: {type(open_gripper).__name__}",
@@ -464,14 +469,6 @@ RELEASE_OBJECT_OPERATION = create_release_object_operation()
 # Implementation: Place Object
 # ============================================================================
 
-# Height above the target surface the arm hovers at before descending.
-PLACE_HOVER_OFFSET: float = 0.15  # 15 cm above target
-
-# Height above target position where gripper opens.
-# Keeps a small gap so the object rests on the surface rather than being
-# forced into it, while still being close enough not to drop freely.
-PLACE_TCP_OFFSET: float = 0.055  # 5.5 cm above target (matches GRASP_TCP_OFFSET)
-
 
 def _check_placement_reachability(
     robot_id: str, x: float, y: float, z: float
@@ -616,6 +613,16 @@ def place_object(
                 on_top_of, placed_object_height, fallback_y=y
             )
 
+        # Stereo depth on flat Unity surfaces is unreliable and returns near-zero Y.
+        # Clamp to table surface height so the arm never descends into the table.
+        if effective_y < PLACE_MIN_Y:
+            logger.warning(
+                f"place_object: effective_y={effective_y:.4f} below PLACE_MIN_Y={PLACE_MIN_Y} "
+                f"(stereo underestimate) — clamping to {PLACE_MIN_Y}"
+            )
+            effective_y = PLACE_MIN_Y
+            resolution_note += "+y_clamped"
+
         reachability_note = _check_placement_reachability(
             robot_id, x, effective_y, z
         )
@@ -628,9 +635,27 @@ def place_object(
             hover_pos = {"x": x, "y": effective_y + PLACE_HOVER_OFFSET, "z": z}
             place_pos = {"x": x, "y": effective_y + PLACE_TCP_OFFSET, "z": z}
 
-            # Top-down orientation: 179° around ROS X axis so ee_link Z points down.
-            # Mirrors the grasp q_topdown constant (x=0.9999, y=0, z=0, w=0.0087).
+            # Top-down orientation: ~179° around ROS X axis (ee_link Z points down).
+            # w=0.0087 (not 0.0) matches grasp planner's base quaternion — keeps MoveIt
+            # IK in the w>0 hemisphere so the solver always picks the same wrist config
+            # and avoids the ±360° flip that occurs at the w=0 singularity.
             top_down_orientation = {"x": 0.9999, "y": 0.0, "z": 0.0, "w": 0.0087}
+
+            # Step 0: Orient gripper to top-down at current position before moving.
+            # plan_and_execute with an orientation constraint can fail to find a plan
+            # if the robot starts far from the desired orientation (e.g. after a yawed
+            # grasp). Pre-orienting makes subsequent constrained moves much more reliable.
+            logger.info(f"place_object: orienting to top-down for {robot_id}")
+            orient_result = bridge.plan_orientation_change(
+                {"roll": 180, "pitch": 0, "yaw": 0},
+                robot_id=robot_id,
+            )
+            if not orient_result or not orient_result.get("success"):
+                logger.warning(
+                    f"place_object: pre-orient failed for {robot_id}, continuing anyway"
+                )
+
+            time.sleep(0.1)
 
             # Step 1: Move to hover above target with top-down gripper orientation.
             logger.info(f"place_object: moving to hover above target for {robot_id}")
@@ -638,6 +663,7 @@ def place_object(
                 position=hover_pos,
                 orientation=top_down_orientation,
                 robot_id=robot_id,
+                constrain_joint4=True,
             )
             if not hover_result or not hover_result.get("success"):
                 err = (
@@ -663,6 +689,7 @@ def place_object(
                 position=place_pos,
                 orientation=top_down_orientation,
                 robot_id=robot_id,
+                constrain_joint4=True,
             )
             if not descent_result or not descent_result.get("success"):
                 err = (
@@ -685,7 +712,6 @@ def place_object(
             logger.info(f"place_object: ascending after place for {robot_id}")
             bridge.plan_and_execute(
                 position=hover_pos,
-                orientation=top_down_orientation,
                 robot_id=robot_id,
             )
 

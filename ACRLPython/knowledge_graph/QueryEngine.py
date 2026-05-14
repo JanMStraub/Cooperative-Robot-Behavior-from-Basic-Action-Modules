@@ -214,51 +214,19 @@ class GraphQueryEngine:
         Returns:
             True if path appears blocked
         """
-        if not self._graph.has_node(robot_id):
-            return False
-
-        robot_node = self._graph.get_node(robot_id)
-        if not robot_node:
-            return False
-
-        # Prefer live WorldState EE position over KG node (which may be stale
-        # mid-movement if WorldStateServer hasn't sent an update yet).
-        try:
-            from core.Imports import get_world_state
-            ws = get_world_state()
-            robot_pos = (ws.get_robot_ee_position(robot_id) if ws else None) or robot_node.get("position")
-        except Exception:
-            robot_pos = robot_node.get("position")
-
+        robot_pos = self._get_robot_position(robot_id)
         if not robot_pos:
             return False
 
-        # Collect candidate obstacle nodes: NEAR neighbors of the robot plus all
-        # object nodes (to catch obstacles near the far end of a long path that
-        # may not be NEAR the robot start position).
-        near_objects = set(self._graph.get_neighbors(robot_id, edge_type="NEAR"))
-        all_objects = set(self._graph.get_all_nodes(node_type="object"))
-        candidates = near_objects | all_objects
+        candidates = self._collect_obstacle_candidates(robot_id)
 
-        # Exclude objects the robot is currently grasping — they travel with it.
-        grasped = set(self._graph.get_neighbors(robot_id, edge_type="GRASPING"))
-
-        # Precompute segment vector for point-to-segment projection
         ax, ay, az = robot_pos
         bx, by, bz = target
         dx, dy, dz = bx - ax, by - ay, bz - az
         seg_len_sq = dx * dx + dy * dy + dz * dz
-
         blocking_threshold = 0.05  # 5cm
 
         for obj_id in candidates:
-            if obj_id == robot_id:
-                continue
-
-            # Skip objects being carried by this robot.
-            if obj_id in grasped:
-                continue
-
             obj_node = self._graph.get_node(obj_id)
             if not obj_node:
                 continue
@@ -266,37 +234,72 @@ class GraphQueryEngine:
             if not obj_pos:
                 continue
 
-            # Skip objects co-located with the robot — either held (GRASPING edge
-            # not yet synced) or resting in the gripper zone.
-            if math.dist(obj_pos, robot_pos) < blocking_threshold:
-                continue
-
-            # Skip objects at the target destination — the robot is moving toward
-            # them, not being blocked by them.
-            if math.dist(obj_pos, target) < blocking_threshold:
-                continue
-
-            # Point-to-line-segment distance:
-            # Project obj_pos onto the segment [robot_pos, target], clamp t to [0,1],
-            # compute the closest point on the segment, measure distance.
-            if seg_len_sq == 0.0:
-                # Degenerate segment: robot is at target
-                dist = math.dist(obj_pos, robot_pos)
-            else:
-                px, py, pz = obj_pos
-                t = ((px - ax) * dx + (py - ay) * dy + (pz - az) * dz) / seg_len_sq
-                t = max(0.0, min(1.0, t))
-                closest = (ax + t * dx, ay + t * dy, az + t * dz)
-                dist = math.dist(obj_pos, closest)
-
-            if dist < blocking_threshold:
+            if self._obstacle_blocks_path(
+                obj_pos, robot_pos, target, seg_len_sq, dx, dy, dz, blocking_threshold
+            ):
                 logger.warning(
-                    f"Path blocked: obj={obj_id} pos={obj_pos} dist_to_path={dist:.4f}m "
+                    f"Path blocked: obj={obj_id} pos={obj_pos} "
                     f"robot_pos={robot_pos} target={target}"
                 )
                 return True
 
         return False
+
+    def _get_robot_position(self, robot_id: str):
+        """Return robot EE position from live WorldState, falling back to KG node."""
+        if not self._graph.has_node(robot_id):
+            return None
+        robot_node = self._graph.get_node(robot_id)
+        if not robot_node:
+            return None
+        try:
+            from core.Imports import get_world_state
+            ws = get_world_state()
+            pos = (ws.get_robot_ee_position(robot_id) if ws else None)
+            return pos or robot_node.get("position")
+        except Exception:
+            return robot_node.get("position")
+
+    def _collect_obstacle_candidates(self, robot_id: str) -> set:
+        """Return object IDs that are potential path obstacles, excluding grasped objects."""
+        near_objects = set(self._graph.get_neighbors(robot_id, edge_type="NEAR"))
+        all_objects = set(self._graph.get_all_nodes(node_type="object"))
+        grasped = set(self._graph.get_neighbors(robot_id, edge_type="GRASPING"))
+        return (near_objects | all_objects) - grasped - {robot_id}
+
+    def _obstacle_blocks_path(
+        self,
+        obj_pos,
+        robot_pos,
+        target,
+        seg_len_sq: float,
+        dx: float,
+        dy: float,
+        dz: float,
+        threshold: float,
+    ) -> bool:
+        """Return True if obj_pos lies within threshold of the robot→target segment.
+
+        Skips objects co-located with robot or target (they are not blocking obstacles).
+        Uses point-to-line-segment projection; degenerate (zero-length) segment falls
+        back to point distance.
+        """
+        if math.dist(obj_pos, robot_pos) < threshold:
+            return False
+        if math.dist(obj_pos, target) < threshold:
+            return False
+
+        ax, ay, az = robot_pos
+        if seg_len_sq == 0.0:
+            dist = math.dist(obj_pos, robot_pos)
+        else:
+            px, py, pz = obj_pos
+            t = ((px - ax) * dx + (py - ay) * dy + (pz - az) * dz) / seg_len_sq
+            t = max(0.0, min(1.0, t))
+            closest = (ax + t * dx, ay + t * dy, az + t * dz)
+            dist = math.dist(obj_pos, closest)
+
+        return dist < threshold
 
     def get_operation_history(
         self, robot_id: str, limit: int = 10

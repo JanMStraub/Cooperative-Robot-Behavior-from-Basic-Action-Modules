@@ -84,7 +84,7 @@ except ImportError:
         "Robot2": (0.475, 0.0, 0.0),
     }
 
-from operations.AR4Kinematics import compute_link_poses
+from AR4Kinematics import compute_link_poses
 
 # ROS 2 imports - only available inside Docker
 try:

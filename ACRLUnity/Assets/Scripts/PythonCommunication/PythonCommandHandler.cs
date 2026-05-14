@@ -1434,6 +1434,12 @@ namespace PythonCommunication
                 Vector3 hoverPos = targetPos + new Vector3(0f, hoverOffset, 0f);
                 Vector3 placePos = targetPos + new Vector3(0f, tcpOffset, 0f);
 
+                // Top-down orientation: robot base rotation × Euler(0,0,0) points gripper straight down.
+                Quaternion baseRotation = robotInstance.robotGameObject != null
+                    ? robotInstance.robotGameObject.transform.rotation
+                    : Quaternion.identity;
+                Quaternion topDownOrientation = baseRotation * Quaternion.Euler(0f, 0f, 0f);
+
                 StartCoroutine(
                     PlaceObjectCoroutine(
                         controller,
@@ -1441,6 +1447,7 @@ namespace PythonCommunication
                         gripperController,
                         hoverPos,
                         placePos,
+                        topDownOrientation,
                         command.robot_id,
                         command.request_id
                     )
@@ -1478,6 +1485,7 @@ namespace PythonCommunication
             GripperController gripperController,
             Vector3 hoverPos,
             Vector3 placePos,
+            Quaternion topDownOrientation,
             string robotId,
             uint requestId
         )
@@ -1485,9 +1493,9 @@ namespace PythonCommunication
             const float segmentTimeout = 15.0f;
             bool usingSimple = (controller == null && simpleController != null);
 
-            // Step 1: Move to hover position above target.
+            // Step 1: Move to hover position above target with top-down gripper orientation.
             if (controller != null)
-                controller.SetTarget(hoverPos);
+                controller.SetTarget(hoverPos, topDownOrientation);
             else if (simpleController != null)
                 simpleController.SetTarget(hoverPos);
 
@@ -1528,9 +1536,9 @@ namespace PythonCommunication
                 }
             }
 
-            // Step 2: Descend straight down to place height.
+            // Step 2: Descend to place height, maintaining top-down orientation.
             if (controller != null)
-                controller.SetTarget(placePos);
+                controller.SetTarget(placePos, topDownOrientation);
             else if (simpleController != null)
                 simpleController.SetTarget(placePos);
 
@@ -1575,9 +1583,9 @@ namespace PythonCommunication
             gripperController.OpenGrippers();
             yield return new WaitForSeconds(0.5f);
 
-            // Step 4: Ascend back to hover height to clear the placed object.
+            // Step 4: Ascend back to hover height, maintaining top-down orientation.
             if (controller != null)
-                controller.SetTarget(hoverPos);
+                controller.SetTarget(hoverPos, topDownOrientation);
             else if (simpleController != null)
                 simpleController.SetTarget(hoverPos);
 

@@ -99,6 +99,7 @@ services:
       - "5020:5020"
     volumes:
       - ../ACRLPython/ros2:/ros_ws/src/ros_bridge
+      - ../ACRLPython/operations/AR4Kinematics.py:/ros_ws/src/ros_bridge/AR4Kinematics.py
     command: >
       /bin/bash -c "
         source /opt/ros/humble/setup.bash &&

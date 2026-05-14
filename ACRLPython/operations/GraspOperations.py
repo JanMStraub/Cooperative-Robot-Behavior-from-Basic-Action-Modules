@@ -2459,7 +2459,6 @@ def receive_handoff(
                 robot_id=robot_id,
                 max_velocity_scaling=0.5,
                 max_acceleration_scaling=0.4,
-                constrain_joint4=True,
             )
             if not pre_result or not pre_result.get("success"):
                 logger.warning(
@@ -2621,7 +2620,7 @@ RECEIVE_HANDOFF_OPERATION = BasicOperation(
     preconditions=[
         "robot_is_initialized(robot_id)",
     ],
-    postconditions=["gripper_closed(robot_id)", "robot_at_approach_position(robot_id)"],
+    postconditions=[],
     average_duration_ms=6000.0,
     success_rate=0.90,
     failure_modes=[

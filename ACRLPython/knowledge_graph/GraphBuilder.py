@@ -49,6 +49,7 @@ class GraphBuilder:
         self._graph = graph
         self._world_state = world_state
         self._init_static_regions()
+        self._seed_robot_nodes()
         logger.info("GraphBuilder initialized")
 
     def _init_static_regions(self):
@@ -76,6 +77,32 @@ class GraphBuilder:
                 self._graph.add_edge(region1, region2, "ADJACENT_TO")
                 self._graph.add_edge(region2, region1, "ADJACENT_TO")
                 logger.debug(f"Added ADJACENT_TO edge: {region1} <-> {region2}")
+
+    def _seed_robot_nodes(self):
+        """
+        Pre-populate robot nodes from ROBOT_BASE_POSITIONS at init time.
+
+        Eliminates the race where QueryEngine warns about missing robot nodes
+        before the first WorldState packet arrives from Unity. Base positions
+        serve as placeholders until on_state_update overwrites them with real
+        positions.
+        """
+        for robot_id, base_pos in ROBOT_BASE_POSITIONS.items():
+            robot_state = self._world_state.get_robot_state(robot_id)
+            if robot_state and robot_state.position:
+                position = robot_state.position
+            else:
+                position = (base_pos[0], base_pos[1], base_pos[2])
+            robot_node = RobotNode(
+                node_id=robot_id,
+                position=position,
+                workspace_region=None,
+                gripper_state="unknown",
+                is_moving=False,
+                timestamp=time.time(),
+            )
+            self._graph.add_node(robot_node.node_id, **robot_node.to_dict())
+            logger.debug(f"Seeded robot node at startup: {robot_id}")
 
     def on_object_updated(self, object_id: str, position: tuple) -> None:
         """
@@ -248,7 +275,6 @@ class GraphBuilder:
         - NEAR: Object <-> Object, Robot <-> Object (if distance < threshold)
         - IN_REGION: Robot/Object -> Region (based on position)
         """
-        # Clear old spatial edges
         robots = self._graph.get_all_nodes(node_type="robot")
         objects = self._graph.get_all_nodes(node_type="object")
 
@@ -258,13 +284,17 @@ class GraphBuilder:
             nodes=robots + objects, edge_types={"CAN_REACH", "NEAR"}
         )
 
-        # Recompute CAN_REACH edges (Robot -> Object)
+        self._compute_can_reach_edges(robots, objects)
+        self._compute_near_edges(robots, objects)
+        self._compute_in_region_edges(robots, objects)
+
+    def _compute_can_reach_edges(self, robots: list, objects: list) -> None:
+        """Add CAN_REACH edges from each robot to objects within accessible reach."""
         for robot_id in robots:
             robot_node = self._graph.get_node(robot_id)
             if not robot_node:
                 continue
             robot_pos = self._to_pos_tuple(robot_node.get("position"))
-
             if not robot_pos:
                 continue
 
@@ -273,15 +303,12 @@ class GraphBuilder:
                 if not obj_node:
                     continue
                 obj_pos = self._to_pos_tuple(obj_node.get("position"))
-
                 if not obj_pos:
                     continue
 
-                # Check if object is accessible
                 is_accessible, _ = object_accessible_by_robot(
                     robot_id, obj_pos, world_state=self._world_state
                 )
-
                 if is_accessible:
                     distance = math.dist(robot_pos, obj_pos)
                     self._graph.add_edge(
@@ -289,11 +316,11 @@ class GraphBuilder:
                         obj_id,
                         "CAN_REACH",
                         distance=distance,
-                        approach_direction=None,  # Could compute from positions
+                        approach_direction=None,
                     )
 
-        # Recompute NEAR edges (proximity)
-        # Robot <-> Object
+    def _compute_near_edges(self, robots: list, objects: list) -> None:
+        """Add bidirectional NEAR edges between robots/objects within NEAR_THRESHOLD."""
         for robot_id in robots:
             robot_node = self._graph.get_node(robot_id)
             if not robot_node:
@@ -315,7 +342,6 @@ class GraphBuilder:
                     self._graph.add_edge(robot_id, obj_id, "NEAR", distance=distance)
                     self._graph.add_edge(obj_id, robot_id, "NEAR", distance=distance)
 
-        # Object <-> Object
         for i, obj1_id in enumerate(objects):
             obj1_node = self._graph.get_node(obj1_id)
             if not obj1_node:
@@ -324,7 +350,7 @@ class GraphBuilder:
             if not obj1_pos:
                 continue
 
-            for obj2_id in objects[i + 1 :]:
+            for obj2_id in objects[i + 1:]:
                 obj2_node = self._graph.get_node(obj2_id)
                 if not obj2_node:
                     continue
@@ -337,38 +363,22 @@ class GraphBuilder:
                     self._graph.add_edge(obj1_id, obj2_id, "NEAR", distance=distance)
                     self._graph.add_edge(obj2_id, obj1_id, "NEAR", distance=distance)
 
-        # Recompute IN_REGION edges
+    def _compute_in_region_edges(self, robots: list, objects: list) -> None:
+        """Update IN_REGION edges for all robots and objects based on current positions."""
         regions = list(WORKSPACE_REGIONS.keys())
 
-        for robot_id in robots:
-            robot_node = self._graph.get_node(robot_id)
-            if robot_node:
-                robot_pos = self._to_pos_tuple(robot_node.get("position"))
-                if robot_pos:
-                    region = self._world_state.get_region_for_position(robot_pos)
-                    if region:
-                        # Remove old IN_REGION edges
-                        for old_region in regions:
-                            self._graph.remove_edge(
-                                robot_id, old_region, edge_type="IN_REGION"
-                            )
-                        # Add new edge
-                        self._graph.add_edge(robot_id, region, "IN_REGION")
-
-        for obj_id in objects:
-            obj_node = self._graph.get_node(obj_id)
-            if obj_node:
-                obj_pos = self._to_pos_tuple(obj_node.get("position"))
-                if obj_pos:
-                    region = self._world_state.get_region_for_position(obj_pos)
-                    if region:
-                        # Remove old IN_REGION edges
-                        for old_region in regions:
-                            self._graph.remove_edge(
-                                obj_id, old_region, edge_type="IN_REGION"
-                            )
-                        # Add new edge
-                        self._graph.add_edge(obj_id, region, "IN_REGION")
+        for node_id in robots + objects:
+            node = self._graph.get_node(node_id)
+            if not node:
+                continue
+            pos = self._to_pos_tuple(node.get("position"))
+            if not pos:
+                continue
+            region = self._world_state.get_region_for_position(pos)
+            if region:
+                for old_region in regions:
+                    self._graph.remove_edge(node_id, old_region, edge_type="IN_REGION")
+                self._graph.add_edge(node_id, region, "IN_REGION")
 
     def _update_grasp_edges(self):
         """

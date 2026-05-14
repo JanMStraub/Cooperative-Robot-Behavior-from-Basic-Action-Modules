@@ -18,6 +18,7 @@ Usage:
 """
 
 import json
+import os
 import socket
 import logging
 import threading
@@ -63,7 +64,7 @@ class ROSBridge:
             self._timeout_per_candidate = ROS_TIMEOUT_PER_CANDIDATE
             self._execution_timeout = ROS_EXECUTION_TIMEOUT
         except ImportError:
-            self._host = host or "127.0.0.1"
+            self._host = host or os.environ.get("ROS_BRIDGE_HOST", "127.0.0.1")
             self._port = port or 5020
             self._timeout_base = 5.0
             self._timeout_per_candidate = 0.5

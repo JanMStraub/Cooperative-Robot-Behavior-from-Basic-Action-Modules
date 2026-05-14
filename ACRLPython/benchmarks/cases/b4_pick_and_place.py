@@ -17,5 +17,5 @@ def get_task(cfg: BenchmarkConfig) -> str:
         Task string sent to the LLM via SequenceServer.
     """
     return (
-        f"Robot {cfg.robot_id}: Grasp blue cube, and lift to y=0.2, detect field A, move to field A, adjust end effector orientation to point straight down, then release the object."
+        f"Robot {cfg.robot_id}: Grasp blue cube, and place it in field A."
     )

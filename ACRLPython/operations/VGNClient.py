@@ -482,8 +482,12 @@ class VGNClient:
         # detection_depth_m is measured directly from stereo disparity and is more
         # accurate than the geometric estimate from object world position.
         depth_hint: "Optional[float]" = None
+        # Stereo detection depth is accurate; WorldState geometry can be stale
+        # (object moved since last detection). Track source to set margin below.
+        _depth_hint_from_stereo = False
         if detection_depth_m is not None and detection_depth_m > 0.05:
             depth_hint = detection_depth_m
+            _depth_hint_from_stereo = True
             logger.debug(f"[VGN] Depth hint from stereo detection: {depth_hint:.3f} m")
         elif (
             object_world_pos is not None and cam_pos is not None and cam_rot is not None
@@ -511,6 +515,11 @@ class VGNClient:
             except Exception as _exc:
                 logger.debug(f"[VGN] depth_hint computation failed (non-fatal): {_exc}")
 
+        # Stereo hint is accurate → tight margin (±0.07 m).
+        # WorldState geometry can be stale by up to ~0.25 m → wider margin (±0.25 m)
+        # covers the object while still filtering far-field background.
+        _depth_margin = 0.07 if _depth_hint_from_stereo else 0.25
+
         # Build segmentation mask using refined bbox.
         # Import from GraspUtils (shared module) to avoid circular import with
         # GraspOperations which imports VGNClient.
@@ -524,11 +533,31 @@ class VGNClient:
             fov,
             preferred_approach="auto",
             depth_hint=depth_hint,
-            depth_margin=0.07,
+            depth_margin=_depth_margin,
         )
 
         masked_points = pts_rh[mask]
-        _MIN_POINTS = 20
+        _MIN_POINTS = 15
+        if masked_points.shape[0] < _MIN_POINTS and depth_hint is not None:
+            # Stereo reconstruction is sparse on small objects — retry with 2×
+            # the initial margin to recover more surface points while keeping
+            # depth filtering to avoid table/background noise.
+            _retry_margin = _depth_margin * 2
+            logger.warning(
+                f"[VGN] Only {masked_points.shape[0]} points after depth-filtered mask "
+                f"(need ≥ {_MIN_POINTS}) — retrying with wider depth margin ({_retry_margin:.2f} m)"
+            )
+            mask = _build_segmentation_mask(
+                pts_rh,
+                refined_bbox,
+                image_width,
+                image_height,
+                fov,
+                preferred_approach="auto",
+                depth_hint=depth_hint,
+                depth_margin=_retry_margin,
+            )
+            masked_points = pts_rh[mask]
         if masked_points.shape[0] < _MIN_POINTS:
             logger.warning(
                 f"[VGN] Only {masked_points.shape[0]} points after masking "

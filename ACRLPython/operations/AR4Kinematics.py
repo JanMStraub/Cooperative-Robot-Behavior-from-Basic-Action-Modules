@@ -25,7 +25,27 @@ from typing import List, Tuple
 
 import numpy as np
 
-from operations.GraspFrameTransform import _quat_multiply, _normalise_quat
+def _quat_multiply(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
+    """Hamilton product of two quaternions [x, y, z, w]."""
+    x1, y1, z1, w1 = q1
+    x2, y2, z2, w2 = q2
+    return np.array(
+        [
+            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+        ],
+        dtype=np.float64,
+    )
+
+
+def _normalise_quat(q: np.ndarray) -> np.ndarray:
+    """Return unit-length quaternion; handles near-zero input gracefully."""
+    norm = np.linalg.norm(q)
+    if norm < 1e-9:
+        return np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float64)
+    return q / norm
 
 # ---------------------------------------------------------------------------
 # URDF joint definitions (verified from ar4.urdf)

@@ -145,6 +145,24 @@ PREGRASP_ACCELERATION_SCALING = float(
     os.environ.get("PREGRASP_ACCELERATION_SCALING", "1.0")
 )
 
+# ============================================================================
+# Placement Parameters
+# ============================================================================
+
+# Arm hovers this far above the target surface before descending to place.
+PLACE_HOVER_OFFSET = float(os.environ.get("PLACE_HOVER_OFFSET", "0.15"))  # meters
+
+# Gripper opens this far above the target surface so the object lands gently.
+PLACE_TCP_OFFSET = float(os.environ.get("PLACE_TCP_OFFSET", "0.055"))  # meters
+
+# Stereo depth on flat Unity surfaces is unreliable and returns near-zero Y.
+# Clamp placement Y to at least this height so the arm never descends into the table.
+PLACE_MIN_Y = float(os.environ.get("PLACE_MIN_Y", "0.06"))  # meters, table surface height
+
+# ============================================================================
+# Grasp Descent Parameters
+# ============================================================================
+
 # Velocity/acceleration scaling for the final Cartesian descent to grasp position.
 # Must be slow enough that the gripper doesn't slam into the object on arrival.
 GRASP_DESCENT_VELOCITY_SCALING = float(

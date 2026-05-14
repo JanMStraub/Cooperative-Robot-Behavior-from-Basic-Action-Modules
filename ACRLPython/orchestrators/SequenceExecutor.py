@@ -312,6 +312,16 @@ class SequenceExecutor:
                 # Auto-inject parameters from previous operations based on ParameterFlow definitions
                 params = self._auto_inject_parameters(operation, params)
 
+                # Warn about unresolved $ references before resolution
+                for _k, _v in params.items():
+                    if isinstance(_v, str) and _v.startswith("$"):
+                        _var_name = _v.lstrip("$").split(".")[0]
+                        if _var_name not in self._variables:
+                            logger.warning(
+                                "Pre-exec: param '%s' references $%s which is not yet captured",
+                                _k, _var_name,
+                            )
+
                 # Resolve variable references in params (manual $ references)
                 params = self._resolve_variables(params)
 
@@ -1405,11 +1415,14 @@ class SequenceExecutor:
         """
         # Get operation definition to access relationships
         op_def = self.registry.get_operation_by_name(operation_name)
-        if not op_def or not getattr(op_def, 'relationships', None):
+        if not op_def:
+            return params
+        relationships = getattr(op_def, 'relationships', None)
+        if not relationships:
             return params
 
         # Check if operation has parameter flows (inputs from other operations)
-        param_flows = op_def.relationships.parameter_flows
+        param_flows = relationships.parameter_flows
         if not param_flows:
             return params
 

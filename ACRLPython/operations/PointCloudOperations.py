@@ -182,6 +182,22 @@ def _apply_camera_rotation(points: np.ndarray, quaternion: list) -> np.ndarray:
         Float32 (N, 3) in Unity world frame.
     """
     x, y, z, w = [float(v) for v in quaternion]
+    # Guard against non-finite or zero-length quaternions from Unity metadata.
+    # Zero-length → identity; non-finite → identity with a warning.
+    if not all(np.isfinite([x, y, z, w])):
+        logger.warning(
+            f"_apply_camera_rotation: non-finite quaternion {[x, y, z, w]}, using identity"
+        )
+        x, y, z, w = 0.0, 0.0, 0.0, 1.0
+    else:
+        norm = np.sqrt(x * x + y * y + z * z + w * w)
+        if norm < 1e-9:
+            logger.warning(
+                "_apply_camera_rotation: zero-length quaternion, using identity"
+            )
+            x, y, z, w = 0.0, 0.0, 0.0, 1.0
+        else:
+            x, y, z, w = x / norm, y / norm, z / norm, w / norm
     R = np.array(
         [
             [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
