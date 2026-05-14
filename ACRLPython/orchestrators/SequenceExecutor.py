@@ -515,6 +515,35 @@ class SequenceExecutor:
             f"{completed}/{len(commands)} commands in {total_duration:.0f}ms",
         )
 
+        # Broadcast outcome to WorldState for peer-robot awareness
+        try:
+            ws = get_world_state()
+            if ws is not None:
+                final_states = {}
+                for r in results:
+                    if r is None:
+                        continue
+                    obj_state = (r.get("result") or {}).get("object_state")
+                    if obj_state and isinstance(obj_state, dict):
+                        obj_id = obj_state.get("object_id")
+                        if obj_id:
+                            final_states[obj_id] = obj_state
+                # Derive robot_id from first command's params
+                _broadcast_robot_id = "unknown"
+                if commands:
+                    _broadcast_robot_id = (
+                        commands[0].get("params", {}).get("robot_id", "unknown")
+                    )
+                ws.broadcast_task_outcome(
+                    robot_id=_broadcast_robot_id,
+                    task_id=self._current_sequence_id or "unknown",
+                    success=success,
+                    duration_ms=total_duration,
+                    final_object_states=final_states,
+                )
+        except Exception:
+            pass  # Broadcasting is best-effort; never fail a sequence over it
+
         return result
 
     def _execute_parallel_groups(

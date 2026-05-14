@@ -35,6 +35,9 @@ logger = get_logger(__name__)
 _DEFAULT_REFRESH_INTERVAL = 2.0
 _DEFAULT_STALE_THRESHOLD = 0.4
 
+# Module-level singleton reference for get_perception_refresh_daemon()
+_active_refresh_loop = None
+
 
 class PerceptionRefreshLoop:
     """Background daemon that re-detects stale WorldState objects.
@@ -63,9 +66,12 @@ class PerceptionRefreshLoop:
         self._stale_threshold = stale_threshold
         self._stop_event = threading.Event()
         self._thread: Optional[threading.Thread] = None
+        self._anticipatory_queue: list = []
+        self._anticipatory_lock = threading.Lock()
 
     def start(self) -> None:
         """Start the background refresh thread (idempotent)."""
+        global _active_refresh_loop
         if self._thread and self._thread.is_alive():
             logger.debug("PerceptionRefreshLoop already running")
             return
@@ -76,10 +82,25 @@ class PerceptionRefreshLoop:
             daemon=True,
         )
         self._thread.start()
+        _active_refresh_loop = self
         logger.debug(
             f"PerceptionRefreshLoop started "
             f"(interval={self._refresh_interval}s, stale_threshold={self._stale_threshold})"
         )
+
+    def trigger_anticipatory_refresh(self, object_ids: list) -> None:
+        """Queue object IDs for immediate re-detection on the next sweep.
+
+        Call this when a robot commits to moving toward an object so its
+        detection data is fresh before the robot arrives.
+
+        Args:
+            object_ids: List of object_id strings to refresh.
+        """
+        with self._anticipatory_lock:
+            for oid in object_ids:
+                if oid not in self._anticipatory_queue:
+                    self._anticipatory_queue.append(oid)
 
     def stop(self) -> None:
         """Signal the refresh thread to stop and wait for it to exit."""
@@ -100,8 +121,38 @@ class PerceptionRefreshLoop:
             except Exception as exc:
                 logger.error(f"PerceptionRefreshLoop sweep error: {exc}", exc_info=True)
 
+    def _refresh_object_by_id(self, object_id: str) -> bool:
+        """Refresh a specific object by ID, looking up its color from WorldState.
+
+        Args:
+            object_id: Object identifier to refresh.
+
+        Returns:
+            True if detection succeeded.
+        """
+        try:
+            obj = self._world_state.get_object(object_id)
+            if obj is None:
+                return False
+            return self._refresh_stereo(obj.color)
+        except Exception as exc:
+            logger.debug(f"_refresh_object_by_id failed for '{object_id}': {exc}")
+            return False
+
     def _sweep(self) -> None:
-        """One sweep: find stale objects and re-detect each one."""
+        """One sweep: drain anticipatory queue then find stale objects and re-detect."""
+        # High-priority: drain anticipatory queue first (robot intent-driven refreshes)
+        with self._anticipatory_lock:
+            pending = list(self._anticipatory_queue)
+            self._anticipatory_queue.clear()
+        for object_id in pending:
+            if self._stop_event.is_set():
+                return
+            try:
+                self._refresh_object_by_id(object_id)
+            except Exception as exc:
+                logger.debug(f"Anticipatory refresh failed for '{object_id}': {exc}")
+
         stale_colors = self._collect_stale_colors()
         if not stale_colors:
             return

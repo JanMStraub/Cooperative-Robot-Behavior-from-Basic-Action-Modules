@@ -1004,11 +1004,61 @@ class CommandParser:
             logger.debug(f"KG spatial context unavailable: {e}")
             return ""
 
+    def _get_peer_context(self, robot_id: str) -> str:
+        """Return peer robot state and intent warnings for LLM context injection.
+
+        Always runs regardless of KG availability. Provides:
+        - Per-robot world context string for all peer robots
+        - Warnings when another robot is already targeting the same object
+
+        Args:
+            robot_id: The planning robot (its own state is excluded).
+
+        Returns:
+            Formatted peer context string, or empty string if unavailable.
+        """
+        try:
+            from core.Imports import get_world_state
+
+            ws = get_world_state()
+            if ws is None:
+                return ""
+
+            peer_lines = []
+
+            all_robots = ws.get_all_robots() if hasattr(ws, "get_all_robots") else []
+            for r_state in all_robots:
+                if r_state.robot_id == robot_id:
+                    continue
+                peer_ctx = ws.get_world_context_string(r_state.robot_id)
+                if peer_ctx:
+                    peer_lines.append(f"  {r_state.robot_id}: {peer_ctx}")
+
+            intents = ws.get_robot_intents() if hasattr(ws, "get_robot_intents") else {}
+            for other_id, target_obj in intents.items():
+                if other_id != robot_id and target_obj:
+                    peer_lines.append(
+                        f"  WARNING: {other_id} is already moving toward {target_obj}"
+                    )
+
+            if not peer_lines:
+                return ""
+
+            lines = ["=== PEER ROBOT STATE ==="] + peer_lines
+            return "\n        ".join(lines)
+        except Exception as e:
+            logger.debug(f"Peer context unavailable: {e}")
+            return ""
+
     def _build_parsing_prompt(
         self, command_text: str, robot_id: str, available_ops: str
     ) -> str:
         """Build the prompt for LLM command parsing. Delegates to _PromptBuilder."""
-        spatial_section = self._get_spatial_context(robot_id, command_text=command_text)
+        kg_section = self._get_spatial_context(robot_id, command_text=command_text)
+        peer_section = self._get_peer_context(robot_id)
+        spatial_section = "\n        ".join(
+            s for s in [kg_section, peer_section] if s
+        )
         return self._prompt_builder.build(
             command_text,
             robot_id,

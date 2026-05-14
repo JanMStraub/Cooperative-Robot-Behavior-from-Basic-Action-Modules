@@ -336,3 +336,17 @@ def get_camera_provider(env: str = "sim"):
         return _get_cam(env=env)
     except ImportError as e:
         raise ImportError(f"Failed to import camera provider. Error: {e}")
+
+
+def get_perception_refresh_daemon():
+    """Get the active PerceptionRefreshLoop instance if one has been started.
+
+    Returns:
+        PerceptionRefreshLoop instance or None if not running.
+    """
+    try:
+        from operations.PerceptionRefresh import _active_refresh_loop
+
+        return _active_refresh_loop
+    except (ImportError, AttributeError):
+        return None

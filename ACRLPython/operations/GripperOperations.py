@@ -628,10 +628,15 @@ def place_object(
             hover_pos = {"x": x, "y": effective_y + PLACE_HOVER_OFFSET, "z": z}
             place_pos = {"x": x, "y": effective_y + PLACE_TCP_OFFSET, "z": z}
 
-            # Step 1: Move to hover above target.
+            # Top-down orientation: 179° around ROS X axis so ee_link Z points down.
+            # Mirrors the grasp q_topdown constant (x=0.9999, y=0, z=0, w=0.0087).
+            top_down_orientation = {"x": 0.9999, "y": 0.0, "z": 0.0, "w": 0.0087}
+
+            # Step 1: Move to hover above target with top-down gripper orientation.
             logger.info(f"place_object: moving to hover above target for {robot_id}")
             hover_result = bridge.plan_and_execute(
                 position=hover_pos,
+                orientation=top_down_orientation,
                 robot_id=robot_id,
             )
             if not hover_result or not hover_result.get("success"):
@@ -656,6 +661,7 @@ def place_object(
             logger.info(f"place_object: descending to place position for {robot_id}")
             descent_result = bridge.plan_and_execute(
                 position=place_pos,
+                orientation=top_down_orientation,
                 robot_id=robot_id,
             )
             if not descent_result or not descent_result.get("success"):
@@ -677,7 +683,11 @@ def place_object(
 
             # Step 4: Ascend back to hover height to clear the placed object.
             logger.info(f"place_object: ascending after place for {robot_id}")
-            bridge.plan_and_execute(position=hover_pos, robot_id=robot_id)
+            bridge.plan_and_execute(
+                position=hover_pos,
+                orientation=top_down_orientation,
+                robot_id=robot_id,
+            )
 
             return OperationResult.success_result(
                 {

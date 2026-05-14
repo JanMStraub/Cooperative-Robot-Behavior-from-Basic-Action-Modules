@@ -1870,6 +1870,26 @@ def grasp_object(
                     ],
                 )
 
+        # --- Signal intent for joint-attention and anticipatory refresh ---
+        try:
+            from core.Imports import get_world_state
+
+            _intent_ws = get_world_state()
+            if _intent_ws is not None:
+                _intent_ws.update_robot_state(
+                    robot_id, {"moving_toward_object": object_id}
+                )
+            try:
+                from core.Imports import get_perception_refresh_daemon
+
+                _daemon = get_perception_refresh_daemon()
+                if _daemon is not None:
+                    _daemon.trigger_anticipatory_refresh([object_id])
+            except Exception:
+                pass
+        except Exception:
+            pass
+
         # --- Determine execution path ---
         _use_ros = use_ros
         if _use_ros is None:
@@ -2162,6 +2182,16 @@ def grasp_object(
                 "Ensure Unity is running and responsive",
             ],
         )
+    finally:
+        # Clear movement intent regardless of outcome
+        try:
+            from core.Imports import get_world_state as _get_ws
+
+            _ws = _get_ws()
+            if _ws is not None:
+                _ws.update_robot_state(robot_id, {"moving_toward_object": None})
+        except Exception:
+            pass
 
 
 # ============================================================================
