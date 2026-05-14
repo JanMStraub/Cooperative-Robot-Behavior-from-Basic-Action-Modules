@@ -94,9 +94,12 @@ class GraphBuilder:
             if not obj_data:
                 return
 
+            raw_pos = obj_data.get("position")
+            if isinstance(raw_pos, dict):
+                raw_pos = (raw_pos["x"], raw_pos["y"], raw_pos["z"])
             object_node = ObjectNode(
                 node_id=object_id,
-                position=obj_data.get("position"),
+                position=raw_pos,
                 color=obj_data.get("color", "unknown"),
                 object_type=obj_data.get("object_type", "unknown"),
                 is_graspable=obj_data.get("is_graspable", False),
@@ -229,6 +232,13 @@ class GraphBuilder:
                 self._graph.remove_node(obj_id)
                 logger.debug(f"Removed stale object node: {obj_id}")
 
+    @staticmethod
+    def _to_pos_tuple(pos):
+        """Normalize position to (x, y, z) tuple regardless of dict/tuple/list input."""
+        if isinstance(pos, dict):
+            return (pos["x"], pos["y"], pos["z"])
+        return pos
+
     def _recompute_spatial_edges(self):
         """
         Recompute all spatial edges based on current positions.
@@ -253,7 +263,7 @@ class GraphBuilder:
             robot_node = self._graph.get_node(robot_id)
             if not robot_node:
                 continue
-            robot_pos = robot_node.get("position")
+            robot_pos = self._to_pos_tuple(robot_node.get("position"))
 
             if not robot_pos:
                 continue
@@ -262,7 +272,7 @@ class GraphBuilder:
                 obj_node = self._graph.get_node(obj_id)
                 if not obj_node:
                     continue
-                obj_pos = obj_node.get("position")
+                obj_pos = self._to_pos_tuple(obj_node.get("position"))
 
                 if not obj_pos:
                     continue
@@ -288,7 +298,7 @@ class GraphBuilder:
             robot_node = self._graph.get_node(robot_id)
             if not robot_node:
                 continue
-            robot_pos = robot_node.get("position")
+            robot_pos = self._to_pos_tuple(robot_node.get("position"))
             if not robot_pos:
                 continue
 
@@ -296,7 +306,7 @@ class GraphBuilder:
                 obj_node = self._graph.get_node(obj_id)
                 if not obj_node:
                     continue
-                obj_pos = obj_node.get("position")
+                obj_pos = self._to_pos_tuple(obj_node.get("position"))
                 if not obj_pos:
                     continue
 
@@ -310,7 +320,7 @@ class GraphBuilder:
             obj1_node = self._graph.get_node(obj1_id)
             if not obj1_node:
                 continue
-            obj1_pos = obj1_node.get("position")
+            obj1_pos = self._to_pos_tuple(obj1_node.get("position"))
             if not obj1_pos:
                 continue
 
@@ -318,7 +328,7 @@ class GraphBuilder:
                 obj2_node = self._graph.get_node(obj2_id)
                 if not obj2_node:
                     continue
-                obj2_pos = obj2_node.get("position")
+                obj2_pos = self._to_pos_tuple(obj2_node.get("position"))
                 if not obj2_pos:
                     continue
 
@@ -333,7 +343,7 @@ class GraphBuilder:
         for robot_id in robots:
             robot_node = self._graph.get_node(robot_id)
             if robot_node:
-                robot_pos = robot_node.get("position")
+                robot_pos = self._to_pos_tuple(robot_node.get("position"))
                 if robot_pos:
                     region = self._world_state.get_region_for_position(robot_pos)
                     if region:
@@ -348,7 +358,7 @@ class GraphBuilder:
         for obj_id in objects:
             obj_node = self._graph.get_node(obj_id)
             if obj_node:
-                obj_pos = obj_node.get("position")
+                obj_pos = self._to_pos_tuple(obj_node.get("position"))
                 if obj_pos:
                     region = self._world_state.get_region_for_position(obj_pos)
                     if region:

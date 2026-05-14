@@ -225,3 +225,137 @@ class TestRobotBaseTransforms:
         server = _make_server()
         pos = server.ROBOT_BASE_TRANSFORMS["Robot2"]["position"]
         assert pos[0] == pytest.approx(0.475)
+
+
+# ---------------------------------------------------------------------------
+# Inter-robot collision object publishing
+# ---------------------------------------------------------------------------
+
+class TestPublishOtherRobotCollision:
+    def test_publish_other_robot_collision_adds_4_objects(self):
+        """_publish_other_robot_collision creates publisher and calls publish once."""
+        import threading
+        from unittest.mock import MagicMock, patch
+
+        server = _make_server()
+        server._joint_states_lock = threading.Lock()
+
+        js = MagicMock()
+        js.position = [0.1, -0.2, 0.3, 0.0, 0.1, 0.0]
+        server._current_joint_states = {"Robot2": js}
+        server._planning_scene_pubs = {}
+
+        mock_pub = MagicMock()
+        mock_node = MagicMock()
+        mock_node.create_publisher.return_value = mock_pub
+        server._node = mock_node
+
+        with patch("ros2.ROSMotionClient.HAS_ROS", True):
+            server._publish_other_robot_collision("Robot1", "Robot2")
+
+        # Publisher was stored for Robot1
+        assert "Robot1" in server._planning_scene_pubs
+        # publish was called exactly once
+        assert mock_pub.publish.call_count == 1
+        # The published scene has is_diff=True
+        published_scene = mock_pub.publish.call_args[0][0]
+        # PlanningScene is a MagicMock; we verify is_diff was assigned True
+        assert published_scene.is_diff is True
+
+    def test_publish_other_robot_collision_ids_and_count(self):
+        """_publish_other_robot_collision builds exactly 4 collision objects with correct IDs."""
+        import threading
+        from unittest.mock import MagicMock, patch
+
+        server = _make_server()
+        server._joint_states_lock = threading.Lock()
+
+        js = MagicMock()
+        js.position = [0.1, -0.2, 0.3, 0.0, 0.1, 0.0]
+        server._current_joint_states = {"Robot2": js}
+        server._planning_scene_pubs = {}
+
+        mock_pub = MagicMock()
+        mock_node = MagicMock()
+        mock_node.create_publisher.return_value = mock_pub
+        server._node = mock_node
+
+        mock_co = MagicMock(side_effect=lambda: MagicMock())
+        with patch("ros2.ROSMotionClient.HAS_ROS", True), \
+             patch("ros2.ROSMotionClient.CollisionObject", mock_co), \
+             patch("ros2.ROSMotionClient.SolidPrimitive", MagicMock(side_effect=lambda: MagicMock())), \
+             patch("ros2.ROSMotionClient.PlanningScene", MagicMock()), \
+             patch("ros2.ROSMotionClient.Pose", MagicMock(side_effect=lambda: MagicMock())):
+            server._publish_other_robot_collision("Robot1", "Robot2")
+
+        # Verify the scene's world.collision_objects has 4 entries with correct IDs
+        scene = mock_pub.publish.call_args[0][0]
+        objs = scene.world.collision_objects
+        assert len(objs) == 4
+        expected_ids = [f"Robot2_link_{i}" for i in range(4)]
+        for i, obj in enumerate(objs):
+            assert obj.id == expected_ids[i]
+
+    def test_no_collision_objects_if_no_joint_state(self):
+        """_publish_other_robot_collision returns early when other robot has no joint state."""
+        import threading
+        from unittest.mock import patch
+
+        server = _make_server()
+        server._joint_states_lock = threading.Lock()
+        server._current_joint_states = {}
+        server._planning_scene_pubs = {}
+
+        with patch("ros2.ROSMotionClient.HAS_ROS", True):
+            server._publish_other_robot_collision("Robot1", "Robot2")
+
+        # No publisher should have been created, nothing was published
+        assert server._planning_scene_pubs == {}
+
+    def test_remove_other_robot_collision_removes_4_objects(self):
+        """_remove_other_robot_collision calls publish once on the existing publisher."""
+        from unittest.mock import MagicMock, patch
+
+        server = _make_server()
+        mock_pub = MagicMock()
+        server._planning_scene_pubs = {"Robot1": mock_pub}
+
+        mock_co = MagicMock()
+        with patch("ros2.ROSMotionClient.HAS_ROS", True), \
+             patch("ros2.ROSMotionClient.CollisionObject", mock_co), \
+             patch("ros2.ROSMotionClient.PlanningScene", MagicMock()):
+            server._remove_other_robot_collision("Robot1", "Robot2")
+
+        assert mock_pub.publish.call_count == 1
+        scene = mock_pub.publish.call_args[0][0]
+        assert scene.is_diff is True
+        objs = scene.world.collision_objects
+        assert len(objs) == 4
+
+    def test_inter_robot_collision_disabled_skips_publish(self):
+        """When INTER_ROBOT_COLLISION_ENABLED=False, _publish_other_robot_collision is never called."""
+        import threading
+        from unittest.mock import MagicMock, patch
+
+        server = _make_server()
+        server._joint_states_lock = threading.Lock()
+        server._current_joint_states = {}
+        server._planning_scene_pubs = {}
+        server._publish_other_robot_collision = MagicMock()
+        server._move_group_server_ready = {"Robot1": True}
+
+        mock_client = MagicMock()
+        server._move_group_clients = {"Robot1": mock_client}
+
+        def fake_wait(_robot_id, _timeout=5.0):
+            return True
+
+        server._wait_for_joint_states = fake_wait
+
+        with patch("ros2.ROSMotionClient.INTER_ROBOT_COLLISION_ENABLED", False):
+            try:
+                server._call_move_group_plan(MagicMock(), "Robot1")
+            except Exception:
+                pass
+
+        assert server._publish_other_robot_collision.call_count == 0

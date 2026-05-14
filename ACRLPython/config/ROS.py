@@ -57,3 +57,7 @@ ARM_JOINT_LIMITS = {
     "joint_5": (-1.8325957145940461, 1.8325957145940461),
     "joint_6": (-3.1405926535897932, 3.1405926535897932),  # inset 0.001 rad from ±π
 }
+
+# Publish the other robot's arm as collision objects in MoveIt planning scenes.
+# Disable to debug planning failures (objects may cause no-path-found errors).
+INTER_ROBOT_COLLISION_ENABLED = True

@@ -57,6 +57,7 @@ except ImportError:
 try:
     from config.ROS import (
         ARM_JOINT_LIMITS,
+        INTER_ROBOT_COLLISION_ENABLED,
         MOVEIT_GOAL_TOLERANCE,
         MOVEIT_PLANNING_ATTEMPTS,
         MOVEIT_PLANNING_TIME,
@@ -65,6 +66,7 @@ except ImportError:
     MOVEIT_PLANNING_TIME = 5.0
     MOVEIT_PLANNING_ATTEMPTS = 10
     MOVEIT_GOAL_TOLERANCE = 0.01
+    INTER_ROBOT_COLLISION_ENABLED = True
     ARM_JOINT_LIMITS = {
         "joint_1": (-2.9670597283903604, 2.9670597283903604),
         "joint_2": (-0.7330382858376184, 1.5707963267948966),
@@ -81,6 +83,8 @@ except ImportError:
         "Robot1": (-0.475, 0.0, 0.0),
         "Robot2": (0.475, 0.0, 0.0),
     }
+
+from operations.AR4Kinematics import compute_link_poses
 
 # ROS 2 imports - only available inside Docker
 try:
@@ -180,6 +184,15 @@ class ROSMotionServer:
         }
         for robot_id, pos in ROBOT_BASE_POSITIONS.items()
     }
+
+    # Conservative bounding boxes for each AR4 arm segment (metres, ROS frame).
+    # Sized ~2 cm larger than actual links to give RRTConnect clearance.
+    _ROBOT_LINK_BOX_SIZES = [
+        (0.12, 0.12, 0.20),  # link_2: base→shoulder column
+        (0.10, 0.10, 0.28),  # link_3: upper arm
+        (0.09, 0.09, 0.22),  # link_5: forearm
+        (0.08, 0.08, 0.12),  # link_6: wrist block
+    ]
 
     def __init__(self, host="0.0.0.0", port=5020):
         """Initialize the ROS motion server with multi-robot support."""
@@ -358,6 +371,119 @@ class ROSMotionServer:
         self._planning_scene_pubs[robot_id].publish(scene)
         logger.info(
             f"Published ground plane collision object to {robot_id} planning scene"
+        )
+
+    def _publish_other_robot_collision(self, planning_robot_id: str, other_robot_id: str):
+        """Publish the other robot's arm links as collision objects into a planning scene.
+
+        Reads the other robot's current joint state, computes forward-kinematics link
+        poses via AR4Kinematics, transforms each pose into the planning robot's
+        base_link frame, and publishes conservative bounding-box CollisionObjects so
+        MoveIt avoids the physical space occupied by the other arm.
+
+        Args:
+            planning_robot_id: Robot whose planning scene receives the obstacles.
+            other_robot_id: Robot whose current arm pose is added as obstacles.
+        """
+        import math
+
+        if not HAS_ROS or other_robot_id not in self._current_joint_states:
+            return
+
+        with self._joint_states_lock:
+            js = self._current_joint_states.get(other_robot_id)
+            if js is None or not js.position:
+                return
+            joint_angles = list(js.position[:6])
+
+        transform = self.ROBOT_BASE_TRANSFORMS.get(other_robot_id)
+        if transform is None:
+            return
+        base_pos = transform["position"]
+        base_yaw_rad = math.radians(transform.get("y_rotation", 0.0))
+
+        link_poses = compute_link_poses(joint_angles, base_pos, base_yaw_rad)
+
+        collision_objects = []
+        for i, (pos_unity, quat_unity) in enumerate(link_poses):
+            ros_pos = self._transform_world_to_local(
+                {"x": pos_unity[0], "y": pos_unity[1], "z": pos_unity[2]},
+                planning_robot_id,
+            )
+            ros_quat = self._transform_orientation_to_ros(
+                {
+                    "x": quat_unity[0],
+                    "y": quat_unity[1],
+                    "z": quat_unity[2],
+                    "w": quat_unity[3],
+                },
+                planning_robot_id,
+            )
+
+            obj = CollisionObject()
+            obj.header.frame_id = "base_link"
+            obj.id = f"{other_robot_id}_link_{i}"
+            obj.operation = CollisionObject.ADD
+
+            box = SolidPrimitive()
+            box.type = SolidPrimitive.BOX
+            box.dimensions = list(self._ROBOT_LINK_BOX_SIZES[i])
+
+            pose = Pose()
+            pose.position.x = ros_pos["x"]
+            pose.position.y = ros_pos["y"]
+            pose.position.z = ros_pos["z"]
+            pose.orientation.x = ros_quat["x"]
+            pose.orientation.y = ros_quat["y"]
+            pose.orientation.z = ros_quat["z"]
+            pose.orientation.w = ros_quat["w"]
+
+            obj.primitives = [box]
+            obj.primitive_poses = [pose]
+            collision_objects.append(obj)
+
+        if planning_robot_id not in self._planning_scene_pubs:
+            self._planning_scene_pubs[planning_robot_id] = self._node.create_publisher(
+                PlanningScene, f"/{planning_robot_id}/planning_scene", 10
+            )
+
+        scene = PlanningScene()
+        scene.is_diff = True
+        scene.world.collision_objects = collision_objects
+        self._planning_scene_pubs[planning_robot_id].publish(scene)
+        logger.debug(
+            f"Published {len(collision_objects)} collision objects for {other_robot_id} into {planning_robot_id} planning scene"
+        )
+
+    def _remove_other_robot_collision(self, planning_robot_id: str, other_robot_id: str):
+        """Remove previously published arm collision objects from a planning scene.
+
+        Sends REMOVE operations for all four link collision objects that were added
+        by _publish_other_robot_collision. Should be called after planning completes.
+
+        Args:
+            planning_robot_id: Robot whose planning scene is being cleaned up.
+            other_robot_id: Robot whose arm collision objects should be removed.
+        """
+        if not HAS_ROS:
+            return
+        if planning_robot_id not in self._planning_scene_pubs:
+            return
+
+        collision_objects = []
+        for i in range(len(self._ROBOT_LINK_BOX_SIZES)):
+            obj = CollisionObject()
+            obj.header.frame_id = "base_link"
+            obj.id = f"{other_robot_id}_link_{i}"
+            obj.operation = CollisionObject.REMOVE
+            collision_objects.append(obj)
+
+        scene = PlanningScene()
+        scene.is_diff = True
+        scene.world.collision_objects = collision_objects
+        self._planning_scene_pubs[planning_robot_id].publish(scene)
+        logger.debug(
+            f"Removed collision objects for {other_robot_id} from {planning_robot_id} planning scene"
         )
 
     def _transform_world_to_local(self, world_position: dict, robot_id: str) -> dict:
@@ -970,108 +1096,118 @@ class ROSMotionServer:
                 f"No joint states received for {robot_id} yet, planning may fail"
             )
 
-        # Check server availability once; skip the blocking wait on subsequent calls.
-        if not self._move_group_server_ready.get(robot_id, False):
-            if not move_group_client.wait_for_server(timeout_sec=15.0):
-                return None, 0, f"MoveGroup action server not available for {robot_id}"
-            self._move_group_server_ready[robot_id] = True
-            # Publish ground plane on first confirmed connection only
-            self._publish_ground_plane(robot_id)
+        other_robots = []
+        if INTER_ROBOT_COLLISION_ENABLED:
+            other_robots = [r for r in self.ROBOT_BASE_TRANSFORMS if r != robot_id]
+            for other in other_robots:
+                self._publish_other_robot_collision(robot_id, other)
 
-        # Send goal asynchronously and poll for completion.
-        # NOTE: We must NOT call rclpy.spin_until_future_complete() here because
-        # the _ros_spin thread is already spinning the node. Two threads spinning
-        # the same node is not thread-safe in rclpy and causes deadlocks.
-        # Instead, we poll the future and let the spin thread handle callbacks.
-        future = move_group_client.send_goal_async(goal)
-        deadline = time.time() + 10.0
-        while not future.done() and time.time() < deadline:
-            time.sleep(0.05)
+        try:
+            # Check server availability once; skip the blocking wait on subsequent calls.
+            if not self._move_group_server_ready.get(robot_id, False):
+                if not move_group_client.wait_for_server(timeout_sec=15.0):
+                    return None, 0, f"MoveGroup action server not available for {robot_id}"
+                self._move_group_server_ready[robot_id] = True
+                # Publish ground plane on first confirmed connection only
+                self._publish_ground_plane(robot_id)
 
-        if not future.done() or future.result() is None:
-            return None, 0, "Goal send timed out"
+            # Send goal asynchronously and poll for completion.
+            # NOTE: We must NOT call rclpy.spin_until_future_complete() here because
+            # the _ros_spin thread is already spinning the node. Two threads spinning
+            # the same node is not thread-safe in rclpy and causes deadlocks.
+            # Instead, we poll the future and let the spin thread handle callbacks.
+            future = move_group_client.send_goal_async(goal)
+            deadline = time.time() + 10.0
+            while not future.done() and time.time() < deadline:
+                time.sleep(0.05)
 
-        goal_handle = future.result()
-        if not goal_handle.accepted:
-            return None, 0, "Goal rejected by MoveGroup"
+            if not future.done() or future.result() is None:
+                return None, 0, "Goal send timed out"
 
-        result_future = goal_handle.get_result_async()
-        result_deadline = time.time() + planning_time + 10.0
-        while not result_future.done() and time.time() < result_deadline:
-            time.sleep(0.05)
+            goal_handle = future.result()
+            if not goal_handle.accepted:
+                return None, 0, "Goal rejected by MoveGroup"
 
-        if not result_future.done() or result_future.result() is None:
-            return None, 0, "Planning timed out"
+            result_future = goal_handle.get_result_async()
+            result_deadline = time.time() + planning_time + 10.0
+            while not result_future.done() and time.time() < result_deadline:
+                time.sleep(0.05)
 
-        result = result_future.result().result
+            if not result_future.done() or result_future.result() is None:
+                return None, 0, "Planning timed out"
 
-        # MoveIt error codes (from moveit_msgs/msg/MoveItErrorCodes.msg)
-        ERROR_CODES = {
-            1: "SUCCESS",
-            -1: "FAILURE",
-            -2: "PLANNING_FAILED",
-            -3: "INVALID_MOTION_PLAN",
-            -4: "MOTION_PLAN_INVALIDATED_BY_ENVIRONMENT_CHANGE",
-            -5: "CONTROL_FAILED",
-            -6: "UNABLE_TO_AQUIRE_SENSOR_DATA",
-            -7: "TIMED_OUT",
-            -10: "PREEMPTED",
-            -11: "START_STATE_IN_COLLISION",
-            -12: "START_STATE_VIOLATES_PATH_CONSTRAINTS",
-            -13: "GOAL_IN_COLLISION",
-            -14: "GOAL_VIOLATES_PATH_CONSTRAINTS",
-            -15: "GOAL_CONSTRAINTS_VIOLATED",
-            -16: "INVALID_GROUP_NAME",
-            -17: "INVALID_GOAL_CONSTRAINTS",
-            -18: "INVALID_ROBOT_STATE",
-            -19: "INVALID_LINK_NAME",
-            -20: "INVALID_OBJECT_NAME",
-            -21: "FRAME_TRANSFORM_FAILURE",
-            -22: "COLLISION_CHECKING_UNAVAILABLE",
-            -23: "ROBOT_STATE_STALE",
-            -24: "SENSOR_INFO_STALE",
-            -25: "COMMUNICATION_FAILURE",
-            -26: "CRASH",
-            -27: "ABORT",
-            -28: "UNABLE_TO_SET_ROBOT_STATE",
-            -29: "UNABLE_TO_SET_JOINT_GOAL",
-            -31: "NO_IK_SOLUTION",
-        }
+            result = result_future.result().result
 
-        error_code = result.error_code.val
-        if error_code == 1:
-            trajectory = result.planned_trajectory.joint_trajectory
-            self._last_planned_trajectories[robot_id] = trajectory
+            # MoveIt error codes (from moveit_msgs/msg/MoveItErrorCodes.msg)
+            ERROR_CODES = {
+                1: "SUCCESS",
+                -1: "FAILURE",
+                -2: "PLANNING_FAILED",
+                -3: "INVALID_MOTION_PLAN",
+                -4: "MOTION_PLAN_INVALIDATED_BY_ENVIRONMENT_CHANGE",
+                -5: "CONTROL_FAILED",
+                -6: "UNABLE_TO_AQUIRE_SENSOR_DATA",
+                -7: "TIMED_OUT",
+                -10: "PREEMPTED",
+                -11: "START_STATE_IN_COLLISION",
+                -12: "START_STATE_VIOLATES_PATH_CONSTRAINTS",
+                -13: "GOAL_IN_COLLISION",
+                -14: "GOAL_VIOLATES_PATH_CONSTRAINTS",
+                -15: "GOAL_CONSTRAINTS_VIOLATED",
+                -16: "INVALID_GROUP_NAME",
+                -17: "INVALID_GOAL_CONSTRAINTS",
+                -18: "INVALID_ROBOT_STATE",
+                -19: "INVALID_LINK_NAME",
+                -20: "INVALID_OBJECT_NAME",
+                -21: "FRAME_TRANSFORM_FAILURE",
+                -22: "COLLISION_CHECKING_UNAVAILABLE",
+                -23: "ROBOT_STATE_STALE",
+                -24: "SENSOR_INFO_STALE",
+                -25: "COMMUNICATION_FAILURE",
+                -26: "CRASH",
+                -27: "ABORT",
+                -28: "UNABLE_TO_SET_ROBOT_STATE",
+                -29: "UNABLE_TO_SET_JOINT_GOAL",
+                -31: "NO_IK_SOLUTION",
+            }
 
-            logger.info(
-                f"Planning succeeded for {robot_id}: {len(trajectory.points)} waypoints"
-            )
+            error_code = result.error_code.val
+            if error_code == 1:
+                trajectory = result.planned_trajectory.joint_trajectory
+                self._last_planned_trajectories[robot_id] = trajectory
 
-            # Diagnostic: warn if TOTG did not produce timestamps (silent failure).
-            if trajectory.points:
-                last_ts = (
-                    trajectory.points[-1].time_from_start.sec
-                    + trajectory.points[-1].time_from_start.nanosec * 1e-9
+                logger.info(
+                    f"Planning succeeded for {robot_id}: {len(trajectory.points)} waypoints"
                 )
-                if last_ts < 1e-9:
-                    logger.warning(
-                        f"{robot_id}: MoveIt returned zero timestamps on all "
-                        f"{len(trajectory.points)} waypoints — TOTG did not run. "
-                        "Check move_group trajectory_processing pipeline and "
-                        "velocity/acceleration scaling config. "
-                        "Unity will use synthesized durations (smooth but not time-optimal)."
-                    )
-                else:
-                    logger.debug(
-                        f"{robot_id}: TOTG OK — last waypoint at {last_ts:.3f}s"
-                    )
 
-            return trajectory, result.planning_time, None
-        else:
-            error_name = ERROR_CODES.get(error_code, f"UNKNOWN_ERROR_{error_code}")
-            error_msg = f"Planning failed: {error_name} (code {error_code})"
-            logger.error(f"{robot_id}: {error_msg}")
-            return None, 0, error_msg
+                # Diagnostic: warn if TOTG did not produce timestamps (silent failure).
+                if trajectory.points:
+                    last_ts = (
+                        trajectory.points[-1].time_from_start.sec
+                        + trajectory.points[-1].time_from_start.nanosec * 1e-9
+                    )
+                    if last_ts < 1e-9:
+                        logger.warning(
+                            f"{robot_id}: MoveIt returned zero timestamps on all "
+                            f"{len(trajectory.points)} waypoints — TOTG did not run. "
+                            "Check move_group trajectory_processing pipeline and "
+                            "velocity/acceleration scaling config. "
+                            "Unity will use synthesized durations (smooth but not time-optimal)."
+                        )
+                    else:
+                        logger.debug(
+                            f"{robot_id}: TOTG OK — last waypoint at {last_ts:.3f}s"
+                        )
+
+                return trajectory, result.planning_time, None
+            else:
+                error_name = ERROR_CODES.get(error_code, f"UNKNOWN_ERROR_{error_code}")
+                error_msg = f"Planning failed: {error_name} (code {error_code})"
+                logger.error(f"{robot_id}: {error_msg}")
+                return None, 0, error_msg
+        finally:
+            for other in other_robots:
+                self._remove_other_robot_collision(robot_id, other)
 
     def _trajectory_to_dict(self, trajectory):
         """Convert a JointTrajectory ROS message to a JSON-serializable dict.

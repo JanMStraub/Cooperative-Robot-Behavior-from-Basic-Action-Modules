@@ -201,3 +201,31 @@ def test_deterministic():
     result_a = compute_end_effector_pose(angles, ROBOT1_BASE)
     result_b = compute_end_effector_pose(angles, ROBOT1_BASE)
     assert result_a == result_b
+
+
+# ============================================================================
+# compute_link_poses: multi-link FK snapshot
+# ============================================================================
+
+
+from operations.AR4Kinematics import compute_link_poses
+
+
+def test_compute_link_poses_returns_4_links():
+    """compute_link_poses returns exactly 4 (pos, quat) tuples."""
+    result = compute_link_poses([0.0] * 6, ROBOT1_BASE)
+    assert len(result) == 4
+    for pos, quat in result:
+        assert len(pos) == 3
+        assert len(quat) == 4
+
+
+def test_compute_link_poses_all_within_reach():
+    """All 4 captured link positions should be within AR4 kinematic reach."""
+    result = compute_link_poses([0.1, -0.2, 0.3, 0.0, 0.1, 0.0], ROBOT1_BASE)
+    bx, by, bz = ROBOT1_BASE
+    for i, (pos, _) in enumerate(result):
+        dist = math.sqrt((pos[0] - bx) ** 2 + (pos[1] - by) ** 2 + (pos[2] - bz) ** 2)
+        assert dist <= MAX_REACH + 0.05, (
+            f"Link {i} pos {pos} dist {dist:.3f} exceeds reach"
+        )

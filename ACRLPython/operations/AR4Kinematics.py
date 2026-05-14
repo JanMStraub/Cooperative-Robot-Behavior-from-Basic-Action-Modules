@@ -21,7 +21,7 @@ to Unity frame — same pattern as GraspFrameTransform.py:202-204.
 """
 
 import math
-from typing import Tuple
+from typing import List, Tuple
 
 import numpy as np
 
@@ -54,6 +54,9 @@ _JOINT_PARAMS = [
 
 # Number of revolute joints (first 6 entries)
 _NUM_JOINTS = 6
+
+# Chain indices at which to snapshot T for collision link poses (link_2, link_3, link_5, link_6)
+_LINK_CAPTURE_INDICES = {1, 2, 4, 5}
 
 
 # ---------------------------------------------------------------------------
@@ -264,6 +267,90 @@ def compute_end_effector_pose(
     )
 
     return pos_unity, quat_unity
+
+
+def compute_link_poses(
+    joint_angles: list,
+    base_position: Tuple[float, float, float],
+    base_yaw_rad: float = 0.0,
+) -> List[Tuple[Tuple[float, float, float], Tuple[float, float, float, float]]]:
+    """Compute poses for 4 key arm links using AR4 forward kinematics.
+
+    Traverses the URDF joint chain and snapshots the accumulated transform
+    after processing joint indices 1, 2, 4, and 5, yielding poses for:
+      - link_2 (shoulder, after joint_2)
+      - link_3 (elbow, after joint_3)
+      - link_5 (wrist, after joint_5)
+      - link_6 (after joint_6)
+
+    All poses are in Unity's left-handed world frame.  These link midpoints
+    are intended for collision geometry checks, not end-effector pose — the
+    last entry will differ from ``compute_end_effector_pose`` because the two
+    trailing fixed joints (ee_joint, gripper_base_joint) are not included.
+
+    Args:
+        joint_angles: 6 joint angles in radians, ROS joint convention
+            (joint_1 … joint_6).
+        base_position: World position of the robot base in Unity frame (x, y, z).
+        base_yaw_rad: Additional yaw rotation of the whole robot base about the
+            world Y-axis (radians).  Pass ``math.pi`` for Robot2 which is
+            mounted mirrored (180° yaw from Robot1).
+
+    Returns:
+        List of 4 ``(position, quaternion)`` tuples in Unity world frame:
+        [(link_2_pos, link_2_quat), (link_3_pos, link_3_quat),
+         (link_5_pos, link_5_quat), (link_6_pos, link_6_quat)]
+
+    Raises:
+        ValueError: If ``joint_angles`` does not have exactly 6 elements.
+    """
+    if len(joint_angles) != _NUM_JOINTS:
+        raise ValueError(
+            f"Expected {_NUM_JOINTS} joint angles, got {len(joint_angles)}"
+        )
+
+    T = np.eye(4, dtype=np.float64)
+    snapshots: List[np.ndarray] = []
+
+    for i, (xyz, rpy, axis) in enumerate(_JOINT_PARAMS):
+        T_trans = _translation_matrix(xyz)
+        T_rpy = _rpy_to_matrix(rpy)
+        if axis is not None and i < _NUM_JOINTS:
+            T_rot = _axis_angle_matrix(axis, joint_angles[i])
+        else:
+            T_rot = np.eye(4, dtype=np.float64)
+        T = T @ T_trans @ T_rpy @ T_rot
+        if i in _LINK_CAPTURE_INDICES:
+            snapshots.append(T.copy())
+
+    # Hoist loop-invariant yaw constants (defaults satisfy type checker when apply_yaw=False)
+    apply_yaw = abs(base_yaw_rad) > 1e-9
+    c_yaw, s_yaw = 1.0, 0.0
+    q_base_yaw = np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float64)
+    if apply_yaw:
+        cy, sy = math.cos(base_yaw_rad / 2), math.sin(base_yaw_rad / 2)
+        q_base_yaw = np.array([0.0, sy, 0.0, cy], dtype=np.float64)
+        c_yaw, s_yaw = math.cos(base_yaw_rad), math.sin(base_yaw_rad)
+    bx, by, bz = base_position
+
+    result = []
+    for snap in snapshots:
+        pos_ros = snap[:3, 3]
+        rot_ros = _mat_to_quaternion(snap[:3, :3])
+
+        if apply_yaw:
+            px, py, pz = pos_ros
+            pos_ros = np.array(
+                [c_yaw * px + s_yaw * pz, py, -s_yaw * px + c_yaw * pz],
+                dtype=np.float64,
+            )
+            rot_ros = _normalise_quat(_quat_multiply(q_base_yaw, rot_ros))
+
+        pos_unity = (-pos_ros[0] + bx, pos_ros[1] + by, pos_ros[2] + bz)
+        quat_unity = (-rot_ros[0], rot_ros[1], rot_ros[2], rot_ros[3])
+        result.append((pos_unity, quat_unity))
+
+    return result
 
 
 def compute_end_effector_position(
