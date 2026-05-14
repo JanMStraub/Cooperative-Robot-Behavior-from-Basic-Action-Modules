@@ -346,6 +346,14 @@ class RobotController:
                     "WorldStateServer not available, skipping KnowledgeGraph wiring"
                 )
 
+            # Also keep KG current when Python detections write to WorldState
+            # (e.g. detect_object_stereo, detect_field) without waiting for the
+            # next Unity WorldStateServer packet.
+            world_state.register_object_observer(
+                self._graph_builder.on_object_updated
+            )
+            logger.info("KnowledgeGraph wired — updates on Python object detections")
+
         except Exception as e:
             logger.warning(f"Failed to wire KnowledgeGraph: {e}")
             logger.debug(

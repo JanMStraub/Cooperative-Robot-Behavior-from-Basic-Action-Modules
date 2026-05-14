@@ -223,6 +223,10 @@ class WorldState(SingletonBase):
         # In-flight command tracking
         self._pending_commands: Dict[int, Dict[str, Any]] = {}
 
+        # Observers notified on every update_object_position write.
+        # Each callable receives (object_id: str, position: tuple).
+        self._object_observers: List = []
+
         logger.info("WorldState initialized")
 
     # ========================================================================
@@ -612,6 +616,25 @@ class WorldState(SingletonBase):
         with self._lock:
             return self._robot_states.get(robot_id)
 
+    def get_robot_ee_position(
+        self, robot_id: str
+    ) -> Optional[Tuple[float, float, float]]:
+        """
+        Return the live end-effector position for a robot from WorldState.
+
+        Used by QueryEngine.is_path_blocked to prefer the freshest position
+        over the potentially stale value stored in the knowledge graph node.
+
+        Args:
+            robot_id: Robot identifier
+
+        Returns:
+            (x, y, z) tuple or None if unknown
+        """
+        with self._lock:
+            state = self._robot_states.get(robot_id)
+            return state.position if state else None
+
     # ========================================================================
     # Object Tracking
     # ========================================================================
@@ -670,6 +693,24 @@ class WorldState(SingletonBase):
             logger.debug(f"Updated object {object_id} at {position}")
             # Invalidate normalized key cache on any structural change
             self._normalized_object_keys = None
+            observers = list(self._object_observers)
+
+        for cb in observers:
+            try:
+                cb(object_id, position)
+            except Exception:
+                pass
+
+    def register_object_observer(self, callback) -> None:
+        """
+        Register a callback invoked after every update_object_position write.
+
+        Args:
+            callback: Callable(object_id: str, position: tuple) -> None
+        """
+        with self._lock:
+            if callback not in self._object_observers:
+                self._object_observers.append(callback)
 
     @staticmethod
     def _strip_to_alnum(s: str) -> str:

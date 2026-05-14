@@ -220,7 +220,16 @@ class GraphQueryEngine:
         robot_node = self._graph.get_node(robot_id)
         if not robot_node:
             return False
-        robot_pos = robot_node.get("position")
+
+        # Prefer live WorldState EE position over KG node (which may be stale
+        # mid-movement if WorldStateServer hasn't sent an update yet).
+        try:
+            from core.Imports import get_world_state
+            ws = get_world_state()
+            robot_pos = (ws.get_robot_ee_position(robot_id) if ws else None) or robot_node.get("position")
+        except Exception:
+            robot_pos = robot_node.get("position")
+
         if not robot_pos:
             return False
 

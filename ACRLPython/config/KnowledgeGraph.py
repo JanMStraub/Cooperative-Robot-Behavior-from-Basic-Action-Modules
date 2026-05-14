@@ -28,10 +28,10 @@ KNOWLEDGE_GRAPH_ENABLED = os.environ.get("KNOWLEDGE_GRAPH_ENABLED", "true").lowe
 # Distance threshold for NEAR edges (meters)
 # Objects/robots closer than this threshold will be connected by a NEAR edge.
 try:
-    KG_NEAR_THRESHOLD = float(os.environ.get("KG_NEAR_THRESHOLD", "0.02"))
+    KG_NEAR_THRESHOLD = float(os.environ.get("KG_NEAR_THRESHOLD", "0.35"))
 except ValueError:
-    logging.warning("Invalid KG_NEAR_THRESHOLD env var; using default 0.02m")
-    KG_NEAR_THRESHOLD = 0.02
+    logging.warning("Invalid KG_NEAR_THRESHOLD env var; using default 0.35m")
+    KG_NEAR_THRESHOLD = 0.35
 
 # ---------------------------------------------------------------------------
 # Visualisation settings (used by KnowledgeGraph.save_png and kg_inspect CLI)

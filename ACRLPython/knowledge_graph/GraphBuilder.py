@@ -77,6 +77,40 @@ class GraphBuilder:
                 self._graph.add_edge(region2, region1, "ADJACENT_TO")
                 logger.debug(f"Added ADJACENT_TO edge: {region1} <-> {region2}")
 
+    def on_object_updated(self, object_id: str, position: tuple) -> None:
+        """
+        Lightweight callback fired by WorldState after a Python detection write.
+
+        Avoids a full graph rebuild: only refreshes the single object node and
+        recomputes spatial edges, keeping CAN_REACH / NEAR edges current without
+        waiting for the next Unity WorldStateServer packet.
+
+        Args:
+            object_id: The object that moved or was newly detected.
+            position: New world-space position (x, y, z).
+        """
+        try:
+            obj_data = self._world_state.get_object_state(object_id)
+            if not obj_data:
+                return
+
+            object_node = ObjectNode(
+                node_id=object_id,
+                position=obj_data.get("position"),
+                color=obj_data.get("color", "unknown"),
+                object_type=obj_data.get("object_type", "unknown"),
+                is_graspable=obj_data.get("is_graspable", False),
+                grasped_by=obj_data.get("grasped_by"),
+                confidence=obj_data.get("confidence", 1.0),
+                stale=obj_data.get("stale", False),
+                timestamp=obj_data.get("timestamp", time.time()),
+            )
+            self._graph.add_node(object_node.node_id, **object_node.to_dict())
+            self._recompute_spatial_edges()
+            logger.debug(f"KG updated from Python detection: {object_id} at {position}")
+        except Exception as e:
+            logger.error(f"Error in on_object_updated for {object_id}: {e}", exc_info=True)
+
     def on_state_update(self, state_data: Dict[str, Any]):
         """
         Callback invoked by WorldStateServer on each state update.
