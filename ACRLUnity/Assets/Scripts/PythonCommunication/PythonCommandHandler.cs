@@ -2858,6 +2858,25 @@ namespace PythonCommunication
 
             try
             {
+                // Boost wrist damping for the entire return motion (not just settle).
+                // Arm joints 0-2 moving create inertial coupling forces on wrist joints 3-5,
+                // exciting oscillation during travel. Restoring in finally block.
+                const float RETURN_DAMPING_MULTIPLIER = 10f;
+                float[] originalDamping = new float[controller.robotJoints.Length];
+                for (int i = 0; i < controller.robotJoints.Length; i++)
+                {
+                    var joint = controller.robotJoints[i];
+                    if (joint == null)
+                        continue;
+                    var drive = joint.xDrive;
+                    originalDamping[i] = drive.damping;
+                    if (i >= 3)
+                    {
+                        drive.damping = drive.damping * RETURN_DAMPING_MULTIPLIER;
+                        joint.xDrive = drive;
+                    }
+                }
+
                 // Read the physical joint position (radians → degrees) so the lerp starts
                 // exactly where the arm currently is, not where IK last commanded it to be.
                 // Using xDrive.target can cause an impulse at t=0 if IK was still moving.
@@ -2890,40 +2909,20 @@ namespace PythonCommunication
                 }
                 Debug.Log(dbgSB.ToString());
 
+                // Phase 1: move wrist joints (3-5) to target while arm holds still.
+                // Wrist settles at its target before arm motion can excite it.
+                float wristDuration = duration * 0.4f;
                 float elapsed = 0f;
-                int _debugFrameCounter = 0;
-
-                while (elapsed < duration)
+                while (elapsed < wristDuration)
                 {
-                    // FIX #4: Safety check in case robot died during movement
-                    if (controller == null)
-                    {
-                        Debug.LogWarning(
-                            $"{_logPrefix} Robot destroyed during ReturnToStartPosition"
-                        );
-                        yield break;
-                    }
-
+                    if (controller == null) yield break;
                     elapsed += Time.fixedDeltaTime;
-                    float t = Mathf.Clamp01(elapsed / duration);
-
-                    // Smooth interpolation using ease-in-out
+                    float t = Mathf.Clamp01(elapsed / wristDuration);
                     float smoothT = t * t * (3f - 2f * t);
-
-                    // Interpolate each joint. targetJoints are the saved jointDriveTargets
-                    // (absolute degree values, not wrapped). Use plain Lerp so the arm
-                    // tracks the same absolute degree values IK used during operation —
-                    // DeltaAngle would incorrectly wrap targets outside (-180,180].
-                    for (
-                        int i = 0;
-                        i < controller.robotJoints.Length && i < targetJoints.Length;
-                        i++
-                    )
+                    for (int i = 3; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
                     {
                         float currentTarget = Mathf.Lerp(startJoints[i], targetJoints[i], smoothT);
-
                         controller.jointDriveTargets[i] = currentTarget;
-
                         var joint = controller.robotJoints[i];
                         if (joint != null)
                         {
@@ -2932,47 +2931,50 @@ namespace PythonCommunication
                             joint.xDrive = drive;
                         }
                     }
+                    yield return new WaitForFixedUpdate();
+                }
 
-                    // DEBUG: log mid-motion state every 20 fixed frames (~0.33s at 60Hz)
-                    _debugFrameCounter++;
-                    if (_debugFrameCounter % 20 == 0)
+                // Pin wrist drives at exact target before arm starts moving
+                for (int i = 3; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
+                {
+                    controller.jointDriveTargets[i] = targetJoints[i];
+                    var joint = controller.robotJoints[i];
+                    if (joint != null)
                     {
-                        var midSB = new System.Text.StringBuilder();
-                        midSB.AppendLine(
-                            $"[ReturnToStart] {robotId} t={t:F2} smoothT={smoothT:F2}"
-                        );
-                        for (
-                            int i = 0;
-                            i < controller.robotJoints.Length && i < targetJoints.Length;
-                            i++
-                        )
-                        {
-                            var j = controller.robotJoints[i];
-                            float physNow =
-                                j.jointPosition.dofCount > 0
-                                    ? j.jointPosition[0] * Mathf.Rad2Deg
-                                    : float.NaN;
-                            float driveNow = j.xDrive.target;
-                            float velNow =
-                                j.jointVelocity.dofCount > 0
-                                    ? j.jointVelocity[0] * Mathf.Rad2Deg
-                                    : float.NaN;
-                            midSB.AppendLine(
-                                $"  J{i}: phys={physNow:F2}° drive={driveNow:F2}° vel={velNow:F2}°/s"
-                            );
-                        }
-                        Debug.Log(midSB.ToString());
+                        var drive = joint.xDrive;
+                        drive.target = targetJoints[i];
+                        joint.xDrive = drive;
                     }
+                }
 
+                // Phase 2: move arm joints (0-2) to target. Wrist is already at its
+                // target, so arm motion no longer excites it.
+                float armDuration = duration * 0.6f;
+                elapsed = 0f;
+                while (elapsed < armDuration)
+                {
+                    if (controller == null) yield break;
+                    elapsed += Time.fixedDeltaTime;
+                    float t = Mathf.Clamp01(elapsed / armDuration);
+                    float smoothT = t * t * (3f - 2f * t);
+                    for (int i = 0; i < Mathf.Min(3, controller.robotJoints.Length) && i < targetJoints.Length; i++)
+                    {
+                        float currentTarget = Mathf.Lerp(startJoints[i], targetJoints[i], smoothT);
+                        controller.jointDriveTargets[i] = currentTarget;
+                        var joint = controller.robotJoints[i];
+                        if (joint != null)
+                        {
+                            var drive = joint.xDrive;
+                            drive.target = currentTarget;
+                            joint.xDrive = drive;
+                        }
+                    }
                     yield return new WaitForFixedUpdate();
                 }
 
                 // Pin drive targets to exact final values (no teleport — just drive target).
-                // The ArticulationBody PD drive will settle the joints from here.
-                // Critically: do NOT write jointPosition/jointVelocity/jointForce here.
-                // Writing them causes a discontinuity that re-excites the under-damped
-                // wrist joint. The IK system never writes these fields either — it only
-                // ever updates xDrive.target and lets the physics drive settle naturally.
+                // Critically: do NOT write jointPosition/jointVelocity/jointForce here —
+                // causes a discontinuity that re-excites the wrist joints.
                 for (int i = 0; i < controller.robotJoints.Length && i < targetJoints.Length; i++)
                 {
                     controller.jointDriveTargets[i] = targetJoints[i];
@@ -3005,15 +3007,12 @@ namespace PythonCommunication
                 }
                 Debug.Log(endSB.ToString());
 
-                // Wait for the PD drive to settle: poll joint velocities each physics
-                // frame, matching the same isSettled pattern in RobotController.
+                // Wait for the PD drive to settle: poll joint velocities each physics frame.
                 // IsManuallyDriven stays true throughout so IK does not interfere.
-                // Cap at MAX_SETTLE_FRAMES to avoid hanging if a joint is truly stuck.
+                // Wrist damping is already boosted from the start of the coroutine.
                 const int MAX_SETTLE_FRAMES = 180; // 3s at 60 Hz physics
                 const float SETTLE_THRESHOLD_RAD_S = 0.01f;
-                // Require consecutive frames to avoid false-positive at oscillation peak
-                // where velocity briefly crosses zero while link4 is still swinging.
-                const int CONSECUTIVE_SETTLED_REQUIRED = 15; // ~250ms at 60Hz
+                const int CONSECUTIVE_SETTLED_REQUIRED = 5;
 
                 int settledCount = 0;
                 for (int frame = 0; frame < MAX_SETTLE_FRAMES; frame++)
@@ -3040,6 +3039,17 @@ namespace PythonCommunication
 
                     if (settledCount >= CONSECUTIVE_SETTLED_REQUIRED)
                         break;
+                }
+
+                // Restore original wrist damping values now that motion is settled
+                for (int i = 3; i < controller.robotJoints.Length; i++)
+                {
+                    var joint = controller.robotJoints[i];
+                    if (joint == null)
+                        continue;
+                    var drive = joint.xDrive;
+                    drive.damping = originalDamping[i];
+                    joint.xDrive = drive;
                 }
 
                 // FIX #5: Clear the target and mark as reached to allow IK to run again

@@ -5,8 +5,6 @@ from __future__ import annotations
 
 from typing import List
 
-from ..config import BenchmarkConfig
-
 # Objects pre-loaded into synthetic KG for this ablation.
 # IDs match Unity GameObjects under the Targets hierarchy.
 KG_OBJECTS = (
@@ -22,7 +20,7 @@ KG_OBJECTS = (
 KG_ROBOT_NEARBY = "Robot2"
 
 
-def get_tasks(cfg: BenchmarkConfig) -> List[str]:
+def get_tasks() -> List[str]:
     """
     Return NL tasks that exercise spatial/handoff reasoning.
 
@@ -30,18 +28,15 @@ def get_tasks(cfg: BenchmarkConfig) -> List[str]:
     LLM should reference the exact object IDs from KG_OBJECTS. Without it,
     the LLM has only the command text and may hallucinate object identifiers.
 
-    Args:
-        cfg: Benchmark configuration.
-
     Returns:
         List of natural language task strings.
     """
 
     return [
-        f"Robot {cfg.robot_id}: Detect the nearest object and move to it.",
-        f"Robot {cfg.robot_id}: Grasp the red cube and hand it to the other robot.",
-        f"Robot {cfg.robot_id}: Find the reachable object closest to you and lift it.",
-        f"Robot {cfg.robot_id}: Pass the red cube to Robot2.",
+        f"Robot2: Detect the nearest object and move to it.",
+        f"Robot1: Grasp the red cube and hand it to the other robot.",
+        f"Robot1: Find the reachable object closest to you and lift it.",
+        f"Robot1: Pass the red cube to Robot2.",
     ]
 
 

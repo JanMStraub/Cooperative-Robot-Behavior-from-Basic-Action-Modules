@@ -3,19 +3,11 @@
 
 from __future__ import annotations
 
-from ..config import BenchmarkConfig
-
-
-def get_task(cfg: BenchmarkConfig) -> str:
+def get_task() -> str:
     """
     Return natural language task description for B4.
-
-    Args:
-        cfg: Benchmark configuration.
 
     Returns:
         Task string sent to the LLM via SequenceServer.
     """
-    return (
-        f"Robot {cfg.robot_id}: Grasp blue cube, and place it in field A."
-    )
+    return f"Robot1: Grasp blue cube, and place it in field A."

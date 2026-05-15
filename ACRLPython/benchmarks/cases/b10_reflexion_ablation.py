@@ -5,27 +5,24 @@ from __future__ import annotations
 
 from typing import List
 
-from ..config import BenchmarkConfig
 
-
-def get_tasks(cfg: BenchmarkConfig) -> List[str]:
+def get_tasks() -> List[str]:
     """
-    Return NL navigation tasks for reflexion ablation.
+    Return failure-prone NL tasks for reflexion ablation.
 
-    Tasks chosen because they exercise NAVIGATION category ops (move_to_coordinate,
-    pick_object_at_coordinate) — the only category where reflexion applies.
-
-    Args:
-        cfg: Benchmark configuration.
+    Tasks are designed to stress IK reachability and precision so that initial
+    attempts are likely to fail, giving reflexion retries a chance to recover.
+    Covers NAVIGATION, MANIPULATION, and PERCEPTION eligible categories.
 
     Returns:
         List of natural language task strings.
     """
-    r = cfg.robot_id
+    # Boundary coords stress IK reachability; low y risks table collision;
+    # "nearest object" is ambiguous, forcing perception retry on first miss.
     return [
-        f"Robot {r}: Move to position (-0.1, 0.1, 0.1).",
-        f"Robot {r}: Grasp the red cube and lift it to y=0.25.",
-        f"Robot {r}: Grasp the green cube and place it at (-0.2, 0.0, -0.25).",
-        f"Robot {r}: Move to position (-0.15, 0.15, 0.2), then move to (-0.1, 0.2, -0.2).",
-        f"Robot {r}: Navigate to the blue cube and return to start.",
+        "Robot1: Move to position (-0.58, 0.05, 0.45).",
+        "Robot2: Grasp the red cube and lift it to y=0.03.",
+        "Robot2: Grasp the green cube and place it at (0.55, 0.02, -0.48).",
+        "Robot1: Move to position (-0.57, 0.08, 0.44), then move to (-0.12, 0.04, -0.47).",
+        "Robot1: Navigate to the nearest object and return to start.",
     ]

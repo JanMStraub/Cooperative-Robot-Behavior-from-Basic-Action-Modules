@@ -107,7 +107,7 @@ class BenchmarkRunner:
             if benchmark_id == 8:
                 return self._run_b8_chain(cfg, module)
 
-            task = module.get_task(cfg)
+            task = module.get_task()
             robot_id = getattr(cfg, "robot_id_a", cfg.robot_id)
             raw = self._send(task, robot_id, cfg)
             return self._build_result(benchmark_id, cfg, raw)

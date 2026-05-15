@@ -3,19 +3,11 @@
 
 from __future__ import annotations
 
-from ..config import DualRobotConfig
-
-
-def get_task(cfg: DualRobotConfig) -> str:
+def get_task() -> str:
     """
     Return natural language task description for B6.
-
-    Args:
-        cfg: DualRobotConfig with robot_id_a and robot_id_b.
 
     Returns:
         Task string sent to the LLM via SequenceServer.
     """
-    return (
-        f"{cfg.robot_id_a} and {cfg.robot_id_b} perform a handoff of the red cube"
-    )
+    return f"Robot1 and Robot2 perform a handoff of the red cube"

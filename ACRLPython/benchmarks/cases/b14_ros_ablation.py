@@ -5,10 +5,7 @@ from __future__ import annotations
 
 from typing import List
 
-from ..config import BenchmarkConfig
-
-
-def get_tasks(cfg: BenchmarkConfig) -> List[str]:
+def get_tasks() -> List[str]:
     """
     Return NL movement tasks for ROS/MoveIt vs Unity-TCP ablation.
 
@@ -18,15 +15,13 @@ def get_tasks(cfg: BenchmarkConfig) -> List[str]:
     Live mode exposes success-rate and timing differences (MoveIt planning overhead);
     offline mode verifies the parse and dispatch path for both conditions.
 
-    Args:
-        cfg: Benchmark configuration.
-
     Returns:
         List of natural language task strings.
     """
     return [
-        f"Robot {cfg.robot_id}: Move to position (0.2, 0.15, 0.1).",
-        f"Robot {cfg.robot_id}: Move to position (0.0, 0.15, 0.2), then move to (-0.1, 0.2, -0.2).",
-        f"Robot {cfg.robot_id}: Detect the blue cube and move to it.",
-        f"Robot {cfg.robot_id}: Move to position (0.0, 0.15, 0.2), then return to start position.",
+        "Robot2: Move to position (0.2, 0.15, 0.1).",
+        "Robot1: Move to position (0.0, 0.15, 0.2), then move to (-0.1, 0.2, -0.2).",
+        "Robot1: Detect the blue cube and move to it.",
+        "Robot1: Move to position (0.0, 0.15, 0.2), then return to start position.",
+        "Robot1: Move to position (-0.05, 0.1, 0.05), then move to (-0.3, 0.2, 0.3).",
     ]
