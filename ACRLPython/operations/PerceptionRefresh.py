@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""
-Background daemon that re-detects stale WorldState objects via stereo+YOLO.
-
-Falls back to LLM analyze_scene when stereo unavailable (refreshes confidence/last_seen
-but cannot update position). Start with PerceptionRefreshLoop(world_state).start().
-"""
+"""Background daemon that re-detects stale WorldState objects via stereo+YOLO. Falls back to LLM analyze_scene when stereo unavailable."""
 
 import threading
 import time
@@ -24,15 +19,12 @@ _active_refresh_loop = None
 
 
 class PerceptionRefreshLoop:
-    """Background daemon that re-detects stale WorldState objects."""
-
     def __init__(
         self,
         world_state,
         refresh_interval: float = _DEFAULT_REFRESH_INTERVAL,
         stale_threshold: float = _DEFAULT_STALE_THRESHOLD,
     ):
-        """Does not start the thread — call start() separately."""
         self._world_state = world_state
         self._refresh_interval = refresh_interval
         self._stale_threshold = stale_threshold
@@ -42,7 +34,6 @@ class PerceptionRefreshLoop:
         self._anticipatory_lock = threading.Lock()
 
     def start(self) -> None:
-        """Start the background refresh thread (idempotent)."""
         global _active_refresh_loop
         if self._thread and self._thread.is_alive():
             logger.debug("PerceptionRefreshLoop already running")
@@ -68,7 +59,6 @@ class PerceptionRefreshLoop:
                     self._anticipatory_queue.append(oid)
 
     def stop(self) -> None:
-        """Signal the refresh thread to stop and wait for it to exit."""
         self._stop_event.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=self._refresh_interval + 2.0)
@@ -79,7 +69,6 @@ class PerceptionRefreshLoop:
     # ------------------------------------------------------------------
 
     def _refresh_loop(self) -> None:
-        """Main polling loop — runs in daemon thread."""
         while not self._stop_event.wait(timeout=self._refresh_interval):
             try:
                 self._sweep()
@@ -87,7 +76,6 @@ class PerceptionRefreshLoop:
                 logger.error(f"PerceptionRefreshLoop sweep error: {exc}", exc_info=True)
 
     def _refresh_object_by_id(self, object_id: str) -> bool:
-        """Refresh object by ID, looking up its color from WorldState. Returns True on success."""
         try:
             obj = self._world_state.get_object(object_id)
             if obj is None:
@@ -98,7 +86,6 @@ class PerceptionRefreshLoop:
             return False
 
     def _sweep(self) -> None:
-        """Drain anticipatory queue (high-priority), then find and re-detect stale objects."""
         with self._anticipatory_lock:
             pending = list(self._anticipatory_queue)
             self._anticipatory_queue.clear()
@@ -124,7 +111,6 @@ class PerceptionRefreshLoop:
                 self._refresh_llm_fallback(color)
 
     def _collect_stale_colors(self) -> list:
-        """Return deduplicated color labels for objects with stale=True or confidence < threshold."""
         stale_colors = []
         seen = set()
         try:
@@ -145,7 +131,6 @@ class PerceptionRefreshLoop:
         return stale_colors
 
     def _refresh_stereo(self, color: str) -> bool:
-        """Re-detect color via stereo+YOLO. In PERCEPTION_ONLY_MODE uses cached images (no Unity round-trip)."""
         try:
             from operations.VisionOperations import detect_object_stereo
 
@@ -165,7 +150,6 @@ class PerceptionRefreshLoop:
         return False
 
     def _refresh_llm_fallback(self, color: str) -> None:
-        """LLM analyze_scene fallback — resets confidence/last_seen but cannot update position (no depth)."""
         try:
             from operations.VisionOperations import analyze_scene
 

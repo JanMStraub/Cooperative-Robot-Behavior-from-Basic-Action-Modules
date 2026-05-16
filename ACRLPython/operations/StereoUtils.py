@@ -1,17 +1,5 @@
 #!/usr/bin/env python3
-"""
-Shared helpers for extracting camera calibration and pose from the stereo
-metadata dict that Unity sends alongside each image pair.
-
-All vision operations (VisionOperations, FieldOperations, PointCloudOperations)
-receive the same flat metadata structure from StereoCameraController::StereoMetadata:
-
-    {"baseline": float, "fov": float,
-     "camera_position": [x, y, z], "camera_rotation": [x, y, z, w]}
-
-Use ``camera_config_from_metadata`` to turn that dict into a typed
-``CameraConfig`` and extract the extrinsics in one place.
-"""
+"""Parse Unity stereo metadata dicts into typed CameraConfig + extrinsics — shared by all vision operations."""
 
 from dataclasses import dataclass
 from typing import List, Optional
@@ -39,8 +27,6 @@ except ImportError:
 
 @dataclass
 class StereoParams:
-    """Typed camera parameters extracted from Unity stereo metadata."""
-
     camera_config: CameraConfig
     camera_position: Optional[List[float]]
     camera_rotation: Optional[List[float]]
@@ -53,28 +39,10 @@ def camera_config_from_metadata(
     camera_position: Optional[List[float]] = None,
     camera_rotation: Optional[List[float]] = None,
 ) -> StereoParams:
-    """
-    Extract a typed ``CameraConfig`` and camera pose from a Unity stereo metadata dict.
-
-    Unity's ``StereoCameraController`` sends a flat JSON object alongside each
-    stereo image pair containing ``baseline``, ``fov``, ``camera_position``, and
-    ``camera_rotation``.  This function converts that dict into the typed objects
-    expected by ``YOLODetector.detect_objects_stereo`` and
-    ``estimate_object_world_position_from_disparity``, falling back to config
-    defaults when values are absent (e.g. legacy clients).
-
-    Example:
-        stereo_params = camera_config_from_metadata(stereo_metadata)
-        detections = detector.detect_objects_stereo(
-            imgL, imgR,
-            camera_config=stereo_params.camera_config,
-            camera_position=stereo_params.camera_position,
-            camera_rotation=stereo_params.camera_rotation,
-        )
-    """
+    """Convert Unity stereo metadata dict to typed StereoParams; falls back to config defaults for legacy clients."""
     meta = metadata or {}
 
-    # Priority: Unity metadata > caller-supplied value > config default
+    # Unity metadata wins; caller-supplied values override config defaults
     baseline = (
         float(meta["baseline"])
         if meta.get("baseline") is not None

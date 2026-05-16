@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""
-AutoRT Task Selector
-
-Task selection with exploration/exploitation balance.
-"""
+"""Task selection with exploration/exploitation balance."""
 
 import logging
 import random
@@ -18,12 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class TaskSelector:
-    """
-    Selects best task from approved candidates.
-
-    Tracks task execution history to balance exploration (trying new tasks)
-    vs exploitation (repeating successful tasks).
-    """
+    """Picks the best task from approved candidates, balancing exploration vs. exploitation."""
 
     def __init__(self):
         # History: task description hash → list of outcomes
@@ -34,11 +25,6 @@ class TaskSelector:
     def select_task(
         self, candidates: List[ProposedTask], strategy: str = "balanced"
     ) -> Optional[ProposedTask]:
-        """
-        Select a task from approved candidates.
-
-
-        """
         if not candidates:
             return None
 
@@ -55,7 +41,6 @@ class TaskSelector:
             return self._select_balanced(candidates)
 
     def _select_explore(self, candidates: List[ProposedTask]) -> ProposedTask:
-        """Prioritize tasks with fewer past attempts"""
         scored = []
         with self._history_lock:
             for task in candidates:
@@ -68,7 +53,6 @@ class TaskSelector:
         return scored[0][0]
 
     def _select_exploit(self, candidates: List[ProposedTask]) -> ProposedTask:
-        """Prioritize tasks with highest success rate"""
         scored = []
         with self._history_lock:
             for task in candidates:
@@ -87,12 +71,7 @@ class TaskSelector:
         return scored[0][0]
 
     def _select_balanced(self, candidates: List[ProposedTask]) -> ProposedTask:
-        """
-        Balance exploration and exploitation.
-
-        Score = success_rate * 0.6 + novelty * 0.4
-        Novelty = 1.0 for untried tasks, decays with attempts.
-        """
+        """Score = success_rate * 0.6 + novelty * 0.4; novelty decays with attempts."""
         scored = []
         with self._history_lock:
             for task in candidates:
@@ -115,10 +94,6 @@ class TaskSelector:
         return scored[0][0]
 
     def update_history(self, task: ProposedTask, result: Dict[str, Any]):
-        """
-        Record task outcome for future selection.
-
-        """
         key = self._task_key(task)
         with self._history_lock:
             self.history[key].append(
@@ -130,13 +105,6 @@ class TaskSelector:
             )
 
     def _task_key(self, task: ProposedTask) -> str:
-        """
-        Generate a key for task type grouping.
-
-        Groups by operation sequence pattern (ignoring specific coordinates),
-        so "pick red cube" and "pick blue cube" are different but
-        "pick red cube at (0.1, 0.2, 0.3)" and "pick red cube at (0.4, 0.5, 0.6)"
-        are the same task type.
-        """
+        """Key by op-type sequence so position variants still bucket together."""
         op_types = tuple(op.type for op in task.operations)
         return str(op_types)

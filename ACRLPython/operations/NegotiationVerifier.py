@@ -22,12 +22,10 @@ class PlanVerificationResult:
     safety_check: bool = True
 
     def add_error(self, msg: str):
-        """Add error and mark plan invalid."""
         self.errors.append(msg)
         self.valid = False
 
     def add_warning(self, msg: str):
-        """Add non-blocking warning."""
         self.warnings.append(msg)
 
 
@@ -196,7 +194,7 @@ class NegotiationVerifier:
     def _verify_spatial_safety(
         self,
         commands: List[Dict[str, Any]],
-        world_state,
+        _world_state,
     ) -> Tuple[List[str], List[str]]:
         errors = []
         warnings = []

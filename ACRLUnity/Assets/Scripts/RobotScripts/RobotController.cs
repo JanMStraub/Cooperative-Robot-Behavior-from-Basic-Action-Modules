@@ -37,9 +37,6 @@ namespace Robotics
 
         private bool _isManuallyDriven = false;
 
-        /// <summary>
-        /// Gets or sets whether the robot is driven externally, disabling the FixedUpdate IK loop.
-        /// </summary>
         public bool IsManuallyDriven
         {
             get => _isManuallyDriven;
@@ -48,10 +45,6 @@ namespace Robotics
 
         private bool _isFrozenByProximity = false;
 
-        /// <summary>
-        /// Set by ProximityGuard when inter-robot EE distance drops below threshold.
-        /// Cleared automatically once separation is restored.
-        /// </summary>
         public bool IsFrozenByProximity
         {
             get => _isFrozenByProximity;
@@ -63,8 +56,7 @@ namespace Robotics
         private Vector3 _targetLocalPosition;
         private Quaternion _targetLocalRotation;
 
-        // Cached inverse of _ikFrame.rotation to avoid redundant Quaternion.Inverse calls
-        // in UpdateJointInfoCache() and UpdateEndEffectorState() every FixedUpdate.
+        // Avoid redundant Inverse() in hot path
         private Quaternion _cachedIKFrameInverseRot = Quaternion.identity;
         private Quaternion _lastIKFrameRot = Quaternion.identity;
 
@@ -357,7 +349,6 @@ namespace Robotics
 
                 Vector3 jointLocalPos = _ikFrame.InverseTransformPoint(joint.transform.position);
                 Vector3 axisWorld = joint.transform.rotation * joint.anchorRotation * Vector3.right;
-                // Use pre-computed inverse rotation (refreshed once per IK step by RefreshIKFrameCache)
                 Vector3 axisLocal = _cachedIKFrameInverseRot * axisWorld;
                 _cachedJointInfos[i] = new JointInfo(jointLocalPos, axisLocal.normalized);
             }
@@ -386,7 +377,6 @@ namespace Robotics
                 endEffectorWorldVelocity += velContribution;
             }
 
-            // Use pre-computed inverse rotation (refreshed once per IK step by RefreshIKFrameCache)
             return _cachedIKFrameInverseRot * endEffectorWorldVelocity;
         }
 
@@ -434,7 +424,6 @@ namespace Robotics
             _endEffectorLocalPosition = _ikFrame.InverseTransformPoint(endEffectorBase.position);
             _targetLocalPosition = _ikFrame.InverseTransformPoint(_targetTransform.position);
 
-            // Use pre-computed inverse rotation (refreshed once per IK step by RefreshIKFrameCache)
             _endEffectorLocalRotation = _cachedIKFrameInverseRot * endEffectorBase.rotation;
             _targetLocalRotation = _cachedIKFrameInverseRot * _targetTransform.rotation;
 
@@ -443,17 +432,10 @@ namespace Robotics
             _distanceToTarget = Mathf.Sqrt(_sqrDistanceToTarget);
         }
 
-        /// <summary>
-        /// Refresh the cached IK frame inverse rotation if the frame has rotated since
-        /// the last call. Called once per PerformInverseKinematicsStep() so that
-        /// UpdateJointInfoCache() and UpdateEndEffectorState() can use the cached value
-        /// instead of each computing Quaternion.Inverse(_ikFrame.rotation) independently.
-        /// </summary>
         private void RefreshIKFrameCache()
         {
             if (_ikFrame == null)
                 return;
-            // Quaternion equality is approximate, so compare against last known value
             if (_ikFrame.rotation != _lastIKFrameRot)
             {
                 _lastIKFrameRot = _ikFrame.rotation;
@@ -461,10 +443,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Runs one IK step: refreshes frame cache, computes PD joint deltas, and applies them to
-        /// ArticulationBody drives. Safe to call externally when IsManuallyDriven is true.
-        /// </summary>
         public void PerformInverseKinematicsStep()
         {
             if (
@@ -493,8 +471,7 @@ namespace Robotics
 
             bool isStalled = isSettled && (!isPosReached || !isRotReached);
 
-            // If settled + position reached + angle within stall acceptance, declare done
-            // rather than spinning forever against ArticulationBody friction.
+            // Stall acceptance: stop rather than fight ArticulationBody friction forever
             if (
                 isStalled
                 && isPosReached
@@ -543,8 +520,7 @@ namespace Robotics
             if (_ikSolver == null)
                 return;
 
-            // STALL COMPENSATION: Increase gain when stopped but not at target
-            // This overcomes static friction
+            // Boost gain when stalled to overcome static friction
             float kpMult = isStalled ? 2.5f : 1.0f;
             float orientationWeight = 1.0f;
 
@@ -767,15 +743,7 @@ namespace Robotics
             SetTargetInternal(target.transform, target, options);
         }
 
-        /// <summary>
-        /// Set a grasp target using externally-computed candidates (e.g., from Contact-GraspNet).
-        /// Bypasses GraspCandidateGenerator and feeds candidates directly into
-        /// GraspIKFilter → GraspCollisionFilter → GraspScorer.
-        /// Falls back to GraspCandidateGenerator if all external candidates are rejected.
-        /// </summary>
-        /// <param name="target">GameObject to grasp</param>
-        /// <param name="externalCandidates">Pre-computed GraspNet candidates in Unity world frame</param>
-        /// <param name="options">Grasp options (approach, retreat, etc.)</param>
+        /// <summary>Grasp using externally-computed candidates; falls back to GraspCandidateGenerator if all rejected.</summary>
         public void SetTargetWithExternalCandidates(
             GameObject target,
             System.Collections.Generic.List<Robotics.Grasp.GraspCandidate> externalCandidates,
@@ -842,10 +810,7 @@ namespace Robotics
             SetTarget(target, options);
         }
 
-        /// <summary>
-        /// Sets a world-space position as the move target. Snaps to the nearest scene object if
-        /// one is within the object-finding radius.
-        /// </summary>
+        /// <summary>Move to world-space position; snaps to nearest object if within find radius.</summary>
         public void SetTarget(Vector3 position, GraspOptions options = default)
         {
             StopActiveGraspCoroutine();
@@ -887,9 +852,6 @@ namespace Robotics
             SetTargetInternal(temp.transform, null, options);
         }
 
-        /// <summary>
-        /// Sets a world-space position and rotation as the move target, bypassing grasp planning.
-        /// </summary>
         public void SetTarget(Vector3 position, Quaternion rotation, GraspOptions options = default)
         {
             StopActiveGraspCoroutine();
@@ -928,29 +890,18 @@ namespace Robotics
 
         public Quaternion? GetCurrentTargetRotation() => _targetTransform?.rotation;
 
-        /// <summary>True if a target transform is currently assigned.</summary>
         public bool HasTarget => _targetTransform != null;
-
-        /// <summary>True if the IK solver has converged to the current target.</summary>
         public bool TargetReached => _hasReachedTarget;
-
-        /// <summary>Returns the original target GameObject (not the temp transform), or null for position-only targets.</summary>
         public GameObject GetTargetObject() => _targetObject;
 
         public void SetMovingTargetTracking(bool enable) => _enableMovingTargetTracking = enable;
 
-        /// <summary>
-        /// Sets the minimum positional change (in metres) before the IK target is re-issued for a moving target.
-        /// </summary>
         public void SetTargetMovementThreshold(float threshold)
         {
             _targetMovementThreshold = Mathf.Max(0.001f, threshold);
             _sqrTargetMovementThreshold = _targetMovementThreshold * _targetMovementThreshold;
         }
 
-        /// <summary>
-        /// Release any grasped object and open the gripper. Called during simulation reset.
-        /// </summary>
         public void ReleaseGrasp()
         {
             if (_gripperController != null)
@@ -961,10 +912,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Resets gripper to open state and clears all deferred attachment/detachment flags.
-        /// Call during simulation reset after ReleaseGrasp().
-        /// </summary>
         public void ResetGripperState()
         {
             _gripperController?.ResetGrippers();
@@ -984,21 +931,13 @@ namespace Robotics
             Debug.Log($"{_logPrefix} [{robotId}] Target cleared");
         }
 
-        /// <summary>
-        /// Sync the IK target to the robot's current end-effector pose so that when
-        /// ROS hands back control the IK solver starts with zero positional error.
-        ///
-        /// Call this after a ROS trajectory completes to prevent the IK from driving
-        /// the arm toward a stale pre-ROS target (which causes jitter after grasping).
-        /// Also disables moving-target tracking so a held (kinematic) object does not
-        /// feed back into the IK as a moving target.
-        /// </summary>
+        /// <summary>Snap IK target to current EE pose after ROS handback to prevent stale-target jitter.</summary>
         public void SyncIKTargetToCurrentPose()
         {
             if (endEffectorBase == null)
                 return;
 
-            // Reuse the cached move-target GameObject so nothing is heap-allocated.
+            // Reuse cached object — no heap alloc
             GameObject temp = GetCachedTempObject(
                 ref _cachedTempTargetMove,
                 RobotConstants.TEMP_TARGET_SUFFIX
@@ -1010,10 +949,10 @@ namespace Robotics
 
             _targetTransform = temp.transform;
             _targetObject = null;
-            _hasReachedTarget = true; // IK will not fire until a new target is given
+            _hasReachedTarget = true;
             _isGraspingTarget = false;
             _closeGripperAfterReach = false;
-            _isTrackingMovingTarget = false; // Held objects must not feed back as moving targets
+            _isTrackingMovingTarget = false;
 
             Debug.Log(
                 $"{_logPrefix} [{robotId}] IK target synced to current EE pose "

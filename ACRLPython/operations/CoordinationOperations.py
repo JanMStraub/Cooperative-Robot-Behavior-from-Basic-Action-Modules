@@ -27,7 +27,6 @@ def detect_other_robot(
     camera_id: str = "main",
     request_id: int = 0,
 ) -> OperationResult:
-    """Detect and locate another robot via WorldState; returns position and distance."""
     try:
         if not robot_id or not isinstance(robot_id, str):
             return OperationResult.error_result(
@@ -71,7 +70,7 @@ def detect_other_robot(
 
         import math
 
-        # Support RobotState dataclass (production) and dict mocks (tests).
+        # dict mocks for tests, RobotState dataclass in production
         if isinstance(detector_state, dict):
             detector_pos = detector_state.get(
                 "end_effector_position"
@@ -93,7 +92,7 @@ def detect_other_robot(
                 ["Ensure WorldStatePublisher is active"],
             )
 
-        # Extract x/y/z from tuple/list or dict mocks.
+        # handle both tuple coords and dict mocks
         def _xyz(pos):
             if isinstance(pos, dict):
                 return pos.get("x", 0.0), pos.get("y", 0.0), pos.get("z", 0.0)
@@ -106,7 +105,7 @@ def detect_other_robot(
             f"Robot {robot_id} detected {target_robot_id} at distance {distance:.3f}m"
         )
 
-        # Enrich with KG proximity (additive — callers unaffected if absent)
+        # KG enrichment is additive — safe to skip if disabled
         kg_proximity = None
         try:
             from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
@@ -154,7 +153,6 @@ def mirror_movement_of_other_robot(
     duration_ms: int = 10000,
     request_id: int = 0,
 ) -> OperationResult:
-    """Activate Unity mirroring coroutine on robot_id for duration_ms; Unity runs the tracking loop."""
     try:
         if not robot_id or not isinstance(robot_id, str):
             return OperationResult.error_result(
@@ -178,7 +176,7 @@ def mirror_movement_of_other_robot(
                 [f"Use one of: {', '.join(valid_axes)}"],
             )
 
-        # Negative scale_factor valid for mirroring/reflection
+        # negative values invert direction (reflection)
         if not (0.1 <= abs(scale_factor) <= 2.0):
             return OperationResult.error_result(
                 "INVALID_SCALE_FACTOR",

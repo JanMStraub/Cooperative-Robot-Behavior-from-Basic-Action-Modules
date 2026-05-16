@@ -42,15 +42,7 @@ def move_to_coordinate(
     request_id: int = 0,
     use_ros: Optional[bool] = None,
 ) -> OperationResult:
-    """
-    Move robot end effector to specified 3D coordinate.
-
-    Asynchronous — sends command to Unity and returns immediately. Unity executes
-    movement in background. Collision detection active during movement.
-
-    Note: approach_offset lifts the target along Unity Y (up-axis); leave at 0.0
-    for pure navigation. Use pick_object_at_coordinate when grasping is needed.
-    """
+    """Move robot EE to specified 3D coordinate. Async — returns immediately, Unity executes in background. approach_offset lifts target along Y."""
     try:
         if err := validate_robot_id(robot_id):
             return err
@@ -61,9 +53,6 @@ def move_to_coordinate(
         if err := validate_approach_offset(approach_offset):
             return err
 
-        # Apply approach offset to target position
-        # Unity uses Y-up coordinate system; approach_offset lifts the target above
-        # the object along Unity's Y axis (height), not Z (depth/forward).
         actual_x = x
         actual_y = y + approach_offset  # Add offset to height (Unity Y = up)
         actual_z = z
@@ -441,14 +430,7 @@ def pick_object_at_coordinate(
     request_id: int = 0,
     use_ros: Optional[bool] = None,
 ) -> OperationResult:
-    """
-    Pick an object at a known 3D coordinate using a hover → descent → grasp sequence.
-
-    Encodes the correct pick pattern: open gripper → hover (approach_height above) →
-    descend to contact → close gripper. Use this instead of manually chaining
-    move_to_coordinate + control_gripper (naive chain fires gripper while still
-    approach_height above the cube). For object-name-based picking use grasp_object.
-    """
+    """Pick at known coords: open → hover → descend → close gripper. Don't manually chain move+control_gripper — use this instead."""
     try:
         if err := validate_robot_id(robot_id):
             return err
@@ -471,7 +453,6 @@ def pick_object_at_coordinate(
         except ImportError:
             from .GripperOperations import control_gripper
 
-        # Step 1: Open gripper so fingers don't knock the object during approach.
         open_result = control_gripper(
             robot_id=robot_id,
             open_gripper=True,
@@ -481,7 +462,6 @@ def pick_object_at_coordinate(
         if not open_result["success"]:
             return open_result
 
-        # Step 2: Move to hover position (approach_height above object).
         hover_result = move_to_coordinate(
             robot_id=robot_id,
             x=x,
@@ -495,7 +475,6 @@ def pick_object_at_coordinate(
         if not hover_result["success"]:
             return hover_result
 
-        # Step 3: Descend straight to contact position (approach_offset=0).
         descent_result = move_to_coordinate(
             robot_id=robot_id,
             x=x,
@@ -509,7 +488,6 @@ def pick_object_at_coordinate(
         if not descent_result["success"]:
             return descent_result
 
-        # Step 4: Close gripper to grasp the object.
         close_result = control_gripper(
             robot_id=robot_id,
             open_gripper=False,

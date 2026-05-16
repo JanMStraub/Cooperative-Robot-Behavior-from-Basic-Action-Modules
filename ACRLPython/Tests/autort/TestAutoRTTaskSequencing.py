@@ -110,7 +110,7 @@ class TestExecutedTaskContext:
         from autort.DataModels import ExecutedTaskContext
 
         with pytest.raises(ValidationError):
-            ExecutedTaskContext(
+            ExecutedTaskContext(  # type: ignore[call-arg]
                 description="No task_id",
                 operation_types=[],
                 success=True,
@@ -139,6 +139,7 @@ class TestSceneDescriptionBackwardCompat:
         from autort.DataModels import SceneDescription
 
         restored = SceneDescription(**data)
+        assert restored.last_task_context is not None
         assert restored.last_task_context.success is False
 
 
@@ -147,13 +148,13 @@ class TestSceneDescriptionBackwardCompat:
 
 class TestBuildPreviousTaskSectionSuccess:
     @pytest.fixture(autouse=True)
-    def gen(self):
+    def _setup_gen(self):
+        from autort.TaskGenerator import TaskGenerator
+
         with patch("autort.TaskGenerator.get_global_registry") as mreg, patch(
             "autort.TaskGenerator.OpenAI"
         ):
             mreg.return_value.get_all_operations.return_value = []
-            from autort.TaskGenerator import TaskGenerator
-
             cfg = Mock(
                 LM_STUDIO_URL="x",
                 TASK_GENERATION_MODEL="m",
@@ -195,13 +196,13 @@ class TestBuildPreviousTaskSectionSuccess:
 
 class TestBuildPreviousTaskSectionFailure:
     @pytest.fixture(autouse=True)
-    def gen(self):
+    def _setup_gen(self):
+        from autort.TaskGenerator import TaskGenerator
+
         with patch("autort.TaskGenerator.get_global_registry") as mreg, patch(
             "autort.TaskGenerator.OpenAI"
         ):
             mreg.return_value.get_all_operations.return_value = []
-            from autort.TaskGenerator import TaskGenerator
-
             cfg = Mock(
                 LM_STUDIO_URL="x",
                 TASK_GENERATION_MODEL="m",
@@ -246,13 +247,13 @@ class TestBuildPreviousTaskSectionFailure:
 
 class TestBuildTaskPromptIntegration:
     @pytest.fixture(autouse=True)
-    def gen(self):
+    def _setup_gen(self):
+        from autort.TaskGenerator import TaskGenerator
+
         with patch("autort.TaskGenerator.get_global_registry") as mreg, patch(
             "autort.TaskGenerator.OpenAI"
         ):
             mreg.return_value.get_all_operations.return_value = []
-            from autort.TaskGenerator import TaskGenerator
-
             cfg = Mock(
                 LM_STUDIO_URL="x",
                 TASK_GENERATION_MODEL="m",

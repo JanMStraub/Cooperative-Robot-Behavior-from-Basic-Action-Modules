@@ -1,24 +1,5 @@
 #!/usr/bin/env python3
-"""
-AR4 Forward Kinematics
-======================
-
-Pure-NumPy FK solver for the AR4 6-DOF arm derived from the URDF joint chain:
-  ACRLUnity/Assets/Prefabs/ar4_urdf/ar4.urdf
-
-Each revolute joint transform is computed as:
-    T_i = Translate(xyz_i) @ RPY_to_matrix(rpy_i) @ AxisAngle(axis_i, θ_i)
-
-The full chain:
-    T_world_ee = T_base * T_j1(θ1) * T_j2(θ2) * ... * T_j6(θ6) * T_gripper_fixed
-
-Coordinate frames:
-- URDF/ROS: right-handed (X-right, Y-up/forward per joint convention)
-- Unity:    left-handed  (X-right, Y-up, Z-forward)
-
-After computing FK in ROS frame, negate X of position and quat.x to convert
-to Unity frame — same pattern as GraspFrameTransform.py:202-204.
-"""
+"""Pure-NumPy FK solver for the AR4 6-DOF arm (from ar4.urdf). Outputs Unity left-handed world frame poses."""
 
 import math
 from typing import List, Tuple
@@ -27,7 +8,6 @@ import numpy as np
 
 
 def _quat_multiply(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
-    """Hamilton product of two quaternions [x, y, z, w]."""
     x1, y1, z1, w1 = q1
     x2, y2, z2, w2 = q2
     return np.array(
@@ -42,7 +22,6 @@ def _quat_multiply(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
 
 
 def _normalise_quat(q: np.ndarray) -> np.ndarray:
-    """Return unit-length quaternion; handles near-zero input gracefully."""
     norm = np.linalg.norm(q)
     if norm < 1e-9:
         return np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float64)
@@ -82,7 +61,6 @@ _LINK_CAPTURE_INDICES = {1, 2, 4, 5}
 
 
 def _translation_matrix(xyz: Tuple[float, float, float]) -> np.ndarray:
-    """Build 4×4 homogeneous translation matrix."""
     T = np.eye(4, dtype=np.float64)
     T[0, 3] = xyz[0]
     T[1, 3] = xyz[1]
@@ -91,7 +69,6 @@ def _translation_matrix(xyz: Tuple[float, float, float]) -> np.ndarray:
 
 
 def _rpy_to_matrix(rpy: Tuple[float, float, float]) -> np.ndarray:
-    """Convert URDF fixed-axis RPY (rad) to 4×4 rotation matrix: R = Rz(yaw) @ Ry(pitch) @ Rx(roll)."""
     roll, pitch, yaw = rpy
     cr, sr = math.cos(roll), math.sin(roll)
     cp, sp = math.cos(pitch), math.sin(pitch)
@@ -112,7 +89,6 @@ def _rpy_to_matrix(rpy: Tuple[float, float, float]) -> np.ndarray:
 
 
 def _axis_angle_matrix(axis: Tuple[float, float, float], theta: float) -> np.ndarray:
-    """Build 4×4 rotation matrix for theta radians around axis via Rodrigues' formula."""
     ax, ay, az = axis
     c, s = math.cos(theta), math.sin(theta)
     t = 1.0 - c
@@ -130,7 +106,6 @@ def _axis_angle_matrix(axis: Tuple[float, float, float], theta: float) -> np.nda
 
 
 def _mat_to_quaternion(R3: np.ndarray) -> np.ndarray:
-    """Convert 3×3 rotation matrix to quaternion [x, y, z, w] via Shepperd method."""
     trace = R3[0, 0] + R3[1, 1] + R3[2, 2]
     if trace > 0.0:
         s = 0.5 / math.sqrt(trace + 1.0)
@@ -164,11 +139,7 @@ def compute_end_effector_pose(
     base_position: Tuple[float, float, float],
     base_yaw_rad: float = 0.0,
 ) -> Tuple[Tuple[float, float, float], Tuple[float, float, float, float]]:
-    """
-    Compute end-effector pose via AR4 FK (joint_1 → joint_6 → ee_joint → gripper_base_joint).
-
-    Returns Unity left-handed world frame pose. Pass base_yaw_rad=math.pi for Robot2 (180° mount).
-    """
+    """Compute EE pose via FK. base_yaw_rad=π for Robot2 (180° mount). Returns Unity world frame."""
     if len(joint_angles) != _NUM_JOINTS:
         raise ValueError(
             f"Expected {_NUM_JOINTS} joint angles, got {len(joint_angles)}"
@@ -227,13 +198,7 @@ def compute_link_poses(
     base_position: Tuple[float, float, float],
     base_yaw_rad: float = 0.0,
 ) -> List[Tuple[Tuple[float, float, float], Tuple[float, float, float, float]]]:
-    """
-    Compute poses for link_2, link_3, link_5, link_6 for collision geometry checks.
-
-    Snapshots accumulated transform at joint indices 1, 2, 4, 5 (not including
-    ee_joint/gripper_base_joint, so differs from compute_end_effector_pose).
-    Returns Unity world frame poses.
-    """
+    """Snapshots link_2/3/5/6 transforms for collision geometry. Returns Unity world frame poses."""
     if len(joint_angles) != _NUM_JOINTS:
         raise ValueError(
             f"Expected {_NUM_JOINTS} joint angles, got {len(joint_angles)}"

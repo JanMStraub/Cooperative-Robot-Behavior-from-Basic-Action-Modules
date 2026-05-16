@@ -73,7 +73,7 @@ def _apply_rag(use_rag: bool, restores: Dict[str, Any]) -> None:
         if use_rag:
             if parser.rag is None:
                 try:
-                    from rag.RAGSystem import RAGSystem
+                    from rag import RAGSystem
 
                     rag = RAGSystem()
                     rag.index_operations(rebuild=False)

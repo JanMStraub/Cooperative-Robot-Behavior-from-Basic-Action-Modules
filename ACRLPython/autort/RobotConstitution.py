@@ -1,11 +1,6 @@
 #!/usr/bin/env python3
-"""
-AutoRT Robot Constitution
+"""Two-layer safety system: Semantic (LLM) + Kinematic (code)."""
 
-Two-layer safety system: Semantic (LLM) + Kinematic (Code)
-"""
-
-import json
 import logging
 import numpy as np
 from typing import List, Tuple
@@ -20,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class BoundingBox:
-    """Axis-aligned bounding box for workspace bounds checking"""
+    """AABB for workspace bounds checking."""
 
     def __init__(
         self,
@@ -37,18 +32,7 @@ class BoundingBox:
 
 
 class RobotConstitution:
-    """
-    Two-Layer Safety System:
-
-    LAYER 1: SEMANTIC SAFETY (LLM-based)
-    - Detects intent violations (harm, damage, unethical actions)
-    - Uses LLM to understand natural language descriptions
-
-    LAYER 2: KINEMATIC SAFETY (Code-based)
-    - Validates physical feasibility and safety
-    - Checks workspace bounds, live robot positions, velocity limits
-    - Uses WorldState for current robot positions (not just planned targets)
-    """
+    """Evaluates tasks through semantic (LLM) and kinematic (code) safety layers."""
 
     def __init__(self, config):
         self.config = config
@@ -82,20 +66,13 @@ class RobotConstitution:
         self.max_gripper_force = config.MAX_GRIPPER_FORCE
 
     def add_rule(self, rule: str) -> None:
-        """
-        Append a semantic safety rule at runtime.
-
-        Useful for deployment-specific rules (e.g. real vs. sim, per-experiment constraints)
-        without restarting the server or modifying config files.
-        """
+        """Add a semantic safety rule at runtime without restarting."""
         if rule and rule not in self.semantic_rules:
             self.semantic_rules.append(rule)
             logger.info(f"Added semantic safety rule: {rule!r}")
 
     def evaluate_task(self, task: ProposedTask, scene: SceneDescription) -> TaskVerdict:
-        """
-        Evaluate task through both safety layers.
-        """
+        """Run task through both safety layers, returning a verdict."""
         # LAYER 1: Semantic Safety (LLM)
         semantic_verdict = self._evaluate_semantic_safety(task)
         if not semantic_verdict.approved:
@@ -114,12 +91,7 @@ class RobotConstitution:
         )
 
     def _evaluate_semantic_safety(self, task: ProposedTask) -> TaskVerdict:
-        """
-        LAYER 1: Use LLM to check for semantic violations.
-
-        Purpose: Detect harmful intent that code cannot catch.
-        Example: "Throw the cube at the camera" (harmful intent)
-        """
+        """Layer 1: LLM checks for intent violations code can't catch."""
         rules_str = "\n".join(f"- {rule}" for rule in self.semantic_rules)
 
         ops_summary = ", ".join(op.type for op in task.operations)
@@ -176,20 +148,9 @@ Does this task violate any rule? JSON: {{"violates":bool,"rule_violated":null,"r
             )
 
     def _evaluate_kinematic_safety(
-        self, task: ProposedTask, scene: SceneDescription
+        self, task: ProposedTask, _scene: SceneDescription
     ) -> TaskVerdict:
-        """
-        LAYER 2: Code-based physics and bounds checking.
-
-        Uses WorldState for live robot positions in addition to
-        checking planned target positions.
-
-        Checks:
-        1. Workspace bounds: All targets reachable
-        2. Robot collision: Live positions + planned targets maintain separation
-        3. Velocity limits: Safe motion speeds
-        4. Force limits: Gripper force within safe range
-        """
+        """Layer 2: Code checks bounds, velocity, gripper force, and robot separation."""
         violations = []
         warnings = []
 
@@ -248,13 +209,6 @@ Does this task violate any rule? JSON: {{"violates":bool,"rule_violated":null,"r
     def _check_robot_collisions(
         self, robot_ids: List[str], planned_targets: dict
     ) -> List[str]:
-        """
-        Check robot collision risk using both planned targets AND live WorldState positions.
-
-        Checks pairwise distances between:
-        1. All planned target positions across robots
-        2. Each robot's planned targets vs other robots' current positions (from WorldState)
-        """
         violations = []
 
         # Gather all positions per robot (live + planned)

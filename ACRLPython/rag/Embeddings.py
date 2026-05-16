@@ -35,7 +35,7 @@ logger = get_logger(__name__)
 
 
 class EmbeddingGenerator:
-    """Generate embeddings using LM Studio or TF-IDF fallback."""
+    """Generates embeddings via LM Studio; falls back to TF-IDF if unavailable."""
 
     def __init__(
         self,
@@ -54,7 +54,6 @@ class EmbeddingGenerator:
         self._initialize_client()
 
     def _initialize_client(self):
-        """Initialize OpenAI client pointing to LM Studio."""
         try:
             self.client = OpenAI(base_url=self.base_url, api_key=self.api_key)
 
@@ -78,7 +77,6 @@ class EmbeddingGenerator:
                 raise Exception(f"LM Studio unavailable and fallback disabled: {e}")
 
     def _initialize_tfidf(self):
-        """Initialize TF-IDF vectorizer as fallback"""
         self.tfidf_vectorizer = TfidfVectorizer(
             max_features=RAG_TFIDF_MAX_FEATURES,
             stop_words="english",
@@ -86,11 +84,9 @@ class EmbeddingGenerator:
         )
 
     def generate_embedding(self, text: str) -> np.ndarray:
-        """Generate embedding for a single text."""
         return self.generate_embeddings([text])[0]
 
     def generate_embeddings(self, texts: List[str]) -> List[np.ndarray]:
-        """Generate embeddings for multiple texts."""
         if not texts:
             return []
 
@@ -100,7 +96,6 @@ class EmbeddingGenerator:
             return self._generate_tfidf_embeddings(texts)
 
     def _generate_lm_studio_embeddings(self, texts: List[str]) -> List[np.ndarray]:
-        """Generate embeddings using LM Studio API"""
         embeddings = []
 
         if self.client is None:
@@ -135,7 +130,6 @@ class EmbeddingGenerator:
         return embeddings
 
     def _generate_tfidf_embeddings(self, texts: List[str]) -> List[np.ndarray]:
-        """Generate embeddings using TF-IDF vectorizer"""
         if self.tfidf_vectorizer is None:
             self._initialize_tfidf()
 
@@ -174,14 +168,12 @@ class EmbeddingGenerator:
             return [np.zeros(RAG_TFIDF_MAX_FEATURES, dtype=np.float32) for _ in texts]
 
     def get_embedding_dimension(self) -> int:
-        """Return the dimension of embeddings produced by this generator."""
         if self.use_lm_studio:
             return RAG_EMBEDDING_DIMENSION
         else:
             return RAG_TFIDF_MAX_FEATURES
 
     def is_using_lm_studio(self) -> bool:
-        """Check if using LM Studio (True) or TF-IDF fallback (False)"""
         return self.use_lm_studio
 
     def __repr__(self) -> str:

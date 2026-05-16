@@ -3,28 +3,15 @@ using UnityEngine;
 
 namespace Robotics
 {
-    /// <summary>
-    /// Trajectory controller with PD control for smooth robot motion.
-    /// Eliminates oscillation by adding velocity feedback (damping) to position control.
-    ///
-    /// Key Features:
-    /// - PD control law: correction = K_p*(pos error) + K_d*(vel error)
-    /// - Synchronized with FixedUpdate to avoid Update/FixedUpdate jitter
-    /// - Feedforward terms from velocity profile for smooth acceleration
-    ///
-    /// Usage:
-    /// - Call GetTrajectoryState() in FixedUpdate to get desired state
-    /// - Call ComputeCartesianCorrection() to get damped correction vector
-    /// </summary>
+    /// <summary>PD trajectory controller: position + velocity feedback for oscillation-free Cartesian motion.</summary>
     public class TrajectoryController
     {
-        // PD gains for Cartesian space control
         private Vector3 _positionGains;
         private Vector3 _velocityGains;
         private float _maxVelocity;
         private float _maxAcceleration;
 
-        // Cached trajectory state (synchronized with FixedUpdate)
+        // Cached per-FixedUpdate to avoid jitter from Update() calls
         private Vector3 _cachedTargetPosition;
         private Vector3 _cachedTargetVelocity;
         private Vector3 _cachedTargetAcceleration;
@@ -49,23 +36,13 @@ namespace Robotics
             _velocityGains = velocityGains;
         }
 
-        /// <summary>
-        /// Get trajectory state at specified time.
-        /// CRITICAL: Must be called in FixedUpdate to avoid jitter.
-        /// Caches result for use between FixedUpdate calls.
-        /// </summary>
-        /// <param name="currentTime">Time along trajectory (from trajectory start)</param>
-        /// <param name="path">Cartesian path being followed</param>
-        /// <param name="velocityProfile">Velocity profile for the path</param>
-        /// <returns>Target position, velocity, and acceleration</returns>
+        /// <summary>Sample trajectory at current time. Call from FixedUpdate only — result is cached per-frame.</summary>
         public (Vector3 targetPos, Vector3 targetVel, Vector3 targetAccel) GetTrajectoryState(
             float currentTime,
             CartesianPath path,
             VelocityProfile velocityProfile
         )
         {
-            // CRITICAL: Cache trajectory state in FixedUpdate
-            // If called in Update(), trajectory will jitter relative to FixedUpdate()
             if (Mathf.Abs(currentTime - _lastUpdateTime) > 0.001f)
             {
                 if (path == null || velocityProfile == null)
@@ -150,15 +127,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Computes a damped Cartesian correction using PD control: position error scaled by
-        /// positionGains plus velocity error scaled by velocityGains.
-        /// </summary>
-        /// <param name="currentPos">Current end effector position</param>
-        /// <param name="targetPos">Target position from trajectory</param>
-        /// <param name="currentVel">Current end effector velocity (from ArticulationBody)</param>
-        /// <param name="targetVel">Target velocity from trajectory</param>
-        /// <returns>Correction vector to apply</returns>
         public Vector3 ComputeCartesianCorrection(
             Vector3 currentPos,
             Vector3 targetPos,

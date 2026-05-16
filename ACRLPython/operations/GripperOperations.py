@@ -54,7 +54,6 @@ def control_gripper(
             )
 
         def _update_gripper_world_state():
-            """Optimistic gripper state update — no Unity stream needed."""
             try:
                 from core.Imports import get_world_state
 
@@ -228,11 +227,7 @@ def release_object(
     request_id: int = 0,
     use_ros: Optional[bool] = None,
 ) -> OperationResult:
-    """
-    Open gripper at current position (ATOMIC — does NOT move the robot).
-
-    For positioned release, chain: move_to_coordinate → release_object.
-    """
+    """Open gripper at current position (atomic — doesn't move robot). Chain with move_to_coordinate for positioned release."""
     try:
         if not robot_id or not isinstance(robot_id, str):
             return OperationResult.error_result(
@@ -365,11 +360,6 @@ RELEASE_OBJECT_OPERATION = create_release_object_operation()
 
 
 def _check_placement_reachability(robot_id: str, x: float, y: float, z: float) -> str:
-    """Non-blocking KG reachability check for the placement position.
-
-    Returns a short note string included in the OperationResult payload.
-    Never raises — if KG is disabled or unavailable the check is silently skipped.
-    """
     try:
         from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
 
@@ -401,7 +391,6 @@ def _resolve_placement_y(
     placed_object_height: float,
     fallback_y: float,
 ) -> tuple[float, str]:
-    """Compute placement Y when stacking on another object via WorldState lookup."""
     try:
         from ._imports import get_world_state
     except ImportError:
@@ -450,47 +439,10 @@ def place_object(
     request_id: int = 0,
 ) -> OperationResult:
     """
-    Carefully place a held object at the specified world position.
+    Place held object at target: hover → descend → release → ascend.
 
-    This is the inverse of grasp_object.  It performs a controlled
-    three-step sequence:
-      1. Move (via MoveIt or Unity IK) to a hover position PLACE_HOVER_OFFSET
-         above the target.
-      2. Cartesian descent to PLACE_TCP_OFFSET above the target surface so
-         the object lands gently rather than dropping.
-      3. Open the gripper to release the object.
-      4. Cartesian ascent back to the hover height so the arm clears the
-         placed object.
-
-    The ROS path uses plan_and_execute for the hover move and
-    plan_cartesian_descent for the final lowering, mirroring the grasp
-    approach.  The TCP fallback sends a single ``place_object`` command to
-    Unity which executes the same sequence inside a coroutine.
-
-    Args:
-        robot_id: ID of the robot performing the placement.
-        x: Target X coordinate in Unity world space (metres).
-        y: Target Y coordinate in Unity world space (metres).  Ignored when
-           on_top_of resolves successfully; used as fallback otherwise.
-        z: Target Z coordinate in Unity world space (metres).
-        on_top_of: Optional name or ID of a WorldState object to stack on.
-           When provided and resolved, placement Y is computed automatically
-           from target object position + dimensions.  Falls back to explicit y
-           if the object is not found or lacks dimension data.
-        placed_object_height: Height of the held object (metres).  Used with
-           on_top_of so the held object lands flush on the target surface.
-           Defaults to 0.0.
-        use_ros: Override ROS/TCP path selection.  None = use config default.
-        request_id: Optional request ID for tracking.
-
-    Returns:
-        OperationResult with placement confirmation or error details.
-        Includes a ``resolution`` key: ``"explicit_coords"``,
-        ``"stacked_on:<id>"``, or a ``"fallback_*"`` reason.
-
-    Example:
-        >>> result = place_object("Robot1", x=-0.18, y=0.06, z=0.05)
-        >>> result = place_object("Robot1", x=0.0, y=0.0, z=0.05, on_top_of="blue_cube")
+    on_top_of auto-computes Y from WorldState object + dimensions (falls back to explicit y).
+    ROS path uses plan_and_execute; TCP path sends place_object command to Unity coroutine.
     """
     try:
         if not robot_id or not isinstance(robot_id, str):
@@ -779,12 +731,7 @@ def place_between_objects(
     use_ros: Optional[bool] = None,
     request_id: int = 0,
 ) -> OperationResult:
-    """
-    Place a held object at the XZ midpoint between two WorldState objects.
-
-    Delegates to place_object; on_top_of and placed_object_height pass through
-    for flush stacking. Y defaults to caller-supplied value when on_top_of not used.
-    """
+    """Place held object at XZ midpoint between two WorldState objects. Delegates to place_object."""
     try:
         if not robot_id or not isinstance(robot_id, str):
             return OperationResult.error_result(

@@ -43,12 +43,7 @@ except ImportError:
 
 
 class AutoRTHandler:
-    """
-    Singleton handler for Unity-integrated AutoRT task generation.
-
-    Manages AutoRTOrchestrator lifecycle and provides Unity-compatible API.
-    Tasks are generated but NOT executed - Unity must approve first.
-    """
+    """Singleton handler for AutoRT task generation. Tasks aren't executed until Unity approves."""
 
     _instance = None
     _lock = threading.Lock()
@@ -91,17 +86,16 @@ class AutoRTHandler:
         return cls._instance
 
     def set_task_callback(self, callback):
-        """Set callback Function(response_dict, request_id) -> None for sending tasks to Unity."""
+        """Register callback for pushing generated tasks to Unity."""
         self._task_callback = callback
         logger.info("Task callback registered")
 
     def set_web_broadcast_callback(self, callback):
-        """Register callback for pushing tasks to WebSocket clients (web dashboard)."""
+        """Register callback for pushing tasks to WebSocket clients."""
         self._web_broadcast_callback = callback
         logger.info("Web broadcast callback registered")
 
     def _initialize_orchestrator(self):
-        """Lazy-initialize AutoRT orchestrator when needed."""
         if self._orchestrator is not None:
             return
 
@@ -157,7 +151,6 @@ class AutoRTHandler:
         return task_id
 
     def _serialize_task(self, task) -> dict:
-        """Convert ProposedTask to Unity-compatible format."""
         operations_list = []
         for op in task.operations:
             operations_list.append(
@@ -365,7 +358,7 @@ class AutoRTHandler:
             }
 
     def execute_task(self, task_id: str) -> dict:
-        """Execute approved task. Returns immediately; execution is async."""
+        """Run approved task async; returns immediately."""
         try:
             with self._task_lock:
                 if task_id not in self._pending_tasks:
@@ -436,10 +429,9 @@ class AutoRTHandler:
         }
 
     def get_pending_tasks(self) -> dict:
-        """Return all cached pending tasks serialized for HTTP responses."""
         with self._task_lock:
             serialized = []
-            for task_id, (task, timestamp) in self._pending_tasks.items():
+            for _task_id, (task, timestamp) in self._pending_tasks.items():
                 task_dict = self._serialize_task(task)
                 task_dict["cached_at"] = timestamp.isoformat()
                 serialized.append(task_dict)
@@ -451,7 +443,6 @@ class AutoRTHandler:
         }
 
     def _loop_worker(self):
-        """Background thread worker for continuous task generation."""
         logger.info("AutoRT loop worker started")
 
         while not self._loop_stop_event.is_set():

@@ -11,7 +11,7 @@ def _make_parser(mock_ws=None):
         from orchestrators.CommandParser import CommandParser
 
         parser = CommandParser.__new__(CommandParser)
-        parser._world_state = ws
+        parser._world_state = ws  # type: ignore[attr-defined]
         return parser, ws
 
 

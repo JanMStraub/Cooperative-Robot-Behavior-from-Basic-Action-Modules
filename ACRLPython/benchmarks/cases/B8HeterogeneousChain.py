@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import List, Tuple
 
-from ..config import BenchmarkConfig
+from ..Config import BenchmarkConfig
 
 # Each robot runs: navigate → grasp+lift → place, targeting its own field.
 _ROBOT_CHAINS: dict[str, List[Tuple[str, str]]] = {

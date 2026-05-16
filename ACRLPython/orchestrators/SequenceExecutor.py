@@ -1,19 +1,5 @@
 #!/usr/bin/env python3
-"""
-Sequence Executor for Multi-Command Operations
-===============================================
-
-This module executes parsed command sequences sequentially, waiting for each
-operation to complete before proceeding to the next.
-
-Example:
-    >>> executor = SequenceExecutor()
-    >>> commands = [
-    ...     {"operation": "move_to_coordinate", "params": {"robot_id": "Robot1", "x": 0.3, "y": 0.2, "z": 0.1}},
-    ...     {"operation": "control_gripper", "params": {"robot_id": "Robot1", "open_gripper": False}}
-    ... ]
-    >>> result = executor.execute_sequence(commands)
-"""
+"""Executes parsed command sequences, waiting for each op to complete before proceeding."""
 
 from typing import Dict, Any, List, Optional, Callable
 import time
@@ -58,12 +44,7 @@ for _handler in logging.root.handlers[:]:
 def _extract_waypoint_from_verification(
     verification_result: dict,
 ) -> "tuple[float, float, float] | None":
-    """
-    Parse a WAYPOINT suggestion embedded by CoordinationVerifier into a coordinate tuple.
-
-    CoordinationVerifier encodes safe waypoints as "WAYPOINT:x,y,z" strings in the
-    resolution_suggestions list.  Returns the first match as a float tuple, or None.
-    """
+    """Parse the first WAYPOINT:x,y,z suggestion from a CoordinationVerifier result."""
     details = verification_result.get("details", {})
     coord_check = (
         details.get("coordination_check", {}) if isinstance(details, dict) else {}
@@ -82,31 +63,16 @@ def _extract_waypoint_from_verification(
 
 
 class SequenceExecutor:
-    """
-    Executes command sequences with completion tracking and error handling.
-
-    Each command is executed and the executor waits for completion before
-    proceeding to the next command in the sequence.
-
-    Supports variable passing between operations:
-        detect_object -> $target
-        move_to_coordinate with position=$target
-    """
+    """Executes command sequences with completion tracking, variable passing, and Reflexion retries."""
 
     # Class-level atomic counter for request IDs (shared across all instances)
     _request_id_counter = 0
     _request_id_lock = threading.Lock()
 
     class _MetricsTracker:
-        """
-        Lightweight operation metrics tracker for a single SequenceExecutor.
-
-        Uses Welford's online algorithm for the running average so no list of
-        samples needs to be maintained in memory.
-        """
+        """Welford online-average tracker for per-executor operation metrics."""
 
         def __init__(self):
-            """Initialise all counters to zero."""
             self._lock = threading.Lock()
             self._ops_executed: int = 0
             self._ops_succeeded: int = 0
@@ -114,32 +80,17 @@ class SequenceExecutor:
             self._avg_duration_ms: float = 0.0
 
         def record(self, success: bool, duration_ms: float):
-            """
-            Update counters for one completed operation.
-
-            Args:
-                success: Whether the operation succeeded.
-                duration_ms: Wall-clock duration of the operation in ms.
-            """
             with self._lock:
                 self._ops_executed += 1
                 if success:
                     self._ops_succeeded += 1
                 else:
                     self._ops_failed += 1
-                # Welford online mean: avg += (x - avg) / n
                 self._avg_duration_ms += (
                     duration_ms - self._avg_duration_ms
                 ) / self._ops_executed
 
         def snapshot(self) -> Dict[str, Any]:
-            """
-            Return a snapshot of current metrics.
-
-            Returns:
-                Dict with keys: ops_executed, ops_succeeded, ops_failed,
-                ops_success_rate (0.0–1.0), avg_duration_ms.
-            """
             with self._lock:
                 executed = self._ops_executed
                 succeeded = self._ops_succeeded
@@ -156,7 +107,6 @@ class SequenceExecutor:
             }
 
         def reset(self):
-            """Reset all counters to zero."""
             with self._lock:
                 self._ops_executed = 0
                 self._ops_succeeded = 0
@@ -169,14 +119,6 @@ class SequenceExecutor:
         check_completion: bool = True,
         enable_verification: bool = True,
     ):
-        """
-        Initialize the SequenceExecutor.
-
-        Args:
-            default_timeout: Default timeout in seconds for each operation (90s for complex movements)
-            check_completion: Whether to check for operation completion via StatusServer
-            enable_verification: Whether to enable formal verification (preconditions/postconditions)
-        """
         from core.Imports import get_global_registry
 
         self.registry = get_global_registry()
@@ -205,20 +147,12 @@ class SequenceExecutor:
         self.outcome_tracker: Optional[Any] = None
 
     def _get_command_broadcaster(self):
-        """Get command broadcaster using centralized lazy import system"""
         from core.Imports import get_command_broadcaster
 
         return get_command_broadcaster()
 
     @classmethod
     def _generate_request_id(cls) -> int:
-        """
-        Generate a unique request ID using atomic counter + timestamp hybrid.
-        Prevents collisions in multi-threaded scenarios.
-
-        Returns:
-            Unique request ID (32-bit unsigned integer)
-        """
         with cls._request_id_lock:
             cls._request_id_counter += 1
             # Hybrid approach: timestamp in upper bits, counter in lower bits
@@ -233,39 +167,7 @@ class SequenceExecutor:
         sequence_id: Optional[str] = None,
         timeout_per_command: Optional[float] = None,
     ) -> Dict[str, Any]:
-        """
-        Execute a sequence of commands sequentially or in parallel groups.
-
-        Supports parallel execution: commands with the same parallel_group number
-        execute concurrently, then wait for all to complete before next group.
-
-        Args:
-            commands: List of commands to execute
-            sequence_id: Optional ID for this sequence
-            timeout_per_command: Timeout per command in seconds
-
-        Returns:
-            Dict with structure:
-            {
-                "success": bool,
-                "sequence_id": str,
-                "total_commands": int,
-                "completed_commands": int,
-                "results": [
-                    {
-                        "index": int,
-                        "operation": str,
-                        "success": bool,
-                        "result": dict or None,
-                        "error": str or None,
-                        "duration_ms": float
-                    },
-                    ...
-                ],
-                "total_duration_ms": float,
-                "error": str or None
-            }
-        """
+        """Execute commands sequentially or in parallel groups; returns full result dict."""
         self._abort_flag = False
         self._current_sequence_id = sequence_id or f"seq_{int(time.time() * 1000)}"
         timeout = timeout_per_command or self.default_timeout
@@ -558,19 +460,6 @@ class SequenceExecutor:
     def _execute_parallel_groups(
         self, commands: List[Dict[str, Any]], timeout: float
     ) -> tuple[List[Optional[Dict[str, Any]]], int]:
-        """
-        Execute commands grouped by parallel_group number.
-
-        Commands with the same parallel_group execute concurrently,
-        then wait for all to complete before proceeding to next group.
-
-        Args:
-            commands: List of commands with parallel_group field
-            timeout: Timeout per command in seconds
-
-        Returns:
-            (results, completed_count)
-        """
         from collections import defaultdict
 
         # Group commands by parallel_group number
@@ -759,23 +648,9 @@ class SequenceExecutor:
         return results, completed
 
     def _record_metric(self, success: bool, duration_ms: float):
-        """
-        Update operation metrics counters in a thread-safe manner.
-
-        Args:
-            success: Whether the operation succeeded
-            duration_ms: Wall-clock duration of the operation in milliseconds
-        """
         self._metrics.record(success, duration_ms)
 
     def get_metrics(self) -> Dict[str, Any]:
-        """
-        Return a snapshot of operation metrics for this executor.
-
-        Returns:
-            Dict with keys: ops_executed, ops_succeeded, ops_failed,
-            ops_success_rate (0.0–1.0), avg_duration_ms.
-        """
         return self._metrics.snapshot()
 
     def reset_metrics(self):
@@ -789,19 +664,6 @@ class SequenceExecutor:
         timeout: float,
         _replan_depth: int = 0,
     ) -> Dict[str, Any]:
-        """
-        Execute a single command and wait for completion.
-
-        Args:
-            operation: Operation name
-            params: Operation parameters
-            timeout: Timeout in seconds
-            _replan_depth: Internal counter preventing infinite waypoint-replan loops.
-
-        Returns:
-            Operation result
-        """
-        # Generate unique request_id using atomic counter + timestamp hybrid
         request_id = self._generate_request_id()
         _cmd_start = time.time()
 
@@ -995,23 +857,7 @@ class SequenceExecutor:
     def _wait_for_completion(
         self, operation: str, request_id: int, timeout: float
     ) -> bool:
-        """
-        Wait for an operation to complete with adaptive polling.
-
-        Waits for a completion signal from Unity via StatusServer.
-        Unity sends a "command_completion" message when the operation finishes.
-
-        Implements adaptive polling: starts at 50ms, gradually increases to 500ms
-        to reduce CPU usage for long-running operations.
-
-        Args:
-            operation: Operation name
-            request_id: Request ID for completion tracking (must match ID sent to Unity)
-            timeout: Timeout in seconds
-
-        Returns:
-            True if completed, False if timed out
-        """
+        """Poll with adaptive backoff (50ms → 500ms) for Unity's completion signal."""
         start_time = time.time()
 
         # Adaptive polling parameters
@@ -1073,16 +919,6 @@ class SequenceExecutor:
         return False
 
     def _is_operation_complete(self, operation: str, status: Dict[str, Any]) -> bool:
-        """
-        Determine if an operation is complete based on robot status.
-
-        Args:
-            operation: Operation name
-            status: Robot status data
-
-        Returns:
-            True if operation is complete
-        """
         if operation == "move_to_coordinate":
             # Check if robot is no longer moving
             is_moving = status.get("is_moving", True)
@@ -1115,15 +951,9 @@ class SequenceExecutor:
         logger.warning(f"Abort requested for sequence {self._current_sequence_id}")
 
     def add_progress_callback(self, callback: Callable):
-        """
-        Add a callback for progress updates.
-
-        Callback signature: callback(index: int, total: int, operation: str, status: str)
-        """
         self._progress_callbacks.append(callback)
 
     def _notify_progress(self, index: int, total: int, operation: str, status: str):
-        """Notify all progress callbacks."""
         for callback in self._progress_callbacks:
             try:
                 callback(index, total, operation, status)
@@ -1133,27 +963,7 @@ class SequenceExecutor:
     def _verify_operation_safety(
         self, op_def, params: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """
-        Unified verification combining operation preconditions and multi-robot coordination checks.
-
-        This is PRIORITY 3: Single pre-execution safety check that combines both verifiers.
-
-        Args:
-            op_def: Operation definition from registry
-            params: Operation parameters
-
-        Returns:
-            Dict with structure:
-            {
-                "safe": bool,  # True if all checks passed
-                "error": str or None,  # Error message if not safe
-                "warnings": List[str],  # Non-critical warnings
-                "details": {
-                    "precondition_check": dict,
-                    "coordination_check": dict
-                }
-            }
-        """
+        """Single pre-execution check combining preconditions and multi-robot coordination."""
         warnings = []
         details = {}
 
@@ -1240,23 +1050,7 @@ class SequenceExecutor:
     def _check_spatial_feasibility(
         self, op_def, params: Dict[str, Any], robot_id: str
     ) -> Dict[str, Any]:
-        """
-        Check spatial feasibility of an operation using the Knowledge Graph.
-
-        For move operations, checks whether the target path is blocked.
-        For grasp/stabilize operations, checks whether the robot is in the
-        reachable set for the object (non-blocking when the list is empty, as
-        the KG may not be populated yet).
-
-        Args:
-            op_def: Operation definition from the registry.
-            params: Operation parameters.
-            robot_id: The robot executing the operation.
-
-        Returns:
-            Dict with "safe" (bool) and optional "warning" (str).
-            Always returns safe=True on any exception (graceful degrade).
-        """
+        """KG path-block and reachability check; returns safe=True on any exception."""
         try:
             from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
 
@@ -1327,19 +1121,7 @@ class SequenceExecutor:
             return {"safe": True, "warning": f"KG check skipped: {e}"}
 
     def _capture_result_to_var(self, capture_var: str, result: Dict[str, Any]) -> None:
-        """
-        Store an operation result under a named variable for later $ references.
-
-        If the result contains a "center" dict (field detection pattern), the center
-        coordinates are stored directly as the variable value so that existing
-        coordinate resolution logic ($var.x / $var with x/y/z params) works without
-        requiring the LLM to know the nested "center" key.  The full result is also
-        stored under "<capture_var>_result" for callers that need field_label etc.
-
-        Args:
-            capture_var: Variable name (the "capture_var" key from the command).
-            result: The operation result dict (cmd_result["result"]).
-        """
+        """Store result under capture_var; flattens field-detection center dict for easy $var.x access."""
         if isinstance(result.get("center"), dict):
             # Field-detection result: expose center coordinates at the top level
             # so $field_g.x / $field_g resolve correctly via existing coord logic.
@@ -1353,15 +1135,6 @@ class SequenceExecutor:
             logger.debug(f"Captured result to ${capture_var}")
 
     def _auto_capture_outputs(self, operation_name: str, result: Dict[str, Any]):
-        """
-        Automatically capture operation outputs based on ParameterFlow definitions.
-
-        This enables automatic chaining: detect_object output → move_to_coordinate input.
-
-        Args:
-            operation_name: Name of the operation that just completed
-            result: Operation result containing output values
-        """
         if not result:
             return
 
@@ -1410,18 +1183,6 @@ class SequenceExecutor:
     def _auto_inject_parameters(
         self, operation_name: str, params: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """
-        Automatically inject parameters from previous operations based on ParameterFlow definitions.
-
-        This enables automatic chaining: previous operation output → current operation input.
-
-        Args:
-            operation_name: Name of the operation about to execute
-            params: Current parameters (may be incomplete)
-
-        Returns:
-            Parameters with auto-injected values from previous operations
-        """
         # Get operation definition to access relationships
         op_def = self.registry.get_operation_by_name(operation_name)
         if not op_def:
@@ -1487,20 +1248,7 @@ class SequenceExecutor:
         return enhanced_params
 
     def _resolve_single_value(self, key: str, value: Any) -> Any:
-        """
-        Resolve a single parameter value that may contain a $ variable reference.
-
-        Handles arithmetic expressions, dotted notation, and simple variable
-        references.  Called by _resolve_variables for both top-level params and
-        individual elements inside list/tuple values.
-
-        Args:
-            key: Parameter name (used for coordinate/object_id special-casing).
-            value: The value to resolve — must be a str containing "$".
-
-        Returns:
-            Resolved value, or the original string if resolution fails.
-        """
+        """Resolve one $var reference (arithmetic, dotted, or simple); returns original string on failure."""
         # Handle expressions with arithmetic (e.g., "$target.z + 0.05")
         if any(op in value for op in ["+", "-", "*", "/"]):
             resolved_value = self._resolve_expression(value)
@@ -1583,20 +1331,7 @@ class SequenceExecutor:
         return value
 
     def _resolve_variables(self, params: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Resolve variable references in parameters.
-
-        Variables are referenced with $ prefix (e.g., $target).
-        Supports dotted notation (e.g., $target.x), arithmetic expressions
-        (e.g., $target.z + 0.05), and list/tuple values whose elements may
-        themselves be variable references (e.g., object_ref: ["$p.x", "$p.y", "$p.z"]).
-
-        Args:
-            params: Parameters that may contain variable references
-
-        Returns:
-            Parameters with variables resolved
-        """
+        """Resolve all $var references in a params dict, including dotted, arithmetic, and list elements."""
         resolved = {}
         for key, value in params.items():
             if isinstance(value, str) and "$" in value:
@@ -1629,15 +1364,6 @@ class SequenceExecutor:
         return resolved
 
     def _resolve_dotted_variable(self, var_ref: str) -> Optional[Any]:
-        """
-        Resolve dotted variable notation (e.g., $target.x).
-
-        Args:
-            var_ref: Variable reference string (e.g., "$target.x")
-
-        Returns:
-            Resolved value or None if not found
-        """
         if not var_ref.startswith("$"):
             return None
 
@@ -1661,15 +1387,6 @@ class SequenceExecutor:
         return value
 
     def _resolve_expression(self, expr: str) -> Optional[float]:
-        """
-        Resolve arithmetic expressions containing variables (e.g., "$target.z + 0.05").
-
-        Args:
-            expr: Expression string containing variables and arithmetic
-
-        Returns:
-            Evaluated result or None if evaluation fails
-        """
         import re
 
         # Find all variable references (e.g., $target.x, $target.z)
@@ -1741,19 +1458,7 @@ class SequenceExecutor:
         command_text: str,
         robot_id: str = "Robot1",
     ) -> Optional[List[Dict[str, Any]]]:
-        """
-        Check if a command needs multi-robot negotiation and run it if so.
-
-        Lazy-imports NegotiationHub via core.Imports to avoid circular deps.
-
-        Args:
-            command_text: Natural language command
-            robot_id: Robot that received the command
-
-        Returns:
-            List of negotiated commands if negotiation ran, None to fall back
-            to normal parsing
-        """
+        """Run NegotiationHub if the command needs multi-robot planning; returns None to fall back."""
         try:
             from core.Imports import get_negotiation_hub
 
@@ -1791,22 +1496,6 @@ class SequenceExecutor:
     def _get_handoff_context(
         self, command_text: str, robot_id: str
     ) -> Optional[Dict[str, Any]]:
-        """
-        Build a handoff context dict from the Knowledge Graph when a handoff
-        keyword is detected in the command.
-
-        Scans all object nodes in the KG for a name match against the command
-        text, then queries get_handoff_candidates() for Robot1 <-> Robot2.
-        Returns None if KG is disabled, unavailable, no handoff keyword found,
-        or any exception occurs.
-
-        Args:
-            command_text: Natural language command being parsed.
-            robot_id: Robot that received the command.
-
-        Returns:
-            Dict with "handoff_candidates" and "handoff_object" keys, or None.
-        """
         HANDOFF_KEYWORDS = {"hand", "pass", "give", "transfer", "handoff"}
         try:
             if not any(kw in command_text.lower() for kw in HANDOFF_KEYWORDS):
@@ -1856,26 +1545,16 @@ class SequenceExecutor:
             return None
 
     def get_variable(self, name: str) -> Optional[Any]:
-        """Get a stored variable value."""
         return self._variables.get(name)
 
     def set_variable(self, name: str, value: Any):
-        """Set a variable value manually."""
         self._variables[name] = value
 
 
 class AsyncSequenceExecutor:
-    """
-    Asynchronous wrapper for SequenceExecutor that runs in a background thread.
-    """
+    """Runs SequenceExecutor in a background thread."""
 
     def __init__(self, executor: Optional[SequenceExecutor] = None):
-        """
-        Initialize the async executor.
-
-        Args:
-            executor: SequenceExecutor instance to use
-        """
         self.executor = executor or SequenceExecutor()
         self._current_thread: Optional[threading.Thread] = None
         self._result: Optional[Dict[str, Any]] = None
@@ -1887,17 +1566,6 @@ class AsyncSequenceExecutor:
         sequence_id: Optional[str] = None,
         timeout_per_command: Optional[float] = None,
     ) -> str:
-        """
-        Execute a sequence in the background.
-
-        Args:
-            commands: List of commands to execute
-            sequence_id: Optional sequence ID
-            timeout_per_command: Timeout per command
-
-        Returns:
-            Sequence ID
-        """
         seq_id = sequence_id or f"seq_{int(time.time() * 1000)}"
 
         def run():
@@ -1912,43 +1580,25 @@ class AsyncSequenceExecutor:
         return seq_id
 
     def is_running(self) -> bool:
-        """Check if a sequence is currently running."""
         return self._current_thread is not None and self._current_thread.is_alive()
 
     def get_result(self) -> Optional[Dict[str, Any]]:
-        """Get the result of the last executed sequence."""
         return self._result
 
     def wait_for_completion(
         self, timeout: Optional[float] = None
     ) -> Optional[Dict[str, Any]]:
-        """
-        Wait for the current sequence to complete.
-
-        Args:
-            timeout: Maximum time to wait in seconds
-
-        Returns:
-            Sequence result or None if timed out
-        """
         if self._current_thread is not None:
             self._current_thread.join(timeout=timeout)
         return self._result
 
     def abort(self):
-        """Abort the current sequence."""
         self.executor.abort()
 
     def add_completion_callback(self, callback: Callable):
-        """
-        Add a callback for sequence completion.
-
-        Callback signature: callback(result: Dict[str, Any])
-        """
         self._completion_callbacks.append(callback)
 
     def _notify_completion(self):
-        """Notify all completion callbacks."""
         for callback in self._completion_callbacks:
             try:
                 callback(self._result)
@@ -1962,7 +1612,6 @@ _async_executor_instance: Optional[AsyncSequenceExecutor] = None
 
 
 def get_sequence_executor() -> SequenceExecutor:
-    """Get the global SequenceExecutor singleton."""
     global _executor_instance
     if _executor_instance is None:
         _executor_instance = SequenceExecutor()
@@ -1970,7 +1619,6 @@ def get_sequence_executor() -> SequenceExecutor:
 
 
 def get_async_executor() -> AsyncSequenceExecutor:
-    """Get the global AsyncSequenceExecutor singleton."""
     global _async_executor_instance
     if _async_executor_instance is None:
         _async_executor_instance = AsyncSequenceExecutor()

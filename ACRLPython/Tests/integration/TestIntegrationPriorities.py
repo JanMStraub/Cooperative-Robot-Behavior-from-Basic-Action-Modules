@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch
 
 from operations.Registry import get_global_registry
 from operations.WorkflowPatterns import get_global_workflow_registry
-from rag import RAGSystem
+from rag import RAGSystem  # type: ignore[attr-defined]
 from orchestrators.SequenceExecutor import SequenceExecutor
 
 

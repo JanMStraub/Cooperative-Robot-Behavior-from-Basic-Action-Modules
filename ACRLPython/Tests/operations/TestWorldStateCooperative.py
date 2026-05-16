@@ -19,6 +19,7 @@ class TestRobotStateIntentFields:
         ws = WorldState()
         ws.update_robot_state("Robot1", {"moving_toward_object": "red_cube"})
         state = ws.get_robot_state("Robot1")
+        assert state is not None
         assert state.moving_toward_object == "red_cube"
 
     def test_update_robot_state_clears_intent_on_none(self):
@@ -26,6 +27,7 @@ class TestRobotStateIntentFields:
         ws.update_robot_state("Robot1", {"moving_toward_object": "red_cube"})
         ws.update_robot_state("Robot1", {"moving_toward_object": None})
         state = ws.get_robot_state("Robot1")
+        assert state is not None
         assert state.moving_toward_object is None
 
     def test_get_robot_intents_returns_all_non_none(self):
@@ -62,7 +64,9 @@ class TestIntentAwareWorkspaceAllocation:
         ws.allocate_workspace(region, "Robot1", urgency=1, estimated_duration=60.0)
         ok = ws.allocate_workspace(region, "Robot2", urgency=5, estimated_duration=3.0)
         assert ok is True
-        assert ws._workspace_allocations[region].robot_id == "Robot2"
+        alloc2 = ws._workspace_allocations[region]
+        assert alloc2 is not None
+        assert alloc2.robot_id == "Robot2"
 
     def test_same_urgency_does_not_preempt(self):
         region = self._get_region()
@@ -70,7 +74,9 @@ class TestIntentAwareWorkspaceAllocation:
         ws.allocate_workspace(region, "Robot1", urgency=3, estimated_duration=30.0)
         ok = ws.allocate_workspace(region, "Robot2", urgency=3, estimated_duration=5.0)
         assert ok is False
-        assert ws._workspace_allocations[region].robot_id == "Robot1"
+        alloc1 = ws._workspace_allocations[region]
+        assert alloc1 is not None
+        assert alloc1.robot_id == "Robot1"
 
     def test_get_free_workspace_regions(self):
         ws = WorldState()
@@ -170,8 +176,9 @@ class TestSupplementObjectFromUnity:
             rotation=None,
         )
         obj = self._get(ws, "red_cube")
-        assert obj.position == (1.0, 0.0, 0.0)
-        assert obj.source == "vision"
+        assert obj is not None
+        assert obj.position == (1.0, 0.0, 0.0)  # type: ignore[union-attr]
+        assert obj.source == "vision"  # type: ignore[union-attr]
 
     def test_fills_missing_dimensions_for_vision_object(self):
         ws = WorldState()
@@ -188,8 +195,9 @@ class TestSupplementObjectFromUnity:
             rotation=None,
         )
         obj = self._get(ws, "green_cube")
-        assert obj.dimensions == (0.05, 0.05, 0.05)
-        assert obj.position == (0.5, 0.0, 0.0)
+        assert obj is not None
+        assert obj.dimensions == (0.05, 0.05, 0.05)  # type: ignore[union-attr]
+        assert obj.position == (0.5, 0.0, 0.0)  # type: ignore[union-attr]
 
     def test_does_not_overwrite_existing_dimensions(self):
         ws = WorldState()
@@ -202,7 +210,8 @@ class TestSupplementObjectFromUnity:
             dimensions=(0.99, 0.99, 0.99),
         )
         obj = self._get(ws, "red_cube")
-        assert obj.dimensions == (0.03, 0.03, 0.03)
+        assert obj is not None
+        assert obj.dimensions == (0.03, 0.03, 0.03)  # type: ignore[union-attr]
 
     def test_source_field_on_objectstate(self):
         from operations.WorldState import ObjectState

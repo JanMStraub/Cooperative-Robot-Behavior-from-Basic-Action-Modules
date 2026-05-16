@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class TaskGenerator:
-    """Generates task proposals using LLM with robust JSON parsing."""
+    """Generates and validates task proposals via LLM."""
 
     def __init__(self, config):
         self.config = config
@@ -41,12 +41,7 @@ class TaskGenerator:
         num_tasks: int = 5,
         include_collaborative: Optional[bool] = None,
     ) -> List[ProposedTask]:
-        """
-        Generate task proposals in parallel — one LLM request per task.
-
-        Sends ``num_tasks`` concurrent requests. Results merged and deduplicated
-        by task_id. Failed slots silently skipped; partial results returned.
-        """
+        """Fire num_tasks LLM requests in parallel; deduplicate by task_id."""
         if include_collaborative is None:
             try:
                 from config.AutoRT import ENABLE_COLLABORATIVE_TASKS
@@ -86,12 +81,6 @@ class TaskGenerator:
     def _generate_single_task(
         self, prompt: str, slot_index: int
     ) -> Optional[ProposedTask]:
-        """
-        Generate and validate one task with retries.
-
-        Called concurrently; each thread retries independently on JSON/validation errors.
-        Returns None if all retries fail.
-        """
         last_error: Optional[str] = None
         current_prompt = prompt
 
@@ -148,7 +137,6 @@ Please fix these issues and generate a valid task following the parameter schema
         return None
 
     def _query_llm(self, prompt: str) -> str:
-        """Query LM Studio via OpenAI-compatible API."""
         try:
             # Type ignore needed for LM Studio compat — OpenAI SDK expects TypedDict but accepts plain dicts
             messages = [
@@ -201,7 +189,6 @@ Please fix these issues and generate a valid task following the parameter schema
         num_tasks: int,
         include_collaborative: bool,
     ) -> str:
-        """Build LLM task generation prompt."""
         from config.Robot import ROBOT_BASE_POSITIONS, MAX_ROBOT_REACH
 
         objects_lines = []
@@ -318,7 +305,6 @@ FIELD RULE: Fields (field_a through field_i) are NOT in WorldState by default. B
 Output compact JSON array only, no markdown"""
 
     def _parse_llm_response(self, raw_response: str) -> List[ProposedTask]:
-        """Parse LLM JSON response with Pydantic validation."""
         # Strip reasoning tokens from models like Mistral Reasoning
         if "[THINK]" in raw_response and "[/THINK]" in raw_response:
             # Extract content after [/THINK] tag
@@ -365,23 +351,17 @@ Output compact JSON array only, no markdown"""
         # Fix missing robot_ids before validation
         if isinstance(data, list):
             fixed_data = [
-                self._fix_missing_robot_ids(
-                    self._flatten_operations(self._ensure_unique_id(task))
-                )
+                self._fix_missing_robot_ids(self._flatten_operations(task))
                 for task in data
             ]
             return [ProposedTask(**task) for task in fixed_data]
         elif isinstance(data, dict):
-            fixed_task = self._fix_missing_robot_ids(
-                self._flatten_operations(self._ensure_unique_id(data))
-            )
+            fixed_task = self._fix_missing_robot_ids(self._flatten_operations(data))
             return [ProposedTask(**fixed_task)]
         else:
             raise ValueError(f"Unexpected response type: {type(data)}")
 
     def _ensure_unique_id(self, task_dict: dict) -> dict:
-        """Append a short UUID suffix to the LLM-generated task_id to prevent deduplication
-        when parallel slots produce the same ID (e.g. both generate 'task_001')."""
         original = task_dict.get("task_id", "task")
         suffix = uuid.uuid4().hex[:6]
         task_dict = dict(task_dict)
@@ -389,13 +369,7 @@ Output compact JSON array only, no markdown"""
         return task_dict
 
     def _flatten_operations(self, task_dict: dict) -> dict:
-        """Normalize operations list — some LLMs emit parallel_group wrapper objects instead of flat ops.
-
-        Handles two degenerate formats:
-          A) Grouped wrapper: {"parallel_group": N, "operations": [{type, robot_id, ...}]}
-          B) Literal type:    {"type": "parallel_group", ...} — skip, not a real op
-        Both get flattened to the expected flat list of {type, robot_id, parameters} dicts.
-        """
+        """Flatten parallel_group wrapper objects some LLMs emit instead of a flat ops list."""
         raw_ops = task_dict.get("operations", [])
         if not raw_ops:
             return task_dict
@@ -423,7 +397,6 @@ Output compact JSON array only, no markdown"""
         return task_dict
 
     def _fix_missing_robot_ids(self, task_dict: dict) -> dict:
-        """Infer missing robot_ids from context (coordination ops → first robot, sequential → last seen)."""
         required_robots = task_dict.get("required_robots", [])
         operations = task_dict.get("operations", [])
 
@@ -453,14 +426,12 @@ Output compact JSON array only, no markdown"""
         return task_dict
 
     def _validate_operations(self, task: ProposedTask) -> bool:
-        """Validate all operations exist in Registry with valid parameters."""
         is_valid, _ = self._validate_operations_with_feedback(task)
         return is_valid
 
     def _validate_operations_with_feedback(
         self, task: ProposedTask
     ) -> tuple[bool, str]:
-        """Validate operations; return (is_valid, error_message) for LLM retry."""
         try:
             for i, op in enumerate(task.operations, 1):
                 # Check operation exists
@@ -505,34 +476,33 @@ Output compact JSON array only, no markdown"""
                             f"use grasp_object + place_object for non-red objects",
                         )
 
-            # Field dependency check: on_top_of referencing a field requires
-            # detect_field to appear earlier in the same task.
-            on_top_of = op.parameters.get("on_top_of", "")
-            if (
-                on_top_of
-                and isinstance(on_top_of, str)
-                and on_top_of.startswith("field_")
-            ):
-                detected_fields = {
-                    prev.parameters.get("field_label", "").upper()
-                    for prev in task.operations[: i - 1]
-                    if prev.type == "detect_field"
-                }
-                field_letter = on_top_of.split("_", 1)[-1].upper()
-                if field_letter not in detected_fields:
-                    return (
-                        False,
-                        f"Operation #{i} 'place_object' references on_top_of='{on_top_of}' "
-                        f"but detect_field('{field_letter}') does not precede it — "
-                        f"add detect_field for '{field_letter}' before this placement",
-                    )
+                # Field dependency check: on_top_of referencing a field requires
+                # detect_field to appear earlier in the same task.
+                on_top_of = op.parameters.get("on_top_of", "")
+                if (
+                    on_top_of
+                    and isinstance(on_top_of, str)
+                    and on_top_of.startswith("field_")
+                ):
+                    detected_fields = {
+                        prev.parameters.get("field_label", "").upper()
+                        for prev in task.operations[: i - 1]
+                        if prev.type == "detect_field"
+                    }
+                    field_letter = on_top_of.split("_", 1)[-1].upper()
+                    if field_letter not in detected_fields:
+                        return (
+                            False,
+                            f"Operation #{i} 'place_object' references on_top_of='{on_top_of}' "
+                            f"but detect_field('{field_letter}') does not precede it — "
+                            f"add detect_field for '{field_letter}' before this placement",
+                        )
 
             return True, ""
         except Exception as e:
             return False, f"Validation exception: {str(e)}"
 
     def _validate_operation_parameters_with_feedback(self, operation, op_def) -> str:
-        """Validate operation parameters. Returns error string or empty string if valid."""
         op_params = operation.parameters if operation.parameters else {}
 
         for param_def in op_def.parameters:
@@ -585,11 +555,7 @@ Output compact JSON array only, no markdown"""
         return ""  # No errors
 
     def _get_operations_summary(self) -> str:
-        """
-        Build token-efficient operation list with parameter schemas from live Registry.
-
-        Cached after first call — operations don't change at runtime.
-        """
+        """Build a token-efficient ops list from the registry; cached after first call."""
         if self._operations_summary_cache is not None:
             return self._operations_summary_cache
 
@@ -636,7 +602,6 @@ Output compact JSON array only, no markdown"""
         return summary
 
     def _build_robot_layout_description(self, robot_ids: List[str]) -> str:
-        """Format robot spatial positions from ROBOT_SPATIAL_LAYOUT config."""
         if not robot_ids:
             return ""
 
@@ -719,7 +684,6 @@ Output compact JSON array only, no markdown"""
     def _build_previous_task_section(
         self, last_task_context: ExecutedTaskContext
     ) -> str:
-        """Build PREVIOUS TASK CONTEXT prompt section for continuity/recovery hints."""
         last_op = (
             last_task_context.operation_types[-1]
             if last_task_context.operation_types

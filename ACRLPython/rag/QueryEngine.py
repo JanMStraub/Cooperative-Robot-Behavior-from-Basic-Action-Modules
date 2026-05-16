@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 
 
 class QueryEngine:
-    """Semantic search engine for robot operations."""
+    """Semantic search over indexed robot operations."""
 
     def __init__(
         self,
@@ -34,7 +34,7 @@ class QueryEngine:
         self._world_state = None  # Optional WorldState for context-aware search
 
     def set_world_state(self, world_state):
-        """Inject WorldState for context-aware filtering by reachability, workspace allocation, and grasp state."""
+        """Inject WorldState so search results can be re-ranked by reachability and grasp state."""
         self._world_state = world_state
         logger.debug("WorldState injected into QueryEngine for context-aware search")
 
@@ -48,7 +48,6 @@ class QueryEngine:
         include_full_operation: bool = False,
         robot_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Search for operations using a natural language query."""
         if not query or not query.strip():
             logger.warning("Empty query provided")
             return []
@@ -82,7 +81,6 @@ class QueryEngine:
     def _apply_world_constraints(
         self, results: List[Dict[str, Any]], robot_id: str, query: str
     ) -> List[Dict[str, Any]]:
-        """Re-rank results by physical constraints: staleness, grasp ownership, workspace allocation, reachability."""
         assert self._world_state is not None
         if not results:
             return results
@@ -171,7 +169,6 @@ class QueryEngine:
     def get_operation_context(
         self, query: str, top_k: int = 3, robot_id: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Return full operation context dict for LLM consumption, including world state if robot_id given."""
         results = self.search(
             query, top_k=top_k, include_full_operation=True, robot_id=robot_id
         )
@@ -257,7 +254,6 @@ class QueryEngine:
     def search_by_category(
         self, category: str, top_k: Optional[int] = None
     ) -> List[Dict[str, Any]]:
-        """Return all operations in a specific category."""
         return self.search(
             query=f"{category} operations",
             top_k=top_k or 50,  # Large number to get all in category
@@ -267,7 +263,6 @@ class QueryEngine:
     def find_similar_operations(
         self, operation_id: str, top_k: int = 5
     ) -> List[Dict[str, Any]]:
-        """Find operations similar to a given operation (excluding itself)."""
         op_data = self.vector_store.get_operation(operation_id)
         if not op_data:
             logger.warning(f"Operation '{operation_id}' not found in vector store")
@@ -280,7 +275,6 @@ class QueryEngine:
         return [r for r in results if r["operation_id"] != operation_id][:top_k]
 
     def get_stats(self) -> Dict[str, Any]:
-        """Return statistics about the query engine."""
         return {
             "vector_store_stats": self.vector_store.get_stats(),
             "embedding_generator": repr(self.embedding_generator),

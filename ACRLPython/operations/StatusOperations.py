@@ -23,12 +23,7 @@ from ._imports import get_command_broadcaster as _get_command_broadcaster
 def check_robot_status(
     robot_id: str, detailed: bool = False, request_id: int = 0
 ) -> OperationResult:
-    """
-    Query current robot status (position, joint angles, operational state).
-
-    Asynchronous — sends query to Unity and returns immediately. Unity responds
-    via the same TCP connection to LLMResultsReceiver.
-    """
+    """Async status query — sends to Unity and returns immediately; response arrives via LLMResultsReceiver."""
     try:
         if not robot_id or not isinstance(robot_id, str):
             return OperationResult.error_result(

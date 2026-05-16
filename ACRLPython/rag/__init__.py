@@ -11,10 +11,7 @@ def _get_registry():
     return get_global_registry()
 
 
-try:
-    from config.Rag import RAG_VECTOR_STORE_PATH
-except ImportError:
-    from ..config.Rag import RAG_VECTOR_STORE_PATH
+from config.Rag import RAG_VECTOR_STORE_PATH
 
 from .Embeddings import EmbeddingGenerator
 from .VectorStore import VectorStore as _VectorStore

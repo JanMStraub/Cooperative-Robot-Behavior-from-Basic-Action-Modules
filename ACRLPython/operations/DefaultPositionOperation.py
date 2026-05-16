@@ -4,7 +4,6 @@
 import time
 from typing import Optional
 
-# Lazy import to avoid circular dependency with servers module
 from .Base import (
     BasicOperation,
     OperationCategory,
@@ -31,11 +30,9 @@ def return_to_start_position(
     request_id: int = 0,
     use_ros: Optional[bool] = None,
 ) -> OperationResult:
-    """
-    Return robot to saved start joint configuration (exact joint restore, not IK).
+    """Return robot to saved start joint configuration (exact joint restore, not IK).
 
-    ROS path reads start angles from WorldState so MoveIt targets the same pose
-    as the TCP path (not URDF all-zeros).
+    ROS path reads start angles from WorldState so MoveIt targets the same pose as TCP, not URDF all-zeros.
     """
     try:
         if not robot_id or not isinstance(robot_id, str):

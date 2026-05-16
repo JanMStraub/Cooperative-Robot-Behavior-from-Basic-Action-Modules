@@ -1,21 +1,5 @@
 #!/usr/bin/env python3
-"""
-Validators - Parameter validation helpers for robot operations.
-
-Single source of truth for workspace bounds and common validation logic.
-Each function returns ``None`` on success or an ``OperationResult`` error
-on failure, enabling the walrus-operator pattern::
-
-    if err := validate_robot_id(robot_id):
-        return err
-    if err := validate_xyz(x, y, z):
-        return err
-
-Workspace coordinate system (robot base frame, metres):
-    X — forward / back  : [-0.65, 0.65]
-    Y — height          : [0.0,   0.7 ]
-    Z — left / right    : [-0.5,  0.5 ]
-"""
+"""Parameter validators — return None on success, OperationResult error on failure (walrus-operator friendly)."""
 
 from typing import Optional
 
@@ -33,7 +17,6 @@ APPROACH_OFFSET_RANGE: tuple = (0.0, 0.1)
 
 
 def validate_robot_id(robot_id: str) -> Optional[OperationResult]:
-    """Validate that robot_id is a non-empty string."""
     if not robot_id or not isinstance(robot_id, str):
         return OperationResult.error_result(
             "INVALID_ROBOT_ID",
@@ -47,7 +30,6 @@ def validate_robot_id(robot_id: str) -> Optional[OperationResult]:
 
 
 def validate_xyz(x: float, y: float, z: float) -> Optional[OperationResult]:
-    """Validate x/y/z coordinates are within robot workspace bounds."""
     if not (WORKSPACE_X[0] <= x <= WORKSPACE_X[1]):
         return OperationResult.error_result(
             "INVALID_X_COORDINATE",
@@ -79,7 +61,6 @@ def validate_xyz(x: float, y: float, z: float) -> Optional[OperationResult]:
 
 
 def validate_speed(speed: float) -> Optional[OperationResult]:
-    """Validate speed multiplier is within legal range."""
     if not (SPEED_RANGE[0] <= speed <= SPEED_RANGE[1]):
         return OperationResult.error_result(
             "INVALID_SPEED",
@@ -93,7 +74,6 @@ def validate_speed(speed: float) -> Optional[OperationResult]:
 
 
 def validate_approach_offset(offset: float) -> Optional[OperationResult]:
-    """Validate approach offset (metres) is within legal range."""
     if not (APPROACH_OFFSET_RANGE[0] <= offset <= APPROACH_OFFSET_RANGE[1]):
         return OperationResult.error_result(
             "INVALID_APPROACH_OFFSET",

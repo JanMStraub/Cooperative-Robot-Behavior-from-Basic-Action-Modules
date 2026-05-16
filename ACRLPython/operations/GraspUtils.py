@@ -18,28 +18,6 @@ def _build_segmentation_mask(
     depth_hint: "Optional[float]" = None,
     depth_margin: float = 0.07,
 ) -> "np.ndarray":
-    """Project 3D camera-frame points to 2D and build a boolean mask from a YOLO bbox.
-
-    Projects each point back to pixel coordinates using the pinhole camera
-    model (inverse of DepthEstimator.pixel_to_world_coords).  Returns a
-    bool mask that is True for points falling inside the bounding box.
-
-    The input ``points_camera`` must be in the Q-matrix output frame:
-    (X-right, Y-up, Z-negative).  This is the frame returned by
-    ``generate_point_cloud`` — no axis flip is applied in VGNClient before
-    calling this function.  Projection formulas:
-    ``u = cx + f·X/depth`` and ``v = cy - f·Y/depth`` where ``depth = -Z``.
-
-    When ``preferred_approach`` is "side" the mask is additionally restricted
-    to the lateral halves of the object (left/right).  When it is "top" only
-    the top third of the bounding box is kept.
-
-    When ``depth_hint`` is provided, an additional depth-range filter keeps
-    only points within ``[depth_hint - depth_margin, depth_hint + depth_margin]``
-    metres.  This removes background and table-surface points that project into
-    the object's 2D footprint but lie at a different depth, reducing TSDF noise.
-
-    """
     import numpy as np
 
     N = points_camera.shape[0]

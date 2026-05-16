@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class TaskAnalysis:
-    """Robot's self-assessment of a task."""
+    """Robot's self-assessment of whether it can contribute to a task."""
 
     robot_id: str
     can_contribute: bool = True
@@ -46,7 +46,7 @@ class TaskAnalysis:
 
 @dataclass
 class PlanProposal:
-    """Coordinated plan proposed by a robot agent."""
+    """Multi-robot plan proposed by one agent."""
 
     proposer_id: str
     reasoning: str = ""
@@ -57,7 +57,7 @@ class PlanProposal:
 
 @dataclass
 class ProposalEvaluation:
-    """Robot's accept/reject verdict on a peer's plan proposal."""
+    """Accept/reject verdict on a peer's plan proposal."""
 
     evaluator_id: str
     accept: bool = False
@@ -67,7 +67,7 @@ class ProposalEvaluation:
 
 
 class RobotLLMAgent:
-    """Per-robot LLM agent for task analysis, plan proposal, and evaluation."""
+    """Per-robot LLM agent: analyze → propose → evaluate negotiation rounds."""
 
     def __init__(
         self,
@@ -94,7 +94,6 @@ class RobotLLMAgent:
         world_state_snapshot: Dict[str, Any],
         available_operations: List[str],
     ) -> TaskAnalysis:
-        """Phase 1: Analyze task from this robot's perspective."""
         context = self._build_agent_context(world_state_snapshot)
         ops_str = ", ".join(available_operations)
 
@@ -146,7 +145,6 @@ JSON: {{"can_contribute":bool,"capabilities":[],"constraints":[],"suggested_role
         round_number: int = 1,
         available_operations: Optional[List[str]] = None,
     ) -> PlanProposal:
-        """Phase 2: Propose a coordinated plan considering other robots' analyses."""
         context = self._build_agent_context(world_state)
 
         analyses_summary = ""
@@ -213,7 +211,6 @@ JSON: {{"reasoning":"","commands":[{{"parallel_group":1,"operation":"","params":
         task: str,
         world_state: Dict[str, Any],
     ) -> ProposalEvaluation:
-        """Phase 3: Evaluate another robot's plan proposal."""
         context = self._build_agent_context(world_state)
 
         commands_json = json.dumps(proposal.commands, indent=2)
@@ -266,7 +263,6 @@ JSON: {{"accept":bool,"concerns":[],"suggested_changes":[],"confidence":0.0}}"""
             )
 
     def _get_workspace_label(self) -> str:
-        """Return workspace side label — uses config assignments, not fragile robot_id substring matching."""
         workspace = ROBOT_WORKSPACE_ASSIGNMENTS.get(self.robot_id, "")
         if "left" in workspace.lower():
             return "left (X < 0)"
@@ -275,7 +271,6 @@ JSON: {{"accept":bool,"concerns":[],"suggested_changes":[],"confidence":0.0}}"""
         return f"workspace '{workspace}'" if workspace else "workspace (unknown)"
 
     def _build_agent_context(self, world_state_snapshot: Dict[str, Any]) -> str:
-        """Build LLM context string for this robot's spatial situation."""
         wb = WORKSPACE_REGIONS.get(self.workspace, {})
         sz = WORKSPACE_REGIONS.get("shared_zone", {})
         context = (
@@ -306,7 +301,6 @@ JSON: {{"accept":bool,"concerns":[],"suggested_changes":[],"confidence":0.0}}"""
         return context
 
     def _classify_position_zone(self, position) -> str:
-        """Classify world position into named workspace zone via WORKSPACE_REGIONS X bounds."""
         if not isinstance(position, (list, tuple)) or len(position) < 1:
             return "unknown"
         x = position[0]
@@ -318,7 +312,6 @@ JSON: {{"accept":bool,"concerns":[],"suggested_changes":[],"confidence":0.0}}"""
         return "unknown"
 
     def _call_llm(self, system_prompt: str, user_prompt: str) -> Optional[str]:
-        """Call LM Studio. Returns response text or None on failure."""
         try:
             payload: dict = {
                 "model": self.model,
@@ -377,7 +370,6 @@ JSON: {{"accept":bool,"concerns":[],"suggested_changes":[],"confidence":0.0}}"""
             return None
 
     def _extract_json(self, content: str) -> Optional[Dict]:
-        """Extract JSON from LLM response. Delegates to core.LLMUtils."""
         result = _extract_json_util(content)
         if result is None:
             logger.error(f"[{self.robot_id}] Failed to extract JSON from response")

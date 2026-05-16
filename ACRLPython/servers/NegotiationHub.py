@@ -27,7 +27,6 @@ logger = logging.getLogger(__name__)
 
 
 class NegotiationState(Enum):
-    """States of a negotiation session."""
 
     IDLE = "idle"
     ANALYZING = "analyzing"
@@ -40,7 +39,6 @@ class NegotiationState(Enum):
 
 @dataclass
 class NegotiationSession:
-    """Tracks state of an active negotiation."""
 
     session_id: str
     task: str
@@ -54,7 +52,6 @@ class NegotiationSession:
 
 @dataclass
 class NegotiationResult:
-    """Final result of a negotiation."""
 
     success: bool = False
     commands: List[Dict[str, Any]] = field(default_factory=list)
@@ -65,22 +62,15 @@ class NegotiationResult:
 
 
 class NegotiationHub(SingletonBase):
-    """
-    Central coordinator for multi-robot negotiation.
-
-    Singleton that manages robot LLM agents and orchestrates the
-    negotiation protocol. Thread-safe for concurrent access.
-    """
+    """Multi-robot negotiation coordinator. Thread-safe singleton."""
 
     def _singleton_init(self):
-        """Initialize the negotiation hub (called once by SingletonBase)."""
         self._agents: Dict[str, RobotLLMAgent] = {}
         self._active_session: Optional[NegotiationSession] = None
         self._last_round_count: int = 0
         logger.info("NegotiationHub initialized")
 
     def get_last_round_count(self) -> int:
-        """Return the number of negotiation rounds used in the last negotiate() call."""
         return self._last_round_count
 
     def _get_or_create_agent(self, robot_id: str) -> RobotLLMAgent:
@@ -124,16 +114,10 @@ class NegotiationHub(SingletonBase):
         timeout: Optional[float] = None,
         spatial_context: Optional[Dict[str, Any]] = None,
     ) -> "NegotiationResult":
-        """
-        Run the full negotiation protocol.
-
-        spatial_context: Optional KG-derived dict (e.g. handoff candidates) logged for
-            future agent prompt injection.
-        """
+        """Run full negotiation: analysis → proposal → evaluation rounds. Returns result."""
         timeout = timeout or NEGOTIATION_TIMEOUT
         robot_ids = robot_ids or list(ROBOT_BASE_POSITIONS.keys())
 
-        # Create session
         session_id = f"neg_{int(time.time() * 1000)}"
         session = NegotiationSession(
             session_id=session_id,
@@ -154,10 +138,8 @@ class NegotiationHub(SingletonBase):
         self._last_round_count = 0
 
         try:
-            # Get world state snapshot
             world_state = self._get_world_state_snapshot()
 
-            # Phase 1: Analysis
             session.state = NegotiationState.ANALYZING
             analysis_ok = self._run_analysis_phase(session, world_state)
             if not analysis_ok:
@@ -167,7 +149,6 @@ class NegotiationHub(SingletonBase):
 
             # Negotiation rounds
             for round_num in range(1, MAX_NEGOTIATION_ROUNDS + 1):
-                # Check timeout
                 elapsed = time.time() - start_time
                 if elapsed > timeout:
                     logger.warning(f"Negotiation timed out after {elapsed:.1f}s")
@@ -188,7 +169,6 @@ class NegotiationHub(SingletonBase):
                         result.reasoning = "Analysis phase failed"
                         return result
 
-                # Phase 2: Proposal
                 session.state = NegotiationState.PROPOSING
                 proposal = self._run_proposal_phase(session, world_state)
                 if proposal is None or not proposal.commands:
@@ -197,7 +177,6 @@ class NegotiationHub(SingletonBase):
 
                 session.proposals.append(proposal)
 
-                # Phase 3: Evaluation
                 session.state = NegotiationState.EVALUATING
                 accepted = self._run_evaluation_phase(session, proposal, world_state)
 
@@ -377,11 +356,7 @@ class NegotiationHub(SingletonBase):
         proposal: PlanProposal,
         world_state: Dict[str, Any],
     ) -> bool:
-        """
-        Evaluation phase: other robots evaluate the proposal. Consensus = all accept.
-
-        Only robots with can_contribute=True evaluate; querying others wastes LLM tokens.
-        """
+        """Evaluation phase: robots with can_contribute=True vote on the proposal."""
         evaluator_ids = [
             rid
             for rid, analysis in session.analyses.items()

@@ -222,6 +222,7 @@ class TestPlaceBetweenObjects:
 
         assert result.success is True
         # x: (0.1 + 0.5) / 2 = 0.3,  z: (0.2 + 0.6) / 2 = 0.4
+        assert result.result is not None
         assert abs(result.result["placed_at"]["x"] - 0.3) < 1e-6
         assert abs(result.result["placed_at"]["z"] - 0.4) < 1e-6
 
@@ -233,6 +234,7 @@ class TestPlaceBetweenObjects:
         result = place_between_objects("Robot1", "blue", "red")
 
         assert result.success is True
+        assert result.result is not None
         assert "midpoint" in result.result
         assert result.result["reference_objects"] == ["blue", "red"]
 
@@ -245,6 +247,7 @@ class TestPlaceBetweenObjects:
         result = place_between_objects("Robot1", "missing", "red")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "OBJECT_NOT_FOUND"
         assert "missing" in result.error["message"]
 
@@ -265,6 +268,7 @@ class TestPlaceBetweenObjects:
         result = place_between_objects("Robot1", "blue", "missing")
 
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "OBJECT_NOT_FOUND"
         assert "missing" in result.error["message"]
 
@@ -272,6 +276,7 @@ class TestPlaceBetweenObjects:
         """Returns INVALID_ROBOT_ID for empty robot_id."""
         result = place_between_objects("", "blue", "red")
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_operation_registered(self):
@@ -292,6 +297,7 @@ class TestPlaceBetweenObjects:
         result = place_between_objects("Robot1", "blue", "red", y=0.08)
 
         assert result.success is True
+        assert result.result is not None
         assert abs(result.result["placed_at"]["y"] - 0.08) < 1e-6
 
 
@@ -341,6 +347,7 @@ class TestPlaceObjectOnTopOf:
         result = place_object("Robot1", x=0.0, y=0.0, z=0.0, on_top_of="target_cube")
 
         assert result.success is True
+        assert result.result is not None
         # expected: 0.05 + 0.10/2 + 0.0/2 = 0.10
         placed_y = result.result["placed_at"]["y"]
         assert abs(placed_y - 0.10) < 1e-6, f"expected 0.10, got {placed_y}"
@@ -361,6 +368,7 @@ class TestPlaceObjectOnTopOf:
         )
 
         assert result.success is True
+        assert result.result is not None
         # expected: 0.05 + 0.05 + 0.02 = 0.12
         placed_y = result.result["placed_at"]["y"]
         assert abs(placed_y - 0.12) < 1e-6, f"expected 0.12, got {placed_y}"
@@ -374,6 +382,7 @@ class TestPlaceObjectOnTopOf:
         result = place_object("Robot1", x=0.0, y=0.5, z=0.0, on_top_of="missing_obj")
 
         assert result.success is True
+        assert result.result is not None
         assert abs(result.result["placed_at"]["y"] - 0.5) < 1e-6
         assert result.result["resolution"] == "fallback_object_not_found"
 
@@ -388,6 +397,7 @@ class TestPlaceObjectOnTopOf:
         result = place_object("Robot1", x=0.0, y=0.5, z=0.0, on_top_of="target_cube")
 
         assert result.success is True
+        assert result.result is not None
         assert abs(result.result["placed_at"]["y"] - 0.5) < 1e-6
         assert result.result["resolution"] == "fallback_no_dimensions"
 
@@ -402,6 +412,7 @@ class TestPlaceObjectOnTopOf:
         result = place_object("Robot1", x=0.0, y=0.5, z=0.0, on_top_of="target_cube")
 
         assert result.success is True
+        assert result.result is not None
         assert abs(result.result["placed_at"]["y"] - 0.5) < 1e-6
         assert result.result["resolution"] == "fallback_no_position"
 
@@ -410,6 +421,7 @@ class TestPlaceObjectOnTopOf:
         result = place_object("Robot1", x=0.0, y=0.42, z=0.0)
 
         assert result.success is True
+        assert result.result is not None
         assert abs(result.result["placed_at"]["y"] - 0.42) < 1e-6
         assert result.result["resolution"] == "explicit_coords"
 

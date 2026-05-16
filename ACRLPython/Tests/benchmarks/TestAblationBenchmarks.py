@@ -14,7 +14,7 @@ def test_sequence_executor_result_includes_reflexion_recoveries():
 
 def test_first_fail_nav_mock_fails_then_succeeds():
     """first_fail_nav profile: navigation op fails on first call, succeeds on second."""
-    from benchmarks import MockRegistry as mock_registry
+    from benchmarks import MockRegistry as mock_registry  # type: ignore[attr-defined]
 
     original = mock_registry.install_mock("first_fail_nav")
     try:
@@ -142,7 +142,7 @@ def test_live_flag_parsed():
     import sys
 
     # Re-import cleanly
-    from benchmarks import Run as run_mod
+    from benchmarks import Run as run_mod  # type: ignore[attr-defined]
 
     # Simulate parse_args call by creating a minimal parser copy
     parser = argparse.ArgumentParser()

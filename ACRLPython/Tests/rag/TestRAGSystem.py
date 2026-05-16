@@ -9,7 +9,7 @@ Integration tests for the complete RAG system.
 import pytest
 from unittest.mock import Mock, patch
 import numpy as np
-from rag import RAGSystem
+from rag import RAGSystem  # type: ignore[attr-defined]
 from rag.VectorStore import VectorStore
 
 

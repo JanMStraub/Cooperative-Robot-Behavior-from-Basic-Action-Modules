@@ -403,9 +403,9 @@ class ROSMotionServer:
         base_yaw_rad = math.radians(transform.get("y_rotation", 0.0))
 
         try:
-            from operations.AR4Kinematics import compute_link_poses
+            from operations.AR4Kinematics import compute_link_poses  # type: ignore[attr-defined]
         except ImportError:
-            from AR4Kinematics import compute_link_poses  # Docker root path fallback
+            from AR4Kinematics import compute_link_poses  # type: ignore[import-untyped]  # Docker root path fallback
         link_poses = compute_link_poses(joint_angles, base_pos, base_yaw_rad)
 
         collision_objects = []

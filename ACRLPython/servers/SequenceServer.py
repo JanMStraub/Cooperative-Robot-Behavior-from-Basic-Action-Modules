@@ -18,7 +18,6 @@ Protocol V2:
 import socket
 import struct
 import json
-import threading
 from typing import Dict, Any, Optional, Union, TYPE_CHECKING
 
 # Handle both direct execution and package import
@@ -66,15 +65,9 @@ logger = get_logger(__name__)
 
 
 class SequenceQueryHandler(SingletonBase):
-    """
-    Singleton handler for sequence queries.
-
-    Manages the CommandParser and SequenceExecutor instances and handles
-    query processing.
-    """
+    """Singleton that owns CommandParser + SequenceExecutor for sequence query processing."""
 
     def _singleton_init(self):
-        """Initialize the handler (called once by SingletonBase)."""
         self._parser: Optional[CommandParser] = None
         self._executor: Optional[SequenceExecutor] = None
 
@@ -84,17 +77,6 @@ class SequenceQueryHandler(SingletonBase):
         model: Optional[str] = None,
         check_completion: bool = True,  # Enabled - Unity sends completion signals
     ) -> bool:
-        """
-        Initialize the parser and executor.
-
-        Args:
-            lm_studio_url: LM Studio URL for parsing
-            model: Model name for parsing
-            check_completion: Whether to check for operation completion
-
-        Returns:
-            True if initialization succeeded
-        """
         try:
             try:
                 from ..core.Imports import get_command_parser, get_sequence_executor
@@ -165,7 +147,6 @@ class SequenceQueryHandler(SingletonBase):
         auto_execute: bool = True,
         timeout: float = 30.0,
     ) -> Dict[str, Any]:
-        """Inner implementation of execute_sequence (no flag handling)."""
         if not self._parser or not self._executor:
             return {"success": False, "error": "SequenceQueryHandler not initialized"}
 
@@ -285,33 +266,14 @@ class SequenceQueryHandler(SingletonBase):
 
 
 class SequenceServer(TCPServerBase):
-    """
-    TCP server for receiving and executing command sequences from Unity.
-
-    Listens on port 5008 for sequence queries and returns execution results.
-    """
+    """TCP server for command sequence execution (port 5008)."""
 
     def __init__(self, config: Optional[ServerConfig] = None):
-        """
-        Initialize the SequenceServer.
-
-        Args:
-            config: Server configuration (uses default if None)
-        """
         if config is None:
             config = ServerConfig(host=DEFAULT_HOST, port=SEQUENCE_SERVER_PORT)
         super().__init__(config)
 
     def handle_client_connection(self, client: socket.socket, address: tuple):
-        """
-        Handle a client connection.
-
-        Receives sequence queries and returns execution results.
-
-        Args:
-            client: Client socket
-            address: Client address
-        """
         logger.info(f"Sequence client connected from {address}")
 
         # Enable TCP keepalives so the OS sends probes during long-running sequence
@@ -452,21 +414,7 @@ class SequenceServer(TCPServerBase):
         logger.info(f"Sequence client disconnected from {address}")
 
     def _recv_exact(self, client: socket.socket, num_bytes: int) -> Optional[bytes]:
-        """
-        Receive exact number of bytes from client, preserving partial reads across socket timeouts.
-
-        The client socket has a 1-second timeout so the outer loop can check
-        is_running(). Without this guard, a timeout mid-read discards accumulated
-        bytes and causes TCP stream desynchronization (next bytes are mis-parsed
-        as a new message header).
-
-        Args:
-            client: Client socket
-            num_bytes: Number of bytes to receive
-
-        Returns:
-            Received bytes or None if connection closed or server stopped
-        """
+        """Read exactly num_bytes, preserving partial reads across timeouts to avoid stream desync."""
         data = b""
         while len(data) < num_bytes:
             try:
@@ -483,13 +431,6 @@ class SequenceServer(TCPServerBase):
         return data
 
     def _handle_autort_command(self, client: socket.socket, header_bytes: bytes):
-        """
-        Handle AutoRT command message from Unity.
-
-        Args:
-            client: Client socket
-            header_bytes: Already-read header (5 bytes: type + request_id)
-        """
         # Extract request_id from the already-read header so it is always
         # bound, even if decode_autort_command() raises before assigning it.
         request_id = struct.unpack("<I", header_bytes[1:5])[0]
@@ -562,14 +503,6 @@ class SequenceServer(TCPServerBase):
     def _send_autort_response(
         self, client: socket.socket, request_id: int, result: Dict[str, Any]
     ):
-        """
-        Send AutoRT response to Unity client.
-
-        Args:
-            client: Client socket
-            request_id: Request ID for correlation
-            result: Result dictionary
-        """
         try:
             # Encode using UnityProtocol
             response_bytes = UnityProtocol.encode_autort_response(result, request_id)
@@ -695,7 +628,7 @@ if __name__ == "__main__":
     server = SequenceServer(config)
 
     # Handle shutdown
-    def signal_handler(signum, frame):  # noqa: ARG001
+    def signal_handler(_signum, _frame):
         logger.info("Shutdown signal received")
         server.stop()
 

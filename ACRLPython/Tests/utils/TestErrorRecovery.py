@@ -189,7 +189,7 @@ class TestExternalDependencyFailures:
 
     def test_lm_studio_unavailable_for_rag(self):
         """Test RAG system when LM Studio is unavailable"""
-        from rag import RAGSystem
+        from rag import RAGSystem  # type: ignore[attr-defined]
 
         with patch("rag.EmbeddingGenerator") as mock_emb_gen:
             # Mock LM Studio connection failure

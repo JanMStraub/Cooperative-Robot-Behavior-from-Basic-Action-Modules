@@ -39,26 +39,19 @@ logger = get_logger(__name__)
 
 @dataclass
 class CachedValue:
-    """TTL-based cached value for robot status queries."""
-
     value: Any
     ttl: float
     timestamp: float = field(default_factory=time.time)
 
     def is_valid(self) -> bool:
-        """Check if cached value is still valid."""
-        age = time.time() - self.timestamp
-        return age < self.ttl
+        return (time.time() - self.timestamp) < self.ttl
 
     def get(self) -> Optional[Any]:
-        """Get value if valid, None if expired."""
         return self.value if self.is_valid() else None
 
 
 @dataclass
 class RobotState:
-    """Complete state of a robot."""
-
     robot_id: str
     position: Optional[Tuple[float, float, float]] = None
     rotation: Optional[Tuple[float, float, float]] = None
@@ -85,8 +78,6 @@ class RobotState:
 
 @dataclass
 class ObjectState:
-    """State of a detected object."""
-
     object_id: str
     position: Tuple[float, float, float]
     color: str = "unknown"
@@ -104,8 +95,6 @@ class ObjectState:
 
 @dataclass
 class WorkspaceAllocation:
-    """Workspace region allocation with timeout tracking."""
-
     robot_id: str
     region: str
     allocated_at: float = field(default_factory=time.time)
@@ -827,7 +816,7 @@ class WorldState(SingletonBase):
         object_id: str,
         object_type: str = "unknown",
         position: Tuple[float, float, float] = (0, 0, 0),
-        graspable: bool = True,
+        _graspable: bool = True,
         **kwargs,
     ):
         """Register a new object (simplified interface for tests)."""

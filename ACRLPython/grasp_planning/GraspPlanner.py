@@ -1,13 +1,5 @@
 #!/usr/bin/env python3
-"""
-End-to-end grasp planning orchestrator.
-
-This module provides the main GraspPlanner class that coordinates the entire
-grasp planning pipeline: candidate generation, IK validation, scoring, and
-selection of the best grasp pose.
-
-Integrates with MoveIt via ROSBridge for IK validation.
-"""
+"""Grasp planning pipeline: candidate generation, IK validation, scoring."""
 
 import logging
 import time
@@ -22,12 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 class GraspPlanner:
-    """
-    End-to-end grasp planning pipeline orchestrator.
-
-    Coordinates candidate generation, IK validation, scoring, and selection.
-    Provides high-level interface for grasp planning operations.
-    """
 
     def __init__(self, config: Optional[GraspConfig] = None):
         self.config = config or GraspConfig.create_default()
@@ -47,16 +33,7 @@ class GraspPlanner:
         min_score: float = 0.3,
         max_candidates: int = 5,
     ) -> Optional[GraspCandidate]:
-        """
-        Plan a grasp for a target object.
-
-        Full pipeline:
-        1. Generate grasp candidates (8-24 depending on config)
-        2. Optionally validate IK via MoveIt
-        3. Score and rank candidates
-        4. Return best candidate above minimum score
-
-        """
+        """Plan a grasp. Returns best candidate above min_score, or None."""
         start_time = time.time()
 
         logger.info(
@@ -64,16 +41,12 @@ class GraspPlanner:
             f"size={object_size}, robot={robot_id}"
         )
 
-        # Filter config if preferred approach is specified.
-        # State is saved before and restored after generation so reusing this
-        # planner instance on a subsequent call without preferred_approach still
-        # sees all approaches enabled.
+        # Save/restore approach state so subsequent calls without preferred_approach still see all approaches.
         saved_state = None
         if preferred_approach is not None:
             saved_state = self._save_approach_state()
             self._filter_approaches(preferred_approach)
 
-        # Step 1: Generate candidates
         try:
             candidates = self.generator.generate_candidates(
                 object_position, object_rotation, object_size, gripper_position
@@ -88,7 +61,6 @@ class GraspPlanner:
 
         logger.info(f"Generated {len(candidates)} grasp candidates")
 
-        # Step 2: Validate IK via MoveIt (if enabled)
         if use_moveit_ik:
             candidates = self._validate_ik_with_moveit(
                 candidates, robot_id, max_candidates
@@ -100,12 +72,10 @@ class GraspPlanner:
 
             logger.info(f"{len(candidates)} candidates passed IK validation")
 
-        # Step 3: Score and rank candidates
         ranked_candidates = self.scorer.score_and_rank(
             candidates, object_size, gripper_position, gripper_rotation
         )
 
-        # Step 4: Filter by minimum score
         valid_candidates = self.scorer.filter_by_min_score(ranked_candidates, min_score)
 
         if not valid_candidates:
@@ -115,7 +85,6 @@ class GraspPlanner:
             )
             return None
 
-        # Return best candidate
         best_candidate = valid_candidates[0]
 
         elapsed_time = (time.time() - start_time) * 1000  # Convert to ms
@@ -133,11 +102,7 @@ class GraspPlanner:
         robot_id: str,
         max_candidates: int = 5,
     ) -> List[GraspCandidate]:
-        """
-        Validate IK for candidates using MoveIt.
-
-        Only validates top N candidates to save time.
-        """
+        """Validate IK via MoveIt. Only checks top N to keep it fast."""
         try:
             from ros2.ROSBridge import ROSBridge
 
@@ -147,10 +112,7 @@ class GraspPlanner:
                 logger.warning("ROSBridge not connected, skipping IK validation")
                 return candidates
 
-            # Limit number of candidates to validate (performance optimization)
             candidates_to_validate = candidates[:max_candidates]
-
-            # Prepare candidate data for validation
             candidate_data = []
             for candidate in candidates_to_validate:
                 candidate_data.append(
@@ -169,7 +131,6 @@ class GraspPlanner:
                     }
                 )
 
-            # Call IK validation service
             result = bridge.validate_grasp_candidates(candidate_data, robot_id)
 
             if not result or not result.get("success"):
@@ -178,7 +139,6 @@ class GraspPlanner:
                 )
                 return candidates
 
-            # Update candidates with IK validation results
             validation_results = result.get("results", [])
             validated_candidates = []
 
@@ -191,7 +151,6 @@ class GraspPlanner:
                 if is_valid:
                     validated_candidates.append(candidate)
 
-            # Add remaining unvalidated candidates (if any)
             if len(candidates) > max_candidates:
                 validated_candidates.extend(candidates[max_candidates:])
 
@@ -205,17 +164,6 @@ class GraspPlanner:
             return candidates
 
     def _filter_approaches(self, preferred_approach: str) -> None:
-        """
-        Filter configuration to only use preferred approach.
-
-        Saves original enabled/preference_weight state, disables all approaches
-        except the preferred one, generates candidates, then restores state so
-        subsequent calls on the same planner instance are unaffected.
-
-        The actual save/restore lifecycle is managed by plan_grasp via
-        _save_approach_state and _restore_approach_state; this method only
-        applies the filter.
-        """
         matched = False
         for approach_settings in self.config.enabled_approaches:
             if approach_settings.approach_type == preferred_approach:
@@ -232,17 +180,11 @@ class GraspPlanner:
             )
 
     def _save_approach_state(self) -> list:
-        """
-        Save current enabled/preference_weight state of all approach settings.
-        """
         return [
             (s.enabled, s.preference_weight) for s in self.config.enabled_approaches
         ]
 
     def _restore_approach_state(self, saved_state: list) -> None:
-        """
-        Restore enabled/preference_weight state saved by _save_approach_state.
-        """
         for approach_settings, (enabled, weight) in zip(
             self.config.enabled_approaches, saved_state
         ):
@@ -259,12 +201,7 @@ class GraspPlanner:
         num_candidates: int = 3,
         **kwargs,
     ) -> List[GraspCandidate]:
-        """
-        Plan multiple grasp candidates for a target object.
-
-        Useful for fallback strategies or multi-robot coordination.
-        """
-        # Generate and score all candidates
+        """Plan multiple candidates. Useful for fallback/multi-robot strategies."""
         candidates = self.generator.generate_candidates(
             object_position, object_rotation, object_size, gripper_position
         )
@@ -272,13 +209,11 @@ class GraspPlanner:
         if not candidates:
             return []
 
-        # Validate IK if requested
         if kwargs.get("use_moveit_ik", True):
             candidates = self._validate_ik_with_moveit(
                 candidates, robot_id, max_candidates=num_candidates * 2
             )
 
-        # Score and rank
         ranked_candidates = self.scorer.score_and_rank(
             candidates,
             object_size,
@@ -286,15 +221,9 @@ class GraspPlanner:
             kwargs.get("gripper_rotation"),
         )
 
-        # Return top N
         return self.scorer.get_top_n(ranked_candidates, num_candidates)
 
     def get_statistics(self, candidates: List[GraspCandidate]) -> Dict:
-        """
-        Get statistics about a set of grasp candidates.
-
-        Useful for debugging and analysis.
-        """
         if not candidates:
             return {"count": 0}
 

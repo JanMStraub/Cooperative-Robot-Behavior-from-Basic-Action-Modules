@@ -36,7 +36,6 @@ def move_relative_to_object(
 ) -> OperationResult:
     """Move robot to a position relative to an object (left_of, right_of, above, below, in_front_of, behind)."""
     try:
-        # Get object position
         if isinstance(object_ref, str):
             world_state = get_world_state()
             position = world_state.get_object_position(object_ref)

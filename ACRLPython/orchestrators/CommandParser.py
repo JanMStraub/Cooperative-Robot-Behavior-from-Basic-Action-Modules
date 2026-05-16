@@ -1,22 +1,5 @@
 #!/usr/bin/env python3
-"""
-Command Parser for Multi-Command Sequences
-==========================================
-
-This module parses natural language compound commands into structured operation sequences using an LLM for intelligent parsing with operation registry validation.
-
-Example:
-    >>> parser = CommandParser()
-    >>> result = parser.parse("move to (0.3, 0.2, 0.1) and close the gripper", robot_id="Robot1")
-    >>> print(result)
-    {
-        "success": True,
-        "commands": [
-            {"operation": "move_to_coordinate", "params": {"robot_id": "Robot1", "x": -0.3, "y": 0.2, "z": 0.1}},
-            {"operation": "control_gripper", "params": {"robot_id": "Robot1", "open_gripper": False}}
-        ]
-    }
-"""
+"""Parses natural language commands into structured operation sequences via LLM + registry validation."""
 
 from typing import Dict, Any, List, Optional, Tuple
 import re
@@ -67,20 +50,9 @@ _HANDOFF_X, _HANDOFF_Y, _HANDOFF_Z = _HPP[0], _HPP[1], _HPP[2]
 
 
 class _PromptBuilder:
-    """
-    Assembles LLM parsing prompts.
-
-    Separated from CommandParser to allow unit testing of prompt construction
-    without needing a full CommandParser instance (LLM URL, RAG system, etc.).
-
-    Args:
-        registry: OperationRegistry with all available operations.
-        workflow_registry: WorkflowPatternRegistry with workflow patterns.
-        rag: Optional RAGSystem for semantic operation retrieval.
-    """
+    """Assembles LLM parsing prompts; separated so prompt logic can be unit-tested without a live LLM."""
 
     def __init__(self, registry, workflow_registry, rag):
-        """Initialise the builder with registry references."""
         self.registry = registry
         self.workflow_registry = workflow_registry
         self.rag = rag
@@ -93,19 +65,6 @@ class _PromptBuilder:
         spatial_section: str = "",
         hint: str = "",
     ) -> str:
-        """
-        Build the full LLM parsing prompt.
-
-        Args:
-            command_text: Natural language command to parse.
-            robot_id: Default robot ID for the command.
-            anti_pattern_section: Formatted anti-pattern warning block (may be empty).
-            spatial_section: Formatted knowledge-graph spatial context (may be empty).
-            hint: Reflexion hint injected when retrying after a failure (may be empty).
-
-        Returns:
-            Complete prompt string ready to send to the LLM.
-        """
         available_ops = self.get_available_operations_summary(command_text)
         anti_pattern_block = (
             f"\n        {anti_pattern_section}\n" if anti_pattern_section else ""
@@ -224,18 +183,7 @@ class _PromptBuilder:
         {spatial_block}{anti_pattern_block}{reflection_block} Output only valid JSON, no explanation, no comments."""
 
     def get_available_operations_summary(self, command_text: str = "") -> str:
-        """
-        Get a summary of available operations for the LLM prompt.
-
-        If RAG is available and command_text is provided, uses semantic search
-        to prioritize the most relevant operations and workflow patterns.
-
-        Args:
-            command_text: The command being parsed (for RAG context)
-
-        Returns:
-            Formatted string of operations and workflow patterns for LLM prompt
-        """
+        """Return ops relevant to command_text (via RAG if available, else full list)."""
         if self.rag and command_text:
             try:
                 rag_results = self.rag.search(command_text, top_k=8)
@@ -310,15 +258,6 @@ class _PromptBuilder:
         return "\n".join(summary_lines)
 
     def format_parameters(self, parameters: List) -> str:
-        """
-        Format operation parameters for LLM prompt, including valid values.
-
-        Args:
-            parameters: List of OperationParameter objects
-
-        Returns:
-            Formatted parameter string
-        """
         param_strs = []
         for p in parameters:
             param_str = f"{p.name}: {p.type}"
@@ -331,15 +270,6 @@ class _PromptBuilder:
         return ", ".join(param_strs)
 
     def format_workflow_pattern(self, pattern: WorkflowPattern) -> str:
-        """
-        Format a workflow pattern for inclusion in LLM prompt.
-
-        Args:
-            pattern: WorkflowPattern to format
-
-        Returns:
-            Formatted pattern description for LLM
-        """
         steps_text = "\n".join(
             f"    {i}. {step.operation_id}: {step.description}"
             for i, step in enumerate(pattern.steps, 1)
@@ -356,12 +286,7 @@ Examples:
 
 
 class CommandParser:
-    """
-    Parses compound natural language commands into structured operation sequences.
-
-    Uses LLM for intelligent parsing with operation registry validation.
-    Falls back to regex patterns when LLM is unavailable.
-    """
+    """Parses compound natural language commands into operation sequences; falls back to regex."""
 
     def __init__(
         self,
@@ -370,14 +295,6 @@ class CommandParser:
         use_rag: bool = True,
         use_cache: bool = True,
     ):
-        """
-        Initialize the CommandParser.
-
-        Args:
-            lm_studio_url: LM Studio base URL (default from config)
-            model: Model name for parsing (default from config)
-            use_rag: Whether to use RAG for semantic operation context
-        """
         from core.Imports import get_global_registry
 
         self.lm_studio_url = lm_studio_url or LMSTUDIO_BASE_URL
@@ -421,27 +338,7 @@ class CommandParser:
         use_llm: bool = True,
         use_motion_layer: Optional[bool] = None,
     ) -> Dict[str, Any]:
-        """
-        Parse a compound command into a sequence of operations.
-
-        Args:
-            command_text: Natural language command (e.g., "move to (0.3, 0.2, 0.1) and close gripper")
-            robot_id: Default robot ID to use for operations
-            use_llm: Whether to use LLM parsing (falls back to regex if False or LLM unavailable)
-            use_motion_layer: Enable RT-H style two-stage parsing (Stage 1: motion decomposition,
-                Stage 2: op mapping). Defaults to the USE_MOTION_LAYER config value.
-
-        Returns:
-            Dict with structure:
-            {
-                "success": bool,
-                "commands": [
-                    {"operation": str, "params": dict},
-                    ...
-                ],
-                "error": str or None
-            }
-        """
+        """Parse a natural language command into a list of validated operations."""
         if not command_text or not command_text.strip():
             return {"success": False, "commands": [], "error": "Empty command text"}
 
@@ -480,28 +377,7 @@ class CommandParser:
         hint: str = "",
         use_motion_layer: Optional[bool] = None,
     ) -> Dict[str, Any]:
-        """
-        Re-parse a command with a Reflexion hint injected into the prompt.
-
-        Called by SequenceExecutor when retrying a failed command. The hint
-        typically contains the previous error message and recovery suggestions
-        so the LLM can correct its parameter choices.
-
-        When use_motion_layer is True (or USE_MOTION_LAYER config is True), Stage 1
-        motion decomposition runs first and the resulting motion strings are prepended
-        to the command before the hinted Stage 2 parse - keeping Reflexion retries
-        consistent with the main parse() path.
-
-        Args:
-            command_text: Original natural language command.
-            robot_id: Default robot for the command.
-            hint: Reflexion context string (error + suggestions).
-            use_motion_layer: Enable RT-H two-stage decomposition on retry.
-                Defaults to the USE_MOTION_LAYER config value.
-
-        Returns:
-            Same structure as parse().
-        """
+        """Re-parse with a Reflexion error hint so the LLM can fix its parameter choices."""
         motion_layer = (
             USE_MOTION_LAYER if use_motion_layer is None else use_motion_layer
         )
@@ -579,27 +455,12 @@ class CommandParser:
     )
 
     def _is_perception_only_command(self, command_text: str) -> bool:
-        """Return True if the command is purely perceptual with no physical motion intent."""
         if re.match(r"\s*signal\s+\S", command_text, re.IGNORECASE):
             return True
         return bool(self._PERCEPTION_ONLY_PATTERNS.search(command_text))
 
     def _decompose_to_motions(self, command_text: str, robot_id: str) -> List[str]:
-        """
-        Stage 1 of the RT-H motion layer: decompose a high-level command into
-        an ordered list of natural-language motion strings.
-
-        Each motion string is a brief, concrete physical action (e.g.
-        "approach red cube from above at 0.05 m/s"). These act as chain-of-thought
-        anchors that constrain Stage 2 operation selection.
-
-        Args:
-            command_text: High-level natural language command.
-            robot_id: Default robot for the task.
-
-        Returns:
-            List of motion strings, or empty list on failure.
-        """
+        """Stage 1: decompose a high-level command into concrete motion strings for chain-of-thought anchoring."""
         prompt = (
             f'High-level command: "{command_text}"\n'
             f"Default robot: {robot_id}\n\n"
@@ -647,21 +508,7 @@ class CommandParser:
     def _parse_with_motion_layer(
         self, command_text: str, robot_id: str
     ) -> Dict[str, Any]:
-        """
-        Two-stage RT-H style parsing.
-
-        Stage 1: decompose command to motion strings via _decompose_to_motions().
-        Stage 2: use motion strings as chain-of-thought context in _parse_with_llm().
-
-        Falls back to single-stage LLM parsing if Stage 1 produces no motions.
-
-        Args:
-            command_text: High-level natural language command.
-            robot_id: Default robot ID.
-
-        Returns:
-            Same structure as parse().
-        """
+        """Two-stage RT-H parse: decompose to motions, then map motions to ops."""
         motions = self._decompose_to_motions(command_text, robot_id)
         if not motions:
             logger.info(
@@ -678,16 +525,6 @@ class CommandParser:
         return self._parse_with_llm(augmented_command, robot_id)
 
     def _parse_with_llm(self, command_text: str, robot_id: str) -> Dict[str, Any]:
-        """
-        Parse command using LLM for intelligent understanding.
-
-        Args:
-            command_text: Natural language command
-            robot_id: Default robot ID
-
-        Returns:
-            Parsed command structure
-        """
         kg_section = self._get_spatial_context(robot_id, command_text=command_text)
         peer_section = self._get_peer_context(robot_id)
         spatial_section = "\n        ".join(s for s in [kg_section, peer_section] if s)
@@ -705,7 +542,6 @@ class CommandParser:
                 return result
 
             parsed = result["parsed"]
-            content = result["content"]
 
             # Normalize multi-robot "plan" format to "commands" format.
             # LLM may emit plan in two shapes:
@@ -767,8 +603,7 @@ class CommandParser:
                 "error": f"LLM parsing error: {str(e)}",
             }
 
-    def _do_llm_request(self, prompt: str, command_text: str) -> Dict[str, Any]:
-        """Actual HTTP request to LLM, separated for caching purposes."""
+    def _do_llm_request(self, prompt: str, _command_text: str) -> Dict[str, Any]:
         try:
             payload = {
                 "model": self.model,
@@ -862,27 +697,13 @@ class CommandParser:
             raise
         except requests.exceptions.ConnectionError:
             raise
-        except Exception as e:
+        except Exception:
             raise
 
     def _get_spatial_context(
         self, robot_id: str, target: Optional[tuple] = None, command_text: str = ""
     ) -> str:
-        """
-        Retrieve formatted spatial context from the Knowledge Graph for the given robot.
-
-        Queries reachable objects, nearby robots, handoff candidates, and path
-        blocking to enrich the LLM prompt with live spatial awareness. Returns an
-        empty string if the KG is disabled, unavailable, or raises any exception
-        (graceful degrade).
-
-        Args:
-            robot_id: The robot whose spatial context to retrieve.
-            target: Optional (x, y, z) target position for path-blocking check.
-
-        Returns:
-            A formatted spatial context block string, or empty string if unavailable.
-        """
+        """Pull KG spatial context for the robot; returns "" if KG is disabled or unavailable."""
         try:
             from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
 
@@ -961,18 +782,7 @@ class CommandParser:
             return ""
 
     def _get_peer_context(self, robot_id: str) -> str:
-        """Return peer robot state and intent warnings for LLM context injection.
-
-        Always runs regardless of KG availability. Provides:
-        - Per-robot world context string for all peer robots
-        - Warnings when another robot is already targeting the same object
-
-        Args:
-            robot_id: The planning robot (its own state is excluded).
-
-        Returns:
-            Formatted peer context string, or empty string if unavailable.
-        """
+        """Return peer robot state and collision-intent warnings; always runs regardless of KG."""
         try:
             from core.Imports import get_world_state
 
@@ -1007,30 +817,17 @@ class CommandParser:
             return ""
 
     def _get_available_operations_summary(self, command_text: str = "") -> str:
-        """Get operations summary for LLM prompt. Delegates to _PromptBuilder."""
         return self._prompt_builder.get_available_operations_summary(command_text)
 
     def _format_workflow_pattern(self, pattern: WorkflowPattern) -> str:
-        """Format workflow pattern for LLM prompt. Delegates to _PromptBuilder."""
         return self._prompt_builder.format_workflow_pattern(pattern)
 
     def _extract_json_from_response(self, content: str) -> Optional[Dict]:
-        """Extract JSON object from LLM response text. Delegates to core.LLMUtils."""
         return _extract_json_util(content)
 
     def _validate_commands(
         self, commands: List[Dict], default_robot_id: str
     ) -> List[Dict]:
-        """
-        Validate and normalize parsed commands.
-
-        Args:
-            commands: List of parsed commands
-            default_robot_id: Default robot ID to use
-
-        Returns:
-            Validated and normalized commands
-        """
         validated = []
         for cmd in commands:
             operation = cmd.get("operation", "")
@@ -1078,15 +875,7 @@ class CommandParser:
         return validated
 
     def _fix_intra_group_dependencies(self, commands: List[Dict]) -> List[Dict]:
-        """Move commands whose $variable dependencies are captured in the same parallel_group
-        to a strictly later group, then renumber groups to stay contiguous.
-
-        Args:
-            commands: Validated command list (may have parallel_group annotations).
-
-        Returns:
-            Commands with corrected parallel_group assignments.
-        """
+        """Push commands that read a $var to a later group than the one capturing it."""
         # Only applies when parallel groups are present
         if not any("parallel_group" in cmd for cmd in commands):
             return commands
@@ -1138,15 +927,6 @@ class CommandParser:
     def _validate_multi_robot_plan(
         self, commands: List[Dict]
     ) -> Tuple[bool, List[str]]:
-        """
-        Validate signal/wait pairs and variable definitions in multi-robot plans.
-
-        Args:
-            commands: List of validated commands
-
-        Returns:
-            Tuple of (is_valid, list_of_errors)
-        """
         errors = []
         defined_signals = set()
         expected_signals = set()
@@ -1196,16 +976,7 @@ class CommandParser:
         return len(errors) == 0, errors
 
     def _parse_with_regex(self, command_text: str, robot_id: str) -> Dict[str, Any]:
-        """
-        Fallback regex-based parsing for common command patterns.
-
-        Args:
-            command_text: Natural language command
-            robot_id: Default robot ID
-
-        Returns:
-            Parsed command structure
-        """
+        """Regex fallback for common command patterns when LLM is unavailable."""
         commands = []
         text = command_text.lower()
 
@@ -1434,7 +1205,6 @@ class CommandParser:
             }
 
     def get_supported_patterns(self) -> List[str]:
-        """Get list of supported regex patterns for documentation."""
         return [
             "move to (x, y, z) - Move robot to coordinates",
             "move to x=0.3, y=0.2, z=0.1 - Move robot to coordinates",
@@ -1452,12 +1222,6 @@ _parser_instance: Optional[CommandParser] = None
 
 
 def get_command_parser() -> CommandParser:
-    """
-    Get the global CommandParser singleton.
-
-    Returns:
-        The global CommandParser instance
-    """
     global _parser_instance
     if _parser_instance is None:
         _parser_instance = CommandParser()

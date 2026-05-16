@@ -21,7 +21,7 @@ logger = get_logger(__name__)
 
 
 class OperationIndexer:
-    """Build searchable embeddings index from the operations and workflow registries."""
+    """Builds a searchable embeddings index from the operations and workflow registries."""
 
     def __init__(
         self,
@@ -40,7 +40,6 @@ class OperationIndexer:
         self.embedding_generator = embedding_generator or EmbeddingGenerator()
 
     def _get_multi_robot_context_documents(self) -> List[Dict[str, Any]]:
-        """Generate context documents for workspace layout, coordination patterns, and safety constraints."""
         context_docs = []
 
         workspace_doc = """
@@ -252,7 +251,6 @@ class OperationIndexer:
         return context_docs
 
     def build_index(self, save: bool = True) -> VectorStore:
-        """Build and return a populated VectorStore from all operations and workflows."""
         operations = self.registry.get_all_operations()
         workflows = self.workflow_registry.get_all_patterns()
         context_docs = self._get_multi_robot_context_documents()
@@ -338,7 +336,7 @@ class OperationIndexer:
     def refresh_index(
         self, existing_store: VectorStore, save: bool = True
     ) -> VectorStore:
-        """Incrementally add only new operations/workflows to an existing index, preserving accumulated metadata."""
+        """Add only new ops/workflows to an existing index without touching accumulated metadata."""
         operations = self.registry.get_all_operations()
         workflows = self.workflow_registry.get_all_patterns()
         context_docs = self._get_multi_robot_context_documents()
@@ -431,15 +429,12 @@ class OperationIndexer:
         return existing_store
 
     def rebuild_index(self) -> VectorStore:
-        """Rebuild index from scratch."""
         return self.build_index(save=True)
 
-    def update_index(self, existing_store: VectorStore) -> VectorStore:
-        """Update existing index (currently rebuilds entire index)."""
+    def update_index(self, _existing_store: VectorStore) -> VectorStore:
         return self.build_index(save=True)
 
     def get_indexer_stats(self) -> dict:
-        """Return statistics about the indexer and embedding generator."""
         operations = self.registry.get_all_operations()
 
         return {
@@ -454,7 +449,6 @@ def build_index_from_registry(
     registry: Optional[Any] = None,  # Changed to Any to avoid circular import
     save_path: Optional[str] = None,
 ) -> VectorStore:
-    """Convenience function to build index from the global operation registry."""
     indexer = OperationIndexer(registry=registry)
     store = indexer.build_index(save=True)
 

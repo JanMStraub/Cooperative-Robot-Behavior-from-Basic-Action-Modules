@@ -73,32 +73,7 @@ def _execute_grasp_with_follow_target(
     tcp_y_offset: float = 0.0,
     world_state=None,
 ) -> bool:
-    """Move arm to object, optionally correct for drift, then close gripper.
-
-    After MoveIt delivers the arm to the initially-planned position, the target
-    cube may have been pushed by the other robot's open fingers.  When
-    FOLLOW_TARGET_ENABLED is True this function re-queries the live object
-    position from WorldState and issues a corrective plan_and_execute if the
-    object has drifted more than FOLLOW_TARGET_DRIFT_THRESHOLD metres.  Up to
-    FOLLOW_TARGET_MAX_CORRECTIONS correction moves are attempted before the
-    gripper is closed regardless.
-
-    The gripper is only closed *after* the arm has settled at (or near) the
-    final object position, so it never closes during the approach phase.
-
-    Args:
-        bridge: Connected ROSBridge instance.
-        robot_id: Robot namespace (e.g. "Robot1").
-        object_id: Object identifier used to look up live position in WorldState.
-        planned_position: Initial target position dict with x/y/z keys.
-        orientation: Gripper orientation quaternion dict with x/y/z/w keys.
-        tcp_y_offset: Additional Y offset applied to live positions (e.g. 0.05m
-            for top-down grasps so ee_link lands above the object centre).
-        world_state: WorldState instance (obtained lazily if None).
-
-    Returns:
-        True if the gripper was closed successfully, False otherwise.
-    """
+    """Move to planned position, optionally correct for object drift, then close gripper. Returns True if gripper closed."""
     import math
 
     current_position = dict(planned_position)
@@ -223,25 +198,10 @@ def _execute_grasp_with_follow_target(
 
 
 def _vec_to_pos(seq, y_offset: float = 0.0) -> dict:
-    """Convert 3-element sequence to {x, y, z} dict for ROSBridge, optionally shifting Y."""
     return {"x": seq[0], "y": seq[1] + y_offset, "z": seq[2]}
 
 
 def _yaw_toward_object(robot_id: str, object_position) -> float:
-    """Return Unity-frame yaw (radians) that orients the gripper jaw perpendicular
-    to the robot-to-object vector so the fingers straddle the object from the sides.
-
-    For a top-down grasp the jaw (open/close axis) must be perpendicular to the
-    approach direction so the fingers land on either side of the object rather than
-    on top of it.  We compute the robot→object azimuth and rotate +90°.
-
-    Args:
-        robot_id: Robot identifier used to look up base position.
-        object_position: (x, y, z) object centre in Unity world space.
-
-    Returns:
-        Yaw angle in radians, normalised to (-π/2, π/2] for gripper symmetry.
-    """
     try:
         from config.Robot import ROBOT_BASE_POSITIONS
 
@@ -264,7 +224,6 @@ def _yaw_toward_object(robot_id: str, object_position) -> float:
 
 
 def _get_control_mode() -> str:
-    """Return DEFAULT_CONTROL_MODE from config, fallback 'ros'."""
     try:
         from config.ROS import DEFAULT_CONTROL_MODE
 
@@ -274,12 +233,6 @@ def _get_control_mode() -> str:
 
 
 def _handle_ros_failure(error_msg: str, context: str):
-    """
-    Returns (should_fallback, error_result).
-
-    Hybrid mode: non-fatal → fallback True, result None.
-    Other modes: return error result immediately.
-    """
     if _get_control_mode() == "hybrid":
         logger.warning(f"{context}: {error_msg}, falling back to TCP")
         return True, None
@@ -296,12 +249,6 @@ def _yaw_from_world_state_or_robot(
     object_position,
     world_state,
 ) -> tuple:
-    """
-    Return (yaw_unity_radians, source_str) for top-down grasp jaw alignment.
-
-    Priority: WorldState object Y-rotation → approach-perpendicular fallback.
-    Normalised to (-π/2, π/2] for gripper symmetry.
-    """
     if world_state is not None:
         try:
             with world_state._lock:
@@ -354,11 +301,7 @@ def _grasp_via_ros_planned(
     grasp_yaw_override: "Optional[float]" = None,
     pre_grasp_distance: float = 0.0,
 ):
-    """
-    Execute grasp via full GraspPlanner pipeline (ROS path).
-
-    Returns (result, should_fallback). should_fallback=True → caller retries via TCP.
-    """
+    """Full GraspPlanner pipeline (ROS path). Returns (result, should_fallback)."""
     try:
         from grasp_planning.GraspPlanner import GraspPlanner
     except ImportError as e:
@@ -593,13 +536,7 @@ def _grasp_via_ros_position_only(
     world_state,
     grasp_yaw_override: "Optional[float]" = None,
 ):
-    """
-    Grasp via position-only ROS planning (fallback when GraspPlanner unavailable).
-
-    q_topdown ≈ (x=0.9999, y=0, z=0, w=0.0087) — 179° around ROS X flips ee_link Z down.
-    Small positive w keeps MoveIt IK in w>0 hemisphere, avoiding the ±360° flip at w=0.
-    Priority: yaw override > WorldState rotation > robot-to-object axis.
-    """
+    """Position-only ROS grasp fallback when GraspPlanner unavailable. Returns (result, should_fallback)."""
     if grasp_yaw_override is not None:
         yaw_unity = grasp_yaw_override
         if yaw_unity > math.pi / 2:
@@ -781,11 +718,7 @@ def _grasp_via_vgn(
     request_id: int,
     custom_approach_vector: "Optional[List[float]]" = None,
 ) -> "Optional[OperationResult]":
-    """
-    VGN TCP fast-path: point cloud → YOLO bbox → VGNClient → Unity precomputed_candidates.
-
-    Returns None if VGN unavailable or no candidates (triggers geometric fallback).
-    """
+    """VGN TCP path: point cloud → YOLO bbox → VGNClient → Unity precomputed_candidates. None if unavailable."""
     import numpy as np
 
     try:
@@ -1020,12 +953,7 @@ def _grasp_via_vgn_with_ros(
     custom_approach_vector: "Optional[List[float]]" = None,
     grasp_yaw_override: "Optional[float]" = None,
 ) -> "Optional[OperationResult]":
-    """
-    Highest-priority grasp path: VGN 6-DOF poses + MoveIt collision-free planning.
-
-    Returns None if VGN unavailable or MoveIt fails before arm moved (caller falls back).
-    Returns OperationResult(error) if arm descended but gripper close failed.
-    """
+    """VGN 6-DOF poses + MoveIt (highest-priority path). None if unavailable; error result if arm descended but gripper failed."""
     import numpy as np
 
     try:
@@ -1151,8 +1079,6 @@ def _grasp_via_vgn_with_ros(
     logger.info(
         f"[VGN] Calling predict_grasps: image_width={img_w}, image_height={img_h}, fov={fov}, bbox={yolo_bbox}, points_shape={points_np.shape}"
     )
-    import numpy as _np
-
     logger.info(
         f"[VGN] Point cloud sample (first 3): {points_np[:3].tolist()}, X range=[{points_np[:,0].min():.3f},{points_np[:,0].max():.3f}], Y=[{points_np[:,1].min():.3f},{points_np[:,1].max():.3f}], Z=[{points_np[:,2].min():.3f},{points_np[:,2].max():.3f}]"
     )
@@ -1552,44 +1478,7 @@ def grasp_object(
     request_id: int = 0,
     use_ros: Optional[bool] = None,
 ) -> OperationResult:
-    """
-    Plan and execute grasp: VGN+ROS → geometric ROS → TCP fallback chain.
-
-    GraspPlanningPipeline in Unity: candidate gen → IK filter → collision filter → score → execute.
-
-    Success result structure:
-        {
-            "robot_id": str,
-            "object_id": str,
-            "approach_type": str,
-            "score": float,            # Quality score of selected grasp
-            "status": str,
-            "timestamp": float
-        }
-
-        Error structure:
-        {
-            "code": str,                    # Error code (e.g., "PLANNING_FAILED")
-            "message": str,                 # Human-readable error message
-            "recovery_suggestions": list    # List of suggested actions
-        }
-
-    Example:
-        >>> # Grasp object with automatic approach selection
-        >>> result = grasp_object("Robot1", "Cube_01")
-        >>> if result["success"]:
-        ...     print(f"Grasped {result['result']['object_id']}")
-
-        >>> # Grasp with specific approach direction
-        >>> result = grasp_object("Robot1", "Cube_01", preferred_approach="top")
-
-        >>> # Grasp without retreat motion
-        >>> result = grasp_object("Robot1", "Cube_01", enable_retreat=False)
-
-        >>> # Custom approach vector (approach from specific direction)
-        >>> result = grasp_object("Robot1", "Cube_01",
-        ...                       custom_approach_vector=[0, 1, 0.5])
-    """
+    """Plan and execute grasp via VGN+ROS → geometric ROS → TCP fallback chain."""
     try:
         if not robot_id or not isinstance(robot_id, str):
             return OperationResult.error_result(
@@ -1957,12 +1846,6 @@ def _compute_handoff_approach_vector(
     object_dimensions: tuple,
     receiving_robot_position: tuple,
 ) -> list:
-    """
-    Compute approach vector from the end of object furthest from receiving robot.
-
-    Grasping robot A takes the far end; robot B can approach near end without gripper collision.
-    Falls back to [0, 1, 0] if geometry is degenerate.
-    """
     import math
 
     ox = object_position[0]
@@ -2003,12 +1886,7 @@ def receive_handoff(
     use_ros: Optional[bool] = None,
     release_signal: Optional[str] = None,
 ) -> OperationResult:
-    """
-    Receive side of a handoff: compute approach from WorldState geometry, move, close gripper.
-
-    Y target = object_center + 0.4*height so receiver grips above source robot's fingers.
-    release_signal (if set) emitted after gripper close — prevents Unity dual-gripper physics conflict.
-    """
+    """Receive side of handoff: compute approach from WorldState, move, close gripper. release_signal prevents dual-gripper physics conflict."""
     try:
         for param, value in (
             ("robot_id", robot_id),
@@ -2025,12 +1903,10 @@ def receive_handoff(
         try:
             from config.Robot import (
                 DEFAULT_HANDOFF_OBJECT_DIMENSIONS,
-                HANDOFF_GRIPPER_CLEARANCE,
                 ROBOT_BASE_POSITIONS,
             )
         except ImportError:
             DEFAULT_HANDOFF_OBJECT_DIMENSIONS = (0.02, 0.02, 0.02)
-            HANDOFF_GRIPPER_CLEARANCE = 0.02
             ROBOT_BASE_POSITIONS = {}
 
         object_position = None

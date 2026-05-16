@@ -22,12 +22,7 @@ from .Base import (
 logger = logging.getLogger(__name__)
 
 
-def _kg_both_robots_can_reach(object_id: str, robot_id: str) -> Optional[str]:
-    """
-    Check KG reachability — returns warning string if <2 robots can reach object, else None.
-
-    Empty reachable set = KG not yet populated; treated as pass to avoid false negatives at startup.
-    """
+def _kg_both_robots_can_reach(object_id: str, _robot_id: str) -> Optional[str]:
     try:
         from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
 

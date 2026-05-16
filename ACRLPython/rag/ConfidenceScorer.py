@@ -36,7 +36,6 @@ WEIGHTS = {
 
 
 def get_confidence_level(score: float) -> ConfidenceLevel:
-    """Map score to confidence level."""
     if score >= CONFIDENCE_TIERS["high"]:
         return ConfidenceLevel.HIGH
     elif score >= CONFIDENCE_TIERS["medium"]:
@@ -50,7 +49,6 @@ def get_confidence_level(score: float) -> ConfidenceLevel:
 def calculate_parameter_match_score(
     query_text: str, parameter_names: List[str]
 ) -> float:
-    """Score based on parameter mentions in query."""
     if not parameter_names:
         return 0.5  # Neutral score for operations without parameters
 
@@ -75,7 +73,6 @@ def calculate_metadata_match_score(
     category_filter: Optional[str] = None,
     complexity_filter: Optional[str] = None,
 ) -> float:
-    """Score based on metadata filter matches."""
     if not category_filter and not complexity_filter:
         return 0.5  # Neutral when no filters
 
@@ -97,7 +94,6 @@ def calculate_metadata_match_score(
 
 
 def calculate_reliability_score(metadata: Dict[str, Any]) -> float:
-    """Score based on operation reliability metadata."""
     success_rate = metadata.get("success_rate", 0.95)
     return float(success_rate)
 
@@ -109,7 +105,6 @@ def compute_confidence_score(
     category_filter: Optional[str] = None,
     complexity_filter: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Compute multi-factor confidence score."""
     parameters = metadata.get("parameters", [])
     if isinstance(parameters, list):
         if parameters and isinstance(parameters[0], dict):
@@ -150,7 +145,6 @@ def compute_confidence_score(
 
 
 def get_category_min_score(category: str) -> float:
-    """Get minimum score threshold for a category."""
     return CATEGORY_MIN_SCORES.get(category.lower(), 0.5)
 
 
@@ -160,7 +154,6 @@ def apply_confidence_boosting(
     category_filter: Optional[str] = None,
     complexity_filter: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """Apply confidence scoring to search results."""
     enhanced_results = []
 
     for result in results:

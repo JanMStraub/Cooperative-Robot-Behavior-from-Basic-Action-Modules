@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""
-Workflow Pattern Library
-========================
-
-This module defines common operation sequences (workflows) that can be used
-by the RAG system to help LLMs understand typical task patterns.
-
-Workflows are reusable templates for common robot tasks like pick-and-place,
-detection-and-approach, or multi-robot coordination scenarios.
-"""
+"""Reusable workflow patterns for RAG indexing — helps LLMs understand common operation sequences."""
 
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
@@ -16,25 +7,20 @@ from enum import Enum
 
 
 class WorkflowCategory(Enum):
-    """Categories for workflow patterns"""
-
-    SINGLE_ROBOT = "single_robot"  # Single robot tasks
-    MULTI_ROBOT = "multi_robot"  # Multi-robot coordination
-    PERCEPTION = "perception"  # Vision-based workflows
-    MANIPULATION = "manipulation"  # Grasping and object handling
+    SINGLE_ROBOT = "single_robot"
+    MULTI_ROBOT = "multi_robot"
+    PERCEPTION = "perception"
+    MANIPULATION = "manipulation"
 
 
 @dataclass
 class WorkflowStep:
-    """A single step in a workflow pattern."""
-
     operation_id: str
     parameter_bindings: Dict[str, str] = field(default_factory=dict)
     conditional: Optional[str] = None
     description: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
         return {
             "operation_id": self.operation_id,
             "parameter_bindings": self.parameter_bindings,
@@ -45,10 +31,6 @@ class WorkflowStep:
 
 @dataclass
 class WorkflowPattern:
-    """
-    A reusable workflow pattern (sequence of operations).
-    """
-
     pattern_id: str
     name: str
     category: WorkflowCategory
@@ -60,7 +42,6 @@ class WorkflowPattern:
     usage_examples: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization"""
         return {
             "pattern_id": self.pattern_id,
             "name": self.name,
@@ -74,11 +55,7 @@ class WorkflowPattern:
         }
 
     def to_rag_document(self) -> str:
-        """
-        Convert workflow pattern to RAG-optimized text document.
-
-        Returns searchable natural language description for LLM retrieval.
-        """
+        """Render pattern as natural language for RAG indexing."""
         doc = f"""
         WORKFLOW PATTERN: {self.name} (ID: {self.pattern_id})
         Category: {self.category.value}
@@ -122,7 +99,6 @@ class WorkflowPattern:
         return doc
 
 
-# Pattern Definitions: Single Robot Workflows
 
 DETECT_AND_APPROACH_PATTERN = WorkflowPattern(
     pattern_id="workflow_detect_approach_001",
@@ -258,7 +234,6 @@ VERIFY_AND_ACT_PATTERN = WorkflowPattern(
     ],
 )
 
-# Pattern Definitions: Multi-Robot Coordination
 
 SIMULTANEOUS_MOVE_PATTERN = WorkflowPattern(
     pattern_id="workflow_simultaneous_move_001",
@@ -540,23 +515,12 @@ LLM_DRIVEN_COORDINATION_PATTERN = WorkflowPattern(
     ],
 )
 
-# Pattern Registry
-
-
 class WorkflowPatternRegistry:
-    """
-    Central registry of all workflow patterns.
-
-    Provides pattern lookup, searching, and RAG document generation.
-    """
-
     def __init__(self):
-        """Initialize registry with all defined patterns"""
         self.patterns: Dict[str, WorkflowPattern] = {}
         self._register_patterns()
 
     def _register_patterns(self):
-        """Register all workflow patterns"""
         patterns = [
             DETECT_AND_APPROACH_PATTERN,
             PICK_AND_PLACE_PATTERN,
@@ -570,28 +534,22 @@ class WorkflowPatternRegistry:
             self.patterns[pattern.pattern_id] = pattern
 
     def get_pattern(self, pattern_id: str) -> Optional[WorkflowPattern]:
-        """Retrieve pattern by ID"""
         return self.patterns.get(pattern_id)
 
     def get_pattern_by_name(self, name: str) -> Optional[WorkflowPattern]:
-        """Retrieve pattern by name (e.g., 'handoff', 'pick_and_place')"""
         for pattern in self.patterns.values():
             if pattern.name == name:
                 return pattern
         return None
 
     def get_all_patterns(self) -> List[WorkflowPattern]:
-        """Get all registered patterns"""
         return list(self.patterns.values())
 
-    def get_patterns_by_category(
-        self, category: WorkflowCategory
-    ) -> List[WorkflowPattern]:
-        """Get all patterns in a specific category"""
+    def get_patterns_by_category(self, category: WorkflowCategory) -> List[WorkflowPattern]:
         return [p for p in self.patterns.values() if p.category == category]
 
     def search_patterns(self, query: str) -> List[WorkflowPattern]:
-        """Simple text search over pattern names and descriptions"""
+        """Text search over names and descriptions."""
         query_lower = query.lower()
         matches = []
 
@@ -608,21 +566,17 @@ class WorkflowPatternRegistry:
         return matches
 
 
-# Singleton instance for global access
 _global_workflow_registry = None
 
 
 def get_global_workflow_registry() -> WorkflowPatternRegistry:
-    """Get or create the global workflow pattern registry"""
     global _global_workflow_registry
     if _global_workflow_registry is None:
         _global_workflow_registry = WorkflowPatternRegistry()
     return _global_workflow_registry
 
 
-# TEXT-BASED PATTERNS (for RAG indexing and LLM guidance)
-# These are detailed textual descriptions removed from non-atomic operations.
-# They guide the LLM on how to chain atomic operations for complex workflows.
+# Text patterns for RAG indexing — guide LLMs on how to chain atomic operations
 
 HANDOFF_TEXT_PATTERN = """
 HANDOFF OPERATION: Explicit flat step sequence

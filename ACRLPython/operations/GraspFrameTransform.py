@@ -1,38 +1,5 @@
 #!/usr/bin/env python3
-"""
-Grasp Frame Transform
-=====================
-
-Converts grasp poses from right-handed OpenCV/camera frame into
-Unity's left-handed world frame using pure NumPy (no scipy dependency).
-
-Camera frame coordinate convention
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-* Right-handed: X-right, Y-down, Z-forward (OpenCV camera convention).
-* Grasp ``position`` is the grasp centre between finger pads (same as
-  ``graspPoint`` in ``GraspCandidateGenerator.cs``).
-* Grasp ``rotation`` quaternion encodes the end-effector orientation in
-  camera frame such that the gripper Z-axis points along the approach
-  direction.
-
-Unity coordinate convention
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-* Left-handed: X-right, Y-up, Z-forward.
-* Camera rotation is stored as a Unity quaternion (x, y, z, w) in world
-  space and delivered via the ``generate_point_cloud`` result.
-
-Transform pipeline (per grasp)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-1. Negate X of grasp position and rotation  →  RH→LH handedness flip.
-2. Rotate the flipped position by the camera quaternion and add the camera
-   translation.
-3. Compose camera quaternion  ⊗  flipped grasp quaternion  →  world-frame
-   grasp rotation.
-4. Negate X of approach direction (if present) and rotate by camera quaternion.
-
-The resulting ``position`` and ``rotation`` fields are ready to be sent to
-Unity's ``PlanGraspWithExternalCandidates()`` as a pre-computed candidate.
-"""
+"""Converts grasp poses from right-handed OpenCV/camera frame to Unity left-handed world frame (pure NumPy)."""
 
 import logging
 from typing import List
@@ -46,7 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 def _quat_multiply(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
-    """Hamilton product of two quaternions [x, y, z, w]."""
     x1, y1, z1, w1 = q1
     x2, y2, z2, w2 = q2
     return np.array(
@@ -61,7 +27,6 @@ def _quat_multiply(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
 
 
 def _quat_rotate_vector(q: np.ndarray, v: np.ndarray) -> np.ndarray:
-    """Rotate 3-vector v by unit quaternion q [x,y,z,w]. Uses double-cross formula."""
     qvec = q[:3]
     w = q[3]
     t = 2.0 * np.cross(qvec, v)
@@ -69,7 +34,6 @@ def _quat_rotate_vector(q: np.ndarray, v: np.ndarray) -> np.ndarray:
 
 
 def _normalise_quat(q: np.ndarray) -> np.ndarray:
-    """Return unit-length quaternion. Handles near-zero input gracefully."""
     norm = np.linalg.norm(q)
     if norm < 1e-9:
         return np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float64)
@@ -86,32 +50,7 @@ def transform_grasp_poses_to_unity(
     camera_position: List[float],
     camera_rotation: List[float],
 ) -> List[dict]:
-    """Transform grasp poses from camera frame to Unity world frame.
-
-    Args:
-        grasps: List of grasp dicts from ``VGNClient.predict_grasps``.
-            Each dict must contain ``"position"`` ([x,y,z]) and ``"rotation"``
-            ([qx,qy,qz,qw]) in right-handed camera frame.  Optional fields
-            ``"score"``, ``"width"``, ``"approach_direction"`` are preserved.
-        camera_position: Camera world position [x, y, z] from Unity (left-handed).
-        camera_rotation: Camera world rotation quaternion [x, y, z, w] from Unity.
-
-    Returns:
-        List of transformed grasp dicts.  Each dict contains:
-
-        .. code-block:: python
-
-            {
-                "position":           [x, y, z],        # Unity world frame
-                "rotation":           [qx, qy, qz, qw], # Unity world frame
-                "approach_direction": [dx, dy, dz],     # Unity world frame
-                "score":              float,
-                "width":              float,
-            }
-
-        Grasps that cannot be transformed (malformed input) are silently
-        skipped; a warning is logged.
-    """
+    """Transform VGNClient grasp poses from right-handed camera frame to Unity world frame. Malformed grasps silently skipped."""
     cam_pos = np.array(camera_position, dtype=np.float64)
     cam_rot_raw = np.array(camera_rotation, dtype=np.float64)
     if cam_rot_raw.shape[0] == 3:

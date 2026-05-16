@@ -87,15 +87,7 @@ class CoordinationCheckResult:
 
 
 class CoordinationVerifier:
-    """
-    Verifier for multi-robot coordination safety.
-
-    Checks for potential conflicts when multiple robots operate simultaneously:
-    - Collision detection (path intersection)
-    - Workspace conflicts (both in same exclusive workspace)
-    - Object access conflicts (both trying to grasp same object)
-    - Deadlock detection (circular dependencies)
-    """
+    """Checks collision, workspace conflict, object conflict, and deadlock before parallel ops."""
 
     def __init__(self):
         self.world_state = get_world_state()
@@ -174,15 +166,6 @@ class CoordinationVerifier:
     def _extract_target_position(
         self, params: Dict[str, Any]
     ) -> Optional[Tuple[float, float, float]]:
-        """
-        Extract target position from operation parameters.
-
-        Args:
-            params: Operation parameters
-
-        Returns:
-            (x, y, z) tuple or None if no target position
-        """
         if "x" in params and "y" in params and "z" in params:
             return (params["x"], params["y"], params["z"])
         elif "target_position" in params:
@@ -198,18 +181,6 @@ class CoordinationVerifier:
         other_robot_id: str,
         world_state,
     ) -> Optional[CoordinationIssue]:
-        """
-        Check if robot will collide with another robot.
-
-        Args:
-            robot_id: ID of moving robot
-            target_pos: Target position
-            other_robot_id: ID of other robot
-            world_state: WorldState instance
-
-        Returns:
-            CoordinationIssue if collision detected, None otherwise
-        """
         # Get other robot's current target (if moving)
         other_robot_state = world_state._robot_states.get(other_robot_id)
         if other_robot_state is None:
@@ -267,27 +238,12 @@ class CoordinationVerifier:
 
     def _compute_safe_waypoint(
         self,
-        robot_id: str,
+        _robot_id: str,
         target_pos: Tuple[float, float, float],
         other_robot_id: str,
         world_state,
     ) -> Optional[Tuple[float, float, float]]:
-        """
-        Compute a simple safe intermediate waypoint for robot_id that avoids other_robot_id.
-
-        Lifts the target 0.10m along the Y axis (Unity up) and checks whether the lifted
-        point satisfies MIN_ROBOT_SEPARATION from the other robot.  Returns None if no
-        trivial fix is found — caller should serialize the operations instead.
-
-        Args:
-            robot_id: ID of robot that needs to move
-            target_pos: Intended target position
-            other_robot_id: ID of blocking robot
-            world_state: WorldState instance
-
-        Returns:
-            Safe waypoint tuple or None
-        """
+        """Lifts target 0.10m upward and checks MIN_ROBOT_SEPARATION. None if no trivial fix — caller serializes instead."""
         other_state = world_state._robot_states.get(other_robot_id)
         if other_state is None or other_state.position is None:
             return None
@@ -307,21 +263,9 @@ class CoordinationVerifier:
         self,
         robot_id: str,
         params: Dict[str, Any],
-        other_robots: List[str],
+        _other_robots: List[str],
         world_state,
     ) -> Optional[CoordinationIssue]:
-        """
-        Check for workspace allocation conflicts.
-
-        Args:
-            robot_id: Robot planning operation
-            params: Operation parameters
-            other_robots: Other robots in system
-            world_state: WorldState instance
-
-        Returns:
-            CoordinationIssue if conflict detected
-        """
         target_pos = self._extract_target_position(params)
         if target_pos is None:
             return None
@@ -358,21 +302,9 @@ class CoordinationVerifier:
         self,
         robot_id: str,
         params: Dict[str, Any],
-        other_robots: List[str],
+        _other_robots: List[str],
         world_state,
     ) -> Optional[CoordinationIssue]:
-        """
-        Check if multiple robots are trying to grasp same object.
-
-        Args:
-            robot_id: Robot planning manipulation
-            params: Operation parameters
-            other_robots: Other robots in system
-            world_state: WorldState instance
-
-        Returns:
-            CoordinationIssue if conflict detected
-        """
         # Extract target object ID from params
         target_object_id = params.get("object_id") or params.get("object_ref")
         if target_object_id is None or not isinstance(target_object_id, str):
@@ -405,22 +337,6 @@ class CoordinationVerifier:
         other_robots: List[str],
         world_state,
     ) -> Optional[CoordinationIssue]:
-        """
-        Check for potential deadlock situations.
-
-        Simplified deadlock detection:
-        - Two robots in each other's target workspaces
-        - Circular wait for workspace release
-
-        Args:
-            robot_id: Robot planning operation
-            params: Operation parameters
-            other_robots: Other robots in system
-            world_state: WorldState instance
-
-        Returns:
-            CoordinationIssue if deadlock potential detected
-        """
         target_pos = self._extract_target_position(params)
         if target_pos is None:
             return None
@@ -467,15 +383,6 @@ class CoordinationVerifier:
     def _get_workspace_for_position(
         self, position: Tuple[float, float, float]
     ) -> Optional[str]:
-        """
-        Determine which workspace region contains a position.
-
-        Args:
-            position: (x, y, z) coordinates
-
-        Returns:
-            Workspace region name or None
-        """
         x, y, z = position
         for region_name, bounds in WORKSPACE_REGIONS.items():
             if (
@@ -495,22 +402,7 @@ class CoordinationVerifier:
 def quick_check_multi_robot_safety(
     robot_id: str, operation_category: OperationCategory, params: Dict[str, Any]
 ) -> Tuple[bool, CoordinationCheckResult]:
-    """
-    Quick helper to check if operation is safe in multi-robot context.
-
-    Args:
-        robot_id: Robot ID
-        operation_category: Operation category
-        params: Operation parameters
-
-    Returns:
-        (is_safe, check_result)
-
-    Example:
-        >>> is_safe, result = quick_check_multi_robot_safety("Robot1", OperationCategory.NAVIGATION, {...})
-        >>> if not is_safe:
-        ...     print("Coordination issues:", result.issues)
-    """
+    """Run safety check for a single operation in multi-robot context."""
     verifier = CoordinationVerifier()
     result = verifier.verify_multi_robot_safety(robot_id, operation_category, params)
     return result.safe, result

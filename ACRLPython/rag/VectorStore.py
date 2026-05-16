@@ -29,7 +29,7 @@ logger = get_logger(__name__)
 
 
 class VectorStore:
-    """In-memory vector store with cosine similarity search."""
+    """In-memory cosine-similarity vector store with pickle persistence."""
 
     def __init__(self):
         self.vectors: np.ndarray = np.array([])  # Shape: (n_ops, embedding_dim)
@@ -45,7 +45,6 @@ class VectorStore:
     def add_operation(
         self, operation_id: str, embedding: np.ndarray, metadata: Dict[str, Any]
     ):
-        """Add an operation embedding and metadata to the store."""
         with self._lock:
             # Set embedding dimension on first add; validate against config
             if self.embedding_dimension is None:
@@ -74,15 +73,7 @@ class VectorStore:
             logger.debug(f"Added operation '{operation_id}' to vector store")
 
     def _flush_pending_vectors(self):
-        """
-        Materialize staged embeddings into self.vectors.
-
-        Collects all embeddings appended since the last flush and builds the
-        final matrix with a single np.vstack() call, avoiding the O(n²)
-        cost of stacking inside add_operation() for bulk inserts.
-
-        Must be called with self._lock already held.
-        """
+        """Materialize staged embeddings into self.vectors via a single vstack; must hold self._lock."""
         if not self._pending_vectors:
             return
 
@@ -102,7 +93,6 @@ class VectorStore:
         query_text: str = "",
         enable_confidence: bool = True,
     ) -> List[Dict[str, Any]]:
-        """Search for similar operations using cosine similarity."""
         with self._lock:
             self._flush_pending_vectors()
 
@@ -168,7 +158,6 @@ class VectorStore:
             return results[:top_k]
 
     def get_operation(self, operation_id: str) -> Optional[Dict[str, Any]]:
-        """Return operation by ID, or None if not found."""
         with self._lock:
             self._flush_pending_vectors()
             try:
@@ -182,7 +171,6 @@ class VectorStore:
                 return None
 
     def save(self, file_path: Optional[str] = None):
-        """Save vector store to pickle file."""
         path = file_path or RAG_VECTOR_STORE_PATH
 
         with self._lock:
@@ -203,7 +191,6 @@ class VectorStore:
 
     @classmethod
     def load(cls, file_path: Optional[str] = None) -> "VectorStore":
-        """Load vector store from pickle file, or return empty store if not found."""
         path = file_path or RAG_VECTOR_STORE_PATH
 
         try:
@@ -229,7 +216,6 @@ class VectorStore:
     def update_operation_metadata(
         self, operation_id: str, metadata_update: Dict[str, Any]
     ) -> bool:
-        """Merge new fields into the metadata of an existing operation."""
         with self._lock:
             try:
                 idx = self.operation_ids.index(operation_id)
@@ -239,7 +225,6 @@ class VectorStore:
                 return False
 
     def get_stats(self) -> Dict[str, Any]:
-        """Return statistics about the vector store."""
         with self._lock:
             categories = {}
             complexities = {}
@@ -260,7 +245,6 @@ class VectorStore:
             }
 
     def clear(self):
-        """Clear all data from the vector store"""
         with self._lock:
             self.vectors = np.array([])
             self.operation_ids = []

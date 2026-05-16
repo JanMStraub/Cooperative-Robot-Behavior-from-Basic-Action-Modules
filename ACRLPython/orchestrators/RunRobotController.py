@@ -1,20 +1,5 @@
 #!/usr/bin/env python3
-"""
-RunRobotController.py - Unified orchestrator for robot control
-
-Starts all required servers in a single process:
-- ImageServer (ports 5005, 5006) - receives images
-- CommandServer (port 5007) - sends commands, receives completions
-- SequenceServer (port 5008) - processes command sequences
-- WorldStateServer (port 5009) - receives robot/object state updates
-- AutoRTServer (port 5010) - autonomous task generation
-
-Usage:
-    python -m orchestrators.RunRobotController
-
-    # With options
-    python -m orchestrators.RunRobotController --model gemma-3-12b
-"""
+"""Unified entry point that starts all Python backend servers in one process."""
 
 import argparse
 import os
@@ -118,11 +103,7 @@ logger = setup_logging(__name__)
 
 
 class RobotController:
-    """
-    Unified robot controller that manages all servers.
-
-    Provides a single entry point for starting the entire Python backend.
-    """
+    """Starts and owns all backend servers for the robot control pipeline."""
 
     def __init__(
         self,
@@ -137,21 +118,6 @@ class RobotController:
         env: str = "sim",
         web_port: Optional[int] = None,
     ):
-        """
-        Initialize the robot controller.
-
-        Args:
-            host: Host to bind servers to
-            stereo_port: Port for stereo image pairs
-            command_port: Port for commands/results (bidirectional)
-            sequence_port: Port for sequence execution
-            world_state_port: Port for world state streaming
-            autort_port: Port for AutoRT task generation
-            model: LLM model for parsing
-            check_completion: Whether to wait for Unity completion signals
-            env: Execution environment — "sim" (Unity) or "real" (physical robot)
-            web_port: If set, start the Web UI server on this port
-        """
         self._host = host
         self._stereo_port = stereo_port
         self._command_port = command_port
@@ -176,15 +142,7 @@ class RobotController:
         self._stop_event = threading.Event()
 
     def _wire_world_state_to_rag(self):
-        """
-        Wire WorldState into RAG QueryEngine for context-aware operation selection.
-
-        This enables the RAG system to:
-        - Filter operations based on reachability
-        - Boost operations targeting reachable objects
-        - Downrank operations for stale objects or objects grasped by other robots
-        - Include world state context in LLM prompts
-        """
+        """Inject WorldState into the RAG QueryEngine so results are reachability-aware."""
         try:
             from operations.WorldState import get_world_state
 
@@ -237,12 +195,7 @@ class RobotController:
             )
 
     def _wire_world_state_callbacks(self):
-        """
-        Wire WorldStateServer callbacks to trigger confidence decay on state updates.
-
-        Registers a callback that updates object confidence based on which objects
-        are currently detected in each frame.
-        """
+        """Register the WorldStateServer callback that syncs Unity state and decays object confidence."""
         try:
             from operations.WorldState import get_world_state
 
@@ -309,15 +262,7 @@ class RobotController:
             )
 
     def _wire_knowledge_graph(self):
-        """
-        Wire GraphBuilder into WorldStateServer as an update callback.
-
-        Creates KnowledgeGraph and GraphBuilder singletons, then registers
-        GraphBuilder.on_state_update as a WorldStateServer callback so the
-        graph stays synchronized with every Unity state push.
-
-        Only runs if KNOWLEDGE_GRAPH_ENABLED is True.
-        """
+        """Register GraphBuilder as a WorldStateServer callback so the KG tracks every Unity push."""
         if not KNOWLEDGE_GRAPH_ENABLED:
             logger.debug("Knowledge graph disabled (KNOWLEDGE_GRAPH_ENABLED=false)")
             return
@@ -356,12 +301,7 @@ class RobotController:
             )
 
     def _start_perception_refresh(self):
-        """Start the background PerceptionRefreshLoop daemon.
-
-        Polls stale WorldState objects every 2 s and re-detects them using
-        stereo+YOLO.  Falls back to LLM analyze_scene when no stereo images
-        are available.  Non-critical — a failure here does not block startup.
-        """
+        """Start the PerceptionRefreshLoop daemon that re-detects stale WorldState objects."""
         try:
             from operations.WorldState import get_world_state
             from operations.PerceptionRefresh import PerceptionRefreshLoop
@@ -375,12 +315,7 @@ class RobotController:
             logger.debug("Non-critical — stale objects will not be auto-refreshed")
 
     def _auto_connect_ros(self):
-        """
-        Connect to ROS bridge on startup if AUTO_CONNECT_ROS is enabled.
-
-        Runs in a background thread so a missing Docker container does not
-        block the Python backend from starting.
-        """
+        """Try to connect to the ROS bridge in the background so a missing Docker won't block startup."""
         if not ROS_ENABLED or not AUTO_CONNECT_ROS:
             return
 
@@ -403,7 +338,6 @@ class RobotController:
         thread.start()
 
     def start(self):
-        """Start all servers."""
         if self._running:
             logger.warning("RobotController already running")
             return
@@ -454,9 +388,7 @@ class RobotController:
         self._autort_server = AutoRTServer(config=autort_config)
         self._autort_server.start()
 
-        # Share resources between servers
-        broadcaster = get_command_broadcaster()
-        # SequenceExecutor will use this for sending commands
+        get_command_broadcaster()  # initialize singleton
 
         # Wire WorldState into RAG for context-aware operation selection
         self._wire_world_state_to_rag()
@@ -610,7 +542,6 @@ class RobotController:
         logger.info("=" * 60)
 
     def stop(self):
-        """Stop all servers."""
         if not self._running:
             return
 
@@ -669,11 +600,9 @@ class RobotController:
         logger.info("RobotController stopped")
 
     def is_running(self) -> bool:
-        """Check if controller is running."""
         return self._running
 
     def wait(self):
-        """Wait for controller to stop (blocking)."""
         try:
             # If VisionProcessor is configured for main thread, run it now (blocking)
             if (
@@ -703,7 +632,6 @@ class RobotController:
 
 
 def main():
-    """Main entry point."""
     parser = argparse.ArgumentParser(
         description="Unified Robot Controller - Start all Python servers"
     )
@@ -752,7 +680,7 @@ def main():
     )
 
     # Handle shutdown signals
-    def signal_handler(sig, frame):
+    def signal_handler(_sig, _frame):
         logger.info("Shutdown signal received")
         controller.stop()
         sys.exit(0)

@@ -119,12 +119,14 @@ class TestDetectField:
             field_label="D", detections=[_make_detection("field_d")]
         )
         assert result.success is True
+        assert result.result is not None
         assert result.result["field_label"] == "D"
 
     def test_happy_path_center_dict(self):
         det = _make_detection("field_g", world_position=(0.5, 0.1, 0.8))
         result, _, _ = self._run(field_label="G", detections=[det])
         assert result.success is True
+        assert result.result is not None
         center = result.result["center"]
         assert center["x"] == pytest.approx(0.5)
         assert center["y"] == pytest.approx(0.1)
@@ -134,6 +136,7 @@ class TestDetectField:
         det = _make_detection("field_a", world_position={"x": 1.0, "y": 2.0, "z": 3.0})
         result, _, _ = self._run(field_label="A", detections=[det])
         assert result.success is True
+        assert result.result is not None
         assert result.result["center"]["x"] == pytest.approx(1.0)
 
     def test_world_state_updated(self):
@@ -147,21 +150,25 @@ class TestDetectField:
     def test_invalid_robot_id_empty(self):
         result = detect_field("", "D")
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_invalid_robot_id_none(self):
-        result = detect_field(None, "D")
+        result = detect_field(None, "D")  # type: ignore[arg-type]
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_invalid_field_label_digit(self):
         result = detect_field("Robot1", "1")
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_FIELD_LABEL"
 
     def test_invalid_field_label_multichar(self):
         result = detect_field("Robot1", "AB")
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_FIELD_LABEL"
 
     def test_no_stereo_images(self):
@@ -173,6 +180,7 @@ class TestDetectField:
         ):
             result = detect_field("Robot1", "D")
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "NO_STEREO_IMAGES"
 
     def test_incomplete_stereo_pair(self):
@@ -190,17 +198,20 @@ class TestDetectField:
         ):
             result = detect_field("Robot1", "D")
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INCOMPLETE_STEREO_PAIR"
 
     def test_no_detections(self):
         result, _, _ = self._run(field_label="D", detections=[])
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "FIELD_NOT_DETECTED"
 
     def test_no_3d_coordinates(self):
         det = _make_detection("field_d", world_position=None)
         result, _, _ = self._run(field_label="D", detections=[det])
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "NO_3D_COORDINATES"
 
     def test_confidence_in_result(self):
@@ -208,12 +219,14 @@ class TestDetectField:
             "field_b", world_position=(0.1, 0.2, 0.3), confidence=0.92
         )
         result, _, _ = self._run(field_label="B", detections=[det])
+        assert result.result is not None
         assert result.result["confidence"] == pytest.approx(0.92)
 
     def test_field_label_case_insensitive(self):
         det = _make_detection("field_g")
         result, _, _ = self._run(field_label="g", detections=[det])
         assert result.success is True
+        assert result.result is not None
         assert result.result["field_label"] == "G"
 
     def test_yolo_class_constructed_correctly(self):
@@ -259,6 +272,7 @@ class TestDetectAllFields:
     def test_empty_detections_success(self):
         result, _ = self._run(detections=[])
         assert result.success is True
+        assert result.result is not None
         assert result.result["fields"] == []
         assert result.result["count"] == 0
 
@@ -270,6 +284,7 @@ class TestDetectAllFields:
         ]
         result, _ = self._run(detections=dets)
         assert result.success is True
+        assert result.result is not None
         assert result.result["count"] == 3
         labels = [f["label"] for f in result.result["fields"]]
         assert set(labels) == {"A", "D", "G"}
@@ -280,6 +295,7 @@ class TestDetectAllFields:
             _make_detection("field_b", world_position=(0.2, 0, 0.2)),
         ]
         result, _ = self._run(detections=dets)
+        assert result.result is not None
         assert result.result["count"] == 1
         assert result.result["fields"][0]["label"] == "B"
 
@@ -292,24 +308,28 @@ class TestDetectAllFields:
         assert "field_i" in filter_classes
 
     def test_no_stereo_images(self):
-        result, _ = self._run(stereo=None)
+        result, _ = self._run(stereo=None)  # type: ignore[arg-type]
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "NO_STEREO_IMAGES"
 
     def test_incomplete_stereo_pair(self):
-        result, _ = self._run(stereo=(None, None, None, None, {}))
+        result, _ = self._run(stereo=(None, None, None, None, {}))  # type: ignore[arg-type]
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INCOMPLETE_STEREO_PAIR"
 
     def test_invalid_robot_id(self):
         # robot_id validation fires before any external dep is called
         result = detect_all_fields("")
         assert result.success is False
+        assert result.error is not None
         assert result.error["code"] == "INVALID_ROBOT_ID"
 
     def test_center_dict_in_result(self):
         det = _make_detection("field_c", world_position=(1.0, 2.0, 3.0))
         result, _ = self._run(detections=[det])
+        assert result.result is not None
         field = result.result["fields"][0]
         assert field["center"]["x"] == pytest.approx(1.0)
         assert field["center"]["z"] == pytest.approx(3.0)
@@ -318,4 +338,5 @@ class TestDetectAllFields:
         det = _make_detection("field_f", world_position={"x": 0.5, "y": 0.0, "z": 0.7})
         result, _ = self._run(detections=[det])
         assert result.success is True
+        assert result.result is not None
         assert result.result["fields"][0]["center"]["x"] == pytest.approx(0.5)

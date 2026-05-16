@@ -51,7 +51,7 @@ class ClaimedObject:
 
 
 class SharedVisionState:
-    """Thread-safe centralized registry of detected objects with claim/release to prevent multi-robot conflicts."""
+    """Thread-safe detected-object registry with claim/release for multi-robot conflict prevention."""
 
     def __init__(self, claim_timeout: float = 10.0):
         self.detections: Dict[str, ClaimedObject] = {}
@@ -65,7 +65,6 @@ class SharedVisionState:
         )
 
     def update_detections(self, detections: List):
-        """Update shared state with new detections; preserves claims, removes stale ones."""
         with self.lock:
             current_time = time.time()
 
@@ -106,7 +105,7 @@ class SharedVisionState:
             logger.debug(f"Updated vision state: {len(self.detections)} objects")
 
     def claim_object(self, object_id: str, robot_id: str) -> bool:
-        """Claim an object for a robot. Returns False if already claimed by another robot."""
+        """Claim object for robot; returns False if already claimed by another."""
         with self.lock:
             if object_id not in self.detections:
                 logger.warning(f"Cannot claim unknown object: {object_id}")
@@ -133,7 +132,6 @@ class SharedVisionState:
             return True
 
     def release_object(self, object_id: str, robot_id: str) -> bool:
-        """Release a claimed object."""
         with self.lock:
             if object_id not in self.detections:
                 logger.warning(f"Cannot release unknown object: {object_id}")
@@ -153,7 +151,6 @@ class SharedVisionState:
             return True
 
     def get_available_objects(self, color: Optional[str] = None) -> List[ClaimedObject]:
-        """Get unclaimed objects, optionally filtered by color."""
         with self.lock:
             self._cleanup_stale_claims()
             available = []
@@ -170,7 +167,6 @@ class SharedVisionState:
             return available.copy()
 
     def get_claimed_objects(self, robot_id: str) -> List[ClaimedObject]:
-        """Get objects claimed by a specific robot."""
         with self.lock:
             claimed = [
                 obj for obj in self.detections.values() if obj.claimed_by == robot_id
@@ -185,11 +181,7 @@ class SharedVisionState:
         robot1_pos: Tuple[float, float, float],
         robot2_pos: Tuple[float, float, float],
     ) -> str:
-        """
-        Resolve conflict when both robots want the same object.
-
-        Strategies: "closest_robot" (assign to closer robot if diff > 5cm), "first_claim".
-        """
+        """Assign object to closest robot (if diff > 5cm) or first claimant."""
         with self.lock:
             if object_id not in self.detections:
                 logger.warning(
@@ -233,14 +225,12 @@ class SharedVisionState:
     def _calculate_distance(
         self, pos1: Tuple[float, float, float], pos2: Tuple[float, float, float]
     ) -> float:
-        """Euclidean distance between two 3D points."""
         dx = pos1[0] - pos2[0]
         dy = pos1[1] - pos2[1]
         dz = pos1[2] - pos2[2]
         return math.sqrt(dx * dx + dy * dy + dz * dz)
 
     def _cleanup_stale_claims(self):
-        """Remove claims older than timeout. Must be called with lock held."""
         current_time = time.time()
 
         for obj in self.detections.values():

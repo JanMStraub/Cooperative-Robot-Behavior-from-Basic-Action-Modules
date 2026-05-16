@@ -5,22 +5,19 @@ using UnityEngine;
 
 namespace Robotics
 {
-    /// <summary>
-    /// Pure C# class for inverse kinematics calculations using damped least squares.
-    /// No Unity MonoBehaviour dependencies - testable in isolation.
-    /// </summary>
+    /// <summary>Damped least-squares IK solver. Pure C#, no MonoBehaviour dependency.</summary>
     public class IKSolver
     {
         private readonly float _dampingFactor;
 
-        // Pre-allocated MathNet matrices (still used for Jacobian building and J*J^T multiply)
+        // Pre-alloc MathNet matrices — Jacobian build + J*J^T
         private Matrix<double> _jacobianMatrix;
         private Vector<double> _errorVector;
         private Vector<double> _jointDelta;
         private Matrix<double> _jacobianTranspose;
         private Matrix<double> _jacobianJacobianTranspose;
 
-        // Raw double arrays for zero-alloc 6x6 LU solve (replaces MathNet LU().Solve())
+        // Zero-alloc 6x6 LU solve — avoids MathNet LU().Solve() allocation
         private readonly double[,] _luA = new double[6, 6];
         private readonly double[] _luB = new double[6];
         private readonly double[] _luY = new double[6];
@@ -51,18 +48,7 @@ namespace Robotics
             _jacobianJacobianTranspose = DenseMatrix.Build.Dense(6, 6);
         }
 
-        /// <summary>
-        /// Compute joint angle deltas to move toward target.
-        /// Returns null if already converged to target.
-        /// </summary>
-        /// <param name="currentState">Current end effector state</param>
-        /// <param name="targetState">Target end effector state</param>
-        /// <param name="joints">Array of joint information</param>
-        /// <param name="convergenceThreshold">Distance threshold for convergence</param>
-        /// <param name="orientationWeight">Weight for orientation error (0.0-2.0, default 1.0)</param>
-        /// <param name="orientationConvergenceThreshold">Orientation convergence threshold in radians (default 0.3)</param>
-        /// <param name="overrideDamping">Optional damping override for dynamic damping control</param>
-        /// <returns>Joint deltas in radians, or null if converged</returns>
+        /// <summary>Compute joint deltas toward target. Returns null if already converged.</summary>
         public Vector<double> ComputeJointDeltas(
             IKState currentState,
             IKState targetState,
@@ -99,23 +85,7 @@ namespace Robotics
             return _jointDelta;
         }
 
-        /// <summary>
-        /// Computes joint deltas using velocity-level (PD) IK: combines position error scaled by
-        /// <paramref name="Kp"/> with velocity error scaled by <paramref name="Kd"/> to damp oscillation.
-        /// Convergence is not signalled here — RobotController owns the stop condition.
-        /// </summary>
-        /// <param name="currentState">Current end effector state</param>
-        /// <param name="targetState">Target end effector state</param>
-        /// <param name="currentEndEffectorVelocity">Current end effector velocity (from ArticulationBody)</param>
-        /// <param name="targetVelocity">Target velocity from trajectory</param>
-        /// <param name="joints">Array of joint information</param>
-        /// <param name="convergenceThreshold">Distance threshold for convergence</param>
-        /// <param name="Kp">Position gain (how strongly to correct position error)</param>
-        /// <param name="Kd">Velocity gain (damping term to prevent overshoot)</param>
-        /// <param name="orientationWeight">Weight for orientation error</param>
-        /// <param name="orientationConvergenceThreshold">Orientation convergence threshold in radians</param>
-        /// <param name="overrideDamping">Optional damping override for pseudo-inverse</param>
-        /// <returns>Joint deltas in radians, or null if converged</returns>
+        /// <summary>PD IK: Kp*posError + Kd*velError. Convergence decision left to RobotController.</summary>
         public Vector<double> ComputeJointDeltasWithVelocity(
             IKState currentState,
             IKState targetState,
@@ -140,16 +110,12 @@ namespace Robotics
                 targetState.Rotation
             );
 
-            // NOTE: Convergence check disabled in IKSolver
-            // Velocity convergence is now handled by RobotController with adaptive thresholds
-            // This allows different velocity requirements for grasp vs normal movement
-            // IKSolver always returns joint deltas, letting RobotController decide when to stop
-
+            // Convergence handled by RobotController — adaptive thresholds differ per mode
             orientationError *= orientationWeight;
 
             Vector3 combinedError = Kp * posError + Kd * velError;
 
-            // Safety clamp: Prevent matrix instability if target teleports far away
+            // Guard against matrix instability on large teleport jumps
             const float maxErrorMagnitude = 1.0f;
             if (combinedError.magnitude > maxErrorMagnitude)
             {
@@ -161,9 +127,7 @@ namespace Robotics
             CalculateJacobian(currentState, joints);
             ComputePseudoInverse(overrideDamping);
 
-            // ⚠️ CRITICAL: Clamp joint velocities near singularities
-            // When arm is fully stretched, Jacobian becomes ill-conditioned
-            // and requested velocities can spike to infinity
+            // Clamp near singularities — ill-conditioned Jacobian → velocity spikes
             for (int i = 0; i < _jointDelta.Count; i++)
             {
                 _jointDelta[i] = System.Math.Clamp(
@@ -228,11 +192,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Compute the damped least squares pseudo-inverse of the Jacobian
-        /// and update joint deltas. Uses zero-alloc manual LU solve for the 6x6 system.
-        /// </summary>
-        /// <param name="overrideDamping">Optional damping override (null uses default)</param>
         private void ComputePseudoInverse(float? overrideDamping = null)
         {
             _jacobianMatrix.Transpose(_jacobianTranspose);
@@ -241,7 +200,7 @@ namespace Robotics
             double damping = overrideDamping ?? _dampingFactor;
             double lambda2 = damping * damping;
 
-            // Copy JJ^T + λ²I into raw double array (avoids MathNet LU object allocation)
+            // JJ^T + λ²I into raw array — skip MathNet LU alloc
             for (int r = 0; r < 6; r++)
             {
                 for (int c = 0; c < 6; c++)
@@ -252,7 +211,7 @@ namespace Robotics
 
             SolveLU6x6(_luA, _luB, _luY, _luPiv);
 
-            // J^T * y -> _jointDelta
+            // J^T * y → joint deltas
             int n = _jointDelta.Count;
             for (int i = 0; i < n; i++)
             {
@@ -263,20 +222,14 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// In-place partial-pivot LU solve for a 6x6 system Ax=b.
-        /// Writes solution into y. Uses pre-allocated pivot buffer.
-        /// </summary>
         private static void SolveLU6x6(double[,] a, double[] b, double[] y, int[] piv)
         {
             const int n = 6;
             for (int i = 0; i < n; i++)
                 piv[i] = i;
 
-            // LU factorization with partial pivoting (in-place on a)
             for (int k = 0; k < n; k++)
             {
-                // Find pivot
                 int maxRow = k;
                 double maxVal = System.Math.Abs(a[k, k]);
                 for (int i = k + 1; i < n; i++)
@@ -290,7 +243,6 @@ namespace Robotics
                 }
                 if (maxRow != k)
                 {
-                    // Swap rows in a
                     for (int j = 0; j < n; j++)
                     {
                         double t = a[k, j];
@@ -312,14 +264,13 @@ namespace Robotics
                 }
             }
 
-            // Apply row permutation to b -> y, then forward/back substitution
             for (int i = 0; i < n; i++)
                 y[i] = b[piv[i]];
-            // Forward substitution (L is unit lower triangular)
+            // Forward sub (unit lower triangular L)
             for (int i = 1; i < n; i++)
             for (int j = 0; j < i; j++)
                 y[i] -= a[i, j] * y[j];
-            // Back substitution
+            // Back sub
             for (int i = n - 1; i >= 0; i--)
             {
                 for (int j = i + 1; j < n; j++)

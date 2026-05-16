@@ -1,14 +1,5 @@
 #!/usr/bin/env python3
-"""
-Point Cloud Operations
-======================
-
-Generates dense 3D point clouds from the robot's stereo camera pair using
-semi-global block matching (SGBM) disparity estimation. The resulting cloud
-is expressed in Unity camera frame with X negated (left-handed convention).
-Downstream consumers (VGNClient) apply their own camera→world transform using
-the camera_position and camera_rotation fields returned alongside the points.
-"""
+"""Dense 3D point cloud from stereo SGBM. Cloud is in Unity camera frame (X negated). VGNClient applies its own camera→world transform."""
 
 import logging
 import time
@@ -84,13 +75,6 @@ def _save_debug_point_cloud(
     camera_rotation: list,
     timestamp: float,
 ) -> None:
-    """Save point cloud to disk as binary PLY for Blender inspection.
-
-    PLY is natively supported by Blender's built-in "Import PLY" operator.
-    Per-vertex RGB stored as uchar, displayed when viewport shading = "Vertex Color".
-    Named with robot ID + UTC timestamp so successive captures don't overwrite.
-    Errors logged but never propagated — debug saves must not break main flow.
-    """
     import os
     import struct
     from datetime import datetime, timezone
@@ -138,11 +122,6 @@ def _save_debug_point_cloud(
 
 
 def _apply_camera_rotation(points: np.ndarray, quaternion: list) -> np.ndarray:
-    """Rotate (N,3) points from Unity camera frame to Unity world frame.
-
-    Q-matrix output is (X-right, Y-up, Z-negative); callers must negate Z before
-    calling so points are in Unity camera frame (X-right, Y-up, Z-forward).
-    """
     x, y, z, w = [float(v) for v in quaternion]
     # Guard against non-finite or zero-length quaternions from Unity metadata.
     # Zero-length → identity; non-finite → identity with a warning.
@@ -185,13 +164,6 @@ def _clean_point_cloud(
     points: np.ndarray,
     colors: np.ndarray,
 ) -> tuple:
-    """Remove background points and statistical outliers from a point cloud.
-
-    Three-stage pipeline (each independently skippable via config):
-    1. Depth clip — Z outside [MIN_DEPTH, MAX_DEPTH]. Fast; removes far-field noise.
-    2. Color-based background removal — per-channel absolute tolerance match.
-    3. Statistical outlier removal — Open3D; silently skipped if unavailable.
-    """
     if len(points) == 0:
         return points, colors
 
@@ -234,7 +206,7 @@ def _clean_point_cloud(
         pcd.colors = o3d.utility.Vector3dVector(colors.astype(np.float64) / 255.0)
 
         before = len(points)
-        pcd_clean, ind = pcd.remove_statistical_outlier(
+        pcd_clean, _ = pcd.remove_statistical_outlier(
             nb_neighbors=POINT_CLOUD_OUTLIER_NB_NEIGHBORS,
             std_ratio=POINT_CLOUD_OUTLIER_STD_RATIO,
         )
@@ -260,12 +232,7 @@ def generate_point_cloud(
     max_age_seconds: float = _DEFAULT_MAX_AGE_SECONDS,
     request_id: int = 0,
 ) -> OperationResult:
-    """Generate dense 3D point cloud from latest stereo image pair via SGBM disparity.
-
-    Output points in Unity world frame (Q-matrix points Y-flipped, rotated by
-    camera quaternion, translated by camera position). Camera extrinsics returned
-    alongside points for downstream transforms.
-    """
+    """Generate dense 3D point cloud from latest stereo image pair via SGBM. Returns camera extrinsics alongside points."""
     try:
         storage = get_unified_image_storage()
         stereo_data = storage.get_latest_stereo_image()

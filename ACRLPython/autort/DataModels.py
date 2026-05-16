@@ -1,16 +1,12 @@
 #!/usr/bin/env python3
-"""
-AutoRT Data Models
-
-Pydantic models for scene descriptions, task proposals, and safety verdicts.
-"""
+"""Pydantic models for scene descriptions, task proposals, and safety verdicts."""
 
 from pydantic import BaseModel, Field, model_validator, ConfigDict
 from typing import List, Tuple, Optional, Dict, Any
 
 
 class GroundedObject(BaseModel):
-    """Object detected and grounded to 3D space via existing detect_object_stereo"""
+    """3D-grounded detected object."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -22,7 +18,7 @@ class GroundedObject(BaseModel):
 
 
 class ExecutedTaskContext(BaseModel):
-    """Lightweight record of the most recently completed task for context-aware prompt generation."""
+    """Record of the last completed task, used to prompt for continuity."""
 
     task_id: str
     description: str
@@ -32,7 +28,7 @@ class ExecutedTaskContext(BaseModel):
 
 
 class SceneDescription(BaseModel):
-    """Scene state assembled from existing operations + WorldState"""
+    """Scene state assembled from perception ops and WorldState."""
 
     timestamp: float
     objects: List[GroundedObject]
@@ -42,11 +38,7 @@ class SceneDescription(BaseModel):
 
 
 class Operation(BaseModel):
-    """Single operation in a task sequence.
-
-    Uses plain string type validated against OperationRegistry
-    to stay in sync with all 30+ registered operations.
-    """
+    """Single operation in a task sequence."""
 
     type: str  # e.g. "move_to_coordinate", "control_gripper"
     robot_id: str
@@ -56,7 +48,7 @@ class Operation(BaseModel):
 
 
 class ProposedTask(BaseModel):
-    """Task proposal from LLM with strict validation"""
+    """LLM-proposed task with Pydantic validation."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -69,7 +61,6 @@ class ProposedTask(BaseModel):
 
     @model_validator(mode="after")
     def validate_robot_ids_consistent(self):
-        """Ensure all operation robot_ids appear in required_robots"""
         required = set(self.required_robots)
         for op in self.operations:
             if op.robot_id not in required:
@@ -81,7 +72,7 @@ class ProposedTask(BaseModel):
 
 
 class TaskVerdict(BaseModel):
-    """Constitution evaluation result"""
+    """Safety constitution evaluation result."""
 
     approved: bool
     violations: List[str] = Field(default_factory=list)

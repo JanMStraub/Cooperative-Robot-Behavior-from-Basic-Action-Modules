@@ -76,11 +76,6 @@ namespace Simulation
         private SimulationState _currentState = SimulationState.Paused;
         private SimulationState _previousState = SimulationState.Paused;
 
-        /// <summary>
-        /// Set to true in Start() when a fatal configuration error prevents
-        /// the simulation from running (e.g. no robots found).
-        /// Guards Update() and other periodic methods from executing with bad state.
-        /// </summary>
         private bool _initializationFailed = false;
         private Dictionary<string, bool> _robotTargetReached = new Dictionary<string, bool>();
         private Dictionary<
@@ -98,10 +93,6 @@ namespace Simulation
         public bool IsPaused => _currentState == SimulationState.Paused;
         public bool ShouldStopRobots => _currentState != SimulationState.Running;
 
-        /// <summary>
-        /// Cached ROSControlModeManagers found in the scene.
-        /// Populated during Start() alongside _robotControllers.
-        /// </summary>
         private Dictionary<string, ROSControlModeManager> _rosControlModeManagers =
             new Dictionary<string, ROSControlModeManager>();
 
@@ -145,10 +136,6 @@ namespace Simulation
             }
         }
 
-        /// <summary>
-        /// Initializes component references and robot tracking.
-        /// Sorts robots by name to ensure deterministic sequential execution order.
-        /// </summary>
         private void Start()
         {
             try
@@ -185,7 +172,6 @@ namespace Simulation
                         );
                     }
 
-                    // Cache ROSControlModeManager if present
                     var rosControlMode = robot.GetComponent<ROSControlModeManager>();
                     if (rosControlMode != null)
                     {
@@ -200,7 +186,7 @@ namespace Simulation
                     return;
                 }
 
-                // Cache initial poses of all dynamic scene objects (Rigidbody, not part of a robot)
+                // Cache initial poses of non-robot Rigidbodies for reset
                 var allRigidbodies = FindObjectsByType<Rigidbody>(
                     FindObjectsInactive.Include,
                     FindObjectsSortMode.None
@@ -294,10 +280,6 @@ namespace Simulation
             }
         }
 
-        /// <summary>
-        /// Resets all robots to their initial poses and coordination state.
-        /// Uses coroutine to ensure physics engine processes changes before resuming.
-        /// </summary>
         public void ResetSimulation()
         {
             if (_activeResetCoroutine != null)
@@ -309,10 +291,6 @@ namespace Simulation
             _activeResetCoroutine = StartCoroutine(ResetSimulationCoroutine());
         }
 
-        /// <summary>
-        /// Performs physics-safe reset with proper frame timing.
-        /// Waits for FixedUpdate to allow physics engine to process teleport before resuming.
-        /// </summary>
         private IEnumerator ResetSimulationCoroutine()
         {
             ChangeState(SimulationState.Resetting);
@@ -360,7 +338,7 @@ namespace Simulation
                 }
             }
 
-            // Restore all dynamic scene objects to their initial poses
+            // Restore scene objects
             foreach (var kvp in _initialObjectPoses)
             {
                 Rigidbody rb = kvp.Key;
@@ -393,19 +371,11 @@ namespace Simulation
             }
         }
 
-        /// <summary>
-        /// Notifies the manager that a robot has reached or is moving towards its target.
-        /// Works for both Unity IK and ROS trajectory paths.
-        /// </summary>
         public void NotifyTargetReached(string robotId, bool reached)
         {
             _robotTargetReached[robotId] = reached;
         }
 
-        /// <summary>
-        /// Get the ROS control mode for a specific robot.
-        /// Returns null if the robot doesn't have a ROSControlModeManager.
-        /// </summary>
         public ControlMode? GetROSControlMode(string robotId)
         {
             if (_rosControlModeManagers.TryGetValue(robotId, out var manager))
@@ -413,10 +383,6 @@ namespace Simulation
             return null;
         }
 
-        /// <summary>
-        /// Check if a robot is currently controlled by ROS (not Unity IK).
-        /// Returns false if no ROSControlModeManager is attached.
-        /// </summary>
         public bool IsRobotROSControlled(string robotId)
         {
             if (_rosControlModeManagers.TryGetValue(robotId, out var manager))

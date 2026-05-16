@@ -27,7 +27,6 @@ logger = logging.getLogger(__name__)
 
 
 def color_matches(detection_color: Optional[str], query_color: Optional[str]) -> bool:
-    """Flexible color matching: exact, partial (YOLO class "blue_cube" matches "blue"), case-insensitive."""
     if detection_color is None or query_color is None:
         return False
 
@@ -47,7 +46,6 @@ def analyze_scene(
     model: Optional[str] = None,
     **kwargs,
 ) -> OperationResult:
-    """Analyze a scene using LLM vision (LM Studio)."""
     if model is None:
         model = DEFAULT_LMSTUDIO_MODEL
 
@@ -176,38 +174,31 @@ def create_analyze_scene_operation() -> BasicOperation:
 
 
 def detect_object_stereo(
-    # Primary parameters
     color: Optional[str] = None,
     camera_id: str = DEFAULT_CAMERA_ID,
-    # Detection options
     request_fresh_capture: bool = True,
     min_confidence: float = 0.5,
     max_distance: Optional[float] = None,
-    # Selection strategy when multiple objects found
     selection: str = "left",
-    # Camera configuration (optional overrides)
     baseline: Optional[float] = None,
     fov: Optional[float] = None,
     camera_position: Optional[list] = None,
     camera_rotation: Optional[list] = None,
-    # Compatibility
     robot_id: Optional[str] = None,
     request_id: int = 0,
     **kwargs,
 ) -> OperationResult:
-    """Unified stereo detection with 3D coordinate estimation and configurable selection strategy."""
-    if color == "None":  # Normalize LLM string "None" to Python None
+    if color == "None":  # LLM sometimes passes string "None"
         color = None
 
     try:
         storage = get_unified_image_storage()
         broadcaster = get_command_broadcaster()
 
-        # Streaming keeps images fresh — no need for fresh capture request
+        # streaming keeps images fresh — skip fresh capture round-trip
         if ENABLE_VISION_STREAMING:
             request_fresh_capture = False
 
-        # Get stereo images
         if request_fresh_capture:
             request_time = time.time()
             logger.info(
@@ -222,7 +213,6 @@ def detect_object_stereo(
             }
             broadcaster.send_command(capture_command, request_id)
 
-            # Wait for images to arrive
             timeout = VISION_OPERATION_TIMEOUT
             poll_interval = 0.1
             start_time = time.time()
@@ -270,7 +260,7 @@ def detect_object_stereo(
                     ],
                 )
 
-        imgL, imgR, prompt = stereo_data
+        imgL, imgR, _ = stereo_data
 
         metadata = storage.get_stereo_metadata(camera_id)
         logger.debug(f"Metadata for {camera_id}: {metadata}")
@@ -305,23 +295,19 @@ def detect_object_stereo(
         detection_result = None
 
         if enable_streaming:
-            # Try to use cached detections from SharedVisionState
-            try:
+            try:  # try cached detections from SharedVisionState first
                 from operations.SharedVisionState import SharedVisionState
 
                 shared_state = SharedVisionState()
                 cached_objects = shared_state.get_available_objects()
 
                 if cached_objects:
-                    # Convert ClaimedObject to DetectionObject format
                     from vision.DetectionDataModels import (
                         DetectionObject,
                         DetectionResult,
                     )
 
-                    # Resolve WorldState once for dimension lookup; dimensions
-                    # streamed from Unity (collider bounds) are more accurate than
-                    # anything we could estimate from a synthetic zero-area bbox.
+                    # Unity-streamed collider dims are more accurate than synthetic zero-area bbox
                     try:
                         from core.Imports import get_world_state as _gws
 
@@ -331,16 +317,13 @@ def detect_object_stereo(
 
                     cached_detections = []
                     for idx, obj in enumerate(cached_objects):
-                        # Inherit dims from WorldState — Unity-streamed collider bounds
-                        # are more accurate than anything estimable from a zero-area bbox.
                         inherited_dims = None
                         if _ws_for_dims is not None:
                             inherited_dims = _ws_for_dims.get_object_dimensions(
                                 obj.color
                             )
 
-                        # bbox=(0,0,0,0): pixel coords unavailable for cached results;
-                        # must not be passed to dimension estimation.
+                        # bbox=(0,0,0,0): no pixel coords for cached results
                         det = DetectionObject(
                             object_id=idx,
                             color=obj.color,
@@ -386,7 +369,6 @@ def detect_object_stereo(
                 camera_position=camera_position,
             )
 
-        # Ensure detection_result is not None (should always be assigned above)
         if detection_result is None:
             return OperationResult.error_result(
                 "DETECTION_ERROR",
@@ -557,8 +539,7 @@ def detect_object_stereo(
 
             world_state = get_world_state()
             ws_object_id = best.color if best.color else "unknown_object"
-            # Fields are managed by detect_field with object_type="field".
-            # detect_object_stereo must not create or overwrite field entries.
+            # don't overwrite field entries — those are owned by detect_field
             is_field = ws_object_id.lower().startswith("field_")
             existing = (
                 world_state.get_object_state(ws_object_id) if not is_field else None
@@ -588,13 +569,12 @@ def detect_object_stereo(
                     f"({best.world_position[0]:.3f}, {best.world_position[1]:.3f}, {best.world_position[2]:.3f}){dim_str}"
                 )
         except Exception as e:
-            # Log at ERROR level so this is never silently missed — a WorldState write
-            # failure means grasp_object will fail to find the object on the next call.
+            # ERROR not WARNING — WorldState write failure breaks next grasp_object call
             logger.error(
                 f"Failed to update WorldState after detection: {e}", exc_info=True
             )
 
-        # Sync to KG immediately — don't wait for WorldStatePublisher 10Hz cycle.
+        # sync to KG now — don't wait for WorldStatePublisher 10Hz cycle
         try:
             from config.KnowledgeGraph import KNOWLEDGE_GRAPH_ENABLED
 

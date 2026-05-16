@@ -357,7 +357,7 @@ class TestPublishOtherRobotCollision:
         mock_client = MagicMock()
         server._move_group_clients = {"Robot1": mock_client}
 
-        def fake_wait(_robot_id, _timeout=5.0):
+        def fake_wait(robot_id, timeout=5.0):
             return True
 
         server._wait_for_joint_states = fake_wait

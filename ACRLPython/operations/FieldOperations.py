@@ -60,9 +60,7 @@ def detect_field(
                 ["Provide field label as 'A', 'B', 'C', etc."],
             )
 
-        yolo_class = (
-            f"field_{field_label_lower}"  # matches trained model: "field_a" etc.
-        )
+        yolo_class = f"field_{field_label_lower}"  # trained class names: "field_a" etc.
 
         try:
             from vision.YOLODetector import YOLODetector
@@ -131,7 +129,7 @@ def detect_field(
 
         detection = detections.detections[0]
 
-        # YOLO class stored in .color field; "field_a" → "A"
+        # .color holds the YOLO class string; "field_a" → letter "A"
         detected_class = detection.color.lower()
         if not detected_class.startswith("field_"):
             return OperationResult.error_result(
@@ -140,7 +138,7 @@ def detect_field(
                 ["Verify YOLO model is correct field detector model"],
             )
 
-        detected_letter = detected_class[6:].upper()  # "field_g"[6:] → "G"
+        detected_letter = detected_class[6:].upper()
         world_position = detection.world_position
 
         if not world_position:
@@ -168,7 +166,7 @@ def detect_field(
         else:
             center_dict = {"x": 0.0, "y": 0.0, "z": 0.0}
 
-        # object_type="field" prevents confidence-decay eviction (fields are static landmarks).
+        # "field" type skips confidence decay — fields don't move
         try:
             from core.Imports import get_world_state
 
@@ -262,9 +260,7 @@ def detect_all_fields(
 
         stereo_params = camera_config_from_metadata(stereo_metadata)
 
-        field_classes = [
-            f"field_{chr(ord('a') + i)}" for i in range(9)
-        ]  # field_a-field_i
+        field_classes = [f"field_{chr(ord('a') + i)}" for i in range(9)]  # field_a–field_i
 
         try:
             from config.Vision import YOLO_MODEL_PATH
@@ -293,12 +289,10 @@ def detect_all_fields(
 
         fields = []
         for detection in detections.detections:
-            # YOLO class stored in .color field
             detected_class = detection.color.lower()
             if detected_class.startswith("field_"):
-                field_letter = detected_class[6:].upper()  # "field_a" → "A"
+                field_letter = detected_class[6:].upper()
 
-                # Convert world_position tuple (x, y, z) to dict for consistent API
                 world_pos = detection.world_position
                 if isinstance(world_pos, tuple) and len(world_pos) == 3:
                     center_dict = {

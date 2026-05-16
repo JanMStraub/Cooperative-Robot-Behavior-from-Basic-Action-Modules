@@ -35,12 +35,7 @@ MAX_STRING_LENGTH = 1024 * 1024  # 1MB
 
 
 class AutoRTServer(TCPServerBase):
-    """
-    TCP server for AutoRT task generation and execution management.
-
-    Listens on AUTORT_SERVER_PORT for AUTORT_COMMAND messages from Unity.
-    Routes commands to AutoRTHandler singleton and returns AUTORT_RESPONSE.
-    """
+    """TCP server for AutoRT commands from Unity (port AUTORT_SERVER_PORT)."""
 
     def __init__(self, config: Optional[ServerConfig] = None):
         if config is None:
@@ -175,11 +170,7 @@ class AutoRTServer(TCPServerBase):
         self._send_autort_response(client, request_id, error_result)
 
     def _recv_exact(self, client: socket.socket, num_bytes: int) -> Optional[bytes]:
-        """
-        Receive exact number of bytes.
-
-        Raises socket.timeout if read times out — caller must handle for persistent connections.
-        """
+        """Raises socket.timeout on read timeout — caller handles for persistent connections."""
         data = b""
         while len(data) < num_bytes:
             try:

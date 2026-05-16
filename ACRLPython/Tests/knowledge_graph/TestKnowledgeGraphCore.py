@@ -427,6 +427,7 @@ class TestCanReachPosition(unittest.TestCase):
         ), mpatch.object(mod, "_get_command_broadcaster", return_value=mock_bc):
             result = mod.place_object("Robot1", x=0.0, y=0.06, z=0.0)
         self.assertTrue(result.success)
+        assert result.result is not None
         self.assertIn("reachability", result.result)
 
 

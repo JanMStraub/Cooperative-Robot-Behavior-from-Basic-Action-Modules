@@ -1,17 +1,5 @@
 #!/usr/bin/env python3
-"""
-Formal Verification System for Robot Operations
-================================================
-
-This module provides formal verification of operation preconditions and
-postconditions using predicate logic. It ensures operations are safe to
-execute before they run and validates expected outcomes after execution.
-
-Key Components:
-- VerificationResult: Structured verification result with violations
-- PredicateParser: Parses predicate strings into callable checks
-- OperationVerifier: Main verification engine
-"""
+"""Formal pre/postcondition verification using predicate logic — checks operation safety before execution."""
 
 import re
 from typing import List, Dict, Any, Optional, Tuple
@@ -27,8 +15,6 @@ logger = get_logger(__name__)
 
 @dataclass
 class PredicateViolation:
-    """Record of a predicate that failed verification."""
-
     predicate: str
     reason: str
     severity: str = "error"  # "error" or "warning"
@@ -37,21 +23,13 @@ class PredicateViolation:
 
 @dataclass
 class VerificationResult:
-    """Result of a verification check."""
-
     success: bool
     violations: List[PredicateViolation] = field(default_factory=list)
     warnings: List[PredicateViolation] = field(default_factory=list)
     checked_predicates: List[str] = field(default_factory=list)
     execution_allowed: bool = True
 
-    def add_violation(
-        self,
-        predicate: str,
-        reason: str,
-        severity: str = "error",
-        suggestions: Optional[List[str]] = None,
-    ):
+    def add_violation(self, predicate: str, reason: str, severity: str = "error", suggestions: Optional[List[str]] = None):
         violation = PredicateViolation(
             predicate=predicate,
             reason=reason,
@@ -92,23 +70,12 @@ class VerificationResult:
 
 
 class PredicateParser:
-    """
-    Parser for predicate expressions in preconditions/postconditions.
+    """Parse predicate strings like "target_within_reach(robot_id, x, y, z)" into name + param list."""
 
-    Supports expressions like:
-    - "target_within_reach(robot_id, x, y, z)"
-    - "robot_is_initialized(robot_id)"
-    - "gripper_is_open(robot_id)"
-
-    Parameter values are resolved from operation parameters.
-    """
-
-    # Regex pattern to parse predicate calls
     PREDICATE_PATTERN = re.compile(r"(\w+)\((.*?)\)")
 
     @staticmethod
     def parse(predicate_str: str) -> Optional[Tuple[str, List[str]]]:
-        """Parse predicate string into (name, [param_names]) or None if invalid."""
         match = PredicateParser.PREDICATE_PATTERN.match(predicate_str.strip())
         if not match:
             return None
@@ -127,7 +94,6 @@ class PredicateParser:
     def resolve_parameters(
         param_names: List[str], operation_params: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Resolve parameter names to values from operation_params dict."""
         resolved = {}
         for param_name in param_names:
             resolved[param_name] = operation_params.get(param_name, None)
@@ -136,12 +102,7 @@ class PredicateParser:
 
 
 class OperationVerifier:
-    """
-    Main verification engine for checking operation safety.
-
-    Verifies preconditions before execution and postconditions after completion.
-    Uses predicate system for formal verification.
-    """
+    """Checks pre/postconditions via predicate system before and after operation execution."""
 
     def __init__(self):
         self.world_state = get_world_state()
@@ -149,7 +110,6 @@ class OperationVerifier:
     def verify_preconditions(
         self, operation: BasicOperation, params: Dict[str, Any], world_state=None
     ) -> VerificationResult:
-        """Verify operation preconditions before execution."""
         if world_state is None:
             world_state = self.world_state
 
@@ -160,8 +120,7 @@ class OperationVerifier:
 
             parsed = PredicateParser.parse(precondition)
             if parsed is None:
-                # Malformed predicate — log warning and record as a violation so callers
-                # are aware that a precondition was skipped rather than evaluated.
+                # record violation so callers know a precondition was skipped, not passed
                 logger.warning(
                     f"Skipping malformed precondition (cannot parse): '{precondition}'"
                 )
@@ -180,8 +139,7 @@ class OperationVerifier:
 
             predicate_params = PredicateParser.resolve_parameters(param_names, params)
 
-            # Skip predicate if required params are missing or still hold unresolved
-            # variable references (e.g. "$target.x") — only resolvable at execution time.
+            # skip if params unresolved (runtime variable refs like "$target.x")
             required_names = [p for p in param_names if p != "world_state"]
             missing_params = [p for p in required_names if p not in predicate_params]
             unresolved_params = [
@@ -240,7 +198,6 @@ class OperationVerifier:
         params: Dict[str, Any],
         world_state=None,
     ) -> VerificationResult:
-        """Verify operation postconditions after execution."""
         if world_state is None:
             world_state = self.world_state
 
@@ -265,8 +222,6 @@ class OperationVerifier:
 
             parsed = PredicateParser.parse(postcondition)
             if parsed is None:
-                # Malformed predicate — log warning and record as a violation so callers
-                # are aware that a postcondition was skipped rather than evaluated.
                 logger.warning(
                     f"Skipping malformed postcondition (cannot parse): '{postcondition}'"
                 )
@@ -285,7 +240,6 @@ class OperationVerifier:
 
             predicate_params = PredicateParser.resolve_parameters(param_names, params)
 
-            # Skip if required params are unresolved (e.g. runtime variable refs)
             required_names = [p for p in param_names if p != "world_state"]
             missing_params = [p for p in required_names if p not in predicate_params]
             if missing_params:
@@ -329,7 +283,6 @@ class OperationVerifier:
     def _suggest_recovery_for_predicate(
         self, predicate_name: str, failure_reason: str, params: Dict[str, Any]
     ) -> List[str]:
-        """Generate context-aware recovery suggestions using WorldState for a failed predicate."""
         suggestions = []
 
         if predicate_name == "target_within_reach":
@@ -339,7 +292,7 @@ class OperationVerifier:
                 from .SpatialPredicates import target_within_reach
 
                 # Check which other robots can reach this target
-                for robot_id, state in self.world_state._robot_states.items():
+                for robot_id, _state in self.world_state._robot_states.items():
                     if robot_id != params.get("robot_id"):
                         is_valid, _ = target_within_reach(
                             robot_id, x, y, z, world_state=self.world_state
@@ -446,22 +399,7 @@ class OperationVerifier:
 def quick_verify_operation(
     operation: BasicOperation, params: Dict[str, Any], world_state=None
 ) -> Tuple[bool, VerificationResult]:
-    """
-    Quick verification helper for checking if operation is safe to execute.
-
-    Args:
-        operation: Operation to verify
-        params: Operation parameters
-        world_state: Optional WorldState
-
-    Returns:
-        (is_safe, verification_result)
-
-    Example:
-        >>> is_safe, result = quick_verify_operation(move_op, {"robot_id": "Robot1", ...})
-        >>> if is_safe:
-        ...     operation.execute(**params)
-    """
+    """Returns (is_safe, verification_result) for operation precondition check."""
     verifier = OperationVerifier()
     result = verifier.verify_preconditions(operation, params, world_state)
     return result.execution_allowed, result

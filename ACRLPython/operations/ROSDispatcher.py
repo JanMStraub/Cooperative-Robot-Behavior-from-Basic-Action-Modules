@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 def _is_ros_enabled(use_ros: Optional[bool]) -> bool:
-    """True if ROS routing should be attempted (use_ros overrides config auto-detect)."""
     if use_ros is not None:
         return bool(use_ros)
     try:
@@ -22,7 +21,6 @@ def _is_ros_enabled(use_ros: Optional[bool]) -> bool:
 
 
 def _get_control_mode() -> str:
-    """Return DEFAULT_CONTROL_MODE from config, or 'ros' if config unavailable."""
     try:
         from config.ROS import DEFAULT_CONTROL_MODE
 
@@ -36,12 +34,7 @@ def execute_with_ros_fallback(
     tcp_func: Callable[[], OperationResult],
     use_ros: Optional[bool] = None,
 ) -> OperationResult:
-    """
-    Execute via ROS if enabled; fall back to TCP in hybrid mode.
-
-    ros_func returns None to signal failure (triggers fallback in hybrid mode).
-    In strict ROS mode a failed attempt returns an error immediately.
-    """
+    """Execute via ROS; fall back to TCP in hybrid mode. ros_func returns None to signal failure."""
     if not _is_ros_enabled(use_ros):
         return tcp_func()
 

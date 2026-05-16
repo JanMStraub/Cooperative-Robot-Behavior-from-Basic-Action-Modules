@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class AutoRTOrchestrator:
-    """AutoRT loop: detect_object_stereo → analyze_scene → generate → filter → select → execute."""
+    """Runs the AutoRT loop: perceive → generate → filter → select → execute."""
 
     def __init__(
         self,
@@ -84,7 +84,6 @@ class AutoRTOrchestrator:
         self._running = False
 
     def _run_one_iteration(self):
-        """Execute one full AutoRT iteration."""
         scene = self._capture_scene(last_task_context=self._last_task_context)
         if not scene.objects:
             logger.info("No objects detected, skipping iteration")
@@ -157,7 +156,6 @@ class AutoRTOrchestrator:
     def _capture_scene(
         self, last_task_context: Optional[ExecutedTaskContext] = None
     ) -> SceneDescription:
-        """Compose detect_object_stereo + WorldState + optional analyze_scene into SceneDescription."""
         grounded_objects = []
 
         try:
@@ -239,7 +237,6 @@ class AutoRTOrchestrator:
         )
 
     def _execute_task(self, task: ProposedTask) -> Dict[str, Any]:
-        """Execute via SequenceExecutor (created once in __init__ to avoid per-call import overhead)."""
         try:
             commands = []
             for op in task.operations:
@@ -262,7 +259,6 @@ class AutoRTOrchestrator:
             }
 
     def _request_approval(self, task: ProposedTask) -> Optional[ProposedTask]:
-        """Display task and request user approval via console."""
         print(f"\n{'=' * 60}")
         print(f"PROPOSED TASK: {task.description}")
         print(f"Robots: {task.required_robots}")

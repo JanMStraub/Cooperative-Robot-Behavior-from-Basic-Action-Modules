@@ -7,14 +7,7 @@ using UnityEngine;
 
 namespace Robotics
 {
-    /// <summary>
-    /// Encapsulates all grasp coroutine logic extracted from RobotController.
-    ///
-    /// GraspExecutor is a plain class (not MonoBehaviour) that borrows coroutine
-    /// execution from its owner RobotController. It receives state access via
-    /// constructor-injected callbacks and direct references, keeping RobotController
-    /// focused on IK orchestration and physics.
-    /// </summary>
+    /// <summary>Grasp coroutines extracted from RobotController; borrows coroutine execution via injected owner.</summary>
     public class GraspExecutor
     {
         // Callbacks into RobotController state
@@ -34,7 +27,7 @@ namespace Robotics
         private readonly string _robotId;
         private readonly string _logPrefix;
 
-        // Timing helpers — read from GraspConfig when available, fall back to safe defaults
+        // GraspConfig values with safe defaults
         private float GraspTimeoutFallback =>
             _graspTimingConfig != null ? _graspTimingConfig.graspTimeoutFallbackSeconds : 30f;
         private float VelocityThresholdPostPreGrasp =>
@@ -46,21 +39,6 @@ namespace Robotics
         private float GraspConfirmationWait =>
             _graspTimingConfig != null ? _graspTimingConfig.graspConfirmationWaitSeconds : 0.3f;
 
-        /// <summary>
-        /// Construct a GraspExecutor with all required dependencies injected.
-        /// </summary>
-        /// <param name="owner">MonoBehaviour that hosts coroutine execution (typically RobotController)</param>
-        /// <param name="gripperController">Gripper component for open/close operations</param>
-        /// <param name="ikConfig">IK configuration for timeouts and thresholds</param>
-        /// <param name="simpleRobotController">Fallback IK controller for simplified grasps</param>
-        /// <param name="robotId">Robot identifier for log messages</param>
-        /// <param name="logPrefix">Log prefix string</param>
-        /// <param name="setTargetInternal">Delegate to RobotController.SetTargetInternal</param>
-        /// <param name="getEndEffectorVelocityMagnitude">Delegate returning current EE velocity magnitude</param>
-        /// <param name="getCachedTempObject">Delegate returning a cached temp GameObject by suffix</param>
-        /// <param name="setIsGraspingTarget">Delegate to set RobotController._isGraspingTarget</param>
-        /// <param name="fireOnTargetReached">Delegate to invoke RobotController.OnTargetReached</param>
-        /// <param name="setActiveCoroutine">Delegate to update RobotController._activeGraspCoroutine</param>
         public GraspExecutor(
             MonoBehaviour owner,
             GripperController gripperController,
@@ -92,11 +70,6 @@ namespace Robotics
             _setActiveCoroutine = setActiveCoroutine;
         }
 
-        /// <summary>
-        /// Coroutine that waits until HasReachedTarget is true or timeout elapses.
-        /// </summary>
-        /// <param name="hasReachedTarget">Getter returning current reach state</param>
-        /// <param name="timeoutSeconds">Maximum seconds to wait</param>
         public IEnumerator WaitForTargetWithTimeout(
             Func<bool> hasReachedTarget,
             float timeoutSeconds
@@ -114,13 +87,6 @@ namespace Robotics
             }
         }
 
-        /// <summary>
-        /// Coroutine that delays gripper close until velocity settles, then attaches and
-        /// closes the gripper before invoking OnTargetReached.
-        /// </summary>
-        /// <param name="targetObject">Object to attach on grasp</param>
-        /// <param name="gripperCloseDelay">Seconds to wait before closing</param>
-        /// <param name="attachObjectOnGrasp">Whether to call SetTargetObject before closing</param>
         public IEnumerator CloseGripperAfterDelay(
             GameObject targetObject,
             float gripperCloseDelay,
@@ -147,13 +113,7 @@ namespace Robotics
             _fireOnTargetReached();
         }
 
-        /// <summary>
-        /// Two-waypoint grasp: pre-grasp position → grasp position (optional gripper close).
-        /// </summary>
-        /// <param name="candidate">Planned grasp candidate with pre/grasp positions</param>
-        /// <param name="targetObject">Object being grasped</param>
-        /// <param name="options">Grasp options</param>
-        /// <param name="hasReachedTarget">Getter for current reach state</param>
+        /// <summary>Two-waypoint grasp: pre-grasp → grasp position.</summary>
         public IEnumerator ExecuteTwoWaypointGrasp(
             GraspCandidate candidate,
             GameObject targetObject,
@@ -225,13 +185,7 @@ namespace Robotics
             _fireOnTargetReached();
         }
 
-        /// <summary>
-        /// Three-waypoint grasp: pre-grasp → grasp → optional retreat.
-        /// </summary>
-        /// <param name="candidate">Planned grasp candidate with pre/grasp/retreat positions</param>
-        /// <param name="targetObject">Object being grasped</param>
-        /// <param name="options">Grasp options</param>
-        /// <param name="hasReachedTarget">Getter for current reach state</param>
+        /// <summary>Three-waypoint grasp: pre-grasp → grasp → optional retreat.</summary>
         public IEnumerator ExecuteThreeWaypointGrasp(
             GraspCandidate candidate,
             GameObject targetObject,
@@ -322,13 +276,7 @@ namespace Robotics
             _fireOnTargetReached();
         }
 
-        /// <summary>
-        /// Handoff grasp: receives an object held by another robot's gripper.
-        /// Opens gripper, moves to handoff position, then optionally closes.
-        /// </summary>
-        /// <param name="targetObject">Object to take via handoff</param>
-        /// <param name="options">Grasp options</param>
-        /// <param name="hasReachedTarget">Getter for current reach state</param>
+        /// <summary>Handoff grasp: take object from another robot's gripper.</summary>
         public IEnumerator ExecuteHandoffGrasp(
             GameObject targetObject,
             GraspOptions options,
@@ -389,14 +337,7 @@ namespace Robotics
             _fireOnTargetReached();
         }
 
-        /// <summary>
-        /// Simplified grasp using SimpleRobotController's IK as fallback when advanced
-        /// grasp planning fails. Manually steps the SimpleRobotController each physics frame.
-        /// </summary>
-        /// <param name="candidate">Grasp candidate from fallback planner</param>
-        /// <param name="targetObject">Object to grasp</param>
-        /// <param name="options">Grasp options</param>
-        /// <param name="hasReachedTarget">Getter for current reach state (used in two-waypoint fallback)</param>
+        /// <summary>Fallback grasp via SimpleRobotController IK when planning fails.</summary>
         public IEnumerator ExecuteSimplifiedGrasp(
             GraspCandidate candidate,
             GameObject targetObject,
