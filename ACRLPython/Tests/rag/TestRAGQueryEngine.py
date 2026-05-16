@@ -9,8 +9,8 @@ Tests for the query and search module.
 import pytest
 import numpy as np
 from unittest.mock import Mock, patch
-from ACRLPython.rag.QueryEngine import QueryEngine
-from ACRLPython.rag.VectorStore import VectorStore
+from rag.QueryEngine import QueryEngine
+from rag.VectorStore import VectorStore
 
 
 class TestQueryEngine:
@@ -39,7 +39,7 @@ class TestQueryEngine:
             },
         )
 
-    @patch("rag.query_engine.EmbeddingGenerator")
+    @patch("rag.QueryEngine.EmbeddingGenerator")
     @patch("operations.Registry.get_global_registry")
     def test_search_basic(self, mock_registry, mock_embedding_gen):
         """Test basic search functionality"""
@@ -55,7 +55,7 @@ class TestQueryEngine:
         assert all("operation_id" in r for r in results)
         assert all("score" in r for r in results)
 
-    @patch("rag.query_engine.EmbeddingGenerator")
+    @patch("rag.QueryEngine.EmbeddingGenerator")
     def test_search_empty_query(self, mock_embedding_gen):
         """Test search with empty query"""
         mock_emb = Mock()
@@ -66,7 +66,7 @@ class TestQueryEngine:
 
         assert results == []
 
-    @patch("rag.query_engine.EmbeddingGenerator")
+    @patch("rag.QueryEngine.EmbeddingGenerator")
     @patch("operations.Registry.get_global_registry")
     def test_search_with_category_filter(self, mock_registry, mock_embedding_gen):
         """Test search with category filtering"""
@@ -79,7 +79,7 @@ class TestQueryEngine:
 
         assert all(r["metadata"]["category"] == "navigation" for r in results)
 
-    @patch("rag.query_engine.EmbeddingGenerator")
+    @patch("rag.QueryEngine.EmbeddingGenerator")
     @patch("operations.Registry.get_global_registry")
     def test_get_operation_context(self, mock_registry, mock_embedding_gen):
         """Test getting full operation context"""
@@ -115,7 +115,7 @@ class TestQueryEngine:
         assert "summary" in context
         assert context["num_results"] >= 0
 
-    @patch("rag.query_engine.EmbeddingGenerator")
+    @patch("rag.QueryEngine.EmbeddingGenerator")
     def test_find_similar_operations(self, mock_embedding_gen):
         """Test finding similar operations"""
         mock_emb = Mock()
@@ -127,7 +127,7 @@ class TestQueryEngine:
         # Should not include the operation itself
         assert all(r["operation_id"] != "op_001" for r in similar)
 
-    @patch("rag.query_engine.EmbeddingGenerator")
+    @patch("rag.QueryEngine.EmbeddingGenerator")
     def test_get_stats(self, mock_embedding_gen):
         """Test getting query engine statistics"""
         mock_emb = Mock()

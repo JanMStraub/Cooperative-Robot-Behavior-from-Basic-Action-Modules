@@ -7,7 +7,7 @@ import tempfile
 import numpy as np
 import pytest
 
-from ACRLPython.rag.VectorStore import VectorStore
+from rag.VectorStore import VectorStore
 
 # Helpers
 
