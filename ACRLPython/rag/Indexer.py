@@ -8,7 +8,7 @@ from typing import Optional, List, Dict, Any
 # from operations.WorkflowPatterns import WorkflowPatternRegistry, get_global_workflow_registry
 
 from .Embeddings import EmbeddingGenerator
-from .vector_store import VectorStore
+from .VectorStore import VectorStore
 
 try:
     from config.Rag import RAG_AUTO_SAVE_INDEX

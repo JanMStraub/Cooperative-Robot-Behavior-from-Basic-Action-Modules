@@ -9,8 +9,8 @@ Tests for the query and search module.
 import pytest
 import numpy as np
 from unittest.mock import Mock, patch
-from rag.query_engine import QueryEngine
-from rag.vector_store import VectorStore
+from ACRLPython.rag.QueryEngine import QueryEngine
+from ACRLPython.rag.VectorStore import VectorStore
 
 
 class TestQueryEngine:

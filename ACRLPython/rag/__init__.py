@@ -17,9 +17,9 @@ except ImportError:
     from ..config.Rag import RAG_VECTOR_STORE_PATH
 
 from .Embeddings import EmbeddingGenerator
-from .vector_store import VectorStore as _VectorStore
+from .VectorStore import VectorStore as _VectorStore
 from .Indexer import OperationIndexer
-from .query_engine import QueryEngine as _QueryEngine
+from .QueryEngine import QueryEngine as _QueryEngine
 from .ConfidenceScorer import (
     compute_confidence_score,
     get_confidence_level,
@@ -80,8 +80,8 @@ class RAGSystem:
         """Try to load existing index from disk."""
         if os.path.exists(RAG_VECTOR_STORE_PATH):
             try:
-                self.vector_store = VectorStore.load()
-                self.query_engine = QueryEngine(
+                self.vector_store = _VectorStore.load()
+                self.query_engine = _QueryEngine(
                     vector_store=self.vector_store,
                     embedding_generator=self.embedding_generator,
                     registry=self.registry,
@@ -102,7 +102,7 @@ class RAGSystem:
                 assert self.vector_store is not None
                 self.vector_store = self.indexer.update_index(self.vector_store)
 
-            self.query_engine = QueryEngine(
+            self.query_engine = _QueryEngine(
                 vector_store=self.vector_store,
                 embedding_generator=self.embedding_generator,
                 registry=self.registry,

@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 from unittest.mock import MagicMock, patch
 
-from rag.vector_store import VectorStore
+from ACRLPython.rag.VectorStore import VectorStore
 from rag.Indexer import OperationIndexer
 
 # Helpers

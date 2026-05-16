@@ -4,7 +4,7 @@
 from typing import List, Dict, Any, Optional
 
 from .Embeddings import EmbeddingGenerator
-from .vector_store import VectorStore
+from .VectorStore import VectorStore
 
 try:
     from config.Rag import RAG_DEFAULT_TOP_K, RAG_CONFIDENCE_TIERS
