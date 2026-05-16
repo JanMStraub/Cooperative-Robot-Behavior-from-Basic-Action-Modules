@@ -3,7 +3,7 @@ export class UIManager {
         this.chatHistory = document.getElementById('chat-history');
         this.promptInput = document.getElementById('prompt-input');
         this.consoleOutput = document.getElementById('console-output');
-        
+
         this.perceptionPanelExpanded = true;
         this.teleopPanelExpanded = false;
         this.autortPanelExpanded = false;

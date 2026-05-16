@@ -5,18 +5,18 @@
 
 // ── Palette (Okabe-Ito colorblind-safe) ──────────────────────────────────────
 const PALETTE = {
-    blue:        '#0072B2',
-    orange:      '#E69F00',
-    teal:        '#009E73',
-    vermillion:  '#D55E00',
-    skyblue:     '#56B4E9',
-    yellow:      '#F0E442',
-    purple:      '#CC79A7',
+    blue: '#0072B2',
+    orange: '#E69F00',
+    teal: '#009E73',
+    vermillion: '#D55E00',
+    skyblue: '#56B4E9',
+    yellow: '#F0E442',
+    purple: '#CC79A7',
 };
 
-const PASS_COLOR  = PALETTE.teal;
-const FAIL_COLOR  = PALETTE.vermillion;
-const WARN_COLOR  = PALETTE.orange;
+const PASS_COLOR = PALETTE.teal;
+const FAIL_COLOR = PALETTE.vermillion;
+const WARN_COLOR = PALETTE.orange;
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let stepChartInstance = null;
@@ -292,8 +292,8 @@ function renderDetails(data) {
             ? '<i class="fa-solid fa-check" style="color:#2ecc71;"></i>'
             : '<i class="fa-solid fa-xmark" style="color:#e74c3c;"></i>';
 
-        const robotId  = step.robot_id          != null ? `<span class="robot-badge robot-badge--${step.robot_id}">${step.robot_id}</span>` : '<span class="step-na">—</span>';
-        const pgId     = step.parallel_group_id != null ? `<span class="pg-badge">pg${step.parallel_group_id}</span>` : '<span class="step-na">—</span>';
+        const robotId = step.robot_id != null ? `<span class="robot-badge robot-badge--${step.robot_id}">${step.robot_id}</span>` : '<span class="step-na">—</span>';
+        const pgId = step.parallel_group_id != null ? `<span class="pg-badge">pg${step.parallel_group_id}</span>` : '<span class="step-na">—</span>';
 
         tr.innerHTML = `
             <td>${step.index}</td>
@@ -328,18 +328,18 @@ function renderRunInfo(data) {
     }
 
     const flagMeta = {
-        use_rag:             { label: 'RAG',          desc: 'Retrieval-Augmented Generation active — LLM has access to operation docs and prior examples. Tests whether retrieval improves plan quality.' },
-        use_vgn:             { label: 'VGN',          desc: 'Volumetric Grasp Network enabled — replaces heuristic grasp candidates with learned 6-DOF grasp poses. Key ablation for grasp success rate.' },
-        use_knowledge_graph: { label: 'KG',           desc: 'Knowledge Graph active — spatial reasoning layer provides reachability, proximity, and handoff queries to the LLM. Ablation for planning quality.' },
-        use_ros_movement:    { label: 'ROS/MoveIt',   desc: 'MoveIt trajectory planning active (vs. Unity IK). Tests whether motion planning improves collision avoidance and trajectory quality.' },
-        reflexion_enabled:   { label: 'Reflexion',    desc: 'Reflexion self-correction loop enabled — LLM retries failed steps with error context. Directly measured via reflexion_recoveries metric.' },
-        dry_run:             { label: 'Dry Run',      desc: 'No real Unity execution — operations are simulated. Used for testing plan generation without robot hardware. Results not comparable to live runs.' },
-        use_negotiation:     { label: 'Negotiation',  desc: 'Multi-robot LLM negotiation active — robots negotiate task allocation before execution. Core ablation for dual-arm coordination benchmarks.' },
+        use_rag: { label: 'RAG', desc: 'Retrieval-Augmented Generation active — LLM has access to operation docs and prior examples. Tests whether retrieval improves plan quality.' },
+        use_vgn: { label: 'VGN', desc: 'Volumetric Grasp Network enabled — replaces heuristic grasp candidates with learned 6-DOF grasp poses. Key ablation for grasp success rate.' },
+        use_knowledge_graph: { label: 'KG', desc: 'Knowledge Graph active — spatial reasoning layer provides reachability, proximity, and handoff queries to the LLM. Ablation for planning quality.' },
+        use_ros_movement: { label: 'ROS/MoveIt', desc: 'MoveIt trajectory planning active (vs. Unity IK). Tests whether motion planning improves collision avoidance and trajectory quality.' },
+        reflexion_enabled: { label: 'Reflexion', desc: 'Reflexion self-correction loop enabled — LLM retries failed steps with error context. Directly measured via reflexion_recoveries metric.' },
+        dry_run: { label: 'Dry Run', desc: 'No real Unity execution — operations are simulated. Used for testing plan generation without robot hardware. Results not comparable to live runs.' },
+        use_negotiation: { label: 'Negotiation', desc: 'Multi-robot LLM negotiation active — robots negotiate task allocation before execution. Core ablation for dual-arm coordination benchmarks.' },
     };
 
     const modeMeta = {
         offline: 'Offline — operations executed against mock/simulated responses. Use for plan generation tests; timing and success rates are not representative of real robot performance.',
-        live:    'Live — operations dispatched to Unity simulation with real physics. Results are representative; compare directly with other live runs.',
+        live: 'Live — operations dispatched to Unity simulation with real physics. Results are representative; compare directly with other live runs.',
     };
 
     let html = '<div class="run-info-header"><i class="fa-solid fa-sliders"></i> Run Configuration</div><div class="run-info-body">';
@@ -407,9 +407,9 @@ function renderOpStats(perOpStats) {
         <tbody>`;
 
     rows.forEach(([op, stats]) => {
-        const count    = stats.count || 0;
-        const fails    = stats.fail_count || 0;
-        const avgMs    = stats.avg_duration_ms != null ? stats.avg_duration_ms.toFixed(0) : '—';
+        const count = stats.count || 0;
+        const fails = stats.fail_count || 0;
+        const avgMs = stats.avg_duration_ms != null ? stats.avg_duration_ms.toFixed(0) : '—';
         const failRate = count > 0 ? (fails / count * 100).toFixed(0) : '0';
         const rateClass = fails === 0 ? 'rate-ok' : (fails / count >= 0.5 ? 'rate-bad' : 'rate-warn');
         html += `<tr>
@@ -458,7 +458,7 @@ function renderStepChart(labels, data, colors) {
                     padding: 10,
                     cornerRadius: 2,
                     titleFont: { family: "'IBM Plex Sans', sans-serif", size: 12, weight: '600' },
-                    bodyFont:  { family: "'IBM Plex Mono', monospace", size: 11 },
+                    bodyFont: { family: "'IBM Plex Mono', monospace", size: 11 },
                 }
             },
             scales: {
@@ -543,7 +543,7 @@ function renderMainResultsChart(sortedEntries) {
     if (coreEntries.length === 0) return;
 
     const labels = coreEntries.map(d => `B${d.benchmark_id}: ${d.benchmark_name}`);
-    const rates  = coreEntries.map(d => +(d.mean_success_rate * 100).toFixed(1));
+    const rates = coreEntries.map(d => +(d.mean_success_rate * 100).toFixed(1));
     const colors = coreEntries.map(d => successColor(d.mean_success_rate));
     const runCounts = coreEntries.map(d => d.run_count);
 
@@ -575,7 +575,7 @@ function renderMainResultsChart(sortedEntries) {
                     padding: 10,
                     cornerRadius: 2,
                     titleFont: { family: "'IBM Plex Sans', sans-serif", size: 12, weight: '600' },
-                    bodyFont:  { family: "'IBM Plex Mono', monospace", size: 11 },
+                    bodyFont: { family: "'IBM Plex Mono', monospace", size: 11 },
                     callbacks: {
                         label: (ctx) => {
                             const idx = ctx.dataIndex;
@@ -627,10 +627,10 @@ function renderAblationChart(data) {
 
     const metric = document.getElementById('ablation-metric').value;
     const metricLabels = {
-        mean_success_rate:          'Success Rate',
-        mean_hallucinated_ops:      'Hallucinated Ops',
-        mean_reflexion_recoveries:  'Reflexion Recoveries',
-        mean_negotiation_rounds:    'Negotiation Rounds',
+        mean_success_rate: 'Success Rate',
+        mean_hallucinated_ops: 'Hallucinated Ops',
+        mean_reflexion_recoveries: 'Reflexion Recoveries',
+        mean_negotiation_rounds: 'Negotiation Rounds',
     };
 
     const labels = ablationBenchmarks.map(d => `B${d.benchmark_id}: ${d.benchmark_name}`);
@@ -683,7 +683,7 @@ function renderAblationChart(data) {
                     padding: 10,
                     cornerRadius: 2,
                     titleFont: { family: "'IBM Plex Sans', sans-serif", size: 12, weight: '600' },
-                    bodyFont:  { family: "'IBM Plex Mono', monospace", size: 11 },
+                    bodyFont: { family: "'IBM Plex Mono', monospace", size: 11 },
                     callbacks: {
                         label: (ctx) => {
                             const suffix = isRate ? '%' : '';
@@ -762,7 +762,7 @@ function renderDurationChart(sortedEntries) {
                     padding: 10,
                     cornerRadius: 2,
                     titleFont: { family: "'IBM Plex Sans', sans-serif", size: 12, weight: '600' },
-                    bodyFont:  { family: "'IBM Plex Mono', monospace", size: 11 },
+                    bodyFont: { family: "'IBM Plex Mono', monospace", size: 11 },
                     callbacks: {
                         label: ctx => `Duration: ${ctx.parsed.y}s`,
                         afterLabel: (ctx) => {
@@ -807,8 +807,8 @@ function renderStabilityChart(sortedEntries) {
     if (entries.length === 0) return;
 
     const labels = entries.map(d => `B${d.benchmark_id}`);
-    const means  = entries.map(d => +(d.mean_success_rate * 100).toFixed(1));
-    const stds   = entries.map(d => +(d.std_success_rate  * 100).toFixed(1));
+    const means = entries.map(d => +(d.mean_success_rate * 100).toFixed(1));
+    const stds = entries.map(d => +(d.std_success_rate * 100).toFixed(1));
     const colors = means.map(m => successColor(m / 100));
 
     // Custom plugin to draw ± error bars
@@ -819,13 +819,13 @@ function renderStabilityChart(sortedEntries) {
             const dataset = chart.data.datasets[0];
             chart.getDatasetMeta(0).data.forEach((bar, i) => {
                 const mean = dataset.data[i];
-                const std  = stds[i];
+                const std = stds[i];
                 if (std === 0) return;
 
                 const xCenter = bar.x;
-                const yTop    = y.getPixelForValue(mean + std);
-                const yBot    = y.getPixelForValue(mean - std);
-                const capW    = 6;
+                const yTop = y.getPixelForValue(mean + std);
+                const yBot = y.getPixelForValue(mean - std);
+                const capW = 6;
 
                 ctx.save();
                 ctx.strokeStyle = colors[i];
@@ -872,7 +872,7 @@ function renderStabilityChart(sortedEntries) {
                     padding: 10,
                     cornerRadius: 2,
                     titleFont: { family: "'IBM Plex Sans', sans-serif", size: 12, weight: '600' },
-                    bodyFont:  { family: "'IBM Plex Mono', monospace", size: 11 },
+                    bodyFont: { family: "'IBM Plex Mono', monospace", size: 11 },
                     callbacks: {
                         label: (ctx) => {
                             const i = ctx.dataIndex;
@@ -915,11 +915,11 @@ function renderStabilityChart(sortedEntries) {
 
 // ── Operation Categories ──────────────────────────────────────────────────────
 const OP_CATEGORIES = {
-    perception:   { ops: ['detect_object_stereo','detect_field','analyze_scene','generate_point_cloud','detect_all_fields'], color: PALETTE.blue },
-    motion:       { ops: ['move_to_coordinate','adjust_end_effector_orientation','return_to_start_position','pick_object_at_coordinate','move_relative_to_object'], color: PALETTE.teal },
-    grasp:        { ops: ['grasp_object','place_object','receive_handoff'], color: PALETTE.orange },
-    coordination: { ops: ['signal','wait_for_signal','wait','detect_other_robot','mirror_movement','stabilize_object'], color: PALETTE.purple },
-    gripper:      { ops: ['control_gripper','release_object'], color: PALETTE.skyblue },
+    perception: { ops: ['detect_object_stereo', 'detect_field', 'analyze_scene', 'generate_point_cloud', 'detect_all_fields'], color: PALETTE.blue },
+    motion: { ops: ['move_to_coordinate', 'adjust_end_effector_orientation', 'return_to_start_position', 'pick_object_at_coordinate', 'move_relative_to_object'], color: PALETTE.teal },
+    grasp: { ops: ['grasp_object', 'place_object', 'receive_handoff'], color: PALETTE.orange },
+    coordination: { ops: ['signal', 'wait_for_signal', 'wait', 'detect_other_robot', 'mirror_movement', 'stabilize_object'], color: PALETTE.purple },
+    gripper: { ops: ['control_gripper', 'release_object'], color: PALETTE.skyblue },
 };
 
 function opCategory(opName) {
@@ -976,7 +976,7 @@ function renderLatencyDecomposition(sortedEntries) {
                 tooltip: {
                     ...tt, padding: 10, cornerRadius: 2,
                     titleFont: { family: "'IBM Plex Sans', sans-serif", size: 12, weight: '600' },
-                    bodyFont:  { family: "'IBM Plex Mono', monospace", size: 11 },
+                    bodyFont: { family: "'IBM Plex Mono', monospace", size: 11 },
                     callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}s` }
                 }
             },
@@ -1026,7 +1026,7 @@ function renderOperationHeatmap(sortedEntries) {
                 ? `rgba(230,159,0,${alpha})`
                 : `rgba(180,100,0,${alpha})`;
             const textColor = t > 0.6 ? (isDark ? '#fff' : '#fff') : (isDark ? '#e6edf3' : '#333');
-            const label = ms >= 1000 ? `${(ms/1000).toFixed(1)}s` : `${ms.toFixed(0)}ms`;
+            const label = ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms.toFixed(0)}ms`;
             html += `<td class="heatmap-cell" style="background:${bg};color:${textColor}" title="${op}: ${ms.toFixed(0)}ms avg">${label}</td>`;
         });
         html += '</tr>';
@@ -1071,7 +1071,7 @@ function renderComplexityScaling(sortedEntries) {
                 tooltip: {
                     ...tt, padding: 10, cornerRadius: 2,
                     titleFont: { family: "'IBM Plex Sans', sans-serif", size: 12, weight: '600' },
-                    bodyFont:  { family: "'IBM Plex Mono', monospace", size: 11 },
+                    bodyFont: { family: "'IBM Plex Mono', monospace", size: 11 },
                     callbacks: {
                         title: ctx => pointLabels[ctx[0].dataIndex],
                         label: ctx => [`Plan length: ${ctx.parsed.x} ops`, `Avg duration: ${ctx.parsed.y}s`],
@@ -1140,7 +1140,7 @@ function renderRobotBreakdown(sortedEntries) {
                 tooltip: {
                     ...tt, padding: 10, cornerRadius: 2,
                     titleFont: { family: "'IBM Plex Sans', sans-serif", size: 12, weight: '600' },
-                    bodyFont:  { family: "'IBM Plex Mono', monospace", size: 11 },
+                    bodyFont: { family: "'IBM Plex Mono', monospace", size: 11 },
                     callbacks: {
                         label: ctx => {
                             const rid = ctx.dataset.label;
@@ -1209,7 +1209,7 @@ function exportChartPng(chartKey, filename) {
     if (thesisMode) {
         // Compose on a white background for print
         const offscreen = document.createElement('canvas');
-        offscreen.width  = canvas.width;
+        offscreen.width = canvas.width;
         offscreen.height = canvas.height;
         const offCtx = offscreen.getContext('2d');
         offCtx.fillStyle = '#ffffff';

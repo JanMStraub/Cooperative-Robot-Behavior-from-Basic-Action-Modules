@@ -21,7 +21,7 @@ SAFETY_VALIDATION_TEMPERATURE = float(
     os.environ.get("AUTORT_SAFETY_VALIDATION_TEMPERATURE", "0.0")
 )
 
-MAX_TASK_CANDIDATES = int(os.environ.get("AUTORT_MAX_TASKS", "3"))
+MAX_TASK_CANDIDATES = int(os.environ.get("AUTORT_MAX_TASKS", "2"))
 LOOP_DELAY_SECONDS = float(os.environ.get("AUTORT_LOOP_DELAY", "5.0"))
 HUMAN_IN_LOOP_DEFAULT = os.environ.get("AUTORT_HUMAN_IN_LOOP", "true").lower() == "true"
 USE_VLM_REASONING = os.environ.get("AUTORT_USE_VLM", "true").lower() == "true"

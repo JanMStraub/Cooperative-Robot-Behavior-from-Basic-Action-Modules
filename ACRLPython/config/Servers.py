@@ -89,7 +89,7 @@ DEFAULT_TEMPERATURE = float(os.environ.get("DEFAULT_TEMPERATURE", "0.1"))
 # LM Studio exposes this as `budget_tokens` inside the `thinking` block.
 # Set to 0 to disable thinking entirely (fastest); increase for harder tasks.
 # Has no effect on non-reasoning models.
-LLM_THINKING_BUDGET = int(os.environ.get("LLM_THINKING_BUDGET", "1024"))
+LLM_THINKING_BUDGET = int(os.environ.get("LLM_THINKING_BUDGET", "4096"))
 
 # Set to True to enable thinking for reasoning models (e.g. ministral-3-14b-reasoning).
 # Requires max_tokens to be large enough to cover both thinking + actual response.

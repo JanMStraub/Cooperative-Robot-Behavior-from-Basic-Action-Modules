@@ -1,357 +1,495 @@
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>ACRL Benchmarks</title>
-		<!-- Modern Typography -->
-		<link rel="preconnect" href="https://fonts.googleapis.com" />
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-		<link
-			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;600&display=swap"
-			rel="stylesheet"
-		/>
-		<!-- Font Awesome for Icons -->
-		<link
-			rel="stylesheet"
-			href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-		/>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ACRL Benchmarks</title>
+    <!-- Modern Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Font Awesome for Icons -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
 
-		<link rel="stylesheet" href="/static/css/variables.css?v=20260430_0001" />
-		<link rel="stylesheet" href="/static/css/layout.css?v=20260430_0001" />
-		<link rel="stylesheet" href="/static/css/components.css?v=20260430_0001" />
-		<link rel="stylesheet" href="/static/css/benchmarks.css?v=20260430_0001" />
+    <link rel="stylesheet" href="/static/css/variables.css?v=20260430_0001" />
+    <link rel="stylesheet" href="/static/css/layout.css?v=20260430_0001" />
+    <link rel="stylesheet" href="/static/css/components.css?v=20260430_0001" />
+    <link rel="stylesheet" href="/static/css/benchmarks.css?v=20260430_0001" />
 
-		<!-- Chart.js for visualizations -->
-		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-	</head>
+    <!-- Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
 
-	<body class="dark-theme">
-		<div class="app-container">
-			<!-- Header -->
-			<header class="glass-header">
-				<div class="logo">
-					<i class="fa-solid fa-chart-line"></i>
-					<div class="title-group">
-						<h1>ACRL Mission Control</h1>
-						<span class="subtitle">Performance Analytics · AR4 System</span>
-					</div>
-				</div>
-				<nav class="header-nav">
-					<a href="/static/index.html" class="nav-pill" id="nav-mission">
-						<i class="fa-solid fa-robot"></i> Mission Control
-					</a>
-					<a href="/static/benchmarks.html" class="nav-pill" id="nav-benchmarks">
-						<i class="fa-solid fa-chart-line"></i> Benchmarks
-					</a>
-				</nav>
-				<div class="system-status">
-					<button class="btn-icon" id="btn-theme" title="Toggle light/dark mode">
-						<i class="fa-solid fa-circle-half-stroke"></i>
-					</button>
-				</div>
-			</header>
+  <body class="dark-theme">
+    <div class="app-container">
+      <!-- Header -->
+      <header class="glass-header">
+        <div class="logo">
+          <i class="fa-solid fa-chart-line"></i>
+          <div class="title-group">
+            <h1>ACRL Mission Control</h1>
+            <span class="subtitle">Performance Analytics · AR4 System</span>
+          </div>
+        </div>
+        <nav class="header-nav">
+          <a href="/static/index.html" class="nav-pill" id="nav-mission">
+            <i class="fa-solid fa-robot"></i> Mission Control
+          </a>
+          <a
+            href="/static/benchmarks.html"
+            class="nav-pill"
+            id="nav-benchmarks"
+          >
+            <i class="fa-solid fa-chart-line"></i> Benchmarks
+          </a>
+        </nav>
+        <div class="system-status">
+          <button
+            class="btn-icon"
+            id="btn-theme"
+            title="Toggle light/dark mode"
+          >
+            <i class="fa-solid fa-circle-half-stroke"></i>
+          </button>
+        </div>
+      </header>
 
-			<!-- Main Content -->
-			<main class="dashboard-grid benchmark-grid">
-				<!-- Left Column: Benchmark History List -->
-				<section class="panel command-panel">
-					<div class="panel-header">
-						<h2>
-							<i class="fa-solid fa-history"></i> Run History
-						</h2>
-						<div class="panel-actions">
-							<button class="btn-icon-small" id="btn-refresh" title="Refresh">
-								<i class="fa-solid fa-sync"></i>
-							</button>
-						</div>
-					</div>
+      <!-- Main Content -->
+      <main class="dashboard-grid benchmark-grid">
+        <!-- Left Column: Benchmark History List -->
+        <section class="panel command-panel">
+          <div class="panel-header">
+            <h2><i class="fa-solid fa-history"></i> Run History</h2>
+            <div class="panel-actions">
+              <button class="btn-icon-small" id="btn-refresh" title="Refresh">
+                <i class="fa-solid fa-sync"></i>
+              </button>
+            </div>
+          </div>
 
-					<div class="history-list glass-box" id="history-list">
-						<div class="ws-empty" id="history-loading">
-							<i class="fa-solid fa-circle-notch fa-spin"></i>
-							<span>Loading benchmarks...</span>
-						</div>
-					</div>
-				</section>
+          <div class="history-list glass-box" id="history-list">
+            <div class="ws-empty" id="history-loading">
+              <i class="fa-solid fa-circle-notch fa-spin"></i>
+              <span>Loading benchmarks...</span>
+            </div>
+          </div>
+        </section>
 
-				<!-- Right Area: Details & Charts -->
-				<section class="panel visualization-panel benchmark-details-panel">
+        <!-- Right Area: Details & Charts -->
+        <section class="panel visualization-panel benchmark-details-panel">
+          <!-- Tab Bar -->
+          <div class="benchmark-tab-bar">
+            <button class="bm-tab bm-tab--active" data-tab="details">
+              <i class="fa-solid fa-list"></i> Run Details
+            </button>
+            <button class="bm-tab" data-tab="analysis">
+              <i class="fa-solid fa-chart-bar"></i> Analysis
+            </button>
+            <div style="flex: 1"></div>
+            <button
+              class="btn-icon-small thesis-only-btn"
+              id="btn-thesis-mode"
+              title="Toggle thesis mode (print-ready white background)"
+              style="display: none"
+            >
+              <i class="fa-solid fa-graduation-cap"></i>
+            </button>
+          </div>
 
-					<!-- Tab Bar -->
-					<div class="benchmark-tab-bar">
-						<button class="bm-tab bm-tab--active" data-tab="details">
-							<i class="fa-solid fa-list"></i> Run Details
-						</button>
-						<button class="bm-tab" data-tab="analysis">
-							<i class="fa-solid fa-chart-bar"></i> Analysis
-						</button>
-						<div style="flex:1"></div>
-						<button class="btn-icon-small thesis-only-btn" id="btn-thesis-mode" title="Toggle thesis mode (print-ready white background)" style="display:none">
-							<i class="fa-solid fa-graduation-cap"></i>
-						</button>
-					</div>
+          <!-- Run Details Tab -->
+          <div id="tab-details" class="tab-pane tab-pane--active">
+            <div id="no-selection" class="empty-state glass-box">
+              <i
+                class="fa-solid fa-chart-bar"
+                style="font-size: 3rem; opacity: 0.5; margin-bottom: 1rem"
+              ></i>
+              <h2>Select a benchmark to view details</h2>
+            </div>
 
-					<!-- Run Details Tab -->
-					<div id="tab-details" class="tab-pane tab-pane--active">
-						<div id="no-selection" class="empty-state glass-box">
-							<i class="fa-solid fa-chart-bar" style="font-size: 3rem; opacity: 0.5; margin-bottom: 1rem;"></i>
-							<h2>Select a benchmark to view details</h2>
-						</div>
+            <div
+              id="benchmark-details"
+              style="
+                display: none;
+                flex-direction: column;
+                gap: 1rem;
+                height: 100%;
+              "
+            >
+              <!-- KPI Row -->
+              <div class="kpi-row">
+                <div class="kpi-card glass-box">
+                  <div class="kpi-icon">
+                    <i class="fa-solid fa-stopwatch"></i>
+                  </div>
+                  <div class="kpi-content">
+                    <span class="kpi-label"
+                      >Total Duration
+                      <i
+                        class="fa-solid fa-circle-info kpi-info"
+                        title="Wall-clock time from first operation dispatch to final result. Reflects real-world latency including LLM inference, network round-trips, and Unity execution. High values indicate bottlenecks in the pipeline."
+                      ></i
+                    ></span>
+                    <span class="kpi-value" id="kpi-duration">-</span>
+                    <span class="kpi-hint">end-to-end latency</span>
+                  </div>
+                </div>
+                <div class="kpi-card glass-box">
+                  <div class="kpi-icon">
+                    <i class="fa-solid fa-check-circle"></i>
+                  </div>
+                  <div class="kpi-content">
+                    <span class="kpi-label"
+                      >Success Rate
+                      <i
+                        class="fa-solid fa-circle-info kpi-info"
+                        title="Fraction of operations that completed without error (ops_succeeded / ops_executed). Primary thesis metric — measures how reliably the LLM orchestrator translates task descriptions into successful robot actions."
+                      ></i
+                    ></span>
+                    <span
+                      class="kpi-value kpi-value--accent"
+                      id="kpi-success-rate"
+                      >-</span
+                    >
+                    <span class="kpi-hint">ops_succeeded / ops_executed</span>
+                  </div>
+                </div>
+                <div class="kpi-card glass-box">
+                  <div class="kpi-icon"><i class="fa-solid fa-cogs"></i></div>
+                  <div class="kpi-content">
+                    <span class="kpi-label"
+                      >Ops Executed
+                      <i
+                        class="fa-solid fa-circle-info kpi-info"
+                        title="succeeded / total operations dispatched in this run. Low totals with low success suggest early-failure or plan generation issues. High totals with low success indicate retry loops or hallucinated operations."
+                      ></i
+                    ></span>
+                    <span class="kpi-value" id="kpi-ops">-</span>
+                    <span class="kpi-hint">succeeded / total</span>
+                  </div>
+                </div>
+                <div class="kpi-card glass-box">
+                  <div class="kpi-icon"><i class="fa-solid fa-bolt"></i></div>
+                  <div class="kpi-content">
+                    <span class="kpi-label"
+                      >Avg Step Time
+                      <i
+                        class="fa-solid fa-circle-info kpi-info"
+                        title="Mean duration per operation step (total_duration / ops_executed). High values point to slow operations (e.g. grasp planning, VGN inference). Compare across runs to isolate the costly steps."
+                      ></i
+                    ></span>
+                    <span class="kpi-value" id="kpi-avg-step">-</span>
+                    <span class="kpi-hint">mean per-op latency</span>
+                  </div>
+                </div>
+              </div>
 
-						<div id="benchmark-details" style="display: none; flex-direction:column; gap:1rem; height:100%;">
-							<!-- KPI Row -->
-							<div class="kpi-row">
-								<div class="kpi-card glass-box">
-									<div class="kpi-icon"><i class="fa-solid fa-stopwatch"></i></div>
-									<div class="kpi-content">
-										<span class="kpi-label">Total Duration <i class="fa-solid fa-circle-info kpi-info" title="Wall-clock time from first operation dispatch to final result. Reflects real-world latency including LLM inference, network round-trips, and Unity execution. High values indicate bottlenecks in the pipeline."></i></span>
-										<span class="kpi-value" id="kpi-duration">-</span>
-										<span class="kpi-hint">end-to-end latency</span>
-									</div>
-								</div>
-								<div class="kpi-card glass-box">
-									<div class="kpi-icon"><i class="fa-solid fa-check-circle"></i></div>
-									<div class="kpi-content">
-										<span class="kpi-label">Success Rate <i class="fa-solid fa-circle-info kpi-info" title="Fraction of operations that completed without error (ops_succeeded / ops_executed). Primary thesis metric — measures how reliably the LLM orchestrator translates task descriptions into successful robot actions."></i></span>
-										<span class="kpi-value kpi-value--accent" id="kpi-success-rate">-</span>
-										<span class="kpi-hint">ops_succeeded / ops_executed</span>
-									</div>
-								</div>
-								<div class="kpi-card glass-box">
-									<div class="kpi-icon"><i class="fa-solid fa-cogs"></i></div>
-									<div class="kpi-content">
-										<span class="kpi-label">Ops Executed <i class="fa-solid fa-circle-info kpi-info" title="succeeded / total operations dispatched in this run. Low totals with low success suggest early-failure or plan generation issues. High totals with low success indicate retry loops or hallucinated operations."></i></span>
-										<span class="kpi-value" id="kpi-ops">-</span>
-										<span class="kpi-hint">succeeded / total</span>
-									</div>
-								</div>
-								<div class="kpi-card glass-box">
-									<div class="kpi-icon"><i class="fa-solid fa-bolt"></i></div>
-									<div class="kpi-content">
-										<span class="kpi-label">Avg Step Time <i class="fa-solid fa-circle-info kpi-info" title="Mean duration per operation step (total_duration / ops_executed). High values point to slow operations (e.g. grasp planning, VGN inference). Compare across runs to isolate the costly steps."></i></span>
-										<span class="kpi-value" id="kpi-avg-step">-</span>
-										<span class="kpi-hint">mean per-op latency</span>
-									</div>
-								</div>
-							</div>
+              <!-- Run Info Panel (execution_mode, feature_flags, parsed_plan) -->
+              <div
+                id="run-info-panel"
+                class="run-info-panel glass-box"
+                style="display: none"
+              ></div>
 
-							<!-- Run Info Panel (execution_mode, feature_flags, parsed_plan) -->
-							<div id="run-info-panel" class="run-info-panel glass-box" style="display:none;"></div>
+              <!-- Charts Row -->
+              <div class="charts-row">
+                <div class="chart-container glass-box">
+                  <canvas id="stepDurationChart"></canvas>
+                </div>
+              </div>
 
-							<!-- Charts Row -->
-							<div class="charts-row">
-								<div class="chart-container glass-box">
-									<canvas id="stepDurationChart"></canvas>
-								</div>
-							</div>
+              <!-- Table Row -->
+              <div class="table-container glass-box">
+                <div class="panel-header" style="margin-bottom: 0.5rem">
+                  <h2><i class="fa-solid fa-list"></i> Step Details</h2>
+                </div>
+                <div class="table-wrapper">
+                  <table class="benchmark-table">
+                    <thead>
+                      <tr>
+                        <th
+                          title="Sequential index of this operation within the run. Useful for tracking execution order and spotting which step in a plan fails first."
+                        >
+                          #
+                        </th>
+                        <th
+                          title="Name of the registered operation executed (e.g. move_to_coordinate, grasp_object). Matches the 22-operation registry. Hallucinated ops (not in registry) appear here and always fail."
+                        >
+                          Operation
+                        </th>
+                        <th
+                          title="Whether the operation returned a SUCCESS result. A FAIL here directly contributes to the success rate KPI above."
+                        >
+                          Status
+                        </th>
+                        <th
+                          title="Time in milliseconds from operation dispatch to result receipt. Includes LLM call (if any), Unity execution, and network round-trip. Outliers indicate slow operations worth optimising."
+                        >
+                          Duration (ms)
+                        </th>
+                        <th
+                          title="Which robot arm executed this step (robot1 / robot2). Populated from the parsed command. Essential for dual-arm benchmarks (B6, B7, B11) to attribute failures to the correct arm."
+                        >
+                          Robot
+                        </th>
+                        <th
+                          title="Parallel group ID — non-null for steps that were dispatched concurrently (e.g. mirrored movements in B7). Steps sharing the same group ID ran at the same time. Helps verify true parallelism."
+                        >
+                          PG
+                        </th>
+                        <th
+                          title="Error code and message returned by the operation on failure. Maps to OperationResult error fields. Common codes: TIMEOUT, EXECUTION_FAILED, INVALID_PARAMS."
+                        >
+                          Error
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody id="step-table-body">
+                      <!-- Populated by JS -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
 
-							<!-- Table Row -->
-							<div class="table-container glass-box">
-								<div class="panel-header" style="margin-bottom: 0.5rem;">
-									<h2><i class="fa-solid fa-list"></i> Step Details</h2>
-								</div>
-								<div class="table-wrapper">
-									<table class="benchmark-table">
-										<thead>
-											<tr>
-												<th title="Sequential index of this operation within the run. Useful for tracking execution order and spotting which step in a plan fails first.">#</th>
-												<th title="Name of the registered operation executed (e.g. move_to_coordinate, grasp_object). Matches the 22-operation registry. Hallucinated ops (not in registry) appear here and always fail.">Operation</th>
-												<th title="Whether the operation returned a SUCCESS result. A FAIL here directly contributes to the success rate KPI above.">Status</th>
-												<th title="Time in milliseconds from operation dispatch to result receipt. Includes LLM call (if any), Unity execution, and network round-trip. Outliers indicate slow operations worth optimising.">Duration (ms)</th>
-												<th title="Which robot arm executed this step (robot1 / robot2). Populated from the parsed command. Essential for dual-arm benchmarks (B6, B7, B11) to attribute failures to the correct arm.">Robot</th>
-												<th title="Parallel group ID — non-null for steps that were dispatched concurrently (e.g. mirrored movements in B7). Steps sharing the same group ID ran at the same time. Helps verify true parallelism.">PG</th>
-												<th title="Error code and message returned by the operation on failure. Maps to OperationResult error fields. Common codes: TIMEOUT, EXECUTION_FAILED, INVALID_PARAMS.">Error</th>
-											</tr>
-										</thead>
-										<tbody id="step-table-body">
-											<!-- Populated by JS -->
-										</tbody>
-									</table>
-								</div>
-							</div>
+              <!-- Op Stats Panel -->
+              <div
+                id="op-stats-panel"
+                class="op-stats-panel glass-box"
+                style="display: none"
+              ></div>
+            </div>
+          </div>
 
-							<!-- Op Stats Panel -->
-							<div id="op-stats-panel" class="op-stats-panel glass-box" style="display:none;"></div>
-						</div>
-					</div>
+          <!-- Analysis Tab -->
+          <div id="tab-analysis" class="tab-pane">
+            <div id="analysis-loading" class="ws-empty">
+              <i class="fa-solid fa-circle-notch fa-spin"></i>
+              <span>Loading aggregate data…</span>
+            </div>
 
-					<!-- Analysis Tab -->
-					<div id="tab-analysis" class="tab-pane">
-						<div id="analysis-loading" class="ws-empty">
-							<i class="fa-solid fa-circle-notch fa-spin"></i>
-							<span>Loading aggregate data…</span>
-						</div>
+            <div id="analysis-charts" style="display: none">
+              <!-- Chart A: Main Results -->
+              <div class="analysis-panel glass-box">
+                <div class="analysis-panel-header">
+                  <span class="analysis-panel-title">
+                    <i class="fa-solid fa-trophy"></i> Main Results — Success
+                    Rate (B1–B8)
+                  </span>
+                  <div class="analysis-panel-actions">
+                    <button
+                      class="btn-icon-small"
+                      onclick="exportChartPng('chartA', 'main-results.png')"
+                      title="Export PNG"
+                    >
+                      <i class="fa-solid fa-image"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="analysis-chart-body">
+                  <canvas id="chartA"></canvas>
+                </div>
+              </div>
 
-						<div id="analysis-charts" style="display:none;">
-							<!-- Chart A: Main Results -->
-							<div class="analysis-panel glass-box">
-								<div class="analysis-panel-header">
-									<span class="analysis-panel-title">
-										<i class="fa-solid fa-trophy"></i> Main Results — Success Rate (B1–B8)
-									</span>
-									<div class="analysis-panel-actions">
-										<button class="btn-icon-small" onclick="exportChartPng('chartA', 'main-results.png')" title="Export PNG">
-											<i class="fa-solid fa-image"></i>
-										</button>
-									</div>
-								</div>
-								<div class="analysis-chart-body">
-									<canvas id="chartA"></canvas>
-								</div>
-							</div>
+              <!-- Chart B: Ablation -->
+              <div class="analysis-panel glass-box">
+                <div class="analysis-panel-header">
+                  <span class="analysis-panel-title">
+                    <i class="fa-solid fa-flask"></i> Ablation Study (B9–B14)
+                  </span>
+                  <div class="analysis-panel-actions">
+                    <select id="ablation-metric" class="metric-select">
+                      <option value="mean_success_rate">Success Rate</option>
+                      <option value="mean_hallucinated_ops">
+                        Hallucinated Ops
+                      </option>
+                      <option value="mean_reflexion_recoveries">
+                        Reflexion Recoveries
+                      </option>
+                      <option value="mean_negotiation_rounds">
+                        Negotiation Rounds
+                      </option>
+                    </select>
+                    <button
+                      class="btn-icon-small"
+                      onclick="exportChartPng('chartB', 'ablation.png')"
+                      title="Export PNG"
+                    >
+                      <i class="fa-solid fa-image"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="analysis-chart-body">
+                  <canvas id="chartB"></canvas>
+                </div>
+              </div>
 
-							<!-- Chart B: Ablation -->
-							<div class="analysis-panel glass-box">
-								<div class="analysis-panel-header">
-									<span class="analysis-panel-title">
-										<i class="fa-solid fa-flask"></i> Ablation Study (B9–B14)
-									</span>
-									<div class="analysis-panel-actions">
-										<select id="ablation-metric" class="metric-select">
-											<option value="mean_success_rate">Success Rate</option>
-											<option value="mean_hallucinated_ops">Hallucinated Ops</option>
-											<option value="mean_reflexion_recoveries">Reflexion Recoveries</option>
-											<option value="mean_negotiation_rounds">Negotiation Rounds</option>
-										</select>
-										<button class="btn-icon-small" onclick="exportChartPng('chartB', 'ablation.png')" title="Export PNG">
-											<i class="fa-solid fa-image"></i>
-										</button>
-									</div>
-								</div>
-								<div class="analysis-chart-body">
-									<canvas id="chartB"></canvas>
-								</div>
-							</div>
+              <!-- Chart C: Duration -->
+              <div class="analysis-panel glass-box">
+                <div class="analysis-panel-header">
+                  <span class="analysis-panel-title">
+                    <i class="fa-solid fa-stopwatch"></i> Avg Task Duration by
+                    Benchmark
+                  </span>
+                  <div class="analysis-panel-actions">
+                    <button
+                      class="btn-icon-small"
+                      onclick="exportChartPng('chartC', 'duration.png')"
+                      title="Export PNG"
+                    >
+                      <i class="fa-solid fa-image"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="analysis-chart-body">
+                  <canvas id="chartC"></canvas>
+                </div>
+              </div>
 
-							<!-- Chart C: Duration -->
-							<div class="analysis-panel glass-box">
-								<div class="analysis-panel-header">
-									<span class="analysis-panel-title">
-										<i class="fa-solid fa-stopwatch"></i> Avg Task Duration by Benchmark
-									</span>
-									<div class="analysis-panel-actions">
-										<button class="btn-icon-small" onclick="exportChartPng('chartC', 'duration.png')" title="Export PNG">
-											<i class="fa-solid fa-image"></i>
-										</button>
-									</div>
-								</div>
-								<div class="analysis-chart-body">
-									<canvas id="chartC"></canvas>
-								</div>
-							</div>
+              <!-- Chart D: Stability (hidden when <2 runs) -->
+              <div
+                class="analysis-panel glass-box"
+                id="chart-d-panel"
+                style="display: none"
+              >
+                <div class="analysis-panel-header">
+                  <span class="analysis-panel-title">
+                    <i class="fa-solid fa-chart-area"></i> Multi-Run Stability
+                    (mean ± σ)
+                  </span>
+                  <div class="analysis-panel-actions">
+                    <button
+                      class="btn-icon-small"
+                      onclick="exportChartPng('chartD', 'stability.png')"
+                      title="Export PNG"
+                    >
+                      <i class="fa-solid fa-image"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="analysis-chart-body">
+                  <canvas id="chartD"></canvas>
+                </div>
+              </div>
 
-							<!-- Chart D: Stability (hidden when <2 runs) -->
-							<div class="analysis-panel glass-box" id="chart-d-panel" style="display:none">
-								<div class="analysis-panel-header">
-									<span class="analysis-panel-title">
-										<i class="fa-solid fa-chart-area"></i> Multi-Run Stability (mean ± σ)
-									</span>
-									<div class="analysis-panel-actions">
-										<button class="btn-icon-small" onclick="exportChartPng('chartD', 'stability.png')" title="Export PNG">
-											<i class="fa-solid fa-image"></i>
-										</button>
-									</div>
-								</div>
-								<div class="analysis-chart-body">
-									<canvas id="chartD"></canvas>
-								</div>
-							</div>
+              <!-- Chart E: Latency Decomposition -->
+              <div class="analysis-panel glass-box">
+                <div class="analysis-panel-header">
+                  <span class="analysis-panel-title">
+                    <i class="fa-solid fa-layer-group"></i> Latency
+                    Decomposition by Category
+                  </span>
+                  <div class="analysis-panel-actions">
+                    <button
+                      class="btn-icon-small"
+                      onclick="exportChartPng('E', 'latency-decomposition.png')"
+                      title="Export PNG"
+                    >
+                      <i class="fa-solid fa-image"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="analysis-chart-body">
+                  <canvas id="chartE"></canvas>
+                </div>
+              </div>
 
-							<!-- Chart E: Latency Decomposition -->
-							<div class="analysis-panel glass-box">
-								<div class="analysis-panel-header">
-									<span class="analysis-panel-title">
-										<i class="fa-solid fa-layer-group"></i> Latency Decomposition by Category
-									</span>
-									<div class="analysis-panel-actions">
-										<button class="btn-icon-small" onclick="exportChartPng('E', 'latency-decomposition.png')" title="Export PNG">
-											<i class="fa-solid fa-image"></i>
-										</button>
-									</div>
-								</div>
-								<div class="analysis-chart-body">
-									<canvas id="chartE"></canvas>
-								</div>
-							</div>
+              <!-- Chart F: Operation Timing Heatmap -->
+              <div class="analysis-panel glass-box">
+                <div class="analysis-panel-header">
+                  <span class="analysis-panel-title">
+                    <i class="fa-solid fa-table-cells"></i> Operation Timing
+                    Heatmap (avg ms)
+                  </span>
+                </div>
+                <div class="analysis-chart-body analysis-chart-body--table">
+                  <div id="chartF"></div>
+                </div>
+              </div>
 
-							<!-- Chart F: Operation Timing Heatmap -->
-							<div class="analysis-panel glass-box">
-								<div class="analysis-panel-header">
-									<span class="analysis-panel-title">
-										<i class="fa-solid fa-table-cells"></i> Operation Timing Heatmap (avg ms)
-									</span>
-								</div>
-								<div class="analysis-chart-body analysis-chart-body--table">
-									<div id="chartF"></div>
-								</div>
-							</div>
+              <!-- Chart G: Complexity Scaling -->
+              <div class="analysis-panel glass-box">
+                <div class="analysis-panel-header">
+                  <span class="analysis-panel-title">
+                    <i class="fa-solid fa-arrow-trend-up"></i> Complexity
+                    Scaling (plan length vs duration)
+                  </span>
+                  <div class="analysis-panel-actions">
+                    <button
+                      class="btn-icon-small"
+                      onclick="exportChartPng('G', 'complexity-scaling.png')"
+                      title="Export PNG"
+                    >
+                      <i class="fa-solid fa-image"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="analysis-chart-body">
+                  <canvas id="chartG"></canvas>
+                </div>
+              </div>
 
-							<!-- Chart G: Complexity Scaling -->
-							<div class="analysis-panel glass-box">
-								<div class="analysis-panel-header">
-									<span class="analysis-panel-title">
-										<i class="fa-solid fa-arrow-trend-up"></i> Complexity Scaling (plan length vs duration)
-									</span>
-									<div class="analysis-panel-actions">
-										<button class="btn-icon-small" onclick="exportChartPng('G', 'complexity-scaling.png')" title="Export PNG">
-											<i class="fa-solid fa-image"></i>
-										</button>
-									</div>
-								</div>
-								<div class="analysis-chart-body">
-									<canvas id="chartG"></canvas>
-								</div>
-							</div>
+              <!-- Chart H: Per-Robot Step Breakdown -->
+              <div
+                class="analysis-panel glass-box"
+                id="chart-h-panel"
+                style="display: none"
+              >
+                <div class="analysis-panel-header">
+                  <span class="analysis-panel-title">
+                    <i class="fa-solid fa-robot"></i> Per-Robot Step Breakdown
+                  </span>
+                  <div class="analysis-panel-actions">
+                    <button
+                      class="btn-icon-small"
+                      onclick="exportChartPng('H', 'robot-breakdown.png')"
+                      title="Export PNG"
+                    >
+                      <i class="fa-solid fa-image"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="analysis-chart-body">
+                  <canvas id="chartH"></canvas>
+                </div>
+              </div>
 
-							<!-- Chart H: Per-Robot Step Breakdown -->
-							<div class="analysis-panel glass-box" id="chart-h-panel" style="display:none">
-								<div class="analysis-panel-header">
-									<span class="analysis-panel-title">
-										<i class="fa-solid fa-robot"></i> Per-Robot Step Breakdown
-									</span>
-									<div class="analysis-panel-actions">
-										<button class="btn-icon-small" onclick="exportChartPng('H', 'robot-breakdown.png')" title="Export PNG">
-											<i class="fa-solid fa-image"></i>
-										</button>
-									</div>
-								</div>
-								<div class="analysis-chart-body">
-									<canvas id="chartH"></canvas>
-								</div>
-							</div>
+              <!-- Chart I: Operation Coverage Matrix -->
+              <div class="analysis-panel glass-box">
+                <div class="analysis-panel-header">
+                  <span class="analysis-panel-title">
+                    <i class="fa-solid fa-grip"></i> Operation Coverage Matrix
+                  </span>
+                </div>
+                <div class="analysis-chart-body analysis-chart-body--table">
+                  <div id="chartI"></div>
+                </div>
+              </div>
 
-							<!-- Chart I: Operation Coverage Matrix -->
-							<div class="analysis-panel glass-box">
-								<div class="analysis-panel-header">
-									<span class="analysis-panel-title">
-										<i class="fa-solid fa-grip"></i> Operation Coverage Matrix
-									</span>
-								</div>
-								<div class="analysis-chart-body analysis-chart-body--table">
-									<div id="chartI"></div>
-								</div>
-							</div>
-
-							<!-- Export Row -->
-							<div class="analysis-export-row glass-box">
-								<span class="export-row-label">EXPORT</span>
-								<button class="btn-action" onclick="exportAllCharts()">
-									<i class="fa-solid fa-images"></i> All Charts as PNG
-								</button>
-								<button class="btn-action" onclick="downloadAggregateJson()">
-									<i class="fa-solid fa-file-code"></i> Aggregate JSON
-								</button>
-							</div>
-						</div>
-					</div>
-
-				</section>
-			</main>
-		</div>
-		<script>
-			document.getElementById('nav-benchmarks').classList.add('nav-pill--active');
-		</script>
-		<script type="module" src="/static/js/benchmarks.js"></script>
-	</body>
+              <!-- Export Row -->
+              <div class="analysis-export-row glass-box">
+                <span class="export-row-label">EXPORT</span>
+                <button class="btn-action" onclick="exportAllCharts()">
+                  <i class="fa-solid fa-images"></i> All Charts as PNG
+                </button>
+                <button class="btn-action" onclick="downloadAggregateJson()">
+                  <i class="fa-solid fa-file-code"></i> Aggregate JSON
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script>
+      document
+        .getElementById("nav-benchmarks")
+        .classList.add("nav-pill--active");
+    </script>
+    <script type="module" src="/static/js/benchmarks.js"></script>
+  </body>
 </html>

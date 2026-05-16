@@ -1,287 +1,291 @@
 <!doctype html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>ACRL Mission Control</title>
-		<!-- Modern Typography -->
-		<link rel="preconnect" href="https://fonts.googleapis.com" />
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-		<link
-			href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;600&display=swap"
-			rel="stylesheet"
-		/>
-		<!-- Font Awesome for Icons -->
-		<link
-			rel="stylesheet"
-			href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-		/>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ACRL Mission Control</title>
+    <!-- Modern Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <!-- Font Awesome for Icons -->
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+    />
 
-		<link rel="stylesheet" href="/static/css/variables.css?v=20260430_0001" />
-		<link rel="stylesheet" href="/static/css/layout.css?v=20260430_0001" />
-		<link rel="stylesheet" href="/static/css/components.css?v=20260430_0001" />
-		<!-- Three.js Library -->
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-		<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-	</head>
+    <link rel="stylesheet" href="/static/css/variables.css?v=20260430_0001" />
+    <link rel="stylesheet" href="/static/css/layout.css?v=20260430_0001" />
+    <link rel="stylesheet" href="/static/css/components.css?v=20260430_0001" />
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  </head>
 
-	<body class="dark-theme">
-		<div class="app-container">
-			<!-- Disconnect Banner -->
-			<div
-				id="disconnect-banner"
-				class="disconnect-banner"
-				style="display: none"
-			>
-				<i class="fa-solid fa-triangle-exclamation"></i> WebSocket
-				disconnected — attempting to reconnect...
-			</div>
+  <body class="dark-theme">
+    <div class="app-container">
+      <!-- Disconnect Banner -->
+      <div
+        id="disconnect-banner"
+        class="disconnect-banner"
+        style="display: none"
+      >
+        <i class="fa-solid fa-triangle-exclamation"></i> WebSocket disconnected
+        — attempting to reconnect...
+      </div>
 
-			<!-- Header -->
-			<header class="glass-header">
-				<div class="logo">
-					<i class="fa-solid fa-robot"></i>
-					<div class="title-group">
-						<h1>ACRL Mission Control</h1>
-						<span class="subtitle">Sim-to-Real Operations · AR4 Dual Arm</span>
-					</div>
-				</div>
-				<nav class="header-nav">
-					<a href="/static/index.html" class="nav-pill" id="nav-mission">
-						<i class="fa-solid fa-robot"></i> Mission Control
-					</a>
-					<a href="/static/benchmarks.html" class="nav-pill" id="nav-benchmarks">
-						<i class="fa-solid fa-chart-line"></i> Benchmarks
-					</a>
-				</nav>
-				<div class="system-status">
-					<div class="status-indicator">
-						<span
-							class="dot badge-offline"
-							id="badge-backend"
-						></span>
-						<span class="label">Backend Gateway</span>
-					</div>
-					<div class="status-indicator">
-						<span class="dot badge-offline" id="badge-ros"></span>
-						<span class="label">ROS Bridge</span>
-					</div>
-					<div class="status-indicator">
-						<span class="dot badge-offline" id="badge-llm"></span>
-						<span class="label">LLM Studio</span>
-					</div>
-					<div class="status-indicator">
-						<span class="dot badge-offline" id="badge-unity"></span>
-						<span class="label">Unity</span>
-					</div>
-					<!-- Theme toggle -->
-					<button
-						class="btn-icon"
-						id="btn-theme"
-						title="Toggle light/dark mode"
-					>
-						<i class="fa-solid fa-circle-half-stroke"></i>
-					</button>
-					<!-- Stop button -->
-					<button class="btn btn-estop" id="btn-estop">
-						<i class="fa-solid fa-stop"></i> Stop
-					</button>
-				</div>
-			</header>
+      <!-- Header -->
+      <header class="glass-header">
+        <div class="logo">
+          <i class="fa-solid fa-robot"></i>
+          <div class="title-group">
+            <h1>ACRL Mission Control</h1>
+            <span class="subtitle">Sim-to-Real Operations · AR4 Dual Arm</span>
+          </div>
+        </div>
+        <nav class="header-nav">
+          <a href="/static/index.html" class="nav-pill" id="nav-mission">
+            <i class="fa-solid fa-robot"></i> Mission Control
+          </a>
+          <a
+            href="/static/benchmarks.html"
+            class="nav-pill"
+            id="nav-benchmarks"
+          >
+            <i class="fa-solid fa-chart-line"></i> Benchmarks
+          </a>
+        </nav>
+        <div class="system-status">
+          <div class="status-indicator">
+            <span class="dot badge-offline" id="badge-backend"></span>
+            <span class="label">Backend Gateway</span>
+          </div>
+          <div class="status-indicator">
+            <span class="dot badge-offline" id="badge-ros"></span>
+            <span class="label">ROS Bridge</span>
+          </div>
+          <div class="status-indicator">
+            <span class="dot badge-offline" id="badge-llm"></span>
+            <span class="label">LLM Studio</span>
+          </div>
+          <div class="status-indicator">
+            <span class="dot badge-offline" id="badge-unity"></span>
+            <span class="label">Unity</span>
+          </div>
+          <!-- Theme toggle -->
+          <button
+            class="btn-icon"
+            id="btn-theme"
+            title="Toggle light/dark mode"
+          >
+            <i class="fa-solid fa-circle-half-stroke"></i>
+          </button>
+          <!-- Stop button -->
+          <button class="btn btn-estop" id="btn-estop">
+            <i class="fa-solid fa-stop"></i> Stop
+          </button>
+        </div>
+      </header>
 
-			<!-- Main Content -->
-			<main class="dashboard-grid">
-				<!-- Left Column: Command & Logs -->
-				<section class="panel command-panel">
-					<div class="panel-header">
-						<h2>
-							<i class="fa-solid fa-terminal"></i> Command &
-							Control
-						</h2>
-						<div class="panel-actions">
-							<button class="btn-icon" title="Toggle AutoRT">
-								<i class="fa-solid fa-robot"></i> AutoRT
-							</button>
-						</div>
-					</div>
+      <!-- Main Content -->
+      <main class="dashboard-grid">
+        <!-- Left Column: Command & Logs -->
+        <section class="panel command-panel">
+          <div class="panel-header">
+            <h2><i class="fa-solid fa-terminal"></i> Command & Control</h2>
+            <div class="panel-actions">
+              <button class="btn-icon" title="Toggle AutoRT">
+                <i class="fa-solid fa-robot"></i> AutoRT
+              </button>
+            </div>
+          </div>
 
-					<div class="chat-history glass-box" id="chat-history">
-						<div class="message system">
-							<div class="msg-icon">
-								<i class="fa-solid fa-server"></i>
-							</div>
-							<div class="msg-content">
-								System initialized. Awaiting commands...
-							</div>
-						</div>
-					</div>
+          <div class="chat-history glass-box" id="chat-history">
+            <div class="message system">
+              <div class="msg-icon">
+                <i class="fa-solid fa-server"></i>
+              </div>
+              <div class="msg-content">
+                System initialized. Awaiting commands...
+              </div>
+            </div>
+          </div>
 
-					<div class="command-input">
-						<textarea
-							id="prompt-input"
-							rows="3"
-							placeholder="Enter natural language sequence... (e.g. 'Robot1: Grab the red cube')"
-						></textarea>
-						<div
-							id="thinking-indicator"
-							class="thinking-indicator"
-							style="display: none"
-						>
-							<span class="thinking-spinner"></span>
-							<span>Processing...</span>
-						</div>
-						<div class="input-actions">
-							<button class="btn btn-secondary" id="btn-clear">
-								<i class="fa-solid fa-eraser"></i> Clear
-							</button>
-							<button class="btn btn-primary" id="btn-send">
-								<i class="fa-solid fa-paper-plane"></i> Execute
-							</button>
-						</div>
-					</div>
-				</section>
+          <div class="command-input">
+            <textarea
+              id="prompt-input"
+              rows="3"
+              placeholder="Enter natural language sequence... (e.g. 'Robot1: Grab the red cube')"
+            ></textarea>
+            <div
+              id="thinking-indicator"
+              class="thinking-indicator"
+              style="display: none"
+            >
+              <span class="thinking-spinner"></span>
+              <span>Processing...</span>
+            </div>
+            <div class="input-actions">
+              <button class="btn btn-secondary" id="btn-clear">
+                <i class="fa-solid fa-eraser"></i> Clear
+              </button>
+              <button class="btn btn-primary" id="btn-send">
+                <i class="fa-solid fa-paper-plane"></i> Execute
+              </button>
+            </div>
+          </div>
+        </section>
 
-				<!-- Middle Column: Cameras + World State -->
-				<section class="panel visualization-panel">
-					<!-- Camera Streams -->
-					<div class="perception-panel expanded" id="perception-panel">
-						<div class="panel-header">
-							<h2>
-								<i class="fa-solid fa-camera"></i> Live Perception
-							</h2>
-							<div class="panel-actions">
-								<button class="btn-icon-small" id="btn-perception-collapse" title="Collapse">
-									<i class="fa-solid fa-chevron-up"></i>
-								</button>
-							</div>
-						</div>
-						<div class="camera-grid">
-							<div class="camera-column">
-								<div class="camera-feed glass-box">
-									<img id="stream-rgb" alt="RGB Stream"
-										style="width:100%;height:100%;object-fit:cover;display:none;" />
-									<div id="rgb-placeholder" class="feed-placeholder">
-										<i class="fa-solid fa-circle-notch fa-spin"></i>
-										<span>Waiting for Unity…</span>
-									</div>
-									<div class="feed-overlay">RGB + YOLO</div>
-								</div>
-							</div>
-							<div class="camera-column">
-								<!-- Stereo point cloud -->
-								<div id="stereo-pc-container" class="glass-box">
-									<div id="stereo-pc-placeholder" class="feed-placeholder">
-										<i class="fa-solid fa-circle-notch fa-spin"></i>
-										<span>Waiting for Unity…</span>
-									</div>
-									<div class="feed-overlay">Stereo Point Cloud</div>
-								</div>
-							</div>
-						</div>
-					</div>
+        <!-- Middle Column: Cameras + World State -->
+        <section class="panel visualization-panel">
+          <!-- Camera Streams -->
+          <div class="perception-panel expanded" id="perception-panel">
+            <div class="panel-header">
+              <h2><i class="fa-solid fa-camera"></i> Live Perception</h2>
+              <div class="panel-actions">
+                <button
+                  class="btn-icon-small"
+                  id="btn-perception-collapse"
+                  title="Collapse"
+                >
+                  <i class="fa-solid fa-chevron-up"></i>
+                </button>
+              </div>
+            </div>
+            <div class="camera-grid">
+              <div class="camera-column">
+                <div class="camera-feed glass-box">
+                  <img
+                    id="stream-rgb"
+                    alt="RGB Stream"
+                    style="
+                      width: 100%;
+                      height: 100%;
+                      object-fit: cover;
+                      display: none;
+                    "
+                  />
+                  <div id="rgb-placeholder" class="feed-placeholder">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                    <span>Waiting for Unity…</span>
+                  </div>
+                  <div class="feed-overlay">RGB + YOLO</div>
+                </div>
+              </div>
+              <div class="camera-column">
+                <!-- Stereo point cloud -->
+                <div id="stereo-pc-container" class="glass-box">
+                  <div id="stereo-pc-placeholder" class="feed-placeholder">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i>
+                    <span>Waiting for Unity…</span>
+                  </div>
+                  <div class="feed-overlay">Stereo Point Cloud</div>
+                </div>
+              </div>
+            </div>
+          </div>
 
-<div class="panel-header">
-						<h2>
-							<i class="fa-solid fa-robot"></i> World State
-						</h2>
-						<span class="ws-timestamp" id="ws-timestamp" style="font-size:0.75rem;opacity:0.5;">–</span>
-					</div>
+          <div class="panel-header">
+            <h2><i class="fa-solid fa-robot"></i> World State</h2>
+            <span
+              class="ws-timestamp"
+              id="ws-timestamp"
+              style="font-size: 0.75rem; opacity: 0.5"
+              >–</span
+            >
+          </div>
 
-					<!-- World State Row: Robot Cards + Object Cards side by side -->
-					<div class="ws-state-row">
-						<!-- Robot Cards -->
-						<div class="ws-robot-list glass-box" id="ws-robot-list">
-							<div class="ws-empty">
-								<i class="fa-solid fa-circle-notch fa-spin"></i>
-								<span>Waiting for Unity…</span>
-							</div>
-						</div>
+          <!-- World State Row: Robot Cards + Object Cards side by side -->
+          <div class="ws-state-row">
+            <!-- Robot Cards -->
+            <div class="ws-robot-list glass-box" id="ws-robot-list">
+              <div class="ws-empty">
+                <i class="fa-solid fa-circle-notch fa-spin"></i>
+                <span>Waiting for Unity…</span>
+              </div>
+            </div>
 
-						<!-- Object Cards -->
-						<div class="ws-object-section" id="ws-object-section" style="display:none;">
-							<h3 class="ws-section-title">
-								<i class="fa-solid fa-cubes"></i> Detected Objects
-							</h3>
-							<div class="ws-object-list glass-box" id="ws-object-list"></div>
-						</div>
-					</div>
-				</section>
+            <!-- Object Cards -->
+            <div
+              class="ws-object-section"
+              id="ws-object-section"
+              style="display: none"
+            >
+              <h3 class="ws-section-title">
+                <i class="fa-solid fa-cubes"></i> Detected Objects
+              </h3>
+              <div class="ws-object-list glass-box" id="ws-object-list"></div>
+            </div>
+          </div>
+        </section>
 
-				<!-- Right Column: Perception & Telemetry -->
-				<section class="panel right-panel">
-					<!-- AutoRT Task Approval -->
-					<div class="autort-panel" id="autort-panel">
-						<div class="panel-header">
-							<h2>
-								<i class="fa-solid fa-wand-magic-sparkles"></i>
-								AutoRT Tasks
-								<span
-									class="autort-badge"
-									id="autort-task-count"
-									style="display: none"
-									>0</span
-								>
-							</h2>
-							<div class="panel-actions">
-								<span
-									class="autort-loop-badge"
-									id="autort-loop-badge"
-									>STOPPED</span
-								>
-								<button
-									class="btn-icon-small"
-									id="btn-autort-collapse"
-									title="Collapse"
-								>
-									<i class="fa-solid fa-chevron-down"></i>
-								</button>
-							</div>
-						</div>
-						<div
-							class="autort-task-list glass-box"
-							id="autort-task-list"
-						>
-							<div class="autort-empty" id="autort-empty">
-								<i class="fa-solid fa-inbox"></i>
-								<span>No pending tasks</span>
-							</div>
-						</div>
-					</div>
+        <!-- Right Column: Perception & Telemetry -->
+        <section class="panel right-panel">
+          <!-- AutoRT Task Approval -->
+          <div class="autort-panel" id="autort-panel">
+            <div class="panel-header">
+              <h2>
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                AutoRT Tasks
+                <span
+                  class="autort-badge"
+                  id="autort-task-count"
+                  style="display: none"
+                  >0</span
+                >
+              </h2>
+              <div class="panel-actions">
+                <span class="autort-loop-badge" id="autort-loop-badge"
+                  >STOPPED</span
+                >
+                <button
+                  class="btn-icon-small"
+                  id="btn-autort-collapse"
+                  title="Collapse"
+                >
+                  <i class="fa-solid fa-chevron-down"></i>
+                </button>
+              </div>
+            </div>
+            <div class="autort-task-list glass-box" id="autort-task-list">
+              <div class="autort-empty" id="autort-empty">
+                <i class="fa-solid fa-inbox"></i>
+                <span>No pending tasks</span>
+              </div>
+            </div>
+          </div>
 
-					<!-- Server Logs -->
-					<div class="logs-panel">
-						<div class="panel-header">
-							<h2>
-								<i class="fa-solid fa-align-left"></i> Server
-								Logs
-							</h2>
-							<button
-								class="btn-icon-small"
-								id="btn-download-logs"
-								title="Download logs"
-							>
-								<i class="fa-solid fa-download"></i>
-							</button>
-						</div>
-						<div
-							class="console-output glass-box"
-							id="console-output"
-						>
-							<div class="log-line info">
-								[INFO] Backend Gateway Started on port 8000
-							</div>
-							<div class="log-line warning">
-								[WARN] Failed to connect to local ROS Bridge.
-							</div>
-							<!-- Logs injected here -->
-						</div>
-					</div>
-				</section>
-			</main>
-		</div>
-		<script>
-			document.getElementById('nav-mission').classList.add('nav-pill--active');
-		</script>
-		<script type="module" src="/static/js/main.js?v=20260328_0005"></script>
-	</body>
+          <!-- Server Logs -->
+          <div class="logs-panel">
+            <div class="panel-header">
+              <h2><i class="fa-solid fa-align-left"></i> Server Logs</h2>
+              <button
+                class="btn-icon-small"
+                id="btn-download-logs"
+                title="Download logs"
+              >
+                <i class="fa-solid fa-download"></i>
+              </button>
+            </div>
+            <div class="console-output glass-box" id="console-output">
+              <div class="log-line info">
+                [INFO] Backend Gateway Started on port 8000
+              </div>
+              <div class="log-line warning">
+                [WARN] Failed to connect to local ROS Bridge.
+              </div>
+              <!-- Logs injected here -->
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script>
+      document.getElementById("nav-mission").classList.add("nav-pill--active");
+    </script>
+    <script type="module" src="/static/js/main.js?v=20260328_0005"></script>
+  </body>
 </html>

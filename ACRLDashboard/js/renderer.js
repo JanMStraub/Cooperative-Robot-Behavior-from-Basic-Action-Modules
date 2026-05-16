@@ -25,8 +25,8 @@ export class Renderer {
         if (robotList && data.robots && data.robots.length > 0) {
             robotList.innerHTML = '';
             data.robots.forEach(robot => {
-                const pos  = robot.position || {};
-                const tgt  = robot.target_position || {};
+                const pos = robot.position || {};
+                const tgt = robot.target_position || {};
                 const f = v => (v != null ? Number(v).toFixed(3) : '–');
                 const px = f(Array.isArray(pos) ? pos[0] : pos.x);
                 const py = f(Array.isArray(pos) ? pos[1] : pos.y);
@@ -34,14 +34,14 @@ export class Renderer {
                 const tx = f(Array.isArray(tgt) ? tgt[0] : tgt.x);
                 const ty = f(Array.isArray(tgt) ? tgt[1] : tgt.y);
                 const tz = f(Array.isArray(tgt) ? tgt[2] : tgt.z);
-                const moving  = robot.is_moving === true;
+                const moving = robot.is_moving === true;
                 const gripper = (robot.gripper_state || 'unknown').toLowerCase();
-                const mode    = robot.control_mode;
-                const joints  = robot.joint_angles;
+                const mode = robot.control_mode;
+                const joints = robot.joint_angles;
 
-                const modeTag  = mode  ? `<span class="ws-mode-badge">${mode}</span>` : '';
+                const modeTag = mode ? `<span class="ws-mode-badge">${mode}</span>` : '';
                 const jointStr = joints && joints.length
-                    ? joints.map((j, i) => `<span><span class="ws-pos-label">J${i+1}</span> ${Number(j).toFixed(2)}</span>`).join('')
+                    ? joints.map((j, i) => `<span><span class="ws-pos-label">J${i + 1}</span> ${Number(j).toFixed(2)}</span>`).join('')
                     : '';
 
                 const card = document.createElement('div');
@@ -210,7 +210,7 @@ export class Renderer {
 
         // Compute centroid for camera framing
         let cx = 0, cy = 0, cz = 0;
-        for (let i = 0; i < positions.length; i += 3) { cx += positions[i]; cy += positions[i+1]; cz += positions[i+2]; }
+        for (let i = 0; i < positions.length; i += 3) { cx += positions[i]; cy += positions[i + 1]; cz += positions[i + 2]; }
         cx /= n; cy /= n; cz /= n;
         const span = data.scene_span || 1.5;
         this.stereoPCCamera.position.set(cx, cy + span * 0.6, cz + span * 1.2);

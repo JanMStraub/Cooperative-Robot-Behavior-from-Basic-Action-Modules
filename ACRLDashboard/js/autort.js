@@ -82,6 +82,9 @@ export class AutoRTManager {
                     this.ui.logToConsole(`AutoRT generate failed: ${data.error}`, 'error');
                 } else {
                     this.ui.logToConsole(`AutoRT generated ${data.tasks.length} task(s)`, 'info');
+                    if (data.tasks && data.tasks.length > 0) {
+                        this.handleAutortTasks(data);
+                    }
                 }
             })
             .catch(err => this.ui.logToConsole(`AutoRT generate error: ${err}`, 'error'))
@@ -129,7 +132,7 @@ export class AutoRTManager {
         card.className = 'autort-task-card';
         card.dataset.taskId = task.task_id;
         card.dataset.complexity = tier;
-        
+
         // We do *NOT* use inline onclicks in the template string anymore. We'll attach listeners directly.
         card.innerHTML = `
             <div class="autort-task-header">

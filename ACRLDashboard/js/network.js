@@ -3,10 +3,10 @@ export class NetworkManager {
         this.ui = ui;
         this.renderer = renderer;
         this.autort = autort;
-        
+
         this.ws = null;
         this.reconnectAttempts = 0;
-        
+
         this.connectWebSocket();
         this.startStatusPolling();
     }
@@ -111,7 +111,7 @@ export class NetworkManager {
             case 'stereo_pointcloud':
                 if (this.renderer) this.renderer.updateStereoPointCloud(msg.data);
                 break;
-default:
+            default:
                 console.log("Unknown msg:", msg);
         }
     }
@@ -131,7 +131,7 @@ default:
     }
 
     jogRobot(direction) {
-        const stepSize = 0.05; 
+        const stepSize = 0.05;
         let offset = { x: 0, y: 0, z: 0 };
 
         switch (direction) {
@@ -175,6 +175,6 @@ default:
                 command: { type: 'gripper', action: action }
             })
         }).then(r => r.json()).then(data => console.log(data))
-          .catch(err => console.error('Gripper cmd failed:', err));
+            .catch(err => console.error('Gripper cmd failed:', err));
     }
 }

@@ -231,7 +231,7 @@ class AutoRTHandler:
                             )
                     else:
                         logger.debug(
-                            f"Task '{candidate.task_id}' rejected: {verdict.rejection_reason}"
+                            f"[AutoRT constitution] REJECTED '{candidate.task_id}': {verdict.rejection_reason}"
                         )
 
                 if not validated_tasks:
@@ -456,6 +456,16 @@ class AutoRTHandler:
 
         while not self._loop_stop_event.is_set():
             try:
+                # Skip generation if we already have pending tasks waiting for approval.
+                with self._task_lock:
+                    pending_count = len(self._pending_tasks)
+                if pending_count > 0:
+                    logger.debug(
+                        f"Loop skipping generation — {pending_count} tasks already pending"
+                    )
+                    self._loop_stop_event.wait(timeout=self._loop_delay)
+                    continue
+
                 response = self.generate_tasks(
                     num_tasks=MAX_TASK_CANDIDATES,
                     robot_ids=self._loop_robot_ids,

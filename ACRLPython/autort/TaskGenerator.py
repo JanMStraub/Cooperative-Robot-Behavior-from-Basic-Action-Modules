@@ -3,7 +3,9 @@
 
 import json
 import logging
+import math
 import time
+import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Optional
 from pydantic import ValidationError
@@ -117,20 +119,25 @@ Please fix these issues and generate a valid task following the parameter schema
                         return task
                     last_error = f"Parameter validation failed: {error_msg}"
                     logger.warning(
-                        f"Task slot {slot_index} attempt {attempt + 1}: {last_error}"
+                        f"[AutoRT slot {slot_index} attempt {attempt + 1}] REJECTED — {error_msg}"
                     )
 
                 if not tasks:
                     last_error = "No tasks generated"
                     logger.warning(
-                        f"Task slot {slot_index} attempt {attempt + 1}: {last_error}"
+                        f"[AutoRT slot {slot_index} attempt {attempt + 1}] EMPTY — LLM returned no parseable tasks"
                     )
 
             except (json.JSONDecodeError, ValidationError, ValueError) as e:
                 last_error = f"JSON/Schema error: {e}"
                 logger.warning(
-                    f"Task slot {slot_index} attempt {attempt + 1}: {last_error}"
+                    f"[AutoRT slot {slot_index} attempt {attempt + 1}] PARSE ERROR — {e}"
                 )
+                if hasattr(e, "doc"):
+                    # JSONDecodeError — show chars around the failure point
+                    pos = getattr(e, "pos", 0)
+                    snippet = e.doc[max(0, pos - 80) : pos + 80]  # type: ignore[union-attr]
+                    logger.info(f"  ↳ context around char {pos}: ...{snippet!r}...")
 
             if attempt < self.max_retries - 1:
                 time.sleep(1)
@@ -160,7 +167,8 @@ Please fix these issues and generate a valid task following the parameter schema
                 "model": self.model,
                 "messages": messages,
                 "temperature": self.temperature,
-                # Single task JSON - 4096 tokens covers verbose multi-step tasks.
+                # max_tokens covers thinking + output as a shared pool in LM Studio.
+                # 4096 for JSON output + full thinking budget headroom.
                 "max_tokens": 4096
                 + (LLM_THINKING_BUDGET if LLM_THINKING_ENABLED else 0),
             }
@@ -168,8 +176,6 @@ Please fix these issues and generate a valid task following the parameter schema
             # Set USE_STRUCTURED_OUTPUT=false for models that don't support response_format.
             if USE_STRUCTURED_OUTPUT:
                 create_kwargs["response_format"] = {"type": "json_object"}
-            # `thinking` is a LM Studio extension; pass via extra_body so the openai SDK
-            # forwards it as-is without treating it as an unknown named parameter.
             if LLM_THINKING_ENABLED:
                 create_kwargs["extra_body"] = {
                     "thinking": {
@@ -196,20 +202,40 @@ Please fix these issues and generate a valid task following the parameter schema
         include_collaborative: bool,
     ) -> str:
         """Build LLM task generation prompt."""
+        from config.Robot import ROBOT_BASE_POSITIONS, MAX_ROBOT_REACH
+
         objects_lines = []
+        # Map object_id → set of robot_ids that can reach it (for validation later)
+        self._reachability_map: dict[str, set[str]] = {}
+        self._object_color_map: dict[str, str] = {
+            obj.object_id: obj.color for obj in scene.objects
+        }
+
         for obj in scene.objects:
-            x_pos = obj.position[0]
-            proximity_hint = ""
-            if x_pos < -0.1:
-                proximity_hint = " [closer to Robot1/left]"
-            elif x_pos > 0.1:
-                proximity_hint = " [closer to Robot2/right]"
+            reachable_robots = []
+            for rid in robot_ids:
+                base = ROBOT_BASE_POSITIONS.get(rid, (0.0, 0.0, 0.0))
+                dist = math.sqrt(
+                    (obj.position[0] - base[0]) ** 2
+                    + (obj.position[1] - base[1]) ** 2
+                    + (obj.position[2] - base[2]) ** 2
+                )
+                if dist <= MAX_ROBOT_REACH:
+                    reachable_robots.append(rid)
+
+            self._reachability_map[obj.object_id] = set(reachable_robots)
+
+            if len(reachable_robots) == 0:
+                reach_hint = " [UNREACHABLE by any robot]"
+            elif len(reachable_robots) == len(robot_ids):
+                reach_hint = " [reachable by all robots]"
             else:
-                proximity_hint = " [center workspace]"
+                reach_hint = f" [REACHABLE: {'/'.join(reachable_robots)} only]"
 
             objects_lines.append(
-                f"- {obj.color} object at ({obj.position[0]:.3f}, {obj.position[1]:.3f}, {obj.position[2]:.3f}) "
-                f"(graspable={obj.graspable}, confidence={obj.confidence:.2f}){proximity_hint}"
+                f"- {obj.color} object (id={obj.object_id}) at "
+                f"({obj.position[0]:.3f}, {obj.position[1]:.3f}, {obj.position[2]:.3f}) "
+                f"(graspable={obj.graspable}, confidence={obj.confidence:.2f}){reach_hint}"
             )
         objects_str = "\n".join(objects_lines)
 
@@ -285,6 +311,10 @@ Every operation needs robot_id and parameters ({{}} if none)
 detect_object_stereo: color must be a named color or null; selection must be "left"/"right"/"closest"/"first"/"all"; camera_id="{DEFAULT_CAMERA_ID}"
 Assign objects to nearest robot (X<-0.1: Robot1, X>0.1: Robot2, center: either)
 Every robot_id in operations must appear in required_robots
+GRASP RULE: Always use grasp_object (not pick_object_at_coordinate) when grasping a detected object — grasp_object uses the object's name/ID and handles detection internally
+HANDOFF RULE: For transferring an object between robots use handoff (sender) + receive_handoff (receiver) — never implement handoffs with raw move/signal/release sequences. Handoffs are ONLY allowed with the red object — never generate a handoff for any other color.
+PLACE RULE: For placing a held object use place_object (at a position) or place_between_objects (between two reference objects) — never use release_object or move_to_coordinate to place
+FIELD RULE: Fields (field_a through field_i) are NOT in WorldState by default. Before using a field as a placement target (on_top_of param) you MUST call detect_field earlier in the same task's operations. Never reference a field ID unless detect_field for that field precedes it in the sequence.
 Output compact JSON array only, no markdown"""
 
     def _parse_llm_response(self, raw_response: str) -> List[ProposedTask]:
@@ -314,6 +344,16 @@ Output compact JSON array only, no markdown"""
         try:
             data = json.loads(raw_response)
         except json.JSONDecodeError:
+            # Detect truncated responses (reasoning models hitting token limit mid-JSON)
+            stripped = raw_response.strip()
+            if stripped and stripped[-1] not in ("}", "]"):
+                logger.error(
+                    f"JSON truncated — response cut off mid-stream (last char={stripped[-1]!r}). "
+                    f"Increase max_tokens or reduce thinking budget. Preview: {raw_response[:200]}"
+                )
+                raise ValueError(
+                    "LLM response truncated before JSON was complete"
+                ) from None
             logger.error(f"JSON parsing failed. Response preview: {raw_response[:200]}")
             raise
 
@@ -324,13 +364,63 @@ Output compact JSON array only, no markdown"""
 
         # Fix missing robot_ids before validation
         if isinstance(data, list):
-            fixed_data = [self._fix_missing_robot_ids(task) for task in data]
+            fixed_data = [
+                self._fix_missing_robot_ids(
+                    self._flatten_operations(self._ensure_unique_id(task))
+                )
+                for task in data
+            ]
             return [ProposedTask(**task) for task in fixed_data]
         elif isinstance(data, dict):
-            fixed_task = self._fix_missing_robot_ids(data)
+            fixed_task = self._fix_missing_robot_ids(
+                self._flatten_operations(self._ensure_unique_id(data))
+            )
             return [ProposedTask(**fixed_task)]
         else:
             raise ValueError(f"Unexpected response type: {type(data)}")
+
+    def _ensure_unique_id(self, task_dict: dict) -> dict:
+        """Append a short UUID suffix to the LLM-generated task_id to prevent deduplication
+        when parallel slots produce the same ID (e.g. both generate 'task_001')."""
+        original = task_dict.get("task_id", "task")
+        suffix = uuid.uuid4().hex[:6]
+        task_dict = dict(task_dict)
+        task_dict["task_id"] = f"{original}_{suffix}"
+        return task_dict
+
+    def _flatten_operations(self, task_dict: dict) -> dict:
+        """Normalize operations list — some LLMs emit parallel_group wrapper objects instead of flat ops.
+
+        Handles two degenerate formats:
+          A) Grouped wrapper: {"parallel_group": N, "operations": [{type, robot_id, ...}]}
+          B) Literal type:    {"type": "parallel_group", ...} — skip, not a real op
+        Both get flattened to the expected flat list of {type, robot_id, parameters} dicts.
+        """
+        raw_ops = task_dict.get("operations", [])
+        if not raw_ops:
+            return task_dict
+
+        flat: list[dict] = []
+        for item in raw_ops:
+            # Format A: wrapper with nested operations list
+            if "operations" in item and "type" not in item:
+                nested = item.get("operations", [])
+                logger.debug(
+                    f"Flattening parallel_group wrapper (group={item.get('parallel_group')}) "
+                    f"with {len(nested)} nested ops"
+                )
+                flat.extend(nested)
+            # Format B: type field is "parallel_group" — degenerate, skip
+            elif item.get("type") == "parallel_group":
+                logger.warning(
+                    "Dropping degenerate operation with type='parallel_group'; LLM confused group wrapper with op type"
+                )
+            else:
+                flat.append(item)
+
+        task_dict = dict(task_dict)
+        task_dict["operations"] = flat
+        return task_dict
 
     def _fix_missing_robot_ids(self, task_dict: dict) -> dict:
         """Infer missing robot_ids from context (coordination ops → first robot, sequential → last seen)."""
@@ -387,6 +477,55 @@ Output compact JSON array only, no markdown"""
                 )
                 if param_errors:
                     return False, f"Operation #{i} '{op.type}': {param_errors}"
+
+                # Reachability check: if this op targets a detected object, verify
+                # the assigned robot can physically reach it.
+                reachability_map = getattr(self, "_reachability_map", {})
+                object_color_map = getattr(self, "_object_color_map", {})
+                object_id = op.parameters.get("object_id")
+
+                if reachability_map and object_id and object_id in reachability_map:
+                    allowed = reachability_map[object_id]
+                    if op.robot_id not in allowed:
+                        allowed_str = "/".join(sorted(allowed)) if allowed else "none"
+                        return (
+                            False,
+                            f"Operation #{i} '{op.type}': {op.robot_id} cannot reach "
+                            f"object '{object_id}' — assign to {allowed_str} instead",
+                        )
+
+                # Handoff color constraint: handoff/receive_handoff only allowed for red objects.
+                if op.type in {"handoff", "receive_handoff"} and object_id:
+                    color = object_color_map.get(object_id, "")
+                    if color and color.lower() != "red":
+                        return (
+                            False,
+                            f"Operation #{i} '{op.type}': handoffs are only allowed with "
+                            f"the red object, but object '{object_id}' is '{color}' — "
+                            f"use grasp_object + place_object for non-red objects",
+                        )
+
+            # Field dependency check: on_top_of referencing a field requires
+            # detect_field to appear earlier in the same task.
+            on_top_of = op.parameters.get("on_top_of", "")
+            if (
+                on_top_of
+                and isinstance(on_top_of, str)
+                and on_top_of.startswith("field_")
+            ):
+                detected_fields = {
+                    prev.parameters.get("field_label", "").upper()
+                    for prev in task.operations[: i - 1]
+                    if prev.type == "detect_field"
+                }
+                field_letter = on_top_of.split("_", 1)[-1].upper()
+                if field_letter not in detected_fields:
+                    return (
+                        False,
+                        f"Operation #{i} 'place_object' references on_top_of='{on_top_of}' "
+                        f"but detect_field('{field_letter}') does not precede it — "
+                        f"add detect_field for '{field_letter}' before this placement",
+                    )
 
             return True, ""
         except Exception as e:
@@ -454,9 +593,20 @@ Output compact JSON array only, no markdown"""
         if self._operations_summary_cache is not None:
             return self._operations_summary_cache
 
+        # Ops excluded from AutoRT — superseded by higher-level composite ops.
+        # grasp_object > pick_object_at_coordinate (ID-based vs coord-based)
+        # handoff/receive_handoff > manual move+signal+release sequences
+        # place_object/place_between_objects > release_object for placement
+        _AUTORT_EXCLUDED_OPS = {
+            "pick_object_at_coordinate",  # use grasp_object
+            "release_object",  # use place_object or place_between_objects
+        }
+
         operations = self.registry.get_all_operations()
         lines = []
         for op in operations:
+            if op.name in _AUTORT_EXCLUDED_OPS:
+                continue
             param_specs = []
             for p in op.parameters:
                 spec_parts = [p.name, f":{p.type}"]
